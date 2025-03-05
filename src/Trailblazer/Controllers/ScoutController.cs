@@ -32,6 +32,9 @@ namespace Trailblazer.Controllers
         Unlocked = 99
     }
 
+    // Deterministic, lockstep, impulse-based agent controller
+    // Each frame applies an impulse that directly modifies velocity,
+    // rather than continuously accumulating acceleration.
     [Serializable]
     public class ScoutController
     {
@@ -52,6 +55,7 @@ namespace Trailblazer.Controllers
         [NonSerialized]
         private IScout _hostScout;
 
+        [NonSerialized]
         private MovementData _movementState = MovementData.DefaultMovementState;
 
         public MovementData MovementState { get => _movementState; }
@@ -78,7 +82,7 @@ namespace Trailblazer.Controllers
         private MoveInput _cachedMovementInput;
 
         [NonSerialized]
-        private Vector3d _cachedTargetImpulse;
+        private Vector3d _cachedForce;
 
         #endregion
 
@@ -120,7 +124,7 @@ namespace Trailblazer.Controllers
             _cachedMoveDirection = LocomotionState.CanControl ? direction : Vector3d.Zero;
 
             // Reset the target impulse to prevent accumulation
-            _cachedTargetImpulse = Vector3d.Zero;
+            _cachedForce = Vector3d.Zero;
 
             CheckGroundingState();
 
@@ -144,19 +148,19 @@ namespace Trailblazer.Controllers
             if (!LocomotionState.Jump.IsJumping)
             {
                 if (_movementState.IsInWater)
-                    _cachedTargetImpulse.y = _cachedMoveDirection.y;
+                    _cachedForce.y = _cachedMoveDirection.y;
 
                 if (_movementState.IsGrounded)
-                    _cachedTargetImpulse.y = Fixed64.Zero; // Prevent unwanted vertical movement
+                    _cachedForce.y = Fixed64.Zero; // Prevent unwanted vertical movement
             }
 
             // Apply the force
-            if (_cachedTargetImpulse != Vector3d.Zero)
+            if (_cachedForce != Vector3d.Zero)
             {
                 if (Mode == ControllerMode.ForceBased)
-                    _hostScout.Events?.OnAddLinearImpulse?.Invoke(_cachedTargetImpulse);
+                    _hostScout.Events?.OnAddLinearImpulse?.Invoke(_cachedForce);
                 else if (Mode == ControllerMode.PositionBased)
-                    _hostScout.Events?.OnAddPositionDelta?.Invoke(_cachedTargetImpulse * TrailblazerManager.DeltaTime);
+                    _hostScout.Events?.OnAddPositionDelta?.Invoke(_cachedForce * TrailblazerManager.DeltaTime);
             }
 
             // Reset before returning
@@ -167,7 +171,7 @@ namespace Trailblazer.Controllers
         {
             _cachedMovementInput = MoveInput.Idle;
             _cachedMoveDirection = Vector3d.Zero;
-            _cachedTargetImpulse = Vector3d.Zero;
+            _cachedForce = Vector3d.Zero;
             _cachedTraversalState = TraversalData.DefaultTraversalState;
         }
 
@@ -340,7 +344,7 @@ namespace Trailblazer.Controllers
             {
                 bool release = LocomotionState.Platform.UpdateHoldOnPlatform();
                 if (release && _movementState.IsGrounded)
-                    _cachedTargetImpulse -= adjustedPlatformVelocity;
+                    _cachedForce -= adjustedPlatformVelocity;
             }
 
             if (LocomotionState.Platform.IsInteriaApplied)
@@ -348,7 +352,7 @@ namespace Trailblazer.Controllers
                 if (!_movementState.WasInAir && _movementState.IsInAir)
                 {
                     LocomotionState.Platform.FrameVelocity = LocomotionState.Platform.ActiveVelocity;
-                    _cachedTargetImpulse += LocomotionState.Platform.FrameVelocity;  // Apply inertia from platform
+                    _cachedForce += LocomotionState.Platform.FrameVelocity;  // Apply inertia from platform
                 }
 
                 if (!_movementState.WasGrounded && _movementState.IsGrounded)
@@ -356,7 +360,7 @@ namespace Trailblazer.Controllers
                     if (LocomotionState.Platform.IsNewPlatform)
                         LocomotionState.Platform.SetHoldPlatform(_cachedTraversalState.HitObject);
                     else
-                        _cachedTargetImpulse -= adjustedPlatformVelocity;
+                        _cachedForce -= adjustedPlatformVelocity;
                 }
             }
 
@@ -447,7 +451,7 @@ namespace Trailblazer.Controllers
             Vector3d velocityChange = GetDesiredVelocity() - _hostScout.LinearVelocity;
             Fixed64 maxVelocityChange = GetMaxVelocity() * TrailblazerManager.DeltaTime;
             // Clamp the impulse
-            _cachedTargetImpulse = velocityChange.SqrMagnitude > maxVelocityChange * maxVelocityChange
+            _cachedForce = velocityChange.SqrMagnitude > maxVelocityChange * maxVelocityChange
                     ? velocityChange.Normal * maxVelocityChange
                     : velocityChange;
         }
@@ -600,15 +604,15 @@ namespace Trailblazer.Controllers
             if (_movementState.IsGrounded)
             {
                 // Only apply gravity if no other system set Y force
-                if (_cachedTargetImpulse.y == Fixed64.Zero)
-                    _cachedTargetImpulse.y = FixedMath.Min(Fixed64.Zero, _cachedTargetImpulse.y) - Gravity * TrailblazerManager.DeltaTime;
+                if (_cachedForce.y == Fixed64.Zero)
+                    _cachedForce.y = FixedMath.Min(Fixed64.Zero, _cachedForce.y - Gravity);
                 return;
             }
 
             if (_movementState.IsInAir)
             {
                 // Convert gravity acceleration to a velocity vector
-                _cachedTargetImpulse.y = _hostScout.LinearVelocity.y - Gravity * TrailblazerManager.DeltaTime;
+                _cachedForce.y = _hostScout.LinearVelocity.y - Gravity;
 
                 // When jumping up we don't apply gravity for some time when the user is holding the jump button.
                 // This gives more control over jump height by pressing the button longer.
@@ -622,11 +626,11 @@ namespace Trailblazer.Controllers
 
                     // Negate the gravity we just applied, except we push in jumpDir rather than jump upwards.
                     if (TrailblazerManager.FrameCount < extraJumpLimit)
-                        _cachedTargetImpulse += LocomotionState.Jump.FrameJumpDirection * Gravity * TrailblazerManager.DeltaTime;
+                        _cachedForce += LocomotionState.Jump.FrameJumpDirection * Gravity;
                 }
 
                 // Make sure we don't fall any faster than maxFallSpeed. This gives our character a terminal velocity.
-                _cachedTargetImpulse.y = FixedMath.Max(_cachedTargetImpulse.y, -TrailblazerManager.MaxFallSpeed);
+                _cachedForce.y = FixedMath.Max(_cachedForce.y, -TrailblazerManager.MaxFallSpeed);
             }
         }
 
@@ -680,7 +684,7 @@ namespace Trailblazer.Controllers
 
             LocomotionState.Jump.StartCooldown();
 
-            _cachedTargetImpulse += jumpImpulse;
+            _cachedForce += jumpImpulse;
         }
 
         #endregion
@@ -688,7 +692,7 @@ namespace Trailblazer.Controllers
         #region Utility
 
         public void SetMotorLock(bool status) => IsMotorLocked = status;
-        
+
         public bool IsTooSteep()
         {
             Fixed64 angle = Vector3d.Angle(Vector3d.Up, _movementState.GroundNormal);

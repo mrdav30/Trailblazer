@@ -41,14 +41,27 @@ namespace Trailblazer.Controllers.Locomotions
 
             if (Swim.IsEnabled)
                 Swim.SyncState(other.Swim);
+
+            if (Slide.IsEnabled)
+                Slide.SyncState(other.Slide);
         }
 
         public void ClearStateAll()
         {
-            Platform.ClearState();
-            Jump.ClearState();
-            Fall.ClearState();
-            Swim.ClearState();
+            if (Platform.IsEnabled)
+                Platform.ClearState();
+
+            if (Jump.IsEnabled)
+                Jump.ClearState();
+
+            if (Fall.IsEnabled)
+                Fall.ClearState();
+
+            if (Swim.IsEnabled)
+                Swim.ClearState();
+
+            if (Slide.IsEnabled)
+                Slide.ClearState();
         }
     }
 }

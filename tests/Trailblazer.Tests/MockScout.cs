@@ -14,7 +14,7 @@ public class MockScout : IScout
 
     public ScoutController ScoutMotor { get; set; }
 
-    public Fixed64 Gravity { get; set; } = TrailblazerManager.FixedGravity;
+    public Fixed64 Gravity { get; set; } = TrailblazerManager.GravityForce;
 
     public TraversalData TraversalState;
 

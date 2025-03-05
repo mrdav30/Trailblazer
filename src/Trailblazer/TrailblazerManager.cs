@@ -18,7 +18,7 @@ namespace Trailblazer
         /// <summary>
         /// Represent a fixed-point representation of Gravity as an acceleration force
         /// </summary>
-        public static Fixed64 FixedGravity { get; private set; } = Fixed64.FromRaw(0x9CCCCCCCDL); //  9.8f
+        public static Fixed64 GravityForce { get; private set; } = Fixed64.FromRaw(0x9CCCCCCCDL); //  9.8f
 
         public static readonly Fixed64 MaxFallSpeed = (Fixed64)9.8f;
 

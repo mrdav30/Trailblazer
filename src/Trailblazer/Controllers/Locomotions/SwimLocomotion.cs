@@ -125,10 +125,12 @@ namespace Trailblazer.Controllers.Locomotions
             }
         }
 
+        public bool IsSwimming { get; set; }
+
         /// <summary>
         /// Is the scout diving?
         /// </summary>
-        public bool IsDiving { get; set; }  // TODO: create logic to determine if we're diving (aka below the water line)
+        public bool IsDiving { get; set; }
 
         /// <summary>
         /// How long the scout has been underwater
@@ -180,12 +182,14 @@ namespace Trailblazer.Controllers.Locomotions
         {
             if (locomotion is not SwimLocomotion other) return;
 
+            IsSwimming = other.IsSwimming;
             UnderwaterTimer = other.UnderwaterTimer;
         }
 
         /// <inheritdoc cref="ITransientLocomotion.ClearState"/>
         public void ClearState()
         {
+            IsSwimming = false;
             IsDiving = false;
             UnderwaterTimer = Fixed64.Zero;
         }

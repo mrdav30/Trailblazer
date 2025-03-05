@@ -6,7 +6,7 @@ namespace Trailblazer.Controllers.Locomotions
     /// A class that handles the sliding movement of the scout.
     /// </summary>
     [System.Serializable]
-    public class SlideLocomotion : ILocomotion
+    public class SlideLocomotion : ITransientLocomotion
     {
         #region Constants
 
@@ -72,6 +72,21 @@ namespace Trailblazer.Controllers.Locomotions
             set => _isEnabled = value;
         }
 
+        public bool IsSliding { get; set; }
+
         #endregion
+
+        public void SyncState(ITransientLocomotion locomotion)
+        {
+            if (locomotion is not SlideLocomotion other) return;
+
+            IsSliding = other.IsSliding;
+        }
+
+        /// <inheritdoc cref="ITransientLocomotion.ClearState"/>
+        public void ClearState()
+        {
+            IsSliding = false;
+        }
     }
 }

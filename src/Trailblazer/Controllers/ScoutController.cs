@@ -61,8 +61,8 @@ namespace Trailblazer.Controllers
         /// </summary>
         public bool IsMotorLocked { get; private set; }
 
-        /// <inheritdoc cref="TrailblazerManager.FixedGravity"/>
-        public Fixed64 Gravity { get; private set; } = TrailblazerManager.FixedGravity;
+        /// <inheritdoc cref="TrailblazerManager.GravityForce"/>
+        public Fixed64 Gravity { get; set; } = TrailblazerManager.GravityForce;
 
         public bool IsPlatformMovementApplied => _movementState.IsGrounded && LocomotionState.Platform.IsOnPlatform || LocomotionState.Platform.IsLockedToPlatform;
 
@@ -151,7 +151,7 @@ namespace Trailblazer.Controllers
             }
 
             // Apply the force
-            if(_cachedTargetImpulse != Vector3d.Zero)
+            if (_cachedTargetImpulse != Vector3d.Zero)
             {
                 if (Mode == ControllerMode.ForceBased)
                     _hostScout.Events?.OnAddLinearImpulse?.Invoke(_cachedTargetImpulse);
@@ -226,18 +226,15 @@ namespace Trailblazer.Controllers
             // Transitioning into water
             if (_movementState.IsInWater)
             {
-                if (_movementState.LastTraversalMedium != TraversalMedium.Water)
-                {
-                    LocomotionState.Jump.ClearState();
-                    LocomotionState.Fall.ClearState();
-                    LocomotionState.Platform.ClearState();
-                    LocomotionState.Swim.UnderwaterTimer = Fixed64.Zero;
-                }
-
-                LocomotionState.Swim.IsDiving = _hostScout.WorldPosition.y < _cachedTraversalState.SurfaceLevel;
+                // Clear the transient state when entiring water for the first time
+                if (!_movementState.WasInWater)
+                    LocomotionState.ClearStateAll();
 
                 if (LocomotionState.Swim.IsEnabled)
                 {
+                    LocomotionState.Swim.IsSwimming = true;
+                    LocomotionState.Swim.IsDiving = _hostScout.WorldPosition.y < _cachedTraversalState.SurfaceLevel;
+
                     LocomotionState.Swim.UpdateDiveTime();
 
                     if (_movementState.IsInWater && LocomotionState.Swim.IsDrowning)
@@ -250,15 +247,22 @@ namespace Trailblazer.Controllers
             if (!_movementState.IsInWater)
             {
                 // Transitioning from water to land
-                if (_movementState.LastTraversalMedium == TraversalMedium.Water)
+                if (_movementState.WasInWater && LocomotionState.Swim.IsEnabled)
+                    LocomotionState.Swim.ClearState();
+
+                if (_movementState.IsGrounded && LocomotionState.Slide.IsEnabled)
                 {
-                    LocomotionState.Swim.IsDiving = false;
-                    LocomotionState.Swim.UnderwaterTimer = Fixed64.Zero;
+                    bool isSliding = IsTooSteep();
+                    if (!isSliding && LocomotionState.Slide.IsSliding)
+                        LocomotionState.CanControl = true; // reset control
+
+                    LocomotionState.Slide.IsSliding = isSliding;
                 }
+
 
                 if (LocomotionState.Fall.IsEnabled)
                     UpdateFallingState();
-            }     
+            }
         }
 
         private bool DidPlatformChange()
@@ -270,8 +274,8 @@ namespace Trailblazer.Controllers
             if (LocomotionState.Platform.ActivePlatform == null
                 || LocomotionState.Platform.ActivePlatform != _cachedTraversalState.HitObject)
             {
-                LocomotionState.Platform.LastMatrix = LocomotionState.Platform.ActivePlatform == null 
-                    ? _cachedTraversalState.GroundMatrix 
+                LocomotionState.Platform.LastMatrix = LocomotionState.Platform.ActivePlatform == null
+                    ? _cachedTraversalState.GroundMatrix
                     : LocomotionState.Platform.ActiveMatrix;
                 LocomotionState.Platform.ActiveMatrix = _cachedTraversalState.GroundMatrix;
                 LocomotionState.Platform.ActivePlatform = _cachedTraversalState.HitObject;
@@ -285,15 +289,13 @@ namespace Trailblazer.Controllers
 
         private void UpdateFallingState()
         {
-            bool isSliding = IsSliding();
-
             if (LocomotionState.Fall.IsFalling)
             {
                 // Make sure we didn't somehow get above the initial start point
                 if (_hostScout.WorldPosition.y > LocomotionState.Fall.FallStart)
                     LocomotionState.Fall.FallStart = _hostScout.WorldPosition.y;
 
-                if (!_movementState.IsInAir && !isSliding)
+                if (!_movementState.IsInAir && !LocomotionState.Slide.IsSliding)
                 {
                     // scout landed after falling
                     LocomotionState.Fall.IsFalling = false;
@@ -312,8 +314,8 @@ namespace Trailblazer.Controllers
                 return;
             }
 
-            // check if we are currently falling
-            if ((_movementState.IsInAir || isSliding) && _hostScout.LinearVelocity.y < -Fixed64.FromRaw(0x00010000L)) // Small threshold
+            // check if we are currently falling with a small threshold
+            if ((_movementState.IsInAir || LocomotionState.Slide.IsSliding) && _hostScout.LinearVelocity.y < -Fixed64.FromRaw(0x00010000L))
             {
                 // scout started falling
                 LocomotionState.Fall.IsFalling = true;
@@ -419,7 +421,7 @@ namespace Trailblazer.Controllers
                 {
                     // --- ANGULAR FORCE CALCULATION ---
                     // Compute angular impulse required to match platform rotation
-                    Vector3d requiredAngularVelocity = targetRotation.ToAngularVelocity(_hostScout.VisualRotation,TrailblazerManager.DeltaTime);
+                    Vector3d requiredAngularVelocity = targetRotation.ToAngularVelocity(_hostScout.VisualRotation, TrailblazerManager.DeltaTime);
 
                     // Apply torque to match platform rotation
                     _hostScout.Events?.OnAddAngularImpulse?.Invoke(requiredAngularVelocity);
@@ -453,9 +455,7 @@ namespace Trailblazer.Controllers
         private Vector3d GetDesiredVelocity()
         {
             Vector3d result;
-            if (_movementState.IsGrounded
-                && LocomotionState.Slide.IsEnabled
-                && IsTooSteep())
+            if (LocomotionState.Slide.IsSliding)
             {
                 // The direction we're sliding in
                 result = new Vector3d(_movementState.GroundNormal.x, Fixed64.Zero, _movementState.GroundNormal.z).Normal;
@@ -482,10 +482,10 @@ namespace Trailblazer.Controllers
                 if (_movementState.IsGrounded)
                     result = Vector3d.ProjectOnPlane(result, _movementState.GroundNormal);
 
-                LocomotionState.CanControl = true;
-
                 if (_movementState.IsInWater) // Ensure smoother stops in water instead of abrupt halts
                     return result * (Fixed64.One - LocomotionState.Swim.WaterDragFactor);
+
+                LocomotionState.CanControl = true;
             }
 
             if (IsPlatformMovementApplied)
@@ -601,7 +601,7 @@ namespace Trailblazer.Controllers
             {
                 // Only apply gravity if no other system set Y force
                 if (_cachedTargetImpulse.y == Fixed64.Zero)
-                    _cachedTargetImpulse.y = FixedMath.Min(Fixed64.Zero, _cachedTargetImpulse.y - Gravity * TrailblazerManager.DeltaTime);
+                    _cachedTargetImpulse.y = FixedMath.Min(Fixed64.Zero, _cachedTargetImpulse.y) - Gravity * TrailblazerManager.DeltaTime;
                 return;
             }
 
@@ -688,11 +688,7 @@ namespace Trailblazer.Controllers
         #region Utility
 
         public void SetMotorLock(bool status) => IsMotorLocked = status;
-
-        public void SetGravity(Fixed64 newGravity) => Gravity = newGravity;
-
-        public bool IsSliding() => LocomotionState.Slide.IsEnabled && _movementState.IsGrounded && IsTooSteep();
-
+        
         public bool IsTooSteep()
         {
             Fixed64 angle = Vector3d.Angle(Vector3d.Up, _movementState.GroundNormal);

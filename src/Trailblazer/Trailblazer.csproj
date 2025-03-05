@@ -99,7 +99,4 @@
 		<None Include="..\..\icon.png" Pack="true" PackagePath="\" Visible="false" />
 		<None Remove=".gitignore" />
 	</ItemGroup>
-	<ItemGroup>
-	  <Folder Include="Utility\" />
-	</ItemGroup>
 </Project>

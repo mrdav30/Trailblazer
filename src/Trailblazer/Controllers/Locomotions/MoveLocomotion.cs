@@ -1,11 +1,12 @@
 ﻿using FixedMathSharp;
+using System;
 
 namespace Trailblazer.Controllers.Locomotions
 {
     /// <summary>
     /// A class that handles the sliding movement of the scout.
     /// </summary>
-    [System.Serializable]
+    [Serializable]
     public class MoveLocomotion : ILocomotion
     {
         #region Constants

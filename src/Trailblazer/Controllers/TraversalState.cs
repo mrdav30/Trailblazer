@@ -2,7 +2,7 @@
 
 namespace Trailblazer.Controllers
 {
-    public struct MovementData
+    public struct TraversalState
     {
         public TraversalMedium ActiveTraversalMedium { get; set; }
         public TraversalMedium LastTraversalMedium { get; set; }
@@ -24,7 +24,7 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// The default movement state.
         /// </summary>
-        public readonly static MovementData DefaultMovementState = new MovementData 
+        public readonly static TraversalState DefaultTraversalState = new TraversalState 
         { 
             ActiveTraversalMedium = TraversalMedium.Unknown,
             LastTraversalMedium = TraversalMedium.Unknown,

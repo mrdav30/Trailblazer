@@ -1,14 +1,12 @@
-﻿using FixedMathSharp;
-
-namespace Trailblazer.Controllers.Locomotions
+﻿namespace Trailblazer.Controllers.Locomotions
 {
     [System.Serializable]
-    public class LocomotionData
+    public class LocomotionState
     {
         /// <summary>
         /// Does this script currently respond to input?
         /// </summary>
-        public bool CanControl = true;
+        public bool IsInControl = true;
    
         #region Locomotions
 
@@ -26,9 +24,9 @@ namespace Trailblazer.Controllers.Locomotions
 
         #endregion
       
-        public void SyncState(LocomotionData other)
+        public void SyncState(LocomotionState other)
         {
-            CanControl = other.CanControl;
+            IsInControl = other.IsInControl;
 
             if (Platform.IsEnabled)
                 Platform.SyncState(other.Platform);

@@ -15,6 +15,8 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public static readonly Fixed64 DefaultMaxFallHeight = (Fixed64)30;
 
+        public static readonly Fixed64 DefaultFallControlMultiplier = Fixed64.FromRaw(0x30000000L);
+
         #endregion
 
         #region Configuration State
@@ -29,7 +31,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public Fixed64 MaxFallHeight = DefaultMaxFallHeight;
 
-        public Fixed64 FallControlMultiplier = Fixed64.FromRaw(0x30000000L); // 50% control when falling
+        public Fixed64 FallControlMultiplier = DefaultFallControlMultiplier; // 50% control when falling
 
         #endregion
 

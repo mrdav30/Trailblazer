@@ -13,7 +13,7 @@ namespace Trailblazer.Controllers
     /// <summary>
     /// The data of the ground.
     /// </summary>
-    public struct TraversalData
+    public struct MovementState
     {
         public TraversalMedium Medium { get; set; }
 
@@ -40,7 +40,7 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// The default traversal state.
         /// </summary>
-        public readonly static TraversalData DefaultTraversalState = new TraversalData
+        public readonly static MovementState DefaultMovementState = new MovementState
         {
             Medium = TraversalMedium.Unknown,
             HitObject = null,

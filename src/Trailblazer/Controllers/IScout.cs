@@ -20,9 +20,9 @@ namespace Trailblazer.Controllers
         /// </summary>
         ScoutEvents Events { get; }
 
-        void SetTraversalState(TraversalData traversalState);
+        void SetMovementState(MovementState movementState);
 
-        void GetTraversalState(out TraversalData traversalState);
+        void GetMovementState(out MovementState movementState);
 
         Vector3d GetFootPosition();
 

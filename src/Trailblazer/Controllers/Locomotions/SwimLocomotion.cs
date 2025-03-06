@@ -50,6 +50,8 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public static readonly Fixed64 DefaultWaterDragFactor = Fixed64.FromRaw(0x10000000L); // ~0.0625
 
+        public static readonly Fixed64 DrowningStatusDelay = Fixed64.FromRaw(0x20000000L);
+
         #endregion
 
         #region Configuration State
@@ -155,7 +157,7 @@ namespace Trailblazer.Controllers.Locomotions
             get
             {
                 if (!_isEnabled || !CanDrown) return false;
-                return UnderwaterTimer >= HoldBreathTime + Fixed64.FromRaw(0x20000000L); // Small delay;
+                return UnderwaterTimer >= HoldBreathTime + DrowningStatusDelay; // Small delay;
             }
         }
 

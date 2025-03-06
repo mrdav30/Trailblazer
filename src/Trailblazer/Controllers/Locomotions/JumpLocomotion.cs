@@ -139,7 +139,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// Is the jump on cooldown?
         /// </summary>
-        public bool IsCoolingDown => State == JumpState.CoolingDown;
+        public bool IsCoolingDown => IsEnabled && State == JumpState.CoolingDown;
 
         #endregion
 

@@ -20,7 +20,8 @@ namespace Trailblazer
         /// </summary>
         public static Fixed64 GravityForce { get; private set; } = Fixed64.FromRaw(0x9CCCCCCCDL); //  9.8f
 
-        public static readonly Fixed64 MaxFallSpeed = (Fixed64)9.8f;
+        // Terminal velocity is roughly 53 m/s (190 km/h or ~120 mph)
+        public static readonly Fixed64 TerminalFallVelocity = (Fixed64)53f;
 
         public static void Simulate()
         {

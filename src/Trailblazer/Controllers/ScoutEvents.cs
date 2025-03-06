@@ -22,12 +22,12 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// The action to add a linear force to the scout.
         /// </summary>
-        public Action<Vector3d>? OnAddLinearImpulse { get; set; } = null;
+        public Action<Vector3d>? OnAddLinearForce { get; set; } = null;
 
         /// <summary>
         /// The action to add an angular force to the scout.
         /// </summary>
-        public Action<Vector3d>? OnAddAngularImpulse { get; set; } = null;
+        public Action<Vector3d>? OnAddAngularForce { get; set; } = null;
 
         /// <summary>
         /// The action to start the fall of the scout.

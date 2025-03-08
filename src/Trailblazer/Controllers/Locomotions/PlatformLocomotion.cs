@@ -3,7 +3,7 @@
 namespace Trailblazer.Controllers.Locomotions
 {
     /// <summary>
-    /// The state of the movement transfer.
+    /// This state controls how the platform's velocity effects the IScout
     /// </summary>
     public enum MovementTransferState
     {
@@ -97,40 +97,40 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// The active platform matrix.
         /// </summary>
-        public Fixed4x4 ActiveMatrix { get; set; }
+        public Fixed4x4 ActiveMatrix { get; set; } = Fixed4x4.Identity;
 
         /// <summary>
         /// The last platform matrix.
         /// </summary>
-        public Fixed4x4 LastMatrix { get; set; }
+        public Fixed4x4 LastMatrix { get; set; } = Fixed4x4.Identity;
 
         /// <summary>
         /// The active global point.
         /// </summary>
-        public Vector3d ActiveGlobalPoint { get; set; }
+        public Vector3d ScoutGlobalPoint { get; set; }
 
         /// <summary>
         /// The active local point.
         /// </summary>
-        public Vector3d ActiveLocalPoint { get; set; }
+        public Vector3d ScoutLocalPoint { get; set; }
 
         /// <summary>
         /// The active global rotation.
         /// </summary>
-        public FixedQuaternion ActiveGlobalRotation { get; set; }
+        public FixedQuaternion ScoutGlobalRotation { get; set; } = FixedQuaternion.Identity;
 
         /// <summary>
         /// The active local rotation.
         /// </summary>
-        public FixedQuaternion ActiveLocalRotation { get; set; }
+        public FixedQuaternion ScoutLocalRotation { get; set; } = FixedQuaternion.Identity;
 
         /// <summary>
         /// The velocity of the platform.
         /// </summary>
-        public Vector3d ActiveVelocity { get; set; }
+        public Vector3d Velocity { get; set; }
 
         /// <summary>
-        /// This keeps track of our current velocity while we're not grounded
+        /// This keeps track of the platform's velocity while we're not grounded
         /// </summary>
         public Vector3d FrameVelocity { get; set; }
 
@@ -158,6 +158,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// Whether the initial velocity has been applied.
         /// </summary>
         public bool IsInteriaApplied => IsOnPlatform
+            && Velocity != Vector3d.Zero
             && (MovementTransfer == MovementTransferState.InitTransfer
                 || MovementTransfer == MovementTransferState.PermaTransfer);
 
@@ -210,11 +211,11 @@ namespace Trailblazer.Controllers.Locomotions
             ActivePlatform = other.ActivePlatform;
             ActiveMatrix = other.ActiveMatrix;
             LastMatrix = other.LastMatrix;
-            ActiveGlobalPoint = other.ActiveGlobalPoint;
-            ActiveGlobalRotation = other.ActiveGlobalRotation;
-            ActiveLocalPoint = other.ActiveLocalPoint;
-            ActiveLocalRotation = other.ActiveLocalRotation;
-            ActiveVelocity = other.ActiveVelocity;
+            ScoutGlobalPoint = other.ScoutGlobalPoint;
+            ScoutGlobalRotation = other.ScoutGlobalRotation;
+            ScoutLocalPoint = other.ScoutLocalPoint;
+            ScoutLocalRotation = other.ScoutLocalRotation;
+            Velocity = other.Velocity;
             FrameVelocity = other.FrameVelocity;
             State = other.State;
             HoldPlatform = other.HoldPlatform;
@@ -228,11 +229,11 @@ namespace Trailblazer.Controllers.Locomotions
             ActivePlatform = null;
             ActiveMatrix = Fixed4x4.Identity;
             LastMatrix = Fixed4x4.Identity;
-            ActiveGlobalPoint = Vector3d.Zero;
-            ActiveLocalPoint = Vector3d.Zero;
-            ActiveGlobalRotation = FixedQuaternion.Identity;
-            ActiveLocalRotation = FixedQuaternion.Identity;
-            ActiveVelocity = Vector3d.Zero;
+            ScoutGlobalPoint = Vector3d.Zero;
+            ScoutLocalPoint = Vector3d.Zero;
+            ScoutGlobalRotation = FixedQuaternion.Identity;
+            ScoutLocalRotation = FixedQuaternion.Identity;
+            Velocity = Vector3d.Zero;
             State = HoldPlatformState.Idle;
             HoldPlatform = null;
             HoldPlatformFrames = 0;

@@ -1,80 +1,90 @@
-﻿namespace Trailblazer.Tests
+﻿using FixedMathSharp;
+using Trailblazer.Controllers;
+
+public static class IScoutTestFactory
 {
-    using FixedMathSharp;
-    using global::Trailblazer.Controllers;
-
-    public static class IScoutTestFactory
+    /// <summary>
+    /// Generates a Scout (no platform logic)
+    /// </summary>
+    public static IScout CreateMockScout(
+        Vector3d? startPosition = null,
+        Vector3d? startVelocity = null,
+        bool grounded = true,
+        Fixed64? gravity = null)
     {
-        public static IScout CreateMockScout(
-            Vector3d? startPosition = null,
-            Vector3d? startVelocity = null,
-            bool grounded = true,
-            Fixed64? gravity = null)
-        {
-            var mock = new MockScout(
-                startPosition ?? Vector3d.Zero,
-                startVelocity ?? Vector3d.Zero
-            );
+        var mock = new MockScout(
+            startPosition ?? Vector3d.Zero,
+            startVelocity ?? Vector3d.Zero
+        );
 
-            if (gravity.HasValue)
-                mock.SetGravity(gravity.Value);
+        if (gravity.HasValue)
+            mock.SetGravity(gravity.Value);
 
-            Fixed4x4 newPlatform = Fixed4x4.Identity;
-            newPlatform.SetTransform(startPosition ?? Vector3d.Up, FixedQuaternion.Identity, Vector3d.One);
-
-            if (grounded)
-                mock.SetTraversalState(new TraversalData { 
-                    Medium = TraversalMedium.Ground, 
-                    HitObject = new object(), 
-                    GroundMatrix = newPlatform, 
-                    GroundNormal = Vector3d.Up, 
-                    SurfaceLevel = Fixed64.Zero
-                });
-            else
-                mock.SetTraversalState(new TraversalData
+        if (grounded)
+            mock.SetTraversalState(
+                TraversalMedium.Ground,
+                Fixed64.Zero,
+                new GroundState
                 {
-                    Medium = TraversalMedium.Air
-                });
+                    HitObject = new object(), // Separate from platform
+                    GroundMatrix = Fixed4x4.Identity
+                }
+            );
+        else
+            mock.SetTraversalState(TraversalMedium.Air);
 
-            return mock;
-        }
+        return mock;
+    }
 
-        public static IScout CreateFallingScout(Vector3d? startVelocity = null)
-        {
-            MockScout mock = new MockScout(Vector3d.Zero, startVelocity ?? new Vector3d(Fixed64.Zero, -Fixed64.One, Fixed64.Zero));
-            mock.SetTraversalState(new TraversalData
+    /// <summary>
+    /// Generates a Falling Scout (for gravity tests)
+    /// </summary>
+    public static IScout CreateFallingScout(Vector3d? startVelocity = null, Fixed64? surfaceLevel = null)
+    {
+        MockScout mock = new MockScout(
+            Vector3d.Zero, 
+            startVelocity ?? new Vector3d(Fixed64.Zero, -Fixed64.One, Fixed64.Zero));
+        mock.SetTraversalState(TraversalMedium.Air, surfaceLevel ?? -(Fixed64)999);
+        return mock;
+    }
+
+    /// <summary>
+    /// Generates a Scout + Platform (Separation of Concerns)
+    /// </summary>
+    public static IScout CreatePlatformScout(
+        Vector3d? startPosition = null,
+        Fixed4x4? platformMatrix = null,
+        Fixed64? gravity = null)
+    {
+        var mock = new MockScout(startPosition ?? Vector3d.Zero, Vector3d.Zero);
+
+        if (gravity.HasValue)
+            mock.SetGravity(gravity.Value);
+
+        mock.SetTraversalState(
+            TraversalMedium.Ground,
+            Fixed64.Zero,
+            new GroundState
             {
-                Medium = TraversalMedium.Air
-            });
-            return mock;
-        }
+                HitObject = new object(), // Separate from platform
+                GroundMatrix = platformMatrix ?? Fixed4x4.Identity
+            }
+        );
 
-        public static IScout CreatePlatformScout(
-            Vector3d? startPosition = null,
-            Vector3d? platformVelocity = null,
-            FixedQuaternion? platformRotation = null,
-            Fixed64? gravity = null)
-        {
-            var mock = new MockScout(startPosition ?? Vector3d.Zero, Vector3d.Zero);
+        return mock;
+    }
 
-            if (gravity.HasValue)
-                mock.SetGravity(gravity.Value);
-
-            Fixed4x4 groundMatrix = Fixed4x4.CreateTransform(
-                startPosition ?? Vector3d.Zero, 
-                platformRotation ?? FixedQuaternion.Identity, 
-                Vector3d.One);
-
-            mock.SetTraversalState(new TraversalData
-            {
-                Medium = TraversalMedium.Ground,
-                HitObject = new object(),
-                GroundMatrix = Fixed4x4.Identity,
-                GroundNormal = Vector3d.Up,
-                SurfaceLevel = Fixed64.Zero
-            });
-
-            return mock;
-        }
+    /// <summary>
+    /// Generates a Platform with Custom Position, Rotation, Velocity
+    /// </summary>
+    public static Fixed4x4 CreatePlatform(
+        Vector3d? startPosition = null,
+        FixedQuaternion? platformRotation = null)
+    {
+        return Fixed4x4.CreateTransform(
+            startPosition ?? Vector3d.Zero,
+            platformRotation ?? FixedQuaternion.Identity,
+            Vector3d.One
+        );
     }
 }

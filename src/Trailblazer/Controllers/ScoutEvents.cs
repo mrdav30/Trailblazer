@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
 using System;
+using Trailblazer.Controllers.Locomotions;
 
 namespace Trailblazer.Controllers
 {
@@ -17,7 +18,7 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// The action to set the rotation of the scout.
         /// </summary>
-        public Action<FixedQuaternion>? OnSetRotation { get; set; } = null;
+        public Action<FixedQuaternion>? OnAddRotationDelta { get; set; } = null;
 
         /// <summary>
         /// The action to add a linear force to the scout.
@@ -55,9 +56,10 @@ namespace Trailblazer.Controllers
         public Func<bool>? CanAffordJump { get; set; } = null;
 
         /// <summary>
-        /// The action to start the jump of the scout.
+        /// The action to start the jump of the scout.  
+        /// Notification sends <see cref="JumpLocomotion.AvoidGroundingTimer"/> to assist in preventing ground checks for the specified time.
         /// </summary>
-        public Action? OnStartJump { get; set; } = null;
+        public Action<Fixed64>? OnStartJump { get; set; } = null;
 
         /// <summary>
         /// The action to stop the jump of the scout.
@@ -79,10 +81,6 @@ namespace Trailblazer.Controllers
         /// </summary>
         public Action? OnStopWaterBreach { get; set; } = null;
 
-        /// <summary>
-        /// The action to skip the grounding check timer of the scout.
-        /// </summary>
-        public Action<Fixed64>? OnSkipGroundingCheckTimer { get; set; } = null;
 #nullable disable
     }
 }

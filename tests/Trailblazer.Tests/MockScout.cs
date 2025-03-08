@@ -4,7 +4,18 @@ using Trailblazer.Controllers;
 
 public class MockScout : IScout
 {
-    public Vector3d WorldPosition { get; set; }
+    private Vector3d _position;
+    public Vector3d WorldPosition
+    {
+        get => _position;
+        set
+        {
+            _position = value;
+            // Simple ground check
+            if (WorldPosition.y <= Traversal.SurfaceLevel)
+                WorldPosition = new Vector3d(WorldPosition.x, Fixed64.Zero, WorldPosition.y);
+        }
+    }
 
     public FixedQuaternion VisualRotation { get; set; } = FixedQuaternion.Identity;
 
@@ -12,11 +23,11 @@ public class MockScout : IScout
 
     public ScoutEvents Events { get; set; } = new();
 
-    public ScoutController ScoutMotor { get; set; }
+    public ScoutController ScoutController { get; set; }
 
     public Fixed64 Gravity { get; set; } = TrailblazerManager.GravityForce;
 
-    public TraversalData TraversalState;
+    public TraversalState Traversal;
 
     public MockScout(Vector3d position, Vector3d velocity)
     {
@@ -26,34 +37,51 @@ public class MockScout : IScout
         Events.CanAffordJump = () => true;
 
         Events.OnAddPositionDelta += deltaPos => WorldPosition += deltaPos;
-        Events.OnSetRotation += rot => VisualRotation = rot;
-        Events.OnAddLinearImpulse += (impulse) =>
+        Events.OnAddRotationDelta += (rot) =>
         {
-            LinearVelocity += impulse * TrailblazerManager.DeltaTime;
-            WorldPosition += LinearVelocity;
+            VisualRotation *= rot;
         };
-        Events.OnAddAngularImpulse += (angularVelocity) =>
+        Events.OnAddLinearForce += (force) =>
+        {
+            // assume a mass of 1
+            // multiply force by DeltaTime to integrate as velocity delta
+            LinearVelocity += force * TrailblazerManager.DeltaTime;
+
+            // we should probably move this into a Simulate loop for IScout
+            WorldPosition += LinearVelocity * TrailblazerManager.DeltaTime;
+        };
+        Events.OnAddAngularForce += (force) =>
         {
             FixedQuaternion deltaRotation = FixedQuaternion.FromAxisAngle(
-                angularVelocity.Normal,
-                angularVelocity.Magnitude * TrailblazerManager.DeltaTime
+                force.Normal,
+                force.Magnitude * TrailblazerManager.DeltaTime
             );
 
             VisualRotation = deltaRotation * VisualRotation;
         };
 
-        ScoutMotor = ScoutController.CreateNew(this);
+        ScoutController = ScoutController.CreateNew(this);
         return;
     }
 
-    public void SetTraversalState(TraversalData traversalState)
+    public void SetTraversalState(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? movementState = null)
     {
-        TraversalState = traversalState;
+        Traversal.Medium = medium;
+        Traversal.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
+        Traversal.Ground = movementState ?? GroundState.DefaultGroundState;
     }
 
-    public void GetTraversalState(out TraversalData traversalState)
+    public void GetTraversalState(out TraversalState movementState)
     {
-        traversalState = TraversalState;
+        if (Traversal.Medium != TraversalMedium.Water)
+        {
+            if (WorldPosition.y > Traversal.SurfaceLevel + Fixed64.FromRaw(0x1000))
+                Traversal.Medium = TraversalMedium.Air;
+            else if (WorldPosition.y <= Traversal.SurfaceLevel)
+                Traversal.Medium = TraversalMedium.Ground;
+        }
+
+        movementState = Traversal;
     }
 
     public Vector3d GetFootPosition()
@@ -68,6 +96,6 @@ public class MockScout : IScout
 
     public void FinalizeMovement()
     {
-        ScoutMotor.SetMotorLock(false);
+        ScoutController.SetMotorLock(false);
     }
 }

@@ -11,18 +11,18 @@ namespace Trailblazer.Controllers
 
         public FixedQuaternion VisualRotation { get; }
 
-        public Vector3d LinearVelocity { get; }
+        public Vector3d LinearVelocity { get; }// TODO: get rid of this and store seperately
 
-        ScoutController ScoutMotor { get; }
+        ScoutController ScoutController { get; }
 
         /// <summary>
         /// The events of the scout.
         /// </summary>
         ScoutEvents Events { get; }
 
-        void SetMovementState(MovementState movementState);
+        void SetTraversalState(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? movementState = null);
 
-        void GetMovementState(out MovementState movementState);
+        void GetTraversalState(out TraversalState traversalState);
 
         Vector3d GetFootPosition();
 

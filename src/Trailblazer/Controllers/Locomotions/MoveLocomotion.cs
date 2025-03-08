@@ -13,21 +13,21 @@ namespace Trailblazer.Controllers.Locomotions
 
         public static readonly Fixed64 VelocityEpsilon = Fixed64.FromRaw(0x418938L); //0.001f;
 
-        public static readonly Fixed64 DefaultMaxWalkSpeed = (Fixed64)0.1d;
+        public static readonly Fixed64 DefaultMaxWalkSpeed = (Fixed64)1d;
 
-        public static readonly Fixed64 DefaultMaxJogSpeed = (Fixed64)0.25d;
+        public static readonly Fixed64 DefaultMaxJogSpeed = (Fixed64)2d;
 
-        public static readonly Fixed64 DefaultMaxSprintSpeed = (Fixed64)0.5d;
+        public static readonly Fixed64 DefaultMaxSprintSpeed = (Fixed64)3d;
 
-        public static readonly Fixed64 DefaultMaxSidewaysSpeed = (Fixed64)0.15d;
+        public static readonly Fixed64 DefaultMaxSidewaysSpeed = (Fixed64)2d;
 
-        public static readonly Fixed64 DefaultMaxBackwardsSpeed = (Fixed64)0.15d;
+        public static readonly Fixed64 DefaultMaxBackwardsSpeed = (Fixed64)2d;
 
         public static readonly Fixed64 DefaultMaxGroundAcceleration = (Fixed64)30;
 
         public static readonly Fixed64 DefaultMaxAirAcceleration = (Fixed64)20;
 
-        public static readonly FixedCurve DefaultAnimationCurve = new FixedCurve(FixedCurveMode.Linear,
+        public static readonly FixedCurve DefaultAnimationCurve = new FixedCurve(FixedCurveMode.Step,
                 new FixedCurveKey(-90, 1), // Full downward slope
                 new FixedCurveKey(0, 1), // Flat ground
                 new FixedCurveKey(90, 0) // Full upward slope

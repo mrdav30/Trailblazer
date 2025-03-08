@@ -23,12 +23,12 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// The default maximum swim speed.
         /// </summary>
-        public static readonly Fixed64 DefaultMaxSwimSpeed = (Fixed64)0.25d;
+        public static readonly Fixed64 DefaultMaxSwimSpeed = (Fixed64)1.5d;
 
         /// <summary>
         /// The default maximum swim sideways speed.
         /// </summary>
-        public static readonly Fixed64 DefaultMaxSwimSidewaysSpeed = (Fixed64)0.15d;
+        public static readonly Fixed64 DefaultMaxSwimSidewaysSpeed = (Fixed64)1d;
 
         /// <summary>
         /// The default maximum swim acceleration.

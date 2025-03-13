@@ -9,7 +9,7 @@ namespace Trailblazer.Controllers
     /// <summary>
     /// The mode of the motor.
     /// </summary>
-    public enum ControllerMode
+    public enum OutputMode
     {
         /// <summary>   
         /// Standard force application.
@@ -18,19 +18,18 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// Calculates and outputs expected position updates.
         /// </summary>
-        PositionDelta = 1
+        Position = 1
     }
 
     /// <summary>
     /// The type of movement input.
     /// </summary>
-    public enum MoveInput
+    public enum TraversalSpeed
     {
         Idle = 0,
-        Walk = 1, // walk
-        Jog = 2, // jog
-        Sprint = 3, // run
-        Unlocked = 99
+        Walk = 1,
+        Jog = 2,
+        Sprint = 3,
     }
 
     // Deterministic, lockstep, impulse-based agent controller
@@ -46,12 +45,12 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// Contains all locomotion states for the scout.
         /// </summary>
-        public LocomotionState Locomotion = new();
+        public LocomotionMotor Locomotions = new();
 
         /// <summary>
         /// The mode of the motor.
         /// </summary>
-        public ControllerMode Mode;
+        public OutputMode Mode;
 
         [NonSerialized]
         private IScout _hostScout;
@@ -81,12 +80,12 @@ namespace Trailblazer.Controllers
         public bool IsInWater => ActiveMedium == TraversalMedium.Water;
         public bool WasInWater => LastMedium == TraversalMedium.Water;
 
-        public bool InLimbo => IsInAir && !Locomotion.Jump.IsJumping && !Locomotion.Fall.IsFalling;
+        public bool InLimbo => IsInAir && !Locomotions.Jump.IsJumping && !Locomotions.Fall.IsFalling;
 
         /// <summary>
         /// Whether the motor is locked.
         /// </summary>
-        public bool IsMotorLocked { get; private set; }
+        public bool IsControllerLocked { get; private set; }
 
         /// <inheritdoc cref="TrailblazerManager.GravityForce"/>
         public Fixed64 Gravity { get; set; } = TrailblazerManager.GravityForce;
@@ -94,13 +93,10 @@ namespace Trailblazer.Controllers
         #region Cache
 
         [NonSerialized]
-        private Vector3d _frameMoveDirection;
+        private TraversalRequest _frameTraversalRequest;
 
         [NonSerialized]
-        private MoveInput _frameMoveInput;
-
-        [NonSerialized]
-        private Vector3d _accelerationDelta;
+        private Vector3d _forceOutput;
 
         #endregion
 
@@ -110,27 +106,37 @@ namespace Trailblazer.Controllers
 
         public static ScoutController CreateNew(IScout scout)
         {
-            ScoutController controller = new ScoutController();
+            ScoutController controller = new();
             controller.Initialize(scout);
             return controller;
         }
 
         public void Initialize(IScout scout) => _hostScout = scout;
 
+        public void Simulate(Vector3d movementDirection, TraversalSpeed traversalSpeed, bool isRequestingJump = false)
+        {
+            Simulate(new TraversalRequest
+            {
+                MovementDirection = movementDirection,
+                TraversalSpeed = traversalSpeed,
+                IsRequestingJump = isRequestingJump
+            });
+        }
+        
         /// <summary>
         /// Call once every simulation frame (i.e. FixedUpdate)
         /// </summary>
-        public void Simulate(
-            Vector3d direction, // The current global direction we want the character to move in.
-            MoveInput movementInput,
-            bool hasJumpRequest = false)
+        /// <remarks>
+        /// Controller will lock to prevent further accumulation of forces until unlocked for the next frame
+        /// </remarks>
+        public void Simulate(TraversalRequest traversalRequest)
         {
             if (_hostScout == null) return;
 
-            if (IsMotorLocked)
+            if (IsControllerLocked)
                 return;
 
-            IsMotorLocked = true;
+            IsControllerLocked = true;
 
             if (DebugMode)
                 Debug.WriteLine($"AgentMotor State: " +
@@ -138,11 +144,10 @@ namespace Trailblazer.Controllers
                     $"InAir={IsInAir}, " +
                     $"Velocity={_hostScout.LinearVelocity}");
 
-            _frameMoveInput = movementInput;
-            _frameMoveDirection = Locomotion.IsInControl ? direction : Vector3d.Zero;
+            _frameTraversalRequest = traversalRequest;
 
             // Reset the target impulse to prevent accumulation
-            _accelerationDelta = Vector3d.Zero;
+            _forceOutput = Vector3d.Zero;
 
             CheckTraversalState();
 
@@ -151,34 +156,22 @@ namespace Trailblazer.Controllers
             ComputeMovementForces();
 
             // Register any additional movement after applying platform movement
-            if (Locomotion.Platform.IsEnabled)
+            if (Locomotions.Platform.IsEnabled)
                 HandlePlatformUpdates();
 
-            if (!hasJumpRequest) // reset this before applying gravity
-                Locomotion.Jump.IsHoldingJump = false;
+            if (!_frameTraversalRequest.IsRequestingJump) // reset this before applying gravity
+                Locomotions.Jump.IsHoldingJump = false;
 
-            // TODO: for water, handle bouyant force
-            if (!Locomotion.Swim.IsSwimming)
-                ApplyGroundOrGravityImpulse();
+            // Include forces from gravity, water, and ground.
+            ApplyEnvironmentalForces();
 
-            if (Locomotion.Jump.IsEnabled && Locomotion.IsInControl && hasJumpRequest)
-                ApplyJumpImpulse();
+            if (Locomotions.Jump.IsEnabled && Locomotions.IsInControl && _frameTraversalRequest.IsRequestingJump)
+                ApplyJumpForce();
 
-            if (Locomotion.Fall.IsEnabled && !Locomotion.Swim.IsSwimming)
+            if (Locomotions.Fall.IsEnabled && !Locomotions.Swim.IsSwimming)
                 HandleFallState();
 
-            // Corrects the Y axis if swimming or no gravity
-            if (Locomotion.Swim.IsSwimming)
-                _accelerationDelta.y = _frameMoveDirection.y;
-
-            // Apply the force
-            if (_accelerationDelta != Vector3d.Zero)
-            {
-                if (Mode == ControllerMode.Force)
-                    _hostScout.Events?.OnAddLinearForce?.Invoke(_accelerationDelta);
-                else if (Mode == ControllerMode.PositionDelta)
-                    _hostScout.Events?.OnAddPositionDelta?.Invoke(_accelerationDelta * TrailblazerManager.DeltaTime);
-            }
+            ApplyScoutMovement();
 
             // Reset before returning
             Reset();
@@ -186,9 +179,8 @@ namespace Trailblazer.Controllers
 
         public void Reset()
         {
-            _frameMoveInput = MoveInput.Idle;
-            _frameMoveDirection = Vector3d.Zero;
-            _accelerationDelta = Vector3d.Zero;
+            _frameTraversalRequest = default;
+            _forceOutput = Vector3d.Zero;
         }
 
         #endregion
@@ -202,6 +194,7 @@ namespace Trailblazer.Controllers
             LastMedium = ActiveMedium;
             ActiveMedium = traversalState.Medium;
 
+            LastSurfaceLevel = SurfaceLevel;
             SurfaceLevel = traversalState.SurfaceLevel;
 
             if (!IsGrounded)  // Left the ground
@@ -215,9 +208,32 @@ namespace Trailblazer.Controllers
                 GroundNormal = traversalState.Ground?.GroundNormal ?? Vector3d.Zero;
 
                 // If we hit a new platform, reset platform state
-                if (traversalState.Ground.HasValue)
-                    DidPlatformChange(traversalState.Ground.Value);
+                if (Locomotions.Platform.IsEnabled)
+                {
+                    Locomotions.Platform.MovementTransfer = traversalState.Ground?.MovementTransfer ?? MovementTransferState.None;
+                    if (DidPlatformChange(traversalState.Ground))
+                    {
+                        Fixed4x4 newGroundMatrix = traversalState.Ground?.GroundMatrix ?? Fixed4x4.Identity;
+
+                        Locomotions.Platform.LastTransform = Locomotions.Platform.ActivePlatform == null
+                            ? newGroundMatrix
+                            : Locomotions.Platform.ActiveTransform;
+                        Locomotions.Platform.ActiveTransform = newGroundMatrix;
+                        Locomotions.Platform.ActivePlatform = traversalState.Ground?.HitObject;
+                        Locomotions.Platform.ActiveVelocity = Vector3d.Zero;
+                    }
+                }
             }
+        }
+        private bool DidPlatformChange(GroundState? groundState)
+        {
+            if (Locomotions.Platform.ActivePlatform == groundState?.HitObject)
+                return Locomotions.Platform.IsNewPlatform = false;
+
+            if (Locomotions.Platform.ActivePlatform == null || Locomotions.Platform.ActivePlatform != groundState?.HitObject)
+                return Locomotions.Platform.IsNewPlatform = true;
+
+            return Locomotions.Platform.IsNewPlatform = false;
         }
 
         private void HandleMovementTransitions()
@@ -225,22 +241,22 @@ namespace Trailblazer.Controllers
             if (InLimbo)
             {
                 // In limbo, prevent any further processing until control is given back
-                Locomotion.IsInControl = false;
+                Locomotions.IsInControl = false;
                 return;
             }
 
-            if (Locomotion.Jump.IsCoolingDown)
-                Locomotion.Jump.UpdateCooldown();
+            if (Locomotions.Jump.IsCoolingDown)
+                Locomotions.Jump.UpdateCooldown();
 
             if (WasInAir && !IsInAir) // Landed
             {
-                if (Locomotion.Platform.IsInteriaApplied)
-                    Locomotion.Platform.FrameVelocity *= Fixed64.Half; // Preserve some horizontal
+                if (Locomotions.Platform.IsPlatformInteriaApplied)
+                    Locomotions.Platform.FrameForce = Vector3d.Zero; // Preserve some horizontal
 
-                if (Locomotion.Jump.IsJumping)
+                if (Locomotions.Jump.IsJumping)
                 {
                     // Reset cooldown on landing
-                    Locomotion.Jump.ClearState();
+                    Locomotions.Jump.ClearState();
 
                     if (IsInWater)
                         _hostScout.Events?.OnStopWaterBreach?.Invoke();
@@ -257,93 +273,69 @@ namespace Trailblazer.Controllers
             {
                 // Clear the transient state when entiring water for the first time
                 if (!WasInWater)
-                    Locomotion.ClearStateAll();
+                    Locomotions.ClearStateAll();
 
-                if (Locomotion.Swim.IsEnabled)
+                if (Locomotions.Swim.IsEnabled)
                 {
-                    Locomotion.Swim.IsSwimming = true;
-                    Locomotion.Swim.IsDiving = _hostScout.WorldPosition.y < SurfaceLevel;
+                    Locomotions.Swim.IsSwimming = true;
+                    Locomotions.Swim.IsDiving = _hostScout.WorldPosition.y < SurfaceLevel;
 
-                    Locomotion.Swim.UpdateDiveTime();
+                    Locomotions.Swim.UpdateDiveTime();
 
-                    if (IsInWater && Locomotion.Swim.IsDrowning)
-                        _hostScout.Events?.OnDrowning?.Invoke(Locomotion.Swim.UnderwaterTimer);
+                    if (IsInWater && Locomotions.Swim.IsDrowning)
+                        _hostScout.Events?.OnDrowning?.Invoke(Locomotions.Swim.UnderwaterTimer);
                 }
 
                 return;
             }
 
             // Transitioning from water to land
-            if (WasInWater && Locomotion.Swim.IsSwimming)
-                Locomotion.Swim.ClearState();
+            if (WasInWater && Locomotions.Swim.IsSwimming)
+                Locomotions.Swim.ClearState();
 
-            if (IsGrounded && Locomotion.Slide.IsEnabled)
+            if (IsGrounded && Locomotions.Slide.IsEnabled)
             {
                 bool isSliding = IsTooSteep();
-                if (!isSliding && Locomotion.Slide.IsSliding)
-                    Locomotion.IsInControl = true; // reset control
+                if (!isSliding && Locomotions.Slide.IsSliding)
+                    Locomotions.IsInControl = true; // reset control
 
-                Locomotion.Slide.IsSliding = isSliding;
+                Locomotions.Slide.IsSliding = isSliding;
             }
-        }
-
-        private bool DidPlatformChange(GroundState groundState)
-        {
-            if (!Locomotion.Platform.IsEnabled
-                || Locomotion.Platform.ActivePlatform == groundState.HitObject)
-                return Locomotion.Platform.IsNewPlatform = false;
-
-            if (Locomotion.Platform.ActivePlatform == null
-                || Locomotion.Platform.ActivePlatform != groundState.HitObject)
-            {
-                Fixed4x4 newGroundMatrix = groundState.GroundMatrix ?? Fixed4x4.Identity;
-
-                Locomotion.Platform.LastMatrix = Locomotion.Platform.ActivePlatform == null
-                    ? newGroundMatrix
-                    : Locomotion.Platform.ActiveMatrix;
-                Locomotion.Platform.ActiveMatrix = newGroundMatrix;
-                Locomotion.Platform.ActivePlatform = groundState.HitObject;
-                Locomotion.Platform.FrameVelocity = Vector3d.Zero;
-                Locomotion.Platform.Velocity = Vector3d.Zero;
-                return Locomotion.Platform.IsNewPlatform = true;
-            }
-
-            return Locomotion.Platform.IsNewPlatform = false;
         }
 
         private void HandleFallState()
         {
-            if (Locomotion.Fall.IsFalling)
+            if (Locomotions.Fall.IsFalling)
             {
                 // Make sure we didn't somehow get above the initial start point
-                if (_hostScout.WorldPosition.y > Locomotion.Fall.FallStart)
-                    Locomotion.Fall.FallStart = _hostScout.WorldPosition.y;
+                if (_hostScout.WorldPosition.y > Locomotions.Fall.FallStart)
+                    Locomotions.Fall.FallStart = _hostScout.WorldPosition.y;
 
-                if (!IsInAir && !Locomotion.Slide.IsSliding)
+                if (!IsInAir && !Locomotions.Slide.IsSliding)
                 {
                     // scout landed after falling
-                    Locomotion.Fall.IsFalling = false;
-                    Locomotion.Fall.FallEnd = _hostScout.WorldPosition.y;
+                    Locomotions.Fall.IsFalling = false;
+                    Locomotions.Fall.FallEnd = _hostScout.WorldPosition.y;
 
-                    if (Locomotion.Fall.FallHeight > Fixed64.Zero)
-                        _hostScout.Events?.OnStopFall?.Invoke(Locomotion.Fall.FallHeight);
+                    if (Locomotions.Fall.FallHeight > Fixed64.Zero)
+                        _hostScout.Events?.OnStopFall?.Invoke(Locomotions.Fall.FallHeight);
 
                     return;
                 }
 
-                Fixed64 fallHeight = (Locomotion.Fall.FallStart - _hostScout.WorldPosition.y).Abs();
-                if (fallHeight > Locomotion.Fall.MaxFallHeight)
+                Fixed64 fallHeight = (Locomotions.Fall.FallStart - _hostScout.WorldPosition.y).Abs();
+                if (fallHeight > Locomotions.Fall.MaxFallHeight)
                     _hostScout.Events?.OnMaxFallHeightReached?.Invoke();
 
                 return;
             }
 
             // check if we are currently falling with a small threshold
-            if ((IsInAir || Locomotion.Slide.IsSliding) && _accelerationDelta.y < -Fixed64.FromRaw(0x00010000L))
+            if ((IsInAir || Locomotions.Slide.IsSliding) && _forceOutput.y < -Fixed64.FromRaw(0x00010000L))
             {
                 // scout started falling
-                Locomotion.Fall.IsFalling = true;
-                Locomotion.Fall.FallStart = _hostScout.WorldPosition.y;
+                Locomotions.Fall.IsFalling = true;
+                Locomotions.Fall.FallStart = _hostScout.WorldPosition.y;
                 _hostScout.Events?.OnStartFall?.Invoke();
             }
         }
@@ -354,136 +346,105 @@ namespace Trailblazer.Controllers
             if (IsInWater)
                 return;
 
-            // Subtract only horizontal velocity, preserving vertical momentum
-            Vector3d adjustedPlatformAcceleration = Locomotion.Platform.Velocity / TrailblazerManager.DeltaTime;
-            adjustedPlatformAcceleration.y = Fixed64.Zero; // Keep vertical momentum
+            // Convert platforms velocity into instantaneous velocity shift
+            Vector3d adjustedPlatformForce = Locomotions.Platform.ActiveVelocity / TrailblazerManager.DeltaTime;
+            adjustedPlatformForce.y = Fixed64.Zero; // preserve vertical momentum
 
             // If scout landed on a new platform, we have to wait for two frames
             // before we know the new velocity of the platform under the scout
-            if (Locomotion.Platform.IsHoldingPlatform)
+            if (Locomotions.Platform.IsHoldingPlatform)
             {
-                bool release = Locomotion.Platform.UpdateHoldOnPlatform();
+                bool release = Locomotions.Platform.UpdateHoldOnPlatform();
                 if (release && IsGrounded)
-                    _accelerationDelta -= adjustedPlatformAcceleration;
+                    _forceOutput -= adjustedPlatformForce;
             }
 
-            if (Locomotion.Platform.IsInteriaApplied)
+            if (Locomotions.Platform.IsPlatformInteriaApplied)
             {
                 if (!WasInAir && IsInAir)
                 {
-                    Locomotion.Platform.FrameVelocity = Locomotion.Platform.Velocity;
+                    Locomotions.Platform.FrameForce = adjustedPlatformForce;
                     // Apply inertia from platform
-                    _accelerationDelta += Locomotion.Platform.FrameVelocity / TrailblazerManager.DeltaTime;
+                    _forceOutput += Locomotions.Platform.FrameForce;
                 }
 
                 if (!WasGrounded && IsGrounded)
                 {
-                    if (Locomotion.Platform.IsNewPlatform)
-                        Locomotion.Platform.SetHoldPlatform(Locomotion.Platform.ActivePlatform);
+                    if (Locomotions.Platform.IsNewPlatform)
+                        Locomotions.Platform.SetHoldPlatform(Locomotions.Platform.ActivePlatform);
                     else
-                        _accelerationDelta -= adjustedPlatformAcceleration;
+                        _forceOutput -= adjustedPlatformForce;
                 }
             }
 
-            if (Locomotion.Platform.ActivePlatform != null)
+            if (Locomotions.Platform.ActivePlatform != null)
                 UpdatePlatformVelocity();
             else
-                Locomotion.Platform.Velocity = Vector3d.Zero;
+                Locomotions.Platform.ActiveVelocity = Vector3d.Zero;
 
-            if (IsGrounded && Locomotion.Platform.IsOnPlatform || Locomotion.Platform.IsLockedToPlatform)
+            if (IsGrounded && Locomotions.Platform.IsOnPlatform || Locomotions.Platform.IsLockedToPlatform)
             {
                 if (IsGrounded)
                     ApplyPlatformMovement();
                 UpdatePlatformMovement();
             }
 
-            Locomotion.Platform.LastMatrix = Locomotion.Platform.ActiveMatrix;
-            Locomotion.Platform.IsNewPlatform = false;
+            Locomotions.Platform.LastTransform = Locomotions.Platform.ActiveTransform;
+            Locomotions.Platform.IsNewPlatform = false;
+        }
+
+        private void UpdatePlatformVelocity()
+        {
+            if (!Locomotions.Platform.IsNewPlatform)
+            {
+                Vector3d currentPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
+                Vector3d previousPoint = Locomotions.Platform.LastTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
+
+                // Store platform velocity to use as a canceling force
+                Locomotions.Platform.ActiveVelocity = (currentPoint - previousPoint) / TrailblazerManager.DeltaTime;
+            }
+        }
+
+        // platform movement should be treated as an external influence rather than an acceleration-based movement.
+        // The Scout should inherit platform motion directly – since it's not "pushing" itself but rather being carried along.
+        private void ApplyPlatformMovement()
+        {
+            // Apply platform rotation first THEN apply platform movement
+            FixedQuaternion targetRotation = Locomotions.Platform.ActiveTransform.Rotation * Locomotions.Platform.ScoutLocalRotation;
+            if (targetRotation != FixedQuaternion.Identity)
+            {
+                FixedQuaternion rotationDiff = targetRotation * Locomotions.Platform.ScoutGlobalRotation.Inverse();
+                _hostScout.Events?.OnAddRotationDelta?.Invoke(rotationDiff);
+            }
+
+            Vector3d newGlobalPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
+            Vector3d moveDistance = newGlobalPoint - Locomotions.Platform.ScoutGlobalPoint;
+            if (moveDistance != Vector3d.Zero)
+                _hostScout.Events?.OnAddPositionDelta?.Invoke(moveDistance);
         }
 
         private void UpdatePlatformMovement()
         {
             Vector3d footPosition = _hostScout.GetFootPosition();
-            footPosition.y += Locomotion.Platform.HeightAdjust;
-            Locomotion.Platform.ScoutGlobalPoint = footPosition;
-            Locomotion.Platform.ScoutLocalPoint = Fixed4x4.InverseTransformPoint(
-                Locomotion.Platform.ActiveMatrix,
-                Locomotion.Platform.ScoutGlobalPoint);
+            footPosition.y += Locomotions.Platform.HeightAdjust;
+            Locomotions.Platform.ScoutGlobalPoint = footPosition;
+            Locomotions.Platform.ScoutLocalPoint = Fixed4x4.InverseTransformPoint(
+                Locomotions.Platform.ActiveTransform,
+                Locomotions.Platform.ScoutGlobalPoint);
 
-            Locomotion.Platform.ScoutGlobalRotation = _hostScout.VisualRotation;
-            Locomotion.Platform.ScoutLocalRotation = Locomotion.Platform.ActiveMatrix.Rotation.Inverse() * Locomotion.Platform.ScoutGlobalRotation;
-        }
-
-        private void UpdatePlatformVelocity()
-        {
-            if (!Locomotion.Platform.IsNewPlatform)
-            {
-                Vector3d currentPoint = Locomotion.Platform.ActiveMatrix.TransformPoint(Locomotion.Platform.ScoutLocalPoint);
-                Vector3d previousPoint = Locomotion.Platform.LastMatrix.TransformPoint(Locomotion.Platform.ScoutLocalPoint);
-                Locomotion.Platform.Velocity = (currentPoint - previousPoint) / TrailblazerManager.DeltaTime;
-            }
-        }
-
-        private void ApplyPlatformMovement()
-        {
-            switch (Mode)
-            {
-                case ControllerMode.Force:
-                    ApplyPlatformMovementWithForce();
-                    break;
-                case ControllerMode.PositionDelta:
-                    ApplyPlatformMovementWithPosition();
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        private void ApplyPlatformMovementWithPosition()
-        {
-            // Apply platform rotation first THEN apply platform movement
-            FixedQuaternion targetRotation = Locomotion.Platform.ActiveMatrix.Rotation * Locomotion.Platform.ScoutLocalRotation;
-            if (targetRotation != FixedQuaternion.Identity)
-            {
-                FixedQuaternion rotationDiff = targetRotation * Locomotion.Platform.ScoutGlobalRotation.Inverse();
-                _hostScout.Events?.OnAddRotationDelta?.Invoke(rotationDiff);
-            }
-
-            Vector3d newGlobalPoint = Locomotion.Platform.ActiveMatrix.TransformPoint(Locomotion.Platform.ScoutLocalPoint);
-            Vector3d moveDistance = newGlobalPoint - Locomotion.Platform.ScoutGlobalPoint;
-            if (moveDistance != Vector3d.Zero)
-                _hostScout.Events?.OnAddPositionDelta?.Invoke(moveDistance);
-        }
-
-        private void ApplyPlatformMovementWithForce()
-        {
-            // Apply platform rotation first THEN apply platform movement
-            FixedQuaternion targetRotation = Locomotion.Platform.ActiveMatrix.Rotation * Locomotion.Platform.ScoutLocalRotation;
-            if (targetRotation != FixedQuaternion.Identity)
-            {
-                Vector3d requiredAngularVelocity = targetRotation.ToAngularVelocity(
-                    _hostScout.VisualRotation,
-                    TrailblazerManager.DeltaTime
-                );
-                _hostScout.Events?.OnAddAngularForce?.Invoke(requiredAngularVelocity);
-            }
-
-            if (Locomotion.Platform.Velocity != Vector3d.Zero)
-            {
-                Vector3d requiredAcceleration = (Locomotion.Platform.Velocity - _hostScout.LinearVelocity) / TrailblazerManager.DeltaTime;
-                _hostScout.Events?.OnAddLinearForce?.Invoke(requiredAcceleration);
-            }
+            Locomotions.Platform.ScoutGlobalRotation = _hostScout.VisualRotation;
+            Locomotions.Platform.ScoutLocalRotation = Locomotions.Platform.ActiveTransform.Rotation.Inverse() * Locomotions.Platform.ScoutGlobalRotation;
         }
 
         /// <summary>
-        /// Find desired velocity
+        /// Calculate the desired velocity to output as an acceleration delta
         /// </summary>
         private void ComputeMovementForces()
         {
             Fixed64 maxVelocityChange = GetMaxAcceleration() * TrailblazerManager.DeltaTime;
             Vector3d velocityChange = (GetDesiredVelocity() - _hostScout.LinearVelocity).ClampMagnitude(maxVelocityChange);
 
-            if (Locomotion.Fall.IsFalling)
+            if (Locomotions.Fall.IsFalling)
                 velocityChange.y = Fixed64.Zero; // TODO: this should get added to gravity
 
             if (velocityChange == Vector3d.Zero)
@@ -491,42 +452,42 @@ namespace Trailblazer.Controllers
 
             Vector3d accelerationChange = velocityChange / TrailblazerManager.DeltaTime;
 
-            if (IsGrounded || Locomotion.IsInControl)
-                _accelerationDelta += accelerationChange;
+            if (IsGrounded || Locomotions.IsInControl)
+                _forceOutput += accelerationChange;
 
             // When going uphill, the IScout will automatically move up by the needed amount.
             // Not moving it upwards manually prevent risk of lifting off from the ground.
             // When going downhill, DO move down manually, as gravity is not enough on steep hills.
             if (IsGrounded)
-                _accelerationDelta.y = FixedMath.Min(_accelerationDelta.y, Fixed64.Zero);
+                _forceOutput.y = FixedMath.Min(_forceOutput.y, Fixed64.Zero);
         }
 
         private Vector3d GetDesiredVelocity()
         {
             Vector3d result;
-            if (Locomotion.Slide.IsSliding)
+            if (Locomotions.Slide.IsSliding)
             {
-                Locomotion.IsInControl = false;
+                Locomotions.IsInControl = false;
 
                 // The direction we're sliding in
                 result = new Vector3d(GroundNormal.x, Fixed64.Zero, GroundNormal.z).Normal;
                 // Find the input movement direction projected onto the sliding direction
-                Vector3d projectedMoveDir = Vector3d.Project(_frameMoveDirection, result);
+                Vector3d projectedMoveDir = Vector3d.Project(_frameTraversalRequest.MovementDirection, result);
                 // Add the sliding direction, the speed control, and the sideways control vectors
                 result = result + projectedMoveDir
-                    * Locomotion.Slide.SpeedControl + (_frameMoveDirection - projectedMoveDir)
-                    * Locomotion.Slide.SidewaysControl;
+                    * Locomotions.Slide.SpeedControl + (_frameTraversalRequest.MovementDirection - projectedMoveDir)
+                    * Locomotions.Slide.SidewaysControl;
                 // Multiply with the sliding speed
 
-                Fixed64 adjustedSlideSpeed = Locomotion.Slide.SlidingSpeed
-                    * (Fixed64.One - Locomotion.Move.SurfaceFriction);
+                Fixed64 adjustedSlideSpeed = Locomotions.Slide.SlidingSpeed
+                    * (Fixed64.One - Locomotions.Move.SurfaceFriction);
                 result *= adjustedSlideSpeed;
             }
             else
             {
-                Locomotion.IsInControl = !InLimbo; // see if IScout gets control back
+                Locomotions.IsInControl = !InLimbo; // see if IScout gets control back
 
-                if (InLimbo || _frameMoveInput == MoveInput.Idle)
+                if (InLimbo || _frameTraversalRequest.TraversalSpeed == TraversalSpeed.Idle)
                     return Vector3d.Zero;
 
                 result = GetHorizontalVelocity();
@@ -538,13 +499,13 @@ namespace Trailblazer.Controllers
 
                 // Ensure smoother stops in water instead of abrupt halts
                 if (IsInWater)
-                    return result * (Fixed64.One - Locomotion.Swim.WaterDragFactor);
+                    return result * (Fixed64.One - Locomotions.Swim.WaterDragFactor);
             }
 
-            if (IsGrounded && Locomotion.Platform.IsOnPlatform || Locomotion.Platform.IsLockedToPlatform)
+            if (Locomotions.Platform.IsLockedToPlatform)
             {
-                result += Locomotion.Platform.FrameVelocity;
-                // any upward/downward momentum will be handled by the platform
+                result += Locomotions.Platform.FrameForce;
+                // any upward/downward momentum will be handled by the platform or gravity
                 result.y = Fixed64.Zero;
             }
 
@@ -561,16 +522,16 @@ namespace Trailblazer.Controllers
         private Vector3d GetHorizontalVelocity()
         {
             Fixed3x3 transposedMatrix = _hostScout.VisualRotation.ToMatrix3x3();
-            Vector3d desiredLocalDirection = Fixed3x3.InverseTransformDirection(transposedMatrix, _frameMoveDirection);
+            Vector3d desiredLocalDirection = Fixed3x3.InverseTransformDirection(transposedMatrix, _frameTraversalRequest.MovementDirection);
             Fixed64 speed = MaxSpeedInDirection(desiredLocalDirection);
 
-            speed *= Locomotion.Move.MoveSpeedMultiplier;
+            speed *= Locomotions.Move.MoveSpeedMultiplier;
 
-            if (IsOnSlope())
+            if (Locomotions.Move.ModifySpeedOnSlope && IsOnSlope())
             {
                 // Modify max speed on slopes based on slope speed multiplier curve
                 Fixed64 movementSlopeAngle = FixedMath.Asin(GroundNormal.y.ClampOne()).ToDegree();
-                speed *= Locomotion.Move.SlopeSpeedMultiplier.Evaluate(movementSlopeAngle);
+                speed *= Locomotions.Move.SlopeSpeedMultiplier.Evaluate(movementSlopeAngle);
             }
 
             return transposedMatrix * (desiredLocalDirection * speed);
@@ -585,30 +546,11 @@ namespace Trailblazer.Controllers
             if (desiredMovementDirection == Vector3d.Zero)
                 return Fixed64.Zero;
 
-            Fixed64 maxSpeed = Fixed64.Zero;
-            if (desiredMovementDirection.z < Fixed64.Zero)
-                maxSpeed = Locomotion.Move.MaxBackwardsSpeed;
-            else
-            {
-                switch (_frameMoveInput)
-                {
-                    case MoveInput.Walk:
-                        maxSpeed = Locomotion.Move.MaxWalkSpeed;
-                        break;
-                    case MoveInput.Jog:
-                        maxSpeed = Locomotion.Move.MaxJogSpeed;
-                        break;
-                    case MoveInput.Sprint:
-                        maxSpeed = Locomotion.Move.MaxSprintSpeed;
-                        break;
-                }
-            }
-
             Vector3d temp;
             Fixed64 zAxisEllipseMultiplier;
             if (IsInWater)
             {
-                zAxisEllipseMultiplier = Locomotion.Swim.MaxSwimSpeed / Locomotion.Swim.MaxSwimSidewaysSpeed;
+                zAxisEllipseMultiplier = Locomotions.Swim.MaxSwimSpeed / Locomotions.Swim.MaxSwimSidewaysSpeed;
                 temp = new Vector3d(
                     desiredMovementDirection.x,
                     Fixed64.Zero,
@@ -616,7 +558,26 @@ namespace Trailblazer.Controllers
             }
             else
             {
-                zAxisEllipseMultiplier = maxSpeed / Locomotion.Move.MaxSidewaysSpeed;
+                Fixed64 maxSpeed = Fixed64.Zero;
+                if (desiredMovementDirection.z < Fixed64.Zero)
+                    maxSpeed = Locomotions.Move.MaxBackwardsSpeed;
+                else
+                {
+                    switch (_frameTraversalRequest.TraversalSpeed)
+                    {
+                        case TraversalSpeed.Walk:
+                            maxSpeed = Locomotions.Move.MaxWalkSpeed;
+                            break;
+                        case TraversalSpeed.Jog:
+                            maxSpeed = Locomotions.Move.MaxJogSpeed;
+                            break;
+                        case TraversalSpeed.Sprint:
+                            maxSpeed = Locomotions.Move.MaxSprintSpeed;
+                            break;
+                    }
+                }
+
+                zAxisEllipseMultiplier = maxSpeed / Locomotions.Move.MaxSidewaysSpeed;
                 if (zAxisEllipseMultiplier <= Fixed64.Zero)
                     return Fixed64.Zero;
 
@@ -628,72 +589,103 @@ namespace Trailblazer.Controllers
 
             Fixed64 length = new Vector3d(temp.x, Fixed64.Zero, temp.z * zAxisEllipseMultiplier).Magnitude;
             return length * (IsInWater
-                ? Locomotion.Swim.MaxSwimSpeed
-                : Locomotion.Move.MaxSidewaysSpeed);
+                ? Locomotions.Swim.MaxSwimSidewaysSpeed
+                : Locomotions.Move.MaxSidewaysSpeed);
         }
 
-        private Fixed64 GetMaxAcceleration()
+        public Fixed64 GetMaxAcceleration()
         {
-            if (Locomotion.Swim.IsSwimming)
-                return Locomotion.Swim.MaxVelocity;
+            if (Locomotions.Swim.IsSwimming)
+                return Locomotions.Swim.MaxSwimAcceleration;
 
             if (IsGrounded)
-                return Locomotion.Move.MaxGroundAcceleration;
+                return Locomotions.Move.MaxGroundAcceleration;
 
-            if (Locomotion.Jump.IsJumping)
-                return Locomotion.Move.MaxAirAcceleration * Locomotion.Jump.JumpControlMultiplier;
+            if (Locomotions.Jump.IsJumping)
+                return Locomotions.Move.MaxAirAcceleration * Locomotions.Jump.JumpControlMultiplier;
 
-            if (Locomotion.Fall.IsFalling)
-                return Locomotion.Move.MaxAirAcceleration * Locomotion.Fall.FallControlMultiplier;
+            if (Locomotions.Fall.IsFalling)
+                return Locomotions.Move.MaxAirAcceleration * Locomotions.Fall.FallControlMultiplier;
 
             if (IsInAir)
-                return Locomotion.Move.MaxAirAcceleration;
+                return Locomotions.Move.MaxAirAcceleration;
 
-            return Fixed64.MaxValue; // fallback, should never be hit
+            return Fixed64.MAX_VALUE; // fallback, should never be hit
         }
 
-        private void ApplyGroundOrGravityImpulse()
+        private void ApplyEnvironmentalForces()
         {
             if (IsGrounded)
             {
                 // Actively cancel any existing downward momentum by simulating the normal force of the ground.
-                if (_hostScout.LinearVelocity.y < Fixed64.Zero)
-                    _accelerationDelta.y = -_hostScout.LinearVelocity.y / TrailblazerManager.DeltaTime;
+                if (_hostScout.LinearVelocity.y <= Fixed64.Zero)
+                    _forceOutput.y = -_hostScout.LinearVelocity.y / TrailblazerManager.DeltaTime;
                 else
-                    _accelerationDelta.y = Fixed64.Zero;
+                    _forceOutput.y = Fixed64.Zero;
+
+                return;
+            }
+
+            if (IsInWater)
+            {
+                Fixed64 netBuoyancyForce = Gravity * Locomotions.Swim.BuoyancyFactor;
+
+
+                // If buoyancy cancels gravity completely, scout should neither sink nor rise
+                if (Locomotions.Swim.BuoyancyFactor == Fixed64.One)
+                {
+                    _forceOutput.y = Fixed64.Zero;
+                    return;
+                }
+
+                // If buoyancy is higher than gravity, scout should float up
+                if (Locomotions.Swim.BuoyancyFactor > Fixed64.One)
+                {
+                    _forceOutput.y += netBuoyancyForce;
+                    _forceOutput.y += (Locomotions.Swim.BuoyantForce - Gravity);
+                }
+
+                // If buoyancy is less than gravity, scout should sink down
+                if (Locomotions.Swim.BuoyancyFactor < Fixed64.One)
+                {
+                    _forceOutput.y -= netBuoyancyForce;
+                    _forceOutput.y -= (Locomotions.Swim.BuoyantForce - Gravity);
+                }
 
                 return;
             }
 
             if (IsInAir)
             {
-                // Apply gravity impulse correctly, considering velocity-to-force conversion
                 // TODO: if we want to support moving while in air, does this need to skip?
-                _accelerationDelta.y -= Gravity;
+                // or cancel it out via another force?
+                _forceOutput.y -= Gravity;
 
-                // Prevent excessive falling speed (terminal velocity)
-                _accelerationDelta.y = FixedMath.Max(_accelerationDelta.y, -TrailblazerManager.TerminalFallVelocity);
+                Fixed64 newVelocityY = _hostScout.LinearVelocity.y + (_forceOutput.y * TrailblazerManager.DeltaTime);
+                // Ensure velocity does not exceed terminal fall speed
+                if (newVelocityY < -TrailblazerManager.TerminalFallVelocity)
+                    _forceOutput.y = (-TrailblazerManager.TerminalFallVelocity - _hostScout.LinearVelocity.y) / TrailblazerManager.DeltaTime;
 
                 // When jumping up we don't apply gravity for some time when the user is holding the jump button.
-                // This gives more control over jump height by pressing the button longer.
-                if (Locomotion.Jump.IsJumping && Locomotion.Jump.IsHoldingJump)
+                // This allows for more control over jump height by pressing the button longer.
+                if (Locomotions.Jump.IsJumping && Locomotions.Jump.IsHoldingJump)
                 {
                     // Calculate the duration that the extra jump force should have effect.
                     // If we're still less than that duration after the jumping time, apply the force.
-                    int extraJumpLimit = (int)(Locomotion.Jump.FrameStartJump + Locomotion.Jump.ExtraJumpHeight / GetVerticalJumpSpeed());
+                    int extraJumpLimit = (int)(Locomotions.Jump.FrameStartJump + Locomotions.Jump.ExtraJumpHeight / GetVerticalJumpSpeed());
 
                     // Negate the gravity we just applied, except we push in jumpDir rather than jump upwards.
                     if (TrailblazerManager.FrameCount < extraJumpLimit)
-                        _accelerationDelta += Locomotion.Jump.FrameJumpDirection * Gravity;
+                        _forceOutput += Locomotions.Jump.FrameJumpDirection * Gravity;
                 }
             }
         }
 
-        private void ApplyJumpImpulse()
+        private void ApplyJumpForce()
         {
             if (IsInAir
-                || IsInWater && !Locomotion.Swim.CanBreachWater
-                || Locomotion.Jump.IsCoolingDown
+                || IsInWater && !Locomotions.Swim.CanBreachWater
+                || Locomotions.Jump.IsCoolingDown
                 || _hostScout.Events?.CanAffordJump?.Invoke() == false)
             {
                 return;
@@ -702,68 +694,88 @@ namespace Trailblazer.Controllers
             Vector3d jumpForce;
             if (IsInWater)
             {
-                Locomotion.Jump.FrameJumpDirection = Vector3d.Up;
-                jumpForce = Locomotion.Jump.FrameJumpDirection * Locomotion.Swim.BuoyantForce;
+                Locomotions.Jump.FrameJumpDirection = Vector3d.Up;
+                jumpForce = Locomotions.Jump.FrameJumpDirection * Locomotions.Swim.BuoyantForce;
                 _hostScout.Events?.OnStartWaterBreach?.Invoke();
             }
             else
             {
                 // Calculate the jumping direction
                 Fixed64 slerpAmount = IsTooSteep()
-                    ? Locomotion.Jump.SteepPerpendicularJumpAmount
-                    : Locomotion.Jump.PerpendicularJumpAmount;
+                    ? Locomotions.Jump.SteepPerpendicularJumpAmount
+                    : Locomotions.Jump.PerpendicularJumpAmount;
 
                 // Store jump direction the first time we jump
-                if (!Locomotion.Jump.IsJumping)
-                    Locomotion.Jump.FrameJumpDirection = Vector3d.Slerp(Vector3d.Up, GroundNormal, slerpAmount);
+                if (!Locomotions.Jump.IsJumping)
+                    Locomotions.Jump.FrameJumpDirection = Vector3d.Slerp(Vector3d.Up, GroundNormal, slerpAmount);
 
-                jumpForce = Locomotion.Jump.FrameJumpDirection * GetVerticalJumpSpeed();
+                jumpForce = Locomotions.Jump.FrameJumpDirection * GetVerticalJumpSpeed();
 
-                // Apply inertia from platform and store velocity for landing momentum
-                if (Locomotion.Platform.IsInteriaApplied)
+                // Apply inertia from platform and store platform force for landing momentum
+                if (Locomotions.Platform.IsPlatformInteriaApplied)
                 {
-                    Locomotion.Platform.FrameVelocity = Locomotion.Platform.Velocity;
-                    jumpForce += Locomotion.Platform.Velocity / TrailblazerManager.DeltaTime;
+                    // Apply platform velocity changes as an instantaneous velocity shift
+                    Locomotions.Platform.FrameForce = Locomotions.Platform.ActiveVelocity / TrailblazerManager.DeltaTime;
+                    jumpForce += Locomotions.Platform.FrameForce;
                 }
 
-                _hostScout.Events?.OnStartJump?.Invoke(Locomotion.Jump.AvoidGroundingTimer);
+                _hostScout.Events?.OnStartJump?.Invoke(Locomotions.Jump.AvoidGroundingTimer);
             }
 
             // If we aren't in air, trigger a new jump then...
-            Locomotion.Jump.IsJumping = true;
-            Locomotion.Jump.IsHoldingJump = true;
-            Locomotion.Jump.FrameStartJump = TrailblazerManager.FrameCount;
+            Locomotions.Jump.IsJumping = true;
+            Locomotions.Jump.IsHoldingJump = true;
+            Locomotions.Jump.FrameStartJump = TrailblazerManager.FrameCount;
 
-            Locomotion.Jump.StartCooldown();
+            Locomotions.Jump.StartCooldown();
 
             // Remove any existing downward force
-            _accelerationDelta.y = FixedMath.Max(Fixed64.Zero, _accelerationDelta.y);
-            _accelerationDelta += jumpForce;
+            _forceOutput.y = FixedMath.Max(Fixed64.Zero, _forceOutput.y);
+            _forceOutput += jumpForce;
         }
 
         /// <summary>
         /// From the jump height and gravity we deduce the upwards speed for the character to reach at the apex.
         /// </summary>
         /// <returns></returns>
-        private Fixed64 GetVerticalJumpSpeed() => FixedMath.Sqrt(2 * Locomotion.Jump.BaseJumpHeight * Gravity);
+        private Fixed64 GetVerticalJumpSpeed() => FixedMath.Sqrt(2 * Locomotions.Jump.BaseJumpHeight * Gravity);
+
+        private void ApplyScoutMovement()
+        {
+            // Corrects the Y axis if swimming or no gravity
+            if (Locomotions.Swim.IsSwimming && _frameTraversalRequest.IsMoving)
+                _forceOutput.y = _frameTraversalRequest.MovementDirection.y;
+
+            // Apply the force
+            if (_forceOutput != Vector3d.Zero)
+            {
+                if (Mode == OutputMode.Force)
+                    _hostScout.Events?.OnAddLinearForce?.Invoke(_forceOutput);
+                else if (Mode == OutputMode.Position)
+                {
+                    Vector3d velocityDelta = _forceOutput * TrailblazerManager.DeltaTime;
+                    _hostScout.Events?.OnAddPositionDelta?.Invoke(velocityDelta * TrailblazerManager.DeltaTime);
+                }
+            }
+        }
 
         #endregion
 
         #region Utility
 
-        public void SetMotorLock(bool status) => IsMotorLocked = status;
+        public void SetMotorLock(bool status) => IsControllerLocked = status;
 
         public bool IsTooSteep()
         {
             Fixed64 angle = Vector3d.Angle(Vector3d.Up, GroundNormal);
-            return angle > Locomotion.Slide.SlopeLimit - Fixed64.Epsilon;
+            return angle > Locomotions.Slide.SlopeLimit - Fixed64.Epsilon;
         }
 
         public bool IsOnSlope()
         {
             if (!IsGrounded) return false;
             Fixed64 angle = Vector3d.Angle(Vector3d.Up, GroundNormal);
-            return angle > Fixed64.One && angle <= Locomotion.Slide.SlopeLimit + Fixed64.Epsilon;
+            return angle > Fixed64.One && angle <= Locomotions.Slide.SlopeLimit + Fixed64.Epsilon;
         }
 
         #endregion

@@ -142,12 +142,12 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// The maximum velocity.
         /// </summary>
-        public Fixed64 MaxVelocity => MaxWaterAcceleration * SwimAccelerationModifier;
+        public Fixed64 MaxSwimAcceleration => MaxWaterAcceleration * SwimAccelerationModifier;
 
         /// <summary>
         /// The buoyant force.
         /// </summary>
-        public Fixed64 BuoyantForce => MaxVelocity * BuoyancyFactor;
+        public Fixed64 BuoyantForce => MaxSwimAcceleration * BuoyancyFactor;
 
         /// <summary>
         /// Is the scout drowning?

@@ -4,10 +4,10 @@ namespace Trailblazer.Controllers
 {
     public enum TraversalMedium
     {
-        Ground = 0,
-        Air = 1,
-        Water = 2,
-        Unknown = 99
+        Unknown = 0,
+        Ground = 1,
+        Air = 2,
+        Water = 3,
     }
 
     public struct TraversalState
@@ -29,9 +29,7 @@ namespace Trailblazer.Controllers
             Medium = TraversalMedium.Unknown
         };
 
-        public TraversalState(TraversalMedium medium, Fixed64 surfaceLevel) : this(medium, surfaceLevel, null) { }
-
-        public TraversalState(TraversalMedium medium, Fixed64 surfaceLevel, GroundState? groundState)
+        public TraversalState(TraversalMedium medium, Fixed64 surfaceLevel, GroundState? groundState = null)
         {
             Medium = medium;
             SurfaceLevel = surfaceLevel;

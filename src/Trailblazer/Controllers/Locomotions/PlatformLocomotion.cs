@@ -3,29 +3,6 @@
 namespace Trailblazer.Controllers.Locomotions
 {
     /// <summary>
-    /// This state controls how the platform's velocity effects the IScout
-    /// </summary>
-    public enum MovementTransferState
-    {
-        /// <summary>
-        /// The scout is not affected by velocity of the platform at all.
-        /// </summary>
-        None = 0,
-        /// <summary>
-        /// scout gets its initial velocity from the platform, then gradualy comes to a stop.
-        /// </summary>
-        InitTransfer = 1,
-        /// <summary>
-        /// scout gets its initial velocity from the platform, and keeps that velocity until landing.
-        /// </summary>
-        PermaTransfer = 2,
-        /// <summary>
-        /// scout is relative to the movement of the last touched platform and will move together with that platform.
-        /// </summary>
-        PermaLocked = 3
-    }
-
-    /// <summary>
     /// The state of the platform locomotion.
     /// </summary>
     public enum HoldPlatformState
@@ -64,11 +41,6 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         private bool _isEnabled = true;
 
-        /// <summary>
-        /// The state of the movement transfer.
-        /// </summary>
-        public MovementTransferState MovementTransfer = DefaultMovementTransfer;
-
         public Fixed64 HeightAdjust = DefaultHeightAdjust;
 
         #endregion
@@ -89,6 +61,8 @@ namespace Trailblazer.Controllers.Locomotions
 
         public bool IsNewPlatform { get; set; }
 
+        public MovementTransferState MovementTransfer { get; set; }
+
         /// <summary>
         /// The active platform.
         /// </summary>
@@ -97,47 +71,47 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// The active platform matrix.
         /// </summary>
-        public Fixed4x4 ActiveMatrix { get; set; } = Fixed4x4.Identity;
+        public Fixed4x4 ActiveTransform { get; set; } = Fixed4x4.Identity;
 
         /// <summary>
         /// The last platform matrix.
         /// </summary>
-        public Fixed4x4 LastMatrix { get; set; } = Fixed4x4.Identity;
+        public Fixed4x4 LastTransform { get; set; } = Fixed4x4.Identity;
 
         /// <summary>
-        /// The active global point.
+        /// The global point of the scout on the platform.
         /// </summary>
         public Vector3d ScoutGlobalPoint { get; set; }
 
         /// <summary>
-        /// The active local point.
+        /// The local point of the scout on the platform.
         /// </summary>
         public Vector3d ScoutLocalPoint { get; set; }
 
         /// <summary>
-        /// The active global rotation.
+        /// The global rotation of the scout on the platform.
         /// </summary>
         public FixedQuaternion ScoutGlobalRotation { get; set; } = FixedQuaternion.Identity;
 
         /// <summary>
-        /// The active local rotation.
+        /// The local rotation of the scout on the platform.
         /// </summary>
         public FixedQuaternion ScoutLocalRotation { get; set; } = FixedQuaternion.Identity;
 
         /// <summary>
         /// The velocity of the platform.
         /// </summary>
-        public Vector3d Velocity { get; set; }
+        public Vector3d ActiveVelocity { get; set; }
 
         /// <summary>
         /// This keeps track of the platform's velocity while we're not grounded
         /// </summary>
-        public Vector3d FrameVelocity { get; set; }
+        public Vector3d FrameForce { get; set; }
 
         /// <summary>
         /// The current state of the platform locomotion.
         /// </summary>
-        public HoldPlatformState State { get; private set; }
+        public HoldPlatformState HoldState { get; private set; }
 
         /// <summary>
         /// The last active platform.
@@ -157,8 +131,8 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// Whether the initial velocity has been applied.
         /// </summary>
-        public bool IsInteriaApplied => IsOnPlatform
-            && Velocity != Vector3d.Zero
+        public bool IsPlatformInteriaApplied => IsOnPlatform
+            && ActiveVelocity != Vector3d.Zero
             && (MovementTransfer == MovementTransferState.InitTransfer
                 || MovementTransfer == MovementTransferState.PermaTransfer);
 
@@ -167,7 +141,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public bool IsLockedToPlatform => IsOnPlatform && MovementTransfer == MovementTransferState.PermaLocked;
 
-        public bool IsHoldingPlatform => State != HoldPlatformState.Idle
+        public bool IsHoldingPlatform => HoldState != HoldPlatformState.Idle
 ;
         #endregion
 
@@ -175,26 +149,26 @@ namespace Trailblazer.Controllers.Locomotions
         {
             HoldPlatform = platform;
             HoldPlatformFrames = 0;
-            State = HoldPlatformState.Holding;
+            HoldState = HoldPlatformState.Holding;
         }
 
         public bool UpdateHoldOnPlatform()
         {
-            switch (State)
+            switch (HoldState)
             {
                 case HoldPlatformState.Holding:
                     {
                         HoldPlatformFrames--;
                         if (HoldPlatformFrames >= MaxHoldPlatformFrames)
                         {
-                            State = HoldPlatformState.Release;
+                            HoldState = HoldPlatformState.Release;
                             HoldPlatformFrames = 0;
                         }
                         return false;
                     }
                 case HoldPlatformState.Release:
                     {
-                        State = HoldPlatformState.Idle;
+                        HoldState = HoldPlatformState.Idle;
                         HoldPlatform = null;
                         return true;
                     }
@@ -209,15 +183,15 @@ namespace Trailblazer.Controllers.Locomotions
 
             IsNewPlatform = other.IsNewPlatform;
             ActivePlatform = other.ActivePlatform;
-            ActiveMatrix = other.ActiveMatrix;
-            LastMatrix = other.LastMatrix;
+            ActiveTransform = other.ActiveTransform;
+            LastTransform = other.LastTransform;
             ScoutGlobalPoint = other.ScoutGlobalPoint;
             ScoutGlobalRotation = other.ScoutGlobalRotation;
             ScoutLocalPoint = other.ScoutLocalPoint;
             ScoutLocalRotation = other.ScoutLocalRotation;
-            Velocity = other.Velocity;
-            FrameVelocity = other.FrameVelocity;
-            State = other.State;
+            ActiveVelocity = other.ActiveVelocity;
+            FrameForce = other.FrameForce;
+            HoldState = other.HoldState;
             HoldPlatform = other.HoldPlatform;
             HoldPlatformFrames = other.HoldPlatformFrames;
         }
@@ -227,14 +201,15 @@ namespace Trailblazer.Controllers.Locomotions
         {
             IsNewPlatform = false;
             ActivePlatform = null;
-            ActiveMatrix = Fixed4x4.Identity;
-            LastMatrix = Fixed4x4.Identity;
+            ActiveTransform = Fixed4x4.Identity;
+            LastTransform = Fixed4x4.Identity;
             ScoutGlobalPoint = Vector3d.Zero;
             ScoutLocalPoint = Vector3d.Zero;
             ScoutGlobalRotation = FixedQuaternion.Identity;
             ScoutLocalRotation = FixedQuaternion.Identity;
-            Velocity = Vector3d.Zero;
-            State = HoldPlatformState.Idle;
+            ActiveVelocity = Vector3d.Zero;
+            FrameForce = Vector3d.Zero;
+            HoldState = HoldPlatformState.Idle;
             HoldPlatform = null;
             HoldPlatformFrames = 0;
         }

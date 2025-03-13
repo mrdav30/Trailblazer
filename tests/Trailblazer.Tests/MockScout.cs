@@ -4,18 +4,7 @@ using Trailblazer.Controllers;
 
 public class MockScout : IScout
 {
-    private Vector3d _position;
-    public Vector3d WorldPosition
-    {
-        get => _position;
-        set
-        {
-            _position = value;
-            // Simple ground check
-            if (WorldPosition.y <= Traversal.SurfaceLevel)
-                WorldPosition = new Vector3d(WorldPosition.x, Fixed64.Zero, WorldPosition.y);
-        }
-    }
+    public Vector3d WorldPosition { get; set; }
 
     public FixedQuaternion VisualRotation { get; set; } = FixedQuaternion.Identity;
 
@@ -25,9 +14,11 @@ public class MockScout : IScout
 
     public ScoutController ScoutController { get; set; }
 
-    public Fixed64 Gravity { get; set; } = TrailblazerManager.GravityForce;
-
     public TraversalState Traversal;
+
+    public TraversalMedium _holdMedium;
+
+    private TraversalRequest _traversalRequest;
 
     public MockScout(Vector3d position, Vector3d velocity)
     {
@@ -36,7 +27,10 @@ public class MockScout : IScout
 
         Events.CanAffordJump = () => true;
 
-        Events.OnAddPositionDelta += deltaPos => WorldPosition += deltaPos;
+        Events.OnAddPositionDelta += (deltaPos) =>
+        {
+            WorldPosition += deltaPos;
+        };
         Events.OnAddRotationDelta += (rot) =>
         {
             VisualRotation *= rot;
@@ -46,9 +40,6 @@ public class MockScout : IScout
             // assume a mass of 1
             // multiply force by DeltaTime to integrate as velocity delta
             LinearVelocity += force * TrailblazerManager.DeltaTime;
-
-            // we should probably move this into a Simulate loop for IScout
-            WorldPosition += LinearVelocity * TrailblazerManager.DeltaTime;
         };
         Events.OnAddAngularForce += (force) =>
         {
@@ -57,31 +48,89 @@ public class MockScout : IScout
                 force.Magnitude * TrailblazerManager.DeltaTime
             );
 
-            VisualRotation = deltaRotation * VisualRotation;
+            VisualRotation *= deltaRotation;
         };
 
         ScoutController = ScoutController.CreateNew(this);
         return;
     }
 
+    #region Pre-Simulate
+
     public void SetTraversalState(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? movementState = null)
     {
         Traversal.Medium = medium;
         Traversal.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-        Traversal.Ground = movementState ?? GroundState.DefaultGroundState;
+        Traversal.Ground = movementState ?? null;
+    }
+
+    public void SetTraversalRequest(Vector3d vector, TraversalSpeed traversalSpeed, bool isRequestingJump = false)
+    {
+        _traversalRequest = new TraversalRequest
+        {
+            MovementDirection = vector,
+            TraversalSpeed = traversalSpeed,
+            IsRequestingJump = isRequestingJump
+        };
+    }
+
+    #endregion
+
+    public void Simulate()
+    {
+        ScoutController.Simulate(_traversalRequest);
+
+        // resolve velocity
+        if (LinearVelocity != Vector3d.Zero)
+            WorldPosition += LinearVelocity * TrailblazerManager.DeltaTime;
+
+        MockGroundCheck();
+
+        // since this is a mock we can unlock immediately, usually this would be called after the body has applied this movement
+        UnlockController();
+
+        _traversalRequest = default;
     }
 
     public void GetTraversalState(out TraversalState movementState)
     {
-        if (Traversal.Medium != TraversalMedium.Water)
+        movementState = Traversal;
+    }
+
+    // Update TraversalState based on output from controller
+    private void MockGroundCheck()
+    {
+        // mock surface level check
+        if (!ScoutController.Locomotions.Jump.IsJumping)
         {
-            if (WorldPosition.y > Traversal.SurfaceLevel + Fixed64.FromRaw(0x1000))
-                Traversal.Medium = TraversalMedium.Air;
-            else if (WorldPosition.y <= Traversal.SurfaceLevel)
-                Traversal.Medium = TraversalMedium.Ground;
+            if (ScoutController.IsInAir
+                && Traversal.Ground?.GroundNormal.y > Fixed64.Epsilon
+                && WorldPosition.y < Traversal.SurfaceLevel - Fixed64.Epsilon)
+            {
+                WorldPosition = new Vector3d(WorldPosition.x, Traversal.SurfaceLevel, WorldPosition.z);
+            }
+
+            if (ScoutController.IsInWater
+                && WorldPosition.y > Traversal.SurfaceLevel + Fixed64.Epsilon)
+            {
+                WorldPosition = new Vector3d(WorldPosition.x, Traversal.SurfaceLevel, WorldPosition.z);
+            }
         }
 
-        movementState = Traversal;
+        // mock grounding check
+        if (Traversal.Medium != TraversalMedium.Air && WorldPosition.y > Traversal.SurfaceLevel + Fixed64.Epsilon)
+        {
+            //  hold what the previous medium was before switching to in air
+            _holdMedium = Traversal.Medium;
+            Traversal.Medium = TraversalMedium.Air;
+        }
+        else if (_holdMedium != TraversalMedium.Unknown && WorldPosition.y <= Traversal.SurfaceLevel)
+        {
+            if (_holdMedium == TraversalMedium.Water && Traversal.Medium != TraversalMedium.Water)
+                Traversal.Medium = TraversalMedium.Water;
+            else if (_holdMedium == TraversalMedium.Ground && Traversal.Medium != TraversalMedium.Ground)
+                Traversal.Medium = TraversalMedium.Ground;
+        }
     }
 
     public Vector3d GetFootPosition()
@@ -89,12 +138,7 @@ public class MockScout : IScout
         return WorldPosition + Vector3d.Down * Fixed64.FromRaw(0x40000000L);
     }
 
-    public void SetGravity(Fixed64 newGravity)
-    {
-        Gravity = newGravity;
-    }
-
-    public void FinalizeMovement()
+    public void UnlockController()
     {
         ScoutController.SetMotorLock(false);
     }

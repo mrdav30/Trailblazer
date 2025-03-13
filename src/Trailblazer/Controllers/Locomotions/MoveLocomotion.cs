@@ -27,7 +27,7 @@ namespace Trailblazer.Controllers.Locomotions
 
         public static readonly Fixed64 DefaultMaxAirAcceleration = (Fixed64)20;
 
-        public static readonly FixedCurve DefaultAnimationCurve = new FixedCurve(FixedCurveMode.Step,
+        public static readonly FixedCurve DefaultSlopeSpeedModifier = new FixedCurve(FixedCurveMode.Step,
                 new FixedCurveKey(-90, 1), // Full downward slope
                 new FixedCurveKey(0, 1), // Flat ground
                 new FixedCurveKey(90, 0) // Full upward slope
@@ -75,7 +75,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// Curve for multiplying speed based on slope(negative = downwards)
         /// </summary>
-        public FixedCurve SlopeSpeedMultiplier = DefaultAnimationCurve;
+        public FixedCurve SlopeSpeedMultiplier = DefaultSlopeSpeedModifier;
 
         /// <summary>
         /// The current surface friction.

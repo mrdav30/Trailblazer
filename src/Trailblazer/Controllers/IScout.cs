@@ -18,17 +18,21 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// The events of the scout.
         /// </summary>
-        ScoutEvents Events { get; }
+#nullable enable
+        ScoutEvents? Events { get; }
+#nullable disable
+
+        void Simulate();
 
         void SetTraversalState(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? movementState = null);
 
         void GetTraversalState(out TraversalState traversalState);
 
+        void SetTraversalRequest(Vector3d movementDirection, TraversalSpeed traversalSpeed, bool isRequestingJump = false);
+
         Vector3d GetFootPosition();
 
-        /// <summary>
-        /// Call after <see cref="ScoutController.Simulate"/> and before next frame to unlock the ScoutController.
-        /// </summary>
-        void FinalizeMovement();
+        // Call before the end of the current frame (after the body of the IScout has actually applied controller movement) to unlock the motor
+        void UnlockController();
     }
 }

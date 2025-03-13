@@ -9,8 +9,8 @@ public static class IScoutTestFactory
     public static IScout CreateMockScout(
         Vector3d? startPosition = null,
         Vector3d? startVelocity = null,
-        bool grounded = true,
-        Fixed64? gravity = null)
+        Fixed64? gravity = null,
+        TraversalMedium startingMedium = TraversalMedium.Unknown)
     {
         var mock = new MockScout(
             startPosition ?? Vector3d.Zero,
@@ -18,20 +18,34 @@ public static class IScoutTestFactory
         );
 
         if (gravity.HasValue)
-            mock.SetGravity(gravity.Value);
+            mock.ScoutController.Gravity = gravity.Value;
 
-        if (grounded)
-            mock.SetTraversalState(
-                TraversalMedium.Ground,
-                Fixed64.Zero,
-                new GroundState
+        switch (startingMedium)
+        {
+            case TraversalMedium.Ground:
                 {
-                    HitObject = new object(), // Separate from platform
-                    GroundMatrix = Fixed4x4.Identity
+                    mock.SetTraversalState(
+                        TraversalMedium.Ground,
+                        Fixed64.Zero,
+                        new GroundState
+                        {
+                            HitObject = new object(), // Separate from platform
+                            GroundMatrix = Fixed4x4.Identity
+                        }
+                    );
                 }
-            );
-        else
-            mock.SetTraversalState(TraversalMedium.Air);
+                break;
+            case TraversalMedium.Air:
+                mock.SetTraversalState(TraversalMedium.Air);
+                break;
+            case TraversalMedium.Water:
+                mock.SetTraversalState(TraversalMedium.Water);
+                break;
+            case TraversalMedium.Unknown:
+                break;
+            default:
+                break;
+        }
 
         return mock;
     }
@@ -54,12 +68,13 @@ public static class IScoutTestFactory
     public static IScout CreatePlatformScout(
         Vector3d? startPosition = null,
         Fixed4x4? platformMatrix = null,
-        Fixed64? gravity = null)
+        Fixed64? gravity = null,
+        MovementTransferState movementTransfer = MovementTransferState.PermaTransfer)
     {
         var mock = new MockScout(startPosition ?? Vector3d.Zero, Vector3d.Zero);
 
         if (gravity.HasValue)
-            mock.SetGravity(gravity.Value);
+            mock.ScoutController.Gravity = gravity.Value;
 
         mock.SetTraversalState(
             TraversalMedium.Ground,
@@ -67,7 +82,8 @@ public static class IScoutTestFactory
             new GroundState
             {
                 HitObject = new object(), // Separate from platform
-                GroundMatrix = platformMatrix ?? Fixed4x4.Identity
+                GroundMatrix = platformMatrix ?? Fixed4x4.Identity,
+                MovementTransfer = movementTransfer
             }
         );
 

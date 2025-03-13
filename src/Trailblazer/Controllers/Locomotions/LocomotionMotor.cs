@@ -1,7 +1,7 @@
 ﻿namespace Trailblazer.Controllers.Locomotions
 {
     [System.Serializable]
-    public class LocomotionState
+    public class LocomotionMotor
     {
         /// <summary>
         /// Does this script currently respond to input?
@@ -12,19 +12,24 @@
 
         public MoveLocomotion Move = new();
 
+        // controls ground state and maintains state while in air
         public PlatformLocomotion Platform = new();
 
+        // controls air state when a jump was processed successfully
         public JumpLocomotion Jump = new();
 
+        // controls air state when any downward momentum detected or is grounded and sliding
         public FallLocomotion Fall = new();
 
+        // controls ground state velocity when is sliding 
         public SlideLocomotion Slide = new();
 
+        // controls water state
         public SwimLocomotion Swim = new();
 
         #endregion
       
-        public void SyncState(LocomotionState other)
+        public void SyncState(LocomotionMotor other)
         {
             IsInControl = other.IsInControl;
 

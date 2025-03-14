@@ -13,22 +13,17 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// The action to set the position of the scout.
         /// </summary>
-        public Action<Vector3d>? OnAddPositionDelta { get; set; } = null;
+        public Action<Vector3d>? OnAddPlatformPositionDelta { get; set; } = null;
         
         /// <summary>
         /// The action to set the rotation of the scout.
         /// </summary>
-        public Action<FixedQuaternion>? OnAddRotationDelta { get; set; } = null;
+        public Action<FixedQuaternion>? OnAddPlatformRotationDelta { get; set; } = null;
 
         /// <summary>
         /// The action to add a linear force to the scout.
         /// </summary>
         public Action<Vector3d>? OnAddLinearForce { get; set; } = null;
-
-        /// <summary>
-        /// The action to add an angular force to the scout.
-        /// </summary>
-        public Action<Vector3d>? OnAddAngularForce { get; set; } = null;
 
         /// <summary>
         /// The action to start the fall of the scout.

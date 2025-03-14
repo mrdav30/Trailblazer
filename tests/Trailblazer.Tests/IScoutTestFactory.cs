@@ -57,7 +57,7 @@ public static class IScoutTestFactory
     {
         MockScout mock = new MockScout(
             Vector3d.Zero, 
-            startVelocity ?? new Vector3d(Fixed64.Zero, -Fixed64.One, Fixed64.Zero));
+            startVelocity ?? Vector3d.Down);
         mock.SetTraversalState(TraversalMedium.Air, surfaceLevel ?? -(Fixed64)999);
         return mock;
     }

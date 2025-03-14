@@ -169,8 +169,11 @@ namespace Trailblazer.Controllers.Locomotions
                 case HoldPlatformState.Release:
                     {
                         HoldState = HoldPlatformState.Idle;
+                        bool result = false;
+                        if (HoldPlatform != ActivePlatform)
+                            result = true;
                         HoldPlatform = null;
-                        return true;
+                        return result;
                     }
                 default:
                     return false;

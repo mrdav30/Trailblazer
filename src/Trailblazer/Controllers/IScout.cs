@@ -11,8 +11,6 @@ namespace Trailblazer.Controllers
 
         public FixedQuaternion VisualRotation { get; }
 
-        public Vector3d LinearVelocity { get; }// TODO: get rid of this and store seperately
-
         ScoutController ScoutController { get; }
 
         /// <summary>
@@ -21,18 +19,18 @@ namespace Trailblazer.Controllers
 #nullable enable
         ScoutEvents? Events { get; }
 #nullable disable
-
-        void Simulate();
-
+        
         void SetTraversalState(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? movementState = null);
-
-        void GetTraversalState(out TraversalState traversalState);
 
         void SetTraversalRequest(Vector3d movementDirection, TraversalSpeed traversalSpeed, bool isRequestingJump = false);
 
-        Vector3d GetFootPosition();
+        void InitiateTraversal();
 
-        // Call before the end of the current frame (after the body of the IScout has actually applied controller movement) to unlock the motor
-        void UnlockController();
+        void GetTraversalState(out TraversalState traversalState);
+
+        // Call before the end of the current frame to unlock the controller for the next frame
+        void FinalizeTraversal();
+
+        Vector3d GetFootPosition();
     }
 }

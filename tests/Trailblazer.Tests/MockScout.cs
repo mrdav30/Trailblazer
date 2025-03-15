@@ -2,15 +2,8 @@
 using Trailblazer;
 using Trailblazer.Controllers;
 
-public class MockScout : IScout
+public class MockScout : Scout
 {
-    public Vector3d WorldPosition { get; set; }
-
-    public FixedQuaternion VisualRotation { get; set; } = FixedQuaternion.Identity;
-
-    public ScoutEvents Events { get; set; } = new();
-
-    public ScoutController ScoutController { get; set; }
     public Vector3d Velocity { get; set; }
 
     private Vector3d _pendingVelocity;
@@ -19,15 +12,14 @@ public class MockScout : IScout
 
     private FixedQuaternion _rotationDelta = FixedQuaternion.Identity;
 
-    private TraversalState _traversal;
-
-    private TraversalMedium _holdMedium;
-
-    private TraversalRequest _traversalRequest;
+    private TraversalState _holdTraversal;
 
     public MockScout(Vector3d position, Vector3d velocity)
     {
         WorldPosition = position;
+
+        base.OnInitialize();
+
         _pendingVelocity = velocity;
 
         Events.CanAffordJump = () => true;
@@ -45,45 +37,9 @@ public class MockScout : IScout
             // assume a mass of 1
             _pendingVelocity += force * TrailblazerManager.DeltaTime;
         };
-
-        ScoutController = ScoutController.CreateNew(this);
-        return;
     }
 
-    #region Pre-Simulate
-
-    public void SetTraversalState(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? movementState = null)
-    {
-        _traversal.Medium = medium;
-        _traversal.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-        _traversal.Ground = movementState ?? null;
-    }
-
-    public void SetTraversalRequest(Vector3d vector, TraversalSpeed traversalSpeed, bool isRequestingJump = false)
-    {
-        _traversalRequest = new TraversalRequest
-        {
-            MovementDirection = vector,
-            TraversalSpeed = traversalSpeed,
-            IsRequestingJump = isRequestingJump
-        };
-    }
-
-    #endregion
-
-    public void InitiateTraversal()
-    {
-        ScoutController.Traverse(_traversalRequest);
-
-        _traversalRequest = default;
-    }
-
-    public void GetTraversalState(out TraversalState movementState)
-    {
-        movementState = _traversal;
-    }
-
-    public void FinalizeTraversal()
+    public override void OnFinalizeTraversal()
     {
         Vector3d previousPosition = WorldPosition;
 
@@ -103,7 +59,7 @@ public class MockScout : IScout
 
         MockGroundCheck();
 
-        ScoutController.Finalize(false);
+        base.OnFinalizeTraversal();
     }
 
     // Update TraversalState based on output from controller
@@ -113,37 +69,35 @@ public class MockScout : IScout
         if (!ScoutController.Locomotions.Jump.IsJumping)
         {
             if (ScoutController.IsInAir
-                && _traversal.Ground?.GroundNormal.y > Fixed64.Epsilon
-                && WorldPosition.y < _traversal.SurfaceLevel - Fixed64.Epsilon)
+                && _traversalState.Ground?.GroundNormal.y > Fixed64.Epsilon
+                && WorldPosition.y < _traversalState.SurfaceLevel - Fixed64.Epsilon)
             {
-                WorldPosition = new Vector3d(WorldPosition.x, _traversal.SurfaceLevel, WorldPosition.z);
+                WorldPosition = new Vector3d(WorldPosition.x, _traversalState.SurfaceLevel, WorldPosition.z);
             }
 
             if (ScoutController.IsInWater
-                && WorldPosition.y > _traversal.SurfaceLevel + Fixed64.Epsilon)
+                && WorldPosition.y > _traversalState.SurfaceLevel + Fixed64.Epsilon)
             {
-                WorldPosition = new Vector3d(WorldPosition.x, _traversal.SurfaceLevel, WorldPosition.z);
+                WorldPosition = new Vector3d(WorldPosition.x, _traversalState.SurfaceLevel, WorldPosition.z);
             }
         }
 
         // mock grounding check
-        if (_traversal.Medium != TraversalMedium.Air && WorldPosition.y > _traversal.SurfaceLevel + Fixed64.Epsilon)
+        if (_traversalState.Medium != TraversalMedium.Air && WorldPosition.y > _traversalState.SurfaceLevel + Fixed64.Epsilon)
         {
             //  hold what the previous medium was before switching to in air
-            _holdMedium = _traversal.Medium;
-            _traversal.Medium = TraversalMedium.Air;
+            _holdTraversal = _traversalState;
+            _traversalState.Medium = TraversalMedium.Air;
+            _traversalState.Ground = null;
         }
-        else if (_holdMedium != TraversalMedium.Unknown && WorldPosition.y <= _traversal.SurfaceLevel)
+        else if (_holdTraversal.Medium != TraversalMedium.Unknown && WorldPosition.y <= _traversalState.SurfaceLevel)
         {
-            if (_holdMedium == TraversalMedium.Water && _traversal.Medium != TraversalMedium.Water)
-                _traversal.Medium = TraversalMedium.Water;
-            else if (_holdMedium == TraversalMedium.Ground && _traversal.Medium != TraversalMedium.Ground)
-                _traversal.Medium = TraversalMedium.Ground;
+            if (_holdTraversal.Medium == TraversalMedium.Water && _traversalState.Medium != TraversalMedium.Water
+                || _holdTraversal.Medium == TraversalMedium.Ground && _traversalState.Medium != TraversalMedium.Ground)
+            {
+                _traversalState = _holdTraversal;
+                _holdTraversal = default;
+            }
         }
-    }
-
-    public Vector3d GetFootPosition()
-    {
-        return WorldPosition + Vector3d.Down * Fixed64.FromRaw(0x40000000L);
     }
 }

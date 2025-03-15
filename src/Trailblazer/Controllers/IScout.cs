@@ -20,16 +20,7 @@ namespace Trailblazer.Controllers
         ScoutEvents? Events { get; }
 #nullable disable
         
-        void SetTraversalState(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? movementState = null);
-
-        void SetTraversalRequest(Vector3d movementDirection, TraversalSpeed traversalSpeed, bool isRequestingJump = false);
-
-        void InitiateTraversal();
-
         void GetTraversalState(out TraversalState traversalState);
-
-        // Call before the end of the current frame to unlock the controller for the next frame
-        void FinalizeTraversal();
 
         Vector3d GetFootPosition();
     }

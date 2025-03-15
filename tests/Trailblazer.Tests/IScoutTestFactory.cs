@@ -6,7 +6,7 @@ public static class IScoutTestFactory
     /// <summary>
     /// Generates a Scout (no platform logic)
     /// </summary>
-    public static IScout CreateMockScout(
+    public static Scout CreateMockScout(
         Vector3d? startPosition = null,
         Vector3d? startVelocity = null,
         Fixed64? gravity = null,
@@ -30,7 +30,7 @@ public static class IScoutTestFactory
                         new GroundState
                         {
                             HitObject = new object(), // Separate from platform
-                            GroundMatrix = Fixed4x4.Identity
+                            GroundMatrix = Fixed4x4.Identity,
                         }
                     );
                 }
@@ -53,7 +53,7 @@ public static class IScoutTestFactory
     /// <summary>
     /// Generates a Falling Scout (for gravity tests)
     /// </summary>
-    public static IScout CreateFallingScout(Vector3d? startVelocity = null, Fixed64? surfaceLevel = null)
+    public static Scout CreateFallingScout(Vector3d? startVelocity = null, Fixed64? surfaceLevel = null)
     {
         MockScout mock = new MockScout(
             Vector3d.Zero, 
@@ -65,7 +65,7 @@ public static class IScoutTestFactory
     /// <summary>
     /// Generates a Scout + Platform (Separation of Concerns)
     /// </summary>
-    public static IScout CreatePlatformScout(
+    public static Scout CreatePlatformScout(
         Vector3d? startPosition = null,
         Fixed4x4? platformMatrix = null,
         Fixed64? gravity = null,

@@ -25,11 +25,6 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public static readonly Fixed64 DefaultHeightAdjust = Fixed64.FromRaw(0x80000000L); // 0.5f;
 
-        /// <summary>
-        /// The default movement transfer state.
-        /// </summary>
-        public static readonly MovementTransferState DefaultMovementTransfer = MovementTransferState.PermaTransfer;
-
         public const int MaxHoldPlatformFrames = 2;
 
         #endregion

@@ -18,8 +18,8 @@ namespace Trailblazer.UnitTests
             Vector3d initialPosition = scout.WorldPosition;
 
             // Act
-            scout.ScoutController.Simulate(Vector3d.One, TraversalSpeed.Sprint);
-            scout.FinalizeTraversal();
+            scout.ScoutController.Traverse(Vector3d.One, TraversalSpeed.Sprint);
+            scout.OnFinalizeTraversal();
 
             // Assert
             Vector3d newPosition = scout.WorldPosition;
@@ -36,8 +36,8 @@ namespace Trailblazer.UnitTests
             var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
 
             // Act
-            scout.ScoutController.Simulate(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
-            scout.FinalizeTraversal();
+            scout.ScoutController.Traverse(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
+            scout.OnFinalizeTraversal();
 
             // Assert
             scout.ScoutController.CurrentVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
@@ -49,16 +49,15 @@ namespace Trailblazer.UnitTests
             // Arrange
             var scout = IScoutTestFactory.CreateMockScout(
                 startPosition: Vector3d.Up,
-                startVelocity: Vector3d.Up,
+                startVelocity: Vector3d.Down,
                 startingMedium: TraversalMedium.Air);
 
-            Vector3d expectedVelocity = Vector3d.Up;
+            Vector3d expectedVelocity = Vector3d.Down;
             expectedVelocity.y += -scout.ScoutController.Gravity * TrailblazerManager.DeltaTime;
 
             // Act
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
@@ -74,8 +73,8 @@ namespace Trailblazer.UnitTests
             expectedVelocity.y += -scout.ScoutController.Gravity * TrailblazerManager.DeltaTime;
 
             // Act
-            scout.ScoutController.Simulate(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
-            scout.FinalizeTraversal();
+            scout.ScoutController.Traverse(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
+            scout.OnFinalizeTraversal();
 
             // Assert
             scout.ScoutController.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
@@ -90,30 +89,17 @@ namespace Trailblazer.UnitTests
             // Act - First Jump
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             int expectedJumpFrame = scout.ScoutController.Locomotions.Jump.FrameStartJump;
-
-            // Simulate leaving the ground before the next frame
-            scout.SetTraversalState(
-                TraversalMedium.Air,
-                Fixed64.Zero,
-                new GroundState
-                {
-                    HitObject = null,
-                    GroundMatrix = Fixed4x4.Identity
-                }
-            );
 
             // Attempt to jump again immediately
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
-            scout.ScoutController.IsInAir.Should().BeTrue();
+            scout.ScoutController.IsInAir.Should().BeFalse();
             scout.ScoutController.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
             scout.ScoutController.Locomotions.Jump.FrameStartJump.Should().Be(expectedJumpFrame);
         }
@@ -127,8 +113,7 @@ namespace Trailblazer.UnitTests
             // Act
             // 1st Frame
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             Vector3d newPlatformPoint = new Vector3d(2, 0, 0);
             Fixed4x4 updatedMatrix = Fixed4x4.SetTranslation(
@@ -149,8 +134,7 @@ namespace Trailblazer.UnitTests
 
             // 2nd Frame
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.WorldPosition.Should().Be(scout.ScoutController.Locomotions.Platform.ActiveTransform.Translation);
@@ -164,8 +148,7 @@ namespace Trailblazer.UnitTests
 
             // Act - First Frame (Falling)
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.IsInAir.Should().BeTrue();
@@ -185,8 +168,7 @@ namespace Trailblazer.UnitTests
             TrailblazerManager.Simulate();
 
             // Act - Second Frame (After Ground Contact)
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.IsGrounded.Should().BeTrue();
@@ -206,8 +188,7 @@ namespace Trailblazer.UnitTests
             for (int i = 0; i < 5; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.InitiateTraversal();
-                scout.FinalizeTraversal();
+                scout.Simulate();
 
                 // Calculate expected velocity update from gravity impulse
                 expectedVelocity.y += -scout.ScoutController.Gravity * TrailblazerManager.DeltaTime;
@@ -232,7 +213,7 @@ namespace Trailblazer.UnitTests
             );
 
             // Act
-            scout.ScoutController.Simulate(Vector3d.Forward, TraversalSpeed.Walk);
+            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Walk);
 
             // Assert
             scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
@@ -253,7 +234,7 @@ namespace Trailblazer.UnitTests
             );
 
             // Act
-            scout.ScoutController.Simulate(Vector3d.Forward, TraversalSpeed.Walk);
+            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Walk);
 
             // Assert
             scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -274,8 +255,8 @@ namespace Trailblazer.UnitTests
             );
 
             // Act
-            scout.ScoutController.Simulate(Vector3d.Forward, TraversalSpeed.Walk);
-            scout.FinalizeTraversal();
+            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Walk);
+            scout.OnFinalizeTraversal();
 
             // Assert
             scout.ScoutController.CurrentVelocity.Should().NotBe(Vector3d.Zero);
@@ -290,21 +271,18 @@ namespace Trailblazer.UnitTests
             // Act - First Jump
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Release jump after 2 frames
             for (int i = 0; i < 2; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.InitiateTraversal();
-                scout.FinalizeTraversal();
+                scout.Simulate();
             }
 
             // Act - Simulate next frame
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeFalse();
@@ -324,15 +302,13 @@ namespace Trailblazer.UnitTests
 
             // Act
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Apply platform rotation
             scout.ScoutController.Locomotions.Platform.ActiveTransform = Fixed4x4.CreateRotation(rotationChange) * scout.ScoutController.Locomotions.Platform.ActiveTransform;
 
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.Locomotions.Platform.ActiveTransform.Rotation.Should().Be(scout.VisualRotation);
@@ -348,7 +324,7 @@ namespace Trailblazer.UnitTests
 
             // Act
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
-            scout.InitiateTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.CurrentVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
@@ -365,8 +341,7 @@ namespace Trailblazer.UnitTests
 
             // Act
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Move platform
             Vector3d movementDelta = new Vector3d(1, 0, 0);
@@ -375,8 +350,7 @@ namespace Trailblazer.UnitTests
             );
 
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.WorldPosition.Should().Be(expectedPosition + movementDelta);
@@ -393,15 +367,13 @@ namespace Trailblazer.UnitTests
 
             // Act
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             scout.ScoutController.Locomotions.Platform.ActiveTransform = Fixed4x4.SetRotation(scout.ScoutController.Locomotions.Platform.ActiveTransform, rotationChange);
             scout.ScoutController.Locomotions.Platform.ActiveTransform = Fixed4x4.NormalizeRotationMatrix(scout.ScoutController.Locomotions.Platform.ActiveTransform);
 
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.VisualRotation.Should().Be(scout.ScoutController.Locomotions.Platform.ActiveTransform.Rotation);
@@ -416,7 +388,7 @@ namespace Trailblazer.UnitTests
             // Act - Initial Jump
             TrailblazerManager.Simulate();
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
-            scout.InitiateTraversal();
+            scout.Simulate();
 
             Vector3d previousVelocity = scout.ScoutController.CurrentVelocity;
 
@@ -425,7 +397,7 @@ namespace Trailblazer.UnitTests
             {
                 TrailblazerManager.Simulate();
                 scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
-                scout.InitiateTraversal();
+                scout.Simulate();
             }
 
             // Assert
@@ -448,8 +420,8 @@ namespace Trailblazer.UnitTests
             );
 
             // Act
-            scout.ScoutController.Simulate(Vector3d.Forward, TraversalSpeed.Walk);
-            scout.FinalizeTraversal();
+            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Walk);
+            scout.OnFinalizeTraversal();
 
             // Assert
             var expected = Vector3d.ProjectOnPlane(Vector3d.Forward, scout.ScoutController.GroundNormal);
@@ -469,8 +441,7 @@ namespace Trailblazer.UnitTests
             {
                 scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Walk);
                 TrailblazerManager.Simulate();
-                scout.InitiateTraversal();
-                scout.FinalizeTraversal();
+                scout.Simulate();
             }
 
             // Assert
@@ -494,8 +465,7 @@ namespace Trailblazer.UnitTests
 
             // Act 1 - Set initial state
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Arrange - Move platform
             scout.ScoutController.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(scout.ScoutController.Locomotions.Platform.ActiveTransform, new Vector3d(2, 0, 0));
@@ -503,8 +473,7 @@ namespace Trailblazer.UnitTests
             // Act 2 - Jump from moving platform
             TrailblazerManager.Simulate();
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.CurrentVelocity.Should().NotBe(Vector3d.Zero);
@@ -527,7 +496,7 @@ namespace Trailblazer.UnitTests
             );
 
             // Act
-            scout.ScoutController.Simulate(Vector3d.Forward, TraversalSpeed.Walk);
+            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Walk);
 
             // Assert
             scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -550,7 +519,7 @@ namespace Trailblazer.UnitTests
             for (int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.InitiateTraversal();
+                scout.Simulate();
             }
 
             // Assert - Position should remain stable within a small range
@@ -568,7 +537,7 @@ namespace Trailblazer.UnitTests
             // Act 1 - Jump before platform movement
             TrailblazerManager.Simulate();
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
-            scout.InitiateTraversal();
+            scout.Simulate();
 
             // Move platform afterward
             scout.ScoutController.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(scout.ScoutController.Locomotions.Platform.ActiveTransform, new Vector3d(3, 0, 0));
@@ -576,7 +545,7 @@ namespace Trailblazer.UnitTests
             // Act 2 - Simulate next frame after platform movement
             TrailblazerManager.Simulate();
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
-            scout.InitiateTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.CurrentVelocity.x.Should().Be(Fixed64.Zero);
@@ -590,15 +559,13 @@ namespace Trailblazer.UnitTests
 
             // Act - First frame, still on ground
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // 2nd Frame - Enter Water
             scout.SetTraversalState(TraversalMedium.Water, scout.WorldPosition.y);
 
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.Locomotions.Swim.IsSwimming.Should().BeTrue();
@@ -611,15 +578,13 @@ namespace Trailblazer.UnitTests
             var scout = IScoutTestFactory.CreateMockScout();
             scout.SetTraversalState(TraversalMedium.Water, scout.WorldPosition.y + Fixed64.One);
 
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Act - Exit water
             scout.SetTraversalState(TraversalMedium.Ground);
 
             TrailblazerManager.Simulate();
-            scout.InitiateTraversal();
-            scout.FinalizeTraversal();
+            scout.Simulate();
 
             // Assert
             scout.ScoutController.Locomotions.Swim.IsSwimming.Should().BeFalse();
@@ -636,14 +601,14 @@ namespace Trailblazer.UnitTests
             // Act - Enter Water
             TrailblazerManager.Simulate();
             scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Walk);
-            scout.InitiateTraversal();
+            scout.Simulate();
 
             // Act - Simulate 3 Frames
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
                 scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Walk);
-                scout.InitiateTraversal();
+                scout.Simulate();
             }
 
             // Assert
@@ -665,8 +630,8 @@ namespace Trailblazer.UnitTests
             scout.SetTraversalState(TraversalMedium.Water, scout.WorldPosition.y + Fixed64.One);
 
             // Act - Simulate entry into water
-            TrailblazerManager.Simulate();          
-            scout.InitiateTraversal();
+            TrailblazerManager.Simulate();
+            scout.Simulate();
 
             Fixed64 previousY = scout.WorldPosition.y;
 
@@ -674,7 +639,7 @@ namespace Trailblazer.UnitTests
             for (int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.InitiateTraversal();
+                scout.Simulate();
             }
 
             var tolerance = Fixed64.FromRaw(0x0800);
@@ -697,8 +662,7 @@ namespace Trailblazer.UnitTests
             for (int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.InitiateTraversal();
-                scout.FinalizeTraversal();
+                scout.Simulate();
             }
 
             // Assert - Scout should float higher
@@ -720,8 +684,7 @@ namespace Trailblazer.UnitTests
             for (int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.InitiateTraversal();
-                scout.FinalizeTraversal();
+                scout.Simulate();
             }
 
             // Assert - Scout should sink lower

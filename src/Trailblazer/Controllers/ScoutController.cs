@@ -106,7 +106,7 @@ namespace Trailblazer.Controllers
             LastPosition = CurrentPosition;
         }
 
-        public void Simulate(Vector3d movementDirection, TraversalSpeed traversalSpeed, bool isRequestingJump = false)
+        public void Traverse(Vector3d movementDirection, TraversalSpeed traversalSpeed, bool isRequestingJump = false)
         {
             Traverse(new TraversalRequest
             {
@@ -142,21 +142,15 @@ namespace Trailblazer.Controllers
             // Reset the target impulse to prevent accumulation
             _forceOutput = Vector3d.Zero;
 
+            // Update platform velocity prior to applying jump force
+            if (Locomotions.Platform.IsEnabled)
+                UpdatePlatformVelocity();
+
             CheckTraversalState();
 
             HandleMovementTransitions();
 
             ComputeMovementForces();
-
-            // Register any additional movement after applying platform movement
-            if (Locomotions.Platform.IsEnabled)
-                HandlePlatformUpdates();
-
-            // Save last Position before any platform movement for velocity calculation.
-            LastPosition = _hostScout.WorldPosition;
-
-            if (IsGrounded && Locomotions.Platform.IsOnPlatform || Locomotions.Platform.IsLockedToPlatform)
-                ApplyPlatformMovement();
 
             if (!_frameTraversalRequest.IsRequestingJump) // reset this before applying gravity
                 Locomotions.Jump.IsHoldingJump = false;
@@ -167,8 +161,11 @@ namespace Trailblazer.Controllers
             if (Locomotions.Jump.IsEnabled && Locomotions.IsInControl && _frameTraversalRequest.IsRequestingJump)
                 ApplyJumpForce();
 
-            if (Locomotions.Fall.IsEnabled && !Locomotions.Swim.IsSwimming)
-                HandleFallState();
+            // Save last Position before any platform movement for velocity calculation.
+            LastPosition = _hostScout.WorldPosition;
+
+            if (IsGrounded && Locomotions.Platform.IsOnPlatform || Locomotions.Platform.IsLockedToPlatform)
+                ApplyPlatformMovement();
 
             // Corrects the Y axis if swimming or no gravity
             if (Locomotions.Swim.IsSwimming && _frameTraversalRequest.IsMoving)
@@ -178,68 +175,56 @@ namespace Trailblazer.Controllers
             if (_forceOutput != Vector3d.Zero)
                 _hostScout.Events?.OnAddLinearForce?.Invoke(_forceOutput);
 
-            // Reset before returning
-            Reset();
-        }
-
-        public void Reset()
-        {
             _frameTraversalRequest = default;
-            _forceOutput = Vector3d.Zero;
         }
 
         #endregion
 
         #region Movement Processing
 
+        private void UpdatePlatformVelocity()
+        {
+            if (Locomotions.Platform.ActivePlatform != null)
+            {
+                if (!Locomotions.Platform.IsNewPlatform)
+                {
+                    Vector3d currentPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
+                    Vector3d previousPoint = Locomotions.Platform.LastTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
+
+                    // Store platform velocity to use as a canceling force
+                    Locomotions.Platform.ActiveVelocity = (currentPoint - previousPoint) / TrailblazerManager.DeltaTime;
+                }
+
+                Locomotions.Platform.LastTransform = Locomotions.Platform.ActiveTransform;
+                Locomotions.Platform.IsNewPlatform = false;
+            }
+            else
+                Locomotions.Platform.ActiveVelocity = Vector3d.Zero;
+        }
+
         private void CheckTraversalState()
         {
             _hostScout.GetTraversalState(out TraversalState traversalState);
 
-            LastMedium = ActiveMedium;
             ActiveMedium = traversalState.Medium;
 
-            LastSurfaceLevel = SurfaceLevel;
             SurfaceLevel = traversalState.SurfaceLevel;
 
             if (!IsGrounded)  // Left the ground
-            {
-                LastGroundNormal = Vector3d.Zero;
                 GroundNormal = Vector3d.Zero;
-            }
             else
-            {
-                LastGroundNormal = GroundNormal;
                 GroundNormal = traversalState.Ground?.GroundNormal ?? Vector3d.Zero;
-
-                // If we hit a new platform, reset platform state
-                if (Locomotions.Platform.IsEnabled)
-                {
-                    Locomotions.Platform.MovementTransfer = traversalState.Ground?.MovementTransfer ?? MovementTransferState.None;
-                    if (DidPlatformChange(traversalState.Ground))
-                    {
-                        Fixed4x4 newGroundMatrix = traversalState.Ground?.GroundMatrix ?? Fixed4x4.Identity;
-
-                        Locomotions.Platform.LastTransform = Locomotions.Platform.ActivePlatform == null
-                            ? newGroundMatrix
-                            : Locomotions.Platform.ActiveTransform;
-                        Locomotions.Platform.ActiveTransform = newGroundMatrix;
-                        Locomotions.Platform.ActivePlatform = traversalState.Ground?.HitObject;
-                        Locomotions.Platform.ActiveVelocity = Vector3d.Zero;
-                    }
-                }
-            }
         }
 
         private bool DidPlatformChange(GroundState? groundState)
         {
             if (Locomotions.Platform.ActivePlatform == groundState?.HitObject)
-                return Locomotions.Platform.IsNewPlatform = false;
+                return false;
 
             if (Locomotions.Platform.ActivePlatform == null || Locomotions.Platform.ActivePlatform != groundState?.HitObject)
-                return Locomotions.Platform.IsNewPlatform = true;
+                return true;
 
-            return Locomotions.Platform.IsNewPlatform = false;
+            return false;
         }
 
         private void HandleMovementTransitions()
@@ -276,24 +261,7 @@ namespace Trailblazer.Controllers
 
             // Transitioning into water
             if (IsInWater)
-            {
-                // Clear the transient state when entiring water for the first time
-                if (!WasInWater)
-                    Locomotions.ClearStateAll();
-
-                if (Locomotions.Swim.IsEnabled)
-                {
-                    Locomotions.Swim.IsSwimming = true;
-                    Locomotions.Swim.IsDiving = _hostScout.WorldPosition.y < SurfaceLevel;
-
-                    Locomotions.Swim.UpdateDiveTime();
-
-                    if (IsInWater && Locomotions.Swim.IsDrowning)
-                        _hostScout.Events?.OnDrowning?.Invoke(Locomotions.Swim.UnderwaterTimer);
-                }
-
                 return;
-            }
 
             // Transitioning from water to land
             if (WasInWater && Locomotions.Swim.IsSwimming)
@@ -491,86 +459,6 @@ namespace Trailblazer.Controllers
             return Fixed64.MAX_VALUE; // fallback, should never be hit
         }
 
-        private void HandlePlatformUpdates()
-        {
-            // Don't process platform state when in water
-            if (IsInWater)
-                return;
-
-            if (Locomotions.Platform.ActivePlatform != null)
-                UpdatePlatformVelocity();
-            else
-                Locomotions.Platform.ActiveVelocity = Vector3d.Zero;
-
-            // Convert platforms velocity into instantaneous velocity shift
-            Vector3d adjustedPlatformForce = Locomotions.Platform.ActiveVelocity / TrailblazerManager.DeltaTime;
-            adjustedPlatformForce.y = Fixed64.Zero; // preserve vertical momentum
-
-            // If scout landed on a new platform, we have to wait for two frames
-            // before we know the new velocity of the platform under the scout
-            if (Locomotions.Platform.IsHoldingPlatform)
-            {
-                bool release = Locomotions.Platform.UpdateHoldOnPlatform();
-                if (release && IsGrounded)
-                    _forceOutput -= adjustedPlatformForce;
-            }
-
-            if (Locomotions.Platform.IsPlatformInteriaApplied)
-            {
-                if (!WasInAir && IsInAir)
-                {
-                    Locomotions.Platform.FrameForce = adjustedPlatformForce;
-                    // Apply inertia from platform
-                    _forceOutput += Locomotions.Platform.FrameForce;
-                }
-
-                if (!WasGrounded && IsGrounded)
-                {
-                    if (Locomotions.Platform.IsNewPlatform)
-                        Locomotions.Platform.SetHoldPlatform(Locomotions.Platform.ActivePlatform);
-                    else
-                        _forceOutput -= adjustedPlatformForce;
-                }
-            }
-
-            Locomotions.Platform.LastTransform = Locomotions.Platform.ActiveTransform;
-            Locomotions.Platform.IsNewPlatform = false;
-        }
-
-        private void UpdatePlatformVelocity()
-        {
-            if (!Locomotions.Platform.IsNewPlatform)
-            {
-                Vector3d currentPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
-                Vector3d previousPoint = Locomotions.Platform.LastTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
-
-                // Store platform velocity to use as a canceling force
-                Locomotions.Platform.ActiveVelocity = (currentPoint - previousPoint) / TrailblazerManager.DeltaTime;
-            }
-        }
-
-        // platform movement should be treated as an external influence rather than an acceleration-based movement.
-        // The Scout should inherit platform motion directly – since it's not "pushing" itself but rather being carried along.
-        private void ApplyPlatformMovement()
-        {
-            // Apply platform rotation first THEN apply platform movement
-            FixedQuaternion targetRotation = Locomotions.Platform.ActiveTransform.Rotation * Locomotions.Platform.ScoutLocalRotation;
-            if (targetRotation != FixedQuaternion.Identity)
-            {
-                FixedQuaternion rotationDiff = targetRotation * Locomotions.Platform.ScoutGlobalRotation.Inverse();
-                _hostScout.Events?.OnAddPlatformRotationDelta?.Invoke(rotationDiff);
-            }
-
-            Vector3d newGlobalPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
-            Vector3d moveDistance = newGlobalPoint - Locomotions.Platform.ScoutGlobalPoint;
-            if (moveDistance != Vector3d.Zero)
-            {
-                _hostScout.Events?.OnAddPlatformPositionDelta?.Invoke(moveDistance);
-                LastPosition += moveDistance; // shift last position so it doesn't alter scout's velocity
-            }
-
-        }
-
         private void ApplyEnvironmentalForces()
         {
             if (IsGrounded)
@@ -692,6 +580,151 @@ namespace Trailblazer.Controllers
             _forceOutput += jumpForce;
         }
 
+        // platform movement should be treated as an external influence rather than an acceleration-based movement.
+        // The Scout should inherit platform motion directly – since it's not "pushing" itself but rather being carried along.
+        private void ApplyPlatformMovement()
+        {
+            // Apply platform rotation first THEN apply platform movement
+            FixedQuaternion targetRotation = Locomotions.Platform.ActiveTransform.Rotation * Locomotions.Platform.ScoutLocalRotation;
+            if (targetRotation != FixedQuaternion.Identity)
+            {
+                FixedQuaternion rotationDiff = targetRotation * Locomotions.Platform.ScoutGlobalRotation.Inverse();
+                _hostScout.Events?.OnAddPlatformRotationDelta?.Invoke(rotationDiff);
+            }
+
+            Vector3d newGlobalPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
+            Vector3d moveDistance = newGlobalPoint - Locomotions.Platform.ScoutGlobalPoint;
+            if (moveDistance != Vector3d.Zero)
+            {
+                _hostScout.Events?.OnAddPlatformPositionDelta?.Invoke(moveDistance);
+                LastPosition += moveDistance; // shift last position so it doesn't alter scout's velocity
+            }
+        }
+
+        #endregion
+
+        #region Finalize 
+
+        // Prepare Traversal for next frame
+        public void FinishTraversing()
+        {
+            if (!IsFrameLocked) return;
+
+            CurrentPosition = _hostScout.WorldPosition;
+
+            LastVelocity = CurrentVelocity;
+            CurrentVelocity = (CurrentPosition - LastPosition) / TrailblazerManager.DeltaTime;
+
+            AdjustTraversalState();
+
+            if (Locomotions.Platform.IsEnabled)
+                HandlePlatformUpdates();
+
+            if (IsInWater)
+                HandleSwimState();
+
+            if (Locomotions.Fall.IsEnabled && !Locomotions.Swim.IsSwimming)
+                HandleFallState();
+
+            if (IsGrounded && Locomotions.Platform.IsOnPlatform || Locomotions.Platform.IsLockedToPlatform)
+                UpdatePlatformMovement();
+
+            _forceOutput = Vector3d.Zero;
+
+            IsFrameLocked = false;
+        }
+
+        private void AdjustTraversalState()
+        {
+            _hostScout.GetTraversalState(out TraversalState traversalState);
+
+            LastMedium = ActiveMedium;
+            ActiveMedium = traversalState.Medium;
+
+            LastSurfaceLevel = SurfaceLevel;
+            SurfaceLevel = traversalState.SurfaceLevel;
+
+            LastGroundNormal = GroundNormal;
+            if (!IsGrounded)
+                GroundNormal = Vector3d.Zero;
+            else
+                GroundNormal = traversalState.Ground?.GroundNormal ?? Vector3d.Zero;
+
+            // If we hit a new platform, reset platform state
+            if (Locomotions.Platform.IsEnabled)
+            {
+                Locomotions.Platform.MovementTransfer = traversalState.Ground?.MovementTransfer ?? MovementTransferState.None;
+                if (DidPlatformChange(traversalState.Ground))
+                {
+                    Fixed4x4 newGroundMatrix = traversalState.Ground?.GroundMatrix ?? Fixed4x4.Identity;
+
+                    Locomotions.Platform.LastTransform = Locomotions.Platform.ActivePlatform == null
+                        ? newGroundMatrix
+                        : Locomotions.Platform.ActiveTransform;
+                    Locomotions.Platform.ActiveTransform = newGroundMatrix;
+                    Locomotions.Platform.ActivePlatform = traversalState.Ground?.HitObject ?? null;
+
+                    Locomotions.Platform.IsNewPlatform = true;
+                }
+            }
+        }
+
+        private void HandlePlatformUpdates()
+        {
+            // Don't process platform state when in water
+            if (IsInWater)
+                return;
+
+            // Convert platforms velocity into instantaneous velocity shift
+            Vector3d adjustedPlatformForce = Locomotions.Platform.ActiveVelocity / TrailblazerManager.DeltaTime;
+            adjustedPlatformForce.y = Fixed64.Zero; // preserve vertical momentum
+
+            // If scout landed on a new platform, we have to wait for two frames
+            // before we know the new velocity of the platform under the scout
+            if (Locomotions.Platform.IsHoldingPlatform)
+            {
+                bool release = Locomotions.Platform.UpdateHoldOnPlatform();
+                if (release && IsGrounded)
+                    CurrentVelocity -= adjustedPlatformForce;
+            }
+
+            if (Locomotions.Platform.IsPlatformInteriaApplied)
+            {
+                if (WasGrounded && IsInAir)
+                {
+                    Locomotions.Platform.FrameForce = adjustedPlatformForce;
+                    // Apply inertia from platform
+                    CurrentVelocity += Locomotions.Platform.FrameForce;
+                }
+
+                if (WasInAir && IsGrounded)
+                {
+                    if (Locomotions.Platform.IsNewPlatform)
+                        Locomotions.Platform.SetHoldPlatform(Locomotions.Platform.ActivePlatform);
+                    else
+                        CurrentVelocity -= adjustedPlatformForce;
+                }
+            }
+        }
+
+        private void HandleSwimState()
+        {
+            // Clear the transient state when entiring water for the first time
+            if (!WasInWater)
+                Locomotions.ClearStateAll();
+
+            if (Locomotions.Swim.IsEnabled)
+            {
+                Locomotions.Swim.IsSwimming = true;
+                Locomotions.Swim.IsDiving = _hostScout.WorldPosition.y < SurfaceLevel;
+
+                Locomotions.Swim.UpdateDiveTime();
+
+                if (IsInWater && Locomotions.Swim.IsDrowning)
+                    _hostScout.Events?.OnDrowning?.Invoke(Locomotions.Swim.UnderwaterTimer);
+            }
+        }
+
         private void HandleFallState()
         {
             if (Locomotions.Fall.IsFalling)
@@ -727,21 +760,6 @@ namespace Trailblazer.Controllers
                 Locomotions.Fall.FallStart = _hostScout.WorldPosition.y;
                 _hostScout.Events?.OnStartFall?.Invoke();
             }
-        }
-
-        public void Finalize(bool status)
-        {
-            IsFrameLocked = status;
-
-            if (IsFrameLocked) return;
-
-            CurrentPosition = _hostScout.WorldPosition;
-
-            LastVelocity = CurrentVelocity;
-            CurrentVelocity = (CurrentPosition - LastPosition) / TrailblazerManager.DeltaTime;
-
-            if (IsGrounded && Locomotions.Platform.IsOnPlatform || Locomotions.Platform.IsLockedToPlatform)
-                UpdatePlatformMovement();
         }
 
         private void UpdatePlatformMovement()

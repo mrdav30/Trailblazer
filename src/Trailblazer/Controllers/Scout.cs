@@ -15,8 +15,8 @@ namespace Trailblazer.Controllers
         protected ScoutEvents _events;
         public ScoutEvents Events => _events;
 
-        protected TraversalState _traversalState;
-        public TraversalState TraversalState => _traversalState;
+        protected TraversalCondition _traversalState;
+        public TraversalCondition TraversalState => _traversalState;
 
         protected TraversalRequest _traversalRequest;
 
@@ -58,7 +58,7 @@ namespace Trailblazer.Controllers
             _traversalRequest = default;
         }
 
-        public virtual void GetTraversalState(out TraversalState traversalState)
+        public virtual void GetTraversalState(out TraversalCondition traversalState)
         {
             traversalState = TraversalState;
         }

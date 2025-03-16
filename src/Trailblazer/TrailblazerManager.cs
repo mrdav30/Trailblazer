@@ -6,6 +6,9 @@ namespace Trailblazer
     {
         public const int FrameRate = 32;
 
+        /// <summary>
+        /// Frames per second
+        /// </summary>
         public static readonly Fixed64 FixedFrameRate = (Fixed64)32;
 
         /// <summary>

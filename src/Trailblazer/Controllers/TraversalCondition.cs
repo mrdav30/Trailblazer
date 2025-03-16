@@ -10,7 +10,7 @@ namespace Trailblazer.Controllers
         Water = 3,
     }
 
-    public struct TraversalState
+    public struct TraversalCondition
     {
         public TraversalMedium Medium;
 
@@ -24,12 +24,12 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// The default movement state.
         /// </summary>
-        public readonly static TraversalState DefaultTraversalState = new()
+        public readonly static TraversalCondition DefaultTraversalCondition = new()
         {
             Medium = TraversalMedium.Unknown
         };
 
-        public TraversalState(TraversalMedium medium, Fixed64 surfaceLevel, GroundState? groundState = null)
+        public TraversalCondition(TraversalMedium medium, Fixed64 surfaceLevel, GroundState? groundState = null)
         {
             Medium = medium;
             SurfaceLevel = surfaceLevel;

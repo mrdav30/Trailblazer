@@ -18,7 +18,7 @@ public static class IScoutTestFactory
         );
 
         if (gravity.HasValue)
-            mock.ScoutController.Gravity = gravity.Value;
+            mock.ScoutController.GravityForce = gravity.Value;
 
         switch (startingMedium)
         {
@@ -74,7 +74,7 @@ public static class IScoutTestFactory
         var mock = new MockScout(startPosition ?? Vector3d.Zero, Vector3d.Zero);
 
         if (gravity.HasValue)
-            mock.ScoutController.Gravity = gravity.Value;
+            mock.ScoutController.GravityForce = gravity.Value;
 
         mock.SetTraversalState(
             TraversalMedium.Ground,

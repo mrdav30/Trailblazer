@@ -41,8 +41,6 @@ namespace Trailblazer.Controllers
 
         public Fixed64 SurfaceLevel { get; set; }
 
-        public Fixed64 LastSurfaceLevel { get; set; }
-
         public Vector3d GroundNormal { get; set; }
 
         public Vector3d LastGroundNormal { get; set; }
@@ -71,7 +69,7 @@ namespace Trailblazer.Controllers
         public Vector3d LastVelocity { get; private set; }
 
         /// <inheritdoc cref="TrailblazerManager.GravityForce"/>
-        public Fixed64 Gravity { get; set; } = TrailblazerManager.GravityForce;
+        public Fixed64 GravityForce { get; set; } = TrailblazerManager.GravityForce;
 
         /// <summary>
         /// Whether the motor is locked.
@@ -85,6 +83,9 @@ namespace Trailblazer.Controllers
 
         [NonSerialized]
         private Vector3d _forceOutput;
+
+        [NonSerialized]
+        private bool _isInitialized;
 
         #endregion
 
@@ -104,6 +105,11 @@ namespace Trailblazer.Controllers
             _hostScout = scout;
             CurrentPosition = _hostScout.WorldPosition;
             LastPosition = CurrentPosition;
+        }
+
+        public void SetVelocity(Vector3d velocity)
+        {
+            CurrentVelocity = velocity;
         }
 
         public void Traverse(Vector3d movementDirection, TraversalSpeed traversalSpeed, bool isRequestingJump = false)
@@ -148,7 +154,12 @@ namespace Trailblazer.Controllers
 
             CheckTraversalState();
 
-            HandleMovementTransitions();
+            // In limbo, prevent any further processing until control is given back
+            if (InLimbo)
+                Locomotions.IsInControl = false;
+
+            if (Locomotions.Jump.IsCoolingDown)
+                Locomotions.Jump.UpdateCooldown();
 
             ComputeMovementForces();
 
@@ -204,13 +215,21 @@ namespace Trailblazer.Controllers
 
         private void CheckTraversalState()
         {
-            _hostScout.GetTraversalState(out TraversalState traversalState);
+            _hostScout.GetTraversalState(out TraversalCondition traversalState);
 
-            ActiveMedium = traversalState.Medium;
+            // need to set this on the first frame only, otherwise we dont' know where we are
+            // otherwise, this should be updated in FinalizeTraversal
+            if (!_isInitialized)
+            {
+                LastMedium = ActiveMedium;
+                ActiveMedium = traversalState.Medium;
+                SurfaceLevel = traversalState.SurfaceLevel;
 
-            SurfaceLevel = traversalState.SurfaceLevel;
+                _isInitialized = true;
+            }
 
-            if (!IsGrounded)  // Left the ground
+            LastGroundNormal = GroundNormal;
+            if (!IsGrounded)
                 GroundNormal = Vector3d.Zero;
             else
                 GroundNormal = traversalState.Ground?.GroundNormal ?? Vector3d.Zero;
@@ -227,79 +246,27 @@ namespace Trailblazer.Controllers
             return false;
         }
 
-        private void HandleMovementTransitions()
-        {
-            if (InLimbo)
-            {
-                // In limbo, prevent any further processing until control is given back
-                Locomotions.IsInControl = false;
-                return;
-            }
-
-            if (Locomotions.Jump.IsCoolingDown)
-                Locomotions.Jump.UpdateCooldown();
-
-            if (WasInAir && !IsInAir) // Landed
-            {
-                if (Locomotions.Platform.IsPlatformInteriaApplied)
-                    Locomotions.Platform.FrameForce = Vector3d.Zero; // Preserve some horizontal
-
-                if (Locomotions.Jump.IsJumping)
-                {
-                    // Reset cooldown on landing
-                    Locomotions.Jump.ClearState();
-
-                    if (IsInWater)
-                        _hostScout.Events?.OnStopWaterBreach?.Invoke();
-                    else
-                        _hostScout.Events?.OnStopJump?.Invoke();
-                }
-
-                if (!IsInWater)
-                    _hostScout.Events?.OnLandedFall?.Invoke();
-            }
-
-            // Transitioning into water
-            if (IsInWater)
-                return;
-
-            // Transitioning from water to land
-            if (WasInWater && Locomotions.Swim.IsSwimming)
-                Locomotions.Swim.ClearState();
-
-            if (IsGrounded && Locomotions.Slide.IsEnabled)
-            {
-                bool isSliding = IsTooSteep();
-                if (!isSliding && Locomotions.Slide.IsSliding)
-                    Locomotions.IsInControl = true; // reset control
-
-                Locomotions.Slide.IsSliding = isSliding;
-            }
-        }
-
         /// <summary>
         /// Calculate the desired velocity to output as an acceleration delta
         /// </summary>
         private void ComputeMovementForces()
         {
-            Fixed64 maxVelocityChange = GetMaxAcceleration() * TrailblazerManager.DeltaTime;
-            Vector3d velocityChange = (GetDesiredVelocity() - CurrentVelocity).ClampMagnitude(maxVelocityChange);
-
             // convert the current velocity into a direct force to manipulate
-            if (CurrentVelocity != Vector3d.Zero)
-                _forceOutput = CurrentVelocity / TrailblazerManager.DeltaTime;
+            _forceOutput = CurrentVelocity;
 
-            if (Locomotions.Fall.IsFalling)
-                velocityChange.y = Fixed64.Zero; // TODO: this should get added to gravity
+            if (!IsGrounded)
+                _forceOutput.y = Fixed64.Zero; // TODO: this should get added to gravity
+
+            Fixed64 maxVelocityChange = GetMaxAcceleration() * TrailblazerManager.DeltaTime;
+            Vector3d velocityChange = (GetDesiredVelocity() - _forceOutput).ClampMagnitude(maxVelocityChange);
 
             if (velocityChange == Vector3d.Zero)
                 return;
 
+            // if we're in the air and don't have control, don't apply any velocity change at all.
+            // if we're on the ground and don't have control we do apply it - it will correspond to friction.
             if (IsGrounded || Locomotions.IsInControl)
-            {
-                Vector3d accelerationChange = velocityChange / TrailblazerManager.DeltaTime;
-                _forceOutput += accelerationChange;
-            }
+                _forceOutput += velocityChange;
 
             // When going uphill, the IScout will automatically move up by the needed amount.
             // Not moving it upwards manually prevent risk of lifting off from the ground.
@@ -448,10 +415,10 @@ namespace Trailblazer.Controllers
                 return Locomotions.Move.MaxGroundAcceleration;
 
             if (Locomotions.Jump.IsJumping)
-                return Locomotions.Move.MaxAirAcceleration * Locomotions.Jump.JumpControlMultiplier;
+                return Locomotions.Move.MaxAirAcceleration;// * Locomotions.Jump.JumpControlMultiplier;
 
             if (Locomotions.Fall.IsFalling)
-                return Locomotions.Move.MaxAirAcceleration * Locomotions.Fall.FallControlMultiplier;
+                return Locomotions.Move.MaxAirAcceleration;// * Locomotions.Fall.FallControlMultiplier;
 
             if (IsInAir)
                 return Locomotions.Move.MaxAirAcceleration;
@@ -464,19 +431,13 @@ namespace Trailblazer.Controllers
             if (IsGrounded)
             {
                 // Actively cancel any existing downward momentum by simulating the normal force of the ground.
-                if (CurrentVelocity.y <= Fixed64.Zero)
-                    _forceOutput.y = -CurrentVelocity.y / TrailblazerManager.DeltaTime;
-                else
-                    _forceOutput.y = Fixed64.Zero;
-
+                _forceOutput.y = CurrentVelocity.y < Fixed64.Zero ? Fixed64.Zero : -_forceOutput.y;
                 return;
             }
 
+            Fixed64 gravityStep = GravityForce * TrailblazerManager.DeltaTime;
             if (IsInWater)
             {
-                Fixed64 netBuoyancyForce = Gravity * Locomotions.Swim.BuoyancyFactor;
-
-
                 // If buoyancy cancels gravity completely, scout should neither sink nor rise
                 if (Locomotions.Swim.BuoyancyFactor == Fixed64.One)
                 {
@@ -484,19 +445,16 @@ namespace Trailblazer.Controllers
                     return;
                 }
 
+                // netBuoyancyForce
+                _forceOutput.y += gravityStep * Locomotions.Swim.BuoyancyFactor;
+
                 // If buoyancy is higher than gravity, scout should float up
                 if (Locomotions.Swim.BuoyancyFactor > Fixed64.One)
-                {
-                    _forceOutput.y += netBuoyancyForce;
-                    _forceOutput.y += (Locomotions.Swim.BuoyantForce - Gravity);
-                }
+                    _forceOutput.y += (Locomotions.Swim.BuoyantForce - gravityStep);
 
                 // If buoyancy is less than gravity, scout should sink down
                 if (Locomotions.Swim.BuoyancyFactor < Fixed64.One)
-                {
-                    _forceOutput.y -= netBuoyancyForce;
-                    _forceOutput.y -= (Locomotions.Swim.BuoyantForce - Gravity);
-                }
+                    _forceOutput.y -= (Locomotions.Swim.BuoyantForce - gravityStep);
 
                 return;
             }
@@ -505,12 +463,11 @@ namespace Trailblazer.Controllers
             {
                 // TODO: if we want to support moving while in air, does this need to skip?
                 // or cancel it out via another force?
-                _forceOutput.y -= Gravity;
+                _forceOutput.y = CurrentVelocity.y - gravityStep;
 
-                Fixed64 newVelocityY = CurrentVelocity.y + (_forceOutput.y * TrailblazerManager.DeltaTime);
                 // Ensure velocity does not exceed terminal fall speed
-                if (newVelocityY < -TrailblazerManager.TerminalFallVelocity)
-                    _forceOutput.y = (-TrailblazerManager.TerminalFallVelocity - CurrentVelocity.y) / TrailblazerManager.DeltaTime;
+                if (CurrentVelocity.y + _forceOutput.y < -TrailblazerManager.TerminalFallVelocity)
+                    _forceOutput.y = -TrailblazerManager.TerminalFallVelocity - CurrentVelocity.y;
 
                 // When jumping up we don't apply gravity for some time when the user is holding the jump button.
                 // This allows for more control over jump height by pressing the button longer.
@@ -518,11 +475,11 @@ namespace Trailblazer.Controllers
                 {
                     // Calculate the duration that the extra jump force should have effect.
                     // If we're still less than that duration after the jumping time, apply the force.
-                    int extraJumpLimit = (int)(Locomotions.Jump.FrameStartJump + Locomotions.Jump.ExtraJumpHeight / GetVerticalJumpSpeed());
+                    int extraJumpLimit = (Locomotions.Jump.FrameStartJump + Locomotions.Jump.ExtraJumpHeight / GetVerticalJumpSpeed()).CeilToInt();
 
                     // Negate the gravity we just applied, except we push in jumpDir rather than jump upwards.
-                    if (TrailblazerManager.FrameCount < extraJumpLimit)
-                        _forceOutput += Locomotions.Jump.FrameJumpDirection * Gravity;
+                    if (TrailblazerManager.FrameCount <= extraJumpLimit)
+                        _forceOutput += Locomotions.Jump.FrameJumpDirection * gravityStep;
                 }
             }
         }
@@ -561,7 +518,7 @@ namespace Trailblazer.Controllers
                 if (Locomotions.Platform.IsPlatformInteriaApplied)
                 {
                     // Apply platform velocity changes as an instantaneous velocity shift
-                    Locomotions.Platform.FrameForce = Locomotions.Platform.ActiveVelocity / TrailblazerManager.DeltaTime;
+                    Locomotions.Platform.FrameForce = Locomotions.Platform.ActiveVelocity;
                     jumpForce += Locomotions.Platform.FrameForce;
                 }
 
@@ -620,6 +577,8 @@ namespace Trailblazer.Controllers
             if (Locomotions.Platform.IsEnabled)
                 HandlePlatformUpdates();
 
+            HandleMovementTransitions();
+
             if (IsInWater)
                 HandleSwimState();
 
@@ -636,19 +595,12 @@ namespace Trailblazer.Controllers
 
         private void AdjustTraversalState()
         {
-            _hostScout.GetTraversalState(out TraversalState traversalState);
+            _hostScout.GetTraversalState(out TraversalCondition traversalState);
 
             LastMedium = ActiveMedium;
             ActiveMedium = traversalState.Medium;
 
-            LastSurfaceLevel = SurfaceLevel;
             SurfaceLevel = traversalState.SurfaceLevel;
-
-            LastGroundNormal = GroundNormal;
-            if (!IsGrounded)
-                GroundNormal = Vector3d.Zero;
-            else
-                GroundNormal = traversalState.Ground?.GroundNormal ?? Vector3d.Zero;
 
             // If we hit a new platform, reset platform state
             if (Locomotions.Platform.IsEnabled)
@@ -676,7 +628,7 @@ namespace Trailblazer.Controllers
                 return;
 
             // Convert platforms velocity into instantaneous velocity shift
-            Vector3d adjustedPlatformForce = Locomotions.Platform.ActiveVelocity / TrailblazerManager.DeltaTime;
+            Vector3d adjustedPlatformForce = Locomotions.Platform.ActiveVelocity;
             adjustedPlatformForce.y = Fixed64.Zero; // preserve vertical momentum
 
             // If scout landed on a new platform, we have to wait for two frames
@@ -704,6 +656,45 @@ namespace Trailblazer.Controllers
                     else
                         CurrentVelocity -= adjustedPlatformForce;
                 }
+            }
+        }
+
+        private void HandleMovementTransitions()
+        {
+            if (WasInAir && !IsInAir) // Landed
+            {
+                if (Locomotions.Platform.IsPlatformInteriaApplied)
+                    Locomotions.Platform.FrameForce = Vector3d.Zero; // Preserve some horizontal
+
+                if (Locomotions.Jump.IsJumping)
+                {
+                    // Reset cooldown on landing
+                    Locomotions.Jump.IsJumping = false;
+
+                    if (IsInWater)
+                        _hostScout.Events?.OnStopWaterBreach?.Invoke();
+                    else
+                        _hostScout.Events?.OnStopJump?.Invoke();
+                }
+
+                if (!IsInWater)
+                    _hostScout.Events?.OnLandedFall?.Invoke();
+            }
+
+            if (IsInWater)
+                return;
+
+            // Transitioning from water to land
+            if (WasInWater && Locomotions.Swim.IsSwimming)
+                Locomotions.Swim.ClearState();
+
+            if (IsGrounded && Locomotions.Slide.IsEnabled)
+            {
+                bool isSliding = IsTooSteep();
+                if (!isSliding && Locomotions.Slide.IsSliding)
+                    Locomotions.IsInControl = true; // reset control
+
+                Locomotions.Slide.IsSliding = isSliding;
             }
         }
 
@@ -783,7 +774,7 @@ namespace Trailblazer.Controllers
         /// From the jump height and gravity we deduce the upwards speed for the character to reach at the apex.
         /// </summary>
         /// <returns></returns>
-        private Fixed64 GetVerticalJumpSpeed() => FixedMath.Sqrt(2 * Locomotions.Jump.BaseJumpHeight * Gravity);
+        private Fixed64 GetVerticalJumpSpeed() => FixedMath.Sqrt(2 * Locomotions.Jump.BaseJumpHeight * GravityForce);
 
         public bool IsTooSteep()
         {

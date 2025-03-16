@@ -12,7 +12,7 @@ public class MockScout : Scout
 
     private FixedQuaternion _rotationDelta = FixedQuaternion.Identity;
 
-    private TraversalState _holdTraversal;
+    private TraversalCondition _holdTraversal;
 
     public MockScout(Vector3d position, Vector3d velocity)
     {
@@ -20,7 +20,7 @@ public class MockScout : Scout
 
         base.OnInitialize();
 
-        _pendingVelocity = velocity;
+        ScoutController.SetVelocity(velocity);
 
         Events.CanAffordJump = () => true;
 
@@ -39,17 +39,21 @@ public class MockScout : Scout
         };
     }
 
+    public override void SetTraversalState(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? movementState = null)
+    {
+        base.SetTraversalState(medium, surfaceLevel, movementState);
+        _holdTraversal = default;
+    }
+
     public override void OnFinalizeTraversal()
     {
         Vector3d previousPosition = WorldPosition;
 
         // resolve velocity
-        WorldPosition += _positionDelta + (_pendingVelocity * TrailblazerManager.DeltaTime);
+        WorldPosition += _positionDelta + _pendingVelocity;
 
         _positionDelta = Vector3d.Zero;
         _pendingVelocity = Vector3d.Zero;
-
-        Velocity = (WorldPosition - previousPosition) / TrailblazerManager.DeltaTime;
 
         if (_rotationDelta != FixedQuaternion.Identity)
         {
@@ -59,29 +63,14 @@ public class MockScout : Scout
 
         MockGroundCheck();
 
+        Velocity = (WorldPosition - previousPosition) / TrailblazerManager.DeltaTime;
+
         base.OnFinalizeTraversal();
     }
 
     // Update TraversalState based on output from controller
     private void MockGroundCheck()
     {
-        // mock surface level check
-        if (!ScoutController.Locomotions.Jump.IsJumping)
-        {
-            if (ScoutController.IsInAir
-                && _traversalState.Ground?.GroundNormal.y > Fixed64.Epsilon
-                && WorldPosition.y < _traversalState.SurfaceLevel - Fixed64.Epsilon)
-            {
-                WorldPosition = new Vector3d(WorldPosition.x, _traversalState.SurfaceLevel, WorldPosition.z);
-            }
-
-            if (ScoutController.IsInWater
-                && WorldPosition.y > _traversalState.SurfaceLevel + Fixed64.Epsilon)
-            {
-                WorldPosition = new Vector3d(WorldPosition.x, _traversalState.SurfaceLevel, WorldPosition.z);
-            }
-        }
-
         // mock grounding check
         if (_traversalState.Medium != TraversalMedium.Air && WorldPosition.y > _traversalState.SurfaceLevel + Fixed64.Epsilon)
         {
@@ -99,5 +88,16 @@ public class MockScout : Scout
                 _holdTraversal = default;
             }
         }
+
+        // mock surface level check
+        if (ScoutController.WasInAir)
+        {
+            if (_traversalState.Ground?.GroundNormal.y > Fixed64.Epsilon && WorldPosition.y < _traversalState.SurfaceLevel - Fixed64.Epsilon
+                || ScoutController.IsInWater && WorldPosition.y > _traversalState.SurfaceLevel + Fixed64.Epsilon)
+            {
+                WorldPosition = new Vector3d(WorldPosition.x, _traversalState.SurfaceLevel, WorldPosition.z);
+            }
+        }
+
     }
 }

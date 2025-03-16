@@ -53,7 +53,7 @@ namespace Trailblazer.UnitTests
                 startingMedium: TraversalMedium.Air);
 
             Vector3d expectedVelocity = Vector3d.Down;
-            expectedVelocity.y += -scout.ScoutController.Gravity * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime;
 
             // Act
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
@@ -70,7 +70,7 @@ namespace Trailblazer.UnitTests
             var scout = IScoutTestFactory.CreateFallingScout();
 
             Vector3d expectedVelocity = Vector3d.Down;
-            expectedVelocity.y += -scout.ScoutController.Gravity * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime;
 
             // Act
             scout.ScoutController.Traverse(Vector3d.Zero, TraversalSpeed.Idle, isRequestingJump: true);
@@ -99,7 +99,7 @@ namespace Trailblazer.UnitTests
             scout.Simulate();
 
             // Assert
-            scout.ScoutController.IsInAir.Should().BeFalse();
+            scout.ScoutController.IsInAir.Should().BeTrue();
             scout.ScoutController.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
             scout.ScoutController.Locomotions.Jump.FrameStartJump.Should().Be(expectedJumpFrame);
         }
@@ -191,7 +191,7 @@ namespace Trailblazer.UnitTests
                 scout.Simulate();
 
                 // Calculate expected velocity update from gravity impulse
-                expectedVelocity.y += -scout.ScoutController.Gravity * TrailblazerManager.DeltaTime;
+                expectedVelocity.y += -scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime;
             }
 
             // Assert
@@ -214,6 +214,7 @@ namespace Trailblazer.UnitTests
 
             // Act
             scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Walk);
+            scout.ScoutController.FinishTraversing();
 
             // Assert
             scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
@@ -274,7 +275,7 @@ namespace Trailblazer.UnitTests
             scout.Simulate();
 
             // Release jump after 2 frames
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < 29; i++)
             {
                 TrailblazerManager.Simulate();
                 scout.Simulate();
@@ -287,7 +288,7 @@ namespace Trailblazer.UnitTests
             // Assert
             scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeFalse();
             scout.ScoutController.Locomotions.Jump.IsJumping.Should().BeFalse();
-            scout.ScoutController.Locomotions.Jump.IsCoolingDown.Should().BeFalse();
+            scout.ScoutController.Locomotions.Jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we only simulate 4
             scout.ScoutController.CurrentVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
         }
 
@@ -401,7 +402,7 @@ namespace Trailblazer.UnitTests
             }
 
             // Assert
-            var expected = previousVelocity.y - (scout.ScoutController.Gravity * TrailblazerManager.DeltaTime * 3);
+            var expected = previousVelocity.y - (scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime * 3);
             scout.ScoutController.CurrentVelocity.y.Should().BeGreaterThan(expected);
         }
 

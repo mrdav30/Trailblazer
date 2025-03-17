@@ -51,7 +51,7 @@ namespace Trailblazer.Controllers
         /// <remarks>
         /// The default value is approximately 9.8 m/s².
         /// </remarks>
-        public static Fixed64 DefaultGravityForce { get; private set; } = Fixed64.FromRaw(0x9CCCCCCCDL); //  9.8f
+        public static readonly Fixed64 DefaultGravityForce = Fixed64.FromRaw(0x9CCCCCCCDL); //  9.8f
 
         /// <summary>
         /// The maximum downward velocity a scout can reach due to gravity.
@@ -78,36 +78,36 @@ namespace Trailblazer.Controllers
         [NonSerialized]
         private IScout _hostScout;
 
-        /// <summary>
-        /// The current traversal medium the scout is in (e.g., ground, air, water).
-        /// </summary>
-        public TraversalMedium ActiveMedium { get; set; }
-
-        /// <summary>
-        /// The traversal medium from the previous frame.
-        /// </summary>
-        public TraversalMedium LastMedium { get; set; }
-
-        /// <summary>
-        /// The vertical surface level relative to the scout, used for water and ground checks.
-        /// </summary>
-        public Fixed64 SurfaceLevel { get; set; }
-
-        /// <summary>
-        /// The normal vector of the surface the scout is currently interacting with.
-        /// </summary>
-        public Vector3d GroundNormal { get; set; }
-
-        /// <summary>
-        /// The surface normal from the previous frame, used for detecting surface transitions.
-        /// </summary>
-        public Vector3d LastGroundNormal { get; set; }
-
         /// <inheritdoc cref="DefaultGravityForce"/>
         public Fixed64 GravityForce { get; set; } = DefaultGravityForce;
 
         /// <inheritdoc cref="DefaultTerminalVelocity"/>
         private Fixed64 TerminalVelocity { get; set; } = DefaultTerminalVelocity;
+
+        /// <summary>
+        /// The current traversal medium the scout is in (e.g., ground, air, water).
+        /// </summary>
+        public TraversalMedium ActiveMedium { get; private set; }
+
+        /// <summary>
+        /// The traversal medium from the previous frame.
+        /// </summary>
+        public TraversalMedium LastMedium { get; private set; }
+
+        /// <summary>
+        /// The vertical surface level relative to the scout, used for water and ground checks.
+        /// </summary>
+        public Fixed64 SurfaceLevel { get; private set; }
+
+        /// <summary>
+        /// The normal vector of the surface the scout is currently interacting with.
+        /// </summary>
+        public Vector3d GroundNormal { get; private set; }
+
+        /// <summary>
+        /// The surface normal from the previous frame, used for detecting surface transitions.
+        /// </summary>
+        public Vector3d LastGroundNormal { get; private set; }
 
         /// <summary>
         /// Indicates whether the controller is locked for the current frame to prevent multiple force applications.
@@ -132,7 +132,7 @@ namespace Trailblazer.Controllers
         /// Tracks whether this is the first simulation frame after initialization.
         /// </summary>
         [NonSerialized]
-        private bool _isFirstFrame = true;
+        private bool _isTraversalStateValid;
 
         #endregion
 
@@ -262,7 +262,10 @@ namespace Trailblazer.Controllers
             if (Locomotions.MovingFloor.IsEnabled)
                 UpdatePlatformVelocity();
 
-            CheckTraversalState();
+            // Need to check traversal state if not set before first frame.
+            // Otherwise, this should be updated in AdjustTraversalState via FinalizeTraversal.
+            if (!_isTraversalStateValid)
+                SetCurrentTraversalState();
 
             // In limbo, prevent any further processing until control is given back
             if (InLimbo)
@@ -297,7 +300,7 @@ namespace Trailblazer.Controllers
                 _hostScout.Events?.OnAddLinearForce?.Invoke(_forceOutput * TrailblazerManager.DeltaTime);
 
             _frameTraversalRequest = default;
-            _isFirstFrame = false;
+            _isTraversalStateValid = false;
         }
 
         /// <summary>
@@ -326,21 +329,18 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// Checks and updates the traversal state (e.g., ground, air, water) based on environment data.
         /// </summary>
-        private void CheckTraversalState()
+        public void SetCurrentTraversalState()
         {
             _hostScout.GetTraversalState(out TraversalCondition traversalState);
 
-            // Need to set this on the first frame only, otherwise we don't know where we are.
-            // Otherwise, this should be updated in FinalizeTraversal.
-            if (_isFirstFrame)
-            {
-                LastMedium = ActiveMedium;
-                ActiveMedium = traversalState.Medium;
-                SurfaceLevel = traversalState.SurfaceLevel;
-            }
+            LastMedium = ActiveMedium;
+            ActiveMedium = traversalState.Medium;
+            SurfaceLevel = traversalState.SurfaceLevel;
 
             LastGroundNormal = GroundNormal;
             GroundNormal = IsGrounded ? traversalState.Ground?.GroundNormal ?? Vector3d.Zero : Vector3d.Zero;
+
+            _isTraversalStateValid = true;
         }
 
         /// <summary>
@@ -748,7 +748,7 @@ namespace Trailblazer.Controllers
         /// <remarks>
         /// If the scout lands on a new platform, the platform state is reset and updated accordingly.
         /// </remarks>
-        private void AdjustTraversalState()
+        public void AdjustTraversalState()
         {
             _hostScout.GetTraversalState(out TraversalCondition traversalState);
 
@@ -756,6 +756,9 @@ namespace Trailblazer.Controllers
             ActiveMedium = traversalState.Medium;
 
             SurfaceLevel = traversalState.SurfaceLevel;
+
+            LastGroundNormal = GroundNormal;
+            GroundNormal = IsGrounded ? traversalState.Ground?.GroundNormal ?? Vector3d.Zero : Vector3d.Zero;
 
             // If we hit a new platform, reset platform state
             if (Locomotions.MovingFloor.IsEnabled)
@@ -774,6 +777,8 @@ namespace Trailblazer.Controllers
                     Locomotions.MovingFloor.IsNewPlatform = true;
                 }
             }
+
+            _isTraversalStateValid = true;
         }
 
         /// <summary>
@@ -809,12 +814,12 @@ namespace Trailblazer.Controllers
             // Even if platform velocity is zero, we need to check if we need to release a hold
             if (Locomotions.MovingFloor.IsHoldingPlatform)
                 isReleasing = Locomotions.MovingFloor.CanReleaseHoldOnPlatform();
- 
+
             // Convert platforms velocity into instantaneous velocity shift
             Vector3d adjustedPlatformForce = Locomotions.MovingFloor.PlatformVelocity;
             adjustedPlatformForce.y = Fixed64.Zero; // preserve vertical momentum
 
-            if(adjustedPlatformForce == Vector3d.Zero)
+            if (adjustedPlatformForce == Vector3d.Zero)
             {
                 Locomotions.MovingFloor.FramePlatformVelocity = Vector3d.Zero;
                 return;

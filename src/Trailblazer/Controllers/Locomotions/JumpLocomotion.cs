@@ -10,7 +10,7 @@ namespace Trailblazer.Controllers.Locomotions
     /// and enforces a cooldown period between consecutive jumps.
     /// </remarks>
     [System.Serializable]
-    public class JumpLocomotion: ITransientLocomotion
+    public class JumpLocomotion : ITransientLocomotion
     {
         #region Constants
 
@@ -119,31 +119,37 @@ namespace Trailblazer.Controllers.Locomotions
         /// <remarks>
         /// This is true if the jump button was pressed and the scout is not grounded.
         /// </remarks>
+        [Transient]
         public bool IsJumping { get; set; }
 
         /// <summary>
         /// Indicates whether the scout is holding the jump button.
         /// </summary>
+        [Transient]
         public bool IsHoldingJump { get; set; }
 
         /// <summary>
         /// The simulation frame when the scout started jumping.
         /// </summary>
+        [Transient]
         public int FrameStartJump { get; set; }
 
         /// <summary>
         /// The direction in which the scout jumped during the current frame.
         /// </summary>
+        [Transient]
         public Vector3d FrameJumpDirection { get; set; }
 
         /// <summary>
         /// The elapsed time in the cooldown state.
         /// </summary>
+        [Transient]
         public Fixed64 CooldownTimer { get; private set; }
 
         /// <summary>
         /// Indicates whether the scout is currently in a jump cooldown period.
         /// </summary>
+        [Transient]
         public bool IsCoolingDown { get; private set; }
 
         #endregion
@@ -179,13 +185,7 @@ namespace Trailblazer.Controllers.Locomotions
         public void SyncState(ITransientLocomotion locomotion)
         {
             if (locomotion is not JumpLocomotion other) return;
-
-            IsJumping = other.IsJumping;
-            IsHoldingJump = other.IsHoldingJump;
-            IsCoolingDown = other.IsCoolingDown;
-            CooldownTimer = other.CooldownTimer;
-            FrameStartJump = other.FrameStartJump;
-            FrameJumpDirection = other.FrameJumpDirection;
+            this.SyncTransientState(other);
         }
 
         /// <summary>
@@ -193,12 +193,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public void ClearState()
         {
-            IsJumping = false;
-            IsHoldingJump = false;
-            IsCoolingDown = false;
-            FrameStartJump = 0;
-            FrameJumpDirection = Vector3d.Zero;
-            CooldownTimer = Fixed64.Zero;
+            this.ClearTransientState();
         }
     }
 }

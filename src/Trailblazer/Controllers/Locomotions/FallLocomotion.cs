@@ -61,16 +61,19 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// Indicates whether the scout is currently falling.
         /// </summary>
+        [Transient]
         public bool IsFalling { get; set; }
 
         /// <summary>
         /// The vertical position where the scout started falling.
         /// </summary>
+        [Transient]
         public Fixed64 FallStart { get; set; }
 
         /// <summary>
         /// The vertical position where the scout landed.
         /// </summary>
+        [Transient]
         public Fixed64 FallEnd { get; set; }
 
         /// <summary>
@@ -87,19 +90,14 @@ namespace Trailblazer.Controllers.Locomotions
         public void SyncState(ITransientLocomotion locomotion)
         {
             if (locomotion is not FallLocomotion other) return;
-
-            IsFalling = other.IsFalling;
-            FallStart = other.FallStart;
-            FallEnd = other.FallEnd;
+            this.SyncTransientState(other);
         }
 
         /// <summary>
         /// Resets all fall-related properties, including the start and end height.
         /// </summary>
         public void ClearState() {
-            IsFalling = false;
-            FallStart = Fixed64.Zero;
-            FallEnd = Fixed64.Zero;
+            this.ClearTransientState();
         }
     }
 }

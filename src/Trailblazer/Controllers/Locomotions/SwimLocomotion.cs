@@ -137,16 +137,19 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// Indicates whether the scout is currently swimming.
         /// </summary>
+        [Transient]
         public bool IsSwimming { get; set; }
 
         /// <summary>
         /// Indicates whether the scout is currently diving (fully submerged).
         /// </summary>
+        [Transient]
         public bool IsDiving { get; set; }
 
         /// <summary>
         /// The amount of time the scout has been underwater.
         /// </summary>
+        [Transient]
         public Fixed64 UnderwaterTimer { get; set; }
 
         /// <summary>
@@ -200,9 +203,7 @@ namespace Trailblazer.Controllers.Locomotions
         public void SyncState(ITransientLocomotion locomotion)
         {
             if (locomotion is not SwimLocomotion other) return;
-
-            IsSwimming = other.IsSwimming;
-            UnderwaterTimer = other.UnderwaterTimer;
+            this.SyncTransientState(other);
         }
 
         /// <summary>
@@ -210,9 +211,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public void ClearState()
         {
-            IsSwimming = false;
-            IsDiving = false;
-            UnderwaterTimer = Fixed64.Zero;
+            this.ClearTransientState();
         }
     }
 }

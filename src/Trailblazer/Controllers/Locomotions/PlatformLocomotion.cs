@@ -57,71 +57,85 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// Indicates whether the scout has just landed on a new platform.
         /// </summary>
+        [Transient]
         public bool IsNewPlatform { get; set; }
 
         /// <summary>
         /// Defines how movement is transferred from the platform to the scout.
         /// </summary>
+        [Transient]
         public MovementTransferState MovementTransfer { get; set; }
-        
+
         /// <summary>
         /// The platform object the scout is currently standing on.
         /// </summary>
+        [Transient]
         public object ActivePlatform { get; set; }
 
         /// <summary>
         /// The transformation matrix of the active platform.
         /// </summary>
+        [Transient]
         public Fixed4x4 ActiveTransform { get; set; } = Fixed4x4.Identity;
 
         /// <summary>
         /// The transformation matrix of the last known platform.
         /// </summary>
+        [Transient]
         public Fixed4x4 LastTransform { get; set; } = Fixed4x4.Identity;
 
         /// <summary>
         /// The global position of the scout on the platform.
         /// </summary>
+        [Transient]
         public Vector3d ScoutGlobalPoint { get; set; }
 
         /// <summary>
         /// The local position of the scout relative to the platform.
         /// </summary>
+        [Transient]
         public Vector3d ScoutLocalPoint { get; set; }
 
         /// <summary>
         /// The global rotation of the scout on the platform.
         /// </summary>
+        [Transient]
         public FixedQuaternion ScoutGlobalRotation { get; set; } = FixedQuaternion.Identity;
 
         /// <summary>
         /// The local rotation of the scout relative to the platform.
         /// </summary>
+        [Transient]
         public FixedQuaternion ScoutLocalRotation { get; set; } = FixedQuaternion.Identity;
 
         /// <summary>
         /// The velocity of the platform.
         /// </summary>
+        [Transient]
         public Vector3d PlatformVelocity { get; set; }
 
         /// <summary>
         /// The last known platform velocity when the scout is airborne.
         /// </summary>
+        [Transient]
         public Vector3d FramePlatformVelocity { get; set; }
 
         /// <summary>
         /// Indicates whether the scout is currently holding onto a platform.
         /// </summary>
+        [Transient]
         public bool IsHoldingPlatform { get; private set; }
 
         /// <summary>
         /// The last known platform the scout was attached to.
         /// </summary>
+        [Transient]
         public object HoldPlatform { get; private set; }
 
         /// <summary>
         /// The number of frames the scout has been holding onto a platform.
         /// </summary>
+        [Transient]
         public int HoldPlatformFrames { get; private set; }
 
         /// <summary>
@@ -182,20 +196,7 @@ namespace Trailblazer.Controllers.Locomotions
         public void SyncState(ITransientLocomotion locomotion)
         {
             if (locomotion is not PlatformLocomotion other) return;
-
-            IsNewPlatform = other.IsNewPlatform;
-            ActivePlatform = other.ActivePlatform;
-            ActiveTransform = other.ActiveTransform;
-            LastTransform = other.LastTransform;
-            ScoutGlobalPoint = other.ScoutGlobalPoint;
-            ScoutGlobalRotation = other.ScoutGlobalRotation;
-            ScoutLocalPoint = other.ScoutLocalPoint;
-            ScoutLocalRotation = other.ScoutLocalRotation;
-            PlatformVelocity = other.PlatformVelocity;
-            FramePlatformVelocity = other.FramePlatformVelocity;
-            IsHoldingPlatform = other.IsHoldingPlatform;
-            HoldPlatform = other.HoldPlatform;
-            HoldPlatformFrames = other.HoldPlatformFrames;
+            this.SyncTransientState(other);
         }
 
         /// <summary>
@@ -203,19 +204,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public void ClearState()
         {
-            IsNewPlatform = false;
-            ActivePlatform = null;
-            ActiveTransform = Fixed4x4.Identity;
-            LastTransform = Fixed4x4.Identity;
-            ScoutGlobalPoint = Vector3d.Zero;
-            ScoutLocalPoint = Vector3d.Zero;
-            ScoutGlobalRotation = FixedQuaternion.Identity;
-            ScoutLocalRotation = FixedQuaternion.Identity;
-            PlatformVelocity = Vector3d.Zero;
-            FramePlatformVelocity = Vector3d.Zero;
-            IsHoldingPlatform = false;
-            HoldPlatform = null;
-            HoldPlatformFrames = 0;
+            this.ClearTransientState();
         }
     }
 }

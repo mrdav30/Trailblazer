@@ -80,12 +80,18 @@ namespace Trailblazer.Controllers.Locomotions
         public bool IsEnabled
         {
             get => _isEnabled;
-            set => _isEnabled = value;
+            set
+            {
+                _isEnabled = value;
+                if (!_isEnabled)
+                    ClearState();
+            }
         }
 
         /// <summary>
         /// Indicates whether the scout is currently sliding.
         /// </summary>
+        [Transient]
         public bool IsSliding { get; set; }
 
         #endregion
@@ -97,8 +103,7 @@ namespace Trailblazer.Controllers.Locomotions
         public void SyncState(ITransientLocomotion locomotion)
         {
             if (locomotion is not SlideLocomotion other) return;
-
-            IsSliding = other.IsSliding;
+            this.SyncTransientState(other);
         }
 
         /// <summary>
@@ -106,7 +111,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public void ClearState()
         {
-            IsSliding = false;
+            this.ClearState();
         }
     }
 }

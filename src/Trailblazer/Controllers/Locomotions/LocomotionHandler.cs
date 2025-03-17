@@ -1,4 +1,8 @@
-﻿namespace Trailblazer.Controllers.Locomotions
+﻿using System.Collections.Generic;
+using System;
+using System.Linq;
+
+namespace Trailblazer.Controllers.Locomotions
 {
     /// <summary>
     /// Manages locomotion states and behaviors for the <see cref="ScoutController"/>.
@@ -75,23 +79,11 @@
         {
             IsInControl = other.IsInControl;
 
-            if (Move.IsEnabled)
-                Move.SyncState(other.Move);
-
-            if (MovingFloor.IsEnabled)
-                MovingFloor.SyncState(other.MovingFloor);
-
-            if (Jump.IsEnabled)
-                Jump.SyncState(other.Jump);
-
-            if (Fall.IsEnabled)
-                Fall.SyncState(other.Fall);
-
-            if (Swim.IsEnabled)
-                Swim.SyncState(other.Swim);
-
-            if (Slide.IsEnabled)
-                Slide.SyncState(other.Slide);
+            foreach (var locomotion in GetLocomotions())
+            {
+                if (locomotion.IsEnabled)
+                    locomotion.SyncState(other.GetLocomotion(locomotion.GetType()));
+            }
         }
 
         /// <summary>
@@ -103,23 +95,32 @@
         /// </remarks>
         public void ClearStateAll()
         {
-            if (Move.IsEnabled)
-                Move.ClearState();
+            foreach (var locomotion in GetLocomotions())
+            {
+                if (locomotion.IsEnabled)
+                    locomotion.ClearState();
+            }
+        }
 
-            if (MovingFloor.IsEnabled)
-                MovingFloor.ClearState();
+        /// <summary>
+        /// Gets all locomotion instances in the handler.
+        /// </summary>
+        public IEnumerable<ITransientLocomotion> GetLocomotions()
+        {
+            yield return Move;
+            yield return MovingFloor;
+            yield return Jump;
+            yield return Fall;
+            yield return Swim;
+            yield return Slide;
+        }
 
-            if (Jump.IsEnabled)
-                Jump.ClearState();
-
-            if (Fall.IsEnabled)
-                Fall.ClearState();
-
-            if (Swim.IsEnabled)
-                Swim.ClearState();
-
-            if (Slide.IsEnabled)
-                Slide.ClearState();
+        /// <summary>
+        /// Retrieves a locomotion instance of a specific type from the handler.
+        /// </summary>
+        public ITransientLocomotion GetLocomotion(Type type)
+        {
+            return GetLocomotions().FirstOrDefault(l => l.GetType() == type);
         }
     }
 }

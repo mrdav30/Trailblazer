@@ -1,4 +1,6 @@
-﻿namespace Trailblazer.Controllers.Locomotions
+﻿using System;
+
+namespace Trailblazer.Controllers.Locomotions
 {
     /// <summary>
     /// Defines the base interface for all locomotion modules that control specific movement behaviors.
@@ -12,19 +14,22 @@
         bool IsEnabled { get; set; }
     }
 
+    [AttributeUsage(AttributeTargets.Property)]
+    public class TransientAttribute : Attribute { }
+
     /// <summary>
     /// Defines locomotion modules with state that may change per frame and require synchronization.
     /// </summary>
     public interface ITransientLocomotion : ILocomotion
     {
         /// <summary>
-        /// Synchronizes the transient state of this locomotion with another instance.
+        /// Synchronizes transient properties from another locomotion instance.
         /// </summary>
         /// <param name="other">The locomotion instance to sync with.</param>
         void SyncState(ITransientLocomotion other);
 
         /// <summary>
-        /// Resets the locomotion state, clearing any active effects.
+        /// Clears transient properties, resetting them to default values.
         /// </summary>
         void ClearState();
     }

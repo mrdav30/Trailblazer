@@ -147,27 +147,35 @@ namespace Trailblazer.Controllers.Locomotions
         public bool IsEnabled
         {
             get => _isEnabled;
-            set => _isEnabled = value;
+            set {
+                _isEnabled = value;
+                if (!_isEnabled)
+                    ClearState();
+            }
         }
 
         /// <summary>
         /// The current world position of the scout.
         /// </summary>
+        [Transient]
         public Vector3d CurrentPosition { get; set; }
 
         /// <summary>
         /// The world position from the previous frame, used for velocity calculations.
         /// </summary>
+        [Transient]
         public Vector3d LastPosition { get; set; }
 
         /// <summary>
         /// The scout’s current velocity in world space.
         /// </summary>
+        [Transient]
         public Vector3d CurrentVelocity { get; set; }
 
         /// <summary>
         /// The scout’s velocity from the previous frame.
         /// </summary>
+        [Transient]
         public Vector3d LastVelocity { get; set; }
 
         #endregion
@@ -179,11 +187,7 @@ namespace Trailblazer.Controllers.Locomotions
         public void SyncState(ITransientLocomotion locomotion)
         {
             if (locomotion is not MoveLocomotion other) return;
-
-            CurrentPosition = other.CurrentPosition;
-            LastPosition = other.LastPosition;
-            CurrentVelocity = other.CurrentVelocity;
-            LastVelocity = other.LastVelocity;
+            this.SyncTransientState(other);
         }
 
         /// <summary>
@@ -191,10 +195,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public void ClearState()
         {
-            CurrentPosition = Vector3d.Zero;
-            LastPosition = Vector3d.Zero;
-            CurrentVelocity = Vector3d.Zero;
-            LastVelocity = Vector3d.Zero;
+            this.ClearTransientState();
         }
     }
 }

@@ -2,35 +2,57 @@
 
 namespace Trailblazer
 {
+    /// <summary>
+    /// Provides global simulation parameters and timing management for the Trailblazer system.
+    /// </summary>
+    /// <remarks>
+    /// This static class handles fixed-time updates, gravity settings, and frame progression.
+    /// It ensures consistency across physics calculations and locomotion systems.
+    /// </remarks>
     public static class TrailblazerManager
     {
-        public const int FrameRate = 32;
+        /// <summary>
+        /// The fixed simulation frame rate.
+        /// </summary>
+        /// <remarks>
+        /// This determines how frequently physics and movement updates occur.
+        /// </remarks>
+        public static int FrameRate { get; private set; } = 32;
 
         /// <summary>
-        /// Frames per second
+        /// The fixed time step for each simulation frame.
         /// </summary>
-        public static readonly Fixed64 FixedFrameRate = (Fixed64)32;
+        /// <remarks>
+        /// This value is derived from <see cref="FrameRate"/> to ensure a consistent time step across updates.
+        /// </remarks>
+        public static Fixed64 DeltaTime { get; private set; } = Fixed64.One / (Fixed64)FrameRate;
 
         /// <summary>
-        /// Unscaled delta-time
+        /// The number of frames elapsed since the simulation started.
         /// </summary>
-        public static readonly Fixed64 DeltaTime = Fixed64.One / (Fixed64)FrameRate;
-
         public static int FrameCount { get; private set; }
 
         /// <summary>
-        /// Represent a fixed-point representation of Gravity as an acceleration force
+        /// Updates the simulation frame rate and recalculates the delta time.
         /// </summary>
-        public static Fixed64 GravityForce { get; private set; } = Fixed64.FromRaw(0x9CCCCCCCDL); //  9.8f
+        /// <param name="frameRate">The new frame rate value.</param>
+        public static void SetFrameRate(int frameRate)
+        {
+            FrameRate = frameRate;
+            DeltaTime = Fixed64.One / (Fixed64)FrameRate;
+        }
 
-        // Terminal velocity is roughly 53 m/s (190 km/h or ~120 mph)
-        public static readonly Fixed64 TerminalFallVelocity = (Fixed64)53f;
-
+        /// <summary>
+        /// Advances the simulation by incrementing the frame count.
+        /// </summary>
         public static void Simulate()
         {
             FrameCount++;
         }
 
+        /// <summary>
+        /// Resets the simulation frame count to zero.
+        /// </summary>
         public static void Reset()
         {
             FrameCount = 0;

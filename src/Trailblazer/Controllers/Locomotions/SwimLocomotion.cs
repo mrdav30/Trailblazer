@@ -3,111 +3,118 @@
 namespace Trailblazer.Controllers.Locomotions
 {
     /// <summary>
-    /// A class that handles the swimming movement of the scout.
+    /// Handles swimming mechanics, including movement, buoyancy, water resistance, and breath control.
     /// </summary>
+    /// <remarks>
+    /// This locomotion module governs how the scout moves in water, applies drag and buoyancy forces,
+    /// and tracks dive time for breath management.
+    /// </remarks>
     [System.Serializable]
     public class SwimLocomotion : ITransientLocomotion
     {
         #region Constants
 
         /// <summary>
-        /// How long the character can hold its breath
+        /// The default duration the scout can hold its breath underwater before drowning begins.
         /// </summary>
         public static readonly Fixed64 DefaultHoldBreathTime = (Fixed64)60;
 
         /// <summary>
-        /// How much breath should be regenerated
+        /// The default amount of breath regenerated per tick when resurfacing.
         /// </summary>
         public static readonly Fixed64 DefaultBreathRegenerateIncrement = (Fixed64)10;
 
         /// <summary>
-        /// The default maximum swim speed.
+        /// The default maximum swimming speed.
         /// </summary>
         public static readonly Fixed64 DefaultMaxSwimSpeed = (Fixed64)1.5d;
 
         /// <summary>
-        /// The default maximum swim sideways speed.
+        /// The default maximum acceleration while swimming.
         /// </summary>
         public static readonly Fixed64 DefaultMaxSwimSidewaysSpeed = (Fixed64)1d;
 
         /// <summary>
-        /// The default maximum swim acceleration.
-        /// </summary>  
+        /// The default maximum acceleration while swimming.
+        /// </summary>
         public static readonly Fixed64 DefaultMaxSwimAcceleration = (Fixed64)5;
 
         /// <summary>
-        /// The default swim acceleration modifier.
+        /// The default swim acceleration multiplier.
         /// </summary>
         public static readonly Fixed64 DefaultSwimAccelerationModifier = (Fixed64)10;
 
         /// <summary>
-        /// The default buoyancy factor.
+        /// The default buoyancy factor, controlling how strongly the scout floats in water.
         /// </summary>
         public static readonly Fixed64 DefaultBouyancyFactor = Fixed64.One;
 
         /// <summary>
-        /// The default water drag factor.
+        /// The default water drag factor, reducing movement speed in water.
         /// </summary>
         public static readonly Fixed64 DefaultWaterDragFactor = Fixed64.FromRaw(0x10000000L); // ~0.0625
 
-        public static readonly Fixed64 DrowningStatusDelay = Fixed64.FromRaw(0x20000000L);
+        /// <summary>
+        /// The delay before the scout enters a drowning state after exceeding breath capacity.
+        /// </summary>
+        public static readonly Fixed64 DrowningStatusDelay = Fixed64.FromRaw(0x20000000L); // 0.125
 
         #endregion
 
         #region Configuration State
 
         /// <summary>
-        /// Can the character swim?
+        /// Determines whether swimming mechanics are enabled.
         /// </summary>
         private bool _isEnabled = true;
 
         /// <summary>
-        /// Can the character jump while swimming?
+        /// Determines whether the scout can breach the water surface when jumping.
         /// </summary>
         public bool CanBreachWater;
 
         /// <summary>
-        /// Can the scout drown?
+        /// Determines whether the scout can drown if underwater for too long.
         /// </summary>
         public bool CanDrown = true;
 
         /// <summary>
-        /// The maximum swim speed.
+        /// The maximum swimming speed.
         /// </summary>
         public Fixed64 MaxSwimSpeed = DefaultMaxSwimSpeed;
 
         /// <summary>
-        /// The maximum swim sideways speed.
+        /// The maximum sideways swimming speed.
         /// </summary>
         public Fixed64 MaxSwimSidewaysSpeed = DefaultMaxSwimSidewaysSpeed;
 
         /// <summary>
-        /// Except this... Higher is Slower some how...
+        /// The maximum acceleration while swimming.
         /// </summary>
         public Fixed64 MaxWaterAcceleration = DefaultMaxSwimAcceleration;
 
         /// <summary>
-        /// The swim acceleration modifier.
+        /// The acceleration multiplier applied to swimming movement.
         /// </summary>
         public Fixed64 SwimAccelerationModifier = DefaultSwimAccelerationModifier;
 
         /// <summary>
-        /// The buoyancy factor.
+        /// The buoyancy factor determining how strongly the scout floats in water.
         /// </summary>
         public Fixed64 BuoyancyFactor = DefaultBouyancyFactor;
 
         /// <summary>
-        /// The water drag factor.
+        /// The water drag factor, slowing movement in water.
         /// </summary>
         public Fixed64 WaterDragFactor = DefaultWaterDragFactor; // ~0.0625
 
         /// <summary>
-        /// How long the character can hold its breath
+        /// The maximum time the scout can hold its breath underwater before drowning.
         /// </summary>
         public Fixed64 HoldBreathTime = DefaultHoldBreathTime;
 
         /// <summary>
-        /// How much breath should be regenerated
+        /// The amount of breath the scout regenerates per tick when resurfacing.
         /// </summary>
         public Fixed64 BreathRegenerateIncrement = DefaultBreathRegenerateIncrement;
 
@@ -127,30 +134,33 @@ namespace Trailblazer.Controllers.Locomotions
             }
         }
 
+        /// <summary>
+        /// Indicates whether the scout is currently swimming.
+        /// </summary>
         public bool IsSwimming { get; set; }
 
         /// <summary>
-        /// Is the scout diving?
+        /// Indicates whether the scout is currently diving (fully submerged).
         /// </summary>
         public bool IsDiving { get; set; }
 
         /// <summary>
-        /// How long the scout has been underwater
+        /// The amount of time the scout has been underwater.
         /// </summary>
         public Fixed64 UnderwaterTimer { get; set; }
 
         /// <summary>
-        /// The maximum velocity.
+        /// The effective maximum acceleration while swimming, factoring in the acceleration modifier.
         /// </summary>
         public Fixed64 MaxSwimAcceleration => MaxWaterAcceleration * SwimAccelerationModifier;
 
         /// <summary>
-        /// The buoyant force.
+        /// The effective buoyant force applied while swimming.
         /// </summary>
         public Fixed64 BuoyantForce => MaxSwimAcceleration * BuoyancyFactor;
 
         /// <summary>
-        /// Is the scout drowning?
+        /// Determines whether the scout is drowning due to prolonged underwater exposure.
         /// </summary>
         public bool IsDrowning
         {
@@ -163,6 +173,9 @@ namespace Trailblazer.Controllers.Locomotions
 
         #endregion
 
+        /// <summary>
+        /// Updates the dive timer, tracking underwater duration and regenerating breath when resurfacing.
+        /// </summary>
         public void UpdateDiveTime()
         {
             if (IsDiving)
@@ -180,6 +193,10 @@ namespace Trailblazer.Controllers.Locomotions
                 UnderwaterTimer = Fixed64.Zero;
         }
 
+        /// <summary>
+        /// Synchronizes swimming state with another <see cref="SwimLocomotion"/> instance.
+        /// </summary>
+        /// <param name="locomotion">The locomotion instance to sync with.</param>
         public void SyncState(ITransientLocomotion locomotion)
         {
             if (locomotion is not SwimLocomotion other) return;
@@ -188,7 +205,9 @@ namespace Trailblazer.Controllers.Locomotions
             UnderwaterTimer = other.UnderwaterTimer;
         }
 
-        /// <inheritdoc cref="ITransientLocomotion.ClearState"/>
+        /// <summary>
+        /// Resets swimming-related state, clearing dive status and breath timers.
+        /// </summary>
         public void ClearState()
         {
             IsSwimming = false;

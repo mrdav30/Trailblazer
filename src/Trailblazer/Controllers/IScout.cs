@@ -3,25 +3,42 @@
 namespace Trailblazer.Controllers
 {
     /// <summary>
-    /// The base interface for the scout.
+    /// Defines the core interface for a scout entity, providing position, rotation, traversal state, and event handling.
     /// </summary>
     public interface IScout
     {
+        /// <summary>
+        /// The current world position of the scout.
+        /// </summary>
         public Vector3d WorldPosition { get; }
 
+        /// <summary>
+        /// The scout's visual rotation in world space.
+        /// </summary>
         public FixedQuaternion VisualRotation { get; }
 
+        /// <summary>
+        /// The controller responsible for managing the scout's movement and physics interactions.
+        /// </summary>
         ScoutController ScoutController { get; }
 
         /// <summary>
-        /// The events of the scout.
+        /// The set of events associated with the scout, allowing for external interactions such as force application and state transitions.
         /// </summary>
-#nullable enable
+        #nullable enable
         ScoutEvents? Events { get; }
 #nullable disable
-        
+
+        /// <summary>
+        /// Retrieves the current traversal state of the scout, including its movement medium (ground, air, water) and environmental interactions.
+        /// </summary>
+        /// <param name="traversalState">The output parameter containing the scout's traversal condition.</param>
         void GetTraversalState(out TraversalCondition traversalState);
 
+        /// <summary>
+        /// Gets the position of the scout's foot in world space, typically used for ground checks and platform interactions.
+        /// </summary>
+        /// <returns>The world-space position of the scout's foot.</returns>
         Vector3d GetFootPosition();
     }
 }

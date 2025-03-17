@@ -3,7 +3,7 @@
 namespace Trailblazer.Controllers.Locomotions
 {
     /// <summary>
-    /// A helper class for the fall locomotion.
+    /// Handles the scout’s behavior when falling, including tracking fall distance and applying movement constraints.
     /// </summary>
     [System.Serializable]
     public class FallLocomotion : ITransientLocomotion
@@ -11,27 +11,36 @@ namespace Trailblazer.Controllers.Locomotions
         #region Constants
 
         /// <summary>
-        /// Default limit on the Y axis the scout can fall.
+        /// The default maximum height a scout can fall before a fatal impact occurs.
         /// </summary>
         public static readonly Fixed64 DefaultMaxFallHeight = (Fixed64)30;
 
-        public static readonly Fixed64 DefaultFallControlMultiplier = Fixed64.FromRaw(0x30000000L);
+        /// <summary>
+        /// Default movement control multiplier when falling.
+        /// Reduces movement responsiveness to simulate loss of control while airborne.
+        /// </summary>
+        public static readonly Fixed64 DefaultFallControlMultiplier = (Fixed64)0.1875f; // 50% control when falling
 
         #endregion
 
         #region Configuration State
 
         /// <summary>
-        /// Can the character fall?
+        /// Determines whether falling mechanics are enabled.
+        /// If disabled, the scout will not experience fall behavior.
         /// </summary>
         private bool _isEnabled = true;
 
         /// <summary>
-        /// How far on the Y axis the scout can fall before death applies
+        /// The maximum allowable fall height before the scout reaches a critical threshold (e.g., death or heavy impact).
         /// </summary>
         public Fixed64 MaxFallHeight = DefaultMaxFallHeight;
 
-        public Fixed64 FallControlMultiplier = DefaultFallControlMultiplier; // 50% control when falling
+        /// <summary>
+        /// A multiplier controlling how much movement input affects the scout while falling.
+        /// Lower values reduce movement responsiveness.
+        /// </summary>
+        public Fixed64 FallControlMultiplier = DefaultFallControlMultiplier;
 
         #endregion
 
@@ -50,27 +59,31 @@ namespace Trailblazer.Controllers.Locomotions
         }
 
         /// <summary>
-        /// Whether the scout is falling.
+        /// Indicates whether the scout is currently falling.
         /// </summary>
         public bool IsFalling { get; set; }
 
         /// <summary>
-        /// The y component of <see cref="IScout.WorldPosition"/> where the scout started to fall.
+        /// The vertical position where the scout started falling.
         /// </summary>
         public Fixed64 FallStart { get; set; }
 
         /// <summary>
-        /// The y component of <see cref="IScout.WorldPosition"/> where the scout landed.
+        /// The vertical position where the scout landed.
         /// </summary>
         public Fixed64 FallEnd { get; set; }
 
         /// <summary>
-        /// The distance between <see cref="FallStart"/> and <see cref="FallEnd"/>
+        /// The total distance fallen, calculated as the difference between <see cref="FallStart"/> and <see cref="FallEnd"/>.
         /// </summary>
         public Fixed64 FallHeight => FallStart - FallEnd;
 
         #endregion
 
+        /// <summary>
+        /// Synchronizes the falling state with another <see cref="FallLocomotion"/> instance.
+        /// </summary>
+        /// <param name="locomotion">The locomotion instance to sync with.</param>
         public void SyncState(ITransientLocomotion locomotion)
         {
             if (locomotion is not FallLocomotion other) return;
@@ -80,7 +93,9 @@ namespace Trailblazer.Controllers.Locomotions
             FallEnd = other.FallEnd;
         }
 
-        /// <inheritdoc cref="ITransientLocomotion.ClearState"/>
+        /// <summary>
+        /// Resets all fall-related properties, including the start and end height.
+        /// </summary>
         public void ClearState() {
             IsFalling = false;
             FallStart = Fixed64.Zero;

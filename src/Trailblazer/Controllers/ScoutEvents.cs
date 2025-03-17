@@ -5,74 +5,80 @@ using Trailblazer.Controllers.Locomotions;
 namespace Trailblazer.Controllers
 {
     /// <summary>
-    /// The events of the scout.
+    /// Defines event-driven interactions for the scout, including movement, forces, and state transitions.
     /// </summary>
     public class ScoutEvents
     {
 #nullable enable
         /// <summary>
-        /// The action to set the position of the scout.
+        /// Event triggered when a platform applies a positional displacement to the scout.
         /// </summary>
         public Action<Vector3d>? OnAddPlatformPositionDelta { get; set; } = null;
-        
+
         /// <summary>
-        /// The action to set the rotation of the scout.
+        /// Event triggered when a platform applies a rotational displacement to the scout.
         /// </summary>
         public Action<FixedQuaternion>? OnAddPlatformRotationDelta { get; set; } = null;
 
         /// <summary>
-        /// The action to add a linear force to the scout.
+        /// Event triggered when an external force is applied to the scout.
         /// </summary>
+        /// <remarks>
+        /// This is typically used for acceleration-based movement adjustments.
+        /// </remarks>
         public Action<Vector3d>? OnAddLinearForce { get; set; } = null;
 
         /// <summary>
-        /// The action to start the fall of the scout.
+        /// Event triggered when the scout begins falling.
         /// </summary>
         public Action? OnStartFall { get; set; } = null;
 
         /// <summary>
-        /// The action to stop the fall of the scout.
+        /// Event triggered when the scout stops falling and lands.
+        /// The event provides the height from which the scout fell.
         /// </summary>
         public Action<Fixed64>? OnStopFall { get; set; } = null;
 
         /// <summary>
-        /// The action to stop the fall of the scout.
+        /// Event triggered when the scout reaches the maximum allowable fall height.
         /// </summary>
         public Action? OnMaxFallHeightReached { get; set; } = null;
 
         /// <summary>
-        /// The action to stop the fall of the scout.
+        /// Event triggered when the scout begins drowning due to prolonged underwater exposure.
+        /// The provided value represents the duration the scout has been underwater before drowning.
         /// </summary>
         public Action<Fixed64>? OnDrowning { get; set; } = null;
 
         /// <summary>
-        /// The action to stop the fall of the scout.
+        /// Function that determines if the scout can afford to perform a jump action.
         /// </summary>
+        /// <returns>True if the scout has enough resources or conditions to jump, otherwise false.</returns>
         public Func<bool>? CanAffordJump { get; set; } = null;
 
         /// <summary>
-        /// The action to start the jump of the scout.  
-        /// Notification sends <see cref="JumpLocomotion.AvoidGroundingTimer"/> to assist in preventing ground checks for the specified time.
+        /// Event triggered when the scout initiates a jump.
+        /// The provided value indicates how long ground checks should be ignored after jumping.
         /// </summary>
         public Action<Fixed64>? OnStartJump { get; set; } = null;
 
         /// <summary>
-        /// The action to stop the jump of the scout.
+        /// Event triggered when the scout stops jumping, typically after reaching the apex or landing.
         /// </summary>
         public Action? OnStopJump { get; set; } = null;
 
         /// <summary>
-        /// The action to land the scout.
+        /// Event triggered when the scout lands after a jump or fall.
         /// </summary>
         public Action? OnLandedFall { get; set; } = null;
 
         /// <summary>
-        /// The action to start the water breach of the scout.
+        /// Event triggered when the scout breaches the water surface.
         /// </summary>
         public Action? OnStartWaterBreach { get; set; } = null;
 
         /// <summary>
-        /// The action to stop the water breach of the scout.
+        /// Event triggered when the scout fully submerges after breaching the water surface.
         /// </summary>
         public Action? OnStopWaterBreach { get; set; } = null;
 

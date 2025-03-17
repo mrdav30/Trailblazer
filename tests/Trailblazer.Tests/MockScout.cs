@@ -35,8 +35,17 @@ public class MockScout : Scout
         Events.OnAddLinearForce += (force) =>
         {
             // assume a mass of 1
-            _pendingVelocity += force * TrailblazerManager.DeltaTime;
+            _pendingVelocity += force;
         };
+    }
+
+    /// <summary>
+    /// Simulates the scout's traversal for a single frame by processing movement input and finalizing state updates.
+    /// </summary>
+    public override void OnSimulate()
+    {
+        StartTraversal();
+        FinalizeTraversal();
     }
 
     public override void SetTraversalState(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? movementState = null)
@@ -45,7 +54,7 @@ public class MockScout : Scout
         _holdTraversal = default;
     }
 
-    public override void OnFinalizeTraversal()
+    public override void FinalizeTraversal()
     {
         Vector3d previousPosition = WorldPosition;
 
@@ -65,13 +74,15 @@ public class MockScout : Scout
 
         Velocity = (WorldPosition - previousPosition) / TrailblazerManager.DeltaTime;
 
-        base.OnFinalizeTraversal();
+        base.FinalizeTraversal();
     }
 
     // Update TraversalState based on output from controller
     private void MockGroundCheck()
     {
         // mock grounding check
+
+        // TODO: prevent in limbo, only do this if we are jumping!
         if (_traversalState.Medium != TraversalMedium.Air && WorldPosition.y > _traversalState.SurfaceLevel + Fixed64.Epsilon)
         {
             //  hold what the previous medium was before switching to in air

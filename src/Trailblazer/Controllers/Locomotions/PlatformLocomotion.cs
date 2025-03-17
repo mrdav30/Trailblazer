@@ -3,28 +3,25 @@
 namespace Trailblazer.Controllers.Locomotions
 {
     /// <summary>
-    /// The state of the platform locomotion.
+    /// Handles movement adjustments when the scout is standing on a moving platform or surface.
     /// </summary>
-    public enum HoldPlatformState
-    {
-        Idle = 0,
-        Holding = 1,
-        Release = 2
-    }
-
-    /// <summary>
-    /// A helper class for the platform locomotion.
-    /// </summary>
+    /// <remarks>
+    /// This locomotion system tracks platform velocity, rotation, and movement transfer behavior.
+    /// It allows the scout to inherit motion from platforms and supports different transfer states.
+    /// </remarks>
     [System.Serializable]
     public class PlatformLocomotion : ITransientLocomotion
     {
         #region Constants
 
         /// <summary>
-        /// The global height adjust.
+        /// Default height adjustment applied when standing on a moving platform.
         /// </summary>
         public static readonly Fixed64 DefaultHeightAdjust = Fixed64.FromRaw(0x80000000L); // 0.5f;
 
+        /// <summary>
+        /// Maximum number of frames the scout can remain attached to a platform before release.
+        /// </summary>
         public const int MaxHoldPlatformFrames = 2;
 
         #endregion
@@ -32,10 +29,13 @@ namespace Trailblazer.Controllers.Locomotions
         #region Configuration State
 
         /// <summary>
-        /// Whether the platform locomotion is enabled.
+        /// Determines whether platform locomotion is enabled.
         /// </summary>
         private bool _isEnabled = true;
 
+        /// <summary>
+        /// The height offset applied when interacting with moving platforms.
+        /// </summary>
         public Fixed64 HeightAdjust = DefaultHeightAdjust;
 
         #endregion
@@ -54,32 +54,38 @@ namespace Trailblazer.Controllers.Locomotions
             }
         }
 
+        /// <summary>
+        /// Indicates whether the scout has just landed on a new platform.
+        /// </summary>
         public bool IsNewPlatform { get; set; }
 
-        public MovementTransferState MovementTransfer { get; set; }
-
         /// <summary>
-        /// The active platform.
+        /// Defines how movement is transferred from the platform to the scout.
+        /// </summary>
+        public MovementTransferState MovementTransfer { get; set; }
+        
+        /// <summary>
+        /// The platform object the scout is currently standing on.
         /// </summary>
         public object ActivePlatform { get; set; }
 
         /// <summary>
-        /// The active platform matrix.
+        /// The transformation matrix of the active platform.
         /// </summary>
         public Fixed4x4 ActiveTransform { get; set; } = Fixed4x4.Identity;
 
         /// <summary>
-        /// The last platform matrix.
+        /// The transformation matrix of the last known platform.
         /// </summary>
         public Fixed4x4 LastTransform { get; set; } = Fixed4x4.Identity;
 
         /// <summary>
-        /// The global point of the scout on the platform.
+        /// The global position of the scout on the platform.
         /// </summary>
         public Vector3d ScoutGlobalPoint { get; set; }
 
         /// <summary>
-        /// The local point of the scout on the platform.
+        /// The local position of the scout relative to the platform.
         /// </summary>
         public Vector3d ScoutLocalPoint { get; set; }
 
@@ -89,92 +95,90 @@ namespace Trailblazer.Controllers.Locomotions
         public FixedQuaternion ScoutGlobalRotation { get; set; } = FixedQuaternion.Identity;
 
         /// <summary>
-        /// The local rotation of the scout on the platform.
+        /// The local rotation of the scout relative to the platform.
         /// </summary>
         public FixedQuaternion ScoutLocalRotation { get; set; } = FixedQuaternion.Identity;
 
         /// <summary>
         /// The velocity of the platform.
         /// </summary>
-        public Vector3d ActiveVelocity { get; set; }
+        public Vector3d PlatformVelocity { get; set; }
 
         /// <summary>
-        /// This keeps track of the platform's velocity while we're not grounded
+        /// The last known platform velocity when the scout is airborne.
         /// </summary>
-        public Vector3d FrameForce { get; set; }
+        public Vector3d FramePlatformVelocity { get; set; }
 
         /// <summary>
-        /// The current state of the platform locomotion.
+        /// Indicates whether the scout is currently holding onto a platform.
         /// </summary>
-        public HoldPlatformState HoldState { get; private set; }
+        public bool IsHoldingPlatform { get; private set; }
 
         /// <summary>
-        /// The last active platform.
+        /// The last known platform the scout was attached to.
         /// </summary>
         public object HoldPlatform { get; private set; }
 
         /// <summary>
-        /// The number of frames the platform has been held.
+        /// The number of frames the scout has been holding onto a platform.
         /// </summary>
         public int HoldPlatformFrames { get; private set; }
 
         /// <summary>
-        /// Whether the scout is on a platform.
+        /// Indicates whether the scout is currently standing on a platform.
         /// </summary>
         public bool IsOnPlatform => IsEnabled && ActivePlatform != null;
 
         /// <summary>
-        /// Whether the initial velocity has been applied.
+        /// Indicates whether platform inertia (initial velocity transfer) has been applied.
         /// </summary>
         public bool IsPlatformInteriaApplied => IsOnPlatform
-            && ActiveVelocity != Vector3d.Zero
+            && PlatformVelocity != Vector3d.Zero
             && (MovementTransfer == MovementTransferState.InitTransfer
                 || MovementTransfer == MovementTransferState.PermaTransfer);
 
         /// <summary>
-        /// Whether the scout is locked on to a platform.
+        /// Indicates whether the scout is locked to a platform and will move with it.
         /// </summary>
         public bool IsLockedToPlatform => IsOnPlatform && MovementTransfer == MovementTransferState.PermaLocked;
 
-        public bool IsHoldingPlatform => HoldState != HoldPlatformState.Idle
-;
         #endregion
 
+        /// <summary>
+        /// Assigns the scout to a platform, initiating a hold state.
+        /// </summary>
+        /// <param name="platform">The platform object to attach to.</param>
         public void SetHoldPlatform(object platform)
         {
             HoldPlatform = platform;
             HoldPlatformFrames = 0;
-            HoldState = HoldPlatformState.Holding;
+            IsHoldingPlatform = true;
         }
 
-        public bool UpdateHoldOnPlatform()
+        /// <summary>
+        /// Updates the platform hold state, releasing the hold if the hold duration expires.
+        /// </summary>
+        /// <returns>True if the scout should detach from the platform; otherwise, false.</returns>
+        public bool CanReleaseHoldOnPlatform()
         {
-            switch (HoldState)
+            if (!IsHoldingPlatform)
+                return false;
+
+            HoldPlatformFrames++;
+            if(HoldPlatformFrames > MaxHoldPlatformFrames)
             {
-                case HoldPlatformState.Holding:
-                    {
-                        HoldPlatformFrames--;
-                        if (HoldPlatformFrames >= MaxHoldPlatformFrames)
-                        {
-                            HoldState = HoldPlatformState.Release;
-                            HoldPlatformFrames = 0;
-                        }
-                        return false;
-                    }
-                case HoldPlatformState.Release:
-                    {
-                        HoldState = HoldPlatformState.Idle;
-                        bool result = false;
-                        if (HoldPlatform != ActivePlatform)
-                            result = true;
-                        HoldPlatform = null;
-                        return result;
-                    }
-                default:
-                    return false;
+                HoldPlatformFrames = 0;
+                if (HoldPlatform != ActivePlatform)
+                    return true;
             }
+
+            return false;
         }
 
+        /// <summary>
+        /// Synchronizes platform movement state with another <see cref="PlatformLocomotion"/> instance.
+        /// </summary>
+        /// <param name="locomotion">The locomotion instance to sync with.</param>
         public void SyncState(ITransientLocomotion locomotion)
         {
             if (locomotion is not PlatformLocomotion other) return;
@@ -187,14 +191,16 @@ namespace Trailblazer.Controllers.Locomotions
             ScoutGlobalRotation = other.ScoutGlobalRotation;
             ScoutLocalPoint = other.ScoutLocalPoint;
             ScoutLocalRotation = other.ScoutLocalRotation;
-            ActiveVelocity = other.ActiveVelocity;
-            FrameForce = other.FrameForce;
-            HoldState = other.HoldState;
+            PlatformVelocity = other.PlatformVelocity;
+            FramePlatformVelocity = other.FramePlatformVelocity;
+            IsHoldingPlatform = other.IsHoldingPlatform;
             HoldPlatform = other.HoldPlatform;
             HoldPlatformFrames = other.HoldPlatformFrames;
         }
 
-        /// <inheritdoc cref="ITransientLocomotion.ClearState"/>
+        /// <summary>
+        /// Resets platform-related state, clearing platform references and velocities.
+        /// </summary>
         public void ClearState()
         {
             IsNewPlatform = false;
@@ -205,9 +211,9 @@ namespace Trailblazer.Controllers.Locomotions
             ScoutLocalPoint = Vector3d.Zero;
             ScoutGlobalRotation = FixedQuaternion.Identity;
             ScoutLocalRotation = FixedQuaternion.Identity;
-            ActiveVelocity = Vector3d.Zero;
-            FrameForce = Vector3d.Zero;
-            HoldState = HoldPlatformState.Idle;
+            PlatformVelocity = Vector3d.Zero;
+            FramePlatformVelocity = Vector3d.Zero;
+            IsHoldingPlatform = false;
             HoldPlatform = null;
             HoldPlatformFrames = 0;
         }

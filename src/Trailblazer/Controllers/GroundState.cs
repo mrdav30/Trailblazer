@@ -1,24 +1,27 @@
 ﻿using FixedMathSharp;
 
 /// <summary>
-/// This state controls how a platform's velocity effects the IScout
+/// Defines how a scout inherits movement from the surface it is standing on.
 /// </summary>
 public enum MovementTransferState
 {
     /// <summary>
-    /// The scout is not affected by velocity of the surface at all.
+    /// The scout is unaffected by the movement of the surface.
     /// </summary>
     None = 0,
+
     /// <summary>
-    /// scout gets its initial velocity from the surface, then gradualy comes to a stop.
+    /// The scout receives an initial velocity from the surface but gradually slows down.
     /// </summary>
     InitTransfer = 1,
+
     /// <summary>
-    /// scout gets its initial velocity from the surface, and keeps that velocity until landing.
+    /// The scout maintains its velocity from the surface until it lands again.
     /// </summary>
     PermaTransfer = 2,
+
     /// <summary>
-    /// scout is relative to the movement of the last touched surface and will move together with that surface.
+    /// The scout is locked to the movement of the surface and moves along with it.
     /// </summary>
     PermaLocked = 3
 }
@@ -26,37 +29,35 @@ public enum MovementTransferState
 namespace Trailblazer.Controllers
 {
     /// <summary>
-    /// The data of the ground.
+    /// Represents the state of the ground the scout is interacting with, including surface movement and normal data.
     /// </summary>
     public struct GroundState
     {
         /// <summary>
-        /// The object the scout is on.
+        /// The object the scout is currently standing on.
         /// </summary>
 #nullable enable
         public object? HitObject;
 #nullable disable
 
         /// <summary>
-        /// The transform of the object the scout is on.
+        /// The transformation matrix of the ground object.
         /// </summary>
         public Fixed4x4? GroundMatrix;
 
         /// <summary>
-        /// The normal of the ground matrix translation.
+        /// The normal vector of the ground, indicating its slope.
         /// </summary>
         public readonly Vector3d GroundNormal => GroundMatrix?.Up ?? Vector3d.Zero;
 
+        /// <summary>
+        /// Determines how the scout inherits movement from the ground surface.
+        /// </summary>
         public MovementTransferState MovementTransfer;
 
-        public GroundState(
-            object hitObject = null, 
-            Fixed4x4? groundMatrix = null,
-            MovementTransferState movementTransfer = MovementTransferState.None)
-        {
-            HitObject = hitObject;
-            GroundMatrix = groundMatrix;
-            MovementTransfer = movementTransfer;
-        }
+        /// <summary>
+        /// Represents an empty ground state with default values.
+        /// </summary>
+        public static readonly GroundState Empty = new();
     }
 }

@@ -86,17 +86,17 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// The maximum speed when walking.
         /// </summary>
-        public Fixed64 MaxWalkSpeed = DefaultMaxWalkSpeed;
+        public Fixed64 MaxSlowSpeed = DefaultMaxWalkSpeed;
 
         /// <summary>
         /// The maximum speed when jogging.
         /// </summary>
-        public Fixed64 MaxJogSpeed = DefaultMaxJogSpeed;
+        public Fixed64 MaxModerateSpeed = DefaultMaxJogSpeed;
 
         /// <summary>
         /// The maximum speed when sprinting.
         /// </summary>
-        public Fixed64 MaxSprintSpeed = DefaultMaxSprintSpeed;
+        public Fixed64 MaxFastSpeed = DefaultMaxSprintSpeed;
 
         /// <summary>
         /// The maximum speed when moving sideways.

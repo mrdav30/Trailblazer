@@ -9,16 +9,13 @@ public static class IScoutTestFactory
     public static Scout CreateMockScout(
         Vector3d? startPosition = null,
         Vector3d? startVelocity = null,
-        Fixed64? gravity = null,
-        TraversalMedium startingMedium = TraversalMedium.Unknown)
+        TraversalMedium startingMedium = TraversalMedium.Unknown,
+        Fixed64? surfaceLevel = null)
     {
         var mock = new MockScout(
             startPosition ?? Vector3d.Zero,
             startVelocity ?? Vector3d.Zero
         );
-
-        if (gravity.HasValue)
-            mock.ScoutController.GravityForce = gravity.Value;
 
         switch (startingMedium)
         {
@@ -26,7 +23,7 @@ public static class IScoutTestFactory
                 {
                     mock.SetTraversalState(
                         TraversalMedium.Ground,
-                        Fixed64.Zero,
+                        surfaceLevel,
                         new GroundState
                         {
                             HitObject = new object(), // Separate from platform
@@ -36,10 +33,10 @@ public static class IScoutTestFactory
                 }
                 break;
             case TraversalMedium.Air:
-                mock.SetTraversalState(TraversalMedium.Air);
+                mock.SetTraversalState(TraversalMedium.Air, surfaceLevel);
                 break;
             case TraversalMedium.Water:
-                mock.SetTraversalState(TraversalMedium.Water);
+                mock.SetTraversalState(TraversalMedium.Water, surfaceLevel);
                 break;
             case TraversalMedium.Unknown:
                 break;
@@ -53,12 +50,13 @@ public static class IScoutTestFactory
     /// <summary>
     /// Generates a Falling Scout (for gravity tests)
     /// </summary>
-    public static Scout CreateFallingScout(Vector3d? startVelocity = null, Fixed64? surfaceLevel = null)
+    public static Scout CreateFallingScout(Vector3d? startPosition = null, Vector3d? startVelocity = null, Fixed64? surfaceLevel = null)
     {
         MockScout mock = new MockScout(
-            Vector3d.Zero, 
+            startPosition ?? Vector3d.Zero, 
             startVelocity ?? Vector3d.Down);
         mock.SetTraversalState(TraversalMedium.Air, surfaceLevel ?? -(Fixed64)999);
+        mock.ScoutController.Locomotions.Fall.IsFalling = true;
         return mock;
     }
 
@@ -87,6 +85,20 @@ public static class IScoutTestFactory
             }
         );
 
+        return mock;
+    }
+
+    public static Scout CreateJumpReadyScout(Vector3d? startPosition = null)
+    {
+        var mock = new MockScout(startPosition ?? Vector3d.Zero, Vector3d.Zero);
+        mock.SetTraversalState(
+            TraversalMedium.Ground, 
+            Fixed64.Zero,
+            new GroundState
+            {
+                HitObject = new object(), // Separate from platform
+                GroundMatrix = Fixed4x4.Identity,
+            });
         return mock;
     }
 

@@ -61,15 +61,18 @@ namespace Trailblazer.Controllers
         /// </summary>
         /// <param name="medium">The traversal medium (e.g., ground, air, water).</param>
         /// <param name="surfaceLevel">The vertical surface level, if applicable.</param>
-        /// <param name="movementState">The ground state data, if applicable.</param>
+        /// <param name="groundState">The ground state data, if applicable.</param>
+        /// <param name="ceilingLevel">The vertical ceiling level, if applicable.</param>
         public virtual void SetTraversalState(
             TraversalMedium medium,
             Fixed64? surfaceLevel = null,
-            GroundState? movementState = null)
+            GroundState? groundState = null,
+            Fixed64? ceilingLevel = null)
         {
             _traversalState.Medium = medium;
             _traversalState.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-            _traversalState.Ground = movementState ?? null;
+            _traversalState.Ground = groundState ?? null;
+            _traversalState.CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
         }
 
         /// <summary>

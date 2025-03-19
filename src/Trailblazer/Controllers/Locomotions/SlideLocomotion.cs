@@ -111,7 +111,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public void ClearState()
         {
-            this.ClearState();
+            this.ClearTransientState();
         }
     }
 }

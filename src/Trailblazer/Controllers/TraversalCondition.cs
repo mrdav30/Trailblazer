@@ -49,8 +49,25 @@ namespace Trailblazer.Controllers
         public GroundState? Ground;
 
         /// <summary>
+        /// Stores the height of the ceiling above the scout, if applicable.
+        /// Defaults to Fixed64.MAX_VALUE, meaning no ceiling.
+        /// </summary>
+        public Fixed64 CeilingLevel;
+
+        /// <summary>
         /// Represents an empty traversal condition with default values.
         /// </summary>
-        public readonly static TraversalCondition Empty = new();
+        public readonly static TraversalCondition Empty = new()
+        {
+            CeilingLevel = Fixed64.MAX_VALUE
+        };
+
+        public TraversalCondition(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? ground = null, Fixed64? ceilingLevel = null)
+        {
+            Medium = medium;
+            SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
+            Ground = ground ?? null;
+            CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
+        }
     }
 }

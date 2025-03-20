@@ -32,12 +32,12 @@ namespace Trailblazer.Controllers
         /// <inheritdoc cref="IScout.Events"/>
         public ScoutEvents Events => _events;
 
-        protected TraversalCondition _traversalState;
+        protected TraversalCondition _traversalCondition;
 
         /// <summary>
         /// The current traversal condition of the scout, including medium (ground, air, water) and surface level.
         /// </summary>
-        public TraversalCondition TraversalState => _traversalState;
+        public TraversalCondition TraversalCondition => _traversalCondition;
 
         /// <summary>
         /// Stores the movement request for the next traversal cycle.
@@ -49,11 +49,11 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// Initializes the scout by setting up its events, traversal state, and movement controller.
         /// </summary>
-        public virtual void OnInitialize()
+        public virtual void OnInitialize(TraversalCondition initialCondition)
         {
             _events = new();
-            _traversalState = TraversalCondition.Empty;
-            _controller = ScoutController.CreateNew(this);
+            _traversalCondition = initialCondition;
+            _controller = ScoutController.CreateNew(this, _traversalCondition);
         }
 
         /// <summary>
@@ -61,19 +61,21 @@ namespace Trailblazer.Controllers
         /// </summary>
         /// <param name="medium">The traversal medium (e.g., ground, air, water).</param>
         /// <param name="surfaceLevel">The vertical surface level, if applicable.</param>
-        /// <param name="groundState">The ground state data, if applicable.</param>
+        /// <param name="surfaceCondition">The ground state data, if applicable.</param>
         /// <param name="ceilingLevel">The vertical ceiling level, if applicable.</param>
-        public virtual void SetTraversalState(
+        public virtual void SetTraversalCondition(
             TraversalMedium medium,
             Fixed64? surfaceLevel = null,
-            GroundState? groundState = null,
+            SurfaceCondition? surfaceCondition = null,
             Fixed64? ceilingLevel = null)
         {
-            _traversalState.Medium = medium;
-            _traversalState.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-            _traversalState.Ground = groundState ?? null;
-            _traversalState.CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
+            _traversalCondition.Medium = medium;
+            _traversalCondition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
+            _traversalCondition.SurfaceCondition = surfaceCondition ?? null;
+            _traversalCondition.CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
         }
+
+        public virtual void SetTraversalCondition(TraversalCondition condition) => _traversalCondition = condition;
 
         /// <summary>
         /// Sets the movement request for the next simulation frame.
@@ -91,14 +93,11 @@ namespace Trailblazer.Controllers
             _traversalRequest.IsRequestingJump = isRequestingJump;
         }
 
+        public virtual void SetTraversalRequest(TraversalRequest request) => _traversalRequest = request;
+
         #endregion
 
         #region Simulation
-
-        public virtual void OnSimulate()
-        {
-            StartTraversal();
-        }
 
         /// <summary>
         /// Handles the start of traversal by passing the movement request to the <see cref="ScoutController"/>.
@@ -110,25 +109,11 @@ namespace Trailblazer.Controllers
         }
 
         /// <summary>
-        /// Retrieves the current traversal state of the scout.
-        /// </summary>
-        /// <param name="traversalState">The output parameter containing the traversal condition.</param>
-        public virtual void GetTraversalState(out TraversalCondition traversalState)
-        {
-            traversalState = TraversalState;
-        }
-
-        public virtual void OnLateUpdate()
-        {
-            FinalizeTraversal();
-        }
-
-        /// <summary>
         /// Finalizes traversal by updating movement calculations and applying corrections.
         /// </summary>
         public virtual void FinalizeTraversal()
         {
-            ScoutController.FinishFrameTraversal();
+            ScoutController.FinishFrameTraversal(_traversalCondition);
         }
 
         /// <summary>

@@ -31,7 +31,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// <remarks>
         /// This locomotion maintains platform velocity tracking and movement transfer states.
         /// </remarks>
-        public PlatformLocomotion MovingFloor = new();
+        public PlatformLocomotion Platform = new();
 
         /// <summary>
         /// Controls the airborne state when a jump is executed successfully.
@@ -108,7 +108,7 @@ namespace Trailblazer.Controllers.Locomotions
         public IEnumerable<ITransientLocomotion> GetLocomotions()
         {
             yield return Move;
-            yield return MovingFloor;
+            yield return Platform;
             yield return Jump;
             yield return Fall;
             yield return Swim;

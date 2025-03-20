@@ -30,12 +30,6 @@ namespace Trailblazer.Controllers
 #nullable disable
 
         /// <summary>
-        /// Retrieves the current traversal state of the scout, including its movement medium (ground, air, water) and environmental interactions.
-        /// </summary>
-        /// <param name="traversalState">The output parameter containing the scout's traversal condition.</param>
-        void GetTraversalState(out TraversalCondition traversalState);
-
-        /// <summary>
         /// Gets the position of the scout's foot in world space, typically used for ground checks and platform interactions.
         /// </summary>
         /// <returns>The world-space position of the scout's foot.</returns>

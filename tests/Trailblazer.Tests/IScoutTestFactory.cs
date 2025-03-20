@@ -12,39 +12,37 @@ public static class IScoutTestFactory
         TraversalMedium startingMedium = TraversalMedium.Unknown,
         Fixed64? surfaceLevel = null)
     {
-        var mock = new MockScout(
-            startPosition ?? Vector3d.Zero,
-            startVelocity ?? Vector3d.Zero
-        );
-
+        TraversalCondition condition = TraversalCondition.Empty;
         switch (startingMedium)
         {
             case TraversalMedium.Ground:
                 {
-                    mock.SetTraversalState(
-                        TraversalMedium.Ground,
-                        surfaceLevel,
-                        new GroundState
-                        {
-                            HitObject = new object(), // Separate from platform
-                            GroundMatrix = Fixed4x4.Identity,
-                        }
-                    );
+                    condition.Medium = TraversalMedium.Ground;
+                    condition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
+                    condition.SurfaceCondition = new SurfaceCondition
+                    {
+                        SurfaceObject = new object(), // Separate from platform
+                        SurfaceMatrix = Fixed4x4.Identity,
+                    };
                 }
                 break;
             case TraversalMedium.Air:
-                mock.SetTraversalState(TraversalMedium.Air, surfaceLevel);
+                condition.Medium = TraversalMedium.Air;
+                condition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
                 break;
             case TraversalMedium.Water:
-                mock.SetTraversalState(TraversalMedium.Water, surfaceLevel);
-                break;
-            case TraversalMedium.Unknown:
+                condition.Medium = TraversalMedium.Water;
+                condition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
                 break;
             default:
                 break;
         }
 
-        return mock;
+        return new MockScout(
+            startPosition ?? Vector3d.Zero,
+            startVelocity ?? Vector3d.Zero,
+            condition
+        );
     }
 
     /// <summary>
@@ -52,10 +50,18 @@ public static class IScoutTestFactory
     /// </summary>
     public static Scout CreateFallingScout(Vector3d? startPosition = null, Vector3d? startVelocity = null, Fixed64? surfaceLevel = null)
     {
+        TraversalCondition condition = new TraversalCondition
+        {
+            Medium = TraversalMedium.Air,
+            SurfaceLevel = surfaceLevel ?? -(Fixed64)999,
+            CeilingLevel = Fixed64.MAX_VALUE
+        };
         MockScout mock = new MockScout(
-            startPosition ?? Vector3d.Zero, 
-            startVelocity ?? Vector3d.Down);
-        mock.SetTraversalState(TraversalMedium.Air, surfaceLevel ?? -(Fixed64)999);
+            startPosition ?? Vector3d.Zero,
+            startVelocity ?? Vector3d.Down,
+            condition
+        );
+
         mock.ScoutController.Locomotions.Fall.IsFalling = true;
         return mock;
     }
@@ -66,40 +72,45 @@ public static class IScoutTestFactory
     public static Scout CreatePlatformScout(
         Vector3d? startPosition = null,
         Fixed4x4? platformMatrix = null,
-        Fixed64? gravity = null,
-        MovementTransferState movementTransfer = MovementTransferState.PermaTransfer)
+        MotionTransfer movementTransfer = MotionTransfer.PermaTransfer)
     {
-        var mock = new MockScout(startPosition ?? Vector3d.Zero, Vector3d.Zero);
-
-        if (gravity.HasValue)
-            mock.ScoutController.GravityForce = gravity.Value;
-
-        mock.SetTraversalState(
-            TraversalMedium.Ground,
-            Fixed64.Zero,
-            new GroundState
+        TraversalCondition condition = new TraversalCondition
+        {
+            Medium = TraversalMedium.Ground,
+            CeilingLevel = Fixed64.MAX_VALUE,
+            SurfaceCondition = new SurfaceCondition
             {
-                HitObject = new object(), // Separate from platform
-                GroundMatrix = platformMatrix ?? Fixed4x4.Identity,
-                MovementTransfer = movementTransfer
+                SurfaceObject = new object(), // Separate from platform
+                SurfaceMatrix = platformMatrix ?? Fixed4x4.Identity,
+                MotionTransferState = movementTransfer
             }
-        );
+        };
 
-        return mock;
+        return new MockScout(
+            startPosition ?? Vector3d.Zero,
+            Vector3d.Zero,
+            condition
+        );
     }
 
     public static Scout CreateJumpReadyScout(Vector3d? startPosition = null)
     {
-        var mock = new MockScout(startPosition ?? Vector3d.Zero, Vector3d.Zero);
-        mock.SetTraversalState(
-            TraversalMedium.Ground, 
-            Fixed64.Zero,
-            new GroundState
+        TraversalCondition condition = new TraversalCondition
+        {
+            Medium = TraversalMedium.Ground,
+            CeilingLevel = Fixed64.MAX_VALUE,
+            SurfaceCondition = new SurfaceCondition
             {
-                HitObject = new object(), // Separate from platform
-                GroundMatrix = Fixed4x4.Identity,
-            });
-        return mock;
+                SurfaceObject = new object(), // Separate from platform
+                SurfaceMatrix = Fixed4x4.Identity,
+            }
+        };
+
+        return new MockScout(
+            startPosition ?? Vector3d.Zero,
+            Vector3d.Zero,
+            condition
+        );
     }
 
     /// <summary>

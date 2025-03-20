@@ -64,7 +64,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// Defines how movement is transferred from the platform to the scout.
         /// </summary>
         [Transient]
-        public MovementTransferState MovementTransfer { get; set; }
+        public MotionTransfer MovementTransfer { get; set; }
 
         /// <summary>
         /// The platform object the scout is currently standing on.
@@ -148,13 +148,13 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public bool IsPlatformInteriaApplied => IsOnPlatform
             && PlatformVelocity != Vector3d.Zero
-            && (MovementTransfer == MovementTransferState.InitTransfer
-                || MovementTransfer == MovementTransferState.PermaTransfer);
+            && (MovementTransfer == MotionTransfer.InitTransfer
+                || MovementTransfer == MotionTransfer.PermaTransfer);
 
         /// <summary>
         /// Indicates whether the scout is locked to a platform and will move with it.
         /// </summary>
-        public bool IsLockedToPlatform => IsOnPlatform && MovementTransfer == MovementTransferState.PermaLocked;
+        public bool IsLockedToPlatform => IsOnPlatform && MovementTransfer == MotionTransfer.PermaLocked;
 
         #endregion
 

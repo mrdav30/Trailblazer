@@ -3,32 +3,6 @@
 namespace Trailblazer.Controllers
 {
     /// <summary>
-    /// Specifies the different movement mediums a scout can traverse through.
-    /// </summary>
-    public enum TraversalMedium
-    {
-        /// <summary>
-        /// The scout's movement medium is unknown.
-        /// </summary>
-        Unknown = 0,
-
-        /// <summary>
-        /// The scout is traversing on the ground.
-        /// </summary>
-        Ground = 1,
-
-        /// <summary>
-        /// The scout is airborne.
-        /// </summary>
-        Air = 2,
-
-        /// <summary>
-        /// The scout is moving through water.
-        /// </summary>
-        Water = 3,
-    }
-
-    /// <summary>
     /// Represents the traversal state of a scout, including its movement medium and surface interactions.
     /// </summary>
     public struct TraversalCondition
@@ -46,7 +20,7 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// Contains data about the ground state, if applicable.
         /// </summary>
-        public GroundState? Ground;
+        public SurfaceCondition? SurfaceCondition;
 
         /// <summary>
         /// Stores the height of the ceiling above the scout, if applicable.
@@ -62,11 +36,11 @@ namespace Trailblazer.Controllers
             CeilingLevel = Fixed64.MAX_VALUE
         };
 
-        public TraversalCondition(TraversalMedium medium, Fixed64? surfaceLevel = null, GroundState? ground = null, Fixed64? ceilingLevel = null)
+        public TraversalCondition(TraversalMedium medium, Fixed64? surfaceLevel = null, SurfaceCondition? surfaceCondition = null, Fixed64? ceilingLevel = null)
         {
             Medium = medium;
             SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-            Ground = ground ?? null;
+            SurfaceCondition = surfaceCondition ?? null;
             CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
         }
     }

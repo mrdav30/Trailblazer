@@ -12,11 +12,11 @@ public class MockScout : Scout
 
     private FixedQuaternion _rotationDelta = FixedQuaternion.Identity;
 
-    public MockScout(Vector3d position, Vector3d velocity)
+    public MockScout(Vector3d position, Vector3d velocity, TraversalCondition traversalCondition)
     {
         WorldPosition = position;
 
-        base.OnInitialize();
+        base.OnInitialize(traversalCondition);
 
         ScoutController.SetVelocity(velocity);
 
@@ -35,15 +35,6 @@ public class MockScout : Scout
             // assume a mass of 1
             _pendingVelocity += force;
         };
-    }
-
-    /// <summary>
-    /// Simulates the scout's traversal for a single frame by processing movement input and finalizing state updates.
-    /// </summary>
-    public override void OnSimulate()
-    {
-        StartTraversal();
-        FinalizeTraversal();
     }
 
     public override void FinalizeTraversal()
@@ -73,33 +64,33 @@ public class MockScout : Scout
     private void MockGroundCheck()
     {
         // If scout is already grounded, maintain state unless velocity pushes it up
-        if (_traversalState.Medium == TraversalMedium.Ground)
+        if (_traversalCondition.Medium == TraversalMedium.Ground)
         {
             if (Velocity.y > Fixed64.Zero)
             {
                 // If scout is moving upwards, it should no longer be grounded
-                _traversalState.Medium = TraversalMedium.Air;
+                _traversalCondition.Medium = TraversalMedium.Air;
             }
             return;
         }
 
         // If scout is airborne, check if it should transition to grounded
-        if (_traversalState.Medium == TraversalMedium.Air)
+        if (_traversalCondition.Medium == TraversalMedium.Air)
         {
-            Fixed64 surfaceLevel = _traversalState.SurfaceLevel;
+            Fixed64 surfaceLevel = _traversalCondition.SurfaceLevel;
             Fixed64 scoutHeight = WorldPosition.y;
 
             // Ensure velocity is downward and scout is within landing range
             if (Velocity.y <= Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
             {
                 // Set state to grounded
-                _traversalState.Medium = TraversalMedium.Ground;
+                _traversalCondition.Medium = TraversalMedium.Ground;
                 WorldPosition = new Vector3d(WorldPosition.x, surfaceLevel, WorldPosition.z);
 
                 // Update ground normal if needed (assuming ground is flat for now)
-                _traversalState.Ground = new GroundState
+                _traversalCondition.SurfaceCondition = new SurfaceCondition
                 {
-                    GroundMatrix = Fixed4x4.Identity, // Assuming a flat ground by default
+                    SurfaceMatrix = Fixed4x4.Identity, // Assuming a flat ground by default
                 };
             }
         }

@@ -63,10 +63,12 @@ namespace Trailblazer.Controllers.Locomotions
         /// - Flat ground (0°) retains full speed.
         /// - Full upward slope (90°) reduces speed to zero.
         /// </remarks>
-        public static readonly FixedCurve DefaultSlopeSpeedModifier = new(FixedCurveMode.Step,
-                new FixedCurveKey(-90, 1), // Full downward slope
-                new FixedCurveKey(0, 1), // Flat ground
-                new FixedCurveKey(90, 0) // Full upward slope
+        public static readonly FixedCurve DefaultSlopeSpeedModifier = new(FixedCurveMode.Linear,
+                new FixedCurveKey(-90, 1.5),  // Full downward slope boosts speed 1.5x
+                new FixedCurveKey(-45, 1.2),  // Moderate downward slope boosts speed 1.2x
+                new FixedCurveKey(0, 1),      // Flat ground, normal speed
+                new FixedCurveKey(45, 0.8),   // Moderate uphill slows down
+                new FixedCurveKey(90, 0)      // Full uphill completely stops movement
             );
 
         /// <summary>

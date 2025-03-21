@@ -280,7 +280,7 @@ namespace Trailblazer.Controllers
                 bool isSliding = false;
                 if (Locomotions.Slide.IsEnabled)
                 {
-                    isSliding = IsTooSteep();
+                    isSliding = IsTooSteep(_currentState.SlopeAngle);
                     Locomotions.Slide.IsSliding = isSliding;
                 }
                 Locomotions.IsInControl = !isSliding; // prevent control if sliding
@@ -327,7 +327,7 @@ namespace Trailblazer.Controllers
             if (Locomotions.Slide.IsSliding)
             {
                 // The direction we're sliding in
-                result = new Vector3d(_currentState.GroundNormal.x, Fixed64.Zero, _currentState.GroundNormal.z).Normal;
+                result = new Vector3d(_currentState.SurfaceNormal.x, Fixed64.Zero, _currentState.SurfaceNormal.z).Normal;
                 // Find the input movement direction projected onto the sliding direction
                 Vector3d projectedMoveDir = Vector3d.Project(_frameTraversalRequest.MovementDirection, result);
                 // Add the sliding direction, the speed control, and the sideways control vectors
@@ -367,12 +367,13 @@ namespace Trailblazer.Controllers
                 return result;
 
             // Ensure that the desired movement of the scout aligns with the surface they are on
-            // i.e., the scout doesn't try to move into the ground when the ground is sloping upwards
-            result = Vector3d.ProjectOnPlane(result, _currentState.GroundNormal);
-
-            // Ensures scout does not "digging into" the ground when moving over a bump
+            // i.e., ensures scout does not "digging into" the ground when moving over a bump
             Vector3d sideways = Vector3d.Cross(Vector3d.Up, result);
-            Vector3d adjustedVelocity = Vector3d.Cross(sideways, _currentState.GroundNormal).Normal * result.Magnitude;
+            Vector3d adjustedVelocity = Vector3d.Cross(sideways, _currentState.SurfaceNormal).Normal * result.Magnitude;
+
+            // Ensure downward movement on downhill slopes & upward movement on uphill slopes
+            if (_currentState.SlopeAngle != Fixed64.Zero && Fixed64.Sign(adjustedVelocity.y) != Fixed64.Sign(_currentState.SlopeAngle))
+                adjustedVelocity.y *= -1;
 
             // Prevent excessive redirection on very steep terrain
             if (Vector3d.Angle(result, adjustedVelocity) < Locomotions.Slide.SlopeLimit)
@@ -393,14 +394,11 @@ namespace Trailblazer.Controllers
 
             speed *= Locomotions.Move.MoveSpeedMultiplier;
 
-            if (Locomotions.Move.ModifySpeedOnSlope && IsOnSlope())
-            {
-                // Modify max speed on slopes based on slope speed multiplier curve
-                Fixed64 movementSlopeAngle = FixedMath.Asin(_currentState.GroundNormal.y.ClampOne()).ToDegree();
-                speed *= Locomotions.Move.SlopeSpeedMultiplier.Evaluate(movementSlopeAngle);
-            }
+            // Modify max speed on slopes based on slope speed multiplier curve
+            if (Locomotions.Move.ModifySpeedOnSlope && IsOnSlope(_currentState.SlopeAngle))
+                speed *= Locomotions.Move.SlopeSpeedMultiplier.Evaluate(_currentState.SlopeAngle);
 
-            return transposedMatrix * (desiredLocalDirection * speed);
+            return Fixed3x3.TransformDirection(transposedMatrix, desiredLocalDirection * speed);
         }
 
         /// <summary>
@@ -492,14 +490,14 @@ namespace Trailblazer.Controllers
         /// </summary>
         private void ApplyEnvironmentalForces()
         {
+            Fixed64 gravityStep = GravityForce * TrailblazerManager.DeltaTime;
+
             if (IsGrounded)
             {
-                // Actively cancel any existing downward momentum by simulating the normal force of the ground.
-                _forceOutput.y = Locomotions.Move.CurrentVelocity.y < Fixed64.Zero ? Fixed64.Zero : -_forceOutput.y;
+                _forceOutput.y = FixedMath.Min(Fixed64.Zero, _forceOutput.y) - gravityStep;
                 return;
             }
 
-            Fixed64 gravityStep = GravityForce * TrailblazerManager.DeltaTime;
             if (IsInWater)
             {
                 // If buoyancy cancels gravity completely, scout should neither sink nor rise
@@ -570,13 +568,13 @@ namespace Trailblazer.Controllers
             else
             {
                 // Calculate the jumping direction
-                Fixed64 slerpAmount = IsTooSteep()
+                Fixed64 slerpAmount = IsTooSteep(_currentState.SlopeAngle)
                     ? Locomotions.Jump.SteepPerpendicularJumpAmount
                     : Locomotions.Jump.PerpendicularJumpAmount;
 
                 // Store jump direction the first time we jump
                 if (!Locomotions.Jump.IsJumping)
-                    Locomotions.Jump.FrameJumpDirection = Vector3d.Slerp(Vector3d.Up, _currentState.GroundNormal, slerpAmount);
+                    Locomotions.Jump.FrameJumpDirection = Vector3d.Slerp(Vector3d.Up, _currentState.SurfaceNormal, slerpAmount);
 
                 jumpForce = Locomotions.Jump.FrameJumpDirection * GetVerticalJumpSpeed();
 
@@ -870,8 +868,11 @@ namespace Trailblazer.Controllers
                 return;
             }
 
-            // check if we are currently falling with a small threshold
-            if ((IsInAir || Locomotions.Slide.IsSliding) && Locomotions.Move.CurrentVelocity.y < Fixed64.Zero)
+            // Check if the scout is in freefall (not simply moving downhill)
+            bool isInFreefall = (IsInAir || Locomotions.Slide.IsSliding) && Locomotions.Move.CurrentVelocity.y < Fixed64.Zero;
+
+            // Ensure we don't trigger falling when moving naturally down a slope
+            if (isInFreefall && (_currentState.SlopeAngle >= -Locomotions.Slide.SlopeLimit))
             {
                 // scout started falling
                 Locomotions.Fall.IsFalling = true;
@@ -915,21 +916,24 @@ namespace Trailblazer.Controllers
         /// Determines whether the current surface is too steep for normal movement.
         /// </summary>
         /// <returns>True if the slope exceeds the allowable incline; otherwise, false.</returns>
-        public bool IsTooSteep()
+        public bool IsTooSteep(Fixed64 angle)
         {
-            Fixed64 angle = Vector3d.Angle(Vector3d.Up, _currentState.GroundNormal);
-            return angle > Locomotions.Slide.SlopeLimit - Fixed64.Epsilon;
+            if (!IsGrounded) return false;
+
+            Fixed64 absAngle = FixedMath.Abs(angle); // Handle both positive (uphill) and negative (downhill) slopes
+            return absAngle > Locomotions.Slide.SlopeLimit - Fixed64.Epsilon;
         }
 
         /// <summary>
         /// Checks if the scout is on a sloped surface that is not considered too steep.
         /// </summary>
         /// <returns>True if the scout is on a valid slope; otherwise, false.</returns>
-        public bool IsOnSlope()
+        public bool IsOnSlope(Fixed64 angle)
         {
             if (!IsGrounded) return false;
-            Fixed64 angle = Vector3d.Angle(Vector3d.Up, _currentState.GroundNormal);
-            return angle > Fixed64.One && angle <= Locomotions.Slide.SlopeLimit + Fixed64.Epsilon;
+
+            Fixed64 absAngle = FixedMath.Abs(angle); // Account for downhill slopes too
+            return absAngle > Fixed64.One && absAngle <= Locomotions.Slide.SlopeLimit + Fixed64.Epsilon;
         }
 
         /// <summary>

@@ -30,7 +30,9 @@ public class TraversalState
     /// <summary>
     /// The normal of the ground surface.
     /// </summary>
-    public Vector3d GroundNormal { get; private set; }
+    public Vector3d SurfaceNormal { get; private set; }
+
+    public Fixed64 SlopeAngle { get; private set; }
 
     /// <summary>
     /// The previous traversal state (for comparison and transition detection).
@@ -51,7 +53,20 @@ public class TraversalState
         Medium = condition.Medium;
         SurfaceLevel = condition.SurfaceLevel;
         SurfaceState = condition.SurfaceCondition;
-        GroundNormal = Medium == TraversalMedium.Ground ? SurfaceState?.SurfaceNormal ?? Vector3d.Zero : Vector3d.Zero;
+
+        if(Medium == TraversalMedium.Ground)
+        {
+            SurfaceNormal = SurfaceState?.SurfaceNormal ?? Vector3d.Zero;
+            SlopeAngle = Vector3d.Angle(Vector3d.Up, SurfaceNormal);
+            bool isDownhill = Vector3d.Dot(Vector3d.Forward, SurfaceNormal) < Fixed64.Zero;
+            if (isDownhill) SlopeAngle *= -1;
+        }
+        else
+        {
+            SurfaceNormal = Vector3d.Zero;
+            SlopeAngle = Fixed64.Zero;
+        }
+
         CeilingLevel = condition.CeilingLevel;
     }
 

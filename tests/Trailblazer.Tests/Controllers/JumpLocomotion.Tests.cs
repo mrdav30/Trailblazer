@@ -1,0 +1,256 @@
+﻿using Xunit;
+using FluentAssertions;
+using Trailblazer.Controllers;
+using FixedMathSharp;
+using Trailblazer.Tests.Assertions;
+
+namespace Trailblazer.Tests.Controllers
+{
+    [Collection("TrailblazerCollection")]
+    public class JumpLocomotionTests
+    {
+        [Fact]
+        public void Given_GroundedScout_When_JumpIsTriggered_Then_ShouldApplyJumpForce()
+        {
+            // Arrange
+            var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
+
+            // Act
+            scout.ScoutController.Traverse(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.FinalizeTraversal();
+
+            // Assert
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
+        }
+
+        [Fact]
+        public void Given_AirborneScout_When_JumpIsTriggered_Then_ShouldNotApplyJumpForce()
+        {
+            // Arrange
+            var scout = IScoutTestFactory.CreateMockScout(
+                startPosition: Vector3d.Up,
+                startVelocity: Vector3d.Down,
+                startingMedium: TraversalMedium.Air);
+
+            Vector3d expectedVelocity = Vector3d.Down;
+            expectedVelocity.y += -scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime;
+
+            // Act
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Assert
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+        }
+
+        [Fact]
+        public void Given_ScoutThatJumped_When_JumpCooldownNotExpired_Then_ShouldNotJump()
+        {
+            // Arrange
+            var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
+
+            // Act - First Jump
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            int expectedJumpFrame = scout.ScoutController.Locomotions.Jump.FrameStartJump;
+
+            // Attempt to jump again immediately
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Assert
+            scout.ScoutController.IsInAir.Should().BeTrue();
+            scout.ScoutController.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
+            scout.ScoutController.Locomotions.Jump.FrameStartJump.Should().Be(expectedJumpFrame);
+        }
+
+        [Fact]
+        public void Given_ScoutJumps_When_JumpIsReleasedMidAir_Then_GravityShouldResume()
+        {
+            // Arrange
+            var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
+
+            // Act - First Jump
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Release jump after 2 frames
+            for (int i = 0; i < 29; i++)
+            {
+                TrailblazerManager.Simulate();
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            // Act - Simulate next frame
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Assert
+            scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeFalse();
+            scout.ScoutController.Locomotions.Jump.IsJumping.Should().BeFalse();
+            scout.ScoutController.Locomotions.Jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we simulate 31
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
+        }
+
+        [Fact]
+        public void Given_ScoutCannotAffordJump_When_JumpRequested_Then_ShouldNotJump()
+        {
+            // Arrange
+            var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
+            if (scout.Events != null)
+                scout.Events.CanAffordJump = () => false;
+
+            // Act
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Assert
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
+        }
+
+        [Fact]
+        public void Given_ScoutHoldingJump_When_Simulated_Then_GravityShouldBeTemporarilyReduced()
+        {
+            // Arrange
+            var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
+
+            // Act - Initial Jump
+            TrailblazerManager.Simulate();
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            Vector3d previousVelocity = scout.ScoutController.Locomotions.Move.CurrentVelocity;
+
+            // Continue holding jump for 3 frames
+            for (int i = 0; i < 3; i++)
+            {
+                TrailblazerManager.Simulate();
+                scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            // Assert
+            var expected = previousVelocity.y - (scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime * 3);
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().BeGreaterThan(expected);
+        }
+
+        [Fact]
+        public void Given_JumpingScout_When_PlatformIsMoving_Then_ShouldInheritVelocity()
+        {
+            // Arrange
+            var platform = IScoutTestFactory.CreatePlatform(startPosition: Vector3d.Zero);
+            var scout = IScoutTestFactory.CreatePlatformScout(startPosition: Vector3d.Zero, platformMatrix: platform);
+
+            // Act 1 - Set initial state
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Arrange - Move platform
+            scout.ScoutController.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(scout.ScoutController.Locomotions.Platform.ActiveTransform, new Vector3d(2, 0, 0));
+
+            // Act 2 - Jump from moving platform
+            TrailblazerManager.Simulate();
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Assert
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().NotBe(Vector3d.Zero);
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.x.Should().Be(scout.ScoutController.Locomotions.Platform.PlatformVelocity.x);
+        }
+
+        [Fact]
+        public void Given_ScoutOnGround_When_JumpHeld_Then_ShouldJumpHigher()
+        {
+            var scout = IScoutTestFactory.CreateJumpReadyScout();
+
+            for (int i = 0; i < 10; i++) // Simulate holding jump button
+            {
+                TrailblazerManager.Simulate();
+                scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Slow, isRequestingJump: true);
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            scout.WorldPosition.y.Should().BeGreaterThan(Fixed64.One); // Higher than default jump height
+        }
+
+        [Fact]
+        public void Given_ScoutWhen_JumpingAgainstCeiling_Then_ShouldStopRising()
+        {
+            var scout = IScoutTestFactory.CreateJumpReadyScout(startPosition: new Vector3d(0, 5, 0));
+
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Slow, isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            scout.StartTraversal();
+
+            scout.SetTraversalCondition(TraversalMedium.Air, surfaceLevel: Fixed64.FromRaw(5 << 16), ceilingLevel: Fixed64.FromRaw(6 << 16)); // Simulate a ceiling
+
+            scout.FinalizeTraversal();
+
+            scout.ScoutController.Locomotions.Jump.IsJumping.Should().BeFalse(); // Jump should be canceled
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero); // Should stop rising
+        }
+
+        [Fact]
+        public void Given_ScoutHoldingJump_When_LandsOnGround_Then_ShouldResetJumpState()
+        {
+            var scout = IScoutTestFactory.CreateJumpReadyScout();
+
+            bool jumpStarted = false;
+            bool jumpStopped = false;
+            bool fallStarted = false;
+            bool fallStopped = false;
+
+            scout.Events.OnStartJump += (avoidTimer) => jumpStarted = true;
+            scout.Events.OnStopJump += () => jumpStopped = true;
+            scout.Events.OnStartFall += () => fallStarted = true;
+            scout.Events.OnLandedFall += () => fallStopped = true;
+
+            // Start Jump
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Slow, isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Simulate entire jump arc until landing
+            for (int i = 0; i < 30; i++)
+            {
+                TrailblazerManager.Simulate();
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+                if (scout.WorldPosition.y <= Fixed64.Zero) // If we've landed
+                    break;
+            }
+
+            scout.StartTraversal();
+
+            scout.SetTraversalCondition(TraversalMedium.Ground, surfaceLevel: Fixed64.Zero);
+
+            scout.FinalizeTraversal();
+
+            // Assert that jump state has been reset after actual landing
+            scout.ScoutController.Locomotions.Jump.IsJumping.Should().BeFalse();
+            jumpStarted.Should().BeTrue();
+            jumpStopped.Should().BeTrue();
+            fallStarted.Should().BeTrue();
+            // We treat landing a jump differently
+            fallStopped.Should().BeFalse();
+        }
+    }
+}

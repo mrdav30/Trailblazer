@@ -2,8 +2,6 @@
 using FluentAssertions;
 using FluentAssertions.Execution;
 using FluentAssertions.Numeric;
-using FluentAssertions.Primitives;
-using System.CodeDom.Compiler;
 
 namespace Trailblazer.Tests.Assertions
 {

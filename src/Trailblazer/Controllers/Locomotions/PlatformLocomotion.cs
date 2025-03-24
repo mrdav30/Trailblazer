@@ -138,24 +138,6 @@ namespace Trailblazer.Controllers.Locomotions
         [Transient]
         public int HoldPlatformFrames { get; private set; }
 
-        /// <summary>
-        /// Indicates whether the scout is currently standing on a platform.
-        /// </summary>
-        public bool IsOnPlatform => IsEnabled && ActivePlatform != null;
-
-        /// <summary>
-        /// Indicates whether platform inertia (initial velocity transfer) has been applied.
-        /// </summary>
-        public bool IsPlatformInteriaApplied => IsOnPlatform
-            && PlatformVelocity != Vector3d.Zero
-            && (MovementTransfer == MotionTransfer.InitTransfer
-                || MovementTransfer == MotionTransfer.PermaTransfer);
-
-        /// <summary>
-        /// Indicates whether the scout is locked to a platform and will move with it.
-        /// </summary>
-        public bool IsLockedToPlatform => IsOnPlatform && MovementTransfer == MotionTransfer.PermaLocked;
-
         #endregion
 
         /// <summary>
@@ -179,7 +161,7 @@ namespace Trailblazer.Controllers.Locomotions
                 return false;
 
             HoldPlatformFrames++;
-            if(HoldPlatformFrames > MaxHoldPlatformFrames)
+            if(HoldPlatformFrames >= MaxHoldPlatformFrames)
             {
                 HoldPlatformFrames = 0;
                 if (HoldPlatform != ActivePlatform)

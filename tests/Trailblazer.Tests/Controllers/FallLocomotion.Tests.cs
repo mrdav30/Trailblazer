@@ -16,7 +16,7 @@ namespace Trailblazer.Tests.Controllers
             var scout = IScoutTestFactory.CreateFallingScout();
 
             Vector3d expectedVelocity = Vector3d.Down;
-            expectedVelocity.y += -scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -scout.ScoutController.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
 
             // Act
             scout.ScoutController.Traverse(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
@@ -80,7 +80,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
 
                 // Calculate expected velocity update from gravity impulse
-                expectedVelocity.y += -scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime;
+                expectedVelocity.y += -scout.ScoutController.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
             }
 
             // Assert

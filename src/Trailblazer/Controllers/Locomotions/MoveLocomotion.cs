@@ -76,6 +76,22 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         public static readonly Fixed64 DefaultSurfaceFriction = Fixed64.FromRaw(0x20000000L); // ~0.125 * One
 
+        /// <summary>
+        /// Represents a fixed-point acceleration force for gravity.
+        /// </summary>
+        /// <remarks>
+        /// The default value is approximately 9.8 m/s².
+        /// </remarks>
+        public static readonly Fixed64 DefaultGravityForce = Fixed64.FromRaw(0x9CCCCCCCDL); //  9.8f
+
+        /// <summary>
+        /// The maximum downward velocity a scout can reach due to gravity.
+        /// </summary>
+        /// <remarks>
+        /// Terminal velocity is roughly 53 m/s (190 km/h or ~120 mph).
+        /// </remarks>
+        public static readonly Fixed64 DefaultTerminalVelocity = (Fixed64)53f;
+
         #endregion
 
         #region Configuration State
@@ -140,6 +156,12 @@ namespace Trailblazer.Controllers.Locomotions
         /// The current surface friction applied to movement.
         /// </summary>
         public Fixed64 SurfaceFriction = DefaultSurfaceFriction;
+
+        /// <inheritdoc cref="DefaultGravityForce"/>
+        public Fixed64 GravityForce = DefaultGravityForce;
+
+        /// <inheritdoc cref="DefaultTerminalVelocity"/>
+        public Fixed64 TerminalVelocity = DefaultTerminalVelocity;
 
         #endregion
 

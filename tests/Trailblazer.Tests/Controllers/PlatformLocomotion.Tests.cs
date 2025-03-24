@@ -3,6 +3,7 @@ using FluentAssertions;
 using Trailblazer.Controllers;
 using FixedMathSharp;
 using Trailblazer.Tests.Assertions;
+using Trailblazer.Controllers.Locomotions;
 
 namespace Trailblazer.Tests.Controllers
 {
@@ -102,7 +103,7 @@ namespace Trailblazer.Tests.Controllers
 		}
 
 		[Fact]
-		public void Given_ScoutOnRotatingPlatform_When_Simulated_Then_ShouldInheritAngularMomentum()
+		public void Given_ScoutOnRotatingPlatform_When_Simulated_Then_ShouldInheritRotation()
 		{
 			// Arrange
 			var scout = IScoutTestFactory.CreatePlatformScout();
@@ -125,14 +126,13 @@ namespace Trailblazer.Tests.Controllers
 			scout.VisualRotation.Should().Be(scout.ScoutController.Locomotions.Platform.ActiveTransform.Rotation);
 		}
 
-
 		[Fact]
 		public void Given_ScoutJumpsBeforePlatformMoves_When_Simulated_Then_ShouldNotInheritFutureVelocity()
 		{
 			// Arrange
 
 			var platform = IScoutTestFactory.CreatePlatform();
-			var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform);
+			var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform, motionTransfer: MotionTransfer.InitTransfer);
 
 			// Act 1 - Jump before platform movement
 			TrailblazerManager.Simulate();
@@ -149,8 +149,147 @@ namespace Trailblazer.Tests.Controllers
 			scout.StartTraversal();
 			scout.FinalizeTraversal();
 
-			// Assert
+			// Assert - we didn't pick up any horizontal velocity from the platform
 			scout.ScoutController.Locomotions.Move.CurrentVelocity.x.Should().Be(Fixed64.Zero);
 		}
-	}
+
+        [Fact]
+        public void Given_ScoutWithInitTransfer_When_Jumping_Then_ShouldInheritPlatformVelocity()
+        {
+            var platform = IScoutTestFactory.CreatePlatform(startPosition: Vector3d.Zero);
+            var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform, motionTransfer: MotionTransfer.InitTransfer);
+
+			scout.ScoutController.Locomotions.Platform.PlatformVelocity = new Vector3d(1, 0, 0);
+
+            TrailblazerManager.Simulate();
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.x.Should().BeGreaterThan(Fixed64.Zero);
+        }
+
+        [Fact]
+        public void Given_ScoutWithPermaLocked_When_PlatformMoves_Then_ScoutFollowsPlatform()
+        {
+            var scout = IScoutTestFactory.CreatePlatformScout();
+            scout.ScoutController.Locomotions.Platform.MovementTransfer = MotionTransfer.PermaLocked;
+
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            var moveDelta = new Vector3d(2, 0, 0);
+            scout.ScoutController.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(
+                scout.ScoutController.Locomotions.Platform.ActiveTransform, moveDelta
+            );
+
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            scout.WorldPosition.Should().Be(moveDelta);
+        }
+
+        [Fact]
+        public void Given_ScoutHoldingOldPlatform_When_HoldTimesOut_Then_ShouldDetach()
+        {
+            var scout = IScoutTestFactory.CreatePlatformScout();
+            var platform = scout.ScoutController.Locomotions.Platform.ActivePlatform;
+
+            scout.ScoutController.Locomotions.Platform.SetHoldPlatform(platform);
+
+			var newPlatform = IScoutTestFactory.CreatePlatform();
+
+			scout.ScoutController.Locomotions.Platform.ActivePlatform = newPlatform;
+
+			bool release = false;
+            // Simulate exceeding the max hold frame count
+            for (int i = 0; i < PlatformLocomotion.MaxHoldPlatformFrames + 1; i++)
+            {
+                release = scout.ScoutController.Locomotions.Platform.CanReleaseHoldOnPlatform();
+				if (release)
+					break;
+            }
+
+            release.Should().BeTrue();
+        }
+
+        [Fact]
+        public void Given_PlatformLocomotionDisabled_When_Cleared_Then_ShouldResetState()
+        {
+            var scout = IScoutTestFactory.CreatePlatformScout();
+
+            scout.ScoutController.Locomotions.Platform.IsEnabled = false;
+
+            scout.ScoutController.Locomotions.Platform.ActivePlatform.Should().BeNull();
+            scout.ScoutController.Locomotions.Platform.PlatformVelocity.Should().Be(Vector3d.Zero);
+        }
+
+        [Fact]
+        public void Given_ScoutOnPlatform_When_JumpsWithInitTransfer_Then_InertiaShouldNotDoubleApply()
+        {
+            var platform = IScoutTestFactory.CreatePlatform(startPosition: Vector3d.Zero);
+            var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform, motionTransfer: MotionTransfer.InitTransfer);
+
+			var initialPlatformVelocity = new Vector3d(1, 0, 0);
+            scout.ScoutController.Locomotions.Platform.PlatformVelocity = initialPlatformVelocity;
+
+            TrailblazerManager.Simulate();
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            Vector3d velocityAfterJump = scout.ScoutController.Locomotions.Move.CurrentVelocity;
+
+            velocityAfterJump.x.Should().Be(initialPlatformVelocity.x);
+        }
+
+        [Fact]
+        public void Given_JumpingScout_When_PlatformIsMoving_Then_ShouldInheritVelocity()
+        {
+            // Arrange
+            var platform = IScoutTestFactory.CreatePlatform(startPosition: Vector3d.Zero);
+            var scout = IScoutTestFactory.CreatePlatformScout(startPosition: Vector3d.Zero, platformMatrix: platform, motionTransfer: MotionTransfer.InitTransfer);
+
+            // Act 1 - Set initial state
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Arrange - Move platform
+            scout.ScoutController.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(scout.ScoutController.Locomotions.Platform.ActiveTransform, new Vector3d(2, 0, 0));
+
+            // Act 2 - Jump from moving platform
+            TrailblazerManager.Simulate();
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.StartTraversal();
+
+
+
+            scout.FinalizeTraversal();
+
+            // Assert
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().NotBe(Vector3d.Zero);
+            //TODO: would we gain the position delta and velocity of the platform?
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.x.Should().Be(scout.ScoutController.Locomotions.Platform.PlatformVelocity.x);
+        }
+
+        [Fact]
+        public void Given_ScoutUsesPlatformInertia_When_Lands_Then_FrameVelocityShouldBeCleared()
+        {
+			var platform = IScoutTestFactory.CreatePlatform();
+            var scout = IScoutTestFactory.CreateFallingScout(platformMatrix: platform);
+            scout.ScoutController.Locomotions.Platform.FramePlatformVelocity = new Vector3d(2, 0, 0);
+
+            scout.StartTraversal();
+
+			scout.SetTraversalCondition(medium: TraversalMedium.Ground, surfaceLevel: Fixed64.Zero);
+
+            scout.FinalizeTraversal(); // Would trigger inertia clearing
+
+            scout.ScoutController.Locomotions.Platform.FramePlatformVelocity.Should().Be(Vector3d.Zero);
+        }
+
+    }
 }

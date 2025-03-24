@@ -48,14 +48,29 @@ public static class IScoutTestFactory
     /// <summary>
     /// Generates a Falling Scout (for gravity tests)
     /// </summary>
-    public static Scout CreateFallingScout(Vector3d? startPosition = null, Vector3d? startVelocity = null, Fixed64? surfaceLevel = null)
+    public static Scout CreateFallingScout(
+        Vector3d? startPosition = null, 
+        Vector3d? startVelocity = null, 
+        Fixed64? surfaceLevel = null,
+        Fixed4x4? platformMatrix = null)
     {
         TraversalCondition condition = new TraversalCondition
         {
             Medium = TraversalMedium.Air,
             SurfaceLevel = surfaceLevel ?? -(Fixed64)999,
-            CeilingLevel = Fixed64.MAX_VALUE
+            CeilingLevel = Fixed64.MAX_VALUE,
         };
+
+        if (platformMatrix.HasValue)
+        {
+            condition.SurfaceCondition = new SurfaceCondition
+            {
+                MotionTransferState = MotionTransfer.InitTransfer,
+                SurfaceMatrix = platformMatrix.Value,
+                SurfaceObject = new object()
+            };
+        }
+
         MockScout mock = new MockScout(
             startPosition ?? Vector3d.Zero,
             startVelocity ?? Vector3d.Down,
@@ -72,7 +87,7 @@ public static class IScoutTestFactory
     public static Scout CreatePlatformScout(
         Vector3d? startPosition = null,
         Fixed4x4? platformMatrix = null,
-        MotionTransfer movementTransfer = MotionTransfer.PermaTransfer)
+        MotionTransfer motionTransfer = MotionTransfer.None)
     {
         TraversalCondition condition = new TraversalCondition
         {
@@ -82,7 +97,7 @@ public static class IScoutTestFactory
             {
                 SurfaceObject = new object(), // Separate from platform
                 SurfaceMatrix = platformMatrix ?? Fixed4x4.Identity,
-                MotionTransferState = movementTransfer
+                MotionTransferState = motionTransfer
             }
         };
 

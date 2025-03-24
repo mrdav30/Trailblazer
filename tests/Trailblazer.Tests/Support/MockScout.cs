@@ -46,15 +46,12 @@ public class MockScout : Scout
         //If grounded, cancel out excess downward movement from gravity, but preserve downward slope acceleration
         if (_traversalCondition.Medium == TraversalMedium.Ground && _pendingVelocity.y < Fixed64.Zero)
         {
-            var groundForce = _controller.GravityForce * TrailblazerManager.DeltaTime; // gravity is defined as 9.8m/s^2
+            var groundForce = _controller.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime; // gravity is defined as 9.8m/s^2
             _pendingVelocity.y = FixedMath.Min(_pendingVelocity.y + (groundForce * TrailblazerManager.DeltaTime), Fixed64.Zero);
         }
 
         // resolve velocity
         WorldPosition += _positionDelta + _pendingVelocity;
-
-        _positionDelta = Vector3d.Zero;
-        _pendingVelocity = Vector3d.Zero;
 
         if (_rotationDelta != FixedQuaternion.Identity)
         {
@@ -66,6 +63,9 @@ public class MockScout : Scout
 
         Velocity = (WorldPosition - previousPosition) / TrailblazerManager.DeltaTime;
 
+        _positionDelta = Vector3d.Zero;
+        _pendingVelocity = Vector3d.Zero;
+
         base.FinalizeTraversal();
     }
 
@@ -75,7 +75,7 @@ public class MockScout : Scout
         // If scout is already grounded, maintain state unless velocity pushes it up
         if (condition.Medium == TraversalMedium.Ground)
         {
-            if (Velocity.y > Fixed64.Zero)
+            if (_pendingVelocity.y > Fixed64.Zero)
             {
                 // If scout is moving upwards, it should no longer be grounded
                 condition.Medium = TraversalMedium.Air;
@@ -98,7 +98,7 @@ public class MockScout : Scout
             Fixed64 scoutHeight = WorldPosition.y;
 
             // Ensure velocity is downward and scout is within landing range
-            if (Velocity.y <= Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
+            if (_pendingVelocity.y <= Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
             {
                 // Set state to grounded
                 condition.Medium = TraversalMedium.Ground;

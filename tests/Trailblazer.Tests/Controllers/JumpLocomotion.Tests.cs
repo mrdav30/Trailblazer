@@ -33,7 +33,7 @@ namespace Trailblazer.Tests.Controllers
                 startingMedium: TraversalMedium.Air);
 
             Vector3d expectedVelocity = Vector3d.Down;
-            expectedVelocity.y += -scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -scout.ScoutController.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
 
             // Act
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
@@ -143,34 +143,8 @@ namespace Trailblazer.Tests.Controllers
             }
 
             // Assert
-            var expected = previousVelocity.y - (scout.ScoutController.GravityForce * TrailblazerManager.DeltaTime * 3);
+            var expected = previousVelocity.y - (scout.ScoutController.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime * 3);
             scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().BeGreaterThan(expected);
-        }
-
-        [Fact]
-        public void Given_JumpingScout_When_PlatformIsMoving_Then_ShouldInheritVelocity()
-        {
-            // Arrange
-            var platform = IScoutTestFactory.CreatePlatform(startPosition: Vector3d.Zero);
-            var scout = IScoutTestFactory.CreatePlatformScout(startPosition: Vector3d.Zero, platformMatrix: platform);
-
-            // Act 1 - Set initial state
-            TrailblazerManager.Simulate();
-            scout.StartTraversal();
-            scout.FinalizeTraversal();
-
-            // Arrange - Move platform
-            scout.ScoutController.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(scout.ScoutController.Locomotions.Platform.ActiveTransform, new Vector3d(2, 0, 0));
-
-            // Act 2 - Jump from moving platform
-            TrailblazerManager.Simulate();
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
-            scout.StartTraversal();
-            scout.FinalizeTraversal();
-
-            // Assert
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().NotBe(Vector3d.Zero);
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.x.Should().Be(scout.ScoutController.Locomotions.Platform.PlatformVelocity.x);
         }
 
         [Fact]

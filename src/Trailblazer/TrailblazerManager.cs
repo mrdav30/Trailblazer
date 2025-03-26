@@ -33,6 +33,11 @@ namespace Trailblazer
         public static int FrameCount { get; private set; }
 
         /// <summary>
+        /// The total simulation time since start (in seconds).
+        /// </summary>
+        public static Fixed64 TotalTime { get; private set; }
+
+        /// <summary>
         /// Updates the simulation frame rate and recalculates the delta time.
         /// </summary>
         /// <param name="frameRate">The new frame rate value.</param>
@@ -48,6 +53,7 @@ namespace Trailblazer
         public static void Simulate()
         {
             FrameCount++;
+            TotalTime += DeltaTime;
         }
 
         /// <summary>
@@ -56,6 +62,12 @@ namespace Trailblazer
         public static void Reset()
         {
             FrameCount = 0;
+            TotalTime = Fixed64.Zero;
+        }
+
+        public static int GetFrameFromTime(Fixed64 timestamp)
+        {
+            return (timestamp / DeltaTime).FloorToInt();
         }
     }
 }

@@ -132,7 +132,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// The simulation frame when the scout started jumping.
         /// </summary>
         [Transient]
-        public int FrameStartJump { get; set; }
+        public Fixed64 JumpStartTime { get; set; }
 
         /// <summary>
         /// The direction in which the scout jumped during the current frame.

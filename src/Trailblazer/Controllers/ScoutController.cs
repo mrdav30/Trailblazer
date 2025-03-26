@@ -525,10 +525,10 @@ namespace Trailblazer.Controllers
             {
                 // Calculate the duration that the extra jump force should have effect.
                 // If we're still less than that duration after the jumping time, apply the force.
-                int extraJumpLimit = (Locomotions.Jump.FrameStartJump + Locomotions.Jump.ExtraJumpHeight / GetVerticalJumpSpeed()).CeilToInt();
+                Fixed64 extraJumpLimit = (Locomotions.Jump.JumpStartTime + Locomotions.Jump.ExtraJumpHeight) / GetVerticalJumpSpeed();
 
                 // Negate the gravity we just applied, except we push in jumpDir rather than jump upwards.
-                if (TrailblazerManager.FrameCount <= extraJumpLimit)
+                if (TrailblazerManager.TotalTime <= extraJumpLimit)
                     _forceOutput += Locomotions.Jump.FrameJumpDirection * gravityStep;
             }
         }
@@ -574,7 +574,7 @@ namespace Trailblazer.Controllers
             // If we aren't in air, trigger a new jump then...
             Locomotions.Jump.IsJumping = true;
             Locomotions.Jump.IsHoldingJump = true;
-            Locomotions.Jump.FrameStartJump = TrailblazerManager.FrameCount;
+            Locomotions.Jump.JumpStartTime = TrailblazerManager.TotalTime;
 
             Locomotions.Jump.StartCooldown();
 
@@ -880,7 +880,7 @@ namespace Trailblazer.Controllers
         #region Utility
 
         /// <summary>
-        /// Computes the vertical jump speed required to reach the desired jump height.
+        /// Computes the vertical jump speed required to reach the desired jump height (apex).
         /// </summary>
         /// <returns>The initial vertical velocity needed for the jump.</returns>
         private Fixed64 GetVerticalJumpSpeed() => FixedMath.Sqrt(2 * Locomotions.Jump.BaseJumpHeight * Locomotions.Move.GravityForce);

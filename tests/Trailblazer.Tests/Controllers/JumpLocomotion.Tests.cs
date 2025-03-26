@@ -56,7 +56,7 @@ namespace Trailblazer.Tests.Controllers
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            int expectedJumpFrame = scout.ScoutController.Locomotions.Jump.FrameStartJump;
+            Fixed64 expectedJumpFrame = scout.ScoutController.Locomotions.Jump.JumpStartTime;
 
             // Attempt to jump again immediately
             scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
@@ -67,7 +67,7 @@ namespace Trailblazer.Tests.Controllers
             // Assert
             scout.ScoutController.IsInAir.Should().BeTrue();
             scout.ScoutController.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
-            scout.ScoutController.Locomotions.Jump.FrameStartJump.Should().Be(expectedJumpFrame);
+            scout.ScoutController.Locomotions.Jump.JumpStartTime.Should().Be(expectedJumpFrame);
         }
 
         [Fact]
@@ -225,6 +225,60 @@ namespace Trailblazer.Tests.Controllers
             fallStarted.Should().BeTrue();
             // We treat landing a jump differently
             fallStopped.Should().BeFalse();
+        }
+
+        [Fact]
+        public void Given_ScoutHoldingJump_When_HeldTooLong_Then_ShouldNotExceedMaxJump()
+        {
+            var scout = IScoutTestFactory.CreateJumpReadyScout();
+
+            var jumpLocomotion = scout.ScoutController.Locomotions.Jump;
+            Fixed64 maxExpectedHeight = jumpLocomotion.BaseJumpHeight + jumpLocomotion.ExtraJumpHeight;
+
+            Fixed64 maxY = scout.WorldPosition.y;
+
+            // Start jump
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Continue holding jump and track peak height until we land
+            while (!scout.ScoutController.IsGrounded)
+            {
+                TrailblazerManager.Simulate();
+                scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+
+                if (scout.WorldPosition.y > maxY)
+                    maxY = scout.WorldPosition.y;
+            }
+
+            maxY.Should().BeLessThanOrEqualTo(maxExpectedHeight);
+        }
+
+        [Fact]
+        public void Given_ScoutTapsJump_When_ReleasedImmediately_Then_JumpHeightShouldBeReduced()
+        {
+            var scout = IScoutTestFactory.CreateJumpReadyScout();
+
+            // Start jump
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Tap release
+            for (int i = 0; i < 5; i++)
+            {
+                TrailblazerManager.Simulate();
+                scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: false);
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            scout.WorldPosition.y.Should().BeGreaterThan((Fixed64)0.5).And.BeLessThan((Fixed64)1.0);
         }
     }
 }

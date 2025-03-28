@@ -814,7 +814,13 @@ namespace Trailblazer.Controllers
         /// </remarks>
         private void HandleFallState()
         {
-            if (!Locomotions.Fall.IsEnabled || Locomotions.Swim.IsSwimming) return;
+            if (!Locomotions.Fall.IsEnabled) return;
+
+            if (Locomotions.Swim.IsSwimming)
+            {
+                Locomotions.Fall.IsFalling = false;
+                return;
+            };
 
             if (Locomotions.Fall.IsFalling)
             {
@@ -841,11 +847,11 @@ namespace Trailblazer.Controllers
                 return;
             }
 
-            // Check if the scout is in freefall (not simply moving downhill)
-            bool isInFreefall = (IsInAir || Locomotions.Slide.IsSliding) && Locomotions.Move.CurrentVelocity.y < Fixed64.Zero;
-
             // Ensure we don't trigger falling when moving naturally down a slope
-            if (isInFreefall && (_currentState.SlopeAngle >= -Locomotions.Slide.SlopeLimit))
+            bool isSlidingTooSleep = Locomotions.Slide.IsSliding && _currentState.SlopeAngle.Abs() > Locomotions.Slide.SlopeLimit;
+
+            // Check if the scout is in freefall (not simply moving downhill)
+            if ((IsInAir || isSlidingTooSleep) && _forceOutput.y < Fixed64.Zero)
             {
                 // scout started falling
                 Locomotions.Fall.IsFalling = true;
@@ -883,7 +889,7 @@ namespace Trailblazer.Controllers
         /// Computes the vertical jump speed required to reach the desired jump height (apex).
         /// </summary>
         /// <returns>The initial vertical velocity needed for the jump.</returns>
-        private Fixed64 GetVerticalJumpSpeed() => FixedMath.Sqrt(2 * Locomotions.Jump.BaseJumpHeight * Locomotions.Move.GravityForce);
+        public Fixed64 GetVerticalJumpSpeed() => FixedMath.Sqrt(2 * Locomotions.Jump.BaseJumpHeight * Locomotions.Move.GravityForce);
 
         /// <summary>
         /// Determines whether the current surface is too steep for normal movement.

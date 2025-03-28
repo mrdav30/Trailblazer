@@ -119,5 +119,155 @@ namespace Trailblazer.Tests.Controllers
             scout.WorldPosition.y.Should().BeLessThan(initialPosition.y); // Gravity should still apply
             scout.WorldPosition.x.Should().BeGreaterThan(Fixed64.Zero); // Should also move forward
         }
+
+        [Fact]
+        public void Given_ScoutFallsFar_When_Lands_Then_ShouldTriggerMaxFallHeightEvent()
+        {
+            var scout = IScoutTestFactory.CreateMockScout(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+            scout.ScoutController.Locomotions.Fall.MaxFallHeight = Fixed64.One;
+
+            bool eventCalled = false;
+            scout.Events.OnMaxFallHeightReached += () => eventCalled = true;
+
+            while (!scout.ScoutController.IsGrounded)
+            {
+                TrailblazerManager.Simulate();
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            eventCalled.Should().BeTrue();
+        }
+
+        [Fact]
+        public void Given_ScoutFallsAndLands_When_FallHeightIsValid_Then_ShouldCallOnStopFallWithHeight()
+        {
+            var scout = IScoutTestFactory.CreateMockScout(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+
+            Fixed64 fallHeight = Fixed64.Zero;
+            scout.Events.OnStopFall += (height) => fallHeight = height;
+
+            while (!scout.ScoutController.IsGrounded)
+            {
+                TrailblazerManager.Simulate();
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            fallHeight.Should().NotBeNull();
+            fallHeight.Should().BeGreaterThan(Fixed64.One);
+        }
+
+        [Fact]
+        public void Given_ScoutSlidesDownhill_When_SlopeIsShallow_Then_ShouldNotStartFalling()
+        {
+            var slopeAngle = FixedMath.DegToRad((Fixed64)10);
+            var platform = IScoutTestFactory.CreatePlatform(
+                platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
+
+            var scout = IScoutTestFactory.CreatePlatformScout(
+                startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
+
+            scout.ScoutController.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeFalse();
+        }
+
+        [Fact]
+        public void Given_ScoutSlidesDownhill_When_SlopeIsSteep_Then_ShouldStartFalling()
+        {
+            var slopeAngle = FixedMath.DegToRad((Fixed64)60);
+            var platform = IScoutTestFactory.CreatePlatform(
+                platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
+
+            var scout = IScoutTestFactory.CreatePlatformScout(
+                startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
+
+            scout.ScoutController.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+
+            for (int i = 0; i < 2; i++)
+            {
+                TrailblazerManager.Simulate();
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
+            scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeTrue();
+        }
+
+        [Fact]
+        public void Given_ScoutStartsFallingMidJump_When_StillRising_Then_ShouldNotTriggerFallStart()
+        {
+            var scout = IScoutTestFactory.CreateJumpReadyScout();
+
+            bool fallTriggered = false;
+            scout.Events.OnStartFall += () => fallTriggered = true;
+
+            // Start jump
+            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            // Simulate a few frames of upward motion
+            for (int i = 0; i < 13; i++)
+            {
+                TrailblazerManager.Simulate();
+                scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            fallTriggered.Should().BeFalse();
+        }
+
+        [Fact]
+        public void Given_ScoutFallsZeroDistance_When_Lands_Then_FallHeightShouldBeZero()
+        {
+            var scout = IScoutTestFactory.CreateMockScout(startPosition: new Vector3d(0, 0, 0), startingMedium: TraversalMedium.Air);
+            scout.SetTraversalCondition(TraversalMedium.Ground, surfaceLevel: Fixed64.Zero);
+
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            scout.ScoutController.Locomotions.Fall.FallHeight.Should().Be(Fixed64.Zero);
+        }
+
+        [Fact]
+        public void Given_ScoutFalls_When_Lands_Then_FallStartShouldBeGreaterThanFallEnd()
+        {
+            var scout = IScoutTestFactory.CreateMockScout(startPosition: new Vector3d(0, 20, 0), startingMedium: TraversalMedium.Air);
+
+            while (!scout.ScoutController.IsGrounded)
+            {
+                TrailblazerManager.Simulate();
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            var fallLocomotion = scout.ScoutController.Locomotions.Fall;
+            fallLocomotion.FallStart.Should().BeGreaterThan(fallLocomotion.FallEnd);
+            fallLocomotion.FallHeight.Should().Be(fallLocomotion.FallStart - fallLocomotion.FallEnd);
+        }
+
+        [Fact]
+        public void Given_ScoutFalls_When_Disabled_Then_FallStateShouldReset()
+        {
+            var scout = IScoutTestFactory.CreateMockScout(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+
+            scout.ScoutController.Locomotions.Fall.IsFalling = true;
+            scout.ScoutController.Locomotions.Fall.FallStart = (Fixed64)10;
+
+            scout.ScoutController.Locomotions.Fall.IsEnabled = false;
+
+            scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeFalse();
+            scout.ScoutController.Locomotions.Fall.FallStart.Should().Be(Fixed64.Zero);
+        }
     }
 }

@@ -84,12 +84,12 @@ namespace Trailblazer.Controllers
         /// <param name="traversalSpeed">The movement speed category.</param>
         /// <param name="isRequestingJump">Whether the scout is attempting to jump.</param>
         public virtual void SetTraversalRequest(
-            Vector3d movementDirection,
-            TraversalSpeed traversalSpeed,
+            Vector3d? movementDirection = null,
+            TraversalSpeed? traversalSpeed = null,
             bool isRequestingJump = false)
         {
-            _traversalRequest.MovementDirection = movementDirection;
-            _traversalRequest.TraversalSpeed = traversalSpeed;
+            _traversalRequest.MovementDirection = movementDirection ?? Vector3d.Zero;
+            _traversalRequest.TraversalSpeed = traversalSpeed ?? TraversalSpeed.Stationary;
             _traversalRequest.IsRequestingJump = isRequestingJump;
         }
 

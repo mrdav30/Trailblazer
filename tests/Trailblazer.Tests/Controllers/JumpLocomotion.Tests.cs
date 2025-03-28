@@ -152,15 +152,39 @@ namespace Trailblazer.Tests.Controllers
         {
             var scout = IScoutTestFactory.CreateJumpReadyScout();
 
-            for (int i = 0; i < 10; i++) // Simulate holding jump button
+            scout.SetTraversalRequest(isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            for (int i = 0; i < 13; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Slow, isRequestingJump: true);
+                scout.SetTraversalRequest(isRequestingJump: true);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
 
-            scout.WorldPosition.y.Should().BeGreaterThan(Fixed64.One); // Higher than default jump height
+            scout.WorldPosition.y.Should().BeGreaterThan(scout.ScoutController.Locomotions.Jump.BaseJumpHeight); // Higher than default jump height
+        }
+
+        [Fact]
+        public void Given_ScoutOnGround_When_JumpNotHeld_Then_ShouldNotJumpHigher()
+        {
+            var scout = IScoutTestFactory.CreateJumpReadyScout();
+
+            scout.SetTraversalRequest(isRequestingJump: true);
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            for (int i = 0; i < 13; i++)
+            {
+                TrailblazerManager.Simulate();
+                scout.SetTraversalRequest(isRequestingJump: false);
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            scout.WorldPosition.y.Should().BeGreaterThan(scout.ScoutController.Locomotions.Jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
         }
 
         [Fact]

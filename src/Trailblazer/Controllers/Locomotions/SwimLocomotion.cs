@@ -42,7 +42,7 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// The default swim acceleration multiplier.
         /// </summary>
-        public static readonly Fixed64 DefaultSwimAccelerationModifier = (Fixed64)10;
+        public static readonly Fixed64 DefaultSwimAccelerationModifier = (Fixed64)1;
 
         /// <summary>
         /// The default buoyancy factor, controlling how strongly the scout floats in water.
@@ -55,9 +55,9 @@ namespace Trailblazer.Controllers.Locomotions
         public static readonly Fixed64 DefaultWaterDragFactor = Fixed64.FromRaw(0x10000000L); // ~0.0625
 
         /// <summary>
-        /// The delay before the scout enters a drowning state after exceeding breath capacity.
+        /// Default multiplier applied to jump force when breaching from water into air.
         /// </summary>
-        public static readonly Fixed64 DrowningStatusDelay = Fixed64.FromRaw(0x20000000L); // 0.125
+        public static readonly Fixed64 DefaultBreachJumpMultiplier = (Fixed64)0.75d;
 
         #endregion
 
@@ -109,6 +109,15 @@ namespace Trailblazer.Controllers.Locomotions
         public Fixed64 WaterDragFactor = DefaultWaterDragFactor; // ~0.0625
 
         /// <summary>
+        /// Multiplier applied to the jump velocity when the scout breaches water.
+        /// Controls how forcefully the scout exits the water.
+        /// </summary>
+        /// <remarks>
+        /// A value less than 1 results in a lower jump arc compared to standard ground jumps.
+        /// </remarks>
+        public Fixed64 BreachJumpMultiplier = DefaultBreachJumpMultiplier;
+
+        /// <summary>
         /// The maximum time the scout can hold its breath underwater before drowning.
         /// </summary>
         public Fixed64 HoldBreathTime = DefaultHoldBreathTime;
@@ -158,11 +167,6 @@ namespace Trailblazer.Controllers.Locomotions
         public Fixed64 MaxSwimAcceleration => MaxWaterAcceleration * SwimAccelerationModifier;
 
         /// <summary>
-        /// The effective buoyant force applied while swimming.
-        /// </summary>
-        public Fixed64 BuoyantForce => MaxSwimAcceleration * BuoyancyFactor;
-
-        /// <summary>
         /// Determines whether the scout is drowning due to prolonged underwater exposure.
         /// </summary>
         public bool IsDrowning
@@ -170,7 +174,7 @@ namespace Trailblazer.Controllers.Locomotions
             get
             {
                 if (!_isEnabled || !CanDrown) return false;
-                return UnderwaterTimer >= HoldBreathTime + DrowningStatusDelay; // Small delay;
+                return UnderwaterTimer >= HoldBreathTime;
             }
         }
 

@@ -108,6 +108,24 @@ public static class IScoutTestFactory
         );
     }
 
+    public static Scout CreateWaterScout(Vector3d? startPosition = null, Fixed64? surfaceLevel = null)
+    {
+        TraversalCondition condition = new TraversalCondition
+        {
+            Medium = TraversalMedium.Water,
+            SurfaceLevel = surfaceLevel ?? Fixed64.Zero,
+            CeilingLevel = Fixed64.MAX_VALUE
+        };
+
+        MockScout scout = new MockScout(
+            startPosition ?? Vector3d.Zero,
+            Vector3d.Zero,
+            condition
+        );
+
+        return scout;
+    }
+
     public static Scout CreateJumpReadyScout(Vector3d? startPosition = null)
     {
         TraversalCondition condition = new TraversalCondition

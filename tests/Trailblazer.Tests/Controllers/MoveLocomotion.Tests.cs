@@ -179,8 +179,11 @@ namespace Trailblazer.Tests.Controllers
             var expected = Vector3d.ProjectOnPlane(Vector3d.Forward, slopeNormal);
 
             // Ensure downward movement on downhill slopes & upward movement on uphill slopes
-            if (scout.ScoutController.CurrentState.SlopeAngle != Fixed64.Zero && Fixed64.Sign(expected.y) != Fixed64.Sign(scout.ScoutController.CurrentState.SlopeAngle))
+            if (scout.ScoutController.CurrentState.SlopeAngle != Fixed64.Zero 
+                && Fixed64.Sign(expected.y) != Fixed64.Sign(scout.ScoutController.CurrentState.SlopeAngle))
+            {
                 expected.y *= -1;
+            }
 
             velocity.Normal.Should().BeApproximately(expected.Normal, Fixed64.Epsilon);
         }

@@ -16,11 +16,11 @@ public class MockScout : Scout
     {
         WorldPosition = position;
 
-        traversalCondition = MockGroundCheck(traversalCondition);
+        _traversalCondition = traversalCondition;
 
-        base.OnInitialize(traversalCondition);
+        MockGroundCheck();
 
-        ScoutController.SetVelocity(velocity);
+        _events = new();
 
         Events.CanAffordJump = () => true;
 
@@ -37,18 +37,14 @@ public class MockScout : Scout
             // assume a mass of 1
             _pendingVelocity += force;
         };
+
+        _controller = ScoutController.CreateNew(this, _traversalCondition);
+        ScoutController.SetVelocity(velocity);
     }
 
     public override void FinalizeTraversal()
     {
         Vector3d previousPosition = WorldPosition;
-
-        //If grounded, cancel out excess downward movement from gravity, but preserve downward slope acceleration
-        if (_traversalCondition.Medium == TraversalMedium.Ground && _pendingVelocity.y < Fixed64.Zero)
-        {
-            var groundForce = _controller.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime; // gravity is defined as 9.8m/s^2
-            _pendingVelocity.y = FixedMath.Min(_pendingVelocity.y + (groundForce * TrailblazerManager.DeltaTime), Fixed64.Zero);
-        }
 
         // resolve velocity
         WorldPosition += _positionDelta + _pendingVelocity;
@@ -59,7 +55,7 @@ public class MockScout : Scout
             _rotationDelta = FixedQuaternion.Identity;
         }
 
-        _traversalCondition = MockGroundCheck(_traversalCondition);
+        MockGroundCheck();
 
         Velocity = (WorldPosition - previousPosition) / TrailblazerManager.DeltaTime;
 
@@ -69,61 +65,79 @@ public class MockScout : Scout
         base.FinalizeTraversal();
     }
 
+    private TraversalMedium? _previousMedium;
     // Update TraversalState based on output from controller
-    private TraversalCondition MockGroundCheck(TraversalCondition condition)
+    private void MockGroundCheck()
     {
         // If scout is already grounded, maintain state unless velocity pushes it up
-        if (condition.Medium == TraversalMedium.Ground)
+        if (_traversalCondition.Medium == TraversalMedium.Ground)
         {
             if (_pendingVelocity.y > Fixed64.Zero)
             {
                 // If scout is moving upwards, it should no longer be grounded
-                condition.Medium = TraversalMedium.Air;
-                return condition;
+                _previousMedium = _traversalCondition.Medium;
+                _traversalCondition.Medium = TraversalMedium.Air;
+                return;
             }
 
-            Vector3d groundNormal = condition.SurfaceCondition?.SurfaceNormal ?? Vector3d.Zero;
-            Fixed64 groundY = GetSlopeSurfaceY(WorldPosition, groundNormal, condition.SurfaceLevel);
+            var surfaceMatrix = _traversalCondition.SurfaceCondition?.SurfaceMatrix;
+            if (surfaceMatrix != null)
+            {
+                // Compute world Y value from surface plane based on scout's X/Z
+                Vector3d localPosition = surfaceMatrix.Value.InverseTransformPoint(WorldPosition);
+                localPosition.y = Fixed64.Zero; // align to the platform's base plane
+                Vector3d alignedWorld = surfaceMatrix.Value.TransformPoint(localPosition);
 
-            if (WorldPosition.y < groundY)
-                WorldPosition = new Vector3d(WorldPosition.x, groundY, WorldPosition.z);
+                if (WorldPosition.y < alignedWorld.y)
+                    WorldPosition = alignedWorld;
+            }
 
-            return condition;
+            return;
         }
 
         // If scout is airborne, check if it should transition to grounded
-        if (condition.Medium == TraversalMedium.Air)
+        if (TraversalCondition.Medium == TraversalMedium.Air)
         {
-            Fixed64 surfaceLevel = condition.SurfaceLevel;
+            Fixed64 surfaceLevel = TraversalCondition.SurfaceLevel;
             Fixed64 scoutHeight = WorldPosition.y;
 
             // Ensure velocity is downward and scout is within landing range
-            if (_pendingVelocity.y <= Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
+            if (_pendingVelocity.y < Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
             {
-                // Set state to grounded
-                condition.Medium = TraversalMedium.Ground;
+                // Set state to previous state or assume ground
+                _traversalCondition.Medium = _previousMedium ?? TraversalMedium.Ground;
                 WorldPosition = new Vector3d(WorldPosition.x, surfaceLevel, WorldPosition.z);
 
-                // Update ground normal if needed (assuming ground is flat for now)
-                condition.SurfaceCondition = new SurfaceCondition
+                if (_traversalCondition.Medium == TraversalMedium.Ground)
                 {
-                    SurfaceMatrix = Fixed4x4.Identity, // Assuming a flat ground by default
-                };
+                    // Update ground normal if needed (assuming ground is flat for now)
+                    _traversalCondition.SurfaceCondition ??= new SurfaceCondition
+                    {
+                        SurfaceMatrix = Fixed4x4.Identity, // Assuming a flat ground by default
+                    };
+                }
             }
+
+            return;
         }
 
-        return condition;
-    }
+        if (TraversalCondition.Medium == TraversalMedium.Water)
+        {
+            Fixed64 surfaceLevel = TraversalCondition.SurfaceLevel;
+            Fixed64 scoutHeight = WorldPosition.y;
 
-    private Fixed64 GetSlopeSurfaceY(Vector3d position, Vector3d groundNormal, Fixed64 knownSurfaceY)
-    {
-        if (groundNormal.y.Abs() <= Fixed64.Epsilon)
-            return knownSurfaceY; // Prevent divide-by-zero for vertical surfaces
+            if (scoutHeight > surfaceLevel)
+            {
+                if (_pendingVelocity.y > Fixed64.Zero)
+                {
+                    // If scout is moving upwards, it should no longer be grounded
+                    _previousMedium = _traversalCondition.Medium;
+                    _traversalCondition.Medium = TraversalMedium.Air;
+                    return;
+                }
 
-        // Compute how much the scout has moved from the original surface detection point
-        Fixed64 offset = (groundNormal.x * position.x + groundNormal.z * position.z) / groundNormal.y;
-
-        // Adjust the surface level by the offset to get the true height at (x, z)
-        return knownSurfaceY + offset;
+                WorldPosition = new Vector3d(WorldPosition.x, surfaceLevel, WorldPosition.z);
+            }
+        }
     }
 }

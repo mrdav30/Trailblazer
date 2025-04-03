@@ -284,7 +284,7 @@ namespace Trailblazer.Controllers
                 return;
 
             // remove any downward current downward momentum if we aren't grounded or just landed
-            if (!IsGrounded || IsGrounded && !WasGrounded)
+            if (!IsGrounded || IsGrounded && WasInAir)
                 _forceOutput.y = Fixed64.Zero;
 
             Vector3d desiredVelocity = GetDesiredVelocity();
@@ -367,8 +367,7 @@ namespace Trailblazer.Controllers
                 adjustedVelocity.y *= -1;
 
             // Prevent excessive redirection on very steep terrain
-            if (Vector3d.Angle(result, adjustedVelocity) < Locomotions.Slide.SlopeLimit)
-                result = adjustedVelocity;
+            result = adjustedVelocity;
 
             return result;
         }
@@ -491,20 +490,8 @@ namespace Trailblazer.Controllers
 
             if (IsInWater)
             {
-                // If buoyancy cancels gravity completely, scout should neither sink nor rise
-                if (Locomotions.Swim.BuoyancyFactor == Fixed64.One)
-                    return;
-
-                // netBuoyancyForce
-                _forceOutput.y += gravityStep * Locomotions.Swim.BuoyancyFactor;
-
-                // If buoyancy is higher than gravity, scout should float up
-                if (Locomotions.Swim.BuoyancyFactor > Fixed64.One)
-                    _forceOutput.y += (Locomotions.Swim.BuoyantForce - gravityStep);
-
-                // If buoyancy is less than gravity, scout should sink down
-                if (Locomotions.Swim.BuoyancyFactor < Fixed64.One)
-                    _forceOutput.y -= (Locomotions.Swim.BuoyantForce - gravityStep);
+                // Apply net buoyant force relative to gravity
+                _forceOutput.y += gravityStep * (Locomotions.Swim.BuoyancyFactor - Fixed64.One);
 
                 return;
             }
@@ -516,7 +503,7 @@ namespace Trailblazer.Controllers
             _forceOutput.y = Locomotions.Move.CurrentVelocity.y - gravityStep;
 
             // Ensure velocity does not exceed terminal fall speed
-            if (Locomotions.Move.CurrentVelocity.y + _forceOutput.y < -Locomotions.Move.TerminalVelocity)
+            if (Locomotions.Move.CurrentVelocity.y + (_forceOutput.y * TrailblazerManager.DeltaTime) < -Locomotions.Move.TerminalVelocity)
                 _forceOutput.y = -Locomotions.Move.TerminalVelocity - Locomotions.Move.CurrentVelocity.y;
 
             // When jumping up we don't apply gravity for some time when the user is holding the jump button.
@@ -552,7 +539,7 @@ namespace Trailblazer.Controllers
             if (IsInWater)
             {
                 Locomotions.Jump.FrameJumpDirection = Vector3d.Up;
-                jumpForce = Locomotions.Jump.FrameJumpDirection * Locomotions.Swim.BuoyantForce;
+                jumpForce = Locomotions.Jump.FrameJumpDirection * (GetVerticalJumpSpeed() * Locomotions.Swim.BreachJumpMultiplier);
                 _hostScout.Events?.OnStartWaterBreach?.Invoke();
             }
             else

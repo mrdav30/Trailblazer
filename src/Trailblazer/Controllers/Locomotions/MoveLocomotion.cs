@@ -72,11 +72,6 @@ namespace Trailblazer.Controllers.Locomotions
             );
 
         /// <summary>
-        /// Default surface friction applied to movement.
-        /// </summary>
-        public static readonly Fixed64 DefaultSurfaceFriction = Fixed64.FromRaw(0x20000000L); // ~0.125 * One
-
-        /// <summary>
         /// Represents a fixed-point acceleration force for gravity.
         /// </summary>
         /// <remarks>
@@ -151,11 +146,6 @@ namespace Trailblazer.Controllers.Locomotions
         /// A curve controlling how speed is affected by terrain slope.
         /// </summary>
         public FixedCurve SlopeSpeedMultiplier = DefaultSlopeSpeedModifier;
-
-        /// <summary>
-        /// The current surface friction applied to movement.
-        /// </summary>
-        public Fixed64 SurfaceFriction = DefaultSurfaceFriction;
 
         /// <inheritdoc cref="DefaultGravityForce"/>
         public Fixed64 GravityForce = DefaultGravityForce;

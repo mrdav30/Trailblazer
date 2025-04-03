@@ -1,6 +1,5 @@
 ﻿using FixedMathSharp;
 using System;
-using Trailblazer.Controllers.Locomotions;
 
 namespace Trailblazer.Controllers
 {
@@ -9,6 +8,14 @@ namespace Trailblazer.Controllers
     /// </summary>
     public class ScoutEvents
     {
+        /// <summary>
+        /// Event triggered when an external force is applied to the scout.
+        /// </summary>
+        /// <remarks>
+        /// This is typically used for acceleration-based movement adjustments.
+        /// </remarks>
+        public Action<Vector3d> OnAddLinearForce { get; set; }
+
 #nullable enable
         /// <summary>
         /// Event triggered when a platform applies a positional displacement to the scout.
@@ -19,14 +26,6 @@ namespace Trailblazer.Controllers
         /// Event triggered when a platform applies a rotational displacement to the scout.
         /// </summary>
         public Action<FixedQuaternion>? OnAddPlatformRotationDelta { get; set; } = null;
-
-        /// <summary>
-        /// Event triggered when an external force is applied to the scout.
-        /// </summary>
-        /// <remarks>
-        /// This is typically used for acceleration-based movement adjustments.
-        /// </remarks>
-        public Action<Vector3d>? OnAddLinearForce { get; set; } = null;
 
         /// <summary>
         /// Event triggered when the scout begins falling.

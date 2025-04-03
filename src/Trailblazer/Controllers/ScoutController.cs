@@ -31,9 +31,9 @@ namespace Trailblazer.Controllers
         private IScout _hostScout;
 
         [NonSerialized]
-        private TraversalState _currentState;
+        private TransitState _currentState;
 
-        public TraversalState CurrentState => _currentState;
+        public TransitState CurrentState => _currentState;
 
         /// <summary>
         /// Indicates whether the controller is locked for the current frame to prevent multiple force applications.
@@ -46,7 +46,7 @@ namespace Trailblazer.Controllers
         /// Stores the movement request for the current frame.
         /// </summary>
         [NonSerialized]
-        private TraversalRequest _frameTraversalRequest;
+        private TravelRequest _frameTraversalRequest;
 
         /// <summary>
         /// Accumulates forces applied during the traversal phase before they are committed.
@@ -145,8 +145,8 @@ namespace Trailblazer.Controllers
         public void Initialize(IScout scout, TraversalCondition initialCondition)
         {
             _hostScout = scout;
-            _currentState = new TraversalState(initialCondition);
-            if (_currentState.SurfaceState.HasValue)
+            _currentState = new TransitState(initialCondition);
+            if (_currentState.GroundState.HasValue)
                 HandlePlatformChange(); // set the initial platform
             Locomotions.Move.CurrentPosition = _hostScout.WorldPosition;
             Locomotions.Move.LastPosition = Locomotions.Move.CurrentPosition;
@@ -162,12 +162,12 @@ namespace Trailblazer.Controllers
         /// <param name="movementDirection">The direction of movement, represented as a unit vector.</param>
         /// <param name="traversalSpeed">The speed category of the movement (e.g., walk, jog, sprint).</param>
         /// <param name="isRequestingJump">Whether the scout is attempting to jump.</param>
-        public void Traverse(Vector3d movementDirection, TraversalSpeed traversalSpeed, bool isRequestingJump = false)
+        public void Traverse(Vector3d movementDirection, MovementSpeed traversalSpeed, bool isRequestingJump = false)
         {
-            Traverse(new TraversalRequest
+            Traverse(new TravelRequest
             {
                 MovementDirection = movementDirection,
-                TraversalSpeed = traversalSpeed,
+                MovementSpeed = traversalSpeed,
                 IsRequestingJump = isRequestingJump
             });
         }
@@ -180,7 +180,7 @@ namespace Trailblazer.Controllers
         /// Movement forces such as gravity, jump, and platform adjustments are applied.
         /// </remarks>
         /// <param name="traversalRequest">The movement request containing direction, speed, and jump state.</param>
-        public void Traverse(TraversalRequest traversalRequest)
+        public void Traverse(TravelRequest traversalRequest)
         {
             if (_hostScout == null) return;
 
@@ -322,16 +322,15 @@ namespace Trailblazer.Controllers
                 result = new Vector3d(_currentState.SurfaceNormal.x, Fixed64.Zero, _currentState.SurfaceNormal.z).Normal;
                 // Find the input movement direction projected onto the sliding direction
                 Vector3d projectedMoveDir = Vector3d.Project(_frameTraversalRequest.MovementDirection, result);
-                // Add the sliding direction, the speed control, and the sideways control vectors
-                result = result + projectedMoveDir
-                    * Locomotions.Slide.SpeedControl + (_frameTraversalRequest.MovementDirection - projectedMoveDir)
-                    * Locomotions.Slide.SidewaysControl;
-                // Multiply with the sliding speed
 
-                Fixed64 adjustedSlideSpeed = Locomotions.Slide.SlidingSpeed * (Fixed64.One - Locomotions.Move.SurfaceFriction);
-                result *= adjustedSlideSpeed;
+                // Add the sliding direction, the speed control, and the sideways control vectors
+                Vector3d speedContribution = projectedMoveDir * Locomotions.Slide.SpeedControl;
+                Vector3d sidewaysContribution = (_frameTraversalRequest.MovementDirection - projectedMoveDir) * Locomotions.Slide.SidewaysControl;
+
+                // Multiply with the sliding speed
+                result += (speedContribution + sidewaysContribution) * Locomotions.Slide.SlidingSpeed;
             }
-            else if (Locomotions.IsInControl && _frameTraversalRequest.TraversalSpeed != TraversalSpeed.Stationary)
+            else if (Locomotions.IsInControl && _frameTraversalRequest.MovementSpeed != MovementSpeed.Stationary)
                 result = GetHorizontalVelocity();
 
             // Ensure smoother stops in water instead of abrupt halts
@@ -366,8 +365,8 @@ namespace Trailblazer.Controllers
             if (_currentState.SlopeAngle != Fixed64.Zero && Fixed64.Sign(adjustedVelocity.y) != Fixed64.Sign(_currentState.SlopeAngle))
                 adjustedVelocity.y *= -1;
 
-            // Prevent excessive redirection on very steep terrain
-            result = adjustedVelocity;
+            // Prevent excessive redirection on very steep terrain and apply friction
+            result = adjustedVelocity * (Fixed64.One - _currentState.GroundState?.SurfaceFriction ?? Fixed64.Zero);
 
             return result;
         }
@@ -421,15 +420,15 @@ namespace Trailblazer.Controllers
                     maxSpeed = Locomotions.Move.MaxBackwardsSpeed;
                 else
                 {
-                    switch (_frameTraversalRequest.TraversalSpeed)
+                    switch (_frameTraversalRequest.MovementSpeed)
                     {
-                        case TraversalSpeed.Slow:
+                        case MovementSpeed.Slow:
                             maxSpeed = Locomotions.Move.MaxSlowSpeed;
                             break;
-                        case TraversalSpeed.Moderate:
+                        case MovementSpeed.Moderate:
                             maxSpeed = Locomotions.Move.MaxModerateSpeed;
                             break;
-                        case TraversalSpeed.Fast:
+                        case MovementSpeed.Fast:
                             maxSpeed = Locomotions.Move.MaxFastSpeed;
                             break;
                     }
@@ -657,18 +656,18 @@ namespace Trailblazer.Controllers
 
             // Clear it to avoid double-applying next frame
             Locomotions.Platform.FramePlatformVelocity = Vector3d.Zero;
-            Locomotions.Platform.MovementTransfer = _currentState.SurfaceState?.MotionTransferState ?? MotionTransfer.None;
+            Locomotions.Platform.MovementTransfer = _currentState.GroundState?.MotionTransferState ?? MotionTransfer.None;
 
-            if (!DidPlatformChange(_currentState.SurfaceState))
+            if (!DidPlatformChange(_currentState.GroundState))
                 return;
 
-            Fixed4x4 newPlatformMatrix = _currentState.SurfaceState?.SurfaceMatrix ?? Fixed4x4.Identity;
+            Fixed4x4 newPlatformMatrix = _currentState.GroundState?.GroundMatrix ?? Fixed4x4.Identity;
 
             Locomotions.Platform.LastTransform = Locomotions.Platform.ActivePlatform == null
                 ? newPlatformMatrix
                 : Locomotions.Platform.ActiveTransform;
             Locomotions.Platform.ActiveTransform = newPlatformMatrix;
-            Locomotions.Platform.ActivePlatform = _currentState.SurfaceState?.SurfaceObject ?? null;
+            Locomotions.Platform.ActivePlatform = _currentState.GroundState?.BaseObject ?? null;
 
             Locomotions.Platform.IsNewPlatform = true;
         }
@@ -678,12 +677,12 @@ namespace Trailblazer.Controllers
         /// </summary>
         /// <param name="surfaceCondition">The current ground state of the scout.</param>
         /// <returns>True if the scout is on a new platform; otherwise, false.</returns>
-        private bool DidPlatformChange(SurfaceCondition? surfaceCondition)
+        private bool DidPlatformChange(GroundCondition? surfaceCondition)
         {
-            if (Locomotions.Platform.ActivePlatform == surfaceCondition?.SurfaceObject)
+            if (Locomotions.Platform.ActivePlatform == surfaceCondition?.BaseObject)
                 return false;
 
-            if (Locomotions.Platform.ActivePlatform == null || Locomotions.Platform.ActivePlatform != surfaceCondition?.SurfaceObject)
+            if (Locomotions.Platform.ActivePlatform == null || Locomotions.Platform.ActivePlatform != surfaceCondition?.BaseObject)
                 return true;
 
             return false;

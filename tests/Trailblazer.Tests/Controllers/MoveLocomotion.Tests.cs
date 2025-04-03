@@ -18,7 +18,7 @@ namespace Trailblazer.Tests.Controllers
             Vector3d initialPosition = scout.WorldPosition;
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.One, TraversalSpeed.Fast);
+            scout.ScoutController.Traverse(Vector3d.One, MovementSpeed.Fast);
             scout.FinalizeTraversal();
 
             // Assert
@@ -39,7 +39,7 @@ namespace Trailblazer.Tests.Controllers
             for (int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Slow);
+                scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Slow);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -72,7 +72,7 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Slow);
+            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
 
             // Assert
             scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -98,7 +98,7 @@ namespace Trailblazer.Tests.Controllers
         {
             Vector3d iniitialVelocity = new Vector3d(3, 0, 0);
             var scout = IScoutTestFactory.CreateMockScout(startVelocity: iniitialVelocity, startingMedium: TraversalMedium.Ground);
-            scout.SetTraversalRequest(new Vector3d(-1, 0, 0), TraversalSpeed.Moderate);
+            scout.SetTravelRequest(new Vector3d(-1, 0, 0), MovementSpeed.Moderate);
 
             for (int i = 0; i < 20; i++) // Apply opposing force over time
             {
@@ -118,12 +118,12 @@ namespace Trailblazer.Tests.Controllers
 
             scout.SetTraversalCondition(
                 medium: TraversalMedium.Ground,
-                surfaceCondition: new SurfaceCondition
+                surfaceCondition: new GroundCondition
                 {
-                    SurfaceMatrix = Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(slope, Fixed64.Zero, Fixed64.Zero))
+                    GroundMatrix = Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(slope, Fixed64.Zero, Fixed64.Zero))
                 }
                 );
-            scout.SetTraversalRequest(new Vector3d(1, 0, 0), TraversalSpeed.Slow);
+            scout.SetTravelRequest(new Vector3d(1, 0, 0), MovementSpeed.Slow);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -148,7 +148,7 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Slow);
+            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
             scout.FinalizeTraversal();
 
             // Assert
@@ -170,7 +170,7 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Slow);
+            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
             scout.FinalizeTraversal();
 
             // Assert - Projected vector must lie in the tangent plane of the slope
@@ -205,7 +205,7 @@ namespace Trailblazer.Tests.Controllers
             for(int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Slow);
+                scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Slow);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -227,7 +227,7 @@ namespace Trailblazer.Tests.Controllers
                 platformMatrix: platform
             );
 
-            scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Moderate);
+            scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Moderate);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -239,7 +239,7 @@ namespace Trailblazer.Tests.Controllers
         {
             var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
 
-            scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Moderate);
+            scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Moderate);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -247,7 +247,7 @@ namespace Trailblazer.Tests.Controllers
             for (int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Moderate);
+                scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Moderate);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -260,11 +260,63 @@ namespace Trailblazer.Tests.Controllers
         {
             var scout = IScoutTestFactory.CreateMockScout(startVelocity: new Vector3d(5, 0, 0));
 
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
             scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().Be(Vector3d.Zero);
+        }
+
+        [Fact]
+        public void Given_ScoutWalkingOnHighFrictionGround_When_Moving_Then_ShouldMoveSlower()
+        {
+            var lowFrictionScout = IScoutTestFactory.CreatePlatformScout(surfaceFriction: Fixed64.Zero);
+            var highFrictionScout = IScoutTestFactory.CreatePlatformScout(surfaceFriction: Fixed64.One);
+
+            // Simulate walking forward for both
+            for (int i = 0; i < 5; i++)
+            {
+                TrailblazerManager.Simulate();
+
+                lowFrictionScout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Moderate);
+                lowFrictionScout.StartTraversal();
+
+                highFrictionScout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Moderate);
+                highFrictionScout.StartTraversal();
+
+                lowFrictionScout.FinalizeTraversal();
+                highFrictionScout.FinalizeTraversal();
+            }
+
+            var low = lowFrictionScout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude;
+            var high = highFrictionScout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude;
+
+            high.Should().BeLessThan(low);
+        }
+
+        [Fact]
+        public void Given_ScoutOnLowFrictionGround_When_StopsMoving_Then_ShouldSlideSlightly()
+        {
+            var scout = IScoutTestFactory.CreatePlatformScout(surfaceFriction: Fixed64.Fraction(1, 100)); // Very low friction
+
+            // Apply forward movement
+            for (int i = 0; i < 3; i++)
+            {
+                TrailblazerManager.Simulate();
+                scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Moderate);
+                scout.StartTraversal();
+                scout.FinalizeTraversal();
+            }
+
+            var initialVelocity = scout.ScoutController.Locomotions.Move.CurrentVelocity;
+
+            // Stop input
+            TrailblazerManager.Simulate();
+            scout.StartTraversal();
+            scout.FinalizeTraversal();
+
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
+            scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeLessThan(initialVelocity.Magnitude);
         }
     }
 }

@@ -42,7 +42,7 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// Stores the movement request for the next traversal cycle.
         /// </summary>
-        protected TraversalRequest _traversalRequest;
+        protected TravelRequest _travelRequest;
 
         #region Lifecycle
 
@@ -66,12 +66,12 @@ namespace Trailblazer.Controllers
         public virtual void SetTraversalCondition(
             TraversalMedium medium,
             Fixed64? surfaceLevel = null,
-            SurfaceCondition? surfaceCondition = null,
+            GroundCondition? surfaceCondition = null,
             Fixed64? ceilingLevel = null)
         {
             _traversalCondition.Medium = medium;
             _traversalCondition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-            _traversalCondition.SurfaceCondition = surfaceCondition ?? null;
+            _traversalCondition.GroundState = surfaceCondition ?? null;
             _traversalCondition.CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
         }
 
@@ -81,19 +81,19 @@ namespace Trailblazer.Controllers
         /// Sets the movement request for the next simulation frame.
         /// </summary>
         /// <param name="movementDirection">The desired movement direction.</param>
-        /// <param name="traversalSpeed">The movement speed category.</param>
+        /// <param name="movementSpeed">The movement speed category.</param>
         /// <param name="isRequestingJump">Whether the scout is attempting to jump.</param>
-        public virtual void SetTraversalRequest(
+        public virtual void SetTravelRequest(
             Vector3d? movementDirection = null,
-            TraversalSpeed? traversalSpeed = null,
+            MovementSpeed? movementSpeed = null,
             bool isRequestingJump = false)
         {
-            _traversalRequest.MovementDirection = movementDirection ?? Vector3d.Zero;
-            _traversalRequest.TraversalSpeed = traversalSpeed ?? TraversalSpeed.Stationary;
-            _traversalRequest.IsRequestingJump = isRequestingJump;
+            _travelRequest.MovementDirection = movementDirection ?? Vector3d.Zero;
+            _travelRequest.MovementSpeed = movementSpeed ?? MovementSpeed.Stationary;
+            _travelRequest.IsRequestingJump = isRequestingJump;
         }
 
-        public virtual void SetTraversalRequest(TraversalRequest request) => _traversalRequest = request;
+        public virtual void SetTravelRequest(TravelRequest request) => _travelRequest = request;
 
         #endregion
 
@@ -104,8 +104,8 @@ namespace Trailblazer.Controllers
         /// </summary>
         public virtual void StartTraversal()
         {
-            ScoutController.Traverse(_traversalRequest);
-            _traversalRequest = default;
+            ScoutController.Traverse(_travelRequest);
+            _travelRequest = default;
         }
 
         /// <summary>

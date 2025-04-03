@@ -5,7 +5,7 @@ using Trailblazer.Controllers;
 /// <summary>
 /// Represents the current traversal state and provides synchronization with TraversalCondition.
 /// </summary>
-public class TraversalState
+public class TransitState
 {
     /// <summary>
     /// The current traversal medium.
@@ -18,14 +18,14 @@ public class TraversalState
     public Fixed64 SurfaceLevel { get; private set; }
 
     /// <summary>
-    /// The ground state, if applicable.
-    /// </summary>
-    public SurfaceCondition? SurfaceState { get; private set; }
-
-    /// <summary>
     /// The ceiling height above the entity.
     /// </summary>
     public Fixed64 CeilingLevel { get; private set; } = Fixed64.MAX_VALUE;
+
+    /// <summary>
+    /// The ground state, if applicable.
+    /// </summary>
+    public GroundCondition? GroundState { get; private set; }
 
     /// <summary>
     /// The normal of the ground surface.
@@ -39,7 +39,7 @@ public class TraversalState
     /// </summary>
     public TraversalCondition? PreviousState { get; private set; }
 
-    public TraversalState(TraversalCondition condition)
+    public TransitState(TraversalCondition condition)
     {
         Update(condition, null);
     }
@@ -52,18 +52,18 @@ public class TraversalState
         PreviousState = previous;
         Medium = condition.Medium;
         SurfaceLevel = condition.SurfaceLevel;
-        SurfaceState = condition.SurfaceCondition;
+        GroundState = condition.GroundState;
 
         if(Medium == TraversalMedium.Ground)
         {
-            SurfaceNormal = SurfaceState?.SurfaceNormal ?? Vector3d.Zero;
+            SurfaceNormal = GroundState?.GroundNormal ?? Vector3d.Zero;
             SlopeAngle = Vector3d.Angle(Vector3d.Up, SurfaceNormal);
             bool isDownhill = Vector3d.Dot(Vector3d.Forward, SurfaceNormal) < Fixed64.Zero;
             if (isDownhill) SlopeAngle *= -1;
         }
         else
         {
-            SurfaceNormal = Vector3d.Zero;
+            SurfaceNormal = Vector3d.Up;
             SlopeAngle = Fixed64.Zero;
         }
 
@@ -75,6 +75,6 @@ public class TraversalState
     /// </summary>
     public TraversalCondition ToTraversalCondition()
     {
-        return new TraversalCondition(Medium, SurfaceLevel, SurfaceState, CeilingLevel);
+        return new TraversalCondition(Medium, SurfaceLevel, GroundState, CeilingLevel);
     }
 }

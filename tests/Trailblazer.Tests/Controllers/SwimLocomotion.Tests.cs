@@ -91,7 +91,7 @@ namespace Trailblazer.Tests.Controllers
 
             // Act - Enter Water
             TrailblazerManager.Simulate();
-            scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Slow);
+            scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Slow);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -99,7 +99,7 @@ namespace Trailblazer.Tests.Controllers
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(Vector3d.Forward, TraversalSpeed.Slow);
+                scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Slow);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -237,7 +237,7 @@ namespace Trailblazer.Tests.Controllers
             for (int i = 0; i < 10; i++) // Simulate swimming upwards
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(Vector3d.Up, TraversalSpeed.Slow);
+                scout.SetTravelRequest(Vector3d.Up, MovementSpeed.Slow);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -273,7 +273,7 @@ namespace Trailblazer.Tests.Controllers
             scout.Events.OnStartWaterBreach += () => breached = true;
 
             // Request a jump while swimming
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
@@ -293,7 +293,7 @@ namespace Trailblazer.Tests.Controllers
             scout.Events.OnStartWaterBreach += () => breached = true;
 
             // Request a jump while swimming, but breach is disabled
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
@@ -313,7 +313,7 @@ namespace Trailblazer.Tests.Controllers
             scout.Events.OnStopWaterBreach += () => stopBreach = true;
 
             // Simulate a jump breach
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();

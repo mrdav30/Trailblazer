@@ -24,7 +24,7 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Slow);
+            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
             scout.ScoutController.FinishFrameTraversal(scout.TraversalCondition);
 
             // Assert
@@ -46,7 +46,7 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, TraversalSpeed.Slow);
+            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
 
             // Assert
             scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -83,19 +83,47 @@ namespace Trailblazer.Tests.Controllers
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
             );
 
-            var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform);
-            scout.ScoutController.Locomotions.Move.SurfaceFriction = Fixed64.One; // max friction
+            var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform, surfaceFriction: Fixed64.One); // max friction
 
             // Simulate several frames to allow friction to take effect
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.ScoutController.Traverse(Vector3d.Zero, TraversalSpeed.Stationary);
+                scout.ScoutController.Traverse(Vector3d.Zero, MovementSpeed.Stationary);
                 scout.ScoutController.FinishFrameTraversal(scout.TraversalCondition);
             }
 
             scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
             scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeLessThan((Fixed64)1);
+        }
+
+        [Fact]
+        public void Given_ScoutOnHighFrictionDownSlope_When_Sliding_Then_ShouldSlideSlowerThanLowFriction()
+        {
+            var slopeAngle = FixedMath.DegToRad((Fixed64)50);
+            var platform = IScoutTestFactory.CreatePlatform(platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
+
+            var lowFrictionScout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform, surfaceFriction: Fixed64.Zero);
+            var highFrictionScout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform, surfaceFriction: Fixed64.One);
+
+            for (int i = 0; i < 5; i++)
+            {
+                TrailblazerManager.Simulate();
+
+                lowFrictionScout.StartTraversal();
+                highFrictionScout.StartTraversal();
+
+                lowFrictionScout.FinalizeTraversal();
+                highFrictionScout.FinalizeTraversal();
+            }
+
+            var low = lowFrictionScout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude;
+            var high = highFrictionScout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude;
+
+            lowFrictionScout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
+            highFrictionScout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
+
+            high.Should().BeLessThan(low);
         }
 
         [Fact]
@@ -122,10 +150,10 @@ namespace Trailblazer.Tests.Controllers
 
             scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
 
-            SurfaceCondition shallowSlopeSurface = new SurfaceCondition
+            GroundCondition shallowSlopeSurface = new GroundCondition
             {
-                SurfaceObject = new object(), // Separate from platform
-                SurfaceMatrix = Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero))
+                BaseObject = new object(), // Separate from platform
+                GroundMatrix = Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero))
             };
 
             // Flatten slope
@@ -160,7 +188,7 @@ namespace Trailblazer.Tests.Controllers
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(sidewaysInput, TraversalSpeed.Slow);
+                scout.SetTravelRequest(sidewaysInput, MovementSpeed.Slow);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }

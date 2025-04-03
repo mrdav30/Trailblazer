@@ -16,7 +16,7 @@ namespace Trailblazer.Tests.Controllers
             var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.ScoutController.Traverse(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             scout.FinalizeTraversal();
 
             // Assert
@@ -36,7 +36,7 @@ namespace Trailblazer.Tests.Controllers
             expectedVelocity.y += -scout.ScoutController.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
 
             // Act
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -51,7 +51,7 @@ namespace Trailblazer.Tests.Controllers
             var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
 
             // Act - First Jump
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
@@ -59,7 +59,7 @@ namespace Trailblazer.Tests.Controllers
             Fixed64 expectedJumpFrame = scout.ScoutController.Locomotions.Jump.JumpStartTime;
 
             // Attempt to jump again immediately
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
@@ -77,7 +77,7 @@ namespace Trailblazer.Tests.Controllers
             var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
 
             // Act - First Jump
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
@@ -111,7 +111,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.Events.CanAffordJump = () => false;
 
             // Act
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -127,7 +127,7 @@ namespace Trailblazer.Tests.Controllers
 
             // Act - Initial Jump
             TrailblazerManager.Simulate();
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -137,7 +137,7 @@ namespace Trailblazer.Tests.Controllers
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+                scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -152,14 +152,14 @@ namespace Trailblazer.Tests.Controllers
         {
             var scout = IScoutTestFactory.CreateJumpReadyScout();
 
-            scout.SetTraversalRequest(isRequestingJump: true);
+            scout.SetTravelRequest(isRequestingJump: true);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
             for (int i = 0; i < 13; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(isRequestingJump: true);
+                scout.SetTravelRequest(isRequestingJump: true);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -172,14 +172,14 @@ namespace Trailblazer.Tests.Controllers
         {
             var scout = IScoutTestFactory.CreateJumpReadyScout();
 
-            scout.SetTraversalRequest(isRequestingJump: true);
+            scout.SetTravelRequest(isRequestingJump: true);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
             for (int i = 0; i < 13; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(isRequestingJump: false);
+                scout.SetTravelRequest(isRequestingJump: false);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -192,7 +192,7 @@ namespace Trailblazer.Tests.Controllers
         {
             var scout = IScoutTestFactory.CreateJumpReadyScout(startPosition: new Vector3d(0, 5, 0));
 
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Slow, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Slow, isRequestingJump: true);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -222,7 +222,7 @@ namespace Trailblazer.Tests.Controllers
             scout.Events.OnLandedFall += () => fallStopped = true;
 
             // Start Jump
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Slow, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Slow, isRequestingJump: true);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -262,7 +262,7 @@ namespace Trailblazer.Tests.Controllers
             Fixed64 maxY = scout.WorldPosition.y;
 
             // Start jump
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
@@ -271,7 +271,7 @@ namespace Trailblazer.Tests.Controllers
             while (!scout.ScoutController.IsGrounded)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+                scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
 
@@ -288,7 +288,7 @@ namespace Trailblazer.Tests.Controllers
             var scout = IScoutTestFactory.CreateJumpReadyScout();
 
             // Start jump
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
@@ -297,7 +297,7 @@ namespace Trailblazer.Tests.Controllers
             for (int i = 0; i < 5; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: false);
+                scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: false);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }

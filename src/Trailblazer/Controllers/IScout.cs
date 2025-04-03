@@ -26,7 +26,7 @@ namespace Trailblazer.Controllers
         /// The set of events associated with the scout, allowing for external interactions such as force application and state transitions.
         /// </summary>
         #nullable enable
-        ScoutEvents? Events { get; }
+        ScoutEvents Events { get; }
 #nullable disable
 
         /// <summary>

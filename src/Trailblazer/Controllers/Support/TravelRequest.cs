@@ -5,7 +5,7 @@ namespace Trailblazer.Controllers
     /// <summary>
     /// Represents a movement request for the scout, including direction, speed, and jump intent.
     /// </summary>
-    public struct TraversalRequest
+    public struct TravelRequest
     {
         /// <summary>
         /// The global direction in which the scout wants to move.
@@ -15,7 +15,7 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// The speed at which the scout wants to move.
         /// </summary>
-        public TraversalSpeed TraversalSpeed { get; set; }
+        public MovementSpeed MovementSpeed { get; set; }
 
         /// <summary>
         /// Indicates whether the scout is requesting to jump.
@@ -25,11 +25,11 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// Determines if the scout is actively moving based on direction and speed.
         /// </summary>
-        public readonly bool IsMoving => MovementDirection != Vector3d.Zero && TraversalSpeed != TraversalSpeed.Stationary;
+        public readonly bool IsMoving => MovementDirection != Vector3d.Zero && MovementSpeed != MovementSpeed.Stationary;
 
         /// <summary>
         /// Represents an empty movement request with default values.
         /// </summary>
-        public static readonly TraversalRequest Empty = new();
+        public static readonly TravelRequest Empty = new();
     }
 }

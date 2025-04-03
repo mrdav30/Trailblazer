@@ -37,10 +37,10 @@ namespace Trailblazer.Tests.Controllers
 			scout.SetTraversalCondition(
 				TraversalMedium.Ground,
 				Fixed64.Zero,
-				new SurfaceCondition
+				new GroundCondition
 				{
-					SurfaceMatrix = updatedMatrix,
-					SurfaceObject = scout.ScoutController.Locomotions.Platform.ActivePlatform
+					GroundMatrix = updatedMatrix,
+					BaseObject = scout.ScoutController.Locomotions.Platform.ActivePlatform
 				}
 			);
 
@@ -136,7 +136,7 @@ namespace Trailblazer.Tests.Controllers
 
 			// Act 1 - Jump before platform movement
 			TrailblazerManager.Simulate();
-			scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+			scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
 			scout.StartTraversal();
 			scout.FinalizeTraversal();
 
@@ -145,7 +145,7 @@ namespace Trailblazer.Tests.Controllers
 
 			// Act 2 - Simulate next frame after platform movement
 			TrailblazerManager.Simulate();
-			scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+			scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
 			scout.StartTraversal();
 			scout.FinalizeTraversal();
 
@@ -162,7 +162,7 @@ namespace Trailblazer.Tests.Controllers
 			scout.ScoutController.Locomotions.Platform.PlatformVelocity = new Vector3d(1, 0, 0);
 
             TrailblazerManager.Simulate();
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -236,7 +236,7 @@ namespace Trailblazer.Tests.Controllers
             scout.ScoutController.Locomotions.Platform.PlatformVelocity = initialPlatformVelocity;
 
             TrailblazerManager.Simulate();
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -262,7 +262,7 @@ namespace Trailblazer.Tests.Controllers
 
             // Act 2 - Jump from moving platform
             TrailblazerManager.Simulate();
-            scout.SetTraversalRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             scout.StartTraversal();
 
 

@@ -80,7 +80,7 @@ public class MockScout : Scout
                 return;
             }
 
-            var surfaceMatrix = _traversalCondition.SurfaceCondition?.SurfaceMatrix;
+            var surfaceMatrix = _traversalCondition.GroundState?.GroundMatrix;
             if (surfaceMatrix != null)
             {
                 // Compute world Y value from surface plane based on scout's X/Z
@@ -111,9 +111,9 @@ public class MockScout : Scout
                 if (_traversalCondition.Medium == TraversalMedium.Ground)
                 {
                     // Update ground normal if needed (assuming ground is flat for now)
-                    _traversalCondition.SurfaceCondition ??= new SurfaceCondition
+                    _traversalCondition.GroundState ??= new GroundCondition
                     {
-                        SurfaceMatrix = Fixed4x4.Identity, // Assuming a flat ground by default
+                        GroundMatrix = Fixed4x4.Identity, // Assuming a flat ground by default
                     };
                 }
             }

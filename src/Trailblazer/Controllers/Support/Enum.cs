@@ -55,7 +55,7 @@
     /// <summary>
     /// Defines movement speed categories for traversal.
     /// </summary>
-    public enum TraversalSpeed
+    public enum MovementSpeed
     {
         /// <summary>
         /// No movement (idle state).

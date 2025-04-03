@@ -19,10 +19,10 @@ public static class IScoutTestFactory
                 {
                     condition.Medium = TraversalMedium.Ground;
                     condition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-                    condition.SurfaceCondition = new SurfaceCondition
+                    condition.GroundState = new GroundCondition
                     {
-                        SurfaceObject = new object(), // Separate from platform
-                        SurfaceMatrix = Fixed4x4.Identity,
+                        BaseObject = new object(), // Separate from platform
+                        GroundMatrix = Fixed4x4.Identity,
                     };
                 }
                 break;
@@ -63,11 +63,11 @@ public static class IScoutTestFactory
 
         if (platformMatrix.HasValue)
         {
-            condition.SurfaceCondition = new SurfaceCondition
+            condition.GroundState = new GroundCondition
             {
                 MotionTransferState = MotionTransfer.InitTransfer,
-                SurfaceMatrix = platformMatrix.Value,
-                SurfaceObject = new object()
+                GroundMatrix = platformMatrix.Value,
+                BaseObject = new object()
             };
         }
 
@@ -87,16 +87,18 @@ public static class IScoutTestFactory
     public static Scout CreatePlatformScout(
         Vector3d? startPosition = null,
         Fixed4x4? platformMatrix = null,
+        Fixed64? surfaceFriction = null,
         MotionTransfer motionTransfer = MotionTransfer.None)
     {
         TraversalCondition condition = new TraversalCondition
         {
             Medium = TraversalMedium.Ground,
             CeilingLevel = Fixed64.MAX_VALUE,
-            SurfaceCondition = new SurfaceCondition
+            GroundState = new GroundCondition
             {
-                SurfaceObject = new object(), // Separate from platform
-                SurfaceMatrix = platformMatrix ?? Fixed4x4.Identity,
+                BaseObject = new object(), // Separate from platform
+                GroundMatrix = platformMatrix ?? Fixed4x4.Identity,
+                SurfaceFriction = surfaceFriction ?? Fixed64.Zero,
                 MotionTransferState = motionTransfer
             }
         };
@@ -132,10 +134,10 @@ public static class IScoutTestFactory
         {
             Medium = TraversalMedium.Ground,
             CeilingLevel = Fixed64.MAX_VALUE,
-            SurfaceCondition = new SurfaceCondition
+            GroundState = new GroundCondition
             {
-                SurfaceObject = new object(), // Separate from platform
-                SurfaceMatrix = Fixed4x4.Identity,
+                BaseObject = new object(), // Separate from platform
+                GroundMatrix = Fixed4x4.Identity,
             }
         };
 

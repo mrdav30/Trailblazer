@@ -2,7 +2,6 @@
 using FluentAssertions;
 using Trailblazer.Controllers;
 using FixedMathSharp;
-using Trailblazer.Tests.Assertions;
 
 namespace Trailblazer.Tests.Controllers
 {

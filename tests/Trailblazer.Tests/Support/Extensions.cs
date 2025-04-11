@@ -3,7 +3,7 @@ using FluentAssertions;
 using FluentAssertions.Execution;
 using FluentAssertions.Numeric;
 
-namespace Trailblazer.Tests.Assertions
+namespace Trailblazer.Tests
 {
     public class Fixed64Assertions : ComparableTypeAssertions<Fixed64, Fixed64Assertions>
     {

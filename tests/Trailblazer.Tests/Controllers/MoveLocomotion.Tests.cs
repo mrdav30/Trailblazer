@@ -2,7 +2,6 @@
 using FluentAssertions;
 using Trailblazer.Controllers;
 using FixedMathSharp;
-using Trailblazer.Tests.Assertions;
 
 namespace Trailblazer.Tests.Controllers
 {
@@ -96,7 +95,7 @@ namespace Trailblazer.Tests.Controllers
         [Fact]
         public void Given_ScoutMovesForward_When_ReversedInput_Then_ShouldDecelerate()
         {
-            Vector3d iniitialVelocity = new Vector3d(3, 0, 0);
+            Vector3d iniitialVelocity = new(3, 0, 0);
             var scout = IScoutTestFactory.CreateMockScout(startVelocity: iniitialVelocity, startingMedium: TraversalMedium.Ground);
             scout.SetTravelRequest(new Vector3d(-1, 0, 0), MovementSpeed.Moderate);
 

@@ -1,11 +1,11 @@
-﻿// Thanks to Sebastian Lague's tutorial: https://www.youtube.com/watch?v=3Dw5d7PlcTM
-
+﻿using GridForge.Grids;
+using SwiftCollections;
 using System;
 
-namespace Lockstep.Simulation.Pathfinding
+namespace Trailblazer.Pathing
 {
     /// <summary>
-    /// A static class representing a heap of GridNodes for efficient pathfinding.
+    /// A static class representing a heap of <see cref="PathPartition"/>> for efficient pathfinding.
     /// </summary>
     public static class PathPartitionHeap
     {
@@ -14,7 +14,7 @@ namespace Lockstep.Simulation.Pathfinding
         /// <summary>
         /// Gets the number of items in the heap.
         /// </summary>
-        public static uint Count { get; private set; }
+        public static int Count { get; private set; }
 
         private static uint _heapVersion = 1;
 
@@ -25,15 +25,14 @@ namespace Lockstep.Simulation.Pathfinding
         /// <summary>
         /// Adds a GridNode to the heap.
         /// </summary>
-        /// <param name="item">The GridNode to add.</param>
-        public static void Add(PathPartition item)
+        public static void Add(PathPartition partition)
         {
             if (Count + 1 > _items.Length)
                 Resize(_items.Length * 2);
-            item.HeapIndex = Count;
-            _items[Count++] = item;
-            SortUp(item);
-            item.HeapVersion = _heapVersion;
+            partition.HeapIndex = (uint)Count;
+            _items[Count++] = partition;
+            SortUp(partition);
+            partition.HeapVersion = _heapVersion;
         }
 
         // Ensures the capacity of the internal array is sufficient.
@@ -46,6 +45,8 @@ namespace Lockstep.Simulation.Pathfinding
                 Array.Copy(_items, 0, newArray, 0, Count);
             _items = newArray;
         }
+
+        public static PathPartition PeekAt(int index) => _items[index];
 
         /// <summary>
         /// Removes and returns the first GridNode in the heap.
@@ -82,22 +83,26 @@ namespace Lockstep.Simulation.Pathfinding
         /// <returns>True if the GridNode is closed, otherwise false.</returns>
         public static bool IsClosed(PathPartition item) => item.ClosedHeapVersion == _heapVersion;
 
-        /// <summary>
-        /// Clears the heap quickly by incrementing the heap version.
-        /// </summary>
-        public static void FastClear()
+        // Sorts the specified GridNode up the heap.
+        public static void SortUp(PathPartition item)
         {
-            _heapVersion++;
-            Count = 0;
-        }
+            if (item.HeapIndex == 0)
+                return;
 
-        /// <summary>
-        /// Resets the heap by setting the heap version to 1 and clearing the count.
-        /// </summary>
-        public static void Reset()
-        {
-            _heapVersion = 1;
-            Count = 0;
+            uint parentIndex = (item.HeapIndex - 1) / 2;
+            while (true)
+            {
+                PathPartition curNode = _items[parentIndex];
+                if (item.HeapCost > curNode.HeapCost)
+                    break;
+
+                Swap(item, _items[parentIndex]);
+
+                if (parentIndex == 0)
+                    break;
+
+                parentIndex = (item.HeapIndex - 1) / 2;
+            }
         }
 
         // Sorts the specified GridNode down the heap.
@@ -115,37 +120,15 @@ namespace Lockstep.Simulation.Pathfinding
 
                 if (childIndexRight < Count)
                 {
-                    if (_items[childIndexLeft].TotalCost > _items[childIndexRight].TotalCost)
+                    if (_items[childIndexLeft].HeapCost > _items[childIndexRight].HeapCost)
                         swapIndex = childIndexRight;
                 }
 
-                PathPartition swapPartition = _items[swapIndex];
-                if (item.TotalCost < swapPartition.TotalCost)
+                PathPartition swapNode = _items[swapIndex];
+                if (item.HeapCost < swapNode.HeapCost)
                     break;
 
-                Swap(item, swapPartition);
-            }
-        }
-
-        // Sorts the specified GridNode up the heap.
-        public static void SortUp(PathPartition item)
-        {
-            if (item.HeapIndex == 0)
-                return;
-
-            uint parentIndex = (item.HeapIndex - 1) / 2;
-            while (true)
-            {
-                PathPartition curNode = _items[parentIndex];
-                if (item.TotalCost > curNode.TotalCost)
-                    break;
-
-                Swap(item, curNode);
-
-                if (parentIndex == 0)
-                    break;
-
-                parentIndex = (item.HeapIndex - 1) / 2;
+                Swap(item, _items[swapIndex]);
             }
         }
 
@@ -159,6 +142,24 @@ namespace Lockstep.Simulation.Pathfinding
 
             itemA.HeapIndex = itemB.HeapIndex;
             itemB.HeapIndex = itemAIndex;
+        }
+
+        /// <summary>
+        /// Clears the heap quickly by incrementing the heap version.
+        /// </summary>
+        public static void FastClear()
+        {
+            _heapVersion++;
+            Count = 0;
+        }
+
+        /// <summary>
+        /// Resets the heap by setting the heap version to 1 and clearing the count.
+        /// </summary>
+        public static void Reset()
+        {
+            _heapVersion = 1;
+            Count = 0;
         }
     }
 }

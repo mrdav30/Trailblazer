@@ -2,7 +2,6 @@
 using FluentAssertions;
 using Trailblazer.Controllers;
 using FixedMathSharp;
-using Trailblazer.Tests.Assertions;
 
 namespace Trailblazer.Tests.Controllers
 {
@@ -150,7 +149,7 @@ namespace Trailblazer.Tests.Controllers
 
             scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
 
-            GroundCondition shallowSlopeSurface = new GroundCondition
+            GroundCondition shallowSlopeSurface = new()
             {
                 BaseObject = new object(), // Separate from platform
                 GroundMatrix = Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero))

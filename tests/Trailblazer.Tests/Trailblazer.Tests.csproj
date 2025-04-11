@@ -16,6 +16,7 @@
 	</ProjectReference>
     <PackageReference Include="FixedMathSharp" Version="1.2.2" />
     <PackageReference Include="FluentAssertions" Version="8.1.1" />
+    <PackageReference Include="GridForge" Version="1.0.5" />
 	<PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3">
 	  <PrivateAssets>all</PrivateAssets>
 	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

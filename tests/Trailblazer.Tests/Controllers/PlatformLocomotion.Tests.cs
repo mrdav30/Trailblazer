@@ -2,7 +2,6 @@
 using FluentAssertions;
 using Trailblazer.Controllers;
 using FixedMathSharp;
-using Trailblazer.Tests.Assertions;
 using Trailblazer.Controllers.Locomotions;
 
 namespace Trailblazer.Tests.Controllers
@@ -271,7 +270,6 @@ namespace Trailblazer.Tests.Controllers
 
             // Assert
             scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().NotBe(Vector3d.Zero);
-            //TODO: would we gain the position delta and velocity of the platform?
             scout.ScoutController.Locomotions.Move.CurrentVelocity.x.Should().Be(scout.ScoutController.Locomotions.Platform.PlatformVelocity.x);
         }
 

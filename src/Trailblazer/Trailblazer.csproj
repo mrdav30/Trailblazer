@@ -66,12 +66,8 @@
 		<OutputPath>bin\$(Configuration)\</OutputPath>
 	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="HeightMap\**" />
-	  <Compile Remove="PathFinding\**" />
-	  <EmbeddedResource Remove="HeightMap\**" />
-	  <EmbeddedResource Remove="PathFinding\**" />
-	  <None Remove="HeightMap\**" />
-	  <None Remove="PathFinding\**" />
+	  <Compile Remove="Navigation\HeightMap.cs" />
+	  <Compile Remove="Navigation\HeightMapSaver.cs" />
 	</ItemGroup>
 	<!-- Dependencies and Package References -->
 	<ItemGroup>	

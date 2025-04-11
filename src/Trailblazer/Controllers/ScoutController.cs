@@ -497,8 +497,6 @@ namespace Trailblazer.Controllers
 
             if (!IsInAir) return;
 
-            // TODO: if we want to support moving while in air, does this need to skip?
-            // or cancel it out via another force?
             _forceOutput.y = Locomotions.Move.CurrentVelocity.y - gravityStep;
 
             // Ensure velocity does not exceed terminal fall speed

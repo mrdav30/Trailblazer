@@ -1,8 +1,7 @@
 ﻿using System;
-using Trailblazer;
 using Xunit;
 
-namespace GridForge.Grids.Tests
+namespace Trailblazer.Tests
 {
     /// <summary>
     /// Class Fixture for all GridForge tests, ensuring proper setup and teardown.

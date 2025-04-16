@@ -66,8 +66,8 @@
 		<OutputPath>bin\$(Configuration)\</OutputPath>
 	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="Navigation\HeightMap.cs" />
-	  <Compile Remove="Navigation\HeightMapSaver.cs" />
+	  <Compile Remove="Pathing\Navigation\HeightMap.cs" />
+	  <Compile Remove="Pathing\Navigation\HeightMapSaver.cs" />
 	</ItemGroup>
 	<!-- Dependencies and Package References -->
 	<ItemGroup>	
@@ -75,7 +75,7 @@
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="GridForge" Version="1.0.5">
+		<PackageReference Include="GridForge" Version="1.0.6">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>

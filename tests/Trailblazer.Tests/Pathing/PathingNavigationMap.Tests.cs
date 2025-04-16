@@ -2,13 +2,12 @@
 using GridForge.Grids;
 using GridForge.Configuration;
 using FixedMathSharp;
-using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
-namespace Trailblazer.Tests.Navigation
+namespace Trailblazer.Tests.Pathing
 {
     [Collection("TraversableNavMapCollection")]
-    public class TraversableNavMapTests
+    public class PathingNavigationMapTests
     {
         [Fact]
         public void Register_AddsMapToManager()
@@ -17,9 +16,9 @@ namespace Trailblazer.Tests.Navigation
             GlobalGridManager.TryAddGrid(config, out _);
 
             var map = BuildSinglePointMap("TestMap", new Vector3d(0, 0, 0));
-            TraversableNavMapManager.Register(map);
+            PathingManager.Register(map);
 
-            Assert.True(TraversableNavMapManager.TryGet("TestMap", out var retrieved));
+            Assert.True(PathingManager.TryGetNavigationMap("TestMap", out var retrieved));
             Assert.Equal(map, retrieved);
         }
 
@@ -30,8 +29,8 @@ namespace Trailblazer.Tests.Navigation
             GlobalGridManager.TryAddGrid(config, out _);
 
             var map = BuildSinglePointMap("InitMap", new Vector3d(0, 0, 0));
-            TraversableNavMapManager.Register(map);
-            TraversableNavMapManager.InitializeMap("InitMap");
+            PathingManager.Register(map);
+            PathingManager.InitializeMap("InitMap");
 
             Assert.True(GlobalGridManager.TryGetGridAndNode(new Vector3d(0, 0, 0), out _, out Node node));
             Assert.True(node.TryGetPartition<PathPartition>(out _));
@@ -47,11 +46,11 @@ namespace Trailblazer.Tests.Navigation
             var mapA = BuildSinglePointMap("MapA", pos);
             var mapB = BuildSinglePointMap("MapB", pos);
 
-            TraversableNavMapManager.Register(mapA);
-            TraversableNavMapManager.Register(mapB);
+            PathingManager.Register(mapA);
+            PathingManager.Register(mapB);
 
-            TraversableNavMapManager.InitializeMap("MapA");
-            TraversableNavMapManager.InitializeMap("MapB");
+            PathingManager.InitializeMap("MapA");
+            PathingManager.InitializeMap("MapB");
 
             // Validate partition exists and belongs to both
             GlobalGridManager.TryGetGridAndNode(pos, out _, out Node node);
@@ -59,7 +58,7 @@ namespace Trailblazer.Tests.Navigation
             Assert.True(partition.BelongsTo("MapA"));
             Assert.True(partition.BelongsTo("MapB"));
 
-            TraversableNavMapManager.Unload("MapA");
+            PathingManager.Unload("MapA");
 
             // Should still be there because MapB owns it
             Assert.True(node.TryGetPartition<PathPartition>(out var afterUnload));
@@ -80,9 +79,9 @@ namespace Trailblazer.Tests.Navigation
             GlobalGridManager.TryAddGrid(config, out _);
 
             var map = BuildSinglePointMap("DuplicateInit", new Vector3d(0, 0, 0));
-            TraversableNavMapManager.Register(map);
-            TraversableNavMapManager.InitializeMap("DuplicateInit");
-            TraversableNavMapManager.InitializeMap("DuplicateInit"); // idempotent
+            PathingManager.Register(map);
+            PathingManager.InitializeMap("DuplicateInit");
+            PathingManager.InitializeMap("DuplicateInit"); // idempotent
 
             GlobalGridManager.TryGetGridAndNode(new Vector3d(0, 0, 0), out _, out Node node);
             var count = node.TryGetPartition<PathPartition>(out var partition) ? 1 : 0;
@@ -91,14 +90,14 @@ namespace Trailblazer.Tests.Navigation
             Assert.True(partition.BelongsTo("DuplicateInit"));
         }
 
-        private static TraversableNavMap BuildSinglePointMap(string name, Vector3d worldPos)
+        private static PathNavigationMap BuildSinglePointMap(string name, Vector3d worldPos)
         {
             // Convert a single world point into an aligned map
             Vector3d origin = worldPos - new Vector3d(1, 1, 1);
             bool[,,] data = new bool[3, 3, 3];
             data[1, 1, 1] = true;
 
-            return TraversableNavMap.From3D(name, data, origin, Fixed64.One);
+            return PathNavigationMap.From3D(name, data, origin, Fixed64.One);
         }
     }
 }

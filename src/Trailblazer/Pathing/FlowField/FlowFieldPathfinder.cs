@@ -44,7 +44,8 @@ namespace Trailblazer.Pathing
             int greatestDistance = 0;
             while (PathPartitionHeap.Count > 0 && searchCount < request.MaxSearchSize)
             {
-                PathPartition currentPartition = PathPartitionHeap.RemoveFirst();
+                if (!PathPartitionHeap.RemoveFirst(out PathPartition currentPartition))
+                    break;
 
                 // Check if we found our way to the start node
                 if (currentPartition.NodeSpawnToken == request.FromNode.SpawnToken)
@@ -56,7 +57,7 @@ namespace Trailblazer.Pathing
                 currentPartition.HasLineOfSight = false;
                 // This could be heavy depending on how far away we are!
                 if (currentPartition.NodeSpawnToken != request.TargetNode.SpawnToken)
-                    currentPartition.HasLineOfSight = !PathfindingManager.NeedsPath(currentPartition.NodePosition, request.TargetNode.WorldPosition, request.RoverSize);
+                    currentPartition.HasLineOfSight = !PathingManager.NeedsPath(currentPartition.NodePosition, request.TargetNode.WorldPosition, request.RoverSize);
 
                 if (currentPartition.HeapCost > greatestDistance)
                     greatestDistance = currentPartition.HeapCost;
@@ -88,26 +89,26 @@ namespace Trailblazer.Pathing
         {
             // Check each straight line neighbour of this node (no diagonals)
             // We will only ever visit every node once as we are always visiting nodes in the most efficient order
-            foreach (PathPartition walkableNeighbor in currentPartition.GetWalkableStraightNeighbors())
+            foreach (TraversableNeighbor neighbor in currentPartition.GetWalkableStraightNeighbors())
             {
-                if (PathPartitionHeap.IsClosed(walkableNeighbor))
+                if (PathPartitionHeap.IsClosed(neighbor.Partition))
                     continue;
 
                 // If neighbor is blocked and isn't start node, don't add to heap
-                if (walkableNeighbor.Unpassable(roverSize) && walkableNeighbor.NodeSpawnToken != startNode.SpawnToken)
+                if (neighbor.Partition.Unpassable(roverSize) && neighbor.Node.SpawnToken != startNode.SpawnToken)
                     continue;
 
                 int neighborToll = currentPartition.HeapCost + 1;
-                if (!PathPartitionHeap.Contains(walkableNeighbor))
+                if (!PathPartitionHeap.Contains(neighbor.Partition))
                 {
-                    walkableNeighbor.HeapCost = neighborToll;
-                    PathPartitionHeap.Add(walkableNeighbor);
-                    _markedPartitions.Add(walkableNeighbor);
+                    neighbor.Partition.HeapCost = neighborToll;
+                    PathPartitionHeap.Add(neighbor.Partition);
+                    _markedPartitions.Add(neighbor.Partition);
                 }
-                else if (neighborToll < walkableNeighbor.HeapCost)
+                else if (neighborToll < neighbor.Partition.HeapCost)
                 {
-                    walkableNeighbor.HeapCost = neighborToll;
-                    PathPartitionHeap.SortUp(walkableNeighbor);
+                    neighbor.Partition.HeapCost = neighborToll;
+                    PathPartitionHeap.SortUp(neighbor.Partition);
                 }
             }
         }
@@ -130,13 +131,13 @@ namespace Trailblazer.Pathing
                 //Go through all neighbours and find the one with the lowest distance
                 PathPartition minDistancePartition = null;
                 int minDistance = greatestDistance;
-                foreach(PathPartition walkableNeighbor in currentPartition.GetWalkableNeighbors())
+                foreach(TraversableNeighbor neighbor in currentPartition.GetWalkableNeighbors())
                 {
-                    int nDistance = PathPartitionHeap.IsClosed(walkableNeighbor) ? walkableNeighbor.HeapCost : greatestDistance;
+                    int nDistance = PathPartitionHeap.IsClosed(neighbor.Partition) ? neighbor.Partition.HeapCost : greatestDistance;
                     int dist = nDistance - currentPartition.HeapCost;
                     if (dist < minDistance)
                     {
-                        minDistancePartition = walkableNeighbor;
+                        minDistancePartition = neighbor.Partition;
                         minDistance = dist;
                     }
                 }

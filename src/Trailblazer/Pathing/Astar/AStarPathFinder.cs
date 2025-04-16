@@ -26,11 +26,27 @@ namespace Trailblazer.Pathing
 
         public HeuristicMethod Heuristic { get; internal set; }
 
-        public Fixed64 MaxHeightDifference { get; internal set; }
+        public Fixed64 MaxClimbHeight { get; internal set; }
+
+        public bool UseSplineSmoothing { get; internal set; }
+
+        private static readonly Fixed64 _directionChangeTolerance = new(0.01);
+
+#if DEBUG
+#nullable enable
+        public static Action<PathPartition, PathPartition, Fixed64>? OnHeightLimitViolated;
+#nullable disable
+#endif
 
         public void FindPath(AStarPathRequest request)
         {
             PathPartitionHeap.FastClear();
+
+            if (request.FromNode.SpawnToken == request.TargetNode.SpawnToken)
+            {
+                request.OnComplete?.Invoke(true, new SwiftList<Vector3d> { request.FromNode.WorldPosition });
+                return;
+            }
 
             if (!request.FromNode.TryGetPartition(out PathPartition startPartition))
             {
@@ -38,8 +54,9 @@ namespace Trailblazer.Pathing
                 return;
             }
 
-            MaxHeightDifference = request.MaxHeightDifference;
+            MaxClimbHeight = request.MaxClimbHeight;
             Heuristic = request.Heuristic;
+            UseSplineSmoothing = request.UseSplineSmoothing;
 
             PathPartitionHeap.Add(startPartition);
 
@@ -63,10 +80,14 @@ namespace Trailblazer.Pathing
             targetReached = false;
             while (PathPartitionHeap.Count > 0 && iterations++ < searchSize)
             {
-                PathPartition currentPartition = PathPartitionHeap.RemoveFirst();
+                if (!PathPartitionHeap.RemoveFirst(out PathPartition currentPartition))
+                    return;
 
                 if (currentPartition.NodeSpawnToken == targetNode.SpawnToken)
+                {
+                    targetReached = true;
                     return;
+                }
 
                 ProcessNeighbors(currentPartition, targetNode, roverSize, out targetReached);
                 if (targetReached)
@@ -81,29 +102,52 @@ namespace Trailblazer.Pathing
             targetReached = false;
             int cost = current.MovementCost + PathPartition.StraightCost;
 
-            foreach (var neighbor in current.GetWalkableStraightNeighbors())
+            foreach (TraversableNeighbor neighbor in current.GetWalkableStraightNeighbors())
             {
-                targetReached |= ProcessNeighbor(current, neighbor, targetNode, gridSize, cost);
+                targetReached |= ProcessNeighbor(current, neighbor.Partition, targetNode, gridSize, cost);
                 if (targetReached) return;
             }
 
             cost = current.MovementCost + PathPartition.DiagonalCost;
-            foreach (var neighbor in current.GetWalkableDiagonalNeighbors())
+            foreach (TraversableNeighbor neighbor in current.GetWalkableDiagonalNeighbors())
             {
-                targetReached |= ProcessNeighbor(current, neighbor, targetNode, gridSize, cost);
+                targetReached |= ProcessNeighbor(current, neighbor.Partition, targetNode, gridSize, cost);
                 if (targetReached) return;
             }
         }
 
         private bool ProcessNeighbor(PathPartition current, PathPartition neighbor, Node target, int gridSize, int cost)
         {
+            if (PathPartitionHeap.IsClosed(neighbor) || neighbor.Unpassable(gridSize))
+                return false;
+
+            // Skip neighbors that have a height difference greater than the allowed maximum
+            Fixed64 heightDifference = (current.NodePosition.y - neighbor.NodePosition.y).Abs();
+            if (heightDifference > MaxClimbHeight)
+            {
+#if DEBUG
+                OnHeightLimitViolated?.Invoke(current, neighbor, heightDifference);
+#endif
+                return false;
+            }
+
             if (neighbor.NodeSpawnToken == target.SpawnToken)
             {
                 SetPathPartitionData(neighbor, target.WorldPosition, current.ParentCoordinate, cost);
                 return true;
             }
 
-            UpsertPartitionOntoHeap(neighbor, current, target.WorldPosition, gridSize, cost);
+            if (!PathPartitionHeap.Contains(neighbor))
+            {
+                SetPathPartitionData(neighbor, target.WorldPosition, current.ParentCoordinate, cost);
+                PathPartitionHeap.Add(neighbor);
+            }
+            else if (cost < neighbor.MovementCost)
+            {
+                SetPathPartitionData(neighbor, target.WorldPosition, current.ParentCoordinate, cost);
+                PathPartitionHeap.SortUp(neighbor);
+            }
+
             return false;
         }
 
@@ -123,28 +167,6 @@ namespace Trailblazer.Pathing
 
             // Calculate the total cost (fCost) by adding the heuristic cost (hCost) to the movement cost (gCost)
             pathPartition.HeapCost = movementCost + heuristicCost;
-        }
-
-        private void UpsertPartitionOntoHeap(PathPartition currrentPartition, PathPartition nextPartition, Vector3d targetPosition, int gridSize, int newCost)
-        {
-            if (PathPartitionHeap.IsClosed(currrentPartition) || currrentPartition.Unpassable(gridSize))
-                return;
-
-            // Skip neighbors that have a height difference greater than the allowed maximum
-            Fixed64 heightDifference = (nextPartition.NodePosition.y - currrentPartition.NodePosition.y).Abs();
-            if (heightDifference > MaxHeightDifference)
-                return;
-
-            if (!PathPartitionHeap.Contains(currrentPartition))
-            {
-                SetPathPartitionData(currrentPartition, targetPosition, nextPartition.ParentCoordinate, newCost);
-                PathPartitionHeap.Add(currrentPartition);
-            }
-            else if (newCost < currrentPartition.MovementCost)
-            {
-                SetPathPartitionData(currrentPartition, targetPosition, nextPartition.ParentCoordinate, newCost);
-                PathPartitionHeap.SortUp(currrentPartition);
-            }
         }
 
         private SwiftList<Node> GetRawpath(Node startNode, Node targetNode)
@@ -168,11 +190,11 @@ namespace Trailblazer.Pathing
                 partition.MovementCost = 0;
             }
 
+            // Ensure start position is included
             rawNodePath.Insert(0, startNode);
             return rawNodePath;
         }
 
-        private static readonly Fixed64 _directionChangeTolerance = new(0.01);
         public SwiftList<Vector3d> SmoothPath(Node targetNode, int gridSize, SwiftList<Node> rawNodePath)
         {
             SwiftList<Vector3d> outputVectorPath = new();
@@ -180,8 +202,10 @@ namespace Trailblazer.Pathing
                 return outputVectorPath;
 
             Vector3d lastDir = Vector3d.Zero;
-            Vector3d startPos = rawNodePath[0].WorldPosition;
-            outputVectorPath.Add(startPos);
+
+            // If the path actually goes somewhere → include the start
+            if (rawNodePath[0].SpawnToken == rawNodePath.FromEnd(1).SpawnToken)
+                outputVectorPath.Add(rawNodePath[0].WorldPosition);
 
             for (int i = 1; i < rawNodePath.Count - 1; i++)
             {
@@ -209,8 +233,56 @@ namespace Trailblazer.Pathing
                 }
             }
 
+            // Ensure target position is included
             outputVectorPath.Add(targetNode.WorldPosition);
+
+            if (UseSplineSmoothing)
+                outputVectorPath = CatmullSmooth(outputVectorPath);
+
             return outputVectorPath;
+        }
+
+        public static SwiftList<Vector3d> CatmullSmooth(SwiftList<Vector3d> input, int resolutionPerSegment = 3)
+        {
+            var output = new SwiftList<Vector3d>();
+            if (input.Count < 4) return input;
+
+            for (int i = 0; i < input.Count - 3; i++)
+            {
+                Vector3d p0 = input[i];
+                Vector3d p1 = input[i + 1];
+                Vector3d p2 = input[i + 2];
+                Vector3d p3 = input[i + 3];
+
+                for (int j = 0; j <= resolutionPerSegment; j++)
+                {
+                    Fixed64 t = new(j / (double)resolutionPerSegment);
+                    output.Add(CatmullRom(p0, p1, p2, p3, t));
+                }
+            }
+
+            // Add the final point
+            int count = input.Count;
+            if (count >= 2)
+            {
+                output.Add(input[count - 2]);
+                output.Add(input[count - 1]);
+            }
+
+            return output;
+        }
+
+        public static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
+        {
+            // Classic Catmull-Rom basis matrix
+            Fixed64 t2 = t * t;
+            Fixed64 t3 = t2 * t;
+
+            return
+                ((-t3 + 2 * t2 - t) * p0 +
+                 (3 * t3 - 5 * t2 + 2) * p1 +
+                 (-3 * t3 + 4 * t2 + t) * p2 +
+                 (t3 - t2) * p3) / 2;
         }
     }
 }

@@ -38,15 +38,21 @@ namespace Trailblazer.Pathing
 
         public static bool TryGetClosestWalkableNeighbor(Node node, out Node closestNeighbor)
         {
-            closestNeighbor = default;
-            foreach (TraversableNeighbor traversableNeighbor in PathPartition.WalkableNeighborsOf(node))
+            closestNeighbor = null;
+
+            foreach (TraversableNeighbor neighbor in PathPartition.WalkableStraightNeighborsOf(node))
             {
-                closestNeighbor = traversableNeighbor.Node;
-                if (PathPartition.IsStraightNeighbor(traversableNeighbor.Direction))
-                    break; // prefer straight neighbors since they cost less
+                closestNeighbor = neighbor.Node; // prefer straight neighbors since they cost less
+                return true;
             }
 
-            return closestNeighbor.IsAllocated;
+            foreach (TraversableNeighbor neighbor in PathPartition.WalkableDiagonalNeighborsOf(node))
+            {
+                closestNeighbor = neighbor.Node;
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>

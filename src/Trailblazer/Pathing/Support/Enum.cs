@@ -5,6 +5,7 @@
         Manhattan,
         Octile,
         Euclidean
+        //Chebyshev?
     }
 
     public enum StraightNeighbors

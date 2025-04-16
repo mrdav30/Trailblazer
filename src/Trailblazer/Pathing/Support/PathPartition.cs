@@ -5,7 +5,6 @@ using SwiftCollections;
 using System;
 using System.Collections.Generic;
 using Trailblazer.Controllers.Locomotions;
-using Trailblazer.Navigation;
 
 namespace Trailblazer.Pathing
 {
@@ -95,7 +94,7 @@ namespace Trailblazer.Pathing
         {
             node.OnObstacleChange -= HandleChange;
 
-            TraversableNavMapManager.PartitionPool.Release(this);
+            PathingManager.PartitionPool.Release(this);
         }
 
         public void Reset()
@@ -196,60 +195,6 @@ namespace Trailblazer.Pathing
             }
         }
 
-        public IEnumerable<PathPartition> GetWalkableNeighbors()
-        {
-            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node parentNode))
-                yield break;
-
-            // Get all neighbors and their associated information
-            foreach ((_, Node neighbor) in parentNode.GetNeighbors())
-            {
-                // Skip blocked neighbors or neighbors that do not have a path partition
-                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                    continue;
-
-                yield return neighborPartition;
-            }
-        }
-
-        public IEnumerable<PathPartition> GetWalkableStraightNeighbors()
-        {
-            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node parentNode))
-                yield break;
-
-            foreach (LinearDirection direction in Enum.GetValues(typeof(StraightNeighbors)))
-            {
-                if (!parentNode.TryGetNeighborFromDirection(direction, out Node neighbor))
-                    continue;
-
-                // Skip blocked neighbors or neighbors that do not have a path partition
-                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                    continue;
-
-                yield return neighborPartition;
-            }
-        }
-
-        public IEnumerable<PathPartition> GetWalkableDiagonalNeighbors()
-        {
-            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node parentNode))
-                yield break;
-
-            foreach (LinearDirection direction in Enum.GetValues(typeof(DiagonalNeighbors)))
-            {
-                if (!parentNode.TryGetNeighborFromDirection(direction, out Node neighbor))
-                    continue;
-
-                // Skip blocked neighbors or neighbors that do not have a path partition
-                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                    continue;
-
-                // Check for edge neighbors that share an edge with the diagonal neighbor
-                if (!HasBlockedEdgeNeighbor(parentNode, direction))
-                    yield return neighborPartition;
-            }
-        }
-
         #region TraversableNavMap Management
 
         public void AddOwner(string mapName) => _mapOwners.Add(mapName);
@@ -336,11 +281,23 @@ namespace Trailblazer.Pathing
             return false;
         }
 
+        public IEnumerable<TraversableNeighbor> GetWalkableNeighbors()
+        {
+            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
+                yield break;
+
+            // Get all neighbors and their associated information
+            foreach (TraversableNeighbor neighbor in WalkableNeighborsOf(node))
+                yield return neighbor;
+        }
+
         public static IEnumerable<TraversableNeighbor> WalkableNeighborsOf(Node node)
         {
             // Get all neighbors and their associated information
             foreach ((LinearDirection direction, Node neighbor) in node.GetNeighbors())
             {
+                if (neighbor == null) continue;
+
                 // Skip blocked neighbors or neighbors that do not have a path partition
                 if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
                     continue;
@@ -348,9 +305,71 @@ namespace Trailblazer.Pathing
                 yield return new TraversableNeighbor()
                 {
                     Node = neighbor,
-                    PathState = neighborPartition,
+                    Partition = neighborPartition,
                     Direction = direction
                 };
+            }
+        }
+
+        public IEnumerable<TraversableNeighbor> GetWalkableStraightNeighbors()
+        {
+            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
+                yield break;
+
+            // Get all neighbors and their associated information
+            foreach (TraversableNeighbor neighbor in WalkableStraightNeighborsOf(node))
+                yield return neighbor;
+        }
+
+        public static IEnumerable<TraversableNeighbor> WalkableStraightNeighborsOf(Node node)
+        {
+            foreach (LinearDirection direction in Enum.GetValues(typeof(StraightNeighbors)))
+            {
+                if (!node.TryGetNeighborFromDirection(direction, out Node neighbor))
+                    continue;
+
+                // Skip blocked neighbors or neighbors that do not have a path partition
+                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
+                    continue;
+
+                yield return new TraversableNeighbor()
+                {
+                    Node = neighbor,
+                    Partition = neighborPartition,
+                    Direction = direction
+                };
+            }
+        }
+
+        public IEnumerable<TraversableNeighbor> GetWalkableDiagonalNeighbors()
+        {
+            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
+                yield break;
+
+            // Get all neighbors and their associated information
+            foreach (TraversableNeighbor neighbor in WalkableDiagonalNeighborsOf(node))
+                yield return neighbor;
+        }
+
+        public static IEnumerable<TraversableNeighbor> WalkableDiagonalNeighborsOf(Node node)
+        {
+            foreach (LinearDirection direction in Enum.GetValues(typeof(DiagonalNeighbors)))
+            {
+                if (!node.TryGetNeighborFromDirection(direction, out Node neighbor))
+                    continue;
+
+                // Skip blocked neighbors or neighbors that do not have a path partition
+                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
+                    continue;
+
+                // Check for edge neighbors that share an edge with the diagonal neighbor
+                if (!HasBlockedEdgeNeighbor(node, direction))
+                    yield return new TraversableNeighbor()
+                    {
+                        Node = neighbor,
+                        Partition = neighborPartition,
+                        Direction = direction
+                    };
             }
         }
 

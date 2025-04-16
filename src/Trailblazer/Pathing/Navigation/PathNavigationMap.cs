@@ -4,10 +4,10 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 // TODO: add conversion to heightmap?
-namespace Trailblazer.Navigation
+namespace Trailblazer.Pathing
 {
     [Serializable]
-    public class TraversableNavMap
+    public class PathNavigationMap
     {
         public readonly string Name;
 
@@ -19,7 +19,7 @@ namespace Trailblazer.Navigation
 
         public bool IsInitialized { get; internal set; }
 
-        public TraversableNavMap(string name, bool[] map, int sizeX, int sizeY, int sizeZ, Vector3d origin, Fixed64 interval)
+        public PathNavigationMap(string name, bool[] map, int sizeX, int sizeY, int sizeZ, Vector3d origin, Fixed64 interval)
         {
             Name = name;
             _map = map;
@@ -60,7 +60,6 @@ namespace Trailblazer.Navigation
             return _map[ToIndex(x, y, z)];
         }
 
-
         public IEnumerable<Vector3d> GetWalkablePositions()
         {
             for (int y = 0; y < SizeY; y++)
@@ -78,7 +77,7 @@ namespace Trailblazer.Navigation
                     }
         }
 
-        public static TraversableNavMap From3D(string name, bool[,,] sourceMap, Vector3d origin, Fixed64 interval)
+        public static PathNavigationMap From3D(string name, bool[,,] sourceMap, Vector3d origin, Fixed64 interval)
         {
             int sizeY = sourceMap.GetLength(0);
             int sizeX = sourceMap.GetLength(1);
@@ -90,7 +89,7 @@ namespace Trailblazer.Navigation
                     for (int z = 0; z < sizeZ; z++)
                         flat[(y * sizeX * sizeZ) + (x * sizeZ) + z] = sourceMap[y, x, z];
 
-            return new TraversableNavMap(name, flat, sizeX, sizeY, sizeZ, origin, interval);
+            return new PathNavigationMap(name, flat, sizeX, sizeY, sizeZ, origin, interval);
         }
     }
 }

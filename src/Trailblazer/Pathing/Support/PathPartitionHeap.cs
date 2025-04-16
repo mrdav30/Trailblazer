@@ -14,7 +14,7 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Gets the number of items in the heap.
         /// </summary>
-        public static int Count { get; private set; }
+        public static uint Count { get; private set; }
 
         private static uint _heapVersion = 1;
 
@@ -23,13 +23,13 @@ namespace Trailblazer.Pathing
         public static int Capacity => _items.Length;
 
         /// <summary>
-        /// Adds a GridNode to the heap.
+        /// Adds a PathPartition to the heap.
         /// </summary>
         public static void Add(PathPartition partition)
         {
             if (Count + 1 > _items.Length)
                 Resize(_items.Length * 2);
-            partition.HeapIndex = (uint)Count;
+            partition.HeapIndex = Count;
             _items[Count++] = partition;
             SortUp(partition);
             partition.HeapVersion = _heapVersion;
@@ -49,99 +49,109 @@ namespace Trailblazer.Pathing
         public static PathPartition PeekAt(int index) => _items[index];
 
         /// <summary>
-        /// Removes and returns the first GridNode in the heap.
+        /// Removes and returns the first PathPartition in the heap.
         /// </summary>
-        /// <returns>The removed GridNode.</returns>
-        public static PathPartition RemoveFirst()
+        /// <returns>The removed PathPartition.</returns>
+        public static bool RemoveFirst(out PathPartition result)
         {
-            PathPartition result = _items[0];
-            PathPartition temp = _items[--Count];
-            _items[0] = temp;
-            _items[0].HeapIndex = 0;
-            SortDown(_items[0]);
+            result = null;
+            if (Count == 0) 
+                return false;
+
+            result = _items[0];
+            Count--;
+
+            if (Count == 0)
+                _items[0] = null;
+            else
+            {
+                PathPartition temp = _items[Count];
+                _items[0] = temp;
+                _items[0].HeapIndex = 0;
+                _items[Count] = null;
+
+                if (Count > 1)
+                    SortDown(temp);
+            }
+
             result.HeapVersion--;
-            return result;
+            return true;
         }
 
         /// <summary>
-        /// Checks if the heap contains the specified GridNode.
+        /// Checks if the heap contains the specified PathPartition.
         /// </summary>
-        /// <param name="item">The GridNode to check.</param>
-        /// <returns>True if the heap contains the GridNode, otherwise false.</returns>
+        /// <param name="item">The PathPartition to check.</param>
+        /// <returns>True if the heap contains the PathPartition, otherwise false.</returns>
         public static bool Contains(PathPartition item) => item.HeapVersion == _heapVersion;
 
         /// <summary>
-        /// Marks the specified GridNode as closed.
+        /// Marks the specified PathPartition as closed.
         /// </summary>
-        /// <param name="item">The GridNode to mark as closed.</param>
+        /// <param name="item">The PathPartition to mark as closed.</param>
         public static void SetClosed(PathPartition item) => item.ClosedHeapVersion = _heapVersion;
 
         /// <summary>
-        /// Checks if the specified GridNode is closed.
+        /// Checks if the specified PathPartition is closed.
         /// </summary>
-        /// <param name="item">The GridNode to check.</param>
-        /// <returns>True if the GridNode is closed, otherwise false.</returns>
+        /// <param name="item">The PathPartition to check.</param>
+        /// <returns>True if the PathPartition is closed, otherwise false.</returns>
         public static bool IsClosed(PathPartition item) => item.ClosedHeapVersion == _heapVersion;
 
-        // Sorts the specified GridNode up the heap.
+        // Sorts the specified PathPartition up the heap.
         public static void SortUp(PathPartition item)
         {
-            if (item.HeapIndex == 0)
-                return;
+            uint index = item.HeapIndex;
 
-            uint parentIndex = (item.HeapIndex - 1) / 2;
-            while (true)
+            while (index > 0 && index < Count)
             {
-                PathPartition curNode = _items[parentIndex];
-                if (item.HeapCost > curNode.HeapCost)
+                uint parentIndex = (index - 1) / 2;
+                PathPartition parent = _items[parentIndex];
+
+                if (item.HeapCost >= parent.HeapCost)
                     break;
 
-                Swap(item, _items[parentIndex]);
-
-                if (parentIndex == 0)
-                    break;
-
-                parentIndex = (item.HeapIndex - 1) / 2;
+                Swap(item, parent);
+                index = item.HeapIndex;
             }
         }
 
-        // Sorts the specified GridNode down the heap.
-        public static void SortDown(PathPartition item)
+        // Sorts the specified PathPartition down the heap.
+        private static void SortDown(PathPartition item)
         {
+            uint index = item.HeapIndex;
+
             while (true)
             {
-                uint childIndexLeft = item.HeapIndex * 2 + 1;
-                uint childIndexRight = item.HeapIndex * 2 + 2;
+                uint left = 2 * index + 1;
+                uint right = 2 * index + 2;
+                uint smallest = index;
 
-                if (childIndexLeft > Count)
+                if (left < Count && _items[left].HeapCost < _items[smallest].HeapCost)
+                    smallest = left;
+
+                if (right < Count && _items[right].HeapCost < _items[smallest].HeapCost)
+                    smallest = right;
+
+                if (smallest == index)
                     break;
 
-                uint swapIndex = childIndexLeft;
-
-                if (childIndexRight < Count)
-                {
-                    if (_items[childIndexLeft].HeapCost > _items[childIndexRight].HeapCost)
-                        swapIndex = childIndexRight;
-                }
-
-                PathPartition swapNode = _items[swapIndex];
-                if (item.HeapCost < swapNode.HeapCost)
-                    break;
-
-                Swap(item, _items[swapIndex]);
+                Swap(item, _items[smallest]);
+                index = item.HeapIndex;
             }
         }
 
-        // Swaps two GridNodes in the heap.
+        // Swaps two PathPartitions in the heap.
         public static void Swap(PathPartition itemA, PathPartition itemB)
         {
-            uint itemAIndex = itemA.HeapIndex;
+            uint indexA = itemA.HeapIndex;
+            uint indexB = itemB.HeapIndex;
 
-            _items[itemAIndex] = itemB;
-            _items[itemB.HeapIndex] = itemA;
+            _items[indexA] = itemB;
+            _items[indexB] = itemA;
 
-            itemA.HeapIndex = itemB.HeapIndex;
-            itemB.HeapIndex = itemAIndex;
+            itemA.HeapIndex = indexB;
+            itemB.HeapIndex = indexA;
         }
 
         /// <summary>

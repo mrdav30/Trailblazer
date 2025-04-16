@@ -1,13 +1,13 @@
 ﻿using System;
 using Xunit;
-using Trailblazer.Navigation;
 using GridForge.Grids;
+using Trailblazer.Pathing;
 
 namespace Trailblazer.Tests
 {
-    public class TraversableNavMapFixture : IDisposable
+    public class PathingFixture : IDisposable
     {
-        public TraversableNavMapFixture()
+        public PathingFixture()
         {
             GridForgeLogger.Verbosity = GridForgeLogger.LogLevel.Error;
             GlobalGridManager.Setup();
@@ -17,13 +17,13 @@ namespace Trailblazer.Tests
 
         public void Dispose()
         {
-            TraversableNavMapManager.UnloadAllMaps();
-            TraversableNavMapManager.ClearAll();
+            PathingManager.UnloadAllMaps();
+            PathingManager.ClearAll();
 
             GlobalGridManager.Reset();
         }
     }
 
     [CollectionDefinition("TraversableNavMapCollection")]
-    public class TraversableNavMapCollection : ICollectionFixture<TraversableNavMapFixture> { }
+    public class TraversableNavMapCollection : ICollectionFixture<PathingFixture> { }
 }

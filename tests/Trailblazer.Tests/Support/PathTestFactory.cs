@@ -1,4 +1,5 @@
 ﻿using FixedMathSharp;
+using GridForge.Grids;
 using SwiftCollections;
 using System;
 using Trailblazer.Pathing;
@@ -16,6 +17,14 @@ namespace Trailblazer.Tests
             var map = PathNavigationMap.From3D(mapName, data, origin, Fixed64.One);
             PathingManager.Register(map);
             PathingManager.InitializeMap(mapName);
+            return map;
+        }
+
+        public static PathNavigationMap RegisterFromData(string name, bool[,,] data, Vector3d origin)
+        {
+            var map = PathNavigationMap.From3D(name, data, origin, GlobalGridManager.NodeSize);
+            PathingManager.Register(map);
+            PathingManager.InitializeMap(name);
             return map;
         }
 

@@ -40,6 +40,9 @@ namespace Trailblazer.Pathing
         [Transient]
         public byte ClearanceDegree { get; private set; }
 
+        [Transient]
+        public bool IsClearanceValid { get; private set; }
+
         #region Astar Properties
 
         [Transient]
@@ -102,6 +105,11 @@ namespace Trailblazer.Pathing
             ParentCoordinate = default;
             NodeSpawnToken = 0;
 
+            IsClearanceValid = false;
+
+            ClearanceDegree = DefaultDegree;
+            ClearanceSource = DefaultSource;
+
             MovementCost = 0;
             NextTrailCoordinate = null;
 
@@ -115,6 +123,8 @@ namespace Trailblazer.Pathing
         public void HandleChange(GridChange changeType, Node node)
         {
             // regardless of change type, we need to update clearance
+
+            IsClearanceValid = false;
             UpdateNeighborClearance();
         }
 
@@ -138,19 +148,20 @@ namespace Trailblazer.Pathing
 
         private void UpdateNeighborClearance()
         {
+            if (IsClearanceValid)
+                return;
+
             if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out Grid grid, out Node node))
             {
                 Console.WriteLine($"Invalidate coordiante provided to setup partition: {ParentCoordinate}");
                 return;
             }
 
-            if (node.CachedGridVersion == grid.Version)
-                return; // nothing should have changed
-
             if (node.IsBlocked)
             {
                 ClearanceDegree = 0;
                 ClearanceSource = DefaultSource;
+                IsClearanceValid = true;
                 return;
             }
 
@@ -193,6 +204,8 @@ namespace Trailblazer.Pathing
                     ClearanceSource = direction;
                 }
             }
+
+            IsClearanceValid = true;
         }
 
         #region TraversableNavMap Management

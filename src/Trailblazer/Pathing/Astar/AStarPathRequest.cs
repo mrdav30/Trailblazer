@@ -1,4 +1,5 @@
 ﻿using FixedMathSharp;
+using GridForge.Grids;
 using SwiftCollections;
 using System;
 
@@ -20,7 +21,7 @@ namespace Trailblazer.Pathing
         /// The maximum Y-axis height delta a unit can step or climb per node.
         /// Nodes exceeding this are ignored even if walkable and adjacent.
         /// </summary>
-        private Fixed64 _maxClimbHeight = Fixed64.Half;
+        private Fixed64 _maxClimbHeight = GlobalGridManager.NodeSize;
         public Fixed64 MaxClimbHeight
         {
             get => _maxClimbHeight;
@@ -53,6 +54,19 @@ namespace Trailblazer.Pathing
             if (!IsValidated) return;
 
             AStarPathFinder.Shared.FindPath(this);
+        }
+
+        public override void Reset()
+        {
+            base.Reset();
+
+            _heuristic = HeuristicMethod.Manhattan;
+
+            _maxClimbHeight = GlobalGridManager.NodeSize;
+
+            _useSplineSmoothing = true;
+
+            OnComplete = null;
         }
     }
 }

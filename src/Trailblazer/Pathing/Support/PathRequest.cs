@@ -13,13 +13,17 @@ namespace Trailblazer.Pathing
 
         bool IsValidated { get;}
 
-        void SetValidatedNodeRequest(Node fromNode, Node targetNode, int maxSearchSize);
+        void SetValidatedNodeRequest(Node fromNode, Node targetNode, int? maxSearchSize);
 
         void FindPath();
+
+        void Reset();
     }
 
     public abstract class PathRequest : IPathRequest
     {
+        public const int DefaultMaxSearchSize = 1000;
+
         public Vector3d FromPosition { get; protected set; }
 
         public Vector3d TargetPosition { get; protected set; }
@@ -32,7 +36,15 @@ namespace Trailblazer.Pathing
 
         public Node TargetNode { get; protected set; }
 
-        public int MaxSearchSize { get; protected set; }
+        public int? _maxSearchSize;
+        public int MaxSearchSize {
+            get => _maxSearchSize ?? 0;
+            set
+            {
+                if (IsValidated) return;
+                _maxSearchSize = value;
+            }
+        }
 
         public PathRequest(Vector3d fromPosition, Vector3d targetPosition, int roverSize)
         {
@@ -41,15 +53,25 @@ namespace Trailblazer.Pathing
             RoverSize = roverSize;
         }
 
-        public virtual void SetValidatedNodeRequest(Node fromNode, Node targetNode, int searchSize)
+        public virtual void SetValidatedNodeRequest(Node fromNode, Node targetNode, int? searchSize)
         {
             FromNode = fromNode;
             TargetNode = targetNode;
-            MaxSearchSize = searchSize;
+            MaxSearchSize = _maxSearchSize ?? (searchSize ?? DefaultMaxSearchSize);
 
             IsValidated = true;
         }
 
         public abstract void FindPath();
+
+        public virtual void Reset()
+        {
+            IsValidated = false;
+
+            FromNode = null;
+            TargetNode = null;
+
+            _maxSearchSize = null;
+        }
     }
 }

@@ -38,7 +38,7 @@ namespace Trailblazer.Pathing
                 fromNode = closestNeighbor;
             }
 
-            if (!GlobalGridManager.TryGetGridAndNode(pathRequest.TargetPosition, out Grid endGrid, out Node targetNode))
+            if (!GlobalGridManager.TryGetGridAndNode(pathRequest.TargetPosition, out Grid targetGrid, out Node targetNode))
             {
                 Console.WriteLine("Unable to find a valid end node for {targetPos}");
                 return false;
@@ -51,7 +51,7 @@ namespace Trailblazer.Pathing
                 targetNode = closestNeighbor;
             }
 
-            int maxSearchSize = fromGrid.SpawnToken == endGrid.SpawnToken ? fromGrid.Size : fromGrid.Size + endGrid.Size;
+            int maxSearchSize = fromGrid.SpawnToken == targetGrid.SpawnToken ? fromGrid.Size : fromGrid.Size + targetGrid.Size;
             pathRequest.SetValidatedNodeRequest(fromNode, targetNode, maxSearchSize);
 
             return true;

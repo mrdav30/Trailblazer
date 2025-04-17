@@ -40,19 +40,14 @@ namespace Trailblazer.Pathing
 
         public void FindPath(AStarPathRequest request)
         {
-            PathPartitionHeap.FastClear();
-
-            if (request.FromNode.SpawnToken == request.TargetNode.SpawnToken)
-            {
-                request.OnComplete?.Invoke(true, new SwiftList<Vector3d> { request.FromNode.WorldPosition });
-                return;
-            }
-
-            if (!request.FromNode.TryGetPartition(out PathPartition startPartition))
+            if (!request.FromNode.TryGetPartition(out PathPartition startPartition)
+                || request.FromNode.SpawnToken == request.TargetNode.SpawnToken)
             {
                 request.OnComplete?.Invoke(false, null);
                 return;
             }
+
+            PathPartitionHeap.FastClear();
 
             MaxClimbHeight = request.MaxClimbHeight;
             Heuristic = request.Heuristic;
@@ -60,65 +55,58 @@ namespace Trailblazer.Pathing
 
             PathPartitionHeap.Add(startPartition);
 
-            TracePath(request.TargetNode, request.RoverSize, request.MaxSearchSize, out bool targetReached);
-            if (!targetReached)
+            if (!TracePath(request))
             {
                 request.OnComplete?.Invoke(false, null);
                 return;
             }
 
-            SwiftList<Node> rawNodePath = GetRawpath(request.FromNode, request.TargetNode);
-            SwiftList<Vector3d> smoothVectorPath = SmoothPath(request.TargetNode, request.RoverSize, rawNodePath);
+            SwiftList<Node> rawNodePath = GetRawpath(request);
+            SwiftList<Vector3d> smoothVectorPath = SmoothPath(rawNodePath, request);
 
             // Call the OnComplete callback with the resulting path
             request.OnComplete?.Invoke(true, smoothVectorPath);
         }
 
-        public void TracePath(Node targetNode, int roverSize, int searchSize, out bool targetReached)
+        public bool TracePath(AStarPathRequest request)
         {
             int iterations = 0;
-            targetReached = false;
-            while (PathPartitionHeap.Count > 0 && iterations++ < searchSize)
+            while (PathPartitionHeap.RemoveFirst(out PathPartition currentPartition) && iterations++ < request.MaxSearchSize)
             {
-                if (!PathPartitionHeap.RemoveFirst(out PathPartition currentPartition))
-                    return;
+                if (currentPartition.NodeSpawnToken == request.TargetNode.SpawnToken)
+                    return true;
 
-                if (currentPartition.NodeSpawnToken == targetNode.SpawnToken)
-                {
-                    targetReached = true;
-                    return;
-                }
-
-                ProcessNeighbors(currentPartition, targetNode, roverSize, out targetReached);
-                if (targetReached)
-                    return;
+                if (ProcessNeighbors(currentPartition, request))
+                    return true;
 
                 PathPartitionHeap.SetClosed(currentPartition);
             }
+
+            return false;
         }
 
-        private void ProcessNeighbors(PathPartition current, Node targetNode, int gridSize, out bool targetReached)
+        private bool ProcessNeighbors(PathPartition current, AStarPathRequest request)
         {
-            targetReached = false;
             int cost = current.MovementCost + PathPartition.StraightCost;
-
             foreach (TraversableNeighbor neighbor in current.GetWalkableStraightNeighbors())
             {
-                targetReached |= ProcessNeighbor(current, neighbor.Partition, targetNode, gridSize, cost);
-                if (targetReached) return;
+                if (ProcessNeighbor(current, neighbor.Partition, cost, request)) 
+                    return true;
             }
 
             cost = current.MovementCost + PathPartition.DiagonalCost;
             foreach (TraversableNeighbor neighbor in current.GetWalkableDiagonalNeighbors())
             {
-                targetReached |= ProcessNeighbor(current, neighbor.Partition, targetNode, gridSize, cost);
-                if (targetReached) return;
+                if (ProcessNeighbor(current, neighbor.Partition, cost, request)) 
+                    return true;
             }
+
+            return false;
         }
 
-        private bool ProcessNeighbor(PathPartition current, PathPartition neighbor, Node target, int gridSize, int cost)
+        private bool ProcessNeighbor(PathPartition current, PathPartition neighbor, int cost, AStarPathRequest request)
         {
-            if (PathPartitionHeap.IsClosed(neighbor) || neighbor.Unpassable(gridSize))
+            if (PathPartitionHeap.IsClosed(neighbor) || neighbor.Unpassable(request.RoverSize))
                 return false;
 
             // Skip neighbors that have a height difference greater than the allowed maximum
@@ -131,20 +119,20 @@ namespace Trailblazer.Pathing
                 return false;
             }
 
-            if (neighbor.NodeSpawnToken == target.SpawnToken)
+            if (neighbor.NodeSpawnToken == request.TargetNode.SpawnToken)
             {
-                SetPathPartitionData(neighbor, target.WorldPosition, current.ParentCoordinate, cost);
+                SetPathPartitionData(neighbor, request.TargetNode.WorldPosition, current.ParentCoordinate, cost);
                 return true;
             }
 
             if (!PathPartitionHeap.Contains(neighbor))
             {
-                SetPathPartitionData(neighbor, target.WorldPosition, current.ParentCoordinate, cost);
+                SetPathPartitionData(neighbor, request.TargetNode.WorldPosition, current.ParentCoordinate, cost);
                 PathPartitionHeap.Add(neighbor);
             }
             else if (cost < neighbor.MovementCost)
             {
-                SetPathPartitionData(neighbor, target.WorldPosition, current.ParentCoordinate, cost);
+                SetPathPartitionData(neighbor, request.TargetNode.WorldPosition, current.ParentCoordinate, cost);
                 PathPartitionHeap.SortUp(neighbor);
             }
 
@@ -169,12 +157,12 @@ namespace Trailblazer.Pathing
             pathPartition.HeapCost = movementCost + heuristicCost;
         }
 
-        private SwiftList<Node> GetRawpath(Node startNode, Node targetNode)
+        private SwiftList<Node> GetRawpath(AStarPathRequest request)
         {
             SwiftList<Node> rawNodePath = new();
 
-            Node currentNode = targetNode;
-            while (currentNode.SpawnToken != startNode.SpawnToken)
+            Node currentNode = request.TargetNode;
+            while (currentNode.SpawnToken != request.FromNode.SpawnToken)
             {
                 rawNodePath.Insert(0, currentNode);
 
@@ -191,11 +179,11 @@ namespace Trailblazer.Pathing
             }
 
             // Ensure start position is included
-            rawNodePath.Insert(0, startNode);
+            rawNodePath.Insert(0, request.FromNode);
             return rawNodePath;
         }
 
-        public SwiftList<Vector3d> SmoothPath(Node targetNode, int gridSize, SwiftList<Node> rawNodePath)
+        public SwiftList<Vector3d> SmoothPath(SwiftList<Node> rawNodePath, AStarPathRequest request)
         {
             SwiftList<Vector3d> outputVectorPath = new();
             if (rawNodePath.Count == 0)
@@ -204,7 +192,7 @@ namespace Trailblazer.Pathing
             Vector3d lastDir = Vector3d.Zero;
 
             // If the path actually goes somewhere → include the start
-            if (rawNodePath[0].SpawnToken == rawNodePath.FromEnd(1).SpawnToken)
+            if (rawNodePath[0].SpawnToken != rawNodePath.FromEnd(1).SpawnToken)
                 outputVectorPath.Add(rawNodePath[0].WorldPosition);
 
             for (int i = 1; i < rawNodePath.Count - 1; i++)
@@ -216,7 +204,7 @@ namespace Trailblazer.Pathing
                     continue;
 
                 // Preserve nodes near unwalkable tiles
-                if (partition.GetNeighborClearance() <= gridSize + 1)
+                if (partition.GetNeighborClearance() <= request.RoverSize + 1)
                 {
                     outputVectorPath.Add(current.WorldPosition);
                     lastDir = Vector3d.Zero;
@@ -234,7 +222,7 @@ namespace Trailblazer.Pathing
             }
 
             // Ensure target position is included
-            outputVectorPath.Add(targetNode.WorldPosition);
+            outputVectorPath.Add(request.TargetNode.WorldPosition);
 
             if (UseSplineSmoothing)
                 outputVectorPath = CatmullSmooth(outputVectorPath);
@@ -244,8 +232,12 @@ namespace Trailblazer.Pathing
 
         public static SwiftList<Vector3d> CatmullSmooth(SwiftList<Vector3d> input, int resolutionPerSegment = 3)
         {
-            var output = new SwiftList<Vector3d>();
             if (input.Count < 4) return input;
+
+            // Add the starting point
+            SwiftList<Vector3d> output = new() {
+                input[0]
+            };
 
             for (int i = 0; i < input.Count - 3; i++)
             {
@@ -262,12 +254,7 @@ namespace Trailblazer.Pathing
             }
 
             // Add the final point
-            int count = input.Count;
-            if (count >= 2)
-            {
-                output.Add(input[count - 2]);
-                output.Add(input[count - 1]);
-            }
+            output.Add(input.FromEnd(1));
 
             return output;
         }

@@ -1,6 +1,7 @@
 ﻿using FixedMathSharp;
+using Trailblazer.Navigator.Motor;
 
-namespace Trailblazer.Controllers
+namespace Trailblazer.Navigator
 {
     /// <summary>
     /// Base abstract class representing a scout, responsible for handling movement, traversal state, and simulation flow.
@@ -11,38 +12,32 @@ namespace Trailblazer.Controllers
     /// </remarks>
     public abstract class Scout : IScout
     {
-        /// <inheritdoc cref="IScout.WorldPosition"/>
-        public Vector3d WorldPosition { get; protected set; }
+        /// <inheritdoc cref="IScout.Position"/>
+        public Vector3d Position { get; protected set; }
 
-        /// <inheritdoc cref="IScout.VisualRotation"/>
-        public FixedQuaternion VisualRotation { get; protected set; } = FixedQuaternion.Identity;
+        /// <inheritdoc cref="IScout.Rotation"/>
+        public FixedQuaternion Rotation { get; protected set; } = FixedQuaternion.Identity;
 
         /// <summary>
         /// Adjustment factor for the foot position, used to determine ground contact points.
         /// </summary>
         public Fixed64 FootPositionAdjust { get; set; } = new Fixed64(0.25f);
 
-        protected ScoutController _controller;
-
-        /// <inheritdoc cref="IScout.ScoutController"/>
-        public ScoutController ScoutController => _controller;
-
-        protected ScoutEvents _events;
+        /// <inheritdoc cref="IScout.Controller"/>
+        public NavigatorMotor Controller { get; protected set; }
 
         /// <inheritdoc cref="IScout.Events"/>
-        public ScoutEvents Events => _events;
-
-        protected TraversalCondition _traversalCondition;
+        public ScoutEvents Events { get; protected set; }
 
         /// <summary>
         /// The current traversal condition of the scout, including medium (ground, air, water) and surface level.
         /// </summary>
-        public TraversalCondition TraversalCondition => _traversalCondition;
+        public TraversalCondition TraversalCondition { get; protected set; }
 
         /// <summary>
         /// Stores the movement request for the next traversal cycle.
         /// </summary>
-        protected TravelRequest _travelRequest;
+        public TravelRequest TravelRequest { get; protected set; }
 
         #region Lifecycle
 
@@ -51,9 +46,9 @@ namespace Trailblazer.Controllers
         /// </summary>
         public virtual void OnInitialize(TraversalCondition initialCondition)
         {
-            _events = new();
-            _traversalCondition = initialCondition;
-            _controller = ScoutController.CreateNew(this, _traversalCondition);
+            Events = new();
+            TraversalCondition = initialCondition;
+            Controller = NavigatorMotor.CreateNew(this, TraversalCondition);
         }
 
         /// <summary>
@@ -64,18 +59,18 @@ namespace Trailblazer.Controllers
         /// <param name="surfaceCondition">The ground state data, if applicable.</param>
         /// <param name="ceilingLevel">The vertical ceiling level, if applicable.</param>
         public virtual void SetTraversalCondition(
-            TraversalMedium medium,
+            TraversalMedium? medium = null,
             Fixed64? surfaceLevel = null,
             GroundCondition? surfaceCondition = null,
             Fixed64? ceilingLevel = null)
         {
-            _traversalCondition.Medium = medium;
-            _traversalCondition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-            _traversalCondition.GroundState = surfaceCondition ?? null;
-            _traversalCondition.CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
+            TraversalCondition.Medium = medium ?? TraversalCondition.Medium;
+            TraversalCondition.SurfaceLevel = surfaceLevel ?? TraversalCondition.SurfaceLevel;
+            TraversalCondition.GroundState = surfaceCondition ?? TraversalCondition.GroundState;
+            TraversalCondition.CeilingLevel = ceilingLevel ?? TraversalCondition.CeilingLevel;
         }
 
-        public virtual void SetTraversalCondition(TraversalCondition condition) => _traversalCondition = condition;
+        public virtual void SetTraversalCondition(TraversalCondition condition) => TraversalCondition = condition;
 
         /// <summary>
         /// Sets the movement request for the next simulation frame.
@@ -86,26 +81,26 @@ namespace Trailblazer.Controllers
         public virtual void SetTravelRequest(
             Vector3d? movementDirection = null,
             MovementSpeed? movementSpeed = null,
-            bool isRequestingJump = false)
+            bool? isRequestingJump = null)
         {
-            _travelRequest.MovementDirection = movementDirection ?? Vector3d.Zero;
-            _travelRequest.MovementSpeed = movementSpeed ?? MovementSpeed.Stationary;
-            _travelRequest.IsRequestingJump = isRequestingJump;
+            TravelRequest.MovementDirection = movementDirection ?? TravelRequest.MovementDirection;
+            TravelRequest.MovementSpeed = movementSpeed ?? TravelRequest.MovementSpeed;
+            TravelRequest.IsRequestingJump = isRequestingJump ?? TravelRequest.IsRequestingJump;
         }
 
-        public virtual void SetTravelRequest(TravelRequest request) => _travelRequest = request;
+        public virtual void SetTravelRequest(TravelRequest request) => TravelRequest = request;
 
         #endregion
 
         #region Simulation
 
         /// <summary>
-        /// Handles the start of traversal by passing the movement request to the <see cref="ScoutController"/>.
+        /// Handles the start of traversal by passing the movement request to the <see cref="Controller"/>.
         /// </summary>
         public virtual void StartTraversal()
         {
-            ScoutController.Traverse(_travelRequest);
-            _travelRequest = default;
+            Controller.Traverse(TravelRequest);
+            TravelRequest = default;
         }
 
         /// <summary>
@@ -113,7 +108,7 @@ namespace Trailblazer.Controllers
         /// </summary>
         public virtual void FinalizeTraversal()
         {
-            ScoutController.FinishFrameTraversal(_traversalCondition);
+            Controller.FinishFrameTraversal(TraversalCondition);
         }
 
         /// <summary>
@@ -122,7 +117,7 @@ namespace Trailblazer.Controllers
         /// <returns>The adjusted foot position in world space.</returns>
         public virtual Vector3d GetFootPosition()
         {
-            return WorldPosition + Vector3d.Down * FootPositionAdjust;
+            return Position + Vector3d.Down * FootPositionAdjust;
         }
 
         #endregion

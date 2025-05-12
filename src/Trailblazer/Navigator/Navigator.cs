@@ -1,13 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using FixedMathSharp;
 using System.Diagnostics;
 using GridForge.Grids;
 using SwiftCollections;
+using Trailblazer.Pathing;
 
-namespace Trailblazer.Pathing
+namespace Trailblazer.Navigator
 {
-    public class TrailNavigator : IAvoidanceBody
+    [Serializable]
+    public class Navigator : IAvoidanceBody
     {
         // Stop multipliers determine accuracy required for stopping on the destination
         public static readonly Fixed64 DefaultDirectStop = Fixed64.FromRaw(0x40000000L); // 0.25f;
@@ -31,14 +32,14 @@ namespace Trailblazer.Pathing
 
         public Fixed64 Acceleration = Fixed64.One * 4;
 
-        public bool CanMove = true;
+        public bool IsAbleToMove = true;
 
-        public bool CanTurn = true;
+        public bool IsAbleToTurn = true;
 
         /// <summary>
         /// Disable if unit doesn't need to find path, i.e. flying
         /// </summary>
-        public bool CanPathFind = true;
+        public bool IsAbleToPathfind = true;
 
         #endregion
 
@@ -67,13 +68,13 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Has this unit arrived at destination?
         /// </summary>
-        public bool Arrived { get; private set; }
+        public bool IsAtDestination { get; private set; }
 
         public Fixed64 StopMultiplier { get; set; } = DefaultDirectStop;
 
-        private bool _doFindPath;
+        private bool _isSearchingForPath;
 
-        protected Vector3d _movementDirection;
+        protected Vector3d _targetDirection;
 
         public Vector3d Velocity { get; set; }
 
@@ -83,7 +84,7 @@ namespace Trailblazer.Pathing
 
         private Fixed64 _timescaledDeceleration;
 
-        private bool _decelerating;
+        private bool _isDecelerating;
 
         /// <summary>
         /// How far we move each update
@@ -145,6 +146,7 @@ namespace Trailblazer.Pathing
 
         public virtual void Setup(Vector3d startingPosition, Fixed64 agentRadius, IGuide guide)
         {
+            // TODO: if guide is null, assume isPlayerControlled
             if (guide == null)
                 ThrowHelper.ThrowArgumentNullException(nameof(guide));
 
@@ -172,7 +174,7 @@ namespace Trailblazer.Pathing
 
             StopMultiplier = DefaultDirectStop;
 
-            _doFindPath = false;
+            _isSearchingForPath = false;
             _isOnLineOfSightPath = false;
             IsMoving = false;
             IsAvoidingLeft = false;
@@ -184,7 +186,7 @@ namespace Trailblazer.Pathing
             _stuckFrameCount = 0;
             _repathTries = 0;
 
-            Arrived = true;
+            IsAtDestination = true;
             AveragePosition = Position;
 
             TrailGuide.OnInitialize();
@@ -195,7 +197,7 @@ namespace Trailblazer.Pathing
             _isOnLineOfSightPath = false;
 
             IsMoving = true;
-            Arrived = false;
+            IsAtDestination = false;
 
             //TODO: If next-best-node, autostop more easily
             //Also implement stopping sooner based on distanceToMove
@@ -219,22 +221,22 @@ namespace Trailblazer.Pathing
             }
 
             if (IsInGroup)
-                _doFindPath = true;
+                _isSearchingForPath = true;
             else
-                _doFindPath = false;
+                _isSearchingForPath = false;
 
             OnMovementRequestProcessed?.Invoke();
         }
 
         public virtual void Simulate()
         {
-            if (!CanMove)
+            if (!IsAbleToMove)
                 return;
 
             if (IsMoving)
             {
                 // check if agent has to pathfind, otherwise straight path to rely on destination
-                if (CanPathFind)
+                if (IsAbleToPathfind)
                     ValidateMovementPath();
 
                 SetMovementDirection();
@@ -245,12 +247,12 @@ namespace Trailblazer.Pathing
                 //Slowin' down
                 if (Velocity.SqrMagnitude > Fixed64.Zero)
                 {
-                    _decelerating = true;
-                    Velocity += GetAdjustVector(Vector3d.Zero);
+                    _isDecelerating = true;
+                    Velocity += GetAdjustedVelocity(Vector3d.Zero);
 
                 }
                 else
-                    _decelerating = false;
+                    _isDecelerating = false;
             }
 
             _autoStopFrameCount--;
@@ -259,7 +261,7 @@ namespace Trailblazer.Pathing
 
         public virtual void ValidateMovementPath()
         {
-            if (!_doFindPath)
+            if (!_isSearchingForPath)
                 return;
 
             if (RoverSize <= 1 && !NodeFinder.GetStartNode(Position, Destination, out _currentNode, _allowUnwalkableDestination)
@@ -269,7 +271,7 @@ namespace Trailblazer.Pathing
                 return;
             }
 
-            _doFindPath = false;
+            _isSearchingForPath = false;
             if (!_viableDestination)
             {
                 // can't get to destination
@@ -298,26 +300,26 @@ namespace Trailblazer.Pathing
         {
             if (_isOnLineOfSightPath)
             {
-                _movementDirection = Destination - Position;
+                _targetDirection = Destination - Position;
             }
             else if (TrailGuide.HasPath)
-                _movementDirection = TrailGuide.GetMovementDirection(Position, out _distanceToMove);
+                _targetDirection = TrailGuide.GetMovementDirection(Position, out _distanceToMove);
             else
             {
                 Debug.Write("No vialable movement direction found, setting 0");
-                _movementDirection = Vector3d.Zero;
+                _targetDirection = Vector3d.Zero;
                 return;
             }
 
             // This is now the direction we want to be travelling in 
-            _movementDirection.Normalize(out _distanceToMove);
+            _targetDirection.Normalize(out _distanceToMove);
 
             // Calculate steering and flocking forces for all agents
             if (IsInGroup)
-                _movementDirection += NavigatorSteering.ComputeGroupSteering(Position, Speed);
+                _targetDirection += NavigatorSteering.ComputeGroupSteering(Position, Speed);
 
             // Avoid any intersection agents!
-            _movementDirection += NavigatorSteering.CalculateAvoidanceForce(this);
+            _targetDirection += NavigatorSteering.CalculateAvoidanceForce(this);
         }
 
         public virtual void SetMovementState()
@@ -326,7 +328,7 @@ namespace Trailblazer.Pathing
             Fixed64 stuckThreshold = _timescaledAcceleration / TrailblazerManager.FrameRate;
             Fixed64 slowDistance = _timescaledDeceleration > Fixed64.Zero ? currentSpeed / _timescaledDeceleration : Fixed64.Zero;
 
-            Fixed64 moveAmount = FixedMath.Clamp01(_movementDirection.x.Abs() + _movementDirection.z.Abs());
+            Fixed64 moveAmount = FixedMath.Clamp01(_targetDirection.x.Abs() + _targetDirection.z.Abs());
 
             if (!TrailGuide.MovingToWaypoint && _distanceToMove < _closingDistance * StopMultiplier || !IsStuck && moveAmount == Fixed64.Zero)
             {
@@ -334,17 +336,17 @@ namespace Trailblazer.Pathing
                 //TODO: Don't skip this frame of slowing down
                 return;
             }
-            else if (CanTurn)
-                OnStartTurn?.Invoke(_movementDirection); //TODO: integrate this...
+            else if (IsAbleToTurn)
+                OnStartTurn?.Invoke(_targetDirection); //TODO: integrate this...
 
             if (_distanceToMove > slowDistance)
-                _desiredVelocity = _movementDirection;
+                _desiredVelocity = _targetDirection;
             else if (!TrailGuide.MovingToWaypoint && _distanceToMove <= slowDistance && _distanceToMove > _closingDistance * StopMultiplier)
             {
                 Fixed64 closingSpeed = _distanceToMove / slowDistance;
 
-                _desiredVelocity = _movementDirection * closingSpeed;
-                _decelerating = true;
+                _desiredVelocity = _targetDirection * closingSpeed;
+                _isDecelerating = true;
                 // Reduce occurence of units preventing other units from reaching destination
                 stuckThreshold *= 4;
             }
@@ -364,7 +366,7 @@ namespace Trailblazer.Pathing
                 _desiredVelocity *= (Speed / currentSpeed).CeilToInt();
 
             // Apply the force
-            Velocity += GetAdjustVector(_desiredVelocity);
+            Velocity += GetAdjustedVelocity(_desiredVelocity);
         }
 
         private void CheckMovementStatus(Fixed64 stuckThreshold)
@@ -387,7 +389,7 @@ namespace Trailblazer.Pathing
                         if (IsInGroup)
                             MovementGroupID = -1;  // Attempt to repath agent by themselves
 
-                        _doFindPath = true;
+                        _isSearchingForPath = true;
                         _isOnLineOfSightPath = false;
                         TrailGuide.Reset();
 
@@ -414,21 +416,22 @@ namespace Trailblazer.Pathing
                 _repathTries = 0;
             }
         
-            if(_distanceToMove < _closingDistance && Vector3d.Dot(Position, _movementDirection) < Fixed64.Epsilon
+            if(_distanceToMove < _closingDistance && Vector3d.Dot(Position, _targetDirection) < Fixed64.Epsilon
                 || _distanceToMove < _closingDistance * GlobalGridManager.NodeSize)
             {
                 TrailGuide.CheckMovementStatus();
             }
         }
 
-        private Vector3d GetAdjustVector(Vector3d desiredVelocity)
+        // TODO: call this before setting velocity
+        public Vector3d GetAdjustedVelocity(Vector3d desiredVelocity)
         {
             //The velocity change we want
             Vector3d velocityChange = desiredVelocity - Velocity;
             Fixed64 adjustFastMag = velocityChange.SqrMagnitude;
 
-            //Cap acceleration vector magnitude
-            Fixed64 accel = _decelerating ? _timescaledDeceleration : _timescaledAcceleration;
+            //  Cap acceleration vector magnitude
+            Fixed64 accel = _isDecelerating ? _timescaledDeceleration : _timescaledAcceleration;
             if (adjustFastMag > accel * (accel))
             {
                 Fixed64 mag = FixedMath.Sqrt(adjustFastMag >> FixedMath.SHIFT_AMOUNT_I);
@@ -446,7 +449,7 @@ namespace Trailblazer.Pathing
             _autoStopFrameCount = 0;
             _stuckFrameCount = 0;
 
-            Arrived = true;
+            IsAtDestination = true;
 
             OnArrive?.Invoke();
         }
@@ -463,15 +466,20 @@ namespace Trailblazer.Pathing
             IsAvoidingLeft = false;
             StoppedFrameCount = 0;
 
-            _movementDirection = Vector3d.Zero;
+            _targetDirection = Vector3d.Zero;
             _desiredVelocity = Vector3d.Zero;
 
-            _doFindPath = false;
+            _isSearchingForPath = false;
             _isOnLineOfSightPath = false;
 
             TrailGuide.Reset();
 
             OnStopMove?.Invoke();
+        }
+
+        public void PauseAutoStop()
+        {
+            _autoStopFrameCount = AutoPauseStopTime;
         }
     }
 }

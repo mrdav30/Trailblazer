@@ -65,10 +65,6 @@
 		<ProjectGuid>{0D2EC1AC-B1A0-4C06-B198-79FAA2B58E97}</ProjectGuid>
 		<OutputPath>bin\$(Configuration)\</OutputPath>
 	</PropertyGroup>
-	<ItemGroup>
-	  <Compile Remove="Pathing\Navigation\HeightMap.cs" />
-	  <Compile Remove="Pathing\Navigation\HeightMapSaver.cs" />
-	</ItemGroup>
 	<!-- Dependencies and Package References -->
 	<ItemGroup>	
 		<PackageReference Include="FixedMathSharp" Version="1.2.2">

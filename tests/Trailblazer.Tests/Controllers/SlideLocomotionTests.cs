@@ -1,9 +1,9 @@
 ﻿using Xunit;
 using FluentAssertions;
-using Trailblazer.Controllers;
 using FixedMathSharp;
+using Trailblazer.Navigator.Motor;
 
-namespace Trailblazer.Tests.Controllers
+namespace Trailblazer.Tests.Navigator.Motor
 {
     [Collection("TrailblazerCollection")]
     public class SlideLocomotionTests
@@ -23,11 +23,11 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
-            scout.ScoutController.FinishFrameTraversal(scout.TraversalCondition);
+            scout.Controller.Traverse(Vector3d.Forward, MovementSpeed.Slow);
+            scout.Controller.FinishFrameTraversal(scout.TraversalCondition);
 
             // Assert
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
         }
 
         [Fact]
@@ -45,10 +45,10 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
+            scout.Controller.Traverse(Vector3d.Forward, MovementSpeed.Slow);
 
             // Assert
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeFalse();
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeFalse();
         }
 
 
@@ -70,8 +70,8 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
+            scout.Controller.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
         }
 
         [Fact]
@@ -88,12 +88,12 @@ namespace Trailblazer.Tests.Controllers
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.ScoutController.Traverse(Vector3d.Zero, MovementSpeed.Stationary);
-                scout.ScoutController.FinishFrameTraversal(scout.TraversalCondition);
+                scout.Controller.Traverse(Vector3d.Zero, MovementSpeed.Stationary);
+                scout.Controller.FinishFrameTraversal(scout.TraversalCondition);
             }
 
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeLessThan((Fixed64)1);
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
+            scout.Controller.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeLessThan((Fixed64)1);
         }
 
         [Fact]
@@ -116,11 +116,11 @@ namespace Trailblazer.Tests.Controllers
                 highFrictionScout.FinalizeTraversal();
             }
 
-            var low = lowFrictionScout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude;
-            var high = highFrictionScout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude;
+            var low = lowFrictionScout.Controller.Locomotions.Move.CurrentVelocity.Magnitude;
+            var high = highFrictionScout.Controller.Locomotions.Move.CurrentVelocity.Magnitude;
 
-            lowFrictionScout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
-            highFrictionScout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
+            lowFrictionScout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
+            highFrictionScout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
 
             high.Should().BeLessThan(low);
         }
@@ -137,7 +137,7 @@ namespace Trailblazer.Tests.Controllers
             );
 
             var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform);
-            scout.ScoutController.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+            scout.Controller.Locomotions.Slide.SlopeLimit = (Fixed64)45;
 
             // Simulate sliding for a few frames
             for (int i = 0; i < 3; i++)
@@ -147,7 +147,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
 
             GroundCondition shallowSlopeSurface = new()
             {
@@ -165,7 +165,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeFalse();
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeFalse();
         }
 
         [Fact]
@@ -178,8 +178,8 @@ namespace Trailblazer.Tests.Controllers
 
             var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform);
 
-            scout.ScoutController.Locomotions.Slide.SlopeLimit = (Fixed64)45;
-            scout.ScoutController.Locomotions.Slide.SidewaysControl = (Fixed64)1;
+            scout.Controller.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+            scout.Controller.Locomotions.Slide.SidewaysControl = (Fixed64)1;
 
             // Provide sideways input (e.g. strafe right)
             Vector3d sidewaysInput = Vector3d.Right;
@@ -192,9 +192,9 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
 
-            var velocity = scout.ScoutController.Locomotions.Move.CurrentVelocity;
+            var velocity = scout.Controller.Locomotions.Move.CurrentVelocity;
             velocity.x.Should().NotBe(Fixed64.Zero, "Sideways input should influence sliding direction");
         }
 
@@ -213,7 +213,7 @@ namespace Trailblazer.Tests.Controllers
                 TrailblazerManager.Simulate();
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
-                if (scout.ScoutController.IsGrounded)
+                if (scout.Controller.IsGrounded)
                     break;
             }
 
@@ -222,8 +222,8 @@ namespace Trailblazer.Tests.Controllers
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            scout.ScoutController.IsGrounded.Should().BeTrue();
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
+            scout.Controller.IsGrounded.Should().BeTrue();
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
         }
 
         [Fact]
@@ -235,7 +235,7 @@ namespace Trailblazer.Tests.Controllers
             );
 
             var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform);
-            scout.ScoutController.Locomotions.Slide.IsEnabled = false;
+            scout.Controller.Locomotions.Slide.IsEnabled = false;
 
             for (int i = 0; i < 3; i++)
             {
@@ -244,7 +244,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeFalse();
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeFalse();
         }
     }
 }

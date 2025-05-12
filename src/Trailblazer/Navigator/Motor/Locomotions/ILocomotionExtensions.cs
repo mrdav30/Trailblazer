@@ -4,8 +4,12 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using Trailblazer.Controllers.Locomotions;
+using Trailblazer.Navigator.Motor;
 
+[AttributeUsage(AttributeTargets.Property)]
+public class TransientAttribute : Attribute { }
+
+// TODO: these should be in a seperate utility project
 public static class ILocomotionExtensions
 {
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _transientPropertiesCache = new();

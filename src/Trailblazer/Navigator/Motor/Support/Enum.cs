@@ -1,4 +1,4 @@
-﻿namespace Trailblazer.Controllers
+﻿namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
     /// Specifies the different movement mediums a scout can traverse through.

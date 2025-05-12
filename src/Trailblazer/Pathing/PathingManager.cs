@@ -12,9 +12,9 @@ namespace Trailblazer.Pathing
 {
     public static class PathingManager
     {
-        private static readonly SwiftDictionary<string, PathNavigationMap> _loadedMaps = new();
+        private static readonly SwiftDictionary<string, NavigationChart> _loadedMaps = new();
 
-        public static IEnumerable<PathNavigationMap> AllMaps => _loadedMaps.Values;
+        public static IEnumerable<NavigationChart> AllMaps => _loadedMaps.Values;
 
         internal static readonly SwiftObjectPool<PathPartition> PartitionPool = new(
             () => new PathPartition(),
@@ -91,7 +91,7 @@ namespace Trailblazer.Pathing
 
         #region Navigation Map Management
 
-        public static bool Register(PathNavigationMap map)
+        public static bool Register(NavigationChart map)
         {
             if (IsMapRegistered(map.Name))
             {
@@ -107,17 +107,17 @@ namespace Trailblazer.Pathing
         public static bool IsMapRegistered(string name) => _loadedMaps.ContainsKey(name);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryGetNavigationMap(string name, out PathNavigationMap map) => _loadedMaps.TryGetValue(name, out map);
+        public static bool TryGetNavigationMap(string name, out NavigationChart map) => _loadedMaps.TryGetValue(name, out map);
 
         public static void InitializeAllMaps()
         {
-            foreach (PathNavigationMap navMap in AllMaps)
+            foreach (NavigationChart navMap in AllMaps)
                 InitializeMap(navMap.Name);
         }
 
         public static void InitializeMap(string name)
         {
-            if (!TryGetNavigationMap(name, out PathNavigationMap map))
+            if (!TryGetNavigationMap(name, out NavigationChart map))
             {
                 Debug.WriteLine($"Map named {map.Name} is not registered!");
                 return;
@@ -145,13 +145,13 @@ namespace Trailblazer.Pathing
 
         public static void UnloadAllMaps()
         {
-            foreach (PathNavigationMap navMap in AllMaps)
+            foreach (NavigationChart navMap in AllMaps)
                 Unload(navMap.Name);
         }
 
         public static void Unload(string name)
         {
-            if (!TryGetNavigationMap(name, out PathNavigationMap map))
+            if (!TryGetNavigationMap(name, out NavigationChart map))
             {
                 Debug.WriteLine($"Map named {map.Name} is not registered!");
                 return;

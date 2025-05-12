@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
 
-namespace Trailblazer.Controllers.Locomotions
+namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
     /// Handles swimming mechanics, including movement, buoyancy, water resistance, and breath control.

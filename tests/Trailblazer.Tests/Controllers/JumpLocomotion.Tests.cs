@@ -1,9 +1,9 @@
 ﻿using Xunit;
 using FluentAssertions;
-using Trailblazer.Controllers;
 using FixedMathSharp;
+using Trailblazer.Navigator.Motor;
 
-namespace Trailblazer.Tests.Controllers
+namespace Trailblazer.Tests.Navigator.Motor
 {
     [Collection("TrailblazerCollection")]
     public class JumpLocomotionTests
@@ -15,11 +15,11 @@ namespace Trailblazer.Tests.Controllers
             var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
+            scout.Controller.Traverse(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             scout.FinalizeTraversal();
 
             // Assert
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
+            scout.Controller.Locomotions.Move.CurrentVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
         }
 
         [Fact]
@@ -32,7 +32,7 @@ namespace Trailblazer.Tests.Controllers
                 startingMedium: TraversalMedium.Air);
 
             Vector3d expectedVelocity = Vector3d.Down;
-            expectedVelocity.y += -scout.ScoutController.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -scout.Controller.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
 
             // Act
             scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
@@ -40,7 +40,7 @@ namespace Trailblazer.Tests.Controllers
             scout.FinalizeTraversal();
 
             // Assert
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
         }
 
         [Fact]
@@ -55,7 +55,7 @@ namespace Trailblazer.Tests.Controllers
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            Fixed64 expectedJumpFrame = scout.ScoutController.Locomotions.Jump.JumpStartTime;
+            Fixed64 expectedJumpFrame = scout.Controller.Locomotions.Jump.JumpStartTime;
 
             // Attempt to jump again immediately
             scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
@@ -64,9 +64,9 @@ namespace Trailblazer.Tests.Controllers
             scout.FinalizeTraversal();
 
             // Assert
-            scout.ScoutController.IsInAir.Should().BeTrue();
-            scout.ScoutController.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
-            scout.ScoutController.Locomotions.Jump.JumpStartTime.Should().Be(expectedJumpFrame);
+            scout.Controller.IsInAir.Should().BeTrue();
+            scout.Controller.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
+            scout.Controller.Locomotions.Jump.JumpStartTime.Should().Be(expectedJumpFrame);
         }
 
         [Fact]
@@ -95,10 +95,10 @@ namespace Trailblazer.Tests.Controllers
             scout.FinalizeTraversal();
 
             // Assert
-            scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeFalse();
-            scout.ScoutController.Locomotions.Jump.IsJumping.Should().BeFalse();
-            scout.ScoutController.Locomotions.Jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we simulate 31
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
+            scout.Controller.Locomotions.Fall.IsFalling.Should().BeFalse();
+            scout.Controller.Locomotions.Jump.IsJumping.Should().BeFalse();
+            scout.Controller.Locomotions.Jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we simulate 31
+            scout.Controller.Locomotions.Move.CurrentVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
         }
 
         [Fact]
@@ -115,7 +115,7 @@ namespace Trailblazer.Tests.Controllers
             scout.FinalizeTraversal();
 
             // Assert
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
+            scout.Controller.Locomotions.Move.CurrentVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
         }
 
         [Fact]
@@ -130,7 +130,7 @@ namespace Trailblazer.Tests.Controllers
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            Vector3d previousVelocity = scout.ScoutController.Locomotions.Move.CurrentVelocity;
+            Vector3d previousVelocity = scout.Controller.Locomotions.Move.CurrentVelocity;
 
             // Continue holding jump for 3 frames
             for (int i = 0; i < 3; i++)
@@ -142,8 +142,8 @@ namespace Trailblazer.Tests.Controllers
             }
 
             // Assert
-            var expected = previousVelocity.y - (scout.ScoutController.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime * 3);
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().BeGreaterThan(expected);
+            var expected = previousVelocity.y - (scout.Controller.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime * 3);
+            scout.Controller.Locomotions.Move.CurrentVelocity.y.Should().BeGreaterThan(expected);
         }
 
         [Fact]
@@ -163,7 +163,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.WorldPosition.y.Should().BeGreaterThan(scout.ScoutController.Locomotions.Jump.BaseJumpHeight); // Higher than default jump height
+            scout.Position.y.Should().BeGreaterThan(scout.Controller.Locomotions.Jump.BaseJumpHeight); // Higher than default jump height
         }
 
         [Fact]
@@ -183,7 +183,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.WorldPosition.y.Should().BeGreaterThan(scout.ScoutController.Locomotions.Jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
+            scout.Position.y.Should().BeGreaterThan(scout.Controller.Locomotions.Jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
         }
 
         [Fact]
@@ -201,8 +201,8 @@ namespace Trailblazer.Tests.Controllers
 
             scout.FinalizeTraversal();
 
-            scout.ScoutController.Locomotions.Jump.IsJumping.Should().BeFalse(); // Jump should be canceled
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero); // Should stop rising
+            scout.Controller.Locomotions.Jump.IsJumping.Should().BeFalse(); // Jump should be canceled
+            scout.Controller.Locomotions.Move.CurrentVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero); // Should stop rising
         }
 
         [Fact]
@@ -231,7 +231,7 @@ namespace Trailblazer.Tests.Controllers
                 TrailblazerManager.Simulate();
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
-                if (scout.WorldPosition.y <= Fixed64.Zero) // If we've landed
+                if (scout.Position.y <= Fixed64.Zero) // If we've landed
                     break;
             }
 
@@ -242,7 +242,7 @@ namespace Trailblazer.Tests.Controllers
             scout.FinalizeTraversal();
 
             // Assert that jump state has been reset after actual landing
-            scout.ScoutController.Locomotions.Jump.IsJumping.Should().BeFalse();
+            scout.Controller.Locomotions.Jump.IsJumping.Should().BeFalse();
             jumpStarted.Should().BeTrue();
             jumpStopped.Should().BeTrue();
             fallStarted.Should().BeTrue();
@@ -255,10 +255,10 @@ namespace Trailblazer.Tests.Controllers
         {
             var scout = IScoutTestFactory.CreateJumpReadyScout();
 
-            var jumpLocomotion = scout.ScoutController.Locomotions.Jump;
+            var jumpLocomotion = scout.Controller.Locomotions.Jump;
             Fixed64 maxExpectedHeight = jumpLocomotion.BaseJumpHeight + jumpLocomotion.ExtraJumpHeight;
 
-            Fixed64 maxY = scout.WorldPosition.y;
+            Fixed64 maxY = scout.Position.y;
 
             // Start jump
             scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
@@ -267,15 +267,15 @@ namespace Trailblazer.Tests.Controllers
             scout.FinalizeTraversal();
 
             // Continue holding jump and track peak height until we land
-            while (!scout.ScoutController.IsGrounded)
+            while (!scout.Controller.IsGrounded)
             {
                 TrailblazerManager.Simulate();
                 scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
 
-                if (scout.WorldPosition.y > maxY)
-                    maxY = scout.WorldPosition.y;
+                if (scout.Position.y > maxY)
+                    maxY = scout.Position.y;
             }
 
             maxY.Should().BeLessThanOrEqualTo(maxExpectedHeight);
@@ -301,7 +301,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.WorldPosition.y.Should().BeGreaterThan((Fixed64)0.5).And.BeLessThan((Fixed64)1.0);
+            scout.Position.y.Should().BeGreaterThan((Fixed64)0.5).And.BeLessThan((Fixed64)1.0);
         }
     }
 }

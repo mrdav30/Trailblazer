@@ -4,7 +4,6 @@ using GridForge.Spatial;
 using SwiftCollections;
 using System;
 using System.Collections.Generic;
-using Trailblazer.Controllers.Locomotions;
 
 namespace Trailblazer.Pathing
 {

@@ -1,9 +1,9 @@
 ﻿using Xunit;
 using FluentAssertions;
-using Trailblazer.Controllers;
 using FixedMathSharp;
+using Trailblazer.Navigator.Motor;
 
-namespace Trailblazer.Tests.Controllers
+namespace Trailblazer.Tests.Navigator.Motor
 {
     [Collection("TrailblazerCollection")]
     public class MoveLocomotionTests
@@ -14,18 +14,18 @@ namespace Trailblazer.Tests.Controllers
             // Arrange
             var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
 
-            Vector3d initialPosition = scout.WorldPosition;
+            Vector3d initialPosition = scout.Position;
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.One, MovementSpeed.Fast);
+            scout.Controller.Traverse(Vector3d.One, MovementSpeed.Fast);
             scout.FinalizeTraversal();
 
             // Assert
-            Vector3d newPosition = scout.WorldPosition;
+            Vector3d newPosition = scout.Position;
             var expectedVelocity = (newPosition - initialPosition) / TrailblazerManager.DeltaTime;
 
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().NotBe(Vector3d.Zero);
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().Be(expectedVelocity);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Should().NotBe(Vector3d.Zero);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Should().Be(expectedVelocity);
         }
 
         [Fact]
@@ -49,10 +49,10 @@ namespace Trailblazer.Tests.Controllers
             // first frame is clamped by max ground acceleration
             // terminal velocity for walking is reached after 1st frame
             var expected = (
-                    ((scout.ScoutController.Locomotions.Move.MaxGroundAcceleration * TrailblazerManager.DeltaTime) * Vector3d.Forward)
+                    ((scout.Controller.Locomotions.Move.MaxGroundAcceleration * TrailblazerManager.DeltaTime) * Vector3d.Forward)
                     + (Vector3d.Forward * 9)
                 ) * TrailblazerManager.DeltaTime;
-            scout.WorldPosition.Should().Be(expected);
+            scout.Position.Should().Be(expected);
         }
 
         [Fact]
@@ -71,10 +71,10 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
+            scout.Controller.Traverse(Vector3d.Forward, MovementSpeed.Slow);
 
             // Assert
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeFalse();
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeFalse();
         }
 
         [Fact]
@@ -89,7 +89,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().BeApproximately(Vector3d.Zero, Fixed64.Epsilon);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Should().BeApproximately(Vector3d.Zero, Fixed64.Epsilon);
         }
 
         [Fact]
@@ -106,7 +106,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.x.Should().BeLessThan(iniitialVelocity.x); // Should be slowing down
+            scout.Controller.Locomotions.Move.CurrentVelocity.x.Should().BeLessThan(iniitialVelocity.x); // Should be slowing down
         }
 
         [Fact]
@@ -126,9 +126,9 @@ namespace Trailblazer.Tests.Controllers
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            Vector3d projectedMovement = Vector3d.ProjectOnPlane(scout.ScoutController.Locomotions.Move.CurrentVelocity, scout.ScoutController.CurrentState.SurfaceNormal);
+            Vector3d projectedMovement = Vector3d.ProjectOnPlane(scout.Controller.Locomotions.Move.CurrentVelocity, scout.Controller.CurrentState.SurfaceNormal);
 
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().Be(projectedMovement); // Moving sideways should project velocity down slope
+            scout.Controller.Locomotions.Move.CurrentVelocity.Should().Be(projectedMovement); // Moving sideways should project velocity down slope
         }
 
 
@@ -147,11 +147,11 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
+            scout.Controller.Traverse(Vector3d.Forward, MovementSpeed.Slow);
             scout.FinalizeTraversal();
 
             // Assert
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().NotBe(Vector3d.Zero);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Should().NotBe(Vector3d.Zero);
         }
 
         [Fact]
@@ -169,17 +169,17 @@ namespace Trailblazer.Tests.Controllers
             );
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Forward, MovementSpeed.Slow);
+            scout.Controller.Traverse(Vector3d.Forward, MovementSpeed.Slow);
             scout.FinalizeTraversal();
 
             // Assert - Projected vector must lie in the tangent plane of the slope
-            var velocity = scout.ScoutController.Locomotions.Move.CurrentVelocity;
-            var slopeNormal = scout.ScoutController.CurrentState.SurfaceNormal;
+            var velocity = scout.Controller.Locomotions.Move.CurrentVelocity;
+            var slopeNormal = scout.Controller.CurrentState.SurfaceNormal;
             var expected = Vector3d.ProjectOnPlane(Vector3d.Forward, slopeNormal);
 
             // Ensure downward movement on downhill slopes & upward movement on uphill slopes
-            if (scout.ScoutController.CurrentState.SlopeAngle != Fixed64.Zero 
-                && Fixed64.Sign(expected.y) != Fixed64.Sign(scout.ScoutController.CurrentState.SlopeAngle))
+            if (scout.Controller.CurrentState.SlopeAngle != Fixed64.Zero 
+                && Fixed64.Sign(expected.y) != Fixed64.Sign(scout.Controller.CurrentState.SlopeAngle))
             {
                 expected.y *= -1;
             }
@@ -209,7 +209,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeGreaterThan(Fixed64.One);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeGreaterThan(Fixed64.One);
         }
 
         [Fact]
@@ -230,7 +230,7 @@ namespace Trailblazer.Tests.Controllers
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeLessThan(Fixed64.One);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeLessThan(Fixed64.One);
         }
 
         [Fact]
@@ -251,7 +251,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().Be((Fixed64)2);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Magnitude.Should().Be((Fixed64)2);
         }
 
         [Fact]
@@ -263,7 +263,7 @@ namespace Trailblazer.Tests.Controllers
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().Be(Vector3d.Zero);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Should().Be(Vector3d.Zero);
         }
 
         [Fact]
@@ -287,8 +287,8 @@ namespace Trailblazer.Tests.Controllers
                 highFrictionScout.FinalizeTraversal();
             }
 
-            var low = lowFrictionScout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude;
-            var high = highFrictionScout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude;
+            var low = lowFrictionScout.Controller.Locomotions.Move.CurrentVelocity.Magnitude;
+            var high = highFrictionScout.Controller.Locomotions.Move.CurrentVelocity.Magnitude;
 
             high.Should().BeLessThan(low);
         }
@@ -307,15 +307,15 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            var initialVelocity = scout.ScoutController.Locomotions.Move.CurrentVelocity;
+            var initialVelocity = scout.Controller.Locomotions.Move.CurrentVelocity;
 
             // Stop input
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeLessThan(initialVelocity.Magnitude);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Magnitude.Should().BeLessThan(initialVelocity.Magnitude);
         }
     }
 }

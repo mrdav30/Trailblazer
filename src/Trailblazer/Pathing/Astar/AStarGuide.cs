@@ -1,6 +1,5 @@
 ﻿using FixedMathSharp;
 using SwiftCollections;
-using System.Drawing;
 
 namespace Trailblazer.Pathing.Navigators
 {

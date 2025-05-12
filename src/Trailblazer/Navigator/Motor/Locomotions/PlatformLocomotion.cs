@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
 
-namespace Trailblazer.Controllers.Locomotions
+namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
     /// Handles movement adjustments when the scout is standing on a moving platform or surface.
@@ -161,7 +161,7 @@ namespace Trailblazer.Controllers.Locomotions
                 return false;
 
             HoldPlatformFrames++;
-            if(HoldPlatformFrames >= MaxHoldPlatformFrames)
+            if (HoldPlatformFrames >= MaxHoldPlatformFrames)
             {
                 HoldPlatformFrames = 0;
                 if (HoldPlatform != ActivePlatform)

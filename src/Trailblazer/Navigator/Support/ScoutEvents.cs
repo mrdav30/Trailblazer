@@ -1,7 +1,7 @@
 ﻿using FixedMathSharp;
 using System;
 
-namespace Trailblazer.Controllers
+namespace Trailblazer.Navigator
 {
     /// <summary>
     /// Defines event-driven interactions for the scout, including movement, forces, and state transitions.

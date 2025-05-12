@@ -1,6 +1,5 @@
 ﻿using FixedMathSharp;
-
-using Trailblazer.Controllers;
+using Trailblazer.Navigator.Motor;
 
 /// <summary>
 /// Represents the current traversal state and provides synchronization with TraversalCondition.

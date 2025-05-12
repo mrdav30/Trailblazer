@@ -1,7 +1,7 @@
 ﻿using FixedMathSharp;
 using System;
 
-namespace Trailblazer.Controllers.Locomotions
+namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
     /// Handles the scout's movement, including speed limits, acceleration, and velocity calculations.
@@ -161,7 +161,8 @@ namespace Trailblazer.Controllers.Locomotions
         public bool IsEnabled
         {
             get => _isEnabled;
-            set {
+            set
+            {
                 _isEnabled = value;
                 if (!_isEnabled)
                     ClearState();

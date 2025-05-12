@@ -80,7 +80,7 @@ namespace Trailblazer.Tests.Pathing
             for (int i = 0; i < 6; i++)
                 data[i, i, 0] = true;
 
-            var map = PathNavigationMap.From3D("HeightSpy", data, new Vector3d(0, 0, 0), Fixed64.One);
+            var map = NavigationChart.From3D("HeightSpy", data, new Vector3d(0, 0, 0), Fixed64.One);
             PathingManager.Register(map);
             PathingManager.InitializeMap("HeightSpy");
 
@@ -120,7 +120,7 @@ namespace Trailblazer.Tests.Pathing
             var target = new Vector3d(2, 0, 2);
 
             // Simple diagonal reachable path
-            var map = PathNavigationMap.From3D("Diag", new bool[1, 3, 3]
+            var map = NavigationChart.From3D("Diag", new bool[1, 3, 3]
             {
         {
             { true, true, true },
@@ -305,7 +305,7 @@ namespace Trailblazer.Tests.Pathing
         public void AStar_SplineSmoothProducesMorePoints()
         {
             // L-shaped path
-            var map = PathNavigationMap.From3D("LSpline", new bool[1, 3, 3]
+            var map = NavigationChart.From3D("LSpline", new bool[1, 3, 3]
             {
                 {
                     { true, true, true },

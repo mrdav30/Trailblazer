@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
 
-namespace Trailblazer.Controllers.Locomotions
+namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
     /// Handles the scout's sliding behavior when traversing steep surfaces.

@@ -8,21 +8,21 @@ namespace Trailblazer.Tests
 {
     public static class PathTestFactory
     {
-        public static PathNavigationMap RegisterSingleWalkablePoint(string mapName, Vector3d pos)
+        public static NavigationChart RegisterSingleWalkablePoint(string mapName, Vector3d pos)
         {
             Vector3d origin = pos - new Vector3d(1, 1, 1);
             bool[,,] data = new bool[3, 3, 3];
             data[1, 1, 1] = true;
 
-            var map = PathNavigationMap.From3D(mapName, data, origin, Fixed64.One);
+            var map = NavigationChart.From3D(mapName, data, origin, Fixed64.One);
             PathingManager.Register(map);
             PathingManager.InitializeMap(mapName);
             return map;
         }
 
-        public static PathNavigationMap RegisterFromData(string name, bool[,,] data, Vector3d origin)
+        public static NavigationChart RegisterFromData(string name, bool[,,] data, Vector3d origin)
         {
-            var map = PathNavigationMap.From3D(name, data, origin, GlobalGridManager.NodeSize);
+            var map = NavigationChart.From3D(name, data, origin, GlobalGridManager.NodeSize);
             PathingManager.Register(map);
             PathingManager.InitializeMap(name);
             return map;

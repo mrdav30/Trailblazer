@@ -1,9 +1,9 @@
 ﻿using Xunit;
 using FluentAssertions;
-using Trailblazer.Controllers;
 using FixedMathSharp;
+using Trailblazer.Navigator.Motor;
 
-namespace Trailblazer.Tests.Controllers
+namespace Trailblazer.Tests.Navigator.Motor
 {
     [Collection("TrailblazerCollection")]
     public class FallLocomotionTests
@@ -15,14 +15,14 @@ namespace Trailblazer.Tests.Controllers
             var scout = IScoutTestFactory.CreateFallingScout();
 
             Vector3d expectedVelocity = Vector3d.Down;
-            expectedVelocity.y += -scout.ScoutController.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -scout.Controller.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
 
             // Act
-            scout.ScoutController.Traverse(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
+            scout.Controller.Traverse(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
             scout.FinalizeTraversal();
 
             // Assert
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
         }
 
         [Fact]
@@ -37,7 +37,7 @@ namespace Trailblazer.Tests.Controllers
             scout.FinalizeTraversal();
 
             // Assert
-            scout.ScoutController.IsInAir.Should().BeTrue();
+            scout.Controller.IsInAir.Should().BeTrue();
 
             // Simulate hitting the ground before the next frame
             scout.SetTraversalCondition(
@@ -58,7 +58,7 @@ namespace Trailblazer.Tests.Controllers
             scout.FinalizeTraversal();
 
             // Assert
-            scout.ScoutController.IsGrounded.Should().BeTrue();
+            scout.Controller.IsGrounded.Should().BeTrue();
         }
 
         [Fact]
@@ -79,11 +79,11 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
 
                 // Calculate expected velocity update from gravity impulse
-                expectedVelocity.y += -scout.ScoutController.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
+                expectedVelocity.y += -scout.Controller.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
             }
 
             // Assert
-            scout.ScoutController.Locomotions.Move.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+            scout.Controller.Locomotions.Move.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
         }
 
         [Fact]
@@ -98,7 +98,7 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.WorldPosition.y.Should().BeLessThan(initialPosition.y); // Should be falling
+            scout.Position.y.Should().BeLessThan(initialPosition.y); // Should be falling
         }
 
         [Fact]
@@ -115,20 +115,20 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.WorldPosition.y.Should().BeLessThan(initialPosition.y); // Gravity should still apply
-            scout.WorldPosition.x.Should().BeGreaterThan(Fixed64.Zero); // Should also move forward
+            scout.Position.y.Should().BeLessThan(initialPosition.y); // Gravity should still apply
+            scout.Position.x.Should().BeGreaterThan(Fixed64.Zero); // Should also move forward
         }
 
         [Fact]
         public void Given_ScoutFallsFar_When_Lands_Then_ShouldTriggerMaxFallHeightEvent()
         {
             var scout = IScoutTestFactory.CreateMockScout(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
-            scout.ScoutController.Locomotions.Fall.MaxFallHeight = Fixed64.One;
+            scout.Controller.Locomotions.Fall.MaxFallHeight = Fixed64.One;
 
             bool eventCalled = false;
             scout.Events.OnMaxFallHeightReached += () => eventCalled = true;
 
-            while (!scout.ScoutController.IsGrounded)
+            while (!scout.Controller.IsGrounded)
             {
                 TrailblazerManager.Simulate();
                 scout.StartTraversal();
@@ -146,7 +146,7 @@ namespace Trailblazer.Tests.Controllers
             Fixed64 fallHeight = Fixed64.Zero;
             scout.Events.OnStopFall += (height) => fallHeight = height;
 
-            while (!scout.ScoutController.IsGrounded)
+            while (!scout.Controller.IsGrounded)
             {
                 TrailblazerManager.Simulate();
                 scout.StartTraversal();
@@ -167,13 +167,13 @@ namespace Trailblazer.Tests.Controllers
             var scout = IScoutTestFactory.CreatePlatformScout(
                 startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
-            scout.ScoutController.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+            scout.Controller.Locomotions.Slide.SlopeLimit = (Fixed64)45;
 
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeFalse();
+            scout.Controller.Locomotions.Fall.IsFalling.Should().BeFalse();
         }
 
         [Fact]
@@ -186,7 +186,7 @@ namespace Trailblazer.Tests.Controllers
             var scout = IScoutTestFactory.CreatePlatformScout(
                 startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
-            scout.ScoutController.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+            scout.Controller.Locomotions.Slide.SlopeLimit = (Fixed64)45;
 
             for (int i = 0; i < 2; i++)
             {
@@ -195,8 +195,8 @@ namespace Trailblazer.Tests.Controllers
                 scout.FinalizeTraversal();
             }
 
-            scout.ScoutController.Locomotions.Slide.IsSliding.Should().BeTrue();
-            scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeTrue();
+            scout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
+            scout.Controller.Locomotions.Fall.IsFalling.Should().BeTrue();
         }
 
         [Fact]
@@ -235,7 +235,7 @@ namespace Trailblazer.Tests.Controllers
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
-            scout.ScoutController.Locomotions.Fall.FallHeight.Should().Be(Fixed64.Zero);
+            scout.Controller.Locomotions.Fall.FallHeight.Should().Be(Fixed64.Zero);
         }
 
         [Fact]
@@ -243,14 +243,14 @@ namespace Trailblazer.Tests.Controllers
         {
             var scout = IScoutTestFactory.CreateMockScout(startPosition: new Vector3d(0, 20, 0), startingMedium: TraversalMedium.Air);
 
-            while (!scout.ScoutController.IsGrounded)
+            while (!scout.Controller.IsGrounded)
             {
                 TrailblazerManager.Simulate();
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
 
-            var fallLocomotion = scout.ScoutController.Locomotions.Fall;
+            var fallLocomotion = scout.Controller.Locomotions.Fall;
             fallLocomotion.FallStart.Should().BeGreaterThan(fallLocomotion.FallEnd);
             fallLocomotion.FallHeight.Should().Be(fallLocomotion.FallStart - fallLocomotion.FallEnd);
         }
@@ -260,13 +260,13 @@ namespace Trailblazer.Tests.Controllers
         {
             var scout = IScoutTestFactory.CreateMockScout(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
 
-            scout.ScoutController.Locomotions.Fall.IsFalling = true;
-            scout.ScoutController.Locomotions.Fall.FallStart = (Fixed64)10;
+            scout.Controller.Locomotions.Fall.IsFalling = true;
+            scout.Controller.Locomotions.Fall.FallStart = (Fixed64)10;
 
-            scout.ScoutController.Locomotions.Fall.IsEnabled = false;
+            scout.Controller.Locomotions.Fall.IsEnabled = false;
 
-            scout.ScoutController.Locomotions.Fall.IsFalling.Should().BeFalse();
-            scout.ScoutController.Locomotions.Fall.FallStart.Should().Be(Fixed64.Zero);
+            scout.Controller.Locomotions.Fall.IsFalling.Should().BeFalse();
+            scout.Controller.Locomotions.Fall.FallStart.Should().Be(Fixed64.Zero);
         }
     }
 }

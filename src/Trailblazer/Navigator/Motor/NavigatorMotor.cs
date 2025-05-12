@@ -1,9 +1,8 @@
 ﻿using FixedMathSharp;
 using System;
 using System.Diagnostics;
-using Trailblazer.Controllers.Locomotions;
 
-namespace Trailblazer.Controllers
+namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
     /// Controls character movement using an acceleration-based approach in a deterministic, lockstep simulation.
@@ -13,7 +12,7 @@ namespace Trailblazer.Controllers
     /// and finalizes traversal states for consistent movement across frames.
     /// </remarks>
     [Serializable]
-    public class ScoutController
+    public class NavigatorMotor
     {
         #region Fields & Properties
 
@@ -123,19 +122,19 @@ namespace Trailblazer.Controllers
         #region Construct
 
         /// <summary>
-        /// Creates a new <see cref="ScoutController"/> instance and initializes it with the provided scout.
+        /// Creates a new <see cref="NavigatorMotor"/> instance and initializes it with the provided scout.
         /// </summary>
         /// <param name="scout">The scout entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the scout</param>
-        /// <returns>A new instance of <see cref="ScoutController"/>.</returns>
-        public static ScoutController CreateNew(IScout scout, TraversalCondition initialCondition) => new(scout, initialCondition);
+        /// <returns>A new instance of <see cref="NavigatorMotor"/>.</returns>
+        public static NavigatorMotor CreateNew(IScout scout, TraversalCondition initialCondition) => new(scout, initialCondition);
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ScoutController"/> class.
+        /// Initializes a new instance of the <see cref="NavigatorMotor"/> class.
         /// </summary>
         /// <param name="scout">The scout entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the scout</param>
-        public ScoutController(IScout scout, TraversalCondition initialCondition) => Initialize(scout, initialCondition);
+        public NavigatorMotor(IScout scout, TraversalCondition initialCondition) => Initialize(scout, initialCondition);
 
         /// <summary>
         /// Prepares the controller by linking it to the given scout and setting initial state values.
@@ -148,7 +147,7 @@ namespace Trailblazer.Controllers
             _currentState = new TransitState(initialCondition);
             if (_currentState.GroundState.HasValue)
                 HandlePlatformChange(); // set the initial platform
-            Locomotions.Move.CurrentPosition = _hostScout.WorldPosition;
+            Locomotions.Move.CurrentPosition = _hostScout.Position;
             Locomotions.Move.LastPosition = Locomotions.Move.CurrentPosition;
         }
 
@@ -221,7 +220,7 @@ namespace Trailblazer.Controllers
             ApplyJumpForce();
 
             // Save last position before platform movement is applied for velocity calculation.
-            Locomotions.Move.LastPosition = _hostScout.WorldPosition;
+            Locomotions.Move.LastPosition = _hostScout.Position;
 
             ApplyPlatformMovement();
 
@@ -377,7 +376,7 @@ namespace Trailblazer.Controllers
         /// <returns>The target horizontal velocity.</returns>
         private Vector3d GetHorizontalVelocity()
         {
-            Fixed3x3 transposedMatrix = _hostScout.VisualRotation.ToMatrix3x3();
+            Fixed3x3 transposedMatrix = _hostScout.Rotation.ToMatrix3x3();
             Vector3d desiredLocalDirection = Fixed3x3.InverseTransformDirection(transposedMatrix, _frameTraversalRequest.MovementDirection);
             Fixed64 speed = MaxHoritzontalSpeedInDirection(desiredLocalDirection);
 
@@ -500,7 +499,7 @@ namespace Trailblazer.Controllers
             _forceOutput.y = Locomotions.Move.CurrentVelocity.y - gravityStep;
 
             // Ensure velocity does not exceed terminal fall speed
-            if (Locomotions.Move.CurrentVelocity.y + (_forceOutput.y * TrailblazerManager.DeltaTime) < -Locomotions.Move.TerminalVelocity)
+            if (Locomotions.Move.CurrentVelocity.y + _forceOutput.y * TrailblazerManager.DeltaTime < -Locomotions.Move.TerminalVelocity)
                 _forceOutput.y = -Locomotions.Move.TerminalVelocity - Locomotions.Move.CurrentVelocity.y;
 
             // When jumping up we don't apply gravity for some time when the user is holding the jump button.
@@ -613,7 +612,7 @@ namespace Trailblazer.Controllers
         {
             if (!IsFrameLocked) return;
 
-            Locomotions.Move.CurrentPosition = _hostScout.WorldPosition;
+            Locomotions.Move.CurrentPosition = _hostScout.Position;
 
             Locomotions.Move.LastVelocity = Locomotions.Move.CurrentVelocity;
             Locomotions.Move.CurrentVelocity = (Locomotions.Move.CurrentPosition - Locomotions.Move.LastPosition) / TrailblazerManager.DeltaTime;
@@ -623,7 +622,7 @@ namespace Trailblazer.Controllers
             // Make sure we aren't hitting the ceiling
             if (Locomotions.Move.CurrentVelocity.y > Fixed64.Zero && _currentState.CeilingLevel != Fixed64.MAX_VALUE)
             {
-                if (_hostScout.WorldPosition.y > _currentState.CeilingLevel)
+                if (_hostScout.Position.y > _currentState.CeilingLevel)
                 {
                     Locomotions.Move.CurrentVelocity = new Vector3d(Locomotions.Move.CurrentVelocity.x, Fixed64.Zero, Locomotions.Move.CurrentVelocity.z);
                     Locomotions.Jump.IsJumping = false;
@@ -781,7 +780,7 @@ namespace Trailblazer.Controllers
             if (Locomotions.Swim.IsEnabled)
             {
                 Locomotions.Swim.IsSwimming = true;
-                Locomotions.Swim.IsDiving = _hostScout.WorldPosition.y < _currentState.SurfaceLevel;
+                Locomotions.Swim.IsDiving = _hostScout.Position.y < _currentState.SurfaceLevel;
 
                 Locomotions.Swim.UpdateDiveTime();
 
@@ -809,14 +808,14 @@ namespace Trailblazer.Controllers
             if (Locomotions.Fall.IsFalling)
             {
                 // Make sure we didn't somehow get above the initial start point
-                if (_hostScout.WorldPosition.y > Locomotions.Fall.FallStart)
-                    Locomotions.Fall.FallStart = _hostScout.WorldPosition.y;
+                if (_hostScout.Position.y > Locomotions.Fall.FallStart)
+                    Locomotions.Fall.FallStart = _hostScout.Position.y;
 
                 if (!IsInAir && !Locomotions.Slide.IsSliding)
                 {
                     // scout landed after falling
                     Locomotions.Fall.IsFalling = false;
-                    Locomotions.Fall.FallEnd = _hostScout.WorldPosition.y;
+                    Locomotions.Fall.FallEnd = _hostScout.Position.y;
 
                     if (Locomotions.Fall.FallHeight > Fixed64.Zero)
                         _hostScout.Events?.OnStopFall?.Invoke(Locomotions.Fall.FallHeight);
@@ -824,7 +823,7 @@ namespace Trailblazer.Controllers
                     return;
                 }
 
-                Fixed64 fallHeight = (Locomotions.Fall.FallStart - _hostScout.WorldPosition.y).Abs();
+                Fixed64 fallHeight = (Locomotions.Fall.FallStart - _hostScout.Position.y).Abs();
                 if (fallHeight > Locomotions.Fall.MaxFallHeight)
                     _hostScout.Events?.OnMaxFallHeightReached?.Invoke();
 
@@ -839,7 +838,7 @@ namespace Trailblazer.Controllers
             {
                 // scout started falling
                 Locomotions.Fall.IsFalling = true;
-                Locomotions.Fall.FallStart = _hostScout.WorldPosition.y;
+                Locomotions.Fall.FallStart = _hostScout.Position.y;
                 _hostScout.Events?.OnStartFall?.Invoke();
             }
         }
@@ -861,7 +860,7 @@ namespace Trailblazer.Controllers
                 Locomotions.Platform.ActiveTransform,
                 Locomotions.Platform.ScoutGlobalPoint);
 
-            Locomotions.Platform.ScoutGlobalRotation = _hostScout.VisualRotation;
+            Locomotions.Platform.ScoutGlobalRotation = _hostScout.Rotation;
             Locomotions.Platform.ScoutLocalRotation = Locomotions.Platform.ActiveTransform.Rotation.Inverse() * Locomotions.Platform.ScoutGlobalRotation;
         }
 

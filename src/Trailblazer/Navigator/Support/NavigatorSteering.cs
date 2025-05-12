@@ -4,7 +4,7 @@ using GridForge.Spatial;
 using SwiftCollections;
 using System;
 
-namespace Trailblazer.Pathing
+namespace Trailblazer.Navigator
 {
     public struct GroupBehaviorWeights
     {

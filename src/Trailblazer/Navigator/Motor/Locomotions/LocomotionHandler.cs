@@ -2,10 +2,10 @@
 using System;
 using System.Linq;
 
-namespace Trailblazer.Controllers.Locomotions
+namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
-    /// Manages locomotion states and behaviors for the <see cref="ScoutController"/>.
+    /// Manages locomotion states and behaviors for the <see cref="NavigatorMotor"/>.
     /// </summary>
     /// <remarks>
     /// This class coordinates multiple locomotion types, ensuring that movement states are properly managed.

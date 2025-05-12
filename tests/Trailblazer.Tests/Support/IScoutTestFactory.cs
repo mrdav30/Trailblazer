@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Controllers;
+using Trailblazer.Navigator;
+using Trailblazer.Navigator.Motor;
 
 namespace Trailblazer.Tests
 {
@@ -79,7 +80,7 @@ namespace Trailblazer.Tests
                 condition
             );
 
-            mock.ScoutController.Locomotions.Fall.IsFalling = true;
+            mock.Controller.Locomotions.Fall.IsFalling = true;
             return mock;
         }
 

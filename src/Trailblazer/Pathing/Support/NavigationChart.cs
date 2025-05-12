@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing
 {
     [Serializable]
-    public class PathNavigationMap
+    public class NavigationChart
     {
         public readonly string Name;
 
@@ -19,7 +19,7 @@ namespace Trailblazer.Pathing
 
         public bool IsInitialized { get; internal set; }
 
-        public PathNavigationMap(string name, bool[] map, int sizeX, int sizeY, int sizeZ, Vector3d origin, Fixed64 interval)
+        public NavigationChart(string name, bool[] map, int sizeX, int sizeY, int sizeZ, Vector3d origin, Fixed64 interval)
         {
             Name = name;
             _map = map;
@@ -77,7 +77,7 @@ namespace Trailblazer.Pathing
                     }
         }
 
-        public static PathNavigationMap From3D(string name, bool[,,] sourceMap, Vector3d origin, Fixed64 interval)
+        public static NavigationChart From3D(string name, bool[,,] sourceMap, Vector3d origin, Fixed64 interval)
         {
             int sizeY = sourceMap.GetLength(0);
             int sizeX = sourceMap.GetLength(1);
@@ -89,7 +89,7 @@ namespace Trailblazer.Pathing
                     for (int z = 0; z < sizeZ; z++)
                         flat[(y * sizeX * sizeZ) + (x * sizeZ) + z] = sourceMap[y, x, z];
 
-            return new PathNavigationMap(name, flat, sizeX, sizeY, sizeZ, origin, interval);
+            return new NavigationChart(name, flat, sizeX, sizeY, sizeZ, origin, interval);
         }
     }
 }

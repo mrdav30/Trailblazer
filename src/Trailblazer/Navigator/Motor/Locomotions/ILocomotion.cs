@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Trailblazer.Controllers.Locomotions
+namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
     /// Defines the base interface for all locomotion modules that control specific movement behaviors.
@@ -13,9 +13,6 @@ namespace Trailblazer.Controllers.Locomotions
         /// </summary>
         bool IsEnabled { get; set; }
     }
-
-    [AttributeUsage(AttributeTargets.Property)]
-    public class TransientAttribute : Attribute { }
 
     /// <summary>
     /// Defines locomotion modules with state that may change per frame and require synchronization.

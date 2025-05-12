@@ -1,16 +1,16 @@
 ﻿using FixedMathSharp;
 
-namespace Trailblazer.Controllers
+namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
     /// Represents a movement request for the scout, including direction, speed, and jump intent.
     /// </summary>
-    public struct TravelRequest
+    public class TravelRequest
     {
         /// <summary>
         /// The global direction in which the scout wants to move.
         /// </summary>
-        public Vector3d MovementDirection { get;set; }
+        public Vector3d MovementDirection { get; set; }
 
         /// <summary>
         /// The speed at which the scout wants to move.
@@ -25,7 +25,7 @@ namespace Trailblazer.Controllers
         /// <summary>
         /// Determines if the scout is actively moving based on direction and speed.
         /// </summary>
-        public readonly bool IsMoving => MovementDirection != Vector3d.Zero && MovementSpeed != MovementSpeed.Stationary;
+        public bool IsMoving => MovementDirection != Vector3d.Zero && MovementSpeed != MovementSpeed.Stationary;
 
         /// <summary>
         /// Represents an empty movement request with default values.

@@ -90,14 +90,14 @@ namespace Trailblazer.Tests.Pathing
             Assert.True(partition.BelongsTo("DuplicateInit"));
         }
 
-        private static PathNavigationMap BuildSinglePointMap(string name, Vector3d worldPos)
+        private static NavigationChart BuildSinglePointMap(string name, Vector3d worldPos)
         {
             // Convert a single world point into an aligned map
             Vector3d origin = worldPos - new Vector3d(1, 1, 1);
             bool[,,] data = new bool[3, 3, 3];
             data[1, 1, 1] = true;
 
-            return PathNavigationMap.From3D(name, data, origin, Fixed64.One);
+            return NavigationChart.From3D(name, data, origin, Fixed64.One);
         }
     }
 }

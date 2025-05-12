@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
 
-namespace Trailblazer.Controllers.Locomotions
+namespace Trailblazer.Navigator.Motor
 {
     /// <summary>
     /// Handles the scout’s behavior when falling, including tracking fall distance and applying movement constraints.
@@ -96,7 +96,8 @@ namespace Trailblazer.Controllers.Locomotions
         /// <summary>
         /// Resets all fall-related properties, including the start and end height.
         /// </summary>
-        public void ClearState() {
+        public void ClearState()
+        {
             this.ClearTransientState();
         }
     }

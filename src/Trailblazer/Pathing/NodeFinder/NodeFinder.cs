@@ -139,9 +139,9 @@ namespace Trailblazer.Pathing
             return true;
         }
 
-        public static bool GetClosestNodeForSize(Vector3d from, Vector3d target, int pathingSize, out Node returnNode, bool allowUnwalkable = false)
+        public static bool GetClosestNodeForSize(Vector3d from, Vector3d destination, int pathingSize, out Node returnNode, bool allowUnwalkable = false)
         {
-            if (GlobalGridManager.TryGetGridAndNode(target, out _, out returnNode)
+            if (GlobalGridManager.TryGetGridAndNode(from, out _, out returnNode)
                 && (!returnNode.IsBlocked || allowUnwalkable)
                 && returnNode.TryGetPartition(out PathPartition returnPartition)
                 && !returnPartition.Unpassable(pathingSize))
@@ -149,7 +149,7 @@ namespace Trailblazer.Pathing
                 return true;
             }
 
-            foreach (GridNodeSet gridNodeSet in GridTracer.TraceLine(target, from))
+            foreach (GridNodeSet gridNodeSet in GridTracer.TraceLine(from, destination))
             {
                 foreach (Node currentNode in gridNodeSet.Nodes)
                 {
@@ -162,28 +162,6 @@ namespace Trailblazer.Pathing
                         returnNode = currentNode;
                         return true;
                     }
-                }
-            }
-
-            return false;
-        }
-
-        public static bool ClosestFlowFieldWithinDistance(
-            Vector3d from, SwiftDictionary<int, FlowField> flowFieldBuffer, Fixed64 withinSight, out int flowFieldKey)
-        {
-            flowFieldKey = -1;
-            foreach (FlowField flowField in flowFieldBuffer.Values)
-            {
-                if (!GlobalGridManager.TryGetGridAndNode(flowField.NodeCoordinates, out _, out Node flowNode))
-                    continue;
-
-                bool xInPos = from.x > flowNode.WorldPosition.x - withinSight && from.x < flowNode.WorldPosition.x + withinSight;
-                bool yInPos = from.y > flowNode.WorldPosition.y - withinSight && from.y < flowNode.WorldPosition.y + withinSight;
-                bool zInPos = from.z > flowNode.WorldPosition.z - withinSight && from.z < flowNode.WorldPosition.z + withinSight;
-                if (xInPos && yInPos)
-                {
-                    flowFieldKey = flowNode.SpawnToken;
-                    return true;
                 }
             }
 

@@ -1,7 +1,4 @@
-﻿using FixedMathSharp;
-using GridForge.Configuration;
-using GridForge.Grids;
-using Trailblazer.Pathing;
+﻿using Trailblazer.Pathing;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing

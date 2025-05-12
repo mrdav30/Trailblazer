@@ -7,20 +7,20 @@ using System.Threading;
 
 namespace Trailblazer.Pathing
 {
-    public class AStarPathFinder
+    public class AStarSurveyor
     {
         #region Singleton Instance
 
         /// <summary>
         /// A lazily initialized singleton instance of the pathfinder.
         /// </summary>
-        private static readonly Lazy<AStarPathFinder> _instance =
-            new(() => new AStarPathFinder(), LazyThreadSafetyMode.ExecutionAndPublication);
+        private static readonly Lazy<AStarSurveyor> _instance =
+            new(() => new AStarSurveyor(), LazyThreadSafetyMode.ExecutionAndPublication);
 
         /// <summary>
         /// Gets the shared instance of the pathfinder.
         /// </summary>
-        public static AStarPathFinder Shared => _instance.Value;
+        public static AStarSurveyor Shared => _instance.Value;
 
         #endregion
 

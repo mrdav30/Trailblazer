@@ -9,6 +9,8 @@ namespace Trailblazer.Pathing
 
         public Vector3d Direction { get; set; }
 
-        public bool HasLineOfSight { get; set; }
+        public int DistanceToTarget { get; set; }
+        
+        public bool IsGoal { get; set; }
     }
 }

@@ -88,7 +88,7 @@ namespace Trailblazer.Tests.Pathing
             bool heightViolationTriggered = false;
 
 #if DEBUG
-            AStarPathFinder.OnHeightLimitViolated = (from, to, delta) =>
+            AStarSurveyor.OnHeightLimitViolated = (from, to, delta) =>
             {
                 if (delta > maxHeightDifference)
                     heightViolationTriggered = true;
@@ -149,7 +149,7 @@ namespace Trailblazer.Tests.Pathing
         }
 
         [Fact]
-        public void AStar_ShouldReturnImmediateSuccessOnSameStartAndEnd()
+        public void AStar_ShouldNotReturnImmediateSuccessOnSameStartAndEnd()
         {
             var pos = new Vector3d(1, 0, 1);
             PathTestFactory.RegisterSingleWalkablePoint("SameSpot", pos);
@@ -157,15 +157,13 @@ namespace Trailblazer.Tests.Pathing
             SwiftList<Vector3d>? path = null;
             var request = PathTestFactory.CreateRequest(pos, pos, 1, (success, result) =>
             {
-                Assert.True(success);
+                Assert.False(success);
                 path = result;
             });
 
             PathingManager.RequestPath(request);
 
-            Assert.NotNull(path);
-            Assert.Single(path);
-            Assert.Equal(pos, path[0]);
+            Assert.Null(path);
 
             PathingManager.Unload("SameSpot");
         }

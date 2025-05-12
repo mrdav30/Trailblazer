@@ -18,8 +18,6 @@ namespace Trailblazer.Pathing
 
         public const byte DefaultDegree = byte.MaxValue;
 
-        public const LinearDirection DefaultSource = LinearDirection.None;
-
         #endregion
 
         public CoordinatesGlobal ParentCoordinate { get; set; }
@@ -31,7 +29,7 @@ namespace Trailblazer.Pathing
         public bool IsPartitioned { get; set; }
 
         [Transient]
-        public LinearDirection ClearanceSource { get; private set; }
+        public LinearDirection ClearanceDirection { get; private set; }
 
         /// <summary>
         /// How many connections until the closest unwalkable node.
@@ -50,13 +48,6 @@ namespace Trailblazer.Pathing
 
         [Transient]
         public CoordinatesGlobal? NextTrailCoordinate { get; set; } = null;
-
-        #endregion
-
-        #region Flow Field Properties
-
-        [Transient]
-        public bool HasLineOfSight { get; set; }
 
         #endregion
 
@@ -86,8 +77,8 @@ namespace Trailblazer.Pathing
             NodeSpawnToken = node.SpawnToken;
             NodePosition = node.WorldPosition;
 
-            ClearanceDegree = DefaultDegree;
-            ClearanceSource = DefaultSource;
+            ClearanceDegree = byte.MaxValue;
+            ClearanceDirection = LinearDirection.None;
 
             IsPartitioned = true;
         }
@@ -108,12 +99,10 @@ namespace Trailblazer.Pathing
             IsClearanceValid = false;
 
             ClearanceDegree = DefaultDegree;
-            ClearanceSource = DefaultSource;
+            ClearanceDirection = LinearDirection.None;
 
             MovementCost = 0;
             NextTrailCoordinate = null;
-
-            HasLineOfSight = false;
 
             _mapOwners.Clear();
 
@@ -125,7 +114,7 @@ namespace Trailblazer.Pathing
             // regardless of change type, we need to update clearance
 
             IsClearanceValid = false;
-            UpdateNeighborClearance();
+            CheckNeighborClearance();
         }
 
         /// <summary>
@@ -136,17 +125,17 @@ namespace Trailblazer.Pathing
             if (size <= 0) return false;
 
             //  If there's an unwalkable within the size's number of connections, the unit cannot pass
-            UpdateNeighborClearance();
+            CheckNeighborClearance();
             return size > ClearanceDegree;
         }
 
         public byte GetNeighborClearance()
         {
-            UpdateNeighborClearance();
+            CheckNeighborClearance();
             return ClearanceDegree;
         }
 
-        private void UpdateNeighborClearance()
+        private void CheckNeighborClearance()
         {
             if (IsClearanceValid)
                 return;
@@ -160,24 +149,25 @@ namespace Trailblazer.Pathing
             if (node.IsBlocked)
             {
                 ClearanceDegree = 0;
-                ClearanceSource = DefaultSource;
+                ClearanceDirection = LinearDirection.None;
                 IsClearanceValid = true;
                 return;
             }
 
             //  refresh source in case the map changed
-            if (node.TryGetNeighborFromDirection(ClearanceSource, out Node source)
+            if (node.TryGetNeighborFromDirection(ClearanceDirection, out Node source)
                 && source.TryGetPartition(out PathPartition sourcePartition))
             {
                 byte prevSourceDegree = sourcePartition.ClearanceDegree;
                 if (sourcePartition.ClearanceDegree < ClearanceDegree)
                 {
-                    sourcePartition.UpdateNeighborClearance();
-                    //Clearance from source can no longer be trusted!
+                    sourcePartition.CheckNeighborClearance();
+
                     if (sourcePartition.ClearanceDegree != prevSourceDegree)
                     {
+                        // Clearance from direction can no longer be trusted!
                         ClearanceDegree = DefaultDegree;
-                        ClearanceSource = DefaultSource;
+                        ClearanceDirection = LinearDirection.None;
                     }
                 }
                 else
@@ -193,7 +183,7 @@ namespace Trailblazer.Pathing
                     || !neighbor.TryGetPartition(out PathPartition neighborPartition))
                 {
                     ClearanceDegree = 1;
-                    ClearanceSource = direction;
+                    ClearanceDirection = direction;
                     break;
                 }
 
@@ -201,7 +191,7 @@ namespace Trailblazer.Pathing
                 {
                     //  Cap clearance to 8. Something larger than that won't work very well with pathfinding.
                     ClearanceDegree = (byte)(neighborPartition.ClearanceDegree + 1);
-                    ClearanceSource = direction;
+                    ClearanceDirection = direction;
                 }
             }
 
@@ -216,8 +206,6 @@ namespace Trailblazer.Pathing
         public bool BelongsTo(string mapName) => _mapOwners.Contains(mapName);
 
         #endregion
-
-        public override int GetHashCode() => NodeSpawnToken;
 
         /// <summary>
         /// Calculates the heuristic cost for the current node based on the target node and the heuristic method used.
@@ -427,5 +415,7 @@ namespace Trailblazer.Pathing
                 _ => false,
             };
         }
+
+        public override int GetHashCode() => NodeSpawnToken;
     }
 }

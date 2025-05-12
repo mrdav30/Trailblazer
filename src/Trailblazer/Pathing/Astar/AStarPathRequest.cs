@@ -53,7 +53,7 @@ namespace Trailblazer.Pathing
         {
             if (!IsValidated) return;
 
-            AStarPathFinder.Shared.FindPath(this);
+            AStarSurveyor.Shared.FindPath(this);
         }
 
         public override void Reset()

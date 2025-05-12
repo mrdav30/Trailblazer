@@ -59,7 +59,7 @@ namespace Trailblazer.Pathing
 
         public static void RequestPath(IPathRequest request)
         {
-            if (_processingLock) 
+            if (_processingLock)
                 return;
 
             if (!request.IsValidated && !ValidatePathRequest(request))
@@ -72,7 +72,7 @@ namespace Trailblazer.Pathing
             _processingLock = false;
         }
 
-        public static bool NeedsPath(Vector3d startPos, Vector3d endPos, int unitSize)
+        public static bool NeedsPath(Vector3d startPos, Vector3d endPos, int unitSize, bool allowUnwalkable = false)
         {
             foreach (GridNodeSet gridNodeSet in GridTracer.TraceLine(startPos, endPos))
             {
@@ -82,7 +82,7 @@ namespace Trailblazer.Pathing
                     if (!node.TryGetPartition(out PathPartition partition))
                         return true;
 
-                    if (!node.IsBlocked && partition.Unpassable(unitSize))
+                    if (!allowUnwalkable && !node.IsBlocked && partition.Unpassable(unitSize))
                         return true;
                 }
             }
@@ -176,7 +176,11 @@ namespace Trailblazer.Pathing
             _loadedMaps.Remove(name);
         }
 
-        public static void ClearAll() => _loadedMaps.Clear();
+        public static void ClearAll()
+        {
+            _loadedMaps.Clear();
+            PathPartitionHeap.FastClear();
+        }
 
         #endregion
     }

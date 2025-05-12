@@ -10,7 +10,7 @@ namespace Trailblazer.Controllers.Locomotions
     /// <remarks>
     /// This class coordinates multiple locomotion types, ensuring that movement states are properly managed.
     /// </remarks>
-    [System.Serializable]
+    [Serializable]
     public class LocomotionHandler
     {
         /// <summary>

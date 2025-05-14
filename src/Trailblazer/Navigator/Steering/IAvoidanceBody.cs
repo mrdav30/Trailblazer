@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
 
-namespace Trailblazer.Navigator
+namespace Trailblazer.Navigation
 {
     public interface IAvoidanceBody
     {

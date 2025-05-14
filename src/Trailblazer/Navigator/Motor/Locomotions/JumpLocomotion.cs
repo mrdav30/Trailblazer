@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
 
-namespace Trailblazer.Navigator.Motor
+namespace Trailblazer.Navigation.Motor
 {
     /// <summary>
     /// Handles the scout’s jumping mechanics, including jump height, cooldown, and movement control while airborne.

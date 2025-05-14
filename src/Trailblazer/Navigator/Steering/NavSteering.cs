@@ -4,7 +4,7 @@ using GridForge.Spatial;
 using SwiftCollections;
 using System;
 
-namespace Trailblazer.Navigator
+namespace Trailblazer.Navigation
 {
     public struct GroupBehaviorWeights
     {
@@ -13,7 +13,7 @@ namespace Trailblazer.Navigator
         public Fixed64 Cohesion;
     }
 
-    public static class NavigatorSteering
+    public static class NavSteering
     {
         private static readonly Fixed64 DefaultSearchRange = Fixed64.One * 10;
 

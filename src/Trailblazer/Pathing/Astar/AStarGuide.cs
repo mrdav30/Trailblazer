@@ -13,18 +13,13 @@ namespace Trailblazer.Pathing.Navigators
 
         public Vector3d? Target { get; private set; }
 
-        public bool MovingToWaypoint => HasPath && _pathIndex < _myPath.Count - 1;
+        public bool HasWaypoints => HasPath && _pathIndex < _myPath.Count - 1 && _pathIndex > 0;
 
         public void OnSetup()
         {
             _myPath = new();
-        }
-
-        public void OnInitialize()
-        {
             HasPath = false;
-            _myPath.FastClear();
-            _pathIndex = 0;
+            _pathIndex = -1;
         }
 
         public void RequestMovementPath(Vector3d from, Vector3d destination, int size)
@@ -40,9 +35,8 @@ namespace Trailblazer.Pathing.Navigators
             PathingManager.RequestPath(pathRequest);
         }
 
-        public Vector3d GetMovementDirection(Vector3d from, out Fixed64 distanceToMove)
+        public Vector3d GetMovementDirection(Vector3d from)
         {
-            distanceToMove = Fixed64.Zero;
             if (Target == null)
                 return Vector3d.Zero;
 
@@ -51,9 +45,9 @@ namespace Trailblazer.Pathing.Navigators
             return direction;
         }
 
-        public void CheckMovementStatus()
+        public void MoveToNextWaypoint()
         {
-            if (MovingToWaypoint && _pathIndex >= 0)
+            if (HasWaypoints)
                 _pathIndex++;
         }
 

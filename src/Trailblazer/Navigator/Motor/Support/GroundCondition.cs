@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
 
-namespace Trailblazer.Navigator.Motor
+namespace Trailblazer.Navigation.Motor
 {
     /// <summary>
     /// Represents the state of the surface the scout is interacting with, including surface movement and normal data.

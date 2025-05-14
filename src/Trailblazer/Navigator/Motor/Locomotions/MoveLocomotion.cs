@@ -1,7 +1,7 @@
 ﻿using FixedMathSharp;
 using System;
 
-namespace Trailblazer.Navigator.Motor
+namespace Trailblazer.Navigation.Motor
 {
     /// <summary>
     /// Handles the scout's movement, including speed limits, acceleration, and velocity calculations.
@@ -173,7 +173,7 @@ namespace Trailblazer.Navigator.Motor
         /// The current world position of the scout.
         /// </summary>
         [Transient]
-        public Vector3d CurrentPosition { get; set; }
+        public Vector3d Position { get; set; }
 
         /// <summary>
         /// The world position from the previous frame, used for velocity calculations.
@@ -185,13 +185,22 @@ namespace Trailblazer.Navigator.Motor
         /// The scout’s current velocity in world space.
         /// </summary>
         [Transient]
-        public Vector3d CurrentVelocity { get; set; }
+        public Vector3d Velocity { get; set; }
 
         /// <summary>
         /// The scout’s velocity from the previous frame.
         /// </summary>
         [Transient]
         public Vector3d LastVelocity { get; set; }
+
+        /// <summary>
+        /// The scout’s velocity from the previous frame.
+        /// </summary>
+        [Transient]
+        public Fixed64 Speed { get; set; }
+
+        [Transient]
+        public Vector3d Acceleration { get; set; }
 
         #endregion
 

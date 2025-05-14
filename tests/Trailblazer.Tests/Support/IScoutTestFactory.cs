@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigator;
-using Trailblazer.Navigator.Motor;
+using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Tests
 {
@@ -9,7 +9,7 @@ namespace Trailblazer.Tests
         /// <summary>
         /// Generates a Scout (no platform logic)
         /// </summary>
-        public static Scout CreateMockScout(
+        public static MockAgent CreateMockAgent(
             Vector3d? startPosition = null,
             Vector3d? startVelocity = null,
             TraversalMedium startingMedium = TraversalMedium.Unknown,
@@ -41,7 +41,7 @@ namespace Trailblazer.Tests
                     break;
             }
 
-            return new MockScout(
+            return new MockAgent(
                 startPosition ?? Vector3d.Zero,
                 startVelocity ?? Vector3d.Zero,
                 condition
@@ -51,7 +51,7 @@ namespace Trailblazer.Tests
         /// <summary>
         /// Generates a Falling Scout (for gravity tests)
         /// </summary>
-        public static Scout CreateFallingScout(
+        public static MockAgent CreateFallingAgent(
             Vector3d? startPosition = null,
             Vector3d? startVelocity = null,
             Fixed64? surfaceLevel = null,
@@ -74,20 +74,20 @@ namespace Trailblazer.Tests
                 };
             }
 
-            MockScout mock = new MockScout(
+            MockAgent mock = new MockAgent(
                 startPosition ?? Vector3d.Zero,
                 startVelocity ?? Vector3d.Down,
                 condition
             );
 
-            mock.Controller.Locomotions.Fall.IsFalling = true;
+            mock.Navigator.Motor.Locomotions.Fall.IsFalling = true;
             return mock;
         }
 
         /// <summary>
         /// Generates a Scout + Platform (Separation of Concerns)
         /// </summary>
-        public static Scout CreatePlatformScout(
+        public static MockAgent CreatePlatformAgent(
             Vector3d? startPosition = null,
             Fixed4x4? platformMatrix = null,
             Fixed64? surfaceFriction = null,
@@ -106,14 +106,14 @@ namespace Trailblazer.Tests
                 }
             };
 
-            return new MockScout(
+            return new MockAgent(
                 startPosition ?? Vector3d.Zero,
                 Vector3d.Zero,
                 condition
             );
         }
 
-        public static Scout CreateWaterScout(Vector3d? startPosition = null, Fixed64? surfaceLevel = null)
+        public static MockAgent CreateWaterAgent(Vector3d? startPosition = null, Fixed64? surfaceLevel = null)
         {
             TraversalCondition condition = new TraversalCondition
             {
@@ -122,7 +122,7 @@ namespace Trailblazer.Tests
                 CeilingLevel = Fixed64.MAX_VALUE
             };
 
-            MockScout scout = new MockScout(
+            MockAgent scout = new MockAgent(
                 startPosition ?? Vector3d.Zero,
                 Vector3d.Zero,
                 condition
@@ -131,7 +131,7 @@ namespace Trailblazer.Tests
             return scout;
         }
 
-        public static Scout CreateJumpReadyScout(Vector3d? startPosition = null)
+        public static MockAgent CreateJumpReadyAgent(Vector3d? startPosition = null)
         {
             TraversalCondition condition = new TraversalCondition
             {
@@ -144,7 +144,7 @@ namespace Trailblazer.Tests
                 }
             };
 
-            return new MockScout(
+            return new MockAgent(
                 startPosition ?? Vector3d.Zero,
                 Vector3d.Zero,
                 condition

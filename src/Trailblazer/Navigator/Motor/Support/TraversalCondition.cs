@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
 
-namespace Trailblazer.Navigator.Motor
+namespace Trailblazer.Navigation.Motor
 {
     /// <summary>
     /// Represents the traversal state of a scout, including its movement medium and surface interactions.

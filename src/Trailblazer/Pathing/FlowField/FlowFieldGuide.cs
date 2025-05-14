@@ -13,16 +13,12 @@ namespace Trailblazer.Pathing
         // key = world position, value = vector flow field
         private SwiftDictionary<int, FlowField> _fields;
 
-        public bool MovingToWaypoint => false; // flow fields don't have waypoints...
+        public bool HasWaypoints => false; // flow fields don't have waypoints...
 
         public void OnSetup()
         {
             _fields = new();
-        }
-
-        public void OnInitialize()
-        {
-            _fields.Clear();
+            HasPath = false;
         }
 
         public void RequestMovementPath(Vector3d from, Vector3d destination, int size)
@@ -36,10 +32,8 @@ namespace Trailblazer.Pathing
             PathingManager.RequestPath(pathRequest);
         }
 
-        public Vector3d GetMovementDirection(Vector3d from, out Fixed64 distanceToMove)
+        public Vector3d GetMovementDirection(Vector3d from)
         {
-            distanceToMove = Fixed64.Zero;
-
             if (_fields == null || _fields.Count <= 0 || !GlobalGridManager.TryGetGridAndNode(from, out _, out Node currentNode))
                 return Vector3d.Zero;
 
@@ -59,7 +53,7 @@ namespace Trailblazer.Pathing
             return direction;
         }
 
-        public void CheckMovementStatus() { }
+        public void MoveToNextWaypoint() { }
 
         /// <summary>
         /// Work out the force to apply to us based on the flow field grid squares we are on.

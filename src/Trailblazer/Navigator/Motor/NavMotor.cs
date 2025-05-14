@@ -1,8 +1,9 @@
 ﻿using FixedMathSharp;
+using SwiftCollections;
 using System;
 using System.Diagnostics;
 
-namespace Trailblazer.Navigator.Motor
+namespace Trailblazer.Navigation.Motor
 {
     /// <summary>
     /// Controls character movement using an acceleration-based approach in a deterministic, lockstep simulation.
@@ -12,7 +13,7 @@ namespace Trailblazer.Navigator.Motor
     /// and finalizes traversal states for consistent movement across frames.
     /// </remarks>
     [Serializable]
-    public class NavigatorMotor
+    public class NavMotor
     {
         #region Fields & Properties
 
@@ -26,8 +27,7 @@ namespace Trailblazer.Navigator.Motor
         /// </summary>
         public LocomotionHandler Locomotions = new();
 
-        [NonSerialized]
-        private IScout _hostScout;
+        public NavMotorEvents Events = new();
 
         [NonSerialized]
         private TransitState _currentState;
@@ -39,13 +39,15 @@ namespace Trailblazer.Navigator.Motor
         /// </summary>
         public bool IsFrameLocked { get; private set; }
 
+        public bool IsInitialized { get; private set; }
+
         #region Cache
 
         /// <summary>
         /// Stores the movement request for the current frame.
         /// </summary>
         [NonSerialized]
-        private TravelRequest _frameTraversalRequest;
+        private TraversalRequest _frameTraversalRequest;
 
         /// <summary>
         /// Accumulates forces applied during the traversal phase before they are committed.
@@ -122,33 +124,38 @@ namespace Trailblazer.Navigator.Motor
         #region Construct
 
         /// <summary>
-        /// Creates a new <see cref="NavigatorMotor"/> instance and initializes it with the provided scout.
+        /// Creates a new <see cref="NavMotor"/> instance and initializes it with the provided scout.
         /// </summary>
-        /// <param name="scout">The scout entity that this controller will manage.</param>
+        /// <param name="navigator">The scout entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the scout</param>
-        /// <returns>A new instance of <see cref="NavigatorMotor"/>.</returns>
-        public static NavigatorMotor CreateNew(IScout scout, TraversalCondition initialCondition) => new(scout, initialCondition);
+        /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
+        public static NavMotor CreateNew(INavigate navigator, TraversalCondition initialCondition) => new(navigator, initialCondition);
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="NavigatorMotor"/> class.
+        /// Initializes a new instance of the <see cref="NavMotor"/> class.
         /// </summary>
-        /// <param name="scout">The scout entity that this controller will manage.</param>
-        /// <param name="initialCondition">The initial traversal condition of the scout</param>
-        public NavigatorMotor(IScout scout, TraversalCondition initialCondition) => Initialize(scout, initialCondition);
+        /// <param name="navigator">The scout entity that this controller will manage.</param>
+        /// <param name="initialCondition">The initial traversal condition of the navigator</param>
+        public NavMotor(INavigate navigator, TraversalCondition initialCondition) => Initialize(navigator, initialCondition);
 
         /// <summary>
-        /// Prepares the controller by linking it to the given scout and setting initial state values.
+        /// Prepares the controller by linking it to the given navigator and setting initial state values.
         /// </summary>
-        /// <param name="scout">The scout entity that this controller will manage.</param>
-        /// <param name="initialCondition">The initial traversal condition of the scout</param>
-        public void Initialize(IScout scout, TraversalCondition initialCondition)
+        /// <param name="navigator">The navigator entity that this controller will manage.</param>
+        /// <param name="initialCondition">The initial traversal condition of the navigator</param>
+        public void Initialize(INavigate navigator, TraversalCondition initialCondition)
         {
-            _hostScout = scout;
+            if (navigator == null)
+                ThrowHelper.ThrowArgumentNullException(nameof(navigator));
+
             _currentState = new TransitState(initialCondition);
             if (_currentState.GroundState.HasValue)
                 HandlePlatformChange(); // set the initial platform
-            Locomotions.Move.CurrentPosition = _hostScout.Position;
-            Locomotions.Move.LastPosition = Locomotions.Move.CurrentPosition;
+
+            Locomotions.Move.Position = navigator.Position;
+            Locomotions.Move.LastPosition = Locomotions.Move.Position;
+
+            IsInitialized = true;
         }
 
         #endregion
@@ -158,15 +165,22 @@ namespace Trailblazer.Navigator.Motor
         /// <summary>
         /// Requests movement input for the current simulation frame.
         /// </summary>
+        /// <param name="navigator">The navigator entity that this controller will manage.</param>
         /// <param name="movementDirection">The direction of movement, represented as a unit vector.</param>
         /// <param name="traversalSpeed">The speed category of the movement (e.g., walk, jog, sprint).</param>
         /// <param name="isRequestingJump">Whether the scout is attempting to jump.</param>
-        public void Traverse(Vector3d movementDirection, MovementSpeed traversalSpeed, bool isRequestingJump = false)
+        public void Traverse(
+            INavigate navigator,
+            Vector3d movementDirection,
+            TrekRate traversalSpeed,
+            bool isRequestingJump = false)
         {
-            Traverse(new TravelRequest
+            Traverse(new TraversalRequest
             {
-                MovementDirection = movementDirection,
-                MovementSpeed = traversalSpeed,
+                CurrentPosition = navigator.Position,
+                CurrentRotation = navigator.Rotation,
+                Direction = movementDirection,
+                Rate = traversalSpeed,
                 IsRequestingJump = isRequestingJump
             });
         }
@@ -179,9 +193,9 @@ namespace Trailblazer.Navigator.Motor
         /// Movement forces such as gravity, jump, and platform adjustments are applied.
         /// </remarks>
         /// <param name="traversalRequest">The movement request containing direction, speed, and jump state.</param>
-        public void Traverse(TravelRequest traversalRequest)
+        public void Traverse(TraversalRequest traversalRequest)
         {
-            if (_hostScout == null) return;
+            if (!IsInitialized) return;
 
             if (IsFrameLocked)
                 return;
@@ -192,12 +206,12 @@ namespace Trailblazer.Navigator.Motor
                 Debug.WriteLine($"AgentMotor State: " +
                     $"Grounded={IsGrounded}, " +
                     $"InAir={IsInAir}, " +
-                    $"Velocity={Locomotions.Move.CurrentVelocity}");
+                    $"Velocity={Locomotions.Move.Velocity}");
 
             _frameTraversalRequest = traversalRequest;
 
             // Store the current velocity for manipulation
-            _forceOutput = Locomotions.Move.CurrentVelocity;
+            _forceOutput = Locomotions.Move.Velocity;
 
             // Update platform velocity prior to applying jump force
             UpdatePlatformVelocity();
@@ -220,13 +234,13 @@ namespace Trailblazer.Navigator.Motor
             ApplyJumpForce();
 
             // Save last position before platform movement is applied for velocity calculation.
-            Locomotions.Move.LastPosition = _hostScout.Position;
+            Locomotions.Move.LastPosition = traversalRequest.CurrentPosition;
 
             ApplyPlatformMovement();
 
             // Apply the computed force
             if (_forceOutput != Vector3d.Zero)
-                _hostScout.Events?.OnAddLinearForce?.Invoke(_forceOutput * TrailblazerManager.DeltaTime);
+                Events.OnAddLinearForce?.Invoke(_forceOutput * TrailblazerManager.DeltaTime);
 
             _frameTraversalRequest = default;
         }
@@ -320,24 +334,24 @@ namespace Trailblazer.Navigator.Motor
                 // The direction we're sliding in
                 result = new Vector3d(_currentState.SurfaceNormal.x, Fixed64.Zero, _currentState.SurfaceNormal.z).Normal;
                 // Find the input movement direction projected onto the sliding direction
-                Vector3d projectedMoveDir = Vector3d.Project(_frameTraversalRequest.MovementDirection, result);
+                Vector3d projectedMoveDir = Vector3d.Project(_frameTraversalRequest.Direction, result);
 
                 // Add the sliding direction, the speed control, and the sideways control vectors
                 Vector3d speedContribution = projectedMoveDir * Locomotions.Slide.SpeedControl;
-                Vector3d sidewaysContribution = (_frameTraversalRequest.MovementDirection - projectedMoveDir) * Locomotions.Slide.SidewaysControl;
+                Vector3d sidewaysContribution = (_frameTraversalRequest.Direction - projectedMoveDir) * Locomotions.Slide.SidewaysControl;
 
                 // Multiply with the sliding speed
                 result += (speedContribution + sidewaysContribution) * Locomotions.Slide.SlidingSpeed;
             }
-            else if (Locomotions.IsInControl && _frameTraversalRequest.MovementSpeed != MovementSpeed.Stationary)
+            else if (Locomotions.IsInControl && _frameTraversalRequest.Rate != TrekRate.Stationary)
                 result = GetHorizontalVelocity();
 
             // Ensure smoother stops in water instead of abrupt halts
             if (IsInWater)
             {
                 // Calculates the maximum allowable vertical swimming speed
-                if (_frameTraversalRequest.MovementDirection.y != Fixed64.Zero)
-                    result.y = _frameTraversalRequest.MovementDirection.y * Locomotions.Swim.MaxSwimSpeed;
+                if (_frameTraversalRequest.Direction.y != Fixed64.Zero)
+                    result.y = _frameTraversalRequest.Direction.y * Locomotions.Swim.MaxSwimSpeed;
 
                 // Apply drag resistance (reduces speed as it increases)
                 if (result != Vector3d.Zero)
@@ -376,8 +390,8 @@ namespace Trailblazer.Navigator.Motor
         /// <returns>The target horizontal velocity.</returns>
         private Vector3d GetHorizontalVelocity()
         {
-            Fixed3x3 transposedMatrix = _hostScout.Rotation.ToMatrix3x3();
-            Vector3d desiredLocalDirection = Fixed3x3.InverseTransformDirection(transposedMatrix, _frameTraversalRequest.MovementDirection);
+            Fixed3x3 transposedMatrix = _frameTraversalRequest.CurrentRotation.ToMatrix3x3();
+            Vector3d desiredLocalDirection = Fixed3x3.InverseTransformDirection(transposedMatrix, _frameTraversalRequest.Direction);
             Fixed64 speed = MaxHoritzontalSpeedInDirection(desiredLocalDirection);
 
             speed *= Locomotions.Move.MoveSpeedMultiplier;
@@ -419,15 +433,15 @@ namespace Trailblazer.Navigator.Motor
                     maxSpeed = Locomotions.Move.MaxBackwardsSpeed;
                 else
                 {
-                    switch (_frameTraversalRequest.MovementSpeed)
+                    switch (_frameTraversalRequest.Rate)
                     {
-                        case MovementSpeed.Slow:
+                        case TrekRate.Slow:
                             maxSpeed = Locomotions.Move.MaxSlowSpeed;
                             break;
-                        case MovementSpeed.Moderate:
+                        case TrekRate.Moderate:
                             maxSpeed = Locomotions.Move.MaxModerateSpeed;
                             break;
-                        case MovementSpeed.Fast:
+                        case TrekRate.Fast:
                             maxSpeed = Locomotions.Move.MaxFastSpeed;
                             break;
                     }
@@ -496,11 +510,11 @@ namespace Trailblazer.Navigator.Motor
 
             if (!IsInAir) return;
 
-            _forceOutput.y = Locomotions.Move.CurrentVelocity.y - gravityStep;
+            _forceOutput.y = Locomotions.Move.Velocity.y - gravityStep;
 
             // Ensure velocity does not exceed terminal fall speed
-            if (Locomotions.Move.CurrentVelocity.y + _forceOutput.y * TrailblazerManager.DeltaTime < -Locomotions.Move.TerminalVelocity)
-                _forceOutput.y = -Locomotions.Move.TerminalVelocity - Locomotions.Move.CurrentVelocity.y;
+            if (Locomotions.Move.Velocity.y + _forceOutput.y * TrailblazerManager.DeltaTime < -Locomotions.Move.TerminalVelocity)
+                _forceOutput.y = -Locomotions.Move.TerminalVelocity - Locomotions.Move.Velocity.y;
 
             // When jumping up we don't apply gravity for some time when the user is holding the jump button.
             // This allows for more control over jump height by pressing the button longer.
@@ -529,14 +543,14 @@ namespace Trailblazer.Navigator.Motor
 
             if (IsInAir || IsInWater && !Locomotions.Swim.CanBreachWater || Locomotions.Jump.IsCoolingDown) return;
 
-            if (_hostScout.Events?.CanAffordJump?.Invoke() == false) return;
+            if (Events.CanAffordJump?.Invoke() == false) return;
 
             Vector3d jumpForce;
             if (IsInWater)
             {
                 Locomotions.Jump.FrameJumpDirection = Vector3d.Up;
                 jumpForce = Locomotions.Jump.FrameJumpDirection * (GetVerticalJumpSpeed() * Locomotions.Swim.BreachJumpMultiplier);
-                _hostScout.Events?.OnStartWaterBreach?.Invoke();
+                Events.OnStartWaterBreach?.Invoke();
             }
             else
             {
@@ -551,7 +565,7 @@ namespace Trailblazer.Navigator.Motor
 
                 jumpForce = Locomotions.Jump.FrameJumpDirection * GetVerticalJumpSpeed();
 
-                _hostScout.Events?.OnStartJump?.Invoke(Locomotions.Jump.AvoidGroundingTimer);
+                Events.OnStartJump?.Invoke(Locomotions.Jump.AvoidGroundingTimer);
             }
 
             // If we aren't in air, trigger a new jump then...
@@ -585,14 +599,14 @@ namespace Trailblazer.Navigator.Motor
             if (targetRotation != FixedQuaternion.Identity)
             {
                 FixedQuaternion rotationDiff = targetRotation * Locomotions.Platform.ScoutGlobalRotation.Inverse();
-                _hostScout.Events?.OnAddPlatformRotationDelta?.Invoke(rotationDiff);
+                Events.OnAddRotationDelta?.Invoke(rotationDiff);
             }
 
             Vector3d newGlobalPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
             Vector3d moveDistance = newGlobalPoint - Locomotions.Platform.ScoutGlobalPoint;
             if (moveDistance != Vector3d.Zero)
             {
-                _hostScout.Events?.OnAddPlatformPositionDelta?.Invoke(moveDistance);
+                Events.OnAddPositionDelta?.Invoke(moveDistance);
                 Locomotions.Move.LastPosition += moveDistance; // shift last position so it doesn't alter scout's velocity
             }
         }
@@ -608,23 +622,26 @@ namespace Trailblazer.Navigator.Motor
         /// This method updates the scout's velocity, applies necessary adjustments based on traversal state changes,
         /// and processes platform movement or environmental effects as needed.
         /// </remarks>
-        public void FinishFrameTraversal(TraversalCondition condition)
+        public void FinishFrameTraversal(INavigate navigator, TraversalCondition condition)
         {
-            if (!IsFrameLocked) return;
+            if (!IsInitialized || !IsFrameLocked) return;
 
-            Locomotions.Move.CurrentPosition = _hostScout.Position;
+            Locomotions.Move.Position = navigator.Position;
 
-            Locomotions.Move.LastVelocity = Locomotions.Move.CurrentVelocity;
-            Locomotions.Move.CurrentVelocity = (Locomotions.Move.CurrentPosition - Locomotions.Move.LastPosition) / TrailblazerManager.DeltaTime;
+            Locomotions.Move.LastVelocity = Locomotions.Move.Velocity;
+            Locomotions.Move.Velocity = (Locomotions.Move.Position - Locomotions.Move.LastPosition) / TrailblazerManager.DeltaTime;
+
+            Locomotions.Move.Speed = Locomotions.Move.Velocity.Magnitude;
+            Locomotions.Move.Acceleration = (Locomotions.Move.Velocity - Locomotions.Move.LastVelocity) / TrailblazerManager.DeltaTime;
 
             _currentState.Update(condition, _currentState.ToTraversalCondition());
 
             // Make sure we aren't hitting the ceiling
-            if (Locomotions.Move.CurrentVelocity.y > Fixed64.Zero && _currentState.CeilingLevel != Fixed64.MAX_VALUE)
+            if (Locomotions.Move.Velocity.y > Fixed64.Zero && _currentState.CeilingLevel != Fixed64.MAX_VALUE)
             {
-                if (_hostScout.Position.y > _currentState.CeilingLevel)
+                if (Locomotions.Move.Position.y > _currentState.CeilingLevel)
                 {
-                    Locomotions.Move.CurrentVelocity = new Vector3d(Locomotions.Move.CurrentVelocity.x, Fixed64.Zero, Locomotions.Move.CurrentVelocity.z);
+                    Locomotions.Move.Velocity = new Vector3d(Locomotions.Move.Velocity.x, Fixed64.Zero, Locomotions.Move.Velocity.z);
                     Locomotions.Jump.IsJumping = false;
                     Locomotions.Jump.IsHoldingJump = false;
                 }
@@ -640,7 +657,7 @@ namespace Trailblazer.Navigator.Motor
 
             HandleFallState();
 
-            HandlePlatformMovement();
+            HandlePlatformMovement(navigator);
 
             IsFrameLocked = false;
         }
@@ -703,7 +720,7 @@ namespace Trailblazer.Navigator.Motor
 
             if (isReleasing)
             {
-                Locomotions.Move.CurrentVelocity -= Locomotions.Platform.PlatformVelocity;
+                Locomotions.Move.Velocity -= Locomotions.Platform.PlatformVelocity;
                 return;
             }
 
@@ -713,7 +730,7 @@ namespace Trailblazer.Navigator.Motor
             {
                 // Scout just left the ground, so it inherits platform inertia into its new velocity.
                 Locomotions.Platform.FramePlatformVelocity = Locomotions.Platform.PlatformVelocity;
-                Locomotions.Move.CurrentVelocity += Locomotions.Platform.PlatformVelocity;
+                Locomotions.Move.Velocity += Locomotions.Platform.PlatformVelocity;
                 return;
             }
 
@@ -726,7 +743,7 @@ namespace Trailblazer.Navigator.Motor
                 else
                     // If the platform isn’t new, we assume the scout landed back on the same platform
                     // and subtract platform velocity to prevent doubling the effect.
-                    Locomotions.Move.CurrentVelocity -= Locomotions.Platform.PlatformVelocity;
+                    Locomotions.Move.Velocity -= Locomotions.Platform.PlatformVelocity;
             }
         }
 
@@ -747,15 +764,15 @@ namespace Trailblazer.Navigator.Motor
                     Locomotions.Jump.IsJumping = false;
 
                     if (IsInWater)
-                        _hostScout.Events?.OnStopWaterBreach?.Invoke();
+                        Events.OnStopWaterBreach?.Invoke();
                     else
-                        _hostScout.Events?.OnStopJump?.Invoke();
+                        Events.OnStopJump?.Invoke();
 
                     return;
                 }
 
                 if (!IsInWater)
-                    _hostScout.Events?.OnLandedFall?.Invoke();
+                    Events.OnLandedFall?.Invoke();
             }
 
             // Transitioning out of water
@@ -780,12 +797,12 @@ namespace Trailblazer.Navigator.Motor
             if (Locomotions.Swim.IsEnabled)
             {
                 Locomotions.Swim.IsSwimming = true;
-                Locomotions.Swim.IsDiving = _hostScout.Position.y < _currentState.SurfaceLevel;
+                Locomotions.Swim.IsDiving = Locomotions.Move.Position.y < _currentState.SurfaceLevel;
 
                 Locomotions.Swim.UpdateDiveTime();
 
                 if (IsInWater && Locomotions.Swim.IsDrowning)
-                    _hostScout.Events?.OnDrowning?.Invoke(Locomotions.Swim.UnderwaterTimer);
+                    Events.OnDrowning?.Invoke(Locomotions.Swim.UnderwaterTimer);
             }
         }
 
@@ -808,24 +825,24 @@ namespace Trailblazer.Navigator.Motor
             if (Locomotions.Fall.IsFalling)
             {
                 // Make sure we didn't somehow get above the initial start point
-                if (_hostScout.Position.y > Locomotions.Fall.FallStart)
-                    Locomotions.Fall.FallStart = _hostScout.Position.y;
+                if (Locomotions.Move.Position.y > Locomotions.Fall.FallStart)
+                    Locomotions.Fall.FallStart = Locomotions.Move.Position.y;
 
                 if (!IsInAir && !Locomotions.Slide.IsSliding)
                 {
                     // scout landed after falling
                     Locomotions.Fall.IsFalling = false;
-                    Locomotions.Fall.FallEnd = _hostScout.Position.y;
+                    Locomotions.Fall.FallEnd = Locomotions.Move.Position.y;
 
                     if (Locomotions.Fall.FallHeight > Fixed64.Zero)
-                        _hostScout.Events?.OnStopFall?.Invoke(Locomotions.Fall.FallHeight);
+                        Events.OnStopFall?.Invoke(Locomotions.Fall.FallHeight);
 
                     return;
                 }
 
-                Fixed64 fallHeight = (Locomotions.Fall.FallStart - _hostScout.Position.y).Abs();
+                Fixed64 fallHeight = (Locomotions.Fall.FallStart - Locomotions.Move.Position.y).Abs();
                 if (fallHeight > Locomotions.Fall.MaxFallHeight)
-                    _hostScout.Events?.OnMaxFallHeightReached?.Invoke();
+                    Events?.OnMaxFallHeightReached?.Invoke();
 
                 return;
             }
@@ -838,8 +855,8 @@ namespace Trailblazer.Navigator.Motor
             {
                 // scout started falling
                 Locomotions.Fall.IsFalling = true;
-                Locomotions.Fall.FallStart = _hostScout.Position.y;
-                _hostScout.Events?.OnStartFall?.Invoke();
+                Locomotions.Fall.FallStart = Locomotions.Move.Position.y;
+                Events?.OnStartFall?.Invoke();
             }
         }
 
@@ -849,18 +866,18 @@ namespace Trailblazer.Navigator.Motor
         /// <remarks>
         /// This method prevents unwanted movement shifts when transitioning between platforms, ensuring smooth locomotion.
         /// </remarks>
-        private void HandlePlatformMovement()
+        private void HandlePlatformMovement(INavigate navigator)
         {
             if (!IsMovingWithPlatform) return;
 
-            Vector3d footPosition = _hostScout.GetFootPosition();
+            Vector3d footPosition = navigator.GetFootPosition();
             footPosition.y += Locomotions.Platform.HeightAdjust;
             Locomotions.Platform.ScoutGlobalPoint = footPosition;
             Locomotions.Platform.ScoutLocalPoint = Fixed4x4.InverseTransformPoint(
                 Locomotions.Platform.ActiveTransform,
                 Locomotions.Platform.ScoutGlobalPoint);
 
-            Locomotions.Platform.ScoutGlobalRotation = _hostScout.Rotation;
+            Locomotions.Platform.ScoutGlobalRotation = navigator.Rotation;
             Locomotions.Platform.ScoutLocalRotation = Locomotions.Platform.ActiveTransform.Rotation.Inverse() * Locomotions.Platform.ScoutGlobalRotation;
         }
 
@@ -904,7 +921,7 @@ namespace Trailblazer.Navigator.Motor
         /// <param name="velocity">The new velocity to assign to the scout.</param>
         public void SetVelocity(Vector3d velocity)
         {
-            Locomotions.Move.CurrentVelocity = velocity;
+            Locomotions.Move.Velocity = velocity;
         }
 
         public void UpdateTraversal(TraversalCondition newCondition)

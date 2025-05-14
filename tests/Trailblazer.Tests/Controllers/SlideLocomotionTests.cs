@@ -1,9 +1,9 @@
 ﻿using Xunit;
 using FluentAssertions;
 using FixedMathSharp;
-using Trailblazer.Navigator.Motor;
+using Trailblazer.Navigation.Motor;
 
-namespace Trailblazer.Tests.Navigator.Motor
+namespace Trailblazer.Tests.Navigation.Motor
 {
     [Collection("TrailblazerCollection")]
     public class SlideLocomotionTests
@@ -17,13 +17,13 @@ namespace Trailblazer.Tests.Navigator.Motor
                 platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right * Fixed64.Half, (Fixed64)0.85)
             );
 
-            var scout = IScoutTestFactory.CreatePlatformScout(
+            var scout = IScoutTestFactory.CreatePlatformAgent(
                 startPosition: Vector3d.Zero,
                 platformMatrix: platform
             );
 
             // Act
-            scout.Controller.Traverse(Vector3d.Forward, MovementSpeed.Slow);
+            scout.Controller.Traverse(Vector3d.Forward, TraversalSpeed.Slow);
             scout.Controller.FinishFrameTraversal(scout.TraversalCondition);
 
             // Assert
@@ -39,13 +39,13 @@ namespace Trailblazer.Tests.Navigator.Motor
                 platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Forward, FixedMath.Atan(Fixed64.FromRaw(0x08000000L)))
             );
 
-            var scout = IScoutTestFactory.CreatePlatformScout(
+            var scout = IScoutTestFactory.CreatePlatformAgent(
                 startPosition: Vector3d.Zero,
                 platformMatrix: platform
             );
 
             // Act
-            scout.Controller.Traverse(Vector3d.Forward, MovementSpeed.Slow);
+            scout.Controller.Traverse(Vector3d.Forward, TraversalSpeed.Slow);
 
             // Assert
             scout.Controller.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -60,7 +60,7 @@ namespace Trailblazer.Tests.Navigator.Motor
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
             );
 
-            var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform);
+            var scout = IScoutTestFactory.CreatePlatformAgent(platformMatrix: platform);
 
             // No movement input
             for (int i = 0; i < 3; i++)
@@ -82,13 +82,13 @@ namespace Trailblazer.Tests.Navigator.Motor
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
             );
 
-            var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform, surfaceFriction: Fixed64.One); // max friction
+            var scout = IScoutTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.One); // max friction
 
             // Simulate several frames to allow friction to take effect
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.Controller.Traverse(Vector3d.Zero, MovementSpeed.Stationary);
+                scout.Controller.Traverse(Vector3d.Zero, TraversalSpeed.Stationary);
                 scout.Controller.FinishFrameTraversal(scout.TraversalCondition);
             }
 
@@ -102,8 +102,8 @@ namespace Trailblazer.Tests.Navigator.Motor
             var slopeAngle = FixedMath.DegToRad((Fixed64)50);
             var platform = IScoutTestFactory.CreatePlatform(platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
-            var lowFrictionScout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform, surfaceFriction: Fixed64.Zero);
-            var highFrictionScout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform, surfaceFriction: Fixed64.One);
+            var lowFrictionScout = IScoutTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.Zero);
+            var highFrictionScout = IScoutTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.One);
 
             for (int i = 0; i < 5; i++)
             {
@@ -136,7 +136,7 @@ namespace Trailblazer.Tests.Navigator.Motor
                 platformRotation: FixedQuaternion.FromEulerAngles(steepSlope, Fixed64.Zero, Fixed64.Zero)
             );
 
-            var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform);
+            var scout = IScoutTestFactory.CreatePlatformAgent(platformMatrix: platform);
             scout.Controller.Locomotions.Slide.SlopeLimit = (Fixed64)45;
 
             // Simulate sliding for a few frames
@@ -176,7 +176,7 @@ namespace Trailblazer.Tests.Navigator.Motor
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
             );
 
-            var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform);
+            var scout = IScoutTestFactory.CreatePlatformAgent(platformMatrix: platform);
 
             scout.Controller.Locomotions.Slide.SlopeLimit = (Fixed64)45;
             scout.Controller.Locomotions.Slide.SidewaysControl = (Fixed64)1;
@@ -187,7 +187,7 @@ namespace Trailblazer.Tests.Navigator.Motor
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(sidewaysInput, MovementSpeed.Slow);
+                scout.SetTravelRequest(sidewaysInput, TraversalSpeed.Slow);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -206,7 +206,7 @@ namespace Trailblazer.Tests.Navigator.Motor
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
             );
 
-            var scout = IScoutTestFactory.CreateFallingScout(startPosition: new Vector3d(0, 2, 0), surfaceLevel: Fixed64.Zero, platformMatrix: platform);
+            var scout = IScoutTestFactory.CreateFallingAgent(startPosition: new Vector3d(0, 2, 0), surfaceLevel: Fixed64.Zero, platformMatrix: platform);
 
             for (int i = 0; i < 32; i++)
             {
@@ -234,7 +234,7 @@ namespace Trailblazer.Tests.Navigator.Motor
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
             );
 
-            var scout = IScoutTestFactory.CreatePlatformScout(platformMatrix: platform);
+            var scout = IScoutTestFactory.CreatePlatformAgent(platformMatrix: platform);
             scout.Controller.Locomotions.Slide.IsEnabled = false;
 
             for (int i = 0; i < 3; i++)

@@ -1,4 +1,4 @@
-﻿namespace Trailblazer.Navigator.Motor
+﻿namespace Trailblazer.Navigation.Motor
 {
     /// <summary>
     /// Specifies the different movement mediums a scout can traverse through.
@@ -50,31 +50,5 @@
         /// The scout is locked to the movement of the platform and moves along with it.
         /// </summary>
         PermaLocked = 3
-    }
-
-    /// <summary>
-    /// Defines movement speed categories for traversal.
-    /// </summary>
-    public enum MovementSpeed
-    {
-        /// <summary>
-        /// No movement (idle state).
-        /// </summary>
-        Stationary = 0,
-
-        /// <summary>
-        /// Slow movement, typically equivalent to walking.
-        /// </summary>
-        Slow = 1,
-
-        /// <summary>
-        /// Moderate movement, commonly used for jogging.
-        /// </summary>
-        Moderate = 2,
-
-        /// <summary>
-        /// Fast movement, typically equivalent to sprinting.
-        /// </summary>
-        Fast = 3,
     }
 }

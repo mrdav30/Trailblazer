@@ -1,9 +1,9 @@
 ﻿using Xunit;
 using FluentAssertions;
 using FixedMathSharp;
-using Trailblazer.Navigator.Motor;
+using Trailblazer.Navigation.Motor;
 
-namespace Trailblazer.Tests.Navigator.Motor
+namespace Trailblazer.Tests.Navigation.Motor
 {
     [Collection("TrailblazerCollection")]
     public class SwimLocomotionTests
@@ -13,7 +13,7 @@ namespace Trailblazer.Tests.Navigator.Motor
         public void Given_ScoutAtNeutralBuoyancy_When_Simulated_Then_ShouldRemainSuspended()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateMockScout();
+            var scout = IScoutTestFactory.CreateMockAgent();
             scout.SetTraversalCondition(TraversalMedium.Water, scout.Position.y);
 
             scout.Controller.Locomotions.Swim.IsEnabled = true;
@@ -36,7 +36,7 @@ namespace Trailblazer.Tests.Navigator.Motor
         public void Given_ScoutEntersWater_When_Simulated_Then_ShouldTransitionToSwimming()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateMockScout(startingMedium: TraversalMedium.Ground);
+            var scout = IScoutTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             // Act - First frame, still on ground
             TrailblazerManager.Simulate();
@@ -59,7 +59,7 @@ namespace Trailblazer.Tests.Navigator.Motor
         public void Given_ScoutExitsWater_When_Simulated_Then_ShouldTransitionOutOfSwimming()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateMockScout();
+            var scout = IScoutTestFactory.CreateMockAgent();
             scout.SetTraversalCondition(TraversalMedium.Water, scout.Position.y + Fixed64.One);
             scout.Controller.UpdateTraversal(scout.TraversalCondition);
 
@@ -83,14 +83,14 @@ namespace Trailblazer.Tests.Navigator.Motor
         public void Given_ScoutInWater_When_Simulated_Then_ShouldApplyWaterDrag()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateMockScout();
+            var scout = IScoutTestFactory.CreateMockAgent();
             scout.Controller.Locomotions.Swim.IsEnabled = true;
             scout.SetTraversalCondition(TraversalMedium.Water, scout.Position.y + Fixed64.One);
             scout.Controller.UpdateTraversal(scout.TraversalCondition);
 
             // Act - Enter Water
             TrailblazerManager.Simulate();
-            scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Slow);
+            scout.SetTravelRequest(Vector3d.Forward, TraversalSpeed.Slow);
             scout.StartTraversal();
             scout.FinalizeTraversal();
 
@@ -98,7 +98,7 @@ namespace Trailblazer.Tests.Navigator.Motor
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(Vector3d.Forward, MovementSpeed.Slow);
+                scout.SetTravelRequest(Vector3d.Forward, TraversalSpeed.Slow);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -117,7 +117,7 @@ namespace Trailblazer.Tests.Navigator.Motor
         public void Given_ScoutAtWaterSurface_When_Simulated_Then_ShouldExperienceBuoyancyForces()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateMockScout();
+            var scout = IScoutTestFactory.CreateMockAgent();
             scout.Controller.Locomotions.Swim.IsEnabled = true;
             scout.SetTraversalCondition(TraversalMedium.Water, scout.Position.y + Fixed64.One);
             scout.Controller.UpdateTraversal(scout.TraversalCondition);
@@ -146,7 +146,7 @@ namespace Trailblazer.Tests.Navigator.Motor
         public void Given_ScoutWithPositiveBuoyancy_When_Simulated_Then_ShouldFloatUp()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateWaterScout(startPosition: Vector3d.Down * 5);
+            var scout = IScoutTestFactory.CreateWaterAgent(startPosition: Vector3d.Down * 5);
 
             scout.Controller.Locomotions.Swim.IsEnabled = true;
             scout.Controller.Locomotions.Swim.BuoyancyFactor = Fixed64.FromRaw(0x180000000L); // ~1.5, meaning scout is more buoyant
@@ -171,7 +171,7 @@ namespace Trailblazer.Tests.Navigator.Motor
         public void Given_ScoutWithLowBuoyancy_When_Simulated_Then_ShouldSink()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateWaterScout(startPosition: Vector3d.Down);
+            var scout = IScoutTestFactory.CreateWaterAgent(startPosition: Vector3d.Down);
 
             scout.Controller.Locomotions.Swim.IsEnabled = true;
             scout.Controller.Locomotions.Swim.BuoyancyFactor = Fixed64.Half; // ~0.5, meaning scout is heavier than water
@@ -193,7 +193,7 @@ namespace Trailblazer.Tests.Navigator.Motor
         [Fact]
         public void Given_ScoutResurfacesFromDive_When_BreathWasLow_Then_ShouldRegenerateBreath()
         {
-            var scout = IScoutTestFactory.CreateWaterScout();
+            var scout = IScoutTestFactory.CreateWaterAgent();
             var swim = scout.Controller.Locomotions.Swim;
             swim.UnderwaterTimer = (Fixed64)30;
 
@@ -213,7 +213,7 @@ namespace Trailblazer.Tests.Navigator.Motor
         [Fact]
         public void Given_DrowningDisabled_When_UnderwaterLong_Then_ShouldNotDrown()
         {
-            var scout = IScoutTestFactory.CreateWaterScout();
+            var scout = IScoutTestFactory.CreateWaterAgent();
             var swim = scout.Controller.Locomotions.Swim;
             swim.CanDrown = false;
             swim.HoldBreathTime = Fixed64.One;
@@ -230,13 +230,13 @@ namespace Trailblazer.Tests.Navigator.Motor
         public void Given_ScoutDiving_When_MovesUp_Then_ShouldSwimUpward()
         {
             var initialPosition = new Vector3d(0, -2, 0);
-            var scout = IScoutTestFactory.CreateMockScout(startPosition: initialPosition, startingMedium: TraversalMedium.Water);
+            var scout = IScoutTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Water);
             scout.Controller.Locomotions.Swim.IsSwimming = true;
 
             for (int i = 0; i < 10; i++) // Simulate swimming upwards
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(Vector3d.Up, MovementSpeed.Slow);
+                scout.SetTravelRequest(Vector3d.Up, TraversalSpeed.Slow);
                 scout.StartTraversal();
                 scout.FinalizeTraversal();
             }
@@ -247,7 +247,7 @@ namespace Trailblazer.Tests.Navigator.Motor
         [Fact]
         public void Given_ScoutUnderwater_When_OutOfBreath_Then_ShouldTriggerDrowning()
         {
-            var scout = IScoutTestFactory.CreateMockScout(startPosition: new Vector3d(0, -5, 0), startingMedium: TraversalMedium.Water);
+            var scout = IScoutTestFactory.CreateMockAgent(startPosition: new Vector3d(0, -5, 0), startingMedium: TraversalMedium.Water);
 
             scout.Controller.Locomotions.Swim.HoldBreathTime = (Fixed64)3;
             scout.Controller.Locomotions.Swim.CanDrown = true;
@@ -265,14 +265,14 @@ namespace Trailblazer.Tests.Navigator.Motor
         [Fact]
         public void Given_SwimmingScout_When_JumpRequested_Then_ShouldBreachWater()
         {
-            var scout = IScoutTestFactory.CreateWaterScout(surfaceLevel: Fixed64.Zero);
+            var scout = IScoutTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
             scout.Controller.Locomotions.Swim.CanBreachWater = true;
 
             bool breached = false;
             scout.Events.OnStartWaterBreach += () => breached = true;
 
             // Request a jump while swimming
-            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
@@ -285,14 +285,14 @@ namespace Trailblazer.Tests.Navigator.Motor
         [Fact]
         public void Given_SwimmingScout_When_JumpRequestedButBreachDisabled_Then_ShouldNotJump()
         {
-            var scout = IScoutTestFactory.CreateWaterScout(surfaceLevel: Fixed64.Zero);
+            var scout = IScoutTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
             scout.Controller.Locomotions.Swim.CanBreachWater = false;
 
             bool breached = false;
             scout.Events.OnStartWaterBreach += () => breached = true;
 
             // Request a jump while swimming, but breach is disabled
-            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();
@@ -305,14 +305,14 @@ namespace Trailblazer.Tests.Navigator.Motor
         [Fact]
         public void Given_ScoutBreachesWater_When_ExitsWater_Then_ShouldStopSwimmingAndTriggerStopBreach()
         {
-            var scout = IScoutTestFactory.CreateWaterScout(surfaceLevel: Fixed64.Zero);
+            var scout = IScoutTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
             scout.Controller.Locomotions.Swim.CanBreachWater = true;
 
             bool stopBreach = false;
             scout.Events.OnStopWaterBreach += () => stopBreach = true;
 
             // Simulate a jump breach
-            scout.SetTravelRequest(Vector3d.Zero, MovementSpeed.Stationary, isRequestingJump: true);
+            scout.SetTravelRequest(Vector3d.Zero, TraversalSpeed.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.StartTraversal();
             scout.FinalizeTraversal();

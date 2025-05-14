@@ -1,12 +1,12 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigator.Motor;
+using Trailblazer.Navigation.Motor;
 
-namespace Trailblazer.Navigator
+namespace Trailblazer.Navigation
 {
     /// <summary>
     /// Defines the core interface for a scout entity, providing position, rotation, traversal state, and event handling.
     /// </summary>
-    public interface IScout
+    public interface INavigate
     {
         /// <summary>
         /// The current world position of the scout.
@@ -21,13 +21,13 @@ namespace Trailblazer.Navigator
         /// <summary>
         /// The controller responsible for managing the scout's movement and physics interactions.
         /// </summary>
-        NavigatorMotor Controller { get; }
+        NavMotor Motor { get; }
 
         /// <summary>
         /// The set of events associated with the scout, allowing for external interactions such as force application and state transitions.
         /// </summary>
         #nullable enable
-        ScoutEvents Events { get; }
+        NavEvents Events { get; }
 #nullable disable
 
         /// <summary>

@@ -1,55 +1,64 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigator;
-using Trailblazer.Navigator.Motor;
+using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Tests
 {
-    public class MockScout : Scout
+    public class MockAgent
     {
+        public Vector3d Position { get; set; }
+
+        public FixedQuaternion Rotation { get; set; }
+
         public Vector3d Velocity { get; set; }
 
-        private Vector3d _pendingVelocity;
+        public Fixed64 Radius => Fixed64.Half;
+
+        private Vector3d _velocityDelta;
 
         private Vector3d _positionDelta;
 
         private FixedQuaternion _rotationDelta = FixedQuaternion.Identity;
 
-        public MockScout(Vector3d position, Vector3d velocity, TraversalCondition traversalCondition)
+        public Navigator Navigator { get; set; } = new Navigator();
+
+        public MockAgent(Vector3d position, Vector3d velocity, TraversalCondition traversalCondition)
         {
             Position = position;
 
-            TraversalCondition = traversalCondition;
-
             MockGroundCheck();
 
-            Events = new();
+            Navigator.Initialize(position, velocity, Radius, traversalCondition);
 
-            Events.CanAffordJump = () => true;
+            Navigator.Events.CanAffordJump = () => true;
 
-            Events.OnAddPlatformPositionDelta += (deltaPos) =>
+            Navigator.Events.OnAddPositionDelta += (deltaPos) =>
             {
                 _positionDelta += deltaPos;
             };
-            Events.OnAddPlatformRotationDelta += (rot) =>
+            Navigator.Events.OnAddRotationDelta += (rot) =>
             {
                 _rotationDelta *= rot;
             };
-            Events.OnAddLinearForce += (force) =>
+            Navigator.Events.OnAddLinearForce += (force) =>
             {
                 // assume a mass of 1
-                _pendingVelocity += force;
+                _velocityDelta += force;
             };
 
-            Controller = NavigatorMotor.CreateNew(this, TraversalCondition);
-            Controller.SetVelocity(velocity);
         }
 
-        public override void FinalizeTraversal()
+        public void Simulate()
+        {
+            Navigator.OnSimulate();
+        }
+
+        public void Visualize()
         {
             Vector3d previousPosition = Position;
 
             // resolve velocity
-            Position += _positionDelta + _pendingVelocity;
+            Position += _positionDelta + _velocityDelta;
 
             if (_rotationDelta != FixedQuaternion.Identity)
             {
@@ -62,27 +71,27 @@ namespace Trailblazer.Tests
             Velocity = (Position - previousPosition) / TrailblazerManager.DeltaTime;
 
             _positionDelta = Vector3d.Zero;
-            _pendingVelocity = Vector3d.Zero;
+            _velocityDelta = Vector3d.Zero;
 
-            base.FinalizeTraversal();
+            Navigator.OnVisualize();
         }
 
         private TraversalMedium? _previousMedium;
         // Update TraversalState based on output from controller
-        private void MockGroundCheck()
+        public void MockGroundCheck()
         {
             // If scout is already grounded, maintain state unless velocity pushes it up
-            if (TraversalCondition.Medium == TraversalMedium.Ground)
+            if (Navigator.TraversalCondition.Medium == TraversalMedium.Ground)
             {
-                if (_pendingVelocity.y > Fixed64.Zero)
+                if (_velocityDelta.y > Fixed64.Zero)
                 {
                     // If scout is moving upwards, it should no longer be grounded
-                    _previousMedium = TraversalCondition.Medium;
-                    TraversalCondition.Medium = TraversalMedium.Air;
+                    _previousMedium = Navigator.TraversalCondition.Medium;
+                    Navigator.TraversalCondition.Medium = TraversalMedium.Air;
                     return;
                 }
 
-                var surfaceMatrix = TraversalCondition.GroundState?.GroundMatrix;
+                var surfaceMatrix = Navigator.TraversalCondition.GroundState?.GroundMatrix;
                 if (surfaceMatrix != null)
                 {
                     // Compute world Y value from surface plane based on scout's X/Z
@@ -98,22 +107,22 @@ namespace Trailblazer.Tests
             }
 
             // If scout is airborne, check if it should transition to grounded
-            if (TraversalCondition.Medium == TraversalMedium.Air)
+            if (Navigator.TraversalCondition.Medium == TraversalMedium.Air)
             {
-                Fixed64 surfaceLevel = TraversalCondition.SurfaceLevel;
+                Fixed64 surfaceLevel = Navigator.TraversalCondition.SurfaceLevel;
                 Fixed64 scoutHeight = Position.y;
 
                 // Ensure velocity is downward and scout is within landing range
-                if (_pendingVelocity.y < Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
+                if (_velocityDelta.y < Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
                 {
                     // Set state to previous state or assume ground
-                    TraversalCondition.Medium = _previousMedium ?? TraversalMedium.Ground;
+                    Navigator.TraversalCondition.Medium = _previousMedium ?? TraversalMedium.Ground;
                     Position = new Vector3d(Position.x, surfaceLevel, Position.z);
 
-                    if (TraversalCondition.Medium == TraversalMedium.Ground)
+                    if (Navigator.TraversalCondition.Medium == TraversalMedium.Ground)
                     {
                         // Update ground normal if needed (assuming ground is flat for now)
-                        TraversalCondition.GroundState ??= new GroundCondition
+                        Navigator.TraversalCondition.GroundState ??= new GroundCondition
                         {
                             GroundMatrix = Fixed4x4.Identity, // Assuming a flat ground by default
                         };
@@ -123,18 +132,18 @@ namespace Trailblazer.Tests
                 return;
             }
 
-            if (TraversalCondition.Medium == TraversalMedium.Water)
+            if (Navigator.TraversalCondition.Medium == TraversalMedium.Water)
             {
-                Fixed64 surfaceLevel = TraversalCondition.SurfaceLevel;
+                Fixed64 surfaceLevel = Navigator.TraversalCondition.SurfaceLevel;
                 Fixed64 scoutHeight = Position.y;
 
                 if (scoutHeight > surfaceLevel)
                 {
-                    if (_pendingVelocity.y > Fixed64.Zero)
+                    if (_velocityDelta.y > Fixed64.Zero)
                     {
                         // If scout is moving upwards, it should no longer be grounded
-                        _previousMedium = TraversalCondition.Medium;
-                        TraversalCondition.Medium = TraversalMedium.Air;
+                        _previousMedium = Navigator.TraversalCondition.Medium;
+                        Navigator.TraversalCondition.Medium = TraversalMedium.Air;
                         return;
                     }
 

@@ -4,7 +4,7 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using Trailblazer.Navigator.Motor;
+using Trailblazer.Navigation.Motor;
 
 [AttributeUsage(AttributeTargets.Property)]
 public class TransientAttribute : Attribute { }

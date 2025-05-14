@@ -4,14 +4,25 @@ using System.Diagnostics;
 using GridForge.Grids;
 using SwiftCollections;
 using Trailblazer.Pathing;
+using Trailblazer.Navigation.Motor;
+using System.Runtime.CompilerServices;
 
-namespace Trailblazer.Navigator
+namespace Trailblazer.Navigation
 {
+    /// <summary>
+    /// Base class representing a navigator, responsible for handling movement, traversal state, and simulation flow.
+    /// </summary>
+    /// <remarks>
+    /// This class acts as a bridge between the simulation logic (`ScoutController`) and the entity's external representation.  
+    /// It defines common traversal behaviors and lifecycle methods that can be extended by concrete implementations.
+    /// </remarks>
     [Serializable]
-    public class Navigator : IAvoidanceBody
+    public class Navigator : INavigate, IAvoidanceBody
     {
         // Stop multipliers determine accuracy required for stopping on the destination
         public static readonly Fixed64 DefaultDirectStop = Fixed64.FromRaw(0x40000000L); // 0.25f;
+        public static readonly Fixed64 DecelerationMultiplier = (Fixed64)10f;
+        public static readonly Fixed64 DefaultFootPositionAdjust = new Fixed64(0.25f);
 
         private static readonly int _stuckFrameThreshold = TrailblazerManager.FrameRate / 4;
         private static readonly int _stuckRepathTries = 4;
@@ -28,9 +39,10 @@ namespace Trailblazer.Navigator
         /// </remarks>
         public int RoverSize = 1;
 
-        public Fixed64 Speed = Fixed64.One * 4;
-
-        public Fixed64 Acceleration = Fixed64.One * 4;
+        /// <summary>
+        /// Adjustment factor for the foot position, used to determine ground contact points.
+        /// </summary>
+        public Fixed64 FootPositionAdjust = DefaultFootPositionAdjust;
 
         public bool IsAbleToMove = true;
 
@@ -45,17 +57,32 @@ namespace Trailblazer.Navigator
 
         public IGuide TrailGuide { get; set; }
 
+        /// <inheritdoc cref="INavigate.Motor"/>
+        public NavMotor Motor { get; protected set; }
+
+        /// <inheritdoc cref="INavigate.Events"/>
+        public NavEvents Events { get; protected set; }
+
+        /// <inheritdoc cref="INavigate.Position"/>
+        public Vector3d Position { get; protected set; }
+
+        /// <inheritdoc cref="INavigate.Rotation"/>
+        public FixedQuaternion Rotation { get; protected set; } = FixedQuaternion.Identity;
+
         public Fixed64 Radius => RoverSize * Fixed64.Half;
 
-        public Vector3d Position { get; set; }
-
-        protected Node _currentNode;
-
         public Vector3d AveragePosition { get; set; } // used to check if stuck
+
+        /// <summary>
+        /// The current traversal condition of the scout, including medium (ground, air, water) and surface level.
+        /// </summary>
+        public TraversalCondition TraversalCondition { get; protected set; }
 
         public Vector3d Destination { get; set; }
 
         public Vector3d LastDestination { get; set; }
+
+        protected Node _currentNode;
 
         protected Node _destinationNode;
 
@@ -74,11 +101,7 @@ namespace Trailblazer.Navigator
 
         private bool _isSearchingForPath;
 
-        protected Vector3d _targetDirection;
-
         public Vector3d Velocity { get; set; }
-
-        private Vector3d _desiredVelocity;
 
         private Fixed64 _timescaledAcceleration;
 
@@ -104,8 +127,6 @@ namespace Trailblazer.Navigator
 
         private int _stuckFrameCount;
 
-        private Fixed64 _stuckTolerance;
-
         private int _repathTries;
 
         #region Group Properties
@@ -126,47 +147,29 @@ namespace Trailblazer.Navigator
 
         #endregion
 
-        #region Actions
+        /// <summary>
+        /// Stores the movement request for the next traversal cycle.
+        /// </summary>
+        public TraversalRequest MoveRequest { get; protected set; }
 
-        public event Action OnMovementRequestProcessed;
+        public bool IsControlled { get; protected set; }
 
-        public event Action<Vector3d> OnStartTurn;
+        public bool IsFollowingWaypoint => TrailGuide != null && TrailGuide.HasPath && TrailGuide.HasWaypoints;
 
         /// <summary>
-        /// Called when unit arrives at destination
+        /// Initializes the navigator by setting up its defaults, events, traversal state, and movement controller.
         /// </summary>
-        public event Action OnArrive;
-
-        /// <summary>
-        /// Called whenever movement is stopped
-        /// </summary>
-        public event Action OnStopMove;
-
-        #endregion
-
-        public virtual void Setup(Vector3d startingPosition, Fixed64 agentRadius, IGuide guide)
+        public virtual void Initialize(
+            Vector3d startingPosition, 
+            Vector3d? initialVelocity,
+            Fixed64? bodyRadius, 
+            TraversalCondition traversalCondition)
         {
-            // TODO: if guide is null, assume isPlayerControlled
-            if (guide == null)
-                ThrowHelper.ThrowArgumentNullException(nameof(guide));
-
-            TrailGuide = guide;
-
             Position = startingPosition;
 
-            _timescaledAcceleration = (Acceleration * Speed) / TrailblazerManager.FrameRate;
-            // Cleaner stops with more deceleration
-            _timescaledDeceleration = _timescaledAcceleration * 4;
             // Fatter objects can afford to land imprecisely
-            _closingDistance = agentRadius;
-            _stuckTolerance = ((_closingDistance * Speed) >> FixedMath.SHIFT_AMOUNT_I) / TrailblazerManager.FrameRate;
-            _stuckTolerance *= _stuckTolerance;
+            _closingDistance = FixedMath.Round(bodyRadius ?? Fixed64.Half + GlobalGridManager.NodeSize);
 
-            TrailGuide.OnSetup();
-        }
-
-        public virtual void Initialize()
-        {
             MovementGroupID = -1;
 
             StoppedFrameCount = 0;
@@ -189,23 +192,66 @@ namespace Trailblazer.Navigator
             IsAtDestination = true;
             AveragePosition = Position;
 
-            TrailGuide.OnInitialize();
+            TraversalCondition = traversalCondition;
+            Motor = NavMotor.CreateNew(this, TraversalCondition);
+            Motor.SetVelocity(initialVelocity ?? Vector3d.Zero);
+
+            TrailGuide = null;
+            MoveRequest = TraversalRequest.Empty;
+
+            Events = new();
         }
 
-        public virtual void ProcessMovementRequest(Vector3d destination, bool allowUnwalkableEndNode = false, int groupId = -1)
+        // TODO: we probably shouldn't let player controlled characters move onto unwalkable nodes...
+        public virtual void RequestControlledMovement(TraversalRequest request)
         {
+            IsMoving = true;
+            IsAtDestination = false;
+            IsStuck = false;
+
+            StoppedFrameCount = 0;
+            _stuckFrameCount = 0;
+
+            MoveRequest = request;
+
+            // TODO: release back to pool if exists?
+            TrailGuide = null;
+
+            IsControlled = true;
+        }
+
+        public virtual void RequestTrailGuide(
+            Vector3d destination,
+            IGuide guide,
+            TrekRate rate = TrekRate.Stationary,
+            bool isRequestingJump = false,
+            bool allowUnwalkableEndNode = false,
+            int groupId = -1)
+        {
+            if (guide == null)
+                ThrowHelper.ThrowArgumentNullException(nameof(guide));
+
+            // TODO: maybe this is where we can check from a cache pool of trail guides that hold a hash key value of from/destination/roversize
+            TrailGuide = guide;
+            TrailGuide.OnSetup();
+
+            MoveRequest.Direction = default;
+            MoveRequest.IsRequestingJump = isRequestingJump;
+            MoveRequest.Rate = rate;
+
+            IsControlled = false;
+
+            _allowUnwalkableDestination = allowUnwalkableEndNode;
+
             _isOnLineOfSightPath = false;
 
             IsMoving = true;
             IsAtDestination = false;
-
-            //TODO: If next-best-node, autostop more easily
-            //Also implement stopping sooner based on distanceToMove
             StoppedFrameCount = 0;
+            IsStuck = false;
             _stuckFrameCount = 0;
-            _repathTries = 0;
 
-            _allowUnwalkableDestination = allowUnwalkableEndNode;
+            IsAvoidingLeft = false;
 
             MovementGroupID = groupId;
 
@@ -216,31 +262,81 @@ namespace Trailblazer.Navigator
             if (RoverSize <= 1 && NodeFinder.GetEndNode(Position, destination, out _destinationNode, _allowUnwalkableDestination)
                 || NodeFinder.GetClosestNodeForSize(Position, destination, RoverSize, out _destinationNode, _allowUnwalkableDestination))
             {
+                _repathTries = 0;
+
                 _viableDestination = true;
                 Destination = _destinationNode.WorldPosition;
+
+                if (IsInGroup)
+                    _isSearchingForPath = true;
+                else
+                    _isSearchingForPath = false;
+
+                Events.OnStartMove?.Invoke();
+
+                return;
             }
 
-            if (IsInGroup)
-                _isSearchingForPath = true;
-            else
-                _isSearchingForPath = false;
-
-            OnMovementRequestProcessed?.Invoke();
+            // no viable destination found
+            Arrive();
         }
 
-        public virtual void Simulate()
+        /// <summary>
+        /// Updates the scout’s traversal state, including its current medium and surface information.
+        /// </summary>
+        /// <param name="medium">The traversal medium (e.g., ground, air, water).</param>
+        /// <param name="surfaceLevel">The vertical surface level, if applicable.</param>
+        /// <param name="surfaceCondition">The ground state data, if applicable.</param>
+        /// <param name="ceilingLevel">The vertical ceiling level, if applicable.</param>
+        public virtual void SetTraversalCondition(
+            TraversalMedium? medium = null,
+            Fixed64? surfaceLevel = null,
+            GroundCondition? surfaceCondition = null,
+            Fixed64? ceilingLevel = null)
+        {
+            TraversalCondition.Medium = medium ?? TraversalCondition.Medium;
+            TraversalCondition.SurfaceLevel = surfaceLevel ?? TraversalCondition.SurfaceLevel;
+            TraversalCondition.GroundState = surfaceCondition ?? TraversalCondition.GroundState;
+            TraversalCondition.CeilingLevel = ceilingLevel ?? TraversalCondition.CeilingLevel;
+        }
+
+        // Used for AI that already have a path and want to jump
+        public virtual void ToggleJumpStatus(bool status)
+        {
+            if (!IsControlled) return;
+            MoveRequest.IsRequestingJump = status;
+        }
+
+        // Used for AI that already have a path and want to change their rate of speed
+        public virtual void SetTraversalSpeed(TrekRate rate)
+        {
+            if (!IsControlled) return;
+            MoveRequest.Rate = rate;
+        }
+
+        public virtual void OnSimulate()
         {
             if (!IsAbleToMove)
                 return;
 
             if (IsMoving)
             {
+                if (IsControlled)
+                {
+                    ProcessControlledMovement();
+                    return;
+                }
+
+                if (!_viableDestination)
+                    return;
+
                 // check if agent has to pathfind, otherwise straight path to rely on destination
                 if (IsAbleToPathfind)
-                    ValidateMovementPath();
+                    RequestPathFromTrailGuide();
 
-                SetMovementDirection();
-                SetMovementState();
+                FindTargetDirection();
+                if (MoveRequest.Direction != Vector3d.Zero)
+                    FollowTrailGuide();
             }
             else
             {
@@ -248,7 +344,7 @@ namespace Trailblazer.Navigator
                 if (Velocity.SqrMagnitude > Fixed64.Zero)
                 {
                     _isDecelerating = true;
-                    Velocity += GetAdjustedVelocity(Vector3d.Zero);
+                    Velocity += AdjustVelocityForTimeScale(Vector3d.Zero);
 
                 }
                 else
@@ -259,7 +355,46 @@ namespace Trailblazer.Navigator
             AveragePosition = Vector3d.Lerp(AveragePosition, Position, Fixed64.Half);
         }
 
-        public virtual void ValidateMovementPath()
+        /// <summary>
+        /// Finalizes traversal by updating movement calculations and applying corrections.
+        /// </summary>
+        /// <remarks>
+        /// Should be called after physics bodies apply velocity changes
+        /// </remarks>
+        public virtual void OnVisualize()
+        {
+            Motor.FinishFrameTraversal(this, TraversalCondition);
+            UpdateTimeScaling();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void UpdateTimeScaling()
+        {
+            _timescaledAcceleration = Motor.Locomotions.Move.Speed > Fixed64.Zero
+                ? ((Motor.Locomotions.Move.Acceleration * Motor.Locomotions.Move.Speed) / TrailblazerManager.FrameRate).Magnitude
+                : Fixed64.Zero;
+            _timescaledDeceleration = _timescaledAcceleration > Fixed64.Zero
+                ? _timescaledAcceleration * DecelerationMultiplier
+                : Fixed64.Zero;
+        }
+
+        // Needs to be called every frame from input system
+        protected virtual void ProcessControlledMovement()
+        {
+            if (IsAbleToTurn)
+                Events.OnStartTurn?.Invoke(MoveRequest.Direction); //TODO: integrate this...
+
+            Motor.Traverse(MoveRequest);
+            MoveRequest.Reset();
+
+            // TODO: this may not be required anymore...
+            // call this after velocity changes
+            //Vector3d previousVelocity = Velocity;
+            //Velocity += AdjustVelocityForTimeScale(previousVelocity);
+        }
+
+        // For AI pathfinding, only needs to be called once until agent destination is reached
+        protected virtual void RequestPathFromTrailGuide()
         {
             if (!_isSearchingForPath)
                 return;
@@ -272,13 +407,6 @@ namespace Trailblazer.Navigator
             }
 
             _isSearchingForPath = false;
-            if (!_viableDestination)
-            {
-                // can't get to destination
-                TrailGuide.Reset();
-                return;
-            }
-
             if (_currentNode.SpawnToken == _destinationNode.SpawnToken && _repathTries >= 1)
             {
                 Arrive();
@@ -289,87 +417,81 @@ namespace Trailblazer.Navigator
             if (!PathingManager.NeedsPath(Position, Destination, RoverSize, _allowUnwalkableDestination))
             {
                 // no path required
+                // TODO: releaes the trailguide back to a pool
+                TrailGuide = null;
                 _isOnLineOfSightPath = true;
                 return;
             }
 
-            TrailGuide.RequestMovementPath(Position, Destination, RoverSize);
+            TrailGuide?.RequestMovementPath(Position, Destination, RoverSize);
         }
 
-        public virtual void SetMovementDirection() 
+        protected virtual void FindTargetDirection()
         {
             if (_isOnLineOfSightPath)
-            {
-                _targetDirection = Destination - Position;
-            }
-            else if (TrailGuide.HasPath)
-                _targetDirection = TrailGuide.GetMovementDirection(Position, out _distanceToMove);
+                MoveRequest.Direction = Destination - Position;
+            else if (TrailGuide != null && TrailGuide.HasPath)
+                MoveRequest.Direction = TrailGuide.GetMovementDirection(Position);
             else
             {
-                Debug.Write("No vialable movement direction found, setting 0");
-                _targetDirection = Vector3d.Zero;
+                Debug.Write("No vialable movement direction found.");
+                MoveRequest.Direction = Vector3d.Zero;
                 return;
             }
 
             // This is now the direction we want to be travelling in 
-            _targetDirection.Normalize(out _distanceToMove);
+            MoveRequest.Direction.Normalize(out _distanceToMove);
 
             // Calculate steering and flocking forces for all agents
             if (IsInGroup)
-                _targetDirection += NavigatorSteering.ComputeGroupSteering(Position, Speed);
+                MoveRequest.Direction += NavSteering.ComputeGroupSteering(Position, Velocity.Magnitude);
 
             // Avoid any intersection agents!
-            _targetDirection += NavigatorSteering.CalculateAvoidanceForce(this);
+            MoveRequest.Direction += NavSteering.CalculateAvoidanceForce(this);
         }
 
-        public virtual void SetMovementState()
+        protected virtual void FollowTrailGuide()
         {
-            Fixed64 currentSpeed = Velocity.Magnitude;
-            Fixed64 stuckThreshold = _timescaledAcceleration / TrailblazerManager.FrameRate;
-            Fixed64 slowDistance = _timescaledDeceleration > Fixed64.Zero ? currentSpeed / _timescaledDeceleration : Fixed64.Zero;
+            Fixed64 stuckThreshold = _timescaledAcceleration > Fixed64.Zero ? _timescaledAcceleration / TrailblazerManager.FrameRate : Fixed64.Zero;
+            Fixed64 slowDistance = _timescaledDeceleration > Fixed64.Zero ? _timescaledDeceleration / Velocity.Magnitude : Fixed64.Zero;
 
-            Fixed64 moveAmount = FixedMath.Clamp01(_targetDirection.x.Abs() + _targetDirection.z.Abs());
+            Fixed64 moveAmount = FixedMath.Clamp01(MoveRequest.Direction.x.Abs() + MoveRequest.Direction.z.Abs());
 
-            if (!TrailGuide.MovingToWaypoint && _distanceToMove < _closingDistance * StopMultiplier || !IsStuck && moveAmount == Fixed64.Zero)
+            if (IsAbleToTurn)
+                Events.OnStartTurn?.Invoke(MoveRequest.Direction); //TODO: integrate this...
+
+            if(!IsFollowingWaypoint)
             {
-                Arrive();
-                //TODO: Don't skip this frame of slowing down
-                return;
-            }
-            else if (IsAbleToTurn)
-                OnStartTurn?.Invoke(_targetDirection); //TODO: integrate this...
+                if (_distanceToMove < _closingDistance * StopMultiplier || !IsStuck && moveAmount == Fixed64.Zero)
+                {
+                    Arrive();
+                    //TODO: Don't skip this frame of slowing down
+                    return;
+                }
 
-            if (_distanceToMove > slowDistance)
-                _desiredVelocity = _targetDirection;
-            else if (!TrailGuide.MovingToWaypoint && _distanceToMove <= slowDistance && _distanceToMove > _closingDistance * StopMultiplier)
-            {
-                Fixed64 closingSpeed = _distanceToMove / slowDistance;
+                if (_distanceToMove <= slowDistance && _distanceToMove > _closingDistance * StopMultiplier)
+                {
+                    Fixed64 closingSpeed = _distanceToMove / slowDistance;
 
-                _desiredVelocity = _targetDirection * closingSpeed;
-                _isDecelerating = true;
-                // Reduce occurence of units preventing other units from reaching destination
-                stuckThreshold *= 4;
+                    MoveRequest.Direction *= closingSpeed;
+                    _isDecelerating = true;
+                    // Reduce occurence of units preventing other units from reaching destination
+                    stuckThreshold *= 4;
+                }
             }
 
             CheckMovementStatus(stuckThreshold);
 
-            // cap accelateration
-            Fixed64 currentVelocity = _desiredVelocity.SqrMagnitude;
-            if (currentVelocity > Acceleration)
-                _desiredVelocity *= (Acceleration / FixedMath.Sqrt(currentVelocity)).CeilToInt();
+            Motor.Traverse(MoveRequest);
+            MoveRequest.Reset();
 
-            // Multiply our direction by speed for our desired speed
-            _desiredVelocity *= Speed;
-
-            // Cap speed as required
-            if (currentSpeed > Speed)
-                _desiredVelocity *= (Speed / currentSpeed).CeilToInt();
-
-            // Apply the force
-            Velocity += GetAdjustedVelocity(_desiredVelocity);
+            // TODO: this may not be required anymore...
+            // call this after velocity changes
+            //Vector3d previousVelocity = Velocity;
+            //Velocity += AdjustVelocityForTimeScale(previousVelocity);
         }
 
-        private void CheckMovementStatus(Fixed64 stuckThreshold)
+        protected virtual void CheckMovementStatus(Fixed64 stuckThreshold)
         {
             _stuckFrameCount++;
 
@@ -385,13 +507,26 @@ namespace Trailblazer.Navigator
                     {
                         Debug.WriteLine("Stuck Agent!");
 
-                        if(TrailGuide.MovingToWaypoint)
                         if (IsInGroup)
                             MovementGroupID = -1;  // Attempt to repath agent by themselves
 
-                        _isSearchingForPath = true;
-                        _isOnLineOfSightPath = false;
-                        TrailGuide.Reset();
+                        // If we have a path, try to move to the next waypoint
+                        if (IsFollowingWaypoint)
+                        {
+                            TrailGuide.MoveToNextWaypoint();
+                            _repathTries++;
+                            _stuckFrameCount = 0;
+                            return;
+                        }
+                        else
+                        {
+                            IsAvoidingLeft = false;
+                            _isSearchingForPath = true;
+                            _isOnLineOfSightPath = false;
+
+                            // Reset the guide and have them try a new path (don't pool a bad path)
+                            TrailGuide?.Reset();
+                        }
 
                         _repathTries++;
                     }
@@ -401,6 +536,7 @@ namespace Trailblazer.Navigator
                         // we've tried to many times, we stuck stuck
                         IsStuck = true;
                         Arrive();
+                        return;
                     }
 
                     _stuckFrameCount = 0;
@@ -415,16 +551,18 @@ namespace Trailblazer.Navigator
 
                 _repathTries = 0;
             }
-        
-            if(_distanceToMove < _closingDistance && Vector3d.Dot(Position, _targetDirection) < Fixed64.Epsilon
+
+            if (!IsFollowingWaypoint) return;
+
+            if (_distanceToMove < _closingDistance && Vector3d.Dot(Position, MoveRequest.Direction) < Fixed64.Epsilon
                 || _distanceToMove < _closingDistance * GlobalGridManager.NodeSize)
             {
-                TrailGuide.CheckMovementStatus();
+                TrailGuide?.MoveToNextWaypoint();
             }
         }
 
         // TODO: call this before setting velocity
-        public Vector3d GetAdjustedVelocity(Vector3d desiredVelocity)
+        protected Vector3d AdjustVelocityForTimeScale(Vector3d desiredVelocity)
         {
             //The velocity change we want
             Vector3d velocityChange = desiredVelocity - Velocity;
@@ -451,7 +589,7 @@ namespace Trailblazer.Navigator
 
             IsAtDestination = true;
 
-            OnArrive?.Invoke();
+            Events.OnArrive?.Invoke();
         }
 
         public virtual void StopMove()
@@ -466,15 +604,24 @@ namespace Trailblazer.Navigator
             IsAvoidingLeft = false;
             StoppedFrameCount = 0;
 
-            _targetDirection = Vector3d.Zero;
-            _desiredVelocity = Vector3d.Zero;
+            MoveRequest.Reset();
 
             _isSearchingForPath = false;
             _isOnLineOfSightPath = false;
 
-            TrailGuide.Reset();
+            // TODO: return the trail guide?
+            TrailGuide = null;
 
-            OnStopMove?.Invoke();
+            Events.OnStopMove?.Invoke();
+        }
+
+        /// <summary>
+        /// Returns the world-space position of the navigator’s foot, adjusted for proper ground contact.
+        /// </summary>
+        /// <returns>The adjusted foot position in world space.</returns>
+        public virtual Vector3d GetFootPosition()
+        {
+            return Position + Vector3d.Down * FootPositionAdjust;
         }
 
         public void PauseAutoStop()

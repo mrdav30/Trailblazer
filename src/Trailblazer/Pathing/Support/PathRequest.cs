@@ -9,7 +9,7 @@ namespace Trailblazer.Pathing
 
         Vector3d TargetPosition { get; }
 
-        int RoverSize { get; }
+        Fixed64 UnitSize { get; }
 
         bool IsValidated { get;}
 
@@ -28,7 +28,7 @@ namespace Trailblazer.Pathing
 
         public Vector3d TargetPosition { get; protected set; }
 
-        public int RoverSize { get; protected set; }
+        public Fixed64 UnitSize { get; protected set; }
 
         public bool IsValidated { get; protected set; }
 
@@ -46,11 +46,11 @@ namespace Trailblazer.Pathing
             }
         }
 
-        public PathRequest(Vector3d fromPosition, Vector3d targetPosition, int roverSize)
+        public PathRequest(Vector3d fromPosition, Vector3d targetPosition, Fixed64 unitSize)
         {
             FromPosition = fromPosition;
             TargetPosition = targetPosition;
-            RoverSize = roverSize;
+            UnitSize = unitSize;
         }
 
         public virtual void SetValidatedNodeRequest(Node fromNode, Node targetNode, int? searchSize)

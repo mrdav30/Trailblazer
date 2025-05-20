@@ -1,10 +1,12 @@
 ﻿using FixedMathSharp;
+using System;
 
 namespace Trailblazer.Navigation.Motor
 {
     /// <summary>
     /// Represents the state of the surface the scout is interacting with, including surface movement and normal data.
     /// </summary>
+    [Serializable]
     public struct GroundCondition
     {
         /// <summary>

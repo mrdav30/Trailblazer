@@ -21,9 +21,9 @@ namespace Trailblazer.Pathing
             HasPath = false;
         }
 
-        public void RequestMovementPath(Vector3d from, Vector3d destination, int size)
+        public void RequestMovementPath(Vector3d from, Vector3d destination, Fixed64 unitSize)
         {
-            FlowFieldPathRequest pathRequest = new(from, destination, size, (success, result) =>
+            FlowFieldPathRequest pathRequest = new(from, destination, unitSize, (success, result) =>
             {
                 _fields = result;
                 HasPath = success;

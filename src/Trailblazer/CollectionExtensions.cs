@@ -5,6 +5,7 @@ using SwiftCollections;
 
 namespace Trailblazer
 {
+    // TODO: move these into SwiftCollections
     public static class CollectionExtensions
     {
         /// <summary>
@@ -37,5 +38,10 @@ namespace Trailblazer
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T Last<T>(this IEnumerable<T> source) => source.FromEnd(1);
+
+        /// <summary>
+        /// Returns the second-to-last item in the sequence.
+        /// </summary>
+        public static T SecondToLast<T>(this IEnumerable<T> source) => source.FromEnd(2);
     }
 }

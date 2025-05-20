@@ -3,6 +3,7 @@ using FluentAssertions;
 using FluentAssertions.Execution;
 using FluentAssertions.Numeric;
 
+// TODO: move these into FixedMathSharp
 namespace Trailblazer.Tests
 {
     public class Fixed64Assertions : ComparableTypeAssertions<Fixed64, Fixed64Assertions>

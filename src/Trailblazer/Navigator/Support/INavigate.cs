@@ -19,16 +19,24 @@ namespace Trailblazer.Navigation
         public FixedQuaternion Rotation { get; }
 
         /// <summary>
+        /// The size of navigator in worldspace.
+        /// </summary>
+        /// <remarks>
+        /// Note: Add a little padding to manevour around blockers
+        /// </remarks>
+        public Fixed64 UnitSize { get; }
+
+        public Fixed64 UnitRadius { get; }
+
+        /// <summary>
+        /// The controller responsible for managing the scout's desired movement direction.
+        /// </summary>
+        NavSteering Steering { get; }
+
+        /// <summary>
         /// The controller responsible for managing the scout's movement and physics interactions.
         /// </summary>
         NavMotor Motor { get; }
-
-        /// <summary>
-        /// The set of events associated with the scout, allowing for external interactions such as force application and state transitions.
-        /// </summary>
-        #nullable enable
-        NavEvents Events { get; }
-#nullable disable
 
         /// <summary>
         /// Gets the position of the scout's foot in world space, typically used for ground checks and platform interactions.

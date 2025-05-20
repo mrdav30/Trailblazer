@@ -72,7 +72,7 @@ namespace Trailblazer.Pathing
             _processingLock = false;
         }
 
-        public static bool NeedsPath(Vector3d startPos, Vector3d endPos, int unitSize, bool allowUnwalkable = false)
+        public static bool NeedsPath(Vector3d startPos, Vector3d endPos, Fixed64 unitSize, bool allowUnwalkable = false)
         {
             foreach (GridNodeSet gridNodeSet in GridTracer.TraceLine(startPos, endPos))
             {

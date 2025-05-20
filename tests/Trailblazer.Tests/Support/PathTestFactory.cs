@@ -28,10 +28,10 @@ namespace Trailblazer.Tests
             return map;
         }
 
-        public static AStarPathRequest CreateRequest(Vector3d from, Vector3d to, int roverSize = 1, Action<bool, SwiftList<Vector3d>>? onComplete = null)
+        public static AStarPathRequest CreateRequest(Vector3d from, Vector3d to, Fixed64? unitSize = null, Action<bool, SwiftList<Vector3d>>? onComplete = null)
         {
             onComplete ??= (_, __) => { }; // noop
-            return new AStarPathRequest(from, to, roverSize, onComplete)
+            return new AStarPathRequest(from, to, unitSize ?? Fixed64.One, onComplete)
             {
                 Heuristic = HeuristicMethod.Manhattan,
                 MaxClimbHeight = Fixed64.One,

@@ -42,8 +42,11 @@ namespace Trailblazer.Pathing
 
         public Action<bool, SwiftDictionary<int, FlowField>> OnComplete { get; private set; }
 
-        public FlowFieldPathRequest(Vector3d fromPosition, Vector3d targetPosition, int roverSize, Action<bool, SwiftDictionary<int, FlowField>> onComplete) 
-            : base(fromPosition, targetPosition, roverSize)
+        public FlowFieldPathRequest(
+            Vector3d from, 
+            Vector3d destination, 
+            Fixed64 unitSize, 
+            Action<bool, SwiftDictionary<int, FlowField>> onComplete) : base(from, destination, unitSize)
         {
             OnComplete = onComplete;
         }

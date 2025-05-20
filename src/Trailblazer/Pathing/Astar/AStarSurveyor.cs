@@ -106,7 +106,7 @@ namespace Trailblazer.Pathing
 
         private bool ProcessNeighbor(PathPartition current, PathPartition neighbor, int cost, AStarPathRequest request)
         {
-            if (PathPartitionHeap.IsClosed(neighbor) || neighbor.Unpassable(request.RoverSize))
+            if (PathPartitionHeap.IsClosed(neighbor) || neighbor.Unpassable(request.UnitSize))
                 return false;
 
             // Skip neighbors that have a height difference greater than the allowed maximum
@@ -204,7 +204,7 @@ namespace Trailblazer.Pathing
                     continue;
 
                 // Preserve nodes near unwalkable tiles
-                if (partition.GetNeighborClearance() <= request.RoverSize + 1)
+                if (partition.GetNeighborClearance() <= request.UnitSize + 1)
                 {
                     outputVectorPath.Add(current.WorldPosition);
                     lastDir = Vector3d.Zero;

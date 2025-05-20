@@ -10,38 +10,40 @@ namespace Trailblazer.Tests.Navigation.Motor
     public class FallLocomotionTests
     {
         [Fact]
-        public void Given_FallingScout_When_JumpIsTriggered_Then_ShouldNotJump()
+        public void Given_FallingAgent_When_JumpIsTriggered_Then_ShouldNotJump()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateFallingAgent();
+            var agent = MockAgentTestFactory.CreateFallingAgent();
 
             Vector3d expectedVelocity = Vector3d.Down;
-            expectedVelocity.y += -scout.Navigator.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -agent.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
+
+            TraversalCondition state = agent.SurfaceState;
 
             // Act
-            scout.Controller.Traverse(Vector3d.Zero, TrekRate.Stationary, isRequestingJump: true);
-            scout.FinalizeTraversal();
+            agent.Motor.Traverse(agent, Vector3d.Zero, TrekRate.Stationary, isRequestingJump: true);
+            agent.Visualize();
 
             // Assert
-            scout.Controller.Locomotions.Move.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+            agent.Motor.Locomotions.Move.Velocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
         }
 
         [Fact]
-        public void Given_FallingScout_When_GroundIsDetected_Then_ShouldTransitionToGrounded()
+        public void Given_FallingAgent_When_GroundIsDetected_Then_ShouldTransitionToGrounded()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateFallingAgent();
+            var agent = MockAgentTestFactory.CreateFallingAgent();
 
             // Act - First Frame (Falling)
             TrailblazerManager.Simulate();
-            scout.StartTraversal();
-            scout.FinalizeTraversal();
+            agent.Simulate();
+            agent.Visualize();
 
             // Assert
-            scout.Controller.IsInAir.Should().BeTrue();
+            agent.Motor.IsInAir.Should().BeTrue();
 
             // Simulate hitting the ground before the next frame
-            scout.SetTraversalCondition(
+            agent.SetTraversalCondition(
                 TraversalMedium.Ground,
                 Fixed64.Zero,
                 new GroundCondition
@@ -55,18 +57,18 @@ namespace Trailblazer.Tests.Navigation.Motor
             TrailblazerManager.Simulate();
 
             // Act - Second Frame (After Ground Contact)
-            scout.StartTraversal();
-            scout.FinalizeTraversal();
+            agent.Simulate();
+            agent.Visualize();
 
             // Assert
-            scout.Controller.IsGrounded.Should().BeTrue();
+            agent.Motor.IsGrounded.Should().BeTrue();
         }
 
         [Fact]
-        public void Given_AirborneScout_When_SimulatedOverMultipleFrames_Then_VelocityShouldMatchGravity()
+        public void Given_AirborneAgent_When_SimulatedOverMultipleFrames_Then_VelocityShouldMatchGravity()
         {
             // Arrange
-            var scout = IScoutTestFactory.CreateMockAgent(
+            var agent = MockAgentTestFactory.CreateMockAgent(
                 startPosition: new Vector3d(0, 100, 0),
                 startingMedium: TraversalMedium.Air
             );
@@ -76,82 +78,82 @@ namespace Trailblazer.Tests.Navigation.Motor
             for (int i = 0; i < 5; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.StartTraversal();
-                scout.FinalizeTraversal();
+                agent.Simulate();
+                agent.Visualize();
 
                 // Calculate expected velocity update from gravity impulse
-                expectedVelocity.y += -scout.Controller.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
+                expectedVelocity.y += -agent.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
             }
 
             // Assert
-            scout.Controller.Locomotions.Move.CurrentVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+            agent.Motor.Locomotions.Move.Velocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
         }
 
         [Fact]
-        public void Given_ScoutInAir_When_NoMovement_Then_ShouldFallNaturally()
+        public void Given_AgentInAir_When_NoMovement_Then_ShouldFallNaturally()
         {
             var initialPosition = new Vector3d(0, 10, 0);
-            var scout = IScoutTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Air);
+            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Air);
 
             for (int i = 0; i < 20; i++) // Simulate multiple frames
             {
-                scout.StartTraversal();
-                scout.FinalizeTraversal();
+                agent.Simulate();
+                agent.Visualize();
             }
 
-            scout.Position.y.Should().BeLessThan(initialPosition.y); // Should be falling
+            agent.Position.y.Should().BeLessThan(initialPosition.y); // Should be falling
         }
 
         [Fact]
-        public void Given_ScoutInAir_When_MovesForward_Then_ShouldStillBeAffectedByGravity()
+        public void Given_AgentInAir_When_MovesForward_Then_ShouldStillBeAffectedByGravity()
         {
             var initialPosition = new Vector3d(0, 10, 0);
-            var scout = IScoutTestFactory.CreateFallingAgent(startPosition: initialPosition);
+            var agent = MockAgentTestFactory.CreateFallingAgent(startPosition: initialPosition);
 
             for (int i = 0; i < 20; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(new Vector3d(1, 0, 0), TrekRate.Moderate);
-                scout.StartTraversal();
-                scout.FinalizeTraversal();
+                agent.SetTravelRequest(direction: new Vector3d(1, 0, 0), rate: TrekRate.Moderate);
+                agent.Simulate();
+                agent.Visualize();
             }
 
-            scout.Position.y.Should().BeLessThan(initialPosition.y); // Gravity should still apply
-            scout.Position.x.Should().BeGreaterThan(Fixed64.Zero); // Should also move forward
+            agent.Position.y.Should().BeLessThan(initialPosition.y); // Gravity should still apply
+            agent.Position.x.Should().BeGreaterThan(Fixed64.Zero); // Should also move forward
         }
 
         [Fact]
-        public void Given_ScoutFallsFar_When_Lands_Then_ShouldTriggerMaxFallHeightEvent()
+        public void Given_AgentFallsFar_When_Lands_Then_ShouldTriggerMaxFallHeightEvent()
         {
-            var scout = IScoutTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
-            scout.Controller.Locomotions.Fall.MaxFallHeight = Fixed64.One;
+            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+            agent.Motor.Locomotions.Fall.MaxFallHeight = Fixed64.One;
 
             bool eventCalled = false;
-            scout.Events.OnMaxFallHeightReached += () => eventCalled = true;
+            agent.Motor.Events.OnMaxFallHeightReached += () => eventCalled = true;
 
-            while (!scout.Controller.IsGrounded)
+            while (!agent.Motor.IsGrounded)
             {
                 TrailblazerManager.Simulate();
-                scout.StartTraversal();
-                scout.FinalizeTraversal();
+                agent.Simulate();
+                agent.Visualize();
             }
 
             eventCalled.Should().BeTrue();
         }
 
         [Fact]
-        public void Given_ScoutFallsAndLands_When_FallHeightIsValid_Then_ShouldCallOnStopFallWithHeight()
+        public void Given_AgentFallsAndLands_When_FallHeightIsValid_Then_ShouldCallOnStopFallWithHeight()
         {
-            var scout = IScoutTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
 
             Fixed64 fallHeight = Fixed64.Zero;
-            scout.Events.OnStopFall += (height) => fallHeight = height;
+            agent.Motor.Events.OnStopFall += (height) => fallHeight = height;
 
-            while (!scout.Controller.IsGrounded)
+            while (!agent.Motor.IsGrounded)
             {
                 TrailblazerManager.Simulate();
-                scout.StartTraversal();
-                scout.FinalizeTraversal();
+                agent.Simulate();
+                agent.Visualize();
             }
 
             fallHeight.Should().NotBeNull();
@@ -159,115 +161,115 @@ namespace Trailblazer.Tests.Navigation.Motor
         }
 
         [Fact]
-        public void Given_ScoutSlidesDownhill_When_SlopeIsShallow_Then_ShouldNotStartFalling()
+        public void Given_AgentSlidesDownhill_When_SlopeIsShallow_Then_ShouldNotStartFalling()
         {
             var slopeAngle = FixedMath.DegToRad((Fixed64)10);
-            var platform = IScoutTestFactory.CreatePlatform(
+            var platform = MockAgentTestFactory.CreatePlatform(
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
-            var scout = IScoutTestFactory.CreatePlatformAgent(
+            var agent = MockAgentTestFactory.CreatePlatformAgent(
                 startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
-            scout.Controller.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+            agent.Motor.Locomotions.Slide.SlopeLimit = (Fixed64)45;
 
             TrailblazerManager.Simulate();
-            scout.StartTraversal();
-            scout.FinalizeTraversal();
+            agent.Simulate();
+            agent.Visualize();
 
-            scout.Controller.Locomotions.Fall.IsFalling.Should().BeFalse();
+            agent.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
         }
 
         [Fact]
-        public void Given_ScoutSlidesDownhill_When_SlopeIsSteep_Then_ShouldStartFalling()
+        public void Given_AgentSlidesDownhill_When_SlopeIsSteep_Then_ShouldStartFalling()
         {
             var slopeAngle = FixedMath.DegToRad((Fixed64)60);
-            var platform = IScoutTestFactory.CreatePlatform(
+            var platform = MockAgentTestFactory.CreatePlatform(
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
-            var scout = IScoutTestFactory.CreatePlatformAgent(
+            var agent = MockAgentTestFactory.CreatePlatformAgent(
                 startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
-            scout.Controller.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+            agent.Motor.Locomotions.Slide.SlopeLimit = (Fixed64)45;
 
             for (int i = 0; i < 2; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.StartTraversal();
-                scout.FinalizeTraversal();
+                agent.Simulate();
+                agent.Visualize();
             }
 
-            scout.Controller.Locomotions.Slide.IsSliding.Should().BeTrue();
-            scout.Controller.Locomotions.Fall.IsFalling.Should().BeTrue();
+            agent.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
+            agent.Motor.Locomotions.Fall.IsFalling.Should().BeTrue();
         }
 
         [Fact]
-        public void Given_ScoutStartsFallingMidJump_When_StillRising_Then_ShouldNotTriggerFallStart()
+        public void Given_AgentStartsFallingMidJump_When_StillRising_Then_ShouldNotTriggerFallStart()
         {
-            var scout = IScoutTestFactory.CreateJumpReadyAgent();
+            var agent = MockAgentTestFactory.CreateJumpReadyAgent();
 
             bool fallTriggered = false;
-            scout.Events.OnStartFall += () => fallTriggered = true;
+            agent.Motor.Events.OnStartFall += () => fallTriggered = true;
 
             // Start jump
-            scout.SetTravelRequest(Vector3d.Zero, TrekRate.Stationary, isRequestingJump: true);
+            agent.SetTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
-            scout.StartTraversal();
-            scout.FinalizeTraversal();
+            agent.Simulate();
+            agent.Visualize();
 
             // Simulate a few frames of upward motion
             for (int i = 0; i < 13; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(Vector3d.Zero, TrekRate.Stationary, isRequestingJump: true);
-                scout.StartTraversal();
-                scout.FinalizeTraversal();
+                agent.SetTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+                agent.Simulate();
+                agent.Visualize();
             }
 
             fallTriggered.Should().BeFalse();
         }
 
         [Fact]
-        public void Given_ScoutFallsZeroDistance_When_Lands_Then_FallHeightShouldBeZero()
+        public void Given_AgentFallsZeroDistance_When_Lands_Then_FallHeightShouldBeZero()
         {
-            var scout = IScoutTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 0, 0), startingMedium: TraversalMedium.Air);
-            scout.SetTraversalCondition(TraversalMedium.Ground, surfaceLevel: Fixed64.Zero);
+            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 0, 0), startingMedium: TraversalMedium.Air);
+            agent.SetTraversalCondition(TraversalMedium.Ground, surfaceLevel: Fixed64.Zero);
 
             TrailblazerManager.Simulate();
-            scout.StartTraversal();
-            scout.FinalizeTraversal();
+            agent.Simulate();
+            agent.Visualize();
 
-            scout.Controller.Locomotions.Fall.FallHeight.Should().Be(Fixed64.Zero);
+            agent.Motor.Locomotions.Fall.FallHeight.Should().Be(Fixed64.Zero);
         }
 
         [Fact]
-        public void Given_ScoutFalls_When_Lands_Then_FallStartShouldBeGreaterThanFallEnd()
+        public void Given_AgentFalls_When_Lands_Then_FallStartShouldBeGreaterThanFallEnd()
         {
-            var scout = IScoutTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 20, 0), startingMedium: TraversalMedium.Air);
+            var agent = MockAgentTestFactory.CreateFallingAgent(startPosition: new Vector3d(0, 20, 0));
 
-            while (!scout.Controller.IsGrounded)
+            while (!agent.Motor.IsGrounded)
             {
                 TrailblazerManager.Simulate();
-                scout.StartTraversal();
-                scout.FinalizeTraversal();
+                agent.Simulate();
+                agent.Visualize();
             }
 
-            var fallLocomotion = scout.Controller.Locomotions.Fall;
+            var fallLocomotion = agent.Motor.Locomotions.Fall;
             fallLocomotion.FallStart.Should().BeGreaterThan(fallLocomotion.FallEnd);
             fallLocomotion.FallHeight.Should().Be(fallLocomotion.FallStart - fallLocomotion.FallEnd);
         }
 
         [Fact]
-        public void Given_ScoutFalls_When_Disabled_Then_FallStateShouldReset()
+        public void Given_AgentFalls_When_Disabled_Then_FallStateShouldReset()
         {
-            var scout = IScoutTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
 
-            scout.Controller.Locomotions.Fall.IsFalling = true;
-            scout.Controller.Locomotions.Fall.FallStart = (Fixed64)10;
+            agent.Motor.Locomotions.Fall.IsFalling = true;
+            agent.Motor.Locomotions.Fall.FallStart = (Fixed64)10;
 
-            scout.Controller.Locomotions.Fall.IsEnabled = false;
+            agent.Motor.Locomotions.Fall.IsEnabled = false;
 
-            scout.Controller.Locomotions.Fall.IsFalling.Should().BeFalse();
-            scout.Controller.Locomotions.Fall.FallStart.Should().Be(Fixed64.Zero);
+            agent.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
+            agent.Motor.Locomotions.Fall.FallStart.Should().Be(Fixed64.Zero);
         }
     }
 }

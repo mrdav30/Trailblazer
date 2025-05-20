@@ -15,7 +15,9 @@ namespace Trailblazer.Pathing
 
         public const int DiagonalCost = 141;
 
-        public const byte DefaultDegree = byte.MaxValue;
+        public static readonly Fixed64 DefaultDegree = Fixed64.MAX_VALUE;
+
+        public static readonly Fixed64 DefaultDegreeCap = (Fixed64)8;
 
         #endregion
 
@@ -35,7 +37,7 @@ namespace Trailblazer.Pathing
         /// If a big unit stands directly on this node, it won't be able to fit if the degree is too low.
         /// </summary>
         [Transient]
-        public byte ClearanceDegree { get; private set; }
+        public Fixed64 ClearanceDegree { get; private set; }
 
         [Transient]
         public bool IsClearanceValid { get; private set; }
@@ -76,7 +78,7 @@ namespace Trailblazer.Pathing
             NodeSpawnToken = node.SpawnToken;
             NodePosition = node.WorldPosition;
 
-            ClearanceDegree = byte.MaxValue;
+            ClearanceDegree = Fixed64.MAX_VALUE;
             ClearanceDirection = LinearDirection.None;
 
             IsPartitioned = true;
@@ -119,16 +121,16 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// If this unit is too fat to fit.
         /// </summary>
-        internal bool Unpassable(int size)
+        internal bool Unpassable(Fixed64 size)
         {
-            if (size <= 0) return false;
+            if (size <= Fixed64.Zero) return false;
 
             //  If there's an unwalkable within the size's number of connections, the unit cannot pass
             CheckNeighborClearance();
             return size > ClearanceDegree;
         }
 
-        public byte GetNeighborClearance()
+        public Fixed64 GetNeighborClearance()
         {
             CheckNeighborClearance();
             return ClearanceDegree;
@@ -147,7 +149,7 @@ namespace Trailblazer.Pathing
 
             if (node.IsBlocked)
             {
-                ClearanceDegree = 0;
+                ClearanceDegree = Fixed64.Zero;
                 ClearanceDirection = LinearDirection.None;
                 IsClearanceValid = true;
                 return;
@@ -157,7 +159,7 @@ namespace Trailblazer.Pathing
             if (node.TryGetNeighborFromDirection(ClearanceDirection, out Node source)
                 && source.TryGetPartition(out PathPartition sourcePartition))
             {
-                byte prevSourceDegree = sourcePartition.ClearanceDegree;
+                Fixed64 prevSourceDegree = sourcePartition.ClearanceDegree;
                 if (sourcePartition.ClearanceDegree < ClearanceDegree)
                 {
                     sourcePartition.CheckNeighborClearance();
@@ -170,7 +172,7 @@ namespace Trailblazer.Pathing
                     }
                 }
                 else
-                    ClearanceDegree = (byte)(sourcePartition.ClearanceDegree + 1);
+                    ClearanceDegree = sourcePartition.ClearanceDegree + Fixed64.One;
             }
 
             //This method isn't always 100% accurate but after several updates, it will have a better picture of the map
@@ -181,15 +183,15 @@ namespace Trailblazer.Pathing
                     || neighbor.IsBlocked
                     || !neighbor.TryGetPartition(out PathPartition neighborPartition))
                 {
-                    ClearanceDegree = 1;
+                    ClearanceDegree = Fixed64.One;
                     ClearanceDirection = direction;
                     break;
                 }
 
-                if (neighborPartition.ClearanceDegree < ClearanceDegree && neighborPartition.ClearanceDegree < 8)
+                if (neighborPartition.ClearanceDegree < ClearanceDegree && neighborPartition.ClearanceDegree < DefaultDegreeCap)
                 {
                     //  Cap clearance to 8. Something larger than that won't work very well with pathfinding.
-                    ClearanceDegree = (byte)(neighborPartition.ClearanceDegree + 1);
+                    ClearanceDegree = neighborPartition.ClearanceDegree + Fixed64.One;
                     ClearanceDirection = direction;
                 }
             }

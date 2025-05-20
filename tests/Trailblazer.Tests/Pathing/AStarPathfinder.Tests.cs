@@ -36,7 +36,7 @@ namespace Trailblazer.Tests.Pathing
             var map = PathTestFactory.RegisterFromData("Line", data, origin);
 
             SwiftList<Vector3d>? resultPath = null;
-            var request = PathTestFactory.CreateRequest(origin, target, 1, (success, path) =>
+            var request = PathTestFactory.CreateRequest(origin, target, Fixed64.One, (success, path) =>
             {
                 Assert.True(success);
                 resultPath = path;
@@ -61,7 +61,7 @@ namespace Trailblazer.Tests.Pathing
             var unreachableTarget = new Vector3d(4, 0, 4);
             bool wasSuccess = false;
 
-            var request = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), unreachableTarget, 1, (success, path) =>
+            var request = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), unreachableTarget, Fixed64.One, (success, path) =>
             {
                 wasSuccess = success;
             });
@@ -98,7 +98,7 @@ namespace Trailblazer.Tests.Pathing
             var request = PathTestFactory.CreateRequest(
                 new Vector3d(0, 0, 0),
                 new Vector3d(5, 5, 0),
-                1,
+                Fixed64.One,
                 (success, _) => Assert.False(success)
             );
 
@@ -133,7 +133,7 @@ namespace Trailblazer.Tests.Pathing
             PathingManager.InitializeMap("Diag");
 
             SwiftList<Vector3d>? result = null;
-            var request = PathTestFactory.CreateRequest(start, target, 1, (success, path) =>
+            var request = PathTestFactory.CreateRequest(start, target, Fixed64.One, (success, path) =>
             {
                 Assert.True(success);
                 result = path;
@@ -155,7 +155,7 @@ namespace Trailblazer.Tests.Pathing
             PathTestFactory.RegisterSingleWalkablePoint("SameSpot", pos);
 
             SwiftList<Vector3d>? path = null;
-            var request = PathTestFactory.CreateRequest(pos, pos, 1, (success, result) =>
+            var request = PathTestFactory.CreateRequest(pos, pos, Fixed64.One, (success, result) =>
             {
                 Assert.False(success);
                 path = result;
@@ -189,7 +189,7 @@ namespace Trailblazer.Tests.Pathing
             var target = new Vector3d(4, 0, 0);
             SwiftList<Vector3d>? resultPath = null;
 
-            var request = PathTestFactory.CreateRequest(start, target, 1, (success, path) =>
+            var request = PathTestFactory.CreateRequest(start, target, Fixed64.One, (success, path) =>
             {
                 resultPath = path;
             });
@@ -220,7 +220,7 @@ namespace Trailblazer.Tests.Pathing
             var map = PathTestFactory.RegisterFromData("Choke", data, new Vector3d(0, 0, 0));
 
             var pathFound = false;
-            var request = PathTestFactory.CreateRequest(new Vector3d(0, 0, 1), new Vector3d(4, 0, 1), roverSize: 2, (success, path) => pathFound = success);
+            var request = PathTestFactory.CreateRequest(new Vector3d(0, 0, 1), new Vector3d(4, 0, 1), unitSize: (Fixed64)2, (success, path) => pathFound = success);
 
             PathingManager.RequestPath(request);
 
@@ -245,7 +245,7 @@ namespace Trailblazer.Tests.Pathing
 
             SwiftList<Vector3d>? result = null;
             var pathFound = false;
-            var req = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), new Vector3d(2, 0, 0), 1, (success, path) =>
+            var req = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), new Vector3d(2, 0, 0), Fixed64.One, (success, path) =>
             {
                 pathFound = success;
                 result = path;
@@ -271,7 +271,7 @@ namespace Trailblazer.Tests.Pathing
             var brokenMap = PathTestFactory.RegisterFromData("ResetTestBlocked", badData, new Vector3d(0, 0, 0));
 
             bool failed = false;
-            var req2 = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), new Vector3d(2, 0, 0), 1, (success, path) => {
+            var req2 = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), new Vector3d(2, 0, 0), Fixed64.One, (success, path) => {
                 failed = !success;
             });
             PathingManager.RequestPath(req2);
@@ -290,7 +290,7 @@ namespace Trailblazer.Tests.Pathing
 
             var map = PathTestFactory.RegisterFromData("SearchCap", data, new Vector3d(0, 0, 0));
 
-            var req = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), new Vector3d(49, 0, 0), 1, (success, _) =>
+            var req = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), new Vector3d(49, 0, 0), Fixed64.One, (success, _) =>
             {
                 Assert.False(success); // Won't reach the end
             });
@@ -321,7 +321,7 @@ namespace Trailblazer.Tests.Pathing
             var request = PathTestFactory.CreateRequest(
                 new Vector3d(0, 0, 0),
                 new Vector3d(2, 0, 2),
-                1,
+                Fixed64.One,
                 (success, path) => resultPath = path
             );
             request.UseSplineSmoothing = true;
@@ -349,7 +349,7 @@ namespace Trailblazer.Tests.Pathing
             var end = new Vector3d(1, 0, 0);
 
             SwiftList<Vector3d>? resultPath = null;
-            var req = PathTestFactory.CreateRequest(start, end, 1, (success, path) => resultPath = path);
+            var req = PathTestFactory.CreateRequest(start, end, Fixed64.One, (success, path) => resultPath = path);
             req.UseSplineSmoothing = true;
 
             PathingManager.RequestPath(req);
@@ -380,7 +380,7 @@ namespace Trailblazer.Tests.Pathing
             var end = new Vector3d(3, 0, 3);
 
             SwiftList<Vector3d>? resultPath = null;
-            var req = PathTestFactory.CreateRequest(start, end, 1, (success, path) => resultPath = path);
+            var req = PathTestFactory.CreateRequest(start, end, Fixed64.One, (success, path) => resultPath = path);
             req.UseSplineSmoothing = true;
 
             PathingManager.RequestPath(req);

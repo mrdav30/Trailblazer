@@ -9,7 +9,7 @@ namespace Trailblazer.Pathing
         public bool HasWaypoints { get; }
 
         void OnSetup();
-        void RequestMovementPath(Vector3d from, Vector3d destination, int size);
+        void RequestMovementPath(Vector3d from, Vector3d destination, Fixed64 size);
         Vector3d GetMovementDirection(Vector3d from);
         void MoveToNextWaypoint();
 

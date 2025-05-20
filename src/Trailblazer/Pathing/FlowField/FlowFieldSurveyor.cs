@@ -107,7 +107,7 @@ namespace Trailblazer.Pathing
             // We will only ever visit every node once as we are always visiting nodes in the most efficient order
             foreach (TraversableNeighbor neighbor in currentPartition.GetWalkableStraightNeighbors())
             {
-                if (PathPartitionHeap.IsClosed(neighbor.Partition) || neighbor.Partition.Unpassable(request.RoverSize))
+                if (PathPartitionHeap.IsClosed(neighbor.Partition) || neighbor.Partition.Unpassable(request.UnitSize))
                     continue;
 
                 int neighborToll = currentPartition.HeapCost + 1;

@@ -22,9 +22,9 @@ namespace Trailblazer.Pathing.Navigators
             _pathIndex = -1;
         }
 
-        public void RequestMovementPath(Vector3d from, Vector3d destination, int size)
+        public void RequestMovementPath(Vector3d from, Vector3d destination, Fixed64 unitSize)
         {
-            AStarPathRequest pathRequest = new(from, destination, size, (success, result) =>
+            AStarPathRequest pathRequest = new(from, destination, unitSize, (success, result) =>
             {
                 HasPath = success;
                 _myPath = result;

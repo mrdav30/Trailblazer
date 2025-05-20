@@ -1,10 +1,9 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Tests
 {
-    public static class IScoutTestFactory
+    public static class MockAgentTestFactory
     {
         /// <summary>
         /// Generates a Scout (no platform logic)
@@ -25,7 +24,7 @@ namespace Trailblazer.Tests
                         condition.GroundState = new GroundCondition
                         {
                             BaseObject = new object(), // Separate from platform
-                            GroundMatrix = Fixed4x4.Identity,
+                            GroundMatrix = Fixed4x4.Identity
                         };
                     }
                     break;
@@ -41,11 +40,15 @@ namespace Trailblazer.Tests
                     break;
             }
 
-            return new MockAgent(
+            MockAgent agent = new MockAgent();
+            agent.Setup(
                 startPosition ?? Vector3d.Zero,
-                startVelocity ?? Vector3d.Zero,
-                condition
+                null,
+                startVelocity ?? Vector3d.Zero
             );
+            agent.Initialize(condition);
+
+            return agent;
         }
 
         /// <summary>
@@ -74,14 +77,17 @@ namespace Trailblazer.Tests
                 };
             }
 
-            MockAgent mock = new MockAgent(
+            MockAgent agent = new MockAgent();
+            agent.Setup(
                 startPosition ?? Vector3d.Zero,
-                startVelocity ?? Vector3d.Down,
-                condition
+                null,
+                startVelocity ?? Vector3d.Down
             );
+            agent.Initialize(condition);
 
-            mock.Navigator.Motor.Locomotions.Fall.IsFalling = true;
-            return mock;
+            agent.Motor.Locomotions.Fall.IsFalling = true;
+
+            return agent;
         }
 
         /// <summary>
@@ -106,11 +112,13 @@ namespace Trailblazer.Tests
                 }
             };
 
-            return new MockAgent(
-                startPosition ?? Vector3d.Zero,
-                Vector3d.Zero,
-                condition
-            );
+            MockAgent agent = new MockAgent();
+            agent.Setup(startPosition ?? Vector3d.Zero);
+            agent.Initialize(condition);
+
+            return agent;
+
+
         }
 
         public static MockAgent CreateWaterAgent(Vector3d? startPosition = null, Fixed64? surfaceLevel = null)
@@ -122,13 +130,11 @@ namespace Trailblazer.Tests
                 CeilingLevel = Fixed64.MAX_VALUE
             };
 
-            MockAgent scout = new MockAgent(
-                startPosition ?? Vector3d.Zero,
-                Vector3d.Zero,
-                condition
-            );
+            MockAgent agent = new MockAgent();
+            agent.Setup(startPosition ?? Vector3d.Zero);
+            agent.Initialize(condition);
 
-            return scout;
+            return agent;
         }
 
         public static MockAgent CreateJumpReadyAgent(Vector3d? startPosition = null)
@@ -144,11 +150,11 @@ namespace Trailblazer.Tests
                 }
             };
 
-            return new MockAgent(
-                startPosition ?? Vector3d.Zero,
-                Vector3d.Zero,
-                condition
-            );
+            MockAgent agent = new MockAgent();
+            agent.Setup(startPosition ?? Vector3d.Zero);
+            agent.Initialize(condition);
+
+            return agent;
         }
 
         /// <summary>

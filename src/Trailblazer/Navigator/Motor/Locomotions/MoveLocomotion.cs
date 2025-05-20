@@ -23,36 +23,42 @@ namespace Trailblazer.Navigation.Motor
         /// <summary>
         /// Default maximum walking speed.
         /// </summary>
-        public static readonly Fixed64 DefaultMaxWalkSpeed = (Fixed64)1d;
+        public static readonly Fixed64 DefaultMaxSlowSpeed = (Fixed64)0.1f;//1d;
 
         /// <summary>
         /// Default maximum jogging speed.
         /// </summary>
-        public static readonly Fixed64 DefaultMaxJogSpeed = (Fixed64)2d;
+        public static readonly Fixed64 DefaultMaxModerateSpeed = (Fixed64)0.25d;//2d;
 
         /// <summary>
         /// Default maximum sprinting speed.
         /// </summary>
-        public static readonly Fixed64 DefaultMaxSprintSpeed = (Fixed64)3d;
+        public static readonly Fixed64 DefaultMaxFastSpeed = (Fixed64)0.5d;//3d;
 
         /// <summary>
         /// Default maximum sideways movement speed.
         /// </summary>
-        public static readonly Fixed64 DefaultMaxSidewaysSpeed = (Fixed64)2d;
+        public static readonly Fixed64 DefaultMaxSidewaysSpeed = (Fixed64)0.15d;//2d;
 
         /// <summary>
         /// Default maximum backward movement speed.
         /// </summary>
-        public static readonly Fixed64 DefaultMaxBackwardsSpeed = (Fixed64)2d;
+        public static readonly Fixed64 DefaultMaxBackwardsSpeed = (Fixed64)0.15d;//2d;
 
         /// <summary>
         /// Default maximum acceleration when moving on the ground.
         /// </summary>
-        public static readonly Fixed64 DefaultMaxGroundAcceleration = (Fixed64)30;
+        /// <remarks>
+        /// This is timescaled, with a default TimeDelta of `0.03125` this resolves to 1.
+        /// </remarks>
+        public static readonly Fixed64 DefaultMaxGroundAcceleration = (Fixed64)32;
 
         /// <summary>
         /// Default maximum acceleration when moving in the air.
         /// </summary>
+        /// <remarks>
+        /// This is timescaled, with a default TimeDelta of `0.03125` this resolves to `0.625`.
+        /// </remarks>
         public static readonly Fixed64 DefaultMaxAirAcceleration = (Fixed64)20;
 
         /// <summary>
@@ -99,17 +105,17 @@ namespace Trailblazer.Navigation.Motor
         /// <summary>
         /// The maximum speed when walking.
         /// </summary>
-        public Fixed64 MaxSlowSpeed = DefaultMaxWalkSpeed;
+        public Fixed64 MaxSlowSpeed = DefaultMaxSlowSpeed;
 
         /// <summary>
         /// The maximum speed when jogging.
         /// </summary>
-        public Fixed64 MaxModerateSpeed = DefaultMaxJogSpeed;
+        public Fixed64 MaxModerateSpeed = DefaultMaxModerateSpeed;
 
         /// <summary>
         /// The maximum speed when sprinting.
         /// </summary>
-        public Fixed64 MaxFastSpeed = DefaultMaxSprintSpeed;
+        public Fixed64 MaxFastSpeed = DefaultMaxFastSpeed;
 
         /// <summary>
         /// The maximum speed when moving sideways.

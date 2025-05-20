@@ -46,7 +46,7 @@ public class TransitState
     /// <summary>
     /// Updates the traversal state and retains the previous state for transition tracking.
     /// </summary>
-    public void Update(TraversalCondition condition, TraversalCondition? previous)
+    public void Update(TraversalCondition condition, TraversalCondition previous)
     {
         PreviousState = previous;
         Medium = condition.Medium;
@@ -57,8 +57,6 @@ public class TransitState
         {
             SurfaceNormal = GroundState?.GroundNormal ?? Vector3d.Zero;
             SlopeAngle = Vector3d.Angle(Vector3d.Up, SurfaceNormal);
-            bool isDownhill = Vector3d.Dot(Vector3d.Forward, SurfaceNormal) < Fixed64.Zero;
-            if (isDownhill) SlopeAngle *= -1;
         }
         else
         {
@@ -67,6 +65,19 @@ public class TransitState
         }
 
         CeilingLevel = condition.CeilingLevel;
+    }
+
+    public Fixed64 GetSignedSlopeAngle(Vector3d moveDirection)
+    {
+        if (SlopeAngle == Fixed64.Zero)
+            return Fixed64.Zero;
+
+        // Treat downhill as gravity-biased when idle
+        if (moveDirection == Vector3d.Zero)
+            moveDirection = Vector3d.Backward;
+
+        bool isDownhill = Vector3d.Dot(moveDirection.Normal, SurfaceNormal) < Fixed64.Zero;
+        return isDownhill ? -SlopeAngle : SlopeAngle;
     }
 
     /// <summary>

@@ -43,8 +43,11 @@ namespace Trailblazer.Pathing
 
         public Action<bool, SwiftList<Vector3d>> OnComplete { get; private set; }
 
-        public AStarPathRequest(Vector3d fromPosition, Vector3d targetPosition, int roverSize, Action<bool, SwiftList<Vector3d>> onComplete)
-            : base(fromPosition, targetPosition, roverSize)
+        public AStarPathRequest(
+            Vector3d from, 
+            Vector3d destination, 
+            Fixed64 unitSize, 
+            Action<bool, SwiftList<Vector3d>> onComplete) : base(from, destination, unitSize)
         {
             OnComplete = onComplete;
         }

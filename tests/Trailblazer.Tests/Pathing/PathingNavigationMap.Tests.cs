@@ -15,7 +15,7 @@ namespace Trailblazer.Tests.Pathing
             var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
             GlobalGridManager.TryAddGrid(config, out _);
 
-            var map = BuildSinglePointMap("TestMap", new Vector3d(0, 0, 0));
+            var map = PathTestFactory.BuildSinglePointMap("TestMap", new Vector3d(0, 0, 0));
             PathingManager.Register(map);
 
             Assert.True(PathingManager.TryGetNavigationMap("TestMap", out var retrieved));
@@ -28,7 +28,7 @@ namespace Trailblazer.Tests.Pathing
             var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
             GlobalGridManager.TryAddGrid(config, out _);
 
-            var map = BuildSinglePointMap("InitMap", new Vector3d(0, 0, 0));
+            var map = PathTestFactory.BuildSinglePointMap("InitMap", new Vector3d(0, 0, 0));
             PathingManager.Register(map);
             PathingManager.InitializeMap("InitMap");
 
@@ -43,8 +43,8 @@ namespace Trailblazer.Tests.Pathing
             GlobalGridManager.TryAddGrid(config, out _);
 
             var pos = new Vector3d(0, 0, 0);
-            var mapA = BuildSinglePointMap("MapA", pos);
-            var mapB = BuildSinglePointMap("MapB", pos);
+            var mapA = PathTestFactory.BuildSinglePointMap("MapA", pos);
+            var mapB = PathTestFactory.BuildSinglePointMap("MapB", pos);
 
             PathingManager.Register(mapA);
             PathingManager.Register(mapB);
@@ -68,7 +68,7 @@ namespace Trailblazer.Tests.Pathing
         [Fact]
         public void IsWalkable_ShouldReturnFalseForOutOfBounds()
         {
-            var map = BuildSinglePointMap("BoundsTest", new Vector3d(0, 0, 0));
+            var map = PathTestFactory.BuildSinglePointMap("BoundsTest", new Vector3d(0, 0, 0));
             Assert.False(map.IsWalkable(new Vector3d(10, 0, 10))); // Way outside
         }
 
@@ -78,7 +78,7 @@ namespace Trailblazer.Tests.Pathing
             var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
             GlobalGridManager.TryAddGrid(config, out _);
 
-            var map = BuildSinglePointMap("DuplicateInit", new Vector3d(0, 0, 0));
+            var map = PathTestFactory.BuildSinglePointMap("DuplicateInit", new Vector3d(0, 0, 0));
             PathingManager.Register(map);
             PathingManager.InitializeMap("DuplicateInit");
             PathingManager.InitializeMap("DuplicateInit"); // idempotent
@@ -88,16 +88,6 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(count == 1);
             Assert.True(partition.BelongsTo("DuplicateInit"));
-        }
-
-        private static NavigationChart BuildSinglePointMap(string name, Vector3d worldPos)
-        {
-            // Convert a single world point into an aligned map
-            Vector3d origin = worldPos - new Vector3d(1, 1, 1);
-            bool[,,] data = new bool[3, 3, 3];
-            data[1, 1, 1] = true;
-
-            return NavigationChart.From3D(name, data, origin, Fixed64.One);
         }
     }
 }

@@ -6,37 +6,16 @@ namespace Trailblazer.Pathing
 {
     public class FlowFieldPathRequest : PathRequest
     {
+        public const int DefaultSearchRange = 10;
 
-        private int _flowFieldSearchPadding = 10;
-        public int FlowFieldSearchPadding
+        private int _searchRange = DefaultSearchRange;
+        public int SearchRange
         {
-            get => _flowFieldSearchPadding;
+            get => _searchRange;
             set
             {
                 if (IsValidated) return;
-                _flowFieldSearchPadding = value;
-            }
-        }
-
-        private bool _enableLineOfSight = true;
-        public bool EnableLineOfSight
-        {
-            get => _enableLineOfSight;
-            set
-            {
-                if (IsValidated) return;
-                _enableLineOfSight = value;
-            }
-        }
-
-        private int _lineOfSightMaxCost = 1000;
-        public int LineOfSightMaxCost
-        {
-            get => _lineOfSightMaxCost;
-            set
-            {
-                if (IsValidated) return;
-                _lineOfSightMaxCost = value;
+                _searchRange = value;
             }
         }
 

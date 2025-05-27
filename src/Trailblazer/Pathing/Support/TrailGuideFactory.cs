@@ -1,10 +1,22 @@
-﻿using Trailblazer.Pathing;
-using Trailblazer.Pathing.Navigators;
+﻿using Trailblazer.Pathing.Navigators;
 
-namespace Trailblazer.Navigation
+namespace Trailblazer.Pathing
 {
+    public enum TrailGuideParadigm
+    {
+        None,
+        Astar,
+        FlowField
+    }
+
+    /// <summary>
+    /// Provides a factory to request pathing guides based on the selected paradigm.
+    /// </summary>
     public static class TrailGuideFactory
     {
+        /// <summary>
+        /// Instantiates a new guide (A* or FlowField) and initializes it for use.
+        /// </summary>
         public static IGuide RequestGuide(TrailGuideParadigm trailGuideRequest)
         {
             IGuide result = null;
@@ -27,8 +39,8 @@ namespace Trailblazer.Navigation
             return result;
         }
 
-        public static AStarGuide RequestAstarGuide() => new AStarGuide();
+        public static AStarGuide RequestAstarGuide() => new();
 
-        public static FlowFieldGuide RequestFlowFieldGuide() => new FlowFieldGuide();
+        public static FlowFieldGuide RequestFlowFieldGuide() => new();
     }
 }

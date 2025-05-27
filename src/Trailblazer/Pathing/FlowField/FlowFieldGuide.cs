@@ -4,16 +4,30 @@ using SwiftCollections;
 
 namespace Trailblazer.Pathing
 {
+    /// <summary>
+    /// Provides steering direction based on a flow field vector grid.
+    /// Suitable for group-based or gradient-following movement strategies.
+    /// </summary>
     public class FlowFieldGuide : IGuide
     {
-        private static readonly Fixed64 DefaultSearchRange = Fixed64.One * 10;
-
         public bool HasPath { get; private set; }
 
-        // key = world position, value = vector flow field
+        /// <summary>
+        /// Indicates whether this guide uses waypoints. Always false for flow fields.
+        /// </summary>
+        public bool HasWaypoints => false;
+
+        /// <summary>
+        /// Not implemented. Flow fields do not use discrete waypoints for arrival logic.
+        /// </summary>
+        public bool HasArrived => HasPath && _currentField.IsGoal;
+
+        public int SearchRange { get; set; } = FlowFieldPathRequest.DefaultSearchRange;
+
+        // key = node spawn token, value = vector flow field
         private SwiftDictionary<int, FlowField> _fields;
 
-        public bool HasWaypoints => false; // flow fields don't have waypoints...
+        private FlowField _currentField;
 
         public void OnSetup()
         {
@@ -28,6 +42,7 @@ namespace Trailblazer.Pathing
                 _fields = result;
                 HasPath = success;
             });
+            pathRequest.SearchRange = SearchRange;
 
             PathingManager.RequestPath(pathRequest);
         }
@@ -38,13 +53,13 @@ namespace Trailblazer.Pathing
                 return Vector3d.Zero;
 
             Vector3d direction;
-            if (_fields.TryGetValue(currentNode.SpawnToken, out _))
-                direction = SampleFlowVector(from, _fields);
+            if (_fields.TryGetValue(currentNode.SpawnToken, out _currentField))
+                direction = FlowFieldSurveyor.SampleFlowVector(from, _fields);
             else
             {
                 // Agent landed on a spot with no flow.
                 // Try to course correct by finding the closest flow field to move towards
-                if (!TryGetNearestFlowAnchor(from, _fields, out Vector3d destination))
+                if (!FlowFieldSurveyor.TryGetNearestFlowAnchor(from, _fields, out Vector3d destination, SearchRange))
                     return Vector3d.Zero;
 
                 direction = destination - from;
@@ -53,83 +68,18 @@ namespace Trailblazer.Pathing
             return direction;
         }
 
+        /// <summary>
+        /// Unused for flow field logic. No discrete waypoint to advance to.
+        /// </summary>
         public void MoveToNextWaypoint() { }
 
         /// <summary>
-        /// Work out the force to apply to us based on the flow field grid squares we are on.
-        /// we apply bilinear interpolation on the 4 grid squares nearest to us to work out our force.
-        /// http://en.wikipedia.org/wiki/Bilinear_interpolation#Nonlinear
+        /// Not implemented. Flow fields do not expose next waypoint positions.
         /// </summary>
-        public static Vector3d SampleFlowVector(Vector3d worldPosition, SwiftDictionary<int, FlowField> fields)
+        bool IGuide.TryGetNextWaypoint(out Vector3d waypoint)
         {
-            // Get bottom-left corner of the square the agent is standing in
-            Vector3d corner = new Vector3d(
-                FixedMath.Floor(worldPosition.x / GlobalGridManager.NodeSize) * GlobalGridManager.NodeSize,
-                FixedMath.Floor(worldPosition.y / GlobalGridManager.NodeSize) * GlobalGridManager.NodeSize,
-                FixedMath.Floor(worldPosition.z / GlobalGridManager.NodeSize) * GlobalGridManager.NodeSize
-            );
-
-            // Compute normalized offset in cell (0..1)
-            Fixed64 dx = (worldPosition.x - corner.x) / GlobalGridManager.NodeSize;
-            Fixed64 dz = (worldPosition.z - corner.z) / GlobalGridManager.NodeSize;
-
-            // Sample the 4 surrounding node centers
-            Vector3d bottomLeft = corner;
-            Vector3d bottomRight = corner + new Vector3d(GlobalGridManager.NodeSize, Fixed64.Zero, Fixed64.Zero);
-            Vector3d topLeft = corner + new Vector3d(Fixed64.Zero, Fixed64.Zero, GlobalGridManager.NodeSize);
-            Vector3d topRight = corner + new Vector3d(GlobalGridManager.NodeSize, Fixed64.Zero, GlobalGridManager.NodeSize);
-
-            // Get flow vectors
-            Vector3d f00 = GetFlowVector(bottomLeft, fields);
-            Vector3d f10 = GetFlowVector(bottomRight, fields);
-            Vector3d f01 = GetFlowVector(topLeft, fields);
-            Vector3d f11 = GetFlowVector(topRight, fields);
-
-            // Bilinear interpolation
-            Vector3d zHigh = f00 * (Fixed64.One - dx) + f10 * dx;
-            Vector3d zLow = f01 * (Fixed64.One - dx) + f11 * dx;
-            Vector3d blended = zHigh * (Fixed64.One - dz) + zLow * dz;
-
-            blended.Normalize();
-            return blended;
-        }
-
-        public static bool TryGetNearestFlowAnchor(
-            Vector3d from,
-            SwiftDictionary<int, FlowField> fields,
-            out Vector3d closestTarget,
-            Fixed64? maxRange = null)
-        {
-            closestTarget = Vector3d.Zero;
-            Fixed64 range = maxRange ?? DefaultSearchRange;
-            Fixed64 minDistanceSq = range * range;
-            bool found = false;
-
-            foreach (FlowField flow in fields.Values)
-            {
-                if (!GlobalGridManager.TryGetGridAndNode(flow.NodeCoordinates, out _, out Node flowNode))
-                    continue;
-
-                Fixed64 distSq = Vector3d.SqrDistance(from, flowNode.WorldPosition);
-                if (distSq <= minDistanceSq)
-                {
-                    closestTarget = flowNode.WorldPosition;
-                    minDistanceSq = distSq;
-                    found = true;
-                }
-            }
-
-            return found;
-        }
-
-        public static Vector3d GetFlowVector(Vector3d position, SwiftDictionary<int, FlowField> fields)
-        {
-            if (GlobalGridManager.TryGetGridAndNode(position, out _, out Node node))
-            {
-                if (fields.TryGetValue(node.SpawnToken, out FlowField field))
-                    return field.Direction;
-            }
-            return Vector3d.Zero;
+            waypoint = Vector3d.Zero;
+            return false;
         }
 
         public void Reset()

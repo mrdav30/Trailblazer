@@ -12,9 +12,7 @@ namespace Trailblazer.Navigation
 
         public Action? OnStartMove;
 
-        public Action<Vector3d>? OnStartTurn;
-
-        public Action<TraversalRequest>? OnStartTraversal;
+        public Action<Vector3d>? OnStartGuidedTraversal;
 
         /// <summary>
         /// Called when unit arrives at destination

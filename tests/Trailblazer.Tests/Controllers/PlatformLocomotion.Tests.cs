@@ -19,7 +19,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 			// 1st Frame
 			TrailblazerManager.Simulate();
 			scout.Simulate();
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			Vector3d newPlatformPoint = new(2, 0, 0);
 			Fixed4x4 updatedMatrix = Fixed4x4.SetTranslation(
@@ -43,7 +43,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 				}
 			);
 
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			// Assert
 			scout.Position.Should().Be(scout.Motor.Locomotions.Platform.ActiveTransform.Translation);
@@ -60,14 +60,14 @@ namespace Trailblazer.Tests.Navigation.Motor
 			// Act
 			TrailblazerManager.Simulate();
 			scout.Simulate();
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			// Apply platform rotation
 			scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.CreateRotation(rotationChange) * scout.Motor.Locomotions.Platform.ActiveTransform;
 
 			TrailblazerManager.Simulate();
 			scout.Simulate();
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			// Assert
 			scout.Motor.Locomotions.Platform.ActiveTransform.Rotation.Should().Be(scout.Rotation);
@@ -85,7 +85,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 			// Act
 			TrailblazerManager.Simulate();
 			scout.Simulate();
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			// Move platform
 			Vector3d movementDelta = new(1, 0, 0);
@@ -95,7 +95,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
 			TrailblazerManager.Simulate();
 			scout.Simulate();
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			// Assert
 			scout.Position.Should().Be(expectedPosition + movementDelta);
@@ -112,14 +112,14 @@ namespace Trailblazer.Tests.Navigation.Motor
 			// Act
 			TrailblazerManager.Simulate();
 			scout.Simulate();
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetRotation(scout.Motor.Locomotions.Platform.ActiveTransform, rotationChange);
 			scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.NormalizeRotationMatrix(scout.Motor.Locomotions.Platform.ActiveTransform);
 
 			TrailblazerManager.Simulate();
 			scout.Simulate();
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			// Assert
 			scout.Rotation.Should().Be(scout.Motor.Locomotions.Platform.ActiveTransform.Rotation);
@@ -135,21 +135,21 @@ namespace Trailblazer.Tests.Navigation.Motor
 
 			// Act 1 - Jump before platform movement
 			TrailblazerManager.Simulate();
-			scout.SetTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+			scout.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
 			scout.Simulate();
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			// Move platform afterward
 			scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(scout.Motor.Locomotions.Platform.ActiveTransform, new Vector3d(3, 0, 0));
 
 			// Act 2 - Simulate next frame after platform movement
 			TrailblazerManager.Simulate();
-			scout.SetTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+			scout.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
 			scout.Simulate();
-			scout.Visualize();
+			scout.CommitFrameMotion();
 
 			// Assert - we didn't pick up any horizontal velocity from the platform
-			scout.Motor.Locomotions.Move.Velocity.x.Should().Be(Fixed64.Zero);
+			scout.Motor.Locomotions.Move.FrameVelocity.x.Should().Be(Fixed64.Zero);
 		}
 
         [Fact]
@@ -161,11 +161,11 @@ namespace Trailblazer.Tests.Navigation.Motor
 			scout.Motor.Locomotions.Platform.PlatformVelocity = new Vector3d(1, 0, 0);
 
             TrailblazerManager.Simulate();
-            scout.SetTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
-            scout.Motor.Locomotions.Move.Velocity.x.Should().BeGreaterThan(Fixed64.Zero);
+            scout.Motor.Locomotions.Move.FrameVelocity.x.Should().BeGreaterThan(Fixed64.Zero);
         }
 
         [Fact]
@@ -176,7 +176,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             var moveDelta = new Vector3d(2, 0, 0);
             scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(
@@ -185,7 +185,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             scout.Position.Should().Be(moveDelta);
         }
@@ -235,11 +235,11 @@ namespace Trailblazer.Tests.Navigation.Motor
             scout.Motor.Locomotions.Platform.PlatformVelocity = initialPlatformVelocity;
 
             TrailblazerManager.Simulate();
-            scout.SetTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
-            Vector3d velocityAfterJump = scout.Motor.Locomotions.Move.Velocity;
+            Vector3d velocityAfterJump = scout.Motor.Locomotions.Move.FrameVelocity;
 
             velocityAfterJump.x.Should().Be(initialPlatformVelocity.x);
         }
@@ -254,20 +254,20 @@ namespace Trailblazer.Tests.Navigation.Motor
             // Act 1 - Set initial state
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Arrange - Move platform
             scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(scout.Motor.Locomotions.Platform.ActiveTransform, new Vector3d(2, 0, 0));
 
             // Act 2 - Jump from moving platform
             TrailblazerManager.Simulate();
-            scout.SetTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Assert
-            scout.Motor.Locomotions.Move.Velocity.Should().NotBe(Vector3d.Zero);
-            scout.Motor.Locomotions.Move.Velocity.x.Should().Be(scout.Motor.Locomotions.Platform.PlatformVelocity.x);
+            scout.Motor.Locomotions.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
+            scout.Motor.Locomotions.Move.FrameVelocity.x.Should().Be(scout.Motor.Locomotions.Platform.PlatformVelocity.x);
         }
 
         [Fact]
@@ -281,7 +281,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
 			scout.SetTraversalCondition(medium: TraversalMedium.Ground, surfaceLevel: Fixed64.Zero);
 
-            scout.Visualize(); // Would trigger inertia clearing
+            scout.CommitFrameMotion(); // Would trigger inertia clearing
 
             scout.Motor.Locomotions.Platform.FramePlatformVelocity.Should().Be(Vector3d.Zero);
         }

@@ -17,10 +17,10 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             // Act
             scout.Motor.Traverse(scout, Vector3d.Zero, TrekRate.Stationary, isRequestingJump: true);
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Assert
-            scout.Motor.Locomotions.Move.Velocity.y.Should().BeGreaterThan(Fixed64.Zero);
+            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
         }
 
         [Fact]
@@ -36,12 +36,12 @@ namespace Trailblazer.Tests.Navigation.Motor
             expectedVelocity.y += -scout.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
 
             // Act
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Assert
-            scout.Motor.Locomotions.Move.Velocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+            scout.Motor.Locomotions.Move.FrameVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
         }
 
         [Fact]
@@ -51,18 +51,18 @@ namespace Trailblazer.Tests.Navigation.Motor
             var scout = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             // Act - First Jump
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             Fixed64 expectedJumpFrame = scout.Motor.Locomotions.Jump.JumpStartTime;
 
             // Attempt to jump again immediately
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Assert
             scout.Motor.IsInAir.Should().BeTrue();
@@ -77,29 +77,29 @@ namespace Trailblazer.Tests.Navigation.Motor
             var scout = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             // Act - First Jump
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Release jump after 2 frames
             for (int i = 0; i < 29; i++)
             {
                 TrailblazerManager.Simulate();
                 scout.Simulate();
-                scout.Visualize();
+                scout.CommitFrameMotion();
             }
 
             // Act - Simulate next frame
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Assert
             scout.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
             scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
             scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we simulate 31
-            scout.Motor.Locomotions.Move.Velocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
+            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
         }
 
         [Fact]
@@ -110,12 +110,12 @@ namespace Trailblazer.Tests.Navigation.Motor
             scout.Motor.Events.CanAffordJump = () => false;
 
             // Act
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Assert
-            scout.Motor.Locomotions.Move.Velocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
+            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
         }
 
         [Fact]
@@ -126,24 +126,24 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             // Act - Initial Jump
             TrailblazerManager.Simulate();
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
-            Vector3d previousVelocity = scout.Motor.Locomotions.Move.Velocity;
+            Vector3d previousVelocity = scout.Motor.Locomotions.Move.FrameVelocity;
 
             // Continue holding jump for 3 frames
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+                scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
                 scout.Simulate();
-                scout.Visualize();
+                scout.CommitFrameMotion();
             }
 
             // Assert
             var expected = previousVelocity.y - (scout.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime * 3);
-            scout.Motor.Locomotions.Move.Velocity.y.Should().BeGreaterThan(expected);
+            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeGreaterThan(expected);
         }
 
         [Fact]
@@ -151,16 +151,16 @@ namespace Trailblazer.Tests.Navigation.Motor
         {
             var scout = MockAgentTestFactory.CreateJumpReadyAgent();
 
-            scout.SetTravelRequest(isRequestingJump: true);
+            scout.ApplyInputTravelRequest(isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             for (int i = 0; i < 13; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(isRequestingJump: true);
+                scout.ApplyInputTravelRequest(isRequestingJump: true);
                 scout.Simulate();
-                scout.Visualize();
+                scout.CommitFrameMotion();
             }
 
             scout.Position.y.Should().BeGreaterThan(scout.Motor.Locomotions.Jump.BaseJumpHeight); // Higher than default jump height
@@ -171,16 +171,16 @@ namespace Trailblazer.Tests.Navigation.Motor
         {
             var scout = MockAgentTestFactory.CreateJumpReadyAgent();
 
-            scout.SetTravelRequest(isRequestingJump: true);
+            scout.ApplyInputTravelRequest(isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             for (int i = 0; i < 13; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(isRequestingJump: false);
+                scout.ApplyInputTravelRequest(isRequestingJump: false);
                 scout.Simulate();
-                scout.Visualize();
+                scout.CommitFrameMotion();
             }
 
             scout.Position.y.Should().BeGreaterThan(scout.Motor.Locomotions.Jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
@@ -191,18 +191,18 @@ namespace Trailblazer.Tests.Navigation.Motor
         {
             var scout = MockAgentTestFactory.CreateJumpReadyAgent(startPosition: new Vector3d(0, 5, 0));
 
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Slow, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Slow, isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             scout.Simulate();
 
             scout.SetTraversalCondition(TraversalMedium.Air, surfaceLevel: Fixed64.FromRaw(5 << 16), ceilingLevel: Fixed64.FromRaw(6 << 16)); // Simulate a ceiling
 
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse(); // Jump should be canceled
-            scout.Motor.Locomotions.Move.Velocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero); // Should stop rising
+            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero); // Should stop rising
         }
 
         [Fact]
@@ -221,16 +221,16 @@ namespace Trailblazer.Tests.Navigation.Motor
             scout.Motor.Events.OnLandedFall += () => fallStopped = true;
 
             // Start Jump
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Slow, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Slow, isRequestingJump: true);
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Simulate entire jump arc until landing
             for (int i = 0; i < 30; i++)
             {
                 TrailblazerManager.Simulate();
                 scout.Simulate();
-                scout.Visualize();
+                scout.CommitFrameMotion();
                 if (scout.Position.y <= Fixed64.Zero) // If we've landed
                     break;
             }
@@ -239,7 +239,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             scout.SetTraversalCondition(TraversalMedium.Ground, surfaceLevel: Fixed64.Zero);
 
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Assert that jump state has been reset after actual landing
             scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
@@ -261,18 +261,18 @@ namespace Trailblazer.Tests.Navigation.Motor
             Fixed64 maxY = scout.Position.y;
 
             // Start jump
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Continue holding jump and track peak height until we land
             while (!scout.Motor.IsGrounded)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+                scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
                 scout.Simulate();
-                scout.Visualize();
+                scout.CommitFrameMotion();
 
                 if (scout.Position.y > maxY)
                     maxY = scout.Position.y;
@@ -287,18 +287,18 @@ namespace Trailblazer.Tests.Navigation.Motor
             var scout = MockAgentTestFactory.CreateJumpReadyAgent();
 
             // Start jump
-            scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.Visualize();
+            scout.CommitFrameMotion();
 
             // Tap release
             for (int i = 0; i < 5; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.SetTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: false);
+                scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: false);
                 scout.Simulate();
-                scout.Visualize();
+                scout.CommitFrameMotion();
             }
 
             scout.Position.y.Should().BeGreaterThan((Fixed64)0.5).And.BeLessThan((Fixed64)1.0);

@@ -14,7 +14,7 @@ namespace Trailblazer.Navigation.Motor
         /// <remarks>
         /// This is typically used for acceleration-based movement adjustments.
         /// </remarks>
-        public Action<Vector3d> OnAddLinearForce { get; set; }
+        public Action<Vector3d> OnAddVelocityDelta { get; set; }
 
 #nullable enable
 

@@ -23,8 +23,6 @@ namespace Trailblazer.Pathing
 
         #endregion
 
-        public int FlowFieldSearchPadding { get; internal set; }
-
         private int _greatestDistance;
 
         private int _startNodeDistance;
@@ -41,8 +39,6 @@ namespace Trailblazer.Pathing
             }
 
             PathPartitionHeap.FastClear();
-
-            FlowFieldSearchPadding = request.FlowFieldSearchPadding;
 
             _markedPartitions.Clear();
 
@@ -86,7 +82,7 @@ namespace Trailblazer.Pathing
 
                 PathPartitionHeap.SetClosed(current);
 
-                if (targetReached && current.HeapCost > _startNodeDistance + FlowFieldSearchPadding)
+                if (targetReached && current.HeapCost > _startNodeDistance + request.SearchRange)
                     return true;
             }
 
@@ -124,7 +120,7 @@ namespace Trailblazer.Pathing
                 }
             }
         }
-
+        
         public SwiftDictionary<int, FlowField> GenerateFlowFields(FlowFieldPathRequest request)
         {
             SwiftDictionary<int, FlowField> output = new();
@@ -184,6 +180,87 @@ namespace Trailblazer.Pathing
             }
 
             return output;
+        }
+
+
+        /// <summary>
+        /// Samples an interpolated flow vector from a 2D grid using bilinear interpolation.
+        /// </summary>
+        public static Vector3d SampleFlowVector(Vector3d worldPosition, SwiftDictionary<int, FlowField> fields)
+        {
+            // Get bottom-left corner of the square the agent is standing in
+            Vector3d corner = new(
+                FixedMath.Floor(worldPosition.x / GlobalGridManager.NodeSize) * GlobalGridManager.NodeSize,
+                FixedMath.Floor(worldPosition.y / GlobalGridManager.NodeSize) * GlobalGridManager.NodeSize,
+                FixedMath.Floor(worldPosition.z / GlobalGridManager.NodeSize) * GlobalGridManager.NodeSize
+            );
+
+            // Compute normalized offset in cell (0..1)
+            Fixed64 dx = (worldPosition.x - corner.x) / GlobalGridManager.NodeSize;
+            Fixed64 dz = (worldPosition.z - corner.z) / GlobalGridManager.NodeSize;
+
+            // Sample the 4 surrounding node centers
+            Vector3d bottomLeft = corner;
+            Vector3d bottomRight = corner + new Vector3d(GlobalGridManager.NodeSize, Fixed64.Zero, Fixed64.Zero);
+            Vector3d topLeft = corner + new Vector3d(Fixed64.Zero, Fixed64.Zero, GlobalGridManager.NodeSize);
+            Vector3d topRight = corner + new Vector3d(GlobalGridManager.NodeSize, Fixed64.Zero, GlobalGridManager.NodeSize);
+
+            // Get flow vectors
+            Vector3d f00 = GetFlowVector(bottomLeft, fields);
+            Vector3d f10 = GetFlowVector(bottomRight, fields);
+            Vector3d f01 = GetFlowVector(topLeft, fields);
+            Vector3d f11 = GetFlowVector(topRight, fields);
+
+            // Bilinear interpolation
+            Vector3d zHigh = f00 * (Fixed64.One - dx) + f10 * dx;
+            Vector3d zLow = f01 * (Fixed64.One - dx) + f11 * dx;
+            Vector3d blended = zHigh * (Fixed64.One - dz) + zLow * dz;
+
+            blended.Normalize();
+            return blended;
+        }
+
+        /// <summary>
+        /// Attempts to locate the closest available flow field anchor node from a given position.
+        /// </summary>
+        public static bool TryGetNearestFlowAnchor(
+            Vector3d from,
+            SwiftDictionary<int, FlowField> fields,
+            out Vector3d closestTarget,
+            double range = FlowFieldPathRequest.DefaultSearchRange)
+        {
+            closestTarget = Vector3d.Zero;
+            Fixed64 minDistanceSq = new(range * range);
+            bool found = false;
+
+            foreach (FlowField flow in fields.Values)
+            {
+                if (!GlobalGridManager.TryGetGridAndNode(flow.NodeCoordinates, out _, out Node flowNode))
+                    continue;
+
+                Fixed64 distSq = Vector3d.SqrDistance(from, flowNode.WorldPosition);
+                if (distSq <= minDistanceSq)
+                {
+                    closestTarget = flowNode.WorldPosition;
+                    minDistanceSq = distSq;
+                    found = true;
+                }
+            }
+
+            return found;
+        }
+
+        /// <summary>
+        /// Gets the raw flow vector at a specific world position, if available.
+        /// </summary>
+        public static Vector3d GetFlowVector(Vector3d position, SwiftDictionary<int, FlowField> fields)
+        {
+            if (GlobalGridManager.TryGetGridAndNode(position, out _, out Node node))
+            {
+                if (fields.TryGetValue(node.SpawnToken, out FlowField field))
+                    return field.Direction;
+            }
+            return Vector3d.Zero;
         }
     }
 }

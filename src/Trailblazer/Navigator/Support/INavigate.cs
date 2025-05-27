@@ -1,22 +1,36 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Navigation
 {
     /// <summary>
-    /// Defines the core interface for a scout entity, providing position, rotation, traversal state, and event handling.
+    /// Defines the core interface for a navigator entity, providing position, rotation, traversal state, and event handling.
     /// </summary>
     public interface INavigate
     {
         /// <summary>
-        /// The current world position of the scout.
+        /// The current world position of the navigator.
         /// </summary>
-        public Vector3d Position { get; }
+        Vector3d Position { get; }
 
         /// <summary>
-        /// The scout's visual rotation in world space.
+        /// The navigator's visual rotation in world space.
         /// </summary>
-        public FixedQuaternion Rotation { get; }
+        FixedQuaternion Rotation { get; }
+
+        /// <summary>
+        /// The current velocity of the navigator in world space.
+        /// </summary>
+        Vector3d Velocity { get; }
+
+        /// <summary>
+        /// The current movement speed, derived from the magnitude of the velocity.
+        /// </summary>
+        Fixed64 Speed { get; }
+
+        /// <summary>
+        /// Minimum speed the agent must maintain to avoid being considered stuck.
+        /// </summary>
+        Fixed64 StuckThresholdSpeed { get; }
 
         /// <summary>
         /// The size of navigator in worldspace.
@@ -24,24 +38,21 @@ namespace Trailblazer.Navigation
         /// <remarks>
         /// Note: Add a little padding to manevour around blockers
         /// </remarks>
-        public Fixed64 UnitSize { get; }
-
-        public Fixed64 UnitRadius { get; }
+        Fixed64 UnitSize { get; }
 
         /// <summary>
-        /// The controller responsible for managing the scout's desired movement direction.
+        /// Half the unit size, used for radius-based spatial checks.
         /// </summary>
-        NavSteering Steering { get; }
+        Fixed64 UnitRadius { get; }
 
         /// <summary>
-        /// The controller responsible for managing the scout's movement and physics interactions.
+        /// Indicates if the agent is currently steering left to avoid another object.
         /// </summary>
-        NavMotor Motor { get; }
+        bool IsAvoidingLeft { get; set; }
 
         /// <summary>
-        /// Gets the position of the scout's foot in world space, typically used for ground checks and platform interactions.
+        /// The default amount to offset the foot position when calculating ground contact.
         /// </summary>
-        /// <returns>The world-space position of the scout's foot.</returns>
         Vector3d GetFootPosition();
     }
 }

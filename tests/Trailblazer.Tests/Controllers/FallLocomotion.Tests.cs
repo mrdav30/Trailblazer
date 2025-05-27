@@ -22,10 +22,10 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             // Act
             agent.Motor.Traverse(agent, Vector3d.Zero, TrekRate.Stationary, isRequestingJump: true);
-            agent.Visualize();
+            agent.CommitFrameMotion();
 
             // Assert
-            agent.Motor.Locomotions.Move.Velocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+            agent.Motor.Locomotions.Move.FrameVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
         }
 
         [Fact]
@@ -37,7 +37,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             // Act - First Frame (Falling)
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.Visualize();
+            agent.CommitFrameMotion();
 
             // Assert
             agent.Motor.IsInAir.Should().BeTrue();
@@ -58,7 +58,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             // Act - Second Frame (After Ground Contact)
             agent.Simulate();
-            agent.Visualize();
+            agent.CommitFrameMotion();
 
             // Assert
             agent.Motor.IsGrounded.Should().BeTrue();
@@ -79,14 +79,14 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.Visualize();
+                agent.CommitFrameMotion();
 
                 // Calculate expected velocity update from gravity impulse
                 expectedVelocity.y += -agent.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
             }
 
             // Assert
-            agent.Motor.Locomotions.Move.Velocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+            agent.Motor.Locomotions.Move.FrameVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
         }
 
         [Fact]
@@ -98,7 +98,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             for (int i = 0; i < 20; i++) // Simulate multiple frames
             {
                 agent.Simulate();
-                agent.Visualize();
+                agent.CommitFrameMotion();
             }
 
             agent.Position.y.Should().BeLessThan(initialPosition.y); // Should be falling
@@ -113,9 +113,9 @@ namespace Trailblazer.Tests.Navigation.Motor
             for (int i = 0; i < 20; i++)
             {
                 TrailblazerManager.Simulate();
-                agent.SetTravelRequest(direction: new Vector3d(1, 0, 0), rate: TrekRate.Moderate);
+                agent.ApplyInputTravelRequest(direction: new Vector3d(1, 0, 0), rate: TrekRate.Moderate);
                 agent.Simulate();
-                agent.Visualize();
+                agent.CommitFrameMotion();
             }
 
             agent.Position.y.Should().BeLessThan(initialPosition.y); // Gravity should still apply
@@ -135,7 +135,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.Visualize();
+                agent.CommitFrameMotion();
             }
 
             eventCalled.Should().BeTrue();
@@ -153,7 +153,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.Visualize();
+                agent.CommitFrameMotion();
             }
 
             fallHeight.Should().NotBeNull();
@@ -174,7 +174,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.Visualize();
+            agent.CommitFrameMotion();
 
             agent.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
         }
@@ -195,7 +195,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.Visualize();
+                agent.CommitFrameMotion();
             }
 
             agent.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
@@ -211,18 +211,18 @@ namespace Trailblazer.Tests.Navigation.Motor
             agent.Motor.Events.OnStartFall += () => fallTriggered = true;
 
             // Start jump
-            agent.SetTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            agent.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.Visualize();
+            agent.CommitFrameMotion();
 
             // Simulate a few frames of upward motion
             for (int i = 0; i < 13; i++)
             {
                 TrailblazerManager.Simulate();
-                agent.SetTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+                agent.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
                 agent.Simulate();
-                agent.Visualize();
+                agent.CommitFrameMotion();
             }
 
             fallTriggered.Should().BeFalse();
@@ -236,7 +236,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.Visualize();
+            agent.CommitFrameMotion();
 
             agent.Motor.Locomotions.Fall.FallHeight.Should().Be(Fixed64.Zero);
         }
@@ -250,7 +250,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.Visualize();
+                agent.CommitFrameMotion();
             }
 
             var fallLocomotion = agent.Motor.Locomotions.Fall;

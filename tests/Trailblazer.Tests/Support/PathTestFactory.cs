@@ -28,6 +28,16 @@ namespace Trailblazer.Tests
             return map;
         }
 
+        public static NavigationChart BuildSinglePointMap(string name, Vector3d worldPos)
+        {
+            // Convert a single world point into an aligned map
+            Vector3d origin = worldPos - new Vector3d(1, 1, 1);
+            bool[,,] data = new bool[3, 3, 3];
+            data[1, 1, 1] = true;
+
+            return NavigationChart.From3D(name, data, origin, Fixed64.One);
+        }
+
         public static AStarPathRequest CreateRequest(Vector3d from, Vector3d to, Fixed64? unitSize = null, Action<bool, SwiftList<Vector3d>>? onComplete = null)
         {
             onComplete ??= (_, __) => { }; // noop

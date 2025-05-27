@@ -1,4 +1,4 @@
-﻿using FixedMathSharp;
+﻿ using FixedMathSharp;
 using Trailblazer.Navigation.Motor;
 
 /// <summary>
@@ -36,7 +36,7 @@ public class TransitState
     /// <summary>
     /// The previous traversal state (for comparison and transition detection).
     /// </summary>
-    public TraversalCondition? PreviousState { get; private set; }
+    public TraversalCondition PreviousState { get; private set; }
 
     public TransitState(TraversalCondition condition)
     {

@@ -11,9 +11,12 @@ namespace Trailblazer.Pathing.Navigators
 
         private int _pathIndex;
 
-        public Vector3d? Target { get; private set; }
+        public bool HasWaypoints => HasPath && _myPath.Count > 0 && _pathIndex >= 0 && _pathIndex < _myPath.Count;
 
-        public bool HasWaypoints => HasPath && _pathIndex < _myPath.Count - 1 && _pathIndex > 0;
+        public bool HasArrived => HasPath && _pathIndex == _myPath.Count - 1;
+
+        public Vector3d Target => HasWaypoints ? _myPath[_pathIndex]
+            : _myPath.Count > 0 ? _myPath.Last() : Vector3d.Zero;
 
         public void OnSetup()
         {
@@ -29,7 +32,6 @@ namespace Trailblazer.Pathing.Navigators
                 HasPath = success;
                 _myPath = result;
                 _pathIndex = success ? 0 : -1;
-                Target = success ? _myPath[_pathIndex] : null;
             });
 
             PathingManager.RequestPath(pathRequest);
@@ -37,24 +39,31 @@ namespace Trailblazer.Pathing.Navigators
 
         public Vector3d GetMovementDirection(Vector3d from)
         {
-            if (Target == null)
+            if (!HasPath || _myPath.Count == 0 || _pathIndex < 0 || _pathIndex >= _myPath.Count)
                 return Vector3d.Zero;
 
-            Vector3d direction = Target.Value - from;
-
-            return direction;
+            return (Target - from).Normal;
         }
 
-        public void MoveToNextWaypoint()
+        public void MoveToNextWaypoint() => _pathIndex++;
+
+        public bool TryGetNextWaypoint(out Vector3d waypoint)
         {
             if (HasWaypoints)
-                _pathIndex++;
+            {
+                waypoint = _myPath[_pathIndex];
+                return true;
+            }
+
+            waypoint = Vector3d.Zero;
+            return false;
         }
 
         public void Reset()
         {
             HasPath = false;
             _myPath.FastClear();
+            _pathIndex = -1;
         }
     }
 }

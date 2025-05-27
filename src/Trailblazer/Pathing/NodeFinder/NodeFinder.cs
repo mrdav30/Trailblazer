@@ -139,7 +139,12 @@ namespace Trailblazer.Pathing
             return true;
         }
 
-        public static bool GetClosestNodeForSize(Vector3d from, Vector3d destination, Fixed64 pathingSize, out Node returnNode, bool allowUnwalkable = false)
+        public static bool GetClosestNodeForSize(
+            Vector3d from, 
+            Vector3d destination, 
+            Fixed64 pathingSize, 
+            out Node returnNode, 
+            bool allowUnwalkable = false)
         {
             if (GlobalGridManager.TryGetGridAndNode(from, out _, out returnNode)
                 && (!returnNode.IsBlocked || allowUnwalkable)

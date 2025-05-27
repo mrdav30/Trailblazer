@@ -1,26 +1,17 @@
 ﻿using FixedMathSharp;
 using System;
+using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation
 {
-    public enum TrailGuideParadigm
-    {
-        None,
-        Astar,
-        FlowField
-    }
-
     [Serializable]
-    public class TraversalRequest
+    public struct TraversalRequest
     {
         [Transient]
         public Vector3d CurrentPosition { get; set; }
 
         [Transient]
         public FixedQuaternion CurrentRotation { get; set; }
-
-        [Transient]
-        public Fixed64 UnitSize { get; set; }
 
         /// <summary>
         /// The speed at which the scout wants to move.
@@ -40,25 +31,9 @@ namespace Trailblazer.Navigation
         [Transient]
         public Vector3d Direction { get; set; }
 
-        [Transient]
-        public Vector3d? Destination { get; set; }
-
-        [Transient]
-        public TrailGuideParadigm TrailGuideRequest { get; set; }
-
         /// <summary>
         /// Represents an empty movement request with default values.
         /// </summary>
         public static readonly TraversalRequest Empty = new();
-
-        public void Reset()
-        {
-            CurrentPosition = default;
-            CurrentRotation = default;
-            Direction = default;
-            Rate = default;
-            IsRequestingJump = false;
-            TrailGuideRequest = default;
-        }
     }
 }

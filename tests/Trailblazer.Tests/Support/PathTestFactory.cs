@@ -1,7 +1,5 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
-using SwiftCollections;
-using System;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Tests
@@ -15,16 +13,16 @@ namespace Trailblazer.Tests
             data[1, 1, 1] = true;
 
             var map = NavigationChart.From3D(mapName, data, origin, Fixed64.One);
-            PathingManager.Register(map);
-            PathingManager.InitializeMap(mapName);
+            PathManager.Register(map);
+            PathManager.InitializeMap(mapName);
             return map;
         }
 
         public static NavigationChart RegisterFromData(string name, bool[,,] data, Vector3d origin)
         {
             var map = NavigationChart.From3D(name, data, origin, GlobalGridManager.NodeSize);
-            PathingManager.Register(map);
-            PathingManager.InitializeMap(name);
+            PathManager.Register(map);
+            PathManager.InitializeMap(name);
             return map;
         }
 
@@ -37,17 +35,5 @@ namespace Trailblazer.Tests
 
             return NavigationChart.From3D(name, data, origin, Fixed64.One);
         }
-
-        public static AStarPathRequest CreateRequest(Vector3d from, Vector3d to, Fixed64? unitSize = null, Action<bool, SwiftList<Vector3d>>? onComplete = null)
-        {
-            onComplete ??= (_, __) => { }; // noop
-            return new AStarPathRequest(from, to, unitSize ?? Fixed64.One, onComplete)
-            {
-                Heuristic = HeuristicMethod.Manhattan,
-                MaxClimbHeight = Fixed64.One,
-                UseSplineSmoothing = false
-            };
-        }
     }
-
 }

@@ -1,75 +1,81 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
-using SwiftCollections;
 using System;
 
 namespace Trailblazer.Pathing
 {
-    public class AStarPathRequest : PathRequest
+    /// <summary>
+    /// A pathfinding request used for A* trail generation, including options for climb height, heuristic weighting,
+    /// and path smoothing. Implements value-based comparison and hashing for guide pooling.
+    /// </summary>
+    public struct AStarPathRequest : IPathRequest, IEquatable<AStarPathRequest>
     {
-        private HeuristicMethod _heuristic = HeuristicMethod.Manhattan;
-        public HeuristicMethod Heuristic
-        {
-            get => _heuristic;
-            set
-            {
-                if (!IsValidated) _heuristic = value;
-            }
-        }
+        public bool AllowUnwalkable { get; set; }
+
+        public Node Start { get; set; }
+
+        public Node End { get; set; }
+
+        public readonly bool HasZeroDisplacement => Start == null || End == null || Start.SpawnToken == End.SpawnToken;
+
+        public Fixed64 UnitSize { get; set; }
+
+        public int? MaxPathSearchRange { get; set; }
 
         /// <summary>
         /// The maximum Y-axis height delta a unit can step or climb per node.
         /// Nodes exceeding this are ignored even if walkable and adjacent.
         /// </summary>
-        private Fixed64 _maxClimbHeight = GlobalGridManager.NodeSize;
-        public Fixed64 MaxClimbHeight
+        public Fixed64 MaxClimbHeight { get; set; }
+
+        public HeuristicMethod Heuristic { get; set; }
+
+        /// <summary>
+        /// Indicates whether a smoothing algorithm like spline interpolation should be applied to the final path.
+        /// </summary>
+        public bool UseSplineSmoothing { get; set; }
+
+        public readonly int RequestCacheKey => GetHashCode();
+
+        public static AStarPathRequest CreateEmpty() => Create(null, null);
+
+        public static AStarPathRequest Create(
+            Node start, 
+            Node end, 
+            Fixed64? unitSize = null, 
+            HeuristicMethod heuristic = HeuristicMethod.Manhattan, 
+            bool allowUnwalkable = false)
         {
-            get => _maxClimbHeight;
-            set
+            return new AStarPathRequest
             {
-                if (!IsValidated) _maxClimbHeight = value;
-            }
+                Start = start,
+                End = end,
+                UnitSize = unitSize ?? GlobalGridManager.NodeSize,
+                Heuristic = heuristic,
+                AllowUnwalkable = allowUnwalkable,
+                MaxClimbHeight = GlobalGridManager.NodeSize,
+                UseSplineSmoothing = false,
+                MaxPathSearchRange = null
+            };
         }
 
-        private bool _useSplineSmoothing = true;
-        public bool UseSplineSmoothing
+        public override readonly bool Equals(object obj) =>
+            obj is AStarPathRequest other && Equals(other);
+
+        public readonly bool Equals(AStarPathRequest other) => RequestCacheKey == other.RequestCacheKey;
+
+        public override readonly int GetHashCode()
         {
-            get => _useSplineSmoothing;
-            set
-            {
-                if (!IsValidated) _useSplineSmoothing = value;
-            }
-        }
-
-        public Action<bool, SwiftList<Vector3d>> OnComplete { get; private set; }
-
-        public AStarPathRequest(
-            Vector3d from, 
-            Vector3d destination, 
-            Fixed64 unitSize, 
-            Action<bool, SwiftList<Vector3d>> onComplete) : base(from, destination, unitSize)
-        {
-            OnComplete = onComplete;
-        }
-
-        public override void FindPath()
-        {
-            if (!IsValidated) return;
-
-            AStarSurveyor.Shared.FindPath(this);
-        }
-
-        public override void Reset()
-        {
-            base.Reset();
-
-            _heuristic = HeuristicMethod.Manhattan;
-
-            _maxClimbHeight = GlobalGridManager.NodeSize;
-
-            _useSplineSmoothing = true;
-
-            OnComplete = null;
+            return (
+                Start?.SpawnToken ?? 0,
+                End?.SpawnToken ?? 0,
+                UnitSize,
+                AllowUnwalkable,
+                Heuristic,
+                MaxClimbHeight,
+                UseSplineSmoothing,
+                MaxPathSearchRange ?? -1
+            ).CombineHashCodes();
         }
     }
 }

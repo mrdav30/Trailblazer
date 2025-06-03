@@ -7,46 +7,85 @@ using System.Collections.Generic;
 
 namespace Trailblazer.Pathing
 {
+    /// <summary>
+    /// Represents a partition attached to a Node that provides additional data used during pathfinding,
+    /// such as clearance information, movement cost, and neighbor traversal helpers.
+    /// </summary>
     public class PathPartition : INodePartition
     {
         #region Constants
 
+        /// <summary>
+        /// Cost applied for straight (orthogonal) pathfinding moves.
+        /// </summary>
         public const int StraightCost = 100;
 
+        /// <summary>
+        /// Cost applied for diagonal pathfinding moves.
+        /// </summary>
         public const int DiagonalCost = 141;
 
+        /// <summary>
+        /// Default value indicating unlimited clearance in degrees.
+        /// </summary>
         public static readonly Fixed64 DefaultDegree = Fixed64.MAX_VALUE;
 
+        /// <summary>
+        /// Maximum clearance degree allowed for valid traversal.
+        /// </summary>
         public static readonly Fixed64 DefaultDegreeCap = (Fixed64)8;
 
         #endregion
 
+        /// <summary>
+        /// The global coordinate of the node this partition is attached to.
+        /// </summary>
         public CoordinatesGlobal ParentCoordinate { get; set; }
 
-        public int NodeSpawnToken { get; set; }
+        /// <summary>
+        /// The spawn token that uniquely identifies this node.
+        /// </summary>
+        public int NodeSpawnToken { get; private set; }
 
-        public Vector3d NodePosition { get; set; }
+        /// <summary>
+        /// The world-space position of the node.
+        /// </summary>
+        public Vector3d NodePosition { get; private set; }
 
+        /// <summary>
+        /// Indicates whether the node has been partitioned and is in use.
+        /// </summary>
         public bool IsPartitioned { get; set; }
 
+        /// <summary>
+        /// The direction used when calculating neighbor clearance.
+        /// </summary>
         [Transient]
         public LinearDirection ClearanceDirection { get; private set; }
 
         /// <summary>
-        /// How many connections until the closest unwalkable node.
-        /// If a big unit stands directly on this node, it won't be able to fit if the degree is too low.
+        /// The number of traversable connections until the nearest unwalkable node.
         /// </summary>
         [Transient]
         public Fixed64 ClearanceDegree { get; private set; }
 
+        /// <summary>
+        /// Indicates whether the clearance degree has been computed and is valid.
+        /// </summary>
         [Transient]
         public bool IsClearanceValid { get; private set; }
 
         #region Astar Properties
 
+        /// <summary>
+        /// The movement penalty cost of this node during A* pathfinding.
+        /// </summary>
         [Transient]
         public int MovementCost { get; set; }
 
+        /// <summary>
+        /// The next node in the trail path, used during A* traversal.
+        /// </summary>
         [Transient]
         public CoordinatesGlobal? NextTrailCoordinate { get; set; } = null;
 
@@ -54,22 +93,43 @@ namespace Trailblazer.Pathing
 
         #region Heap Helpers
 
+        /// <summary>
+        /// The combined cost for use in pathfinding heap prioritization.
+        /// </summary>
         [Transient]
         public int HeapCost { get; set; }
 
+        /// <summary>
+        /// A version used to distinguish between heap insertions across frames.
+        /// </summary>
         [Transient]
         public uint HeapVersion { get; set; }
 
+        /// <summary>
+        /// A version used to track closed nodes in the heap for the current search.
+        /// </summary>
         [Transient]
         public uint ClosedHeapVersion { get; set; }
 
+        /// <summary>
+        /// The index of this node in the heap.
+        /// </summary>
         [Transient]
         public uint HeapIndex { get; set; }
 
         #endregion
 
+        /// <summary>
+        /// Maps that currently include this partition as part of their traversable space.
+        /// </summary>
         private readonly SwiftHashSet<string> _mapOwners = new();
 
+        /// <inheritdoc cref="_mapOwners">
+        public SwiftHashSet<string> MapOwners => _mapOwners;
+
+        /// <summary>
+        /// Called when this partition is attached to a node, initializing key references and state.
+        /// </summary>
         public void OnAddToNode(Node node)
         {
             node.OnObstacleChange += HandleChange;
@@ -89,9 +149,12 @@ namespace Trailblazer.Pathing
         {
             node.OnObstacleChange -= HandleChange;
 
-            PathingManager.PartitionPool.Release(this);
+            PathManager.PartitionPool.Release(this);
         }
 
+        /// <summary>
+        /// Resets this partition's internal state, preparing it for reuse or reattachment.
+        /// </summary>
         public void Reset()
         {
             ParentCoordinate = default;
@@ -110,6 +173,9 @@ namespace Trailblazer.Pathing
             IsPartitioned = false;
         }
 
+        /// <summary>
+        /// Handles any obstacle changes on the associated node and invalidates clearance as needed.
+        /// </summary>
         public void HandleChange(GridChange changeType, Node node)
         {
             // regardless of change type, we need to update clearance
@@ -130,12 +196,18 @@ namespace Trailblazer.Pathing
             return size > ClearanceDegree;
         }
 
+        /// <summary>
+        /// Returns the cached or recalculated clearance value to nearby obstacles.
+        /// </summary>
         public Fixed64 GetNeighborClearance()
         {
             CheckNeighborClearance();
             return ClearanceDegree;
         }
 
+        /// <summary>
+        /// Validates or recalculates the clearance degree from nearby nodes.
+        /// </summary>
         private void CheckNeighborClearance()
         {
             if (IsClearanceValid)
@@ -201,9 +273,24 @@ namespace Trailblazer.Pathing
 
         #region TraversableNavMap Management
 
+        /// <summary>
+        /// Registers the map name as one that owns this partition.
+        /// </summary>
         public void AddOwner(string mapName) => _mapOwners.Add(mapName);
+
+        /// <summary>
+        /// Removes the map name from those that reference this partition.
+        /// </summary>
         public void RemoveOwner(string mapName) => _mapOwners.Remove(mapName);
+
+        /// <summary>
+        /// Returns true if any map currently references this partition.
+        /// </summary>
         public bool HasAnyOwners => _mapOwners.Count > 0;
+
+        /// <summary>
+        /// Returns true if the partition is claimed by the given map name.
+        /// </summary>
         public bool BelongsTo(string mapName) => _mapOwners.Contains(mapName);
 
         #endregion
@@ -283,6 +370,9 @@ namespace Trailblazer.Pathing
             return false;
         }
 
+        /// <summary>
+        /// Returns all walkable neighbors of the partition’s current node.
+        /// </summary>
         public IEnumerable<TraversableNeighbor> GetWalkableNeighbors()
         {
             if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
@@ -293,6 +383,9 @@ namespace Trailblazer.Pathing
                 yield return neighbor;
         }
 
+        /// <summary>
+        /// Returns walkable neighbors for a specific node.
+        /// </summary>
         public static IEnumerable<TraversableNeighbor> WalkableNeighborsOf(Node node)
         {
             // Get all neighbors and their associated information
@@ -313,6 +406,9 @@ namespace Trailblazer.Pathing
             }
         }
 
+        /// <summary>
+        /// Returns all walkable straight (orthogonal) neighbors of the partition’s node.
+        /// </summary>
         public IEnumerable<TraversableNeighbor> GetWalkableStraightNeighbors()
         {
             if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
@@ -323,6 +419,9 @@ namespace Trailblazer.Pathing
                 yield return neighbor;
         }
 
+        /// <summary>
+        /// Returns straight walkable neighbors for a specific node.
+        /// </summary>
         public static IEnumerable<TraversableNeighbor> WalkableStraightNeighborsOf(Node node)
         {
             foreach (LinearDirection direction in Enum.GetValues(typeof(StraightNeighbors)))
@@ -343,6 +442,9 @@ namespace Trailblazer.Pathing
             }
         }
 
+        /// <summary>
+        /// Returns all walkable diagonal neighbors of the partition’s node.
+        /// </summary>
         public IEnumerable<TraversableNeighbor> GetWalkableDiagonalNeighbors()
         {
             if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
@@ -353,6 +455,9 @@ namespace Trailblazer.Pathing
                 yield return neighbor;
         }
 
+        /// <summary>
+        /// Returns diagonal walkable neighbors for a specific node, avoiding blocked adjacent edges.
+        /// </summary>
         public static IEnumerable<TraversableNeighbor> WalkableDiagonalNeighborsOf(Node node)
         {
             foreach (LinearDirection direction in Enum.GetValues(typeof(DiagonalNeighbors)))
@@ -375,6 +480,9 @@ namespace Trailblazer.Pathing
             }
         }
 
+        /// <summary>
+        /// Determines if the given direction is considered straight (orthogonal).
+        /// </summary>
         public static bool IsStraightNeighbor(LinearDirection direction)
         {
             return direction switch
@@ -389,6 +497,9 @@ namespace Trailblazer.Pathing
             };
         }
 
+        /// <summary>
+        /// Determines if the given direction is considered diagonal.
+        /// </summary>
         public static bool IsDiagnolNeighbor(LinearDirection direction)
         {
             return direction switch

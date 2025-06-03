@@ -1,69 +1,108 @@
 ﻿using FixedMathSharp;
 using SwiftCollections;
 
-namespace Trailblazer.Pathing.Navigators
+namespace Trailblazer.Pathing
 {
     public class AStarGuide : IGuide
     {
-        public bool HasPath { get; private set; }
+        public bool PathFound => _path != null;
 
-        private SwiftList<Vector3d> _myPath;
+        public bool IsValid => PathFound && _path.Count > 0;
 
-        private int _pathIndex;
+        public bool IsInUse { get; private set; }
 
-        public bool HasWaypoints => HasPath && _myPath.Count > 0 && _pathIndex >= 0 && _pathIndex < _myPath.Count;
+        public int LastUsedFrame { get; private set; }
 
-        public bool HasArrived => HasPath && _pathIndex == _myPath.Count - 1;
+        private SwiftList<Vector3d> _path;
 
-        public Vector3d Target => HasWaypoints ? _myPath[_pathIndex]
-            : _myPath.Count > 0 ? _myPath.Last() : Vector3d.Zero;
+        public SwiftList<Vector3d> Path => _path;
 
-        public void OnSetup()
+        public int RequestHashKey { get; private set; }
+
+        public bool HasWaypoints => IsValid;
+
+        public bool Initialize(IPathRequest request)
         {
-            _myPath = new();
-            HasPath = false;
-            _pathIndex = -1;
-        }
+            if (request is not AStarPathRequest aStarRequest)
+                return false;
 
-        public void RequestMovementPath(Vector3d from, Vector3d destination, Fixed64 unitSize)
-        {
-            AStarPathRequest pathRequest = new(from, destination, unitSize, (success, result) =>
+            int requestHashKey = request.GetHashCode();
+            if (RequestHashKey == requestHashKey && IsValid)
+                return true; // Reuse existing path
+
+            int searchSize = request.MaxPathSearchRange ?? 0;
+            if (searchSize <= 0)
             {
-                HasPath = success;
-                _myPath = result;
-                _pathIndex = success ? 0 : -1;
-            });
+                // Retrieves the maximum length the path could possibly be
+                if (!PathManager.GetMaxSearchSize(request.Start, request.End, out searchSize))
+                    return false;
 
-            PathingManager.RequestPath(pathRequest);
-        }
-
-        public Vector3d GetMovementDirection(Vector3d from)
-        {
-            if (!HasPath || _myPath.Count == 0 || _pathIndex < 0 || _pathIndex >= _myPath.Count)
-                return Vector3d.Zero;
-
-            return (Target - from).Normal;
-        }
-
-        public void MoveToNextWaypoint() => _pathIndex++;
-
-        public bool TryGetNextWaypoint(out Vector3d waypoint)
-        {
-            if (HasWaypoints)
-            {
-                waypoint = _myPath[_pathIndex];
-                return true;
+                aStarRequest.MaxPathSearchRange = searchSize;
             }
 
-            waypoint = Vector3d.Zero;
-            return false;
+            if (!AStarSurveyor.Shared.FindPath(aStarRequest, out SwiftList<Vector3d> foundPath))
+                return false;
+
+            _path = foundPath;
+            RequestHashKey = requestHashKey;
+
+            return true;
         }
 
-        public void Reset()
+        public void MarkInUse() => IsInUse = true;
+
+        public bool HasArrived(int index)
         {
-            HasPath = false;
-            _myPath.FastClear();
-            _pathIndex = -1;
+            return IsValid && index == _path.Count - 1;
+        }
+
+        public int GetIndex(Vector3d from)
+        {
+            for(int i = 0; i < _path.Count; i++)
+            {
+                if (from.Equals(_path[i]))
+                    return i;
+            }
+
+            return -1;
+        }
+
+        public Vector3d GetMovementDirection(Vector3d from, int index)
+        {
+            if (!IsValid || index < 0 || index >= _path.Count)
+                return Vector3d.Zero;
+
+            Vector3d movementDirection = !IsValid ? _path.Last() : _path[index];
+            if (movementDirection == Vector3d.Zero)
+                return Vector3d.Zero;
+
+            return (movementDirection - from).Normal;
+        }
+
+        public bool TryGetNextWaypoint(int index, out Vector3d waypoint)
+        {
+            if (!IsValid || index < 0 || index >= _path.Count)
+            {
+                waypoint = Vector3d.Zero;
+                return false;
+            }
+
+            waypoint = _path[index];
+            return true;
+        }
+
+        public void Release()
+        {
+            IsInUse = false;
+            LastUsedFrame = TrailblazerManager.FrameCount;
+        }
+
+        public void Dispose()
+        {
+            IsInUse = false;
+            LastUsedFrame = -1;
+            _path = null;
+            RequestHashKey = -1;
         }
     }
 }

@@ -5,6 +5,7 @@ using Trailblazer.Pathing;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System.Linq;
+using Trailblazer.Navigation.Steering;
 
 namespace Trailblazer.Tests.Pathing
 {
@@ -33,23 +34,19 @@ namespace Trailblazer.Tests.Pathing
                 }
             };
 
-            var map = PathTestFactory.RegisterFromData("Line", data, origin);
+            PathTestFactory.RegisterFromData("Line", data, origin);
 
-            SwiftList<Vector3d>? resultPath = null;
-            var request = PathTestFactory.CreateRequest(origin, target, Fixed64.One, (success, path) =>
-            {
-                Assert.True(success);
-                resultPath = path;
-            });
+            var request = AStarPathRequest.CreateEmpty();
 
-            PathingManager.RequestPath(request);
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(origin, target, request);
 
-            Assert.NotNull(resultPath);
-            Assert.Equal(3, resultPath!.Count); // start, middle, end
-            Assert.Equal(origin, resultPath[0]);
-            Assert.Equal(target, resultPath.Last());
+            Assert.True(guide.IsValid);
+            Assert.NotNull(guide.Path);
+            Assert.Equal(3, guide.Path!.Count); // start, middle, end
+            Assert.Equal(origin, guide.Path[0]);
+            Assert.Equal(target, guide.Path.Last());
 
-            PathingManager.Unload("Line");
+            PathManager.Unload("Line");
         }
 
         [Fact]
@@ -59,18 +56,14 @@ namespace Trailblazer.Tests.Pathing
             PathTestFactory.RegisterSingleWalkablePoint("Isolated", new Vector3d(0, 0, 0));
 
             var unreachableTarget = new Vector3d(4, 0, 4);
-            bool wasSuccess = false;
 
-            var request = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), unreachableTarget, Fixed64.One, (success, path) =>
-            {
-                wasSuccess = success;
-            });
+            var request = AStarPathRequest.CreateEmpty();
 
-            PathingManager.RequestPath(request);
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, unreachableTarget, request);
 
-            Assert.False(wasSuccess);
+            Assert.Null(guide);
 
-            PathingManager.Unload("Isolated");
+            PathManager.Unload("Isolated");
         }
 
         [Fact]
@@ -81,8 +74,8 @@ namespace Trailblazer.Tests.Pathing
                 data[i, i, 0] = true;
 
             var map = NavigationChart.From3D("HeightSpy", data, new Vector3d(0, 0, 0), Fixed64.One);
-            PathingManager.Register(map);
-            PathingManager.InitializeMap("HeightSpy");
+            PathManager.Register(map);
+            PathManager.InitializeMap("HeightSpy");
 
             Fixed64 maxHeightDifference = Fixed64.Half;
             bool heightViolationTriggered = false;
@@ -95,19 +88,14 @@ namespace Trailblazer.Tests.Pathing
             };
 #endif
 
-            var request = PathTestFactory.CreateRequest(
-                new Vector3d(0, 0, 0),
-                new Vector3d(5, 5, 0),
-                Fixed64.One,
-                (success, _) => Assert.False(success)
-            );
-
+            var request = AStarPathRequest.CreateEmpty();
             request.MaxClimbHeight = maxHeightDifference;
-            PathingManager.RequestPath(request);
+
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(5, 5, 0), request);
 
             Assert.True(heightViolationTriggered);
 
-            PathingManager.Unload("HeightSpy");
+            PathManager.Unload("HeightSpy");
         }
 
         [Theory]
@@ -129,23 +117,18 @@ namespace Trailblazer.Tests.Pathing
         }
             }, start, Fixed64.One);
 
-            PathingManager.Register(map);
-            PathingManager.InitializeMap("Diag");
+            PathManager.Register(map);
+            PathManager.InitializeMap("Diag");
 
-            SwiftList<Vector3d>? result = null;
-            var request = PathTestFactory.CreateRequest(start, target, Fixed64.One, (success, path) =>
-            {
-                Assert.True(success);
-                result = path;
-            });
-
+            var request = AStarPathRequest.CreateEmpty();
             request.Heuristic = method;
-            PathingManager.RequestPath(request);
 
-            Assert.NotNull(result);
-            Assert.True(result!.Count > 1);
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(start, target, request);
 
-            PathingManager.Unload("Diag");
+            Assert.NotNull(guide);
+            Assert.True(guide.IsValid);
+
+            PathManager.Unload("Diag");
         }
 
         [Fact]
@@ -154,18 +137,13 @@ namespace Trailblazer.Tests.Pathing
             var pos = new Vector3d(1, 0, 1);
             PathTestFactory.RegisterSingleWalkablePoint("SameSpot", pos);
 
-            SwiftList<Vector3d>? path = null;
-            var request = PathTestFactory.CreateRequest(pos, pos, Fixed64.One, (success, result) =>
-            {
-                Assert.False(success);
-                path = result;
-            });
+            var request = AStarPathRequest.CreateEmpty();
 
-            PathingManager.RequestPath(request);
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(pos, pos, request);
 
-            Assert.Null(path);
+            Assert.Null(guide);
 
-            PathingManager.Unload("SameSpot");
+            PathManager.Unload("SameSpot");
         }
 
         [Fact]
@@ -183,23 +161,19 @@ namespace Trailblazer.Tests.Pathing
                 }
             };
 
-            var map = PathTestFactory.RegisterFromData("Detour", data, new Vector3d(0, 0, 0));
+            PathTestFactory.RegisterFromData("Detour", data, Vector3d.Zero);
 
             var start = new Vector3d(0, 0, 0);
             var target = new Vector3d(4, 0, 0);
-            SwiftList<Vector3d>? resultPath = null;
 
-            var request = PathTestFactory.CreateRequest(start, target, Fixed64.One, (success, path) =>
-            {
-                resultPath = path;
-            });
+            var request = AStarPathRequest.CreateEmpty();
 
-            PathingManager.RequestPath(request);
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(start, target, request);
 
-            Assert.NotNull(resultPath);
-            Assert.Contains(new Vector3d(2, 0, 1), resultPath!); // Must have detoured around
+            Assert.NotNull(guide);
+            Assert.Contains(new Vector3d(2, 0, 1), guide.Path!); // Must have detoured around
 
-            PathingManager.Unload("Detour");
+            PathManager.Unload("Detour");
         }
 
         [Fact]
@@ -217,16 +191,17 @@ namespace Trailblazer.Tests.Pathing
                 }
             };
 
-            var map = PathTestFactory.RegisterFromData("Choke", data, new Vector3d(0, 0, 0));
+            PathTestFactory.RegisterFromData("Choke", data, Vector3d.Zero);
 
-            var pathFound = false;
-            var request = PathTestFactory.CreateRequest(new Vector3d(0, 0, 1), new Vector3d(4, 0, 1), unitSize: (Fixed64)2, (success, path) => pathFound = success);
+            var request = AStarPathRequest.CreateEmpty();
+            request.UnitSize = (Fixed64)2;
 
-            PathingManager.RequestPath(request);
+            AStarGuide guide =
+                PathGuideFactory.RequestGuide<AStarGuide>(new Vector3d(0, 0, 1), new Vector3d(4, 0, 1), request);
 
-            Assert.False(pathFound);
+            Assert.Null(guide);
 
-            PathingManager.Unload("Choke");
+            PathManager.Unload("Choke");
         }
 
         [Fact]
@@ -235,50 +210,44 @@ namespace Trailblazer.Tests.Pathing
             var data = new bool[1, 3, 1]
             {
                 {
-                    { true }, 
-                    { true }, 
+                    { true },
+                    { true },
                     { true }
                 }
             };
 
-            var map = PathTestFactory.RegisterFromData("ResetTest", data, new Vector3d(0, 0, 0));
+            PathTestFactory.RegisterFromData("ResetTest", data, Vector3d.Zero);
 
-            SwiftList<Vector3d>? result = null;
-            var pathFound = false;
-            var req = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), new Vector3d(2, 0, 0), Fixed64.One, (success, path) =>
-            {
-                pathFound = success;
-                result = path;
-            });
+            var request = AStarPathRequest.CreateEmpty();
 
-            PathingManager.RequestPath(req);
+            AStarGuide guide =
+                PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(2, 0, 0), request);
 
-            Assert.True(pathFound);
-            Assert.NotNull(result);
+            Assert.NotNull(guide);
+            Assert.True(guide.IsValid);
 
             // Second request with blocked path
-            PathingManager.Unload("ResetTest");
+            PathManager.Unload("ResetTest");
 
             var badData = new bool[1, 3, 1]
             {
                 {
-                    { true }, 
-                    { false }, 
+                    { true },
+                    { false },
                     { true }
                 }
             };
 
-            var brokenMap = PathTestFactory.RegisterFromData("ResetTestBlocked", badData, new Vector3d(0, 0, 0));
+            PathTestFactory.RegisterFromData("ResetTestBlocked", badData, Vector3d.Zero);
 
-            bool failed = false;
-            var req2 = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), new Vector3d(2, 0, 0), Fixed64.One, (success, path) => {
-                failed = !success;
-            });
-            PathingManager.RequestPath(req2);
+            var failedRequest = AStarPathRequest.CreateEmpty();
 
-            Assert.True(failed);
+            AStarGuide failedGuide =
+                PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(2, 0, 0), failedRequest);
 
-            PathingManager.Unload("ResetTestBlocked");
+            Assert.Null(failedGuide);
+
+            PathManager.Unload("ResetTestBlocked");
         }
 
         [Fact]
@@ -288,17 +257,16 @@ namespace Trailblazer.Tests.Pathing
             for (int i = 0; i < 50; i++)
                 data[0, i, 0] = true;
 
-            var map = PathTestFactory.RegisterFromData("SearchCap", data, new Vector3d(0, 0, 0));
+            PathTestFactory.RegisterFromData("SearchCap", data, Vector3d.Zero);
 
-            var req = PathTestFactory.CreateRequest(new Vector3d(0, 0, 0), new Vector3d(49, 0, 0), Fixed64.One, (success, _) =>
-            {
-                Assert.False(success); // Won't reach the end
-            });
+            var request = AStarPathRequest.CreateEmpty();
+            request.MaxPathSearchRange = 10;
 
-            req.MaxSearchSize = 10;
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(49, 0, 0), request);
 
-            PathingManager.RequestPath(req);
-            PathingManager.Unload("SearchCap");
+            Assert.Null(guide);
+
+            PathManager.Unload("SearchCap");
         }
 
         [Fact]
@@ -314,30 +282,24 @@ namespace Trailblazer.Tests.Pathing
                 }
             }, new Vector3d(0, 0, 0), Fixed64.One);
 
-            PathingManager.Register(map);
-            PathingManager.InitializeMap("LSpline");
+            PathManager.Register(map);
+            PathManager.InitializeMap("LSpline");
 
-            SwiftList<Vector3d>? resultPath = null;
-            var request = PathTestFactory.CreateRequest(
-                new Vector3d(0, 0, 0),
-                new Vector3d(2, 0, 2),
-                Fixed64.One,
-                (success, path) => resultPath = path
-            );
+            var request = AStarPathRequest.CreateEmpty();
             request.UseSplineSmoothing = true;
 
-            PathingManager.RequestPath(request);
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(2, 0, 2), request);
 
-            Assert.NotNull(resultPath);
-            Assert.True(resultPath!.Count > 3); // should have inserted curve points
+            Assert.NotNull(guide);
+            Assert.True(guide.Path!.Count > 3); // should have inserted curve points
 
-            PathingManager.Unload("LSpline");
+            PathManager.Unload("LSpline");
         }
 
         [Fact]
         public void AStarSpline_ShouldSkipShortPaths()
         {
-            var map = PathTestFactory.RegisterFromData("ShortSpline", new bool[1, 2, 1]
+            PathTestFactory.RegisterFromData("ShortSpline", new bool[1, 2, 1]
             {
                 {
                     { true },
@@ -348,16 +310,15 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(1, 0, 0);
 
-            SwiftList<Vector3d>? resultPath = null;
-            var req = PathTestFactory.CreateRequest(start, end, Fixed64.One, (success, path) => resultPath = path);
-            req.UseSplineSmoothing = true;
+            var request = AStarPathRequest.CreateEmpty();
+            request.UseSplineSmoothing = true;
 
-            PathingManager.RequestPath(req);
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(start, end, request);
 
-            Assert.NotNull(resultPath);
-            Assert.Equal(2, resultPath!.Count); // No smoothing applied
+            Assert.NotNull(guide);
+            Assert.Equal(2, guide.Path!.Count); // No smoothing applied
 
-            PathingManager.Unload("ShortSpline");
+            PathManager.Unload("ShortSpline");
         }
 
 
@@ -374,22 +335,21 @@ namespace Trailblazer.Tests.Pathing
                 }
             };
 
-            var map = PathTestFactory.RegisterFromData("SplineEnds", data, new Vector3d(0, 0, 0));
+            PathTestFactory.RegisterFromData("SplineEnds", data, new Vector3d(0, 0, 0));
 
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(3, 0, 3);
 
-            SwiftList<Vector3d>? resultPath = null;
-            var req = PathTestFactory.CreateRequest(start, end, Fixed64.One, (success, path) => resultPath = path);
-            req.UseSplineSmoothing = true;
+            var request = AStarPathRequest.CreateEmpty();
+            request.UseSplineSmoothing = true;
 
-            PathingManager.RequestPath(req);
+            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(start, end, request);
 
-            Assert.NotNull(resultPath);
-            Assert.Equal(start, resultPath!.First());
-            Assert.Equal(end, resultPath.Last());
+            Assert.NotNull(guide);
+            Assert.Equal(start, guide.Path!.First());
+            Assert.Equal(end, guide.Path.Last());
 
-            PathingManager.Unload("SplineEnds");
+            PathManager.Unload("SplineEnds");
         }
 
     }

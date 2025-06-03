@@ -10,9 +10,9 @@ namespace Trailblazer.Navigation
     {
 #nullable enable
 
-        public Action? OnStartMove;
+        public Action? OnMoveRequestApplied;
 
-        public Action<Vector3d>? OnStartGuidedTraversal;
+        public Action<Vector3d>? OnStartTraversal;
 
         /// <summary>
         /// Called when unit arrives at destination

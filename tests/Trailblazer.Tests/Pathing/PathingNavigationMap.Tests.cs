@@ -16,9 +16,9 @@ namespace Trailblazer.Tests.Pathing
             GlobalGridManager.TryAddGrid(config, out _);
 
             var map = PathTestFactory.BuildSinglePointMap("TestMap", new Vector3d(0, 0, 0));
-            PathingManager.Register(map);
+            PathManager.Register(map);
 
-            Assert.True(PathingManager.TryGetNavigationMap("TestMap", out var retrieved));
+            Assert.True(PathManager.TryGetNavigationMap("TestMap", out var retrieved));
             Assert.Equal(map, retrieved);
         }
 
@@ -29,8 +29,8 @@ namespace Trailblazer.Tests.Pathing
             GlobalGridManager.TryAddGrid(config, out _);
 
             var map = PathTestFactory.BuildSinglePointMap("InitMap", new Vector3d(0, 0, 0));
-            PathingManager.Register(map);
-            PathingManager.InitializeMap("InitMap");
+            PathManager.Register(map);
+            PathManager.InitializeMap("InitMap");
 
             Assert.True(GlobalGridManager.TryGetGridAndNode(new Vector3d(0, 0, 0), out _, out Node node));
             Assert.True(node.TryGetPartition<PathPartition>(out _));
@@ -46,11 +46,11 @@ namespace Trailblazer.Tests.Pathing
             var mapA = PathTestFactory.BuildSinglePointMap("MapA", pos);
             var mapB = PathTestFactory.BuildSinglePointMap("MapB", pos);
 
-            PathingManager.Register(mapA);
-            PathingManager.Register(mapB);
+            PathManager.Register(mapA);
+            PathManager.Register(mapB);
 
-            PathingManager.InitializeMap("MapA");
-            PathingManager.InitializeMap("MapB");
+            PathManager.InitializeMap("MapA");
+            PathManager.InitializeMap("MapB");
 
             // Validate partition exists and belongs to both
             GlobalGridManager.TryGetGridAndNode(pos, out _, out Node node);
@@ -58,7 +58,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.True(partition.BelongsTo("MapA"));
             Assert.True(partition.BelongsTo("MapB"));
 
-            PathingManager.Unload("MapA");
+            PathManager.Unload("MapA");
 
             // Should still be there because MapB owns it
             Assert.True(node.TryGetPartition<PathPartition>(out var afterUnload));
@@ -79,9 +79,9 @@ namespace Trailblazer.Tests.Pathing
             GlobalGridManager.TryAddGrid(config, out _);
 
             var map = PathTestFactory.BuildSinglePointMap("DuplicateInit", new Vector3d(0, 0, 0));
-            PathingManager.Register(map);
-            PathingManager.InitializeMap("DuplicateInit");
-            PathingManager.InitializeMap("DuplicateInit"); // idempotent
+            PathManager.Register(map);
+            PathManager.InitializeMap("DuplicateInit");
+            PathManager.InitializeMap("DuplicateInit"); // idempotent
 
             GlobalGridManager.TryGetGridAndNode(new Vector3d(0, 0, 0), out _, out Node node);
             var count = node.TryGetPartition<PathPartition>(out var partition) ? 1 : 0;

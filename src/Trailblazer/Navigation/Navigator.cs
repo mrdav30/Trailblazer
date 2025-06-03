@@ -1,6 +1,7 @@
 ﻿using System;
 using FixedMathSharp;
 using Trailblazer.Navigation.Motor;
+using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation
@@ -90,7 +91,7 @@ namespace Trailblazer.Navigation
         /// <summary>
         /// Indicates whether the current traversal session is guided via a TrailGuide path (e.g., A* or flow field).
         /// </summary>
-        public bool RequiresSteering { get; protected set; }
+        public bool IsManuallyControlled { get; protected set; }
 
         /// <summary>
         /// The traversal request for the current frame, containing directional intent and travel mode.
@@ -167,7 +168,7 @@ namespace Trailblazer.Navigation
             Steering = new NavSteering();
             Steering.OnInitialize(this);
 
-            Steering.Events.OnStartGuidedTraversal += HandleGuidedStart;
+            Steering.Events.OnStartTraversal += HandlePathStart;
 
             Motor = NavMotor.CreateNew(this, SurfaceState);
             Motor.SetVelocity(Velocity);
@@ -205,21 +206,23 @@ namespace Trailblazer.Navigation
                 IsRequestingJump = isRequestingJump ?? false
             };
 
-            RequiresSteering = false;
+            IsManuallyControlled = true;
         }
 
         /// <summary>
         /// Constructs and applies a guided traversal request toward a destination using a pathfinding paradigm.
         /// </summary>
-        /// <param name="destination">The world-space target position.</param>
-        /// <param name="trailGuideParadigm">The type of TrailGuide path to request (e.g., A*, FlowField).</param>
+        /// <param name="destination">The target destination.</param>
+        /// <param name="pathRequest">The configuration for the type of path to request (e.g., A*, FlowField).</param>
         /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
         /// <param name="isRequestingJump">Whether the navigator intends to jump during traversal.</param>
+        /// <param name="allowUnwalkable">Whether the navigator can traverse to an unwalkable node.</param>
         public virtual void ApplyGuidedTravelRequest(
             Vector3d destination,
-            TrailGuideParadigm? trailGuideParadigm = null,
+            IPathRequest pathRequest,
             TrekRate? rate = null,
-            bool? isRequestingJump = null)
+            bool? isRequestingJump = null,
+            bool? allowUnwalkable = null)
         {
             _currentFrameRequest = new TraversalRequest()
             {
@@ -227,24 +230,10 @@ namespace Trailblazer.Navigation
                 IsRequestingJump = isRequestingJump ?? false
             };
 
-            RequiresSteering = true;
+            pathRequest.UnitSize = UnitSize;
 
-            SetSteeringRequest(new SteeringRequest()
-            {
-                TrailGuideRequest = trailGuideParadigm ?? TrailGuideParadigm.None,
-                From = Position,
-                Destination = destination,
-                UnitSize = UnitSize
-            });
-        }
-
-        /// <summary>
-        /// Applies a raw traversal request containing directional and movement intent.
-        /// </summary>
-        /// <param name="request">The traversal request to process.</param>
-        public virtual void SetSteeringRequest(SteeringRequest request)
-        {
-            Steering.ApplySteeringRequest(request);
+            IsManuallyControlled = false;
+            Steering.ApplyPathRequest(Position, destination, pathRequest);
         }
 
         /// <summary>
@@ -267,14 +256,15 @@ namespace Trailblazer.Navigation
         /// </summary>
         public virtual void Simulate()
         {
-            if (RequiresSteering)
-                Steering.OnSimulate(this);
-            else
+            if (IsManuallyControlled)
             {
                 _currentFrameRequest.CurrentPosition = Position;
                 _currentFrameRequest.CurrentRotation = Rotation;
                 StartTraversal(_currentFrameRequest);
+                return;
             }
+
+            Steering.OnSimulate(this);
         }
 
         /// <summary>
@@ -333,12 +323,12 @@ namespace Trailblazer.Navigation
         /// Called when a new guided path traversal begins, typically after a TrailGuide returns a direction to follow.
         /// </summary>
         /// <param name="direction">The direction vector produced by the pathfinding logic.</param>
-        protected virtual void HandleGuidedStart(Vector3d direction)
+        protected virtual void HandlePathStart(Vector3d direction)
         {
             _currentFrameRequest.CurrentPosition = Position;
             _currentFrameRequest.CurrentRotation = Rotation;
 
-            if (direction != Vector3d.Zero && !Steering.IsMovingToWaypoint)
+            if (direction != Vector3d.Zero && !Steering.IsFollowingGuide)
             {
                 // Scaling direction before passing to the motor lets us modulate movement before acceleration is applied
                 Fixed64 deceleration = Acceleration != Vector3d.Zero ? Acceleration.Magnitude : BrakingPower;

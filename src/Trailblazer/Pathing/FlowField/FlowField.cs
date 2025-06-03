@@ -3,14 +3,30 @@ using GridForge.Spatial;
 
 namespace Trailblazer.Pathing
 {
+    /// <summary>
+    /// Represents a flow field cell used in vector field-based pathfinding.
+    /// Stores directional and distance data used to navigate agents through the grid.
+    /// </summary>
     public struct FlowField
     {
+        /// <summary>
+        /// The global coordinates corresponding to this node in the field.
+        /// </summary>
         public CoordinatesGlobal NodeCoordinates { get; set; }
 
+        /// <summary>
+        /// The movement direction vector pointing toward the goal from this cell.
+        /// </summary>
         public Vector3d Direction { get; set; }
 
+        /// <summary>
+        /// The scalar distance from this node to the goal in grid steps.
+        /// </summary>
         public int DistanceToTarget { get; set; }
-        
+
+        /// <summary>
+        /// Indicates whether this node is the goal or anchor in the flow field.
+        /// </summary>
         public bool IsGoal { get; set; }
     }
 }

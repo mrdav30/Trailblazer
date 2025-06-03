@@ -7,6 +7,10 @@ using System.Threading;
 
 namespace Trailblazer.Pathing
 {
+    /// <summary>
+    /// Executes A* pathfinding logic using partitioned grids to find viable navigation paths for agents.
+    /// Supports climb height constraints and optional spline smoothing of the final path.
+    /// </summary>
     public class AStarSurveyor
     {
         #region Singleton Instance
@@ -24,59 +28,60 @@ namespace Trailblazer.Pathing
 
         #endregion
 
-        public HeuristicMethod Heuristic { get; internal set; }
-
-        public Fixed64 MaxClimbHeight { get; internal set; }
-
-        public bool UseSplineSmoothing { get; internal set; }
-
+        /// <summary>
+        /// The directional tolerance used to detect changes in path heading when smoothing a path.
+        /// </summary>
         private static readonly Fixed64 _directionChangeTolerance = new(0.01);
 
-#if DEBUG
 #nullable enable
+        /// <summary>
+        /// Optional callback triggered when a height difference exceeds the allowed climb height during pathfinding.
+        /// </summary>
         public static Action<PathPartition, PathPartition, Fixed64>? OnHeightLimitViolated;
 #nullable disable
-#endif
 
-        public void FindPath(AStarPathRequest request)
+        /// <summary>
+        /// Attempts to find a path between the start and end points provided in the request. 
+        /// Returns true if a valid path was found and outputs the resulting waypoint list.
+        /// </summary>
+        /// <param name="request">The pathfinding request containing start/end info and constraints.</param>
+        /// <param name="result">The list of path waypoints if successful; otherwise null.</param>
+        /// <returns>True if a path is found; false otherwise.</returns>
+        public bool FindPath(AStarPathRequest request, out SwiftList<Vector3d> result)
         {
-            if (!request.FromNode.TryGetPartition(out PathPartition startPartition)
-                || request.FromNode.SpawnToken == request.TargetNode.SpawnToken)
+            result = null;
+            if (!request.Start.TryGetPartition(out PathPartition startPartition)
+                || request.Start.SpawnToken == request.End.SpawnToken)
             {
-                request.OnComplete?.Invoke(false, null);
-                return;
+                return false;
             }
 
             PathPartitionHeap.FastClear();
 
-            MaxClimbHeight = request.MaxClimbHeight;
-            Heuristic = request.Heuristic;
-            UseSplineSmoothing = request.UseSplineSmoothing;
-
             PathPartitionHeap.Add(startPartition);
 
             if (!TracePath(request))
-            {
-                request.OnComplete?.Invoke(false, null);
-                return;
-            }
+                return false;
 
-            SwiftList<Node> rawNodePath = GetRawpath(request);
-            SwiftList<Vector3d> smoothVectorPath = SmoothPath(rawNodePath, request);
-
-            // Call the OnComplete callback with the resulting path
-            request.OnComplete?.Invoke(true, smoothVectorPath);
+            SwiftList<Node> rawNodePath = GetRawpath(request.Start, request.End);
+            result = SmoothPath(rawNodePath, request.End, request.UnitSize, request.UseSplineSmoothing);
+            return true;
         }
 
+        /// <summary>
+        /// Executes the core A* loop to find a valid trail between the start and end nodes.
+        /// </summary>
+        /// <param name="request">The pathfinding request with all search parameters.</param>
+        /// <returns>True if the path to the target was found; false otherwise.</returns>
         public bool TracePath(AStarPathRequest request)
         {
             int iterations = 0;
-            while (PathPartitionHeap.RemoveFirst(out PathPartition currentPartition) && iterations++ < request.MaxSearchSize)
+            while (PathPartitionHeap.RemoveFirst(out PathPartition currentPartition) && iterations++ < request.MaxPathSearchRange)
             {
-                if (currentPartition.NodeSpawnToken == request.TargetNode.SpawnToken)
+                if (currentPartition.NodeSpawnToken == request.End.SpawnToken)
                     return true;
 
-                if (ProcessNeighbors(currentPartition, request))
+                if (ProcessNeighbors(request, currentPartition))
                     return true;
 
                 PathPartitionHeap.SetClosed(currentPartition);
@@ -85,65 +90,82 @@ namespace Trailblazer.Pathing
             return false;
         }
 
-        private bool ProcessNeighbors(PathPartition current, AStarPathRequest request)
+        /// <summary>
+        /// Indicates whether straight and diagonal neighbor nodes should be processed during pathfinding.
+        /// </summary>
+        private bool ProcessNeighbors(AStarPathRequest request, PathPartition current)
         {
             int cost = current.MovementCost + PathPartition.StraightCost;
             foreach (TraversableNeighbor neighbor in current.GetWalkableStraightNeighbors())
             {
-                if (ProcessNeighbor(current, neighbor.Partition, cost, request)) 
+                if (ProcessNeighbor(request, current, neighbor.Partition, cost)) 
                     return true;
             }
 
             cost = current.MovementCost + PathPartition.DiagonalCost;
             foreach (TraversableNeighbor neighbor in current.GetWalkableDiagonalNeighbors())
             {
-                if (ProcessNeighbor(current, neighbor.Partition, cost, request)) 
+                if (ProcessNeighbor(request, current, neighbor.Partition, cost)) 
                     return true;
             }
 
             return false;
         }
 
-        private bool ProcessNeighbor(PathPartition current, PathPartition neighbor, int cost, AStarPathRequest request)
+        /// <summary>
+        /// Determines whether a given neighbor node should be considered for path expansion.
+        /// </summary>
+        private bool ProcessNeighbor(
+            AStarPathRequest request,
+            PathPartition current, 
+            PathPartition neighbor, 
+            int cost)
         {
             if (PathPartitionHeap.IsClosed(neighbor) || neighbor.Unpassable(request.UnitSize))
                 return false;
 
             // Skip neighbors that have a height difference greater than the allowed maximum
             Fixed64 heightDifference = (current.NodePosition.y - neighbor.NodePosition.y).Abs();
-            if (heightDifference > MaxClimbHeight)
+            if (heightDifference > request.MaxClimbHeight)
             {
-#if DEBUG
                 OnHeightLimitViolated?.Invoke(current, neighbor, heightDifference);
-#endif
                 return false;
             }
 
-            if (neighbor.NodeSpawnToken == request.TargetNode.SpawnToken)
+            if (neighbor.NodeSpawnToken == request.End.SpawnToken)
             {
-                SetPathPartitionData(neighbor, request.TargetNode.WorldPosition, current.ParentCoordinate, cost);
+                SetPathPartitionData(neighbor, request.End.WorldPosition, current.ParentCoordinate, cost, request.Heuristic);
                 return true;
             }
 
             if (!PathPartitionHeap.Contains(neighbor))
             {
-                SetPathPartitionData(neighbor, request.TargetNode.WorldPosition, current.ParentCoordinate, cost);
+                SetPathPartitionData(neighbor, request.End.WorldPosition, current.ParentCoordinate, cost, request.Heuristic);
                 PathPartitionHeap.Add(neighbor);
             }
             else if (cost < neighbor.MovementCost)
             {
-                SetPathPartitionData(neighbor, request.TargetNode.WorldPosition, current.ParentCoordinate, cost);
+                SetPathPartitionData(neighbor, request.End.WorldPosition, current.ParentCoordinate, cost, request.Heuristic);
                 PathPartitionHeap.SortUp(neighbor);
             }
 
             return false;
         }
 
+        /// <summary>
+        /// Assigns pathfinding data to a path partition, including cost and direction toward the next trail node.
+        /// </summary>
+        /// <param name="pathPartition">The path partition being updated.</param>
+        /// <param name="targetPosition">The destination's world position for heuristic estimation.</param>
+        /// <param name="nextTrailCoordinates">The coordinates of the parent partition leading to this one.</param>
+        /// <param name="movementCost">The cumulative movement cost to this partition.</param>
+        /// <param name="heuristic">The heuristic method used to estimate cost-to-goal.</param>
         private void SetPathPartitionData(
             PathPartition pathPartition,
             Vector3d targetPosition,
             CoordinatesGlobal nextTrailCoordinates,
-            int movementCost)
+            int movementCost,
+            HeuristicMethod heuristic)
         {
             pathPartition.NextTrailCoordinate = nextTrailCoordinates;
             pathPartition.MovementCost = movementCost;
@@ -151,18 +173,24 @@ namespace Trailblazer.Pathing
             int heuristicCost = PathPartition.CalculateHeuristic(
                 pathPartition.NodePosition,
                 targetPosition,
-                Heuristic);
+                heuristic);
 
             // Calculate the total cost (fCost) by adding the heuristic cost (hCost) to the movement cost (gCost)
             pathPartition.HeapCost = movementCost + heuristicCost;
         }
 
-        private SwiftList<Node> GetRawpath(AStarPathRequest request)
+        /// <summary>
+        /// Reconstructs the raw node-based path from the destination to the origin by walking backwards through trail links.
+        /// </summary>
+        /// <param name="start">The origin node.</param>
+        /// <param name="end">The destination node.</param>
+        /// <returns>A list of nodes from start to end representing the raw path.</returns>
+        private SwiftList<Node> GetRawpath(Node start, Node end)
         {
             SwiftList<Node> rawNodePath = new();
 
-            Node currentNode = request.TargetNode;
-            while (currentNode.SpawnToken != request.FromNode.SpawnToken)
+            Node currentNode = end;
+            while (currentNode.SpawnToken != start.SpawnToken)
             {
                 rawNodePath.Insert(0, currentNode);
 
@@ -179,11 +207,23 @@ namespace Trailblazer.Pathing
             }
 
             // Ensure start position is included
-            rawNodePath.Insert(0, request.FromNode);
+            rawNodePath.Insert(0, start);
             return rawNodePath;
         }
 
-        public SwiftList<Vector3d> SmoothPath(SwiftList<Node> rawNodePath, AStarPathRequest request)
+        /// <summary>
+        /// Constructs a smoothed version of the path using direction changes and optional spline smoothing.
+        /// </summary>
+        /// <param name="rawNodePath">The unsmoothed list of nodes produced by pathfinding.</param>
+        /// <param name="end">The target node.</param>
+        /// <param name="unitSize">The agent’s unit size used to maintain spacing from obstacles.</param>
+        /// <param name="useSplineSmoothing">True to apply Catmull-Rom spline smoothing to the path.</param>
+        /// <returns>A smoothed list of world positions.</returns>
+        public SwiftList<Vector3d> SmoothPath(
+            SwiftList<Node> rawNodePath, 
+            Node end,
+            Fixed64 unitSize,
+            bool useSplineSmoothing)
         {
             SwiftList<Vector3d> outputVectorPath = new();
             if (rawNodePath.Count == 0)
@@ -204,7 +244,7 @@ namespace Trailblazer.Pathing
                     continue;
 
                 // Preserve nodes near unwalkable tiles
-                if (partition.GetNeighborClearance() <= request.UnitSize + 1)
+                if (partition.GetNeighborClearance() <= unitSize + 1)
                 {
                     outputVectorPath.Add(current.WorldPosition);
                     lastDir = Vector3d.Zero;
@@ -222,14 +262,20 @@ namespace Trailblazer.Pathing
             }
 
             // Ensure target position is included
-            outputVectorPath.Add(request.TargetNode.WorldPosition);
+            outputVectorPath.Add(end.WorldPosition);
 
-            if (UseSplineSmoothing)
+            if (useSplineSmoothing)
                 outputVectorPath = CatmullSmooth(outputVectorPath);
 
             return outputVectorPath;
         }
 
+        /// <summary>
+        /// Applies Catmull-Rom spline smoothing to a set of input path points to produce a smoother curve.
+        /// </summary>
+        /// <param name="input">The input path of waypoints.</param>
+        /// <param name="resolutionPerSegment">The number of interpolated points per segment.</param>
+        /// <returns>A smoothed path using Catmull-Rom spline interpolation.</returns>
         public static SwiftList<Vector3d> CatmullSmooth(SwiftList<Vector3d> input, int resolutionPerSegment = 3)
         {
             if (input.Count < 4) return input;
@@ -259,6 +305,15 @@ namespace Trailblazer.Pathing
             return output;
         }
 
+        /// <summary>
+        /// Computes the interpolated point along a Catmull-Rom spline given four control points.
+        /// </summary>
+        /// <param name="p0">The first control point.</param>
+        /// <param name="p1">The second control point.</param>
+        /// <param name="p2">The third control point.</param>
+        /// <param name="p3">The fourth control point.</param>
+        /// <param name="t">Interpolation factor between 0 and 1.</param>
+        /// <returns>The interpolated point on the spline.</returns>
         public static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
         {
             // Classic Catmull-Rom basis matrix

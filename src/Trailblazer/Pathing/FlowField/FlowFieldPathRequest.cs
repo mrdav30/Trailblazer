@@ -1,40 +1,69 @@
 ﻿using FixedMathSharp;
-using SwiftCollections;
+using GridForge.Grids;
 using System;
 
 namespace Trailblazer.Pathing
 {
-    public class FlowFieldPathRequest : PathRequest
+    /// <summary>
+    /// A pathfinding request used for flow field generation. Contains configuration for 
+    /// destination targeting, dynamic agent sizing, and walkability override. 
+    /// Implements value-based equality for guide pooling.
+    /// </summary>
+    public struct FlowFieldPathRequest : IPathRequest, IEquatable<FlowFieldPathRequest>
     {
         public const int DefaultSearchRange = 10;
 
-        private int _searchRange = DefaultSearchRange;
-        public int SearchRange
+        public bool AllowUnwalkable { get; set; }
+
+        public Node Start { get; set; }
+
+        public Node End { get; set; }
+
+        public readonly bool HasZeroDisplacement => Start == null || End == null || Start.SpawnToken == End.SpawnToken;
+
+        public Fixed64 UnitSize { get; set; }
+
+        public int? MaxPathSearchRange { get; set; }
+
+        public int FieldSearchRange { get; set; }
+
+        public readonly int RequestCacheKey => GetHashCode();
+
+        public static FlowFieldPathRequest CreateEmpty() => Create(null, null);
+
+        public static FlowFieldPathRequest Create(
+            Node start, 
+            Node end, 
+            Fixed64? unitSize = null,
+            bool allowUnwalkable = false)
         {
-            get => _searchRange;
-            set
+            return new FlowFieldPathRequest()
             {
-                if (IsValidated) return;
-                _searchRange = value;
-            }
+
+                Start = start,
+                End = end,
+                UnitSize = unitSize ?? GlobalGridManager.NodeSize,
+                AllowUnwalkable = false,
+                FieldSearchRange = DefaultSearchRange,
+                MaxPathSearchRange = null
+            };
         }
 
-        public Action<bool, SwiftDictionary<int, FlowField>> OnComplete { get; private set; }
+        public override readonly bool Equals(object obj) =>
+            obj is FlowFieldPathRequest other && Equals(other);
 
-        public FlowFieldPathRequest(
-            Vector3d from, 
-            Vector3d destination, 
-            Fixed64 unitSize, 
-            Action<bool, SwiftDictionary<int, FlowField>> onComplete) : base(from, destination, unitSize)
+        public readonly bool Equals(FlowFieldPathRequest other) => RequestCacheKey == other.RequestCacheKey;
+
+        public override readonly int GetHashCode()
         {
-            OnComplete = onComplete;
-        }
-
-        public override void FindPath()
-        {
-            if (!IsValidated) return;
-
-            FlowFieldSurveyor.Shared.FindPath(this);
+            // Note: For FlowFields we don't care about the start node (only that the FlowField contains it)
+            return (
+                End?.SpawnToken ?? 0,
+                UnitSize,
+                AllowUnwalkable,
+                FieldSearchRange,
+                MaxPathSearchRange ?? -1
+            ).CombineHashCodes();
         }
     }
 }

@@ -1,6 +1,5 @@
 ﻿using FixedMathSharp;
 using System;
-using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation
 {

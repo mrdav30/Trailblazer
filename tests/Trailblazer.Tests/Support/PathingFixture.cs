@@ -17,8 +17,8 @@ namespace Trailblazer.Tests
 
         public void Dispose()
         {
-            PathingManager.UnloadAllMaps();
-            PathingManager.ClearAll();
+            PathManager.UnloadAllMaps();
+            PathManager.ClearAll();
 
             GlobalGridManager.Reset();
         }

@@ -3,22 +3,66 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-// TODO: add conversion to heightmap?
 namespace Trailblazer.Pathing
 {
+    /// <summary>
+    /// Represents a 3D navigable grid used for pathfinding. Provides utility methods for querying walkability 
+    /// and converting world positions into discrete grid indices.
+    /// </summary>
     [Serializable]
     public class NavigationChart
     {
+        /// <summary>
+        /// The name identifier for this navigation chart.
+        /// </summary>
         public readonly string Name;
 
+        /// <summary>
+        /// The origin point (world-space) of the grid.
+        /// </summary>
         public readonly Vector3d Origin;
-        public readonly Fixed64 Interval;
-        public readonly int SizeX, SizeY, SizeZ;
 
+        /// <summary>
+        /// The distance between grid points along each axis.
+        /// </summary>
+        public readonly Fixed64 Interval;
+
+        /// <summary>
+        /// The number of cells along the X axis.
+        /// </summary>
+        public readonly int SizeX;
+
+        /// <summary>
+        /// The number of cells along the Y axis.
+        /// </summary>
+        public readonly int SizeY;
+
+        /// <summary>
+        /// The number of cells along the Z axis.
+        /// </summary>
+        public readonly int SizeZ;
+
+        /// <summary>
+        /// A flattened 3D boolean map representing walkable (true) or unwalkable (false) cells.
+        /// The array is indexed using a custom row-major layout across Y, X, then Z.
+        /// </summary>
         private readonly bool[] _map;
 
+        /// <summary>
+        /// Indicates whether this chart has been fully initialized and is ready for queries.
+        /// </summary>
         public bool IsInitialized { get; internal set; }
 
+        /// <summary>
+        /// Creates a new navigation chart using a pre-flattened map array and spatial parameters.
+        /// </summary>
+        /// <param name="name">The chart's unique identifier.</param>
+        /// <param name="map">A flattened boolean array representing walkable and non-walkable grid cells.</param>
+        /// <param name="sizeX">Number of cells along the X axis.</param>
+        /// <param name="sizeY">Number of cells along the Y axis.</param>
+        /// <param name="sizeZ">Number of cells along the Z axis.</param>
+        /// <param name="origin">World position of the grid origin.</param>
+        /// <param name="interval">Distance between adjacent grid points.</param>
         public NavigationChart(string name, bool[] map, int sizeX, int sizeY, int sizeZ, Vector3d origin, Fixed64 interval)
         {
             Name = name;
@@ -30,9 +74,24 @@ namespace Trailblazer.Pathing
             Interval = interval;
         }
 
+        /// <summary>
+        /// Converts 3D grid indices (x, y, z) into a 1D flattened index for accessing the internal map.
+        /// </summary>
+        /// <param name="x">The X index in the grid.</param>
+        /// <param name="y">The Y index in the grid.</param>
+        /// <param name="z">The Z index in the grid.</param>
+        /// <returns>The flattened index corresponding to the provided 3D coordinates.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int ToIndex(int x, int y, int z) => (y * SizeX * SizeZ) + (x * SizeZ) + z;
 
+        /// <summary>
+        /// Attempts to convert a world-space position into the grid's local indices.
+        /// </summary>
+        /// <param name="pos">The world-space position.</param>
+        /// <param name="x">Resulting X index.</param>
+        /// <param name="y">Resulting Y index.</param>
+        /// <param name="z">Resulting Z index.</param>
+        /// <returns>True if the position is within bounds; otherwise, false.</returns>
         public bool TryWorldToIndex(Vector3d pos, out int x, out int y, out int z)
         {
             x = (int)((pos.x - Origin.x) / Interval);
@@ -52,6 +111,11 @@ namespace Trailblazer.Pathing
             return true;
         }
 
+        /// <summary>
+        /// Checks if the given world-space position corresponds to a walkable cell.
+        /// </summary>
+        /// <param name="worldPos">The position to query.</param>
+        /// <returns>True if walkable; otherwise, false.</returns>
         public bool IsWalkable(Vector3d worldPos)
         {
             if (!TryWorldToIndex(worldPos, out int x, out int y, out int z))
@@ -60,6 +124,10 @@ namespace Trailblazer.Pathing
             return _map[ToIndex(x, y, z)];
         }
 
+        /// <summary>
+        /// Returns all walkable world positions within the chart.
+        /// </summary>
+        /// <returns>A collection of walkable Vector3d positions.</returns>
         public IEnumerable<Vector3d> GetWalkablePositions()
         {
             for (int y = 0; y < SizeY; y++)
@@ -77,6 +145,14 @@ namespace Trailblazer.Pathing
                     }
         }
 
+        /// <summary>
+        /// Creates a navigation chart from a 3D boolean array representing walkable nodes.
+        /// </summary>
+        /// <param name="name">Name identifier for the chart.</param>
+        /// <param name="sourceMap">3D map of walkable cells (true = walkable).</param>
+        /// <param name="origin">The origin world-space coordinate of the grid.</param>
+        /// <param name="interval">The spacing between each grid point.</param>
+        /// <returns>A constructed NavigationChart instance.</returns>
         public static NavigationChart From3D(string name, bool[,,] sourceMap, Vector3d origin, Fixed64 interval)
         {
             int sizeY = sourceMap.GetLength(0);

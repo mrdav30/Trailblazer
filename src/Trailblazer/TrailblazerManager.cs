@@ -1,4 +1,5 @@
 ﻿using FixedMathSharp;
+using Trailblazer.Pathing;
 
 namespace Trailblazer
 {
@@ -54,6 +55,8 @@ namespace Trailblazer
         {
             FrameCount++;
             TotalTime += DeltaTime;
+
+            PathGuideFactory.CullExpiredGuides(FrameCount);
         }
 
         /// <summary>

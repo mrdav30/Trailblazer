@@ -9,6 +9,9 @@ namespace Trailblazer.Pathing
     /// </summary>
     public static class PathPartitionHeap
     {
+        /// <summary>
+        /// /// Default initial capacity of the heap (64 x 64 = 4096).
+        /// </summary>
         public const int DefaultCapacity = 64 * 64;
 
         /// <summary>
@@ -16,10 +19,19 @@ namespace Trailblazer.Pathing
         /// </summary>
         public static uint Count { get; private set; }
 
+        /// <summary>
+        /// Internal version counter to distinguish heap generations.
+        /// </summary>
         private static uint _heapVersion = 1;
 
+        /// <summary>
+        /// Internal storage for heap items.
+        /// </summary>
         private static PathPartition[] _items = new PathPartition[DefaultCapacity];
 
+        /// <summary>
+        /// Current total capacity of the heap.
+        /// </summary>
         public static int Capacity => _items.Length;
 
         /// <summary>
@@ -35,7 +47,9 @@ namespace Trailblazer.Pathing
             partition.HeapVersion = _heapVersion;
         }
 
-        // Ensures the capacity of the internal array is sufficient.
+        /// <summary>
+        /// Resizes the internal array to accommodate more items.
+        /// </summary>
         private static void Resize(int newSize)
         {
             int newCapacity = newSize <= DefaultCapacity ? DefaultCapacity : newSize;
@@ -46,6 +60,9 @@ namespace Trailblazer.Pathing
             _items = newArray;
         }
 
+        /// <summary>
+        /// Retrieves the PathPartition at the specified index without removing it.
+        /// </summary>
         public static PathPartition PeekAt(int index) => _items[index];
 
         /// <summary>
@@ -98,7 +115,9 @@ namespace Trailblazer.Pathing
         /// <returns>True if the PathPartition is closed, otherwise false.</returns>
         public static bool IsClosed(PathPartition item) => item.ClosedHeapVersion == _heapVersion;
 
-        // Sorts the specified PathPartition up the heap.
+        /// <summary>
+        /// Sorts a PathPartition up the heap based on its HeapCost.
+        /// </summary>
         public static void SortUp(PathPartition item)
         {
             uint index = item.HeapIndex;
@@ -116,8 +135,10 @@ namespace Trailblazer.Pathing
             }
         }
 
-        // Sorts the specified PathPartition down the heap.
-        private static void SortDown(PathPartition item)
+        /// <summary>
+        /// Sorts a PathPartition down the heap based on its HeapCost.
+        /// </summary>
+        public static void SortDown(PathPartition item)
         {
             uint index = item.HeapIndex;
 
@@ -141,7 +162,9 @@ namespace Trailblazer.Pathing
             }
         }
 
-        // Swaps two PathPartitions in the heap.
+        /// <summary>
+        /// Swaps two PathPartitions in the heap and updates their HeapIndex.
+        /// </summary>
         public static void Swap(PathPartition itemA, PathPartition itemB)
         {
             uint indexA = itemA.HeapIndex;

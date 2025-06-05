@@ -7,7 +7,7 @@ namespace Trailblazer.Pathing
     /// <summary>
     /// A static class representing a heap of <see cref="PathPartition"/>> for efficient pathfinding.
     /// </summary>
-    public static class PathPartitionHeap
+    public static class PathHeap
     {
         /// <summary>
         /// /// Default initial capacity of the heap (64 x 64 = 4096).

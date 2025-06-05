@@ -40,13 +40,13 @@ namespace Trailblazer.Pathing
         {
             closestNeighbor = null;
 
-            foreach (TraversableNeighbor neighbor in PathPartition.WalkableStraightNeighborsOf(node))
+            foreach (TraversableNode neighbor in PathManager.WalkableStraightNeighborsOf(node))
             {
                 closestNeighbor = neighbor.Node; // prefer straight neighbors since they cost less
                 return true;
             }
 
-            foreach (TraversableNeighbor neighbor in PathPartition.WalkableDiagonalNeighborsOf(node))
+            foreach (TraversableNode neighbor in PathManager.WalkableDiagonalNeighborsOf(node))
             {
                 closestNeighbor = neighbor.Node;
                 return true;

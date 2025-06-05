@@ -4,6 +4,7 @@ using GridForge.Spatial;
 using SwiftCollections;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
 {
@@ -57,41 +58,26 @@ namespace Trailblazer.Pathing
         /// </summary>
         public bool IsPartitioned { get; set; }
 
+        #region Clearance Properties
+
         /// <summary>
         /// The direction used when calculating neighbor clearance.
         /// </summary>
-        [Transient]
         public LinearDirection ClearanceDirection { get; private set; }
 
         /// <summary>
         /// The number of traversable connections until the nearest unwalkable node.
         /// </summary>
-        [Transient]
         public Fixed64 ClearanceDegree { get; private set; }
 
         /// <summary>
         /// Indicates whether the clearance degree has been computed and is valid.
         /// </summary>
-        [Transient]
         public bool IsClearanceValid { get; private set; }
-
-        #region Astar Properties
-
-        /// <summary>
-        /// The movement penalty cost of this node during A* pathfinding.
-        /// </summary>
-        [Transient]
-        public int MovementCost { get; set; }
-
-        /// <summary>
-        /// The next node in the trail path, used during A* traversal.
-        /// </summary>
-        [Transient]
-        public CoordinatesGlobal? NextTrailCoordinate { get; set; } = null;
 
         #endregion
 
-        #region Heap Helpers
+        #region Transient Heap Properties
 
         /// <summary>
         /// The combined cost for use in pathfinding heap prioritization.
@@ -124,8 +110,13 @@ namespace Trailblazer.Pathing
         /// </summary>
         private readonly SwiftHashSet<string> _mapOwners = new();
 
-        /// <inheritdoc cref="_mapOwners">
+        ///<inheritdoc cref="_mapOwners"/>
         public SwiftHashSet<string> MapOwners => _mapOwners;
+
+        /// <summary>
+        /// Returns true if any map currently references this partition.
+        /// </summary>
+        public bool HasAnyOwners => _mapOwners.Count > 0;
 
         /// <summary>
         /// Called when this partition is attached to a node, initializing key references and state.
@@ -145,10 +136,10 @@ namespace Trailblazer.Pathing
         }
 
         /// This will call <see cref="Reset"/> as an action on release
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnRemoveFromNode(Node node)
         {
             node.OnObstacleChange -= HandleChange;
-
             PathManager.PartitionPool.Release(this);
         }
 
@@ -164,9 +155,6 @@ namespace Trailblazer.Pathing
 
             ClearanceDegree = DefaultDegree;
             ClearanceDirection = LinearDirection.None;
-
-            MovementCost = 0;
-            NextTrailCoordinate = null;
 
             _mapOwners.Clear();
 
@@ -213,7 +201,7 @@ namespace Trailblazer.Pathing
             if (IsClearanceValid)
                 return;
 
-            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out Grid grid, out Node node))
+            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
             {
                 Console.WriteLine($"Invalidate coordiante provided to setup partition: {ParentCoordinate}");
                 return;
@@ -260,7 +248,8 @@ namespace Trailblazer.Pathing
                     break;
                 }
 
-                if (neighborPartition.ClearanceDegree < ClearanceDegree && neighborPartition.ClearanceDegree < DefaultDegreeCap)
+                if (neighborPartition.ClearanceDegree < ClearanceDegree
+                    && neighborPartition.ClearanceDegree < DefaultDegreeCap)
                 {
                     //  Cap clearance to 8. Something larger than that won't work very well with pathfinding.
                     ClearanceDegree = neighborPartition.ClearanceDegree + Fixed64.One;
@@ -276,21 +265,19 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Registers the map name as one that owns this partition.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddOwner(string mapName) => _mapOwners.Add(mapName);
 
         /// <summary>
         /// Removes the map name from those that reference this partition.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void RemoveOwner(string mapName) => _mapOwners.Remove(mapName);
-
-        /// <summary>
-        /// Returns true if any map currently references this partition.
-        /// </summary>
-        public bool HasAnyOwners => _mapOwners.Count > 0;
 
         /// <summary>
         /// Returns true if the partition is claimed by the given map name.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool BelongsTo(string mapName) => _mapOwners.Contains(mapName);
 
         #endregion
@@ -335,199 +322,16 @@ namespace Trailblazer.Pathing
 
             return heuristicCost.CeilToInt();
         }
-
-        /// <summary>
-        /// Checks if any edge neighbors of a diagonal neighbor are blocked.
-        /// </summary>
-        /// <param name="currentNode">The current node.</param>
-        /// <param name="diagonalIndex">The index of the diagonal neighbor in the 3x3x3 grid.</param>
-        /// <returns>True if any edge neighbors are blocked; otherwise, false.</returns>
-        private static bool HasBlockedEdgeNeighbor(Node currentNode, LinearDirection diagonalIndex)
-        {
-            // Define the relative offsets for the two edge neighbors of each diagonal neighbor
-            var edgeOffsets = diagonalIndex switch
-            {
-                LinearDirection.SouthWest => new[] { (x: -1, z: 0), (x: 0, z: -1) }, // South-West
-                LinearDirection.NorthWest => new[] { (x: -1, z: 0), (x: 0, z: 1) },  // North-West
-                LinearDirection.SouthEast => new[] { (x: 1, z: 0), (x: 0, z: -1) },  // South-East
-                LinearDirection.NorthEast => new[] { (x: 1, z: 0), (x: 0, z: 1) },   // North-East
-                _ => Array.Empty<(int x, int z)>()
-            };
-
-            foreach (var (xOffset, zOffset) in edgeOffsets)
-            {
-                // Calculate the linear index of the edge neighbor in the 3x3x3 grid
-                LinearDirection edgeDirection = GlobalGridManager.GetNeighborDirectionFromOffset((xOffset, 0, zOffset));
-
-                if (currentNode.TryGetNeighborFromDirection(edgeDirection, out Node edgeNeighbor))
-                {
-                    // Check if the edge neighbor is blocked or not walkable
-                    if (edgeNeighbor.IsBlocked)
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Returns all walkable neighbors of the partition’s current node.
-        /// </summary>
-        public IEnumerable<TraversableNeighbor> GetWalkableNeighbors()
-        {
-            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
-                yield break;
-
-            // Get all neighbors and their associated information
-            foreach (TraversableNeighbor neighbor in WalkableNeighborsOf(node))
-                yield return neighbor;
-        }
-
-        /// <summary>
-        /// Returns walkable neighbors for a specific node.
-        /// </summary>
-        public static IEnumerable<TraversableNeighbor> WalkableNeighborsOf(Node node)
-        {
-            // Get all neighbors and their associated information
-            foreach ((LinearDirection direction, Node neighbor) in node.GetNeighbors())
-            {
-                if (neighbor == null) continue;
-
-                // Skip blocked neighbors or neighbors that do not have a path partition
-                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                    continue;
-
-                yield return new TraversableNeighbor()
-                {
-                    Node = neighbor,
-                    Partition = neighborPartition,
-                    Direction = direction
-                };
-            }
-        }
-
-        /// <summary>
-        /// Returns all walkable straight (orthogonal) neighbors of the partition’s node.
-        /// </summary>
-        public IEnumerable<TraversableNeighbor> GetWalkableStraightNeighbors()
-        {
-            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
-                yield break;
-
-            // Get all neighbors and their associated information
-            foreach (TraversableNeighbor neighbor in WalkableStraightNeighborsOf(node))
-                yield return neighbor;
-        }
-
-        /// <summary>
-        /// Returns straight walkable neighbors for a specific node.
-        /// </summary>
-        public static IEnumerable<TraversableNeighbor> WalkableStraightNeighborsOf(Node node)
-        {
-            foreach (LinearDirection direction in Enum.GetValues(typeof(StraightNeighbors)))
-            {
-                if (!node.TryGetNeighborFromDirection(direction, out Node neighbor))
-                    continue;
-
-                // Skip blocked neighbors or neighbors that do not have a path partition
-                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                    continue;
-
-                yield return new TraversableNeighbor()
-                {
-                    Node = neighbor,
-                    Partition = neighborPartition,
-                    Direction = direction
-                };
-            }
-        }
-
-        /// <summary>
-        /// Returns all walkable diagonal neighbors of the partition’s node.
-        /// </summary>
-        public IEnumerable<TraversableNeighbor> GetWalkableDiagonalNeighbors()
-        {
-            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
-                yield break;
-
-            // Get all neighbors and their associated information
-            foreach (TraversableNeighbor neighbor in WalkableDiagonalNeighborsOf(node))
-                yield return neighbor;
-        }
-
-        /// <summary>
-        /// Returns diagonal walkable neighbors for a specific node, avoiding blocked adjacent edges.
-        /// </summary>
-        public static IEnumerable<TraversableNeighbor> WalkableDiagonalNeighborsOf(Node node)
-        {
-            foreach (LinearDirection direction in Enum.GetValues(typeof(DiagonalNeighbors)))
-            {
-                if (!node.TryGetNeighborFromDirection(direction, out Node neighbor))
-                    continue;
-
-                // Skip blocked neighbors or neighbors that do not have a path partition
-                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                    continue;
-
-                // Check for edge neighbors that share an edge with the diagonal neighbor
-                if (!HasBlockedEdgeNeighbor(node, direction))
-                    yield return new TraversableNeighbor()
-                    {
-                        Node = neighbor,
-                        Partition = neighborPartition,
-                        Direction = direction
-                    };
-            }
-        }
-
-        /// <summary>
-        /// Determines if the given direction is considered straight (orthogonal).
-        /// </summary>
-        public static bool IsStraightNeighbor(LinearDirection direction)
-        {
-            return direction switch
-            {
-                LinearDirection.West
-                or LinearDirection.South
-                or LinearDirection.East
-                or LinearDirection.North
-                or LinearDirection.Below
-                or LinearDirection.Above => true,
-                _ => false,
-            };
-        }
-
-        /// <summary>
-        /// Determines if the given direction is considered diagonal.
-        /// </summary>
-        public static bool IsDiagnolNeighbor(LinearDirection direction)
-        {
-            return direction switch
-            {
-                LinearDirection.SouthWest
-                or LinearDirection.NorthWest
-                or LinearDirection.SouthEast
-                or LinearDirection.NorthEast
-                or LinearDirection.BelowWest
-                or LinearDirection.BelowSouth
-                or LinearDirection.BelowEast
-                or LinearDirection.BelowNorth
-                or LinearDirection.BelowSouthWest
-                or LinearDirection.BelowNorthWest
-                or LinearDirection.BelowSouthEast
-                or LinearDirection.BelowNorthEast
-                or LinearDirection.AboveWest
-                or LinearDirection.AboveSouth
-                or LinearDirection.AboveEast
-                or LinearDirection.AboveNorth
-                or LinearDirection.AboveSouthWest
-                or LinearDirection.AboveNorthWest
-                or LinearDirection.AboveSouthEast
-                or LinearDirection.AboveNorthEast => true,
-                _ => false,
-            };
-        }
-
+ 
         public override int GetHashCode() => NodeSpawnToken;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ClearHeapState()
+        {
+            HeapCost = 0;
+            HeapVersion = 0;
+            ClosedHeapVersion = 0;
+            HeapIndex = 0;
+        }
     }
 }

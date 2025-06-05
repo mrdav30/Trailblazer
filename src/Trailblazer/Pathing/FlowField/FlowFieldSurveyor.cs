@@ -27,6 +27,8 @@ namespace Trailblazer.Pathing
 
         #endregion
 
+        private FlowFieldPathRequest _request;
+
         /// <summary>
         /// The maximum distance found during the flood phase of path generation.
         /// Used to weight blending toward the goal.
@@ -37,13 +39,13 @@ namespace Trailblazer.Pathing
         /// The distance from the end node to the starting node during flood fill.
         /// Used to define the flood radius.
         /// </summary>
-        private int _startNodeDistance;
+        private int _distanceToStart;
 
         /// <summary>
         /// Tracks partitions that were affected during the flood fill.
         /// These will be used to construct the final flow field result.
         /// </summary>
-        private readonly SwiftHashSet<PathPartition> _markedPartitions = new();
+        private readonly SwiftHashSet<PathPartition> _marked = new();
 
         /// <summary>
         /// Attempts to create a shared flow field path from the start to the end node specified in the request.
@@ -60,21 +62,22 @@ namespace Trailblazer.Pathing
                 return false;
             }
 
-            PathPartitionHeap.FastClear();
+            _request = request;
 
-            _markedPartitions.Clear();
+            _marked.Clear();
+            PathHeap.FastClear();
 
             _greatestDistance = 0;
-            _startNodeDistance = 0;
+            _distanceToStart = 0;
 
             // Start from the end and move towards the start node
-            PathPartitionHeap.Add(targetPartition);
+            PathHeap.Add(targetPartition);
 
-            if(!FloodPath(request))
+            if(!FloodPath())
                 return false;
 
-            if (_markedPartitions.Count > 0)
-                result = GenerateFlowFields(request.End);
+            if (_marked.Count > 0)
+                result = GenerateFlowFields(_request.End);
 
             return result.Count > 0;
         }
@@ -83,30 +86,30 @@ namespace Trailblazer.Pathing
         /// Executes the wavefront expansion (flood fill) phase of the flow field generation algorithm.
         /// Starts from the goal and expands outward until the start node is reached or search range is exceeded.
         /// </summary>
-        /// <param name="request">The flow field path request to evaluate.</param>
         /// <returns><c>true</c> if the start node is reached within the maximum range; otherwise <c>false</c>.</returns>
-        public bool FloodPath(FlowFieldPathRequest request)
+        public bool FloodPath()
         {
             bool targetReached = false;
 
             int iterations = 0;
-            while (PathPartitionHeap.RemoveFirst(out PathPartition current) && iterations < request.MaxPathSearchRange)
+            while (PathHeap.RemoveFirst(out PathPartition current) 
+                && iterations++ < _request.MaxPathSearchRange)
             {
                 // Check if we found our way to the start node
-                if (!targetReached && current.NodeSpawnToken == request.End.SpawnToken)
+                if (!targetReached && current.NodeSpawnToken == _request.End.SpawnToken)
                 {
-                    _startNodeDistance = current.HeapCost;
+                    _distanceToStart = current.HeapCost;
                     targetReached = true;
                 }
 
                 if (current.HeapCost > _greatestDistance)
                     _greatestDistance = current.HeapCost;
 
-                AnalyzeNeighborDistance(current, request.UnitSize);
+                AnalyzeNeighborDistance(current, _request.UnitSize);
 
-                PathPartitionHeap.SetClosed(current);
+                PathHeap.SetClosed(current);
 
-                if (targetReached && current.HeapCost > _startNodeDistance + request.FieldSearchRange)
+                if (targetReached && current.HeapCost > _distanceToStart + _request.FieldSearchRange)
                     return true;
             }
 
@@ -117,28 +120,28 @@ namespace Trailblazer.Pathing
         /// Evaluates each walkable neighbor of the current partition and assigns a heap cost if a shorter path is found.
         /// Ensures the wavefront expands in an optimal order.
         /// </summary>
-        /// <param name="currentPartition">The current path partition being evaluated.</param>
+        /// <param name="current">The current path partition being evaluated.</param>
         /// <param name="unitSize">The size of the navigating agent.</param>
-        public void AnalyzeNeighborDistance(PathPartition currentPartition, Fixed64 unitSize)
+        public void AnalyzeNeighborDistance(PathPartition current, Fixed64 unitSize)
         {
             // Check each straight line neighbour of this node (no diagonals)
             // We will only ever visit every node once as we are always visiting nodes in the most efficient order
-            foreach (TraversableNeighbor neighbor in currentPartition.GetWalkableStraightNeighbors())
+            foreach (TraversableNode neighbor in PathManager.GetWalkableStraightNeighbors(current.ParentCoordinate))
             {
-                if (PathPartitionHeap.IsClosed(neighbor.Partition) || neighbor.Partition.Unpassable(unitSize))
+                if (PathHeap.IsClosed(neighbor.Partition) || neighbor.Partition.Unpassable(unitSize))
                     continue;
 
-                int neighborToll = currentPartition.HeapCost + 1;
-                if (!PathPartitionHeap.Contains(neighbor.Partition))
+                int neighborToll = current.HeapCost + 1;
+                if (!PathHeap.Contains(neighbor.Partition))
                 {
                     neighbor.Partition.HeapCost = neighborToll;
-                    PathPartitionHeap.Add(neighbor.Partition);
-                    _markedPartitions.Add(neighbor.Partition);
+                    PathHeap.Add(neighbor.Partition);
+                    _marked.Add(neighbor.Partition);
                 }
                 else if (neighborToll < neighbor.Partition.HeapCost)
                 {
                     neighbor.Partition.HeapCost = neighborToll;
-                    PathPartitionHeap.SortUp(neighbor.Partition);
+                    PathHeap.SortUp(neighbor.Partition);
                 }
             }
         }
@@ -153,8 +156,8 @@ namespace Trailblazer.Pathing
         {
             SwiftDictionary<int, FlowField> output = new();
 
-            Fixed64 totalDistance = _startNodeDistance + Fixed64.One; // total flood radius
-            foreach (PathPartition current in _markedPartitions)
+            Fixed64 totalDistance = _distanceToStart + Fixed64.One; // total flood radius
+            foreach (PathPartition current in _marked)
             {
                 if (current.NodeSpawnToken == end.SpawnToken)
                 {
@@ -176,10 +179,10 @@ namespace Trailblazer.Pathing
                 // Go through all neighbours and find the one with the lowest distance
                 PathPartition minPartition = null;
                 int minDistance = _greatestDistance;
-                foreach(TraversableNeighbor neighbor in current.GetWalkableNeighbors())
+                foreach(TraversableNode neighbor in PathManager.GetWalkableNeighbors(current.ParentCoordinate))
                 {
                     // check closed heap version to ensure neighbor was part of flood phase
-                    if (!PathPartitionHeap.IsClosed(neighbor.Partition)) 
+                    if (!PathHeap.IsClosed(neighbor.Partition)) 
                         continue;
 
                     int dist = neighbor.Partition.HeapCost - current.HeapCost;

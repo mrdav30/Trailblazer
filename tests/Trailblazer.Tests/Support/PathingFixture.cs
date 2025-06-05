@@ -24,6 +24,6 @@ namespace Trailblazer.Tests
         }
     }
 
-    [CollectionDefinition("TraversableNavMapCollection")]
-    public class TraversableNavMapCollection : ICollectionFixture<PathingFixture> { }
+    [CollectionDefinition("PathingCollection")]
+    public class PathingCollection : ICollectionFixture<PathingFixture> { }
 }

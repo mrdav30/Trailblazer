@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using GridForge.Spatial;
 
 namespace Trailblazer.Pathing
 {
@@ -159,7 +160,8 @@ namespace Trailblazer.Pathing
         /// <param name="map">The retrieved navigation chart.</param>
         /// <returns>True if the map exists; otherwise, false.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryGetNavigationMap(string name, out NavigationChart map) => _loadedMaps.TryGetValue(name, out map);
+        public static bool TryGetNavigationMap(string name, out NavigationChart map) 
+            => _loadedMaps.TryGetValue(name, out map);
 
         /// <summary>
         /// Initializes all registered navigation maps by assigning walkable nodes to partitions.
@@ -261,10 +263,205 @@ namespace Trailblazer.Pathing
         public static void ClearAll()
         {
             _loadedMaps.Clear();
-            PathPartitionHeap.FastClear();
 
             if (PathGuideFactory.IsPooling)
                 PathGuideFactory.FlushPools();
+        }
+
+        #endregion
+
+        #region Neighbor Discovery
+
+        /// <summary>
+        /// Checks if any edge neighbors of a diagonal neighbor are blocked.
+        /// </summary>
+        /// <param name="currentNode">The current node.</param>
+        /// <param name="diagonalIndex">The index of the diagonal neighbor in the 3x3x3 grid.</param>
+        /// <returns>True if any edge neighbors are blocked; otherwise, false.</returns>
+        private static bool HasBlockedEdgeNeighbor(Node currentNode, LinearDirection diagonalIndex)
+        {
+            // Define the relative offsets for the two edge neighbors of each diagonal neighbor
+            var edgeOffsets = diagonalIndex switch
+            {
+                LinearDirection.SouthWest => new[] { (x: -1, z: 0), (x: 0, z: -1) }, // South-West
+                LinearDirection.NorthWest => new[] { (x: -1, z: 0), (x: 0, z: 1) },  // North-West
+                LinearDirection.SouthEast => new[] { (x: 1, z: 0), (x: 0, z: -1) },  // South-East
+                LinearDirection.NorthEast => new[] { (x: 1, z: 0), (x: 0, z: 1) },   // North-East
+                _ => Array.Empty<(int x, int z)>()
+            };
+
+            foreach (var (xOffset, zOffset) in edgeOffsets)
+            {
+                // Calculate the linear index of the edge neighbor in the 3x3x3 grid
+                LinearDirection edgeDirection = GlobalGridManager.GetNeighborDirectionFromOffset((xOffset, 0, zOffset));
+
+                if (currentNode.TryGetNeighborFromDirection(edgeDirection, out Node edgeNeighbor))
+                {
+                    // Check if the edge neighbor is blocked or not walkable
+                    if (edgeNeighbor.IsBlocked)
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Returns all walkable neighbors of the partition’s current node.
+        /// </summary>
+        public static IEnumerable<TraversableNode> GetWalkableNeighbors(CoordinatesGlobal coordinates)
+        {
+            if (!GlobalGridManager.TryGetGridAndNode(coordinates, out _, out Node node))
+                yield break;
+
+            // Get all neighbors and their associated information
+            foreach (TraversableNode neighbor in WalkableNeighborsOf(node))
+                yield return neighbor;
+        }
+
+        /// <summary>
+        /// Returns walkable neighbors for a specific node.
+        /// </summary>
+        public static IEnumerable<TraversableNode> WalkableNeighborsOf(Node node)
+        {
+            // Get all neighbors and their associated information
+            foreach ((LinearDirection direction, Node neighbor) in node.GetNeighbors())
+            {
+                if (neighbor == null) continue;
+
+                // Skip blocked neighbors or neighbors that do not have a path partition
+                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
+                    continue;
+
+                yield return new TraversableNode()
+                {
+                    Node = neighbor,
+                    Partition = neighborPartition,
+                    Direction = direction
+                };
+            }
+        }
+
+        /// <summary>
+        /// Returns all walkable straight (orthogonal) neighbors of the partition’s node.
+        /// </summary>
+        public static IEnumerable<TraversableNode> GetWalkableStraightNeighbors(CoordinatesGlobal coordinates)
+        {
+            if (!GlobalGridManager.TryGetGridAndNode(coordinates, out _, out Node node))
+                yield break;
+
+            // Get all neighbors and their associated information
+            foreach (TraversableNode neighbor in WalkableStraightNeighborsOf(node))
+                yield return neighbor;
+        }
+
+        /// <summary>
+        /// Returns straight walkable neighbors for a specific node.
+        /// </summary>
+        public static IEnumerable<TraversableNode> WalkableStraightNeighborsOf(Node node)
+        {
+            foreach (LinearDirection direction in Enum.GetValues(typeof(StraightNeighbors)))
+            {
+                if (!node.TryGetNeighborFromDirection(direction, out Node neighbor))
+                    continue;
+
+                // Skip blocked neighbors or neighbors that do not have a path partition
+                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
+                    continue;
+
+                yield return new TraversableNode()
+                {
+                    Node = neighbor,
+                    Partition = neighborPartition,
+                    Direction = direction
+                };
+            }
+        }
+
+        /// <summary>
+        /// Returns all walkable diagonal neighbors of the partition’s node.
+        /// </summary>
+        public static IEnumerable<TraversableNode> GetWalkableDiagonalNeighbors(CoordinatesGlobal coordinates)
+        {
+            if (!GlobalGridManager.TryGetGridAndNode(coordinates, out _, out Node node))
+                yield break;
+
+            // Get all neighbors and their associated information
+            foreach (TraversableNode neighbor in WalkableDiagonalNeighborsOf(node))
+                yield return neighbor;
+        }
+
+        /// <summary>
+        /// Returns diagonal walkable neighbors for a specific node, avoiding blocked adjacent edges.
+        /// </summary>
+        public static IEnumerable<TraversableNode> WalkableDiagonalNeighborsOf(Node node)
+        {
+            foreach (LinearDirection direction in Enum.GetValues(typeof(DiagonalNeighbors)))
+            {
+                if (!node.TryGetNeighborFromDirection(direction, out Node neighbor))
+                    continue;
+
+                // Skip blocked neighbors or neighbors that do not have a path partition
+                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
+                    continue;
+
+                // Check for edge neighbors that share an edge with the diagonal neighbor
+                if (!HasBlockedEdgeNeighbor(node, direction))
+                    yield return new TraversableNode()
+                    {
+                        Node = neighbor,
+                        Partition = neighborPartition,
+                        Direction = direction
+                    };
+            }
+        }
+
+        /// <summary>
+        /// Determines if the given direction is considered straight (orthogonal).
+        /// </summary>
+        public static bool IsStraightNeighbor(LinearDirection direction)
+        {
+            return direction switch
+            {
+                LinearDirection.West
+                or LinearDirection.South
+                or LinearDirection.East
+                or LinearDirection.North
+                or LinearDirection.Below
+                or LinearDirection.Above => true,
+                _ => false,
+            };
+        }
+
+        /// <summary>
+        /// Determines if the given direction is considered diagonal.
+        /// </summary>
+        public static bool IsDiagnolNeighbor(LinearDirection direction)
+        {
+            return direction switch
+            {
+                LinearDirection.SouthWest
+                or LinearDirection.NorthWest
+                or LinearDirection.SouthEast
+                or LinearDirection.NorthEast
+                or LinearDirection.BelowWest
+                or LinearDirection.BelowSouth
+                or LinearDirection.BelowEast
+                or LinearDirection.BelowNorth
+                or LinearDirection.BelowSouthWest
+                or LinearDirection.BelowNorthWest
+                or LinearDirection.BelowSouthEast
+                or LinearDirection.BelowNorthEast
+                or LinearDirection.AboveWest
+                or LinearDirection.AboveSouth
+                or LinearDirection.AboveEast
+                or LinearDirection.AboveNorth
+                or LinearDirection.AboveSouthWest
+                or LinearDirection.AboveNorthWest
+                or LinearDirection.AboveSouthEast
+                or LinearDirection.AboveNorthEast => true,
+                _ => false,
+            };
         }
 
         #endregion

@@ -2,7 +2,7 @@
 
 namespace Trailblazer.Pathing
 {
-    public struct TraversableNeighbor
+    public struct TraversableNode
     {
         public Node Node { get; set; }
 

@@ -1,18 +1,16 @@
 ﻿using Xunit;
 using FixedMathSharp;
-using SwiftCollections;
 using Trailblazer.Pathing;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System.Linq;
-using Trailblazer.Navigation.Steering;
 
 namespace Trailblazer.Tests.Pathing
 {
-    [Collection("TraversableNavMapCollection")]
-    public class AStarPathFinderTests
+    [Collection("PathingCollection")]
+    public class AStarPathSurveryorTests
     {
-        public AStarPathFinderTests()
+        public AStarPathSurveryorTests()
         {
             var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
             GlobalGridManager.TryAddGrid(config, out _);

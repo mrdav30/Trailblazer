@@ -43,7 +43,7 @@ namespace Trailblazer.Pathing
                 Start = start,
                 End = end,
                 UnitSize = unitSize ?? GlobalGridManager.NodeSize,
-                AllowUnwalkable = false,
+                AllowUnwalkable = allowUnwalkable,
                 FieldSearchRange = DefaultSearchRange,
                 MaxPathSearchRange = null
             };

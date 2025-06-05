@@ -3,10 +3,24 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 
 namespace Trailblazer.Pathing
 {
+    internal struct AStarNodeData
+    {
+        /// <summary>
+        /// The movement penalty cost of this node during A* pathfinding.
+        /// </summary>
+        public int MovementCost;
+
+        /// <summary>
+        /// The next node in the trail path, used during A* traversal.
+        /// </summary>
+        public CoordinatesGlobal? NextTrailCoordinate;
+    }
+
     /// <summary>
     /// Executes A* pathfinding logic using partitioned grids to find viable navigation paths for agents.
     /// Supports climb height constraints and optional spline smoothing of the final path.
@@ -33,11 +47,15 @@ namespace Trailblazer.Pathing
         /// </summary>
         private static readonly Fixed64 _directionChangeTolerance = new(0.01);
 
+        private AStarPathRequest _request;
+
+        private readonly SwiftDictionary<int, AStarNodeData> _nodeData = new();
+
 #nullable enable
         /// <summary>
         /// Optional callback triggered when a height difference exceeds the allowed climb height during pathfinding.
         /// </summary>
-        public static Action<PathPartition, PathPartition, Fixed64>? OnHeightLimitViolated;
+        public static Action<CoordinatesGlobal, CoordinatesGlobal, Fixed64>? OnHeightLimitViolated;
 #nullable disable
 
         /// <summary>
@@ -56,35 +74,40 @@ namespace Trailblazer.Pathing
                 return false;
             }
 
-            PathPartitionHeap.FastClear();
+            _request = request;
 
-            PathPartitionHeap.Add(startPartition);
+            _nodeData.Clear();
+            PathHeap.FastClear();
 
-            if (!TracePath(request))
+            // Trace path from the start to the end
+            _nodeData.Add(_request.Start.SpawnToken, new());
+            PathHeap.Add(startPartition);
+
+            if (!TracePath())
                 return false;
 
-            SwiftList<Node> rawNodePath = GetRawpath(request.Start, request.End);
-            result = SmoothPath(rawNodePath, request.End, request.UnitSize, request.UseSplineSmoothing);
+            SwiftList<Node> rawNodePath = GetRawpath(_request.Start, _request.End);
+            result = SmoothPath(rawNodePath, _request.End, _request.UnitSize, _request.UseSplineSmoothing);
             return true;
         }
 
         /// <summary>
         /// Executes the core A* loop to find a valid trail between the start and end nodes.
         /// </summary>
-        /// <param name="request">The pathfinding request with all search parameters.</param>
         /// <returns>True if the path to the target was found; false otherwise.</returns>
-        public bool TracePath(AStarPathRequest request)
+        public bool TracePath()
         {
             int iterations = 0;
-            while (PathPartitionHeap.RemoveFirst(out PathPartition currentPartition) && iterations++ < request.MaxPathSearchRange)
+            while (PathHeap.RemoveFirst(out PathPartition currentPartition) 
+                && iterations++ < _request.MaxPathSearchRange)
             {
-                if (currentPartition.NodeSpawnToken == request.End.SpawnToken)
+                if (currentPartition.NodeSpawnToken == _request.End.SpawnToken)
                     return true;
 
-                if (ProcessNeighbors(request, currentPartition))
+                if (ProcessNeighbors(currentPartition))
                     return true;
 
-                PathPartitionHeap.SetClosed(currentPartition);
+                PathHeap.SetClosed(currentPartition);
             }
 
             return false;
@@ -93,19 +116,23 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Indicates whether straight and diagonal neighbor nodes should be processed during pathfinding.
         /// </summary>
-        private bool ProcessNeighbors(AStarPathRequest request, PathPartition current)
+        /// <returns>True if any neighbor is the target destination.</returns>
+        private bool ProcessNeighbors(PathPartition current)
         {
-            int cost = current.MovementCost + PathPartition.StraightCost;
-            foreach (TraversableNeighbor neighbor in current.GetWalkableStraightNeighbors())
+            if (!_nodeData.TryGetValue(current.NodeSpawnToken, out AStarNodeData data))
+                return false;
+
+            int cost = data.MovementCost + PathPartition.StraightCost;
+            foreach (TraversableNode neighbor in PathManager.GetWalkableStraightNeighbors(current.ParentCoordinate))
             {
-                if (ProcessNeighbor(request, current, neighbor.Partition, cost)) 
+                if (ProcessNeighbor(current, neighbor.Partition, cost))
                     return true;
             }
 
-            cost = current.MovementCost + PathPartition.DiagonalCost;
-            foreach (TraversableNeighbor neighbor in current.GetWalkableDiagonalNeighbors())
+            cost = data.MovementCost + PathPartition.DiagonalCost;
+            foreach (TraversableNode neighbor in PathManager.GetWalkableDiagonalNeighbors(current.ParentCoordinate))
             {
-                if (ProcessNeighbor(request, current, neighbor.Partition, cost)) 
+                if (ProcessNeighbor(current, neighbor.Partition, cost))
                     return true;
             }
 
@@ -115,38 +142,39 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Determines whether a given neighbor node should be considered for path expansion.
         /// </summary>
+        /// <returns>True if the neighbor is the target destination.</returns>
         private bool ProcessNeighbor(
-            AStarPathRequest request,
-            PathPartition current, 
-            PathPartition neighbor, 
+            PathPartition current,
+            PathPartition neighbor,
             int cost)
         {
-            if (PathPartitionHeap.IsClosed(neighbor) || neighbor.Unpassable(request.UnitSize))
+            if (PathHeap.IsClosed(neighbor) || neighbor.Unpassable(_request.UnitSize))
                 return false;
 
             // Skip neighbors that have a height difference greater than the allowed maximum
             Fixed64 heightDifference = (current.NodePosition.y - neighbor.NodePosition.y).Abs();
-            if (heightDifference > request.MaxClimbHeight)
+            if (heightDifference > _request.MaxClimbHeight)
             {
-                OnHeightLimitViolated?.Invoke(current, neighbor, heightDifference);
+                OnHeightLimitViolated?.Invoke(current.ParentCoordinate, neighbor.ParentCoordinate, heightDifference);
                 return false;
             }
 
-            if (neighbor.NodeSpawnToken == request.End.SpawnToken)
+            if (neighbor.NodeSpawnToken == _request.End.SpawnToken)
             {
-                SetPathPartitionData(neighbor, request.End.WorldPosition, current.ParentCoordinate, cost, request.Heuristic);
+                SetPathPartitionData(neighbor, current.ParentCoordinate, cost);
                 return true;
             }
 
-            if (!PathPartitionHeap.Contains(neighbor))
+            if (!PathHeap.Contains(neighbor))
             {
-                SetPathPartitionData(neighbor, request.End.WorldPosition, current.ParentCoordinate, cost, request.Heuristic);
-                PathPartitionHeap.Add(neighbor);
+                SetPathPartitionData(neighbor, current.ParentCoordinate, cost);
+                PathHeap.Add(neighbor);
             }
-            else if (cost < neighbor.MovementCost)
+            else if (_nodeData.TryGetValue(neighbor.NodeSpawnToken, out AStarNodeData data)
+                && data.MovementCost > cost)
             {
-                SetPathPartitionData(neighbor, request.End.WorldPosition, current.ParentCoordinate, cost, request.Heuristic);
-                PathPartitionHeap.SortUp(neighbor);
+                SetPathPartitionData(neighbor, current.ParentCoordinate, cost);
+                PathHeap.SortUp(neighbor);
             }
 
             return false;
@@ -155,28 +183,27 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Assigns pathfinding data to a path partition, including cost and direction toward the next trail node.
         /// </summary>
-        /// <param name="pathPartition">The path partition being updated.</param>
-        /// <param name="targetPosition">The destination's world position for heuristic estimation.</param>
+        /// <param name="partition">The path partition being updated.</param>
         /// <param name="nextTrailCoordinates">The coordinates of the parent partition leading to this one.</param>
         /// <param name="movementCost">The cumulative movement cost to this partition.</param>
-        /// <param name="heuristic">The heuristic method used to estimate cost-to-goal.</param>
         private void SetPathPartitionData(
-            PathPartition pathPartition,
-            Vector3d targetPosition,
+            PathPartition partition,
             CoordinatesGlobal nextTrailCoordinates,
-            int movementCost,
-            HeuristicMethod heuristic)
+            int movementCost)
         {
-            pathPartition.NextTrailCoordinate = nextTrailCoordinates;
-            pathPartition.MovementCost = movementCost;
+            _nodeData.Add(partition.NodeSpawnToken, new AStarNodeData
+            {
+                MovementCost = movementCost,
+                NextTrailCoordinate = nextTrailCoordinates
+            });
 
             int heuristicCost = PathPartition.CalculateHeuristic(
-                pathPartition.NodePosition,
-                targetPosition,
-                heuristic);
+                partition.NodePosition,
+                _request.End.WorldPosition,
+                _request.Heuristic);
 
             // Calculate the total cost (fCost) by adding the heuristic cost (hCost) to the movement cost (gCost)
-            pathPartition.HeapCost = movementCost + heuristicCost;
+            partition.HeapCost = movementCost + heuristicCost;
         }
 
         /// <summary>
@@ -189,21 +216,22 @@ namespace Trailblazer.Pathing
         {
             SwiftList<Node> rawNodePath = new();
 
-            Node currentNode = end;
-            while (currentNode.SpawnToken != start.SpawnToken)
+            Node current = end;
+            while (current.SpawnToken != start.SpawnToken)
             {
-                rawNodePath.Insert(0, currentNode);
+                rawNodePath.Insert(0, current);
 
-                currentNode.TryGetPartition(out PathPartition partition);
-                if (!partition.NextTrailCoordinate.HasValue)
+                if (!current.TryGetPartition(out PathPartition partition))
+                    continue;
+
+                if (!_nodeData.TryGetValue(current.SpawnToken, out AStarNodeData data) || !data.NextTrailCoordinate.HasValue)
                     break; // break in the trail!
 
-                if (GlobalGridManager.TryGetGridAndNode(partition.NextTrailCoordinate.Value, out _, out Node nextTrailNode))
-                    currentNode = nextTrailNode;
+                if (!GlobalGridManager.TryGetGridAndNode(data.NextTrailCoordinate.Value, out _, out Node nextTrailNode))
+                    break; // break in the trail!
 
-                // Wipe out for next run
-                partition.NextTrailCoordinate = null;
-                partition.MovementCost = 0;
+                current = nextTrailNode;
+                partition.ClearHeapState();
             }
 
             // Ensure start position is included
@@ -220,7 +248,7 @@ namespace Trailblazer.Pathing
         /// <param name="useSplineSmoothing">True to apply Catmull-Rom spline smoothing to the path.</param>
         /// <returns>A smoothed list of world positions.</returns>
         public SwiftList<Vector3d> SmoothPath(
-            SwiftList<Node> rawNodePath, 
+            SwiftList<Node> rawNodePath,
             Node end,
             Fixed64 unitSize,
             bool useSplineSmoothing)

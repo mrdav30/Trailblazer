@@ -6,7 +6,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Tests.Pathing
 {
-    [Collection("TraversableNavMapCollection")]
+    [Collection("PathingCollection")]
     public class PathingNavigationMapTests
     {
         [Fact]

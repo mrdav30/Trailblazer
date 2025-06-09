@@ -12,9 +12,9 @@ namespace Trailblazer.Pathing
     {
         public bool AllowUnwalkable { get; set; }
 
-        public Node Start { get; set; }
+        public Voxel Start { get; set; }
 
-        public Node End { get; set; }
+        public Voxel End { get; set; }
 
         public readonly bool HasZeroDisplacement => Start == null || End == null || Start.SpawnToken == End.SpawnToken;
 
@@ -23,8 +23,8 @@ namespace Trailblazer.Pathing
         public int? MaxPathSearchRange { get; set; }
 
         /// <summary>
-        /// The maximum Y-axis height delta a unit can step or climb per node.
-        /// Nodes exceeding this are ignored even if walkable and adjacent.
+        /// The maximum Y-axis height delta a unit can step or climb per voxel.
+        /// Voxels exceeding this are ignored even if walkable and adjacent.
         /// </summary>
         public Fixed64 MaxClimbHeight { get; set; }
 
@@ -40,8 +40,8 @@ namespace Trailblazer.Pathing
         public static AStarPathRequest CreateEmpty() => Create(null, null);
 
         public static AStarPathRequest Create(
-            Node start, 
-            Node end, 
+            Voxel start, 
+            Voxel end, 
             Fixed64? unitSize = null, 
             HeuristicMethod heuristic = HeuristicMethod.Manhattan, 
             bool allowUnwalkable = false)
@@ -50,10 +50,10 @@ namespace Trailblazer.Pathing
             {
                 Start = start,
                 End = end,
-                UnitSize = unitSize ?? GlobalGridManager.NodeSize,
+                UnitSize = unitSize ?? GlobalGridManager.VoxelSize,
                 Heuristic = heuristic,
                 AllowUnwalkable = allowUnwalkable,
-                MaxClimbHeight = GlobalGridManager.NodeSize,
+                MaxClimbHeight = GlobalGridManager.VoxelSize,
                 UseSplineSmoothing = false,
                 MaxPathSearchRange = null
             };

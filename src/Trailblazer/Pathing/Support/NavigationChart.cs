@@ -18,9 +18,15 @@ namespace Trailblazer.Pathing
         public readonly string Name;
 
         /// <summary>
-        /// The origin point (world-space) of the grid.
+        /// The minimum world-space bounds of the grid. Determines the starting point for grid indexing.
         /// </summary>
-        public readonly Vector3d Origin;
+        public readonly Vector3d MinBounds;
+
+        /// <summary>
+        /// The maximum world-space bounds of the grid, computed as MinBounds + grid size * Interval.
+        /// Represents the exclusive upper bound of the grid.
+        /// </summary>
+        public readonly Vector3d MaxBounds;
 
         /// <summary>
         /// The distance between grid points along each axis.
@@ -61,16 +67,26 @@ namespace Trailblazer.Pathing
         /// <param name="sizeX">Number of cells along the X axis.</param>
         /// <param name="sizeY">Number of cells along the Y axis.</param>
         /// <param name="sizeZ">Number of cells along the Z axis.</param>
-        /// <param name="origin">World position of the grid origin.</param>
+        /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
+        /// <param name="maxBounds">The maximum world-space bounds of the grid.</param>
         /// <param name="interval">Distance between adjacent grid points.</param>
-        public NavigationChart(string name, bool[] map, int sizeX, int sizeY, int sizeZ, Vector3d origin, Fixed64 interval)
+        public NavigationChart(
+            string name,
+            bool[] map,
+            int sizeX,
+            int sizeY,
+            int sizeZ,
+            Vector3d minBounds,
+            Vector3d maxBounds,
+            Fixed64 interval)
         {
             Name = name;
             _map = map;
             SizeX = sizeX;
             SizeY = sizeY;
             SizeZ = sizeZ;
-            Origin = origin;
+            MinBounds = minBounds;
+            MaxBounds = maxBounds;
             Interval = interval;
         }
 
@@ -94,9 +110,9 @@ namespace Trailblazer.Pathing
         /// <returns>True if the position is within bounds; otherwise, false.</returns>
         public bool TryWorldToIndex(Vector3d pos, out int x, out int y, out int z)
         {
-            x = (int)((pos.x - Origin.x) / Interval);
-            y = (int)((pos.y - Origin.y) / Interval);
-            z = (int)((pos.z - Origin.z) / Interval);
+            x = (int)((pos.x - MinBounds.x) / Interval);
+            y = (int)((pos.y - MinBounds.y) / Interval);
+            z = (int)((pos.z - MinBounds.z) / Interval);
 
             bool valid = x >= 0 && x < SizeX &&
                          y >= 0 && y < SizeY &&
@@ -137,27 +153,33 @@ namespace Trailblazer.Pathing
                         if (_map[ToIndex(x, y, z)])
                         {
                             yield return new Vector3d(
-                                Origin.x + x * Interval,
-                                Origin.y + y * Interval,
-                                Origin.z + z * Interval
+                                MinBounds.x + x * Interval,
+                                MinBounds.y + y * Interval,
+                                MinBounds.z + z * Interval
                             );
                         }
                     }
         }
 
         /// <summary>
-        /// Creates a navigation chart from a 3D boolean array representing walkable nodes.
+        /// Creates a navigation chart from a 3D boolean array representing walkable voxels.
         /// </summary>
         /// <param name="name">Name identifier for the chart.</param>
         /// <param name="sourceMap">3D map of walkable cells (true = walkable).</param>
-        /// <param name="origin">The origin world-space coordinate of the grid.</param>
+        /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
         /// <param name="interval">The spacing between each grid point.</param>
         /// <returns>A constructed NavigationChart instance.</returns>
-        public static NavigationChart From3D(string name, bool[,,] sourceMap, Vector3d origin, Fixed64 interval)
+        public static NavigationChart From3D(string name, bool[,,] sourceMap, Vector3d minBounds, Fixed64 interval)
         {
             int sizeY = sourceMap.GetLength(0);
             int sizeX = sourceMap.GetLength(1);
             int sizeZ = sourceMap.GetLength(2);
+
+            Vector3d maxBounds = minBounds + new Vector3d(
+                sizeX * interval,
+                sizeY * interval,
+                sizeZ * interval
+            );
 
             var flat = new bool[sizeX * sizeY * sizeZ];
             for (int y = 0; y < sizeY; y++)
@@ -165,7 +187,34 @@ namespace Trailblazer.Pathing
                     for (int z = 0; z < sizeZ; z++)
                         flat[(y * sizeX * sizeZ) + (x * sizeZ) + z] = sourceMap[y, x, z];
 
-            return new NavigationChart(name, flat, sizeX, sizeY, sizeZ, origin, interval);
+            return new NavigationChart(name, flat, sizeX, sizeY, sizeZ, minBounds, maxBounds, interval);
+        }
+    }
+
+    public static class NavigationChartDebugExtensions
+    {
+        public static void PrintWalkablePositions(this NavigationChart chart)
+        {
+            Console.WriteLine($"Walkable Positions for Chart [{chart.Name}]:");
+
+            foreach (Vector3d pos in chart.GetWalkablePositions())
+                Console.WriteLine($"  ({pos.x}, {pos.y}, {pos.z})");
+        }
+
+        public static void PrintXZPlane(this NavigationChart chart, int yLevel)
+        {
+            Console.WriteLine($"XZ Plane at Y={yLevel} for Chart [{chart.Name}]:");
+
+            for (int z = (int)chart.MinBounds.z; z < (int)chart.MaxBounds.z; z++)
+            {
+                for (int x = (int)chart.MinBounds.x; x < (int)chart.MaxBounds.x; x++)
+                {
+                    Vector3d pos = new(x, yLevel, z);
+                    bool walkable = chart.IsWalkable(pos);
+                    Console.Write(walkable ? "O " : ". ");
+                }
+                Console.WriteLine();
+            }
         }
     }
 }

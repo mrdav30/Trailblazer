@@ -11,13 +11,13 @@ namespace Trailblazer.Pathing
     /// </summary>
     public struct FlowFieldPathRequest : IPathRequest, IEquatable<FlowFieldPathRequest>
     {
-        public const int DefaultSearchRange = 10;
+        public const int DefaultExtraFloodRange = 10;
 
         public bool AllowUnwalkable { get; set; }
 
-        public Node Start { get; set; }
+        public Voxel Start { get; set; }
 
-        public Node End { get; set; }
+        public Voxel End { get; set; }
 
         public readonly bool HasZeroDisplacement => Start == null || End == null || Start.SpawnToken == End.SpawnToken;
 
@@ -25,26 +25,28 @@ namespace Trailblazer.Pathing
 
         public int? MaxPathSearchRange { get; set; }
 
-        public int FieldSearchRange { get; set; }
+        /// <summary>
+        /// Limits how much extra distance the flood will expand after the target is reached.
+        /// </summary>
+        public int ExtraFloodRange { get; set; }
 
         public readonly int RequestCacheKey => GetHashCode();
 
         public static FlowFieldPathRequest CreateEmpty() => Create(null, null);
 
         public static FlowFieldPathRequest Create(
-            Node start, 
-            Node end, 
+            Voxel start, 
+            Voxel end, 
             Fixed64? unitSize = null,
             bool allowUnwalkable = false)
         {
             return new FlowFieldPathRequest()
             {
-
                 Start = start,
                 End = end,
-                UnitSize = unitSize ?? GlobalGridManager.NodeSize,
+                UnitSize = unitSize ?? GlobalGridManager.VoxelSize,
                 AllowUnwalkable = allowUnwalkable,
-                FieldSearchRange = DefaultSearchRange,
+                ExtraFloodRange = DefaultExtraFloodRange,
                 MaxPathSearchRange = null
             };
         }
@@ -56,12 +58,12 @@ namespace Trailblazer.Pathing
 
         public override readonly int GetHashCode()
         {
-            // Note: For FlowFields we don't care about the start node (only that the FlowField contains it)
+            // Note: For FlowFields we don't care about the start voxel (only that the FlowField contains it)
             return (
                 End?.SpawnToken ?? 0,
                 UnitSize,
                 AllowUnwalkable,
-                FieldSearchRange,
+                ExtraFloodRange,
                 MaxPathSearchRange ?? -1
             ).CombineHashCodes();
         }

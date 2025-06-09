@@ -36,28 +36,37 @@ namespace Trailblazer.Pathing
         private int _greatestDistance;
 
         /// <summary>
-        /// The distance from the end node to the starting node during flood fill.
-        /// Used to define the flood radius.
-        /// </summary>
-        private int _distanceToStart;
-
-        /// <summary>
         /// Tracks partitions that were affected during the flood fill.
         /// These will be used to construct the final flow field result.
         /// </summary>
         private readonly SwiftHashSet<PathPartition> _marked = new();
 
         /// <summary>
-        /// Attempts to create a shared flow field path from the start to the end node specified in the request.
+        /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
         /// </summary>
         /// <param name="request">A flow field path request containing the start, end, and search parameters.</param>
         /// <param name="result">A dictionary of flow fields indexed by spawn token.</param>
         /// <returns><c>true</c> if a valid path is found; otherwise <c>false</c>.</returns>
-        public bool FindPath(FlowFieldPathRequest request, out SwiftDictionary<int, FlowField> result)
+        public bool FindPath(
+            FlowFieldPathRequest request,
+            out SwiftDictionary<int, FlowField> result) => FindPath(request, out result, out _);
+
+        /// <summary>
+        /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
+        /// </summary>
+        /// <param name="request">A flow field path request containing the start, end, and search parameters.</param>
+        /// <param name="result">A dictionary of flow fields indexed by spawn token.</param>
+        /// <param name="distanceToTarget">The distance between the start and end voxel.</param>
+        /// <returns><c>true</c> if a valid path is found; otherwise <c>false</c>.</returns>
+        public bool FindPath(
+            FlowFieldPathRequest request, 
+            out SwiftDictionary<int, FlowField> result,
+            out int distanceToTarget)
         {
+            distanceToTarget = 0;
             result = null;
-            if (!request.End.TryGetPartition(out PathPartition targetPartition)
-                || request.Start.SpawnToken == request.End.SpawnToken)
+            if (request.HasZeroDisplacement ||
+                !request.End.TryGetPartition(out PathPartition targetPartition))
             {
                 return false;
             }
@@ -68,39 +77,43 @@ namespace Trailblazer.Pathing
             PathHeap.FastClear();
 
             _greatestDistance = 0;
-            _distanceToStart = 0;
 
-            // Start from the end and move towards the start node
+            // Start from the end and move towards the start voxel
             PathHeap.Add(targetPartition);
 
-            if(!FloodPath())
+            if(!FloodPath(out distanceToTarget))
                 return false;
 
             if (_marked.Count > 0)
-                result = GenerateFlowFields(_request.End);
+                result = GenerateFlowFields(_request.End, distanceToTarget);
 
             return result.Count > 0;
         }
 
         /// <summary>
         /// Executes the wavefront expansion (flood fill) phase of the flow field generation algorithm.
-        /// Starts from the goal and expands outward until the start node is reached or search range is exceeded.
+        /// Starts from the goal and expands outward until the start voxel is reached or search range is exceeded.
         /// </summary>
-        /// <returns><c>true</c> if the start node is reached within the maximum range; otherwise <c>false</c>.</returns>
-        public bool FloodPath()
+        /// <returns><c>true</c> if the start voxel is reached within the maximum range; otherwise <c>false</c>.</returns>
+        public bool FloodPath(out int distanceToStart)
         {
             bool targetReached = false;
+            distanceToStart = 0;
 
             int iterations = 0;
+            int searchSize = _request.MaxPathSearchRange ?? PathManager.DefaultMaxPathSearchRange;
             while (PathHeap.RemoveFirst(out PathPartition current) 
-                && iterations++ < _request.MaxPathSearchRange)
+                && iterations++ < searchSize)
             {
-                // Check if we found our way to the start node
-                if (!targetReached && current.NodeSpawnToken == _request.End.SpawnToken)
+                // Check if we found our way to the start voxel
+                if (!targetReached && current.VoxelSpawnToken == _request.Start.SpawnToken)
                 {
-                    _distanceToStart = current.HeapCost;
+                    distanceToStart = current.HeapCost;
                     targetReached = true;
                 }
+
+                if (targetReached && current.HeapCost >= distanceToStart + _request.ExtraFloodRange)
+                    break;
 
                 if (current.HeapCost > _greatestDistance)
                     _greatestDistance = current.HeapCost;
@@ -108,9 +121,6 @@ namespace Trailblazer.Pathing
                 AnalyzeNeighborDistance(current, _request.UnitSize);
 
                 PathHeap.SetClosed(current);
-
-                if (targetReached && current.HeapCost > _distanceToStart + _request.FieldSearchRange)
-                    return true;
             }
 
             return targetReached;
@@ -124,9 +134,9 @@ namespace Trailblazer.Pathing
         /// <param name="unitSize">The size of the navigating agent.</param>
         public void AnalyzeNeighborDistance(PathPartition current, Fixed64 unitSize)
         {
-            // Check each straight line neighbour of this node (no diagonals)
-            // We will only ever visit every node once as we are always visiting nodes in the most efficient order
-            foreach (TraversableNode neighbor in PathManager.GetWalkableStraightNeighbors(current.ParentCoordinate))
+            // Check each straight line neighbour of this voxel (no diagonals)
+            // We will only ever visit every voxel once as we are always visiting voxels in the most efficient order
+            foreach (TraversableVoxel neighbor in PathManager.GetWalkableStraightNeighbors(current.GlobalIndex))
             {
                 if (PathHeap.IsClosed(neighbor.Partition) || neighbor.Partition.Unpassable(unitSize))
                     continue;
@@ -150,36 +160,41 @@ namespace Trailblazer.Pathing
         /// Converts the results of the flood fill phase into directional flow fields pointing toward the goal.
         /// Each partition is assigned a direction vector blending shortest path and direct-to-goal direction.
         /// </summary>
-        /// <param name="end">The goal node for the flow field.</param>
-        /// <returns>A dictionary of directional flow field data indexed by node spawn tokens.</returns>
-        public SwiftDictionary<int, FlowField> GenerateFlowFields(Node end)
+        /// <param name="end">The goal voxel for the flow field.</param>
+        /// <param name="distanceToStart">The distance between the start and end voxel.</param>
+        /// <returns>A dictionary of directional flow field data indexed by voxel spawn tokens.</returns>
+        public SwiftDictionary<int, FlowField> GenerateFlowFields(Voxel end, int distanceToStart)
         {
-            SwiftDictionary<int, FlowField> output = new();
-
-            Fixed64 totalDistance = _distanceToStart + Fixed64.One; // total flood radius
-            foreach (PathPartition current in _marked)
+            SwiftDictionary<int, FlowField> output = new()
             {
-                if (current.NodeSpawnToken == end.SpawnToken)
+                // Ensure end voxel is include, it shouldn't point anywhere
                 {
-                    // End node shouldn't point anywhere
-                    output.Add(current.NodeSpawnToken, new FlowField()
+                    end.SpawnToken,
+                    new FlowField()
                     {
                         Direction = Vector3d.Zero,
                         IsGoal = true
-                    });
-                    continue;
+                    }
                 }
+            };
+
+            Fixed64 totalDistance = distanceToStart + Fixed64.One; // total flood radius
+            foreach (PathPartition current in _marked)
+            {
+                // end voxel shouldn't be marked, but just in case...
+                if (current.VoxelSpawnToken == end.SpawnToken)
+                    continue;
 
                 FlowField currentFlow = new()
                 {
-                    NodeCoordinates = current.ParentCoordinate,
+                    GlobalIndex = current.GlobalIndex,
                     DistanceToTarget = current.HeapCost
                 };
 
                 // Go through all neighbours and find the one with the lowest distance
                 PathPartition minPartition = null;
                 int minDistance = _greatestDistance;
-                foreach(TraversableNode neighbor in PathManager.GetWalkableNeighbors(current.ParentCoordinate))
+                foreach(TraversableVoxel neighbor in PathManager.GetWalkableNeighbors(current.GlobalIndex))
                 {
                     // check closed heap version to ensure neighbor was part of flood phase
                     if (!PathHeap.IsClosed(neighbor.Partition)) 
@@ -199,15 +214,15 @@ namespace Trailblazer.Pathing
                     Fixed64 alpha = FixedMath.Clamp01((totalDistance - currentFlow.DistanceToTarget) / totalDistance); // closer = alpha → 1
 
                     // blend with the lowest-cost vector
-                    Vector3d direct = (end.WorldPosition - current.NodePosition).Normalize();
-                    Vector3d field = (minPartition.NodePosition - current.NodePosition).Normalize();
+                    Vector3d direct = (end.WorldPosition - current.VoxelPosition).Normalize();
+                    Vector3d field = (minPartition.VoxelPosition - current.VoxelPosition).Normalize();
 
                     Vector3d blended = field * alpha + direct * (Fixed64.One - alpha);
 
                     currentFlow.Direction = blended.Normalize();
                 }
 
-                output.Add(current.NodeSpawnToken, currentFlow);
+                output.Add(current.VoxelSpawnToken, currentFlow);
             }
 
             return output;
@@ -222,22 +237,25 @@ namespace Trailblazer.Pathing
         /// <returns>An interpolated directional vector.</returns>
         public static Vector3d SampleFlowVector(Vector3d worldPosition, SwiftDictionary<int, FlowField> fields)
         {
+            if (fields == null || fields.Count == 0)
+                return Vector3d.Zero;
+
             // Get bottom-left corner of the square the agent is standing in
             Vector3d corner = new(
-                FixedMath.Floor(worldPosition.x / GlobalGridManager.NodeSize) * GlobalGridManager.NodeSize,
-                FixedMath.Floor(worldPosition.y / GlobalGridManager.NodeSize) * GlobalGridManager.NodeSize,
-                FixedMath.Floor(worldPosition.z / GlobalGridManager.NodeSize) * GlobalGridManager.NodeSize
+                FixedMath.Floor(worldPosition.x / GlobalGridManager.VoxelSize) * GlobalGridManager.VoxelSize,
+                FixedMath.Floor(worldPosition.y / GlobalGridManager.VoxelSize) * GlobalGridManager.VoxelSize,
+                FixedMath.Floor(worldPosition.z / GlobalGridManager.VoxelSize) * GlobalGridManager.VoxelSize
             );
 
             // Compute normalized offset in cell (0..1)
-            Fixed64 dx = (worldPosition.x - corner.x) / GlobalGridManager.NodeSize;
-            Fixed64 dz = (worldPosition.z - corner.z) / GlobalGridManager.NodeSize;
+            Fixed64 dx = (worldPosition.x - corner.x) / GlobalGridManager.VoxelSize;
+            Fixed64 dz = (worldPosition.z - corner.z) / GlobalGridManager.VoxelSize;
 
-            // Sample the 4 surrounding node centers
+            // Sample the 4 surrounding voxel centers
             Vector3d bottomLeft = corner;
-            Vector3d bottomRight = corner + new Vector3d(GlobalGridManager.NodeSize, Fixed64.Zero, Fixed64.Zero);
-            Vector3d topLeft = corner + new Vector3d(Fixed64.Zero, Fixed64.Zero, GlobalGridManager.NodeSize);
-            Vector3d topRight = corner + new Vector3d(GlobalGridManager.NodeSize, Fixed64.Zero, GlobalGridManager.NodeSize);
+            Vector3d bottomRight = corner + new Vector3d(GlobalGridManager.VoxelSize, Fixed64.Zero, Fixed64.Zero);
+            Vector3d topLeft = corner + new Vector3d(Fixed64.Zero, Fixed64.Zero, GlobalGridManager.VoxelSize);
+            Vector3d topRight = corner + new Vector3d(GlobalGridManager.VoxelSize, Fixed64.Zero, GlobalGridManager.VoxelSize);
 
             // Get flow vectors
             Vector3d f00 = GetFlowVector(bottomLeft, fields);
@@ -255,33 +273,36 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Attempts to locate the closest valid node from which to begin flow-based movement.
+        /// Attempts to locate the closest valid voxel from which to begin flow-based movement.
         /// Useful for finding an initial entry point to the flow field.
         /// </summary>
         /// <param name="origin">The world-space origin to search from.</param>
-        /// <param name="flowFields">Flow field data indexed by node spawn token.</param>
-        /// <param name="result">The closest valid node, if found.</param>
+        /// <param name="fields">Flow field data indexed by voxel spawn token.</param>
+        /// <param name="result">The closest valid voxel, if found.</param>
         /// <param name="range">Maximum range to search.</param>
         /// <returns><c>true</c> if a nearby flow field anchor is found; otherwise <c>false</c>.</returns>
         public static bool TryGetNearestFlowAnchor(
             Vector3d origin,
-            SwiftDictionary<int, FlowField> flowFields,
-            out Node result,
+            SwiftDictionary<int, FlowField> fields,
+            out Voxel result,
             double range)
         {
             result = null;
+            if (fields == null || fields.Count == 0)
+                return false;
+
             Fixed64 minDistanceSq = new(range * range);
             bool found = false;
 
-            foreach (FlowField flow in flowFields.Values)
+            foreach (FlowField flow in fields.Values)
             {
-                if (!GlobalGridManager.TryGetGridAndNode(flow.NodeCoordinates, out _, out Node flowNode))
+                if (!GlobalGridManager.TryGetGridAndVoxel(flow.GlobalIndex, out _, out Voxel flowVoxel))
                     continue;
 
-                Fixed64 distSq = Vector3d.SqrDistance(origin, flowNode.WorldPosition);
+                Fixed64 distSq = Vector3d.SqrDistance(origin, flowVoxel.WorldPosition);
                 if (distSq <= minDistanceSq)
                 {
-                    result = flowNode;
+                    result = flowVoxel;
                     minDistanceSq = distSq;
                     found = true;
                 }
@@ -298,9 +319,9 @@ namespace Trailblazer.Pathing
         /// <returns>The direction vector, or <c>Vector3d.Zero</c> if no field exists.</returns>
         public static Vector3d GetFlowVector(Vector3d position, SwiftDictionary<int, FlowField> fields)
         {
-            if (GlobalGridManager.TryGetGridAndNode(position, out _, out Node node))
+            if (GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
             {
-                if (fields.TryGetValue(node.SpawnToken, out FlowField field))
+                if (fields.TryGetValue(voxel.SpawnToken, out FlowField field))
                     return field.Direction;
             }
             return Vector3d.Zero;

@@ -9,10 +9,10 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing
 {
     /// <summary>
-    /// Represents a partition attached to a Node that provides additional data used during pathfinding,
+    /// Represents a partition attached to a Voxel that provides additional data used during pathfinding,
     /// such as clearance information, movement cost, and neighbor traversal helpers.
     /// </summary>
-    public class PathPartition : INodePartition
+    public class PathPartition : IVoxelPartition
     {
         #region Constants
 
@@ -39,22 +39,22 @@ namespace Trailblazer.Pathing
         #endregion
 
         /// <summary>
-        /// The global coordinate of the node this partition is attached to.
+        /// The global coordinate of the voxel this partition is attached to.
         /// </summary>
-        public CoordinatesGlobal ParentCoordinate { get; set; }
+        public GlobalVoxelIndex GlobalIndex { get; set; }
 
         /// <summary>
-        /// The spawn token that uniquely identifies this node.
+        /// The spawn token that uniquely identifies this voxel.
         /// </summary>
-        public int NodeSpawnToken { get; private set; }
+        public int VoxelSpawnToken { get; private set; }
 
         /// <summary>
-        /// The world-space position of the node.
+        /// The world-space position of the voxel.
         /// </summary>
-        public Vector3d NodePosition { get; private set; }
+        public Vector3d VoxelPosition { get; private set; }
 
         /// <summary>
-        /// Indicates whether the node has been partitioned and is in use.
+        /// Indicates whether the voxel has been partitioned and is in use.
         /// </summary>
         public bool IsPartitioned { get; set; }
 
@@ -66,7 +66,7 @@ namespace Trailblazer.Pathing
         public LinearDirection ClearanceDirection { get; private set; }
 
         /// <summary>
-        /// The number of traversable connections until the nearest unwalkable node.
+        /// The number of traversable connections until the nearest unwalkable voxel.
         /// </summary>
         public Fixed64 ClearanceDegree { get; private set; }
 
@@ -92,13 +92,13 @@ namespace Trailblazer.Pathing
         public uint HeapVersion { get; set; }
 
         /// <summary>
-        /// A version used to track closed nodes in the heap for the current search.
+        /// A version used to track closed voxels in the heap for the current search.
         /// </summary>
         [Transient]
         public uint ClosedHeapVersion { get; set; }
 
         /// <summary>
-        /// The index of this node in the heap.
+        /// The index of this voxel in the heap.
         /// </summary>
         [Transient]
         public uint HeapIndex { get; set; }
@@ -119,15 +119,15 @@ namespace Trailblazer.Pathing
         public bool HasAnyOwners => _mapOwners.Count > 0;
 
         /// <summary>
-        /// Called when this partition is attached to a node, initializing key references and state.
+        /// Called when this partition is attached to a voxel, initializing key references and state.
         /// </summary>
-        public void OnAddToNode(Node node)
+        public void OnAddToVoxel(Voxel voxel)
         {
-            node.OnObstacleChange += HandleChange;
+            voxel.OnObstacleChange += HandleChange;
 
-            ParentCoordinate = node.GlobalCoordinates;
-            NodeSpawnToken = node.SpawnToken;
-            NodePosition = node.WorldPosition;
+            GlobalIndex = voxel.GlobalIndex;
+            VoxelSpawnToken = voxel.SpawnToken;
+            VoxelPosition = voxel.WorldPosition;
 
             ClearanceDegree = Fixed64.MAX_VALUE;
             ClearanceDirection = LinearDirection.None;
@@ -137,9 +137,9 @@ namespace Trailblazer.Pathing
 
         /// This will call <see cref="Reset"/> as an action on release
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void OnRemoveFromNode(Node node)
+        public void OnRemoveFromVoxel(Voxel voxel)
         {
-            node.OnObstacleChange -= HandleChange;
+            voxel.OnObstacleChange -= HandleChange;
             PathManager.PartitionPool.Release(this);
         }
 
@@ -148,8 +148,8 @@ namespace Trailblazer.Pathing
         /// </summary>
         public void Reset()
         {
-            ParentCoordinate = default;
-            NodeSpawnToken = 0;
+            GlobalIndex = default;
+            VoxelSpawnToken = 0;
 
             IsClearanceValid = false;
 
@@ -162,9 +162,9 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Handles any obstacle changes on the associated node and invalidates clearance as needed.
+        /// Handles any obstacle changes on the associated voxel and invalidates clearance as needed.
         /// </summary>
-        public void HandleChange(GridChange changeType, Node node)
+        public void HandleChange(GridChange changeType, Voxel voxel)
         {
             // regardless of change type, we need to update clearance
 
@@ -194,20 +194,20 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Validates or recalculates the clearance degree from nearby nodes.
+        /// Validates or recalculates the clearance degree from nearby voxels.
         /// </summary>
         private void CheckNeighborClearance()
         {
             if (IsClearanceValid)
                 return;
 
-            if (!GlobalGridManager.TryGetGridAndNode(ParentCoordinate, out _, out Node node))
+            if (!GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out Voxel voxel))
             {
-                Console.WriteLine($"Invalidate coordiante provided to setup partition: {ParentCoordinate}");
+                Console.WriteLine($"Invalidate coordiante provided to setup partition: {GlobalIndex}");
                 return;
             }
 
-            if (node.IsBlocked)
+            if (voxel.IsBlocked)
             {
                 ClearanceDegree = Fixed64.Zero;
                 ClearanceDirection = LinearDirection.None;
@@ -216,7 +216,7 @@ namespace Trailblazer.Pathing
             }
 
             //  refresh source in case the map changed
-            if (node.TryGetNeighborFromDirection(ClearanceDirection, out Node source)
+            if (voxel.TryGetNeighborFromDirection(ClearanceDirection, out Voxel source)
                 && source.TryGetPartition(out PathPartition sourcePartition))
             {
                 Fixed64 prevSourceDegree = sourcePartition.ClearanceDegree;
@@ -239,7 +239,7 @@ namespace Trailblazer.Pathing
             //TODO: Test this thoroughly and visualize
             foreach (LinearDirection direction in Enum.GetValues(typeof(LinearDirection)))
             {
-                if (!node.TryGetNeighborFromDirection(direction, out Node neighbor)
+                if (!voxel.TryGetNeighborFromDirection(direction, out Voxel neighbor)
                     || neighbor.IsBlocked
                     || !neighbor.TryGetPartition(out PathPartition neighborPartition))
                 {
@@ -283,18 +283,18 @@ namespace Trailblazer.Pathing
         #endregion
 
         /// <summary>
-        /// Calculates the heuristic cost for the current node based on the target node and the heuristic method used.
+        /// Calculates the heuristic cost for the current voxel based on the target voxel and the heuristic method used.
         /// This implementation takes into account the X, Y, and Z axes for pathfinding.
         /// </summary>
         public static int CalculateHeuristic(
-            Vector3d currentNode,
-            Vector3d targetNode,
+            Vector3d currentVoxel,
+            Vector3d targetVoxel,
             HeuristicMethod heuristicMethod)
         {
             Fixed64 heuristicCost = Fixed64.MAX_VALUE;
 
             // Calculate the absolute distance in each axis
-            Vector3d dst = Vector3d.Abs(currentNode - targetNode);
+            Vector3d dst = Vector3d.Abs(currentVoxel - targetVoxel);
 
             switch (heuristicMethod)
             {
@@ -323,7 +323,7 @@ namespace Trailblazer.Pathing
             return heuristicCost.CeilToInt();
         }
  
-        public override int GetHashCode() => NodeSpawnToken;
+        public override int GetHashCode() => VoxelSpawnToken;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ClearHeapState()

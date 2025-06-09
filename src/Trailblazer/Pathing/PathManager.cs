@@ -13,11 +13,13 @@ namespace Trailblazer.Pathing
 {
     /// <summary>
     /// Manages registration, initialization, and validation of navigation maps,
-    /// as well as providing global pathfinding utilities like node validation,
+    /// as well as providing global pathfinding utilities like voxel validation,
     /// path necessity checks, and partition pooling.
     /// </summary>
     public static class PathManager
     {
+        public static readonly int DefaultMaxPathSearchRange = 1000;
+
         /// <summary>
         /// Internal dictionary of all registered navigation charts, keyed by their unique names.
         /// </summary>
@@ -37,61 +39,61 @@ namespace Trailblazer.Pathing
         );
 
         /// <summary>
-        /// Attempts to get valid start and end nodes based on provided world positions.
+        /// Attempts to get valid start and end voxels based on provided world positions.
         /// Falls back to the closest walkable neighbor if necessary.
         /// </summary>
         /// <param name="start">The start position in world space.</param>
         /// <param name="end">The end position in world space.</param>
-        /// <param name="startNode">Resolved start node.</param>
-        /// <param name="endNode">Resolved end node.</param>
-        /// <returns>True if both nodes were resolved successfully; otherwise, false.</returns>
+        /// <param name="startVoxel">Resolved start voxel.</param>
+        /// <param name="endVoxel">Resolved end voxel.</param>
+        /// <returns>True if both voxels were resolved successfully; otherwise, false.</returns>
         public static bool GetValidPathRequest(
             Vector3d start, 
             Vector3d end, 
-            out Node startNode, 
-            out Node endNode)
+            out Voxel startVoxel, 
+            out Voxel endVoxel)
         {
-            endNode = null;
-            if (!GlobalGridManager.TryGetGridAndNode(start, out _, out startNode))
+            endVoxel = null;
+            if (!GlobalGridManager.TryGetGridAndVoxel(start, out _, out startVoxel))
             {
-                Console.WriteLine("Unable to find a valid start node for {startPos}");
+                Console.WriteLine("Unable to find a valid start voxel for {startPos}");
                 return false;
             }
 
-            if (startNode.IsBlocked || !startNode.TryGetPartition<PathPartition>(out _))
+            if (startVoxel.IsBlocked || !startVoxel.TryGetPartition<PathPartition>(out _))
             {
-                if (!NodeFinder.TryGetClosestWalkableNeighbor(startNode, out Node closestNeighbor))
+                if (!VoxelFinder.TryGetClosestWalkableNeighbor(startVoxel, out Voxel closestNeighbor))
                     return false;
-                startNode = closestNeighbor;
+                startVoxel = closestNeighbor;
             }
 
-            if (!GlobalGridManager.TryGetGridAndNode(end, out _, out endNode))
+            if (!GlobalGridManager.TryGetGridAndVoxel(end, out _, out endVoxel))
             {
-                Console.WriteLine("Unable to find a valid end node for {targetPos}");
+                Console.WriteLine("Unable to find a valid end voxel for {targetPos}");
                 return false;
             }
 
-            if (endNode.IsBlocked || !endNode.TryGetPartition<PathPartition>(out _))
+            if (endVoxel.IsBlocked || !endVoxel.TryGetPartition<PathPartition>(out _))
             {
-                if (!NodeFinder.TryGetClosestWalkableNeighbor(endNode, out Node closestNeighbor))
+                if (!VoxelFinder.TryGetClosestWalkableNeighbor(endVoxel, out Voxel closestNeighbor))
                     return false;
-                endNode = closestNeighbor;
+                endVoxel = closestNeighbor;
             }
 
             return true;
         }
 
         /// <summary>
-        /// Determines the maximum number of nodes to search based on the start and end node's grid sizes.
+        /// Determines the maximum number of voxels to search based on the start and end voxel's grid sizes.
         /// </summary>
-        /// <param name="start">The start node.</param>
-        /// <param name="end">The end node.</param>
+        /// <param name="start">The start voxel.</param>
+        /// <param name="end">The end voxel.</param>
         /// <param name="maxSearchSize">The output max search size.</param>
-        /// <returns>True if both nodes belong to valid grids; otherwise, false.</returns>
-        public static bool GetMaxSearchSize(Node start, Node end, out int maxSearchSize)
+        /// <returns>True if both voxels belong to valid grids; otherwise, false.</returns>
+        public static bool GetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)
         {
-            if (!GlobalGridManager.TryGetGrid(start.GlobalCoordinates.GridIndex, out Grid startGrid) 
-                || !GlobalGridManager.TryGetGrid(end.GlobalCoordinates.GridIndex, out Grid endGrid))
+            if (!GlobalGridManager.TryGetGrid(start.GlobalIndex.GridIndex, out VoxelGrid startGrid) 
+                || !GlobalGridManager.TryGetGrid(end.GlobalIndex.GridIndex, out VoxelGrid endGrid))
             {
                 maxSearchSize = 0;
                 return false;
@@ -102,24 +104,24 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Checks if a path is needed between the start and end positions based on traced nodes and unit size.
+        /// Checks if a path is needed between the start and end positions based on traced voxels and unit size.
         /// </summary>
         /// <param name="startPos">The starting position.</param>
         /// <param name="endPos">The destination position.</param>
         /// <param name="unitSize">The size of the navigating unit.</param>
-        /// <param name="allowUnwalkable">Whether to permit unwalkable nodes.</param>
+        /// <param name="allowUnwalkable">Whether to permit unwalkable voxels.</param>
         /// <returns>True if a path is required; otherwise, false.</returns>
         public static bool NeedsPath(Vector3d startPos, Vector3d endPos, Fixed64 unitSize, bool allowUnwalkable = false)
         {
-            foreach (GridNodeSet gridNodeSet in GridTracer.TraceLine(startPos, endPos))
+            foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(startPos, endPos))
             {
-                foreach (Node node in gridNodeSet.Nodes)
+                foreach (Voxel voxel in gridVoxelSet.Voxels)
                 {
-                    // A path is required if a node doesn't exist in the traced line
-                    if (!node.TryGetPartition(out PathPartition partition))
+                    // A path is required if a voxel doesn't exist in the traced line
+                    if (!voxel.TryGetPartition(out PathPartition partition))
                         return true;
 
-                    if (!allowUnwalkable && !node.IsBlocked && partition.Unpassable(unitSize))
+                    if (!allowUnwalkable && !voxel.IsBlocked && partition.Unpassable(unitSize))
                         return true;
                 }
             }
@@ -164,7 +166,7 @@ namespace Trailblazer.Pathing
             => _loadedMaps.TryGetValue(name, out map);
 
         /// <summary>
-        /// Initializes all registered navigation maps by assigning walkable nodes to partitions.
+        /// Initializes all registered navigation maps by assigning walkable voxels to partitions.
         /// </summary>
         public static void InitializeAllMaps()
         {
@@ -173,7 +175,7 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Initializes a specific navigation map, assigning nodes to partitions.
+        /// Initializes a specific navigation map, assigning voxels to partitions.
         /// </summary>
         /// <param name="name">The name of the map to initialize.</param>
         public static void InitializeMap(string name)
@@ -189,13 +191,13 @@ namespace Trailblazer.Pathing
 
             foreach (Vector3d pos in map.GetWalkablePositions())
             {
-                if (!GlobalGridManager.TryGetGridAndNode(pos, out _, out Node node))
+                if (!GlobalGridManager.TryGetGridAndVoxel(pos, out _, out Voxel voxel))
                     continue;
 
-                if (!node.TryGetPartition(out PathPartition partition))
+                if (!voxel.TryGetPartition(out PathPartition partition))
                 {
                     partition = PartitionPool.Rent();
-                    node.TryAddPartition(partition);
+                    voxel.TryAddPartition(partition);
                 }
 
                 partition.AddOwner(map.Name);
@@ -205,7 +207,7 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Unloads all registered maps, removing ownerships and partitions from walkable nodes.
+        /// Unloads all registered maps, removing ownerships and partitions from walkable voxels.
         /// </summary>
         public static void UnloadAllMaps()
         {
@@ -239,14 +241,14 @@ namespace Trailblazer.Pathing
 
             foreach (Vector3d position in map.GetWalkablePositions())
             {
-                if (!GlobalGridManager.TryGetGridAndNode(position, out _, out Node node))
+                if (!GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
                     continue;
 
-                if (node.TryGetPartition(out PathPartition partition) && partition.BelongsTo(name))
+                if (voxel.TryGetPartition(out PathPartition partition) && partition.BelongsTo(name))
                 {
                     partition.RemoveOwner(name);
                     if (!partition.HasAnyOwners)
-                        node.TryRemovePartition<PathPartition>();
+                        voxel.TryRemovePartition<PathPartition>();
                 }
             }
 
@@ -275,10 +277,10 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Checks if any edge neighbors of a diagonal neighbor are blocked.
         /// </summary>
-        /// <param name="currentNode">The current node.</param>
+        /// <param name="currentVoxel">The current voxel.</param>
         /// <param name="diagonalIndex">The index of the diagonal neighbor in the 3x3x3 grid.</param>
         /// <returns>True if any edge neighbors are blocked; otherwise, false.</returns>
-        private static bool HasBlockedEdgeNeighbor(Node currentNode, LinearDirection diagonalIndex)
+        private static bool HasBlockedEdgeNeighbor(Voxel currentVoxel, LinearDirection diagonalIndex)
         {
             // Define the relative offsets for the two edge neighbors of each diagonal neighbor
             var edgeOffsets = diagonalIndex switch
@@ -295,7 +297,7 @@ namespace Trailblazer.Pathing
                 // Calculate the linear index of the edge neighbor in the 3x3x3 grid
                 LinearDirection edgeDirection = GlobalGridManager.GetNeighborDirectionFromOffset((xOffset, 0, zOffset));
 
-                if (currentNode.TryGetNeighborFromDirection(edgeDirection, out Node edgeNeighbor))
+                if (currentVoxel.TryGetNeighborFromDirection(edgeDirection, out Voxel edgeNeighbor))
                 {
                     // Check if the edge neighbor is blocked or not walkable
                     if (edgeNeighbor.IsBlocked)
@@ -307,25 +309,25 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Returns all walkable neighbors of the partition’s current node.
+        /// Returns all walkable neighbors of the partition’s current voxel.
         /// </summary>
-        public static IEnumerable<TraversableNode> GetWalkableNeighbors(CoordinatesGlobal coordinates)
+        public static IEnumerable<TraversableVoxel> GetWalkableNeighbors(GlobalVoxelIndex coordinates)
         {
-            if (!GlobalGridManager.TryGetGridAndNode(coordinates, out _, out Node node))
+            if (!GlobalGridManager.TryGetGridAndVoxel(coordinates, out _, out Voxel voxel))
                 yield break;
 
             // Get all neighbors and their associated information
-            foreach (TraversableNode neighbor in WalkableNeighborsOf(node))
+            foreach (TraversableVoxel neighbor in WalkableNeighborsOf(voxel))
                 yield return neighbor;
         }
 
         /// <summary>
-        /// Returns walkable neighbors for a specific node.
+        /// Returns walkable neighbors for a specific voxel.
         /// </summary>
-        public static IEnumerable<TraversableNode> WalkableNeighborsOf(Node node)
+        public static IEnumerable<TraversableVoxel> WalkableNeighborsOf(Voxel voxel)
         {
             // Get all neighbors and their associated information
-            foreach ((LinearDirection direction, Node neighbor) in node.GetNeighbors())
+            foreach ((LinearDirection direction, Voxel neighbor) in voxel.GetNeighbors())
             {
                 if (neighbor == null) continue;
 
@@ -333,9 +335,9 @@ namespace Trailblazer.Pathing
                 if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
                     continue;
 
-                yield return new TraversableNode()
+                yield return new TraversableVoxel()
                 {
-                    Node = neighbor,
+                    Voxel = neighbor,
                     Partition = neighborPartition,
                     Direction = direction
                 };
@@ -343,35 +345,35 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Returns all walkable straight (orthogonal) neighbors of the partition’s node.
+        /// Returns all walkable straight (orthogonal) neighbors of the partition’s voxel.
         /// </summary>
-        public static IEnumerable<TraversableNode> GetWalkableStraightNeighbors(CoordinatesGlobal coordinates)
+        public static IEnumerable<TraversableVoxel> GetWalkableStraightNeighbors(GlobalVoxelIndex coordinates)
         {
-            if (!GlobalGridManager.TryGetGridAndNode(coordinates, out _, out Node node))
+            if (!GlobalGridManager.TryGetGridAndVoxel(coordinates, out _, out Voxel voxel))
                 yield break;
 
             // Get all neighbors and their associated information
-            foreach (TraversableNode neighbor in WalkableStraightNeighborsOf(node))
+            foreach (TraversableVoxel neighbor in WalkableStraightNeighborsOf(voxel))
                 yield return neighbor;
         }
 
         /// <summary>
-        /// Returns straight walkable neighbors for a specific node.
+        /// Returns straight walkable neighbors for a specific voxel.
         /// </summary>
-        public static IEnumerable<TraversableNode> WalkableStraightNeighborsOf(Node node)
+        public static IEnumerable<TraversableVoxel> WalkableStraightNeighborsOf(Voxel voxel)
         {
             foreach (LinearDirection direction in Enum.GetValues(typeof(StraightNeighbors)))
             {
-                if (!node.TryGetNeighborFromDirection(direction, out Node neighbor))
+                if (!voxel.TryGetNeighborFromDirection(direction, out Voxel neighbor))
                     continue;
 
                 // Skip blocked neighbors or neighbors that do not have a path partition
                 if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
                     continue;
 
-                yield return new TraversableNode()
+                yield return new TraversableVoxel()
                 {
-                    Node = neighbor,
+                    Voxel = neighbor,
                     Partition = neighborPartition,
                     Direction = direction
                 };
@@ -379,26 +381,26 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Returns all walkable diagonal neighbors of the partition’s node.
+        /// Returns all walkable diagonal neighbors of the partition’s voxel.
         /// </summary>
-        public static IEnumerable<TraversableNode> GetWalkableDiagonalNeighbors(CoordinatesGlobal coordinates)
+        public static IEnumerable<TraversableVoxel> GetWalkableDiagonalNeighbors(GlobalVoxelIndex coordinates)
         {
-            if (!GlobalGridManager.TryGetGridAndNode(coordinates, out _, out Node node))
+            if (!GlobalGridManager.TryGetGridAndVoxel(coordinates, out _, out Voxel voxel))
                 yield break;
 
             // Get all neighbors and their associated information
-            foreach (TraversableNode neighbor in WalkableDiagonalNeighborsOf(node))
+            foreach (TraversableVoxel neighbor in WalkableDiagonalNeighborsOf(voxel))
                 yield return neighbor;
         }
 
         /// <summary>
-        /// Returns diagonal walkable neighbors for a specific node, avoiding blocked adjacent edges.
+        /// Returns diagonal walkable neighbors for a specific voxel, avoiding blocked adjacent edges.
         /// </summary>
-        public static IEnumerable<TraversableNode> WalkableDiagonalNeighborsOf(Node node)
+        public static IEnumerable<TraversableVoxel> WalkableDiagonalNeighborsOf(Voxel voxel)
         {
             foreach (LinearDirection direction in Enum.GetValues(typeof(DiagonalNeighbors)))
             {
-                if (!node.TryGetNeighborFromDirection(direction, out Node neighbor))
+                if (!voxel.TryGetNeighborFromDirection(direction, out Voxel neighbor))
                     continue;
 
                 // Skip blocked neighbors or neighbors that do not have a path partition
@@ -406,10 +408,10 @@ namespace Trailblazer.Pathing
                     continue;
 
                 // Check for edge neighbors that share an edge with the diagonal neighbor
-                if (!HasBlockedEdgeNeighbor(node, direction))
-                    yield return new TraversableNode()
+                if (!HasBlockedEdgeNeighbor(voxel, direction))
+                    yield return new TraversableVoxel()
                     {
-                        Node = neighbor,
+                        Voxel = neighbor,
                         Partition = neighborPartition,
                         Direction = direction
                     };

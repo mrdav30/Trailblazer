@@ -2,9 +2,9 @@
 
 namespace Trailblazer.Pathing
 {
-    public struct TraversableNode
+    public struct TraversableVoxel
     {
-        public Node Node { get; set; }
+        public Voxel Voxel { get; set; }
 
         public PathPartition Partition { get; set; }
 

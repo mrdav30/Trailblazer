@@ -8,19 +8,19 @@ namespace Trailblazer.Tests
     {
         public static NavigationChart RegisterSingleWalkablePoint(string mapName, Vector3d pos)
         {
-            Vector3d origin = pos - new Vector3d(1, 1, 1);
+            Vector3d minBounds = pos - new Vector3d(1, 1, 1);
             bool[,,] data = new bool[3, 3, 3];
             data[1, 1, 1] = true;
 
-            var map = NavigationChart.From3D(mapName, data, origin, Fixed64.One);
+            var map = NavigationChart.From3D(mapName, data, minBounds, Fixed64.One);
             PathManager.Register(map);
             PathManager.InitializeMap(mapName);
             return map;
         }
 
-        public static NavigationChart RegisterFromData(string name, bool[,,] data, Vector3d origin)
+        public static NavigationChart RegisterFromData(string name, bool[,,] data, Vector3d minBounds)
         {
-            var map = NavigationChart.From3D(name, data, origin, GlobalGridManager.NodeSize);
+            var map = NavigationChart.From3D(name, data, minBounds, GlobalGridManager.VoxelSize);
             PathManager.Register(map);
             PathManager.InitializeMap(name);
             return map;
@@ -29,11 +29,11 @@ namespace Trailblazer.Tests
         public static NavigationChart BuildSinglePointMap(string name, Vector3d worldPos)
         {
             // Convert a single world point into an aligned map
-            Vector3d origin = worldPos - new Vector3d(1, 1, 1);
+            Vector3d minBounds = worldPos - new Vector3d(1, 1, 1);
             bool[,,] data = new bool[3, 3, 3];
             data[1, 1, 1] = true;
 
-            return NavigationChart.From3D(name, data, origin, Fixed64.One);
+            return NavigationChart.From3D(name, data, minBounds, Fixed64.One);
         }
     }
 }

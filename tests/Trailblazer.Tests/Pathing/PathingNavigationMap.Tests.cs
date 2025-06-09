@@ -23,7 +23,7 @@ namespace Trailblazer.Tests.Pathing
         }
 
         [Fact]
-        public void InitializeMap_AddsPartitionToExpectedNode()
+        public void InitializeMap_AddsPartitionToExpectedVoxel()
         {
             var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
             GlobalGridManager.TryAddGrid(config, out _);
@@ -32,8 +32,8 @@ namespace Trailblazer.Tests.Pathing
             PathManager.Register(map);
             PathManager.InitializeMap("InitMap");
 
-            Assert.True(GlobalGridManager.TryGetGridAndNode(new Vector3d(0, 0, 0), out _, out Node node));
-            Assert.True(node.TryGetPartition<PathPartition>(out _));
+            Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
+            Assert.True(voxel.TryGetPartition<PathPartition>(out _));
         }
 
         [Fact]
@@ -53,15 +53,15 @@ namespace Trailblazer.Tests.Pathing
             PathManager.InitializeMap("MapB");
 
             // Validate partition exists and belongs to both
-            GlobalGridManager.TryGetGridAndNode(pos, out _, out Node node);
-            node.TryGetPartition(out PathPartition partition);
+            GlobalGridManager.TryGetGridAndVoxel(pos, out _, out Voxel voxel);
+            voxel.TryGetPartition(out PathPartition partition);
             Assert.True(partition.BelongsTo("MapA"));
             Assert.True(partition.BelongsTo("MapB"));
 
             PathManager.Unload("MapA");
 
             // Should still be there because MapB owns it
-            Assert.True(node.TryGetPartition<PathPartition>(out var afterUnload));
+            Assert.True(voxel.TryGetPartition<PathPartition>(out var afterUnload));
             Assert.True(afterUnload.BelongsTo("MapB"));
         }
 
@@ -83,8 +83,8 @@ namespace Trailblazer.Tests.Pathing
             PathManager.InitializeMap("DuplicateInit");
             PathManager.InitializeMap("DuplicateInit"); // idempotent
 
-            GlobalGridManager.TryGetGridAndNode(new Vector3d(0, 0, 0), out _, out Node node);
-            var count = node.TryGetPartition<PathPartition>(out var partition) ? 1 : 0;
+            GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel);
+            var count = voxel.TryGetPartition<PathPartition>(out var partition) ? 1 : 0;
 
             Assert.True(count == 1);
             Assert.True(partition.BelongsTo("DuplicateInit"));

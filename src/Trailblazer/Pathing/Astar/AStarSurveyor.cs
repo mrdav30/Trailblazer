@@ -8,17 +8,17 @@ using System.Threading;
 
 namespace Trailblazer.Pathing
 {
-    internal struct AStarNodeData
+    internal struct AStarVoxelData
     {
         /// <summary>
-        /// The movement penalty cost of this node during A* pathfinding.
+        /// The movement penalty cost of this voxel.
         /// </summary>
         public int MovementCost;
 
         /// <summary>
-        /// The next node in the trail path, used during A* traversal.
+        /// The next voxel in the trail path.
         /// </summary>
-        public CoordinatesGlobal? NextTrailCoordinate;
+        public GlobalVoxelIndex? NextTrailIndex;
     }
 
     /// <summary>
@@ -49,13 +49,13 @@ namespace Trailblazer.Pathing
 
         private AStarPathRequest _request;
 
-        private readonly SwiftDictionary<int, AStarNodeData> _nodeData = new();
+        private readonly SwiftDictionary<int, AStarVoxelData> _voxelData = new();
 
 #nullable enable
         /// <summary>
         /// Optional callback triggered when a height difference exceeds the allowed climb height during pathfinding.
         /// </summary>
-        public static Action<CoordinatesGlobal, CoordinatesGlobal, Fixed64>? OnHeightLimitViolated;
+        public static Action<GlobalVoxelIndex, GlobalVoxelIndex, Fixed64>? OnHeightLimitViolated;
 #nullable disable
 
         /// <summary>
@@ -68,40 +68,41 @@ namespace Trailblazer.Pathing
         public bool FindPath(AStarPathRequest request, out SwiftList<Vector3d> result)
         {
             result = null;
-            if (!request.Start.TryGetPartition(out PathPartition startPartition)
-                || request.Start.SpawnToken == request.End.SpawnToken)
+            if (request.HasZeroDisplacement 
+                || !request.Start.TryGetPartition(out PathPartition startPartition))
             {
                 return false;
             }
 
             _request = request;
 
-            _nodeData.Clear();
+            _voxelData.Clear();
             PathHeap.FastClear();
 
             // Trace path from the start to the end
-            _nodeData.Add(_request.Start.SpawnToken, new());
+            _voxelData.Add(_request.Start.SpawnToken, new());
             PathHeap.Add(startPartition);
 
             if (!TracePath())
                 return false;
 
-            SwiftList<Node> rawNodePath = GetRawpath(_request.Start, _request.End);
-            result = SmoothPath(rawNodePath, _request.End, _request.UnitSize, _request.UseSplineSmoothing);
+            SwiftList<Voxel> rawVoxelPath = GetRawpath(_request.Start, _request.End);
+            result = SmoothPath(rawVoxelPath, _request.End, _request.UnitSize, _request.UseSplineSmoothing);
             return true;
         }
 
         /// <summary>
-        /// Executes the core A* loop to find a valid trail between the start and end nodes.
+        /// Executes the core A* loop to find a valid trail between the start and end voxels.
         /// </summary>
         /// <returns>True if the path to the target was found; false otherwise.</returns>
         public bool TracePath()
         {
             int iterations = 0;
+            int searchSize = _request.MaxPathSearchRange ?? PathManager.DefaultMaxPathSearchRange;
             while (PathHeap.RemoveFirst(out PathPartition currentPartition) 
-                && iterations++ < _request.MaxPathSearchRange)
+                && iterations++ < searchSize)
             {
-                if (currentPartition.NodeSpawnToken == _request.End.SpawnToken)
+                if (currentPartition.VoxelSpawnToken == _request.End.SpawnToken)
                     return true;
 
                 if (ProcessNeighbors(currentPartition))
@@ -114,23 +115,23 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Indicates whether straight and diagonal neighbor nodes should be processed during pathfinding.
+        /// Indicates whether straight and diagonal neighbor voxels should be processed during pathfinding.
         /// </summary>
         /// <returns>True if any neighbor is the target destination.</returns>
         private bool ProcessNeighbors(PathPartition current)
         {
-            if (!_nodeData.TryGetValue(current.NodeSpawnToken, out AStarNodeData data))
+            if (!_voxelData.TryGetValue(current.VoxelSpawnToken, out AStarVoxelData data))
                 return false;
 
             int cost = data.MovementCost + PathPartition.StraightCost;
-            foreach (TraversableNode neighbor in PathManager.GetWalkableStraightNeighbors(current.ParentCoordinate))
+            foreach (TraversableVoxel neighbor in PathManager.GetWalkableStraightNeighbors(current.GlobalIndex))
             {
                 if (ProcessNeighbor(current, neighbor.Partition, cost))
                     return true;
             }
 
             cost = data.MovementCost + PathPartition.DiagonalCost;
-            foreach (TraversableNode neighbor in PathManager.GetWalkableDiagonalNeighbors(current.ParentCoordinate))
+            foreach (TraversableVoxel neighbor in PathManager.GetWalkableDiagonalNeighbors(current.GlobalIndex))
             {
                 if (ProcessNeighbor(current, neighbor.Partition, cost))
                     return true;
@@ -140,7 +141,7 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Determines whether a given neighbor node should be considered for path expansion.
+        /// Determines whether a given neighbor voxel should be considered for path expansion.
         /// </summary>
         /// <returns>True if the neighbor is the target destination.</returns>
         private bool ProcessNeighbor(
@@ -152,28 +153,28 @@ namespace Trailblazer.Pathing
                 return false;
 
             // Skip neighbors that have a height difference greater than the allowed maximum
-            Fixed64 heightDifference = (current.NodePosition.y - neighbor.NodePosition.y).Abs();
+            Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
             if (heightDifference > _request.MaxClimbHeight)
             {
-                OnHeightLimitViolated?.Invoke(current.ParentCoordinate, neighbor.ParentCoordinate, heightDifference);
+                OnHeightLimitViolated?.Invoke(current.GlobalIndex, neighbor.GlobalIndex, heightDifference);
                 return false;
             }
 
-            if (neighbor.NodeSpawnToken == _request.End.SpawnToken)
+            if (neighbor.VoxelSpawnToken == _request.End.SpawnToken)
             {
-                SetPathPartitionData(neighbor, current.ParentCoordinate, cost);
+                SetPathPartitionData(neighbor, current.GlobalIndex, cost);
                 return true;
             }
 
             if (!PathHeap.Contains(neighbor))
             {
-                SetPathPartitionData(neighbor, current.ParentCoordinate, cost);
+                SetPathPartitionData(neighbor, current.GlobalIndex, cost);
                 PathHeap.Add(neighbor);
             }
-            else if (_nodeData.TryGetValue(neighbor.NodeSpawnToken, out AStarNodeData data)
+            else if (_voxelData.TryGetValue(neighbor.VoxelSpawnToken, out AStarVoxelData data)
                 && data.MovementCost > cost)
             {
-                SetPathPartitionData(neighbor, current.ParentCoordinate, cost);
+                SetPathPartitionData(neighbor, current.GlobalIndex, cost);
                 PathHeap.SortUp(neighbor);
             }
 
@@ -181,24 +182,24 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Assigns pathfinding data to a path partition, including cost and direction toward the next trail node.
+        /// Assigns pathfinding data to a path partition, including cost and direction toward the next trail voxel.
         /// </summary>
         /// <param name="partition">The path partition being updated.</param>
         /// <param name="nextTrailCoordinates">The coordinates of the parent partition leading to this one.</param>
         /// <param name="movementCost">The cumulative movement cost to this partition.</param>
         private void SetPathPartitionData(
             PathPartition partition,
-            CoordinatesGlobal nextTrailCoordinates,
+            GlobalVoxelIndex nextTrailCoordinates,
             int movementCost)
         {
-            _nodeData.Add(partition.NodeSpawnToken, new AStarNodeData
+            _voxelData.Add(partition.VoxelSpawnToken, new AStarVoxelData
             {
                 MovementCost = movementCost,
-                NextTrailCoordinate = nextTrailCoordinates
+                NextTrailIndex = nextTrailCoordinates
             });
 
             int heuristicCost = PathPartition.CalculateHeuristic(
-                partition.NodePosition,
+                partition.VoxelPosition,
                 _request.End.WorldPosition,
                 _request.Heuristic);
 
@@ -207,71 +208,71 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Reconstructs the raw node-based path from the destination to the origin by walking backwards through trail links.
+        /// Reconstructs the raw voxel-based path from the destination to the origin by walking backwards through trail links.
         /// </summary>
-        /// <param name="start">The origin node.</param>
-        /// <param name="end">The destination node.</param>
-        /// <returns>A list of nodes from start to end representing the raw path.</returns>
-        private SwiftList<Node> GetRawpath(Node start, Node end)
+        /// <param name="start">The origin voxel.</param>
+        /// <param name="end">The destination voxel.</param>
+        /// <returns>A list of voxels from start to end representing the raw path.</returns>
+        private SwiftList<Voxel> GetRawpath(Voxel start, Voxel end)
         {
-            SwiftList<Node> rawNodePath = new();
+            SwiftList<Voxel> rawVoxelPath = new();
 
-            Node current = end;
+            Voxel current = end;
             while (current.SpawnToken != start.SpawnToken)
             {
-                rawNodePath.Insert(0, current);
+                rawVoxelPath.Insert(0, current);
 
                 if (!current.TryGetPartition(out PathPartition partition))
                     continue;
 
-                if (!_nodeData.TryGetValue(current.SpawnToken, out AStarNodeData data) || !data.NextTrailCoordinate.HasValue)
+                if (!_voxelData.TryGetValue(current.SpawnToken, out AStarVoxelData data) || !data.NextTrailIndex.HasValue)
                     break; // break in the trail!
 
-                if (!GlobalGridManager.TryGetGridAndNode(data.NextTrailCoordinate.Value, out _, out Node nextTrailNode))
+                if (!GlobalGridManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
                     break; // break in the trail!
 
-                current = nextTrailNode;
+                current = nextTrailVoxel;
                 partition.ClearHeapState();
             }
 
             // Ensure start position is included
-            rawNodePath.Insert(0, start);
-            return rawNodePath;
+            rawVoxelPath.Insert(0, start);
+            return rawVoxelPath;
         }
 
         /// <summary>
         /// Constructs a smoothed version of the path using direction changes and optional spline smoothing.
         /// </summary>
-        /// <param name="rawNodePath">The unsmoothed list of nodes produced by pathfinding.</param>
-        /// <param name="end">The target node.</param>
+        /// <param name="rawVoxelPath">The unsmoothed list of voxels produced by pathfinding.</param>
+        /// <param name="end">The target voxel.</param>
         /// <param name="unitSize">The agent’s unit size used to maintain spacing from obstacles.</param>
         /// <param name="useSplineSmoothing">True to apply Catmull-Rom spline smoothing to the path.</param>
         /// <returns>A smoothed list of world positions.</returns>
         public SwiftList<Vector3d> SmoothPath(
-            SwiftList<Node> rawNodePath,
-            Node end,
+            SwiftList<Voxel> rawVoxelPath,
+            Voxel end,
             Fixed64 unitSize,
             bool useSplineSmoothing)
         {
             SwiftList<Vector3d> outputVectorPath = new();
-            if (rawNodePath.Count == 0)
+            if (rawVoxelPath.Count == 0)
                 return outputVectorPath;
 
             Vector3d lastDir = Vector3d.Zero;
 
             // If the path actually goes somewhere → include the start
-            if (rawNodePath[0].SpawnToken != rawNodePath.FromEnd(1).SpawnToken)
-                outputVectorPath.Add(rawNodePath[0].WorldPosition);
+            if (rawVoxelPath[0].SpawnToken != rawVoxelPath.FromEnd(1).SpawnToken)
+                outputVectorPath.Add(rawVoxelPath[0].WorldPosition);
 
-            for (int i = 1; i < rawNodePath.Count - 1; i++)
+            for (int i = 1; i < rawVoxelPath.Count - 1; i++)
             {
-                Node current = rawNodePath[i];
-                Node previous = rawNodePath[i - 1];
+                Voxel current = rawVoxelPath[i];
+                Voxel previous = rawVoxelPath[i - 1];
 
                 if (!current.TryGetPartition(out PathPartition partition))
                     continue;
 
-                // Preserve nodes near unwalkable tiles
+                // Preserve voxels near unwalkable tiles
                 if (partition.GetNeighborClearance() <= unitSize + 1)
                 {
                     outputVectorPath.Add(current.WorldPosition);
@@ -281,7 +282,7 @@ namespace Trailblazer.Pathing
 
                 Vector3d dir = (current.WorldPosition - previous.WorldPosition).Normal;
 
-                // Only add this node if direction changed
+                // Only add this voxel if direction changed
                 if (!dir.FuzzyEqual(lastDir, _directionChangeTolerance))
                 {
                     outputVectorPath.Add(current.WorldPosition);

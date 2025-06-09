@@ -9,14 +9,14 @@ namespace Trailblazer.Tests.Pathing
         public void RemoveFirst_WhenCountIsOne_ShouldClearRootSafely()
         {
             PathHeap.FastClear();
-            var node = new PathPartition();
-            node.HeapCost = 1;
+            var voxel = new PathPartition();
+            voxel.HeapCost = 1;
 
-            PathHeap.Add(node);
+            PathHeap.Add(voxel);
             Assert.Equal(1u, PathHeap.Count);
 
             PathHeap.RemoveFirst(out PathPartition removed);
-            Assert.Equal(node, removed);
+            Assert.Equal(voxel, removed);
             Assert.Equal(0u, PathHeap.Count);
 
             // Should not leave stale data

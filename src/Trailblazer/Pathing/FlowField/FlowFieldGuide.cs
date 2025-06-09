@@ -18,7 +18,7 @@ namespace Trailblazer.Pathing
 
         public int LastUsedFrame { get; private set; }
 
-        // key = node spawn token, value = vector flow field
+        // key = voxel spawn token, value = vector flow field
         private SwiftDictionary<int, FlowField> _fields;
 
         private int _fieldSearchRange;
@@ -35,7 +35,7 @@ namespace Trailblazer.Pathing
             int requestHashKey = request.RequestCacheKey;
             if (RequestHashKey == requestHashKey && IsValid)
             {
-                // Make sure the start node is within the current fields collection
+                // Make sure the start voxel is within the current fields collection
                 if (_fields.ContainsKey(request.Start.SpawnToken))
                     return true;
             }
@@ -54,7 +54,7 @@ namespace Trailblazer.Pathing
                 return false;
 
             _fields = foundFields;
-            _fieldSearchRange = flowFieldRequest.FieldSearchRange;
+            _fieldSearchRange = flowFieldRequest.ExtraFloodRange;
             RequestHashKey = requestHashKey;
 
             return PathFound;
@@ -75,15 +75,15 @@ namespace Trailblazer.Pathing
             if (!PathFound
                 || _fields == null
                 || _fields.Count <= 0
-                || !GlobalGridManager.TryGetGridAndNode(from, out _, out Node currentNode))
+                || !GlobalGridManager.TryGetGridAndVoxel(from, out _, out Voxel currentVoxel))
             {
                 return -1;
             }
 
-            if (_fields.ContainsKey(currentNode.SpawnToken))
-                return currentNode.SpawnToken;
+            if (_fields.ContainsKey(currentVoxel.SpawnToken))
+                return currentVoxel.SpawnToken;
 
-            if (!FlowFieldSurveyor.TryGetNearestFlowAnchor(from, _fields, out Node destination, _fieldSearchRange))
+            if (!FlowFieldSurveyor.TryGetNearestFlowAnchor(from, _fields, out Voxel destination, _fieldSearchRange))
                 return -1;
 
             return destination.SpawnToken;

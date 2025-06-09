@@ -10,9 +10,9 @@ namespace Trailblazer.Pathing
     public struct FlowField
     {
         /// <summary>
-        /// The global coordinates corresponding to this node in the field.
+        /// The global coordinates corresponding to this voxel in the field.
         /// </summary>
-        public CoordinatesGlobal NodeCoordinates { get; set; }
+        public GlobalVoxelIndex GlobalIndex { get; set; }
 
         /// <summary>
         /// The movement direction vector pointing toward the goal from this cell.
@@ -20,12 +20,12 @@ namespace Trailblazer.Pathing
         public Vector3d Direction { get; set; }
 
         /// <summary>
-        /// The scalar distance from this node to the goal in grid steps.
+        /// The scalar distance from this voxel to the goal in grid steps.
         /// </summary>
         public int DistanceToTarget { get; set; }
 
         /// <summary>
-        /// Indicates whether this node is the goal or anchor in the flow field.
+        /// Indicates whether this voxel is the goal or anchor in the flow field.
         /// </summary>
         public bool IsGoal { get; set; }
     }

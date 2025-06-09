@@ -67,11 +67,11 @@
 	</PropertyGroup>
 	<!-- Dependencies and Package References -->
 	<ItemGroup>	
-		<PackageReference Include="FixedMathSharp" Version="1.2.2">
+		<PackageReference Include="FixedMathSharp" Version="1.2.3">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="GridForge" Version="1.0.6">
+		<PackageReference Include="GridForge" Version="1.1.0">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>
@@ -79,7 +79,7 @@
 		  <PrivateAssets>all</PrivateAssets>
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>	
-		<PackageReference Include="SwiftCollections" Version="1.0.4">
+		<PackageReference Include="SwiftCollections" Version="1.0.5">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>

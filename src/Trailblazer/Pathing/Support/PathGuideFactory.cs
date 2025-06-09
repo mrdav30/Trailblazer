@@ -59,7 +59,7 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Attempts to retrieve a guide for the given path request using validated nodes internally.
+        /// Attempts to retrieve a guide for the given path request using validated voxels internally.
         /// </summary>
         /// <param name="origin">The world position to start from.</param>
         /// <param name="destination">The world destination to path toward.</param>
@@ -67,11 +67,11 @@ namespace Trailblazer.Pathing
         /// <returns>The resolved guide or null if the request was invalid.</returns>
         public static IGuide RequestGuide(Vector3d origin, Vector3d destination, IPathRequest request)
         {
-            if (!PathManager.GetValidPathRequest(origin, destination, out Node startNode, out Node endNode))
+            if (!PathManager.GetValidPathRequest(origin, destination, out Voxel startVoxel, out Voxel endVoxel))
                 return null;
 
-            request.Start = startNode;
-            request.End = endNode;
+            request.Start = startVoxel;
+            request.End = endVoxel;
 
             return RequestGuide(request);
         }

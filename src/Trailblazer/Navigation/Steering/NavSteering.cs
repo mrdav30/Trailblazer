@@ -85,7 +85,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Index or key used to track the agent’s progress along its assigned guide.
         /// For AStar, this represents the waypoint index. 
-        /// For FlowField, this corresponds to the SpawnToken of the current node.
+        /// For FlowField, this corresponds to the SpawnToken of the current voxel.
         /// </summary>
         public int CurrentIndex { get; protected set; }
 
@@ -110,7 +110,7 @@ namespace Trailblazer.Navigation.Steering
         public bool HasLineOfSightPath { get; protected set; }
 
         /// <summary>
-        /// Whether the destination node is reachable.
+        /// Whether the destination voxel is reachable.
         /// </summary>
         public bool HasViableDestination { get; protected set; }
 
@@ -232,25 +232,25 @@ namespace Trailblazer.Navigation.Steering
             _stuckFrameCount = 0;
 
             HasViableDestination = false;
-            Node destinationNode = null;
-            // if size requires consideration, use next-best-node system,
-            if (pathRequest.UnitSize <= GlobalGridManager.NodeSize)
+            Voxel destinationVoxel = null;
+            // if size requires consideration, use next-best-voxel system,
+            if (pathRequest.UnitSize <= GlobalGridManager.VoxelSize)
             {
-                HasViableDestination = NodeFinder.GetEndNode(
+                HasViableDestination = VoxelFinder.GetEndVoxel(
                     origin,
                     destination,
-                    out destinationNode,
+                    out destinationVoxel,
                     pathRequest.AllowUnwalkable);
             }
 
-            if (!HasViableDestination || pathRequest.UnitSize > GlobalGridManager.NodeSize)
+            if (!HasViableDestination || pathRequest.UnitSize > GlobalGridManager.VoxelSize)
             {
                 // Start from the end
-                HasViableDestination = NodeFinder.GetClosestNodeForSize(
+                HasViableDestination = VoxelFinder.GetClosestVoxelForSize(
                     destination,
                     origin,
                     pathRequest.UnitSize,
-                    out destinationNode,
+                    out destinationVoxel,
                     pathRequest.AllowUnwalkable);
             }
 
@@ -264,7 +264,7 @@ namespace Trailblazer.Navigation.Steering
             IsFollowingTrail = true;
             CurrentIndex = 0;
             CurrentRequest = pathRequest;
-            CurrentRequest.End = destinationNode;
+            CurrentRequest.End = destinationVoxel;
             Destination = destination;
 
             _repathTries = 0;
@@ -413,23 +413,23 @@ namespace Trailblazer.Navigation.Steering
             }
 
             bool isCurrentPositionValid = false;
-            Node currentNode = null;
-            // if size requires consideration, use old next-best-node system
-            if (CurrentRequest.UnitSize <= GlobalGridManager.NodeSize)
+            Voxel currentVoxel = null;
+            // if size requires consideration, use old next-best-voxel system
+            if (CurrentRequest.UnitSize <= GlobalGridManager.VoxelSize)
             {
-                isCurrentPositionValid = NodeFinder.GetStartNode(
+                isCurrentPositionValid = VoxelFinder.GetStartVoxel(
                     origin,
                     Destination,
-                    out currentNode);
+                    out currentVoxel);
             }
 
-            if (!isCurrentPositionValid || CurrentRequest.UnitSize > GlobalGridManager.NodeSize)
+            if (!isCurrentPositionValid || CurrentRequest.UnitSize > GlobalGridManager.VoxelSize)
             {
-                isCurrentPositionValid = NodeFinder.GetClosestNodeForSize(
+                isCurrentPositionValid = VoxelFinder.GetClosestVoxelForSize(
                     origin,
                     Destination,
                     CurrentRequest.UnitSize,
-                    out currentNode);
+                    out currentVoxel);
             }
 
             if (!isCurrentPositionValid)
@@ -439,7 +439,7 @@ namespace Trailblazer.Navigation.Steering
                 return;
             }
 
-            CurrentRequest.Start = currentNode;
+            CurrentRequest.Start = currentVoxel;
 
             if (!_shouldRequestPathThisFrame)
                 return;
@@ -510,7 +510,7 @@ namespace Trailblazer.Navigation.Steering
         public bool ShouldAdvanceToNextWaypoint(Vector3d position, Vector3d direction)
         {
             return _distanceToTarget < _closingDistance && Vector3d.Dot(position, direction) < Fixed64.Epsilon
-                || _distanceToTarget < _closingDistance * GlobalGridManager.NodeSize;
+                || _distanceToTarget < _closingDistance * GlobalGridManager.VoxelSize;
         }
 
         /// <summary>
@@ -664,7 +664,7 @@ namespace Trailblazer.Navigation.Steering
             //  Sum up the position of our neighbours
             Vector3d centerOfMass = Vector3d.Zero;
 
-            foreach (INodeOccupant entity in ScanManager.ScanRadius(from, paddingRadius))
+            foreach (IVoxelOccupant entity in ScanManager.ScanRadius(from, paddingRadius))
             {
                 if (entity is not INavigate other)
                     continue;

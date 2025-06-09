@@ -2,6 +2,7 @@
 using Xunit;
 using GridForge.Grids;
 using Trailblazer.Pathing;
+using GridForge;
 
 namespace Trailblazer.Tests
 {

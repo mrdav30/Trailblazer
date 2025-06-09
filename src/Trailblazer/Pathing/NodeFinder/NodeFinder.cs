@@ -5,50 +5,50 @@ using SwiftCollections;
 
 namespace Trailblazer.Pathing
 {
-    public static class NodeFinder
+    public static class VoxelFinder
     {
         // set to the highest height or width value of any game object
         private const int _maxTestDistance = 3;
 
-        public static bool TryGetPathEdgeNodes(Vector3d startPosition, Vector3d targetPosition, out Node startNode, out Node targetNode)
+        public static bool TryGetPathEdgeVoxels(Vector3d startPosition, Vector3d targetPosition, out Voxel startVoxel, out Voxel targetVoxel)
         {
-            targetNode = default;
-            if (!GlobalGridManager.TryGetGridAndNode(startPosition, out _, out startNode))
+            targetVoxel = default;
+            if (!GlobalGridManager.TryGetGridAndVoxel(startPosition, out _, out startVoxel))
                 return false;
 
-            if (startNode.IsBlocked)
+            if (startVoxel.IsBlocked)
             {
-                if (!TryGetClosestWalkableNeighbor(startNode, out Node closestNeighbor))
+                if (!TryGetClosestWalkableNeighbor(startVoxel, out Voxel closestNeighbor))
                     return false;
-                startNode = closestNeighbor;
+                startVoxel = closestNeighbor;
             }
 
-            if (!GlobalGridManager.TryGetGridAndNode(targetPosition, out _, out targetNode))
+            if (!GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out targetVoxel))
                 return false;
 
-            if (targetNode.IsBlocked)
+            if (targetVoxel.IsBlocked)
             {
-                if (!TryGetClosestWalkableNeighbor(targetNode, out Node closestNeighbor))
+                if (!TryGetClosestWalkableNeighbor(targetVoxel, out Voxel closestNeighbor))
                     return false;
-                targetNode = closestNeighbor;
+                targetVoxel = closestNeighbor;
             }
 
             return true;
         }
 
-        public static bool TryGetClosestWalkableNeighbor(Node node, out Node closestNeighbor)
+        public static bool TryGetClosestWalkableNeighbor(Voxel voxel, out Voxel closestNeighbor)
         {
             closestNeighbor = null;
 
-            foreach (TraversableNode neighbor in PathManager.WalkableStraightNeighborsOf(node))
+            foreach (TraversableVoxel neighbor in PathManager.WalkableStraightNeighborsOf(voxel))
             {
-                closestNeighbor = neighbor.Node; // prefer straight neighbors since they cost less
+                closestNeighbor = neighbor.Voxel; // prefer straight neighbors since they cost less
                 return true;
             }
 
-            foreach (TraversableNode neighbor in PathManager.WalkableDiagonalNeighborsOf(node))
+            foreach (TraversableVoxel neighbor in PathManager.WalkableDiagonalNeighborsOf(voxel))
             {
-                closestNeighbor = neighbor.Node;
+                closestNeighbor = neighbor.Voxel;
                 return true;
             }
 
@@ -56,22 +56,22 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Finds closest next-best-node also when destination is off invalid
+        /// Finds closest next-best-voxel also when destination is off invalid
         /// </summary>
-        public static bool GetEndNode(Vector3d from, Vector3d destination, out Node destinationNode, bool allowUnwalkable = false)
+        public static bool GetEndVoxel(Vector3d from, Vector3d destination, out Voxel destinationVoxel, bool allowUnwalkable = false)
         {
-            if (!GlobalGridManager.TryGetGridAndNode(destination, out _, out destinationNode))
+            if (!GlobalGridManager.TryGetGridAndVoxel(destination, out _, out destinationVoxel))
             {
-                // If null, it is off the grid. Raycast back onto grid for closest viable node to the destination.
-                foreach (GridNodeSet gridNodeSet in GridTracer.TraceLine(destination, from))
+                // If null, it is off the grid. Raycast back onto grid for closest viable voxel to the destination.
+                foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(destination, from))
                 {
-                    foreach (Node node in gridNodeSet.Nodes)
+                    foreach (Voxel voxel in gridVoxelSet.Voxels)
                     {
-                        // A path is required if a node doesn't exist in the traced line
-                        if (!allowUnwalkable && node.IsBlocked || !node.TryGetPartition<PathPartition>(out _))
+                        // A path is required if a voxel doesn't exist in the traced line
+                        if (!allowUnwalkable && voxel.IsBlocked || !voxel.TryGetPartition<PathPartition>(out _))
                             continue;
 
-                        destinationNode = node;
+                        destinationVoxel = voxel;
                         return true;
                     }
                 }
@@ -79,34 +79,34 @@ namespace Trailblazer.Pathing
                 return false;
             }
 
-            if (destinationNode.IsBlocked)
+            if (destinationVoxel.IsBlocked)
             {
-                if (allowUnwalkable && TryGetClosestWalkableNeighbor(destinationNode, out _))
+                if (allowUnwalkable && TryGetClosestWalkableNeighbor(destinationVoxel, out _))
                     return true;
 
-                return StarCast(destination, out destinationNode);
+                return StarCast(destination, out destinationVoxel);
             }
 
             return true;
         }
 
         /// <summary>
-        /// Finds closest next-best-node
+        /// Finds closest next-best-voxel
         /// </summary>
-        public static bool GetStartNode(Vector3d from, Vector3d destination, out Node startNode, bool allowUnwalkable = false)
+        public static bool GetStartVoxel(Vector3d from, Vector3d destination, out Voxel startVoxel, bool allowUnwalkable = false)
         {
-            if (!GlobalGridManager.TryGetGridAndNode(from, out _, out startNode))
+            if (!GlobalGridManager.TryGetGridAndVoxel(from, out _, out startVoxel))
             {
-                // If null, it is off the grid. Raycast back onto grid for closest viable node to the destination.
-                foreach (GridNodeSet gridNodeSet in GridTracer.TraceLine(from, destination))
+                // If null, it is off the grid. Raycast back onto grid for closest viable voxel to the destination.
+                foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(from, destination))
                 {
-                    foreach (Node node in gridNodeSet.Nodes)
+                    foreach (Voxel voxel in gridVoxelSet.Voxels)
                     {
-                        // A path is required if a node doesn't exist in the traced line
-                        if (!allowUnwalkable && node.IsBlocked || !node.TryGetPartition<PathPartition>(out _))
+                        // A path is required if a voxel doesn't exist in the traced line
+                        if (!allowUnwalkable && voxel.IsBlocked || !voxel.TryGetPartition<PathPartition>(out _))
                             continue;
 
-                        startNode = node;
+                        startVoxel = voxel;
                         return true;
                     }
                 }
@@ -114,57 +114,57 @@ namespace Trailblazer.Pathing
                 return false;
             }
 
-            if (startNode.IsBlocked)
+            if (startVoxel.IsBlocked)
             {
-                if (allowUnwalkable && TryGetClosestWalkableNeighbor(startNode, out _))
+                if (allowUnwalkable && TryGetClosestWalkableNeighbor(startVoxel, out _))
                     return true;
 
-                return StarCast(from, out startNode);
+                return StarCast(from, out startVoxel);
             }
 
             return true;
         }
 
-        public static bool StarCast(Vector3d targetPosition, out Node returnNode)
+        public static bool StarCast(Vector3d targetPosition, out Voxel returnVoxel)
         {
-            returnNode = null;
-            if (!GlobalGridManager.TryGetGrid(targetPosition, out Grid outGrid))
+            returnVoxel = null;
+            if (!GlobalGridManager.TryGetGrid(targetPosition, out VoxelGrid outGrid))
                 return false; // no grid found at this position!
 
-            AlternativeNodeFinder.Instance.SetQuery(targetPosition, outGrid.BoundsMin, _maxTestDistance);
+            AlternativeVoxelFinder.Instance.SetQuery(targetPosition, outGrid.BoundsMin, _maxTestDistance);
 
-            if (!AlternativeNodeFinder.Instance.GetNode(out returnNode))
+            if (!AlternativeVoxelFinder.Instance.GetVoxel(out returnVoxel))
                 return false;
 
             return true;
         }
 
-        public static bool GetClosestNodeForSize(
+        public static bool GetClosestVoxelForSize(
             Vector3d from, 
             Vector3d destination, 
             Fixed64 pathingSize, 
-            out Node returnNode, 
+            out Voxel returnVoxel, 
             bool allowUnwalkable = false)
         {
-            if (GlobalGridManager.TryGetGridAndNode(from, out _, out returnNode)
-                && (!returnNode.IsBlocked || allowUnwalkable)
-                && returnNode.TryGetPartition(out PathPartition returnPartition)
+            if (GlobalGridManager.TryGetGridAndVoxel(from, out _, out returnVoxel)
+                && (!returnVoxel.IsBlocked || allowUnwalkable)
+                && returnVoxel.TryGetPartition(out PathPartition returnPartition)
                 && !returnPartition.Unpassable(pathingSize))
             {
                 return true;
             }
 
-            foreach (GridNodeSet gridNodeSet in GridTracer.TraceLine(from, destination))
+            foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(from, destination))
             {
-                foreach (Node currentNode in gridNodeSet.Nodes)
+                foreach (Voxel currentVoxel in gridVoxelSet.Voxels)
                 {
-                    // A path is required if a node doesn't exist in the traced line
-                    if (!allowUnwalkable && currentNode.IsBlocked || !currentNode.TryGetPartition(out PathPartition currentPartition))
+                    // A path is required if a voxel doesn't exist in the traced line
+                    if (!allowUnwalkable && currentVoxel.IsBlocked || !currentVoxel.TryGetPartition(out PathPartition currentPartition))
                         continue;
 
                     if (!currentPartition.Unpassable(pathingSize))
                     {
-                        returnNode = currentNode;
+                        returnVoxel = currentVoxel;
                         return true;
                     }
                 }

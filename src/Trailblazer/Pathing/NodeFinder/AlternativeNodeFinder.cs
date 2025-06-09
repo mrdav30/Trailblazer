@@ -5,12 +5,12 @@ using System.Diagnostics;
 namespace Trailblazer.Pathing
 {
     /// <summary>
-    /// Pathfinding queries require 2 valid nodes. 
-    /// When one is not valid, this is used to find the best nearest node to path to instead.
+    /// Pathfinding queries require 2 valid voxels. 
+    /// When one is not valid, this is used to find the best nearest voxel to path to instead.
     /// </summary>
-    public class AlternativeNodeFinder
+    public class AlternativeVoxelFinder
     {
-        public static AlternativeNodeFinder Instance = new();
+        public static AlternativeVoxelFinder Instance = new();
 
         private Vector3d _worldPos;
 
@@ -35,7 +35,7 @@ namespace Trailblazer.Pathing
             _layer = 1;
         }
 
-        public bool GetNode(out Node nextNode)
+        public bool GetVoxel(out Voxel nextVoxel)
         {
             // Calculated closest side to raycast in first
             Fixed64 xDif = _offsettedPos.x - _worldPos.x;
@@ -45,7 +45,7 @@ namespace Trailblazer.Pathing
             zDif = zDif.ClampOne();
 
             // Check to see if we should raycast towards corner first
-            if ((xDif.Abs() >= GlobalGridManager.NodeResolution) && (zDif.Abs() >= GlobalGridManager.NodeResolution))
+            if ((xDif.Abs() >= GlobalGridManager.VoxelResolution) && (zDif.Abs() >= GlobalGridManager.VoxelResolution))
             {
                 _direction.x = xDif.CeilToInt();
                 _direction.z = zDif.CeilToInt();
@@ -74,9 +74,9 @@ namespace Trailblazer.Pathing
                     _worldPos.x + _direction.x,
                     Fixed64.Zero,
                     _worldPos.z + _direction.z);
-                if (GlobalGridManager.TryGetGridAndNode(checkPosition, out _, out Node checkNode))
+                if (GlobalGridManager.TryGetGridAndVoxel(checkPosition, out _, out Voxel checkVoxel))
                 {
-                    if (CheckPathNode(checkNode, out nextNode))
+                    if (CheckPathVoxel(checkVoxel, out nextVoxel))
                         return true;
                 }
 
@@ -108,7 +108,7 @@ namespace Trailblazer.Pathing
                 }
             }
 
-            nextNode = null;
+            nextVoxel = null;
             return false;
         }
 
@@ -157,17 +157,17 @@ namespace Trailblazer.Pathing
                 _direction.z = 0;  // bottom-left
         }
 
-        private bool CheckPathNode(Node node, out Node closestNode)
+        private bool CheckPathVoxel(Voxel voxel, out Voxel closestVoxel)
         {
-            closestNode = null;
-            if (node == null || node.IsBlocked)
+            closestVoxel = null;
+            if (voxel == null || voxel.IsBlocked)
                 return false;
 
-            Fixed64 distance = Vector3d.SqrDistance(node.WorldPosition, _worldPos);
+            Fixed64 distance = Vector3d.SqrDistance(voxel.WorldPosition, _worldPos);
             if (distance < _closestDistance)
             {
                 _closestDistance = distance;
-                closestNode = node;
+                closestVoxel = voxel;
 
                 return true;
             }

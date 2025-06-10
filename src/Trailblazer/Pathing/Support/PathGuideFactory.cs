@@ -45,6 +45,8 @@ namespace Trailblazer.Pathing
             _cachedFlow.EvictStaleEntries(currentFrame, MaxFramesUnused);
         }
 
+ 
+
         /// <summary>
         /// Requests a guide of a specific type using the given origin, destination, and request parameters.
         /// </summary>
@@ -95,6 +97,11 @@ namespace Trailblazer.Pathing
         public static IGuide RequestGuide(IPathRequest request)
         {
             IGuide guide = null;
+
+            request.Prepare();
+            if (!request.IsValid)
+                return null;
+
             switch (request)
             {
                 case AStarPathRequest a:

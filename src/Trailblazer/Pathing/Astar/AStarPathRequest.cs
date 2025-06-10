@@ -22,6 +22,11 @@ namespace Trailblazer.Pathing
 
         public int? MaxPathSearchRange { get; set; }
 
+        public readonly bool IsValid =>
+            Start != null &&
+            End != null &&
+            MaxPathSearchRange.HasValue;
+
         /// <summary>
         /// The maximum Y-axis height delta a unit can step or climb per voxel.
         /// Voxels exceeding this are ignored even if walkable and adjacent.
@@ -57,6 +62,15 @@ namespace Trailblazer.Pathing
                 UseSplineSmoothing = false,
                 MaxPathSearchRange = null
             };
+        }
+
+        public void Prepare()
+        {
+            if (!MaxPathSearchRange.HasValue
+                && PathManager.GetMaxSearchSize(Start, End, out int searchSize))
+            {
+                MaxPathSearchRange = searchSize;
+            }
         }
 
         public override readonly bool Equals(object obj) =>

@@ -29,7 +29,7 @@ namespace Trailblazer.Pathing
 
         public bool Initialize(IPathRequest request)
         {
-            if (request is not FlowFieldPathRequest flowFieldRequest)
+            if (request is not FlowFieldPathRequest flowFieldRequest || !request.IsValid)
                 return false;
 
             int requestHashKey = request.RequestCacheKey;
@@ -38,16 +38,6 @@ namespace Trailblazer.Pathing
                 // Make sure the start voxel is within the current fields collection
                 if (_fields.ContainsKey(request.Start.SpawnToken))
                     return true;
-            }
-
-            int searchSize = request.MaxPathSearchRange ?? 0;
-            if (searchSize <= 0)
-            {
-                // Retrieves the maximum length the path could possibly be
-                if (!PathManager.GetMaxSearchSize(request.Start, request.End, out searchSize))
-                    return false;
-
-                flowFieldRequest.MaxPathSearchRange = searchSize;
             }
 
             if (!FlowFieldSurveyor.Shared.FindPath(flowFieldRequest, out SwiftDictionary<int, FlowField> foundFields))

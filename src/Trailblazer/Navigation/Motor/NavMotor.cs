@@ -330,9 +330,7 @@ namespace Trailblazer.Navigation.Motor
                 return;
 
             Fixed64 maxVelocityChange = GetMaxAcceleration() * TrailblazerManager.DeltaTime;
-            Vector3d velocityChange = desiredVelocity - _forceOutput;
-            if (velocityChange.SqrMagnitude > maxVelocityChange * maxVelocityChange)
-                velocityChange = velocityChange.Normal * maxVelocityChange;
+            Vector3d velocityChange = (desiredVelocity - _forceOutput).ClampMagnitude(maxVelocityChange);
 
             // Don't apply velocity changes in air unless controlled
             if (!IsGrounded && !Locomotions.IsInControl)

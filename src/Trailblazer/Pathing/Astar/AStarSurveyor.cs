@@ -68,7 +68,8 @@ namespace Trailblazer.Pathing
         public bool FindPath(AStarPathRequest request, out SwiftList<Vector3d> result)
         {
             result = null;
-            if (request.HasZeroDisplacement 
+            if (!request.IsValid
+                || request.HasZeroDisplacement 
                 || !request.Start.TryGetPartition(out PathPartition startPartition))
             {
                 return false;
@@ -86,8 +87,8 @@ namespace Trailblazer.Pathing
             if (!TracePath())
                 return false;
 
-            SwiftList<Voxel> rawVoxelPath = GetRawpath(_request.Start, _request.End);
-            result = SmoothPath(rawVoxelPath, _request.End, _request.UnitSize, _request.UseSplineSmoothing);
+            SwiftList<Voxel> rawVoxelPath = GetRawpath();
+            result = SmoothPath(rawVoxelPath);
             return true;
         }
 
@@ -95,10 +96,10 @@ namespace Trailblazer.Pathing
         /// Executes the core A* loop to find a valid trail between the start and end voxels.
         /// </summary>
         /// <returns>True if the path to the target was found; false otherwise.</returns>
-        public bool TracePath()
+        private bool TracePath()
         {
             int iterations = 0;
-            int searchSize = _request.MaxPathSearchRange ?? PathManager.DefaultMaxPathSearchRange;
+            int searchSize = _request.MaxPathSearchRange.Value;
             while (PathHeap.RemoveFirst(out PathPartition currentPartition) 
                 && iterations++ < searchSize)
             {
@@ -210,15 +211,13 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Reconstructs the raw voxel-based path from the destination to the origin by walking backwards through trail links.
         /// </summary>
-        /// <param name="start">The origin voxel.</param>
-        /// <param name="end">The destination voxel.</param>
         /// <returns>A list of voxels from start to end representing the raw path.</returns>
-        private SwiftList<Voxel> GetRawpath(Voxel start, Voxel end)
+        private SwiftList<Voxel> GetRawpath()
         {
             SwiftList<Voxel> rawVoxelPath = new();
 
-            Voxel current = end;
-            while (current.SpawnToken != start.SpawnToken)
+            Voxel current = _request.End;
+            while (current.SpawnToken != _request.Start.SpawnToken)
             {
                 rawVoxelPath.Insert(0, current);
 
@@ -236,7 +235,7 @@ namespace Trailblazer.Pathing
             }
 
             // Ensure start position is included
-            rawVoxelPath.Insert(0, start);
+            rawVoxelPath.Insert(0, _request.Start);
             return rawVoxelPath;
         }
 
@@ -244,15 +243,8 @@ namespace Trailblazer.Pathing
         /// Constructs a smoothed version of the path using direction changes and optional spline smoothing.
         /// </summary>
         /// <param name="rawVoxelPath">The unsmoothed list of voxels produced by pathfinding.</param>
-        /// <param name="end">The target voxel.</param>
-        /// <param name="unitSize">The agent’s unit size used to maintain spacing from obstacles.</param>
-        /// <param name="useSplineSmoothing">True to apply Catmull-Rom spline smoothing to the path.</param>
         /// <returns>A smoothed list of world positions.</returns>
-        public SwiftList<Vector3d> SmoothPath(
-            SwiftList<Voxel> rawVoxelPath,
-            Voxel end,
-            Fixed64 unitSize,
-            bool useSplineSmoothing)
+        private SwiftList<Vector3d> SmoothPath(SwiftList<Voxel> rawVoxelPath)
         {
             SwiftList<Vector3d> outputVectorPath = new();
             if (rawVoxelPath.Count == 0)
@@ -273,7 +265,7 @@ namespace Trailblazer.Pathing
                     continue;
 
                 // Preserve voxels near unwalkable tiles
-                if (partition.GetNeighborClearance() <= unitSize + 1)
+                if (partition.GetNeighborClearance() <= _request.UnitSize + 1)
                 {
                     outputVectorPath.Add(current.WorldPosition);
                     lastDir = Vector3d.Zero;
@@ -291,9 +283,9 @@ namespace Trailblazer.Pathing
             }
 
             // Ensure target position is included
-            outputVectorPath.Add(end.WorldPosition);
+            outputVectorPath.Add(_request.End.WorldPosition);
 
-            if (useSplineSmoothing)
+            if (_request.UseSplineSmoothing)
                 outputVectorPath = CatmullSmooth(outputVectorPath);
 
             return outputVectorPath;

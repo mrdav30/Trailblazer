@@ -39,11 +39,15 @@ namespace Trailblazer.Pathing
         /// An optional max search limit when generating the path.
         /// If null, the search will continue until all walkable voxels are evaluated.
         /// </summary>
-        int? MaxPathSearchRange { get; }
+        int? MaxPathSearchRange { get; set; }
+
+        bool IsValid { get; }
 
         /// <summary>
         /// A unique hash for this path request, useful for caching and guide pooling.
         /// </summary>
         public int RequestCacheKey { get; }
+
+        void Prepare();
     }
 }

@@ -23,22 +23,12 @@ namespace Trailblazer.Pathing
 
         public bool Initialize(IPathRequest request)
         {
-            if (request is not AStarPathRequest aStarRequest)
+            if (request is not AStarPathRequest aStarRequest || !request.IsValid)
                 return false;
 
             int requestHashKey = request.GetHashCode();
             if (RequestHashKey == requestHashKey && IsValid)
                 return true; // Reuse existing path
-
-            int searchSize = request.MaxPathSearchRange ?? 0;
-            if (searchSize <= 0)
-            {
-                // Retrieves the maximum length the path could possibly be
-                if (!PathManager.GetMaxSearchSize(request.Start, request.End, out searchSize))
-                    return false;
-
-                aStarRequest.MaxPathSearchRange = searchSize;
-            }
 
             if (!AStarSurveyor.Shared.FindPath(aStarRequest, out SwiftList<Vector3d> foundPath))
                 return false;

@@ -32,6 +32,7 @@ namespace Trailblazer.Tests.Pathing
 
             PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            request.Prepare();
 
             bool success = FlowFieldSurveyor.Shared.FindPath(request, out SwiftDictionary<int, FlowField> fields);
 
@@ -68,6 +69,7 @@ namespace Trailblazer.Tests.Pathing
             PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.UnitSize = (Fixed64)2;
+            request.Prepare();
 
             bool success = FlowFieldSurveyor.Shared.FindPath(request, out SwiftDictionary<int, FlowField> fields);
             Assert.False(success);
@@ -92,6 +94,7 @@ namespace Trailblazer.Tests.Pathing
             PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.ExtraFloodRange = 5;
+            request.Prepare();
 
             bool success = FlowFieldSurveyor.Shared.FindPath(request, out SwiftDictionary<int, FlowField> fields, out int distanceToTarget);
 
@@ -121,6 +124,7 @@ namespace Trailblazer.Tests.Pathing
 
             PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            request.Prepare();
 
             FlowFieldSurveyor.Shared.FindPath(request, out SwiftDictionary<int, FlowField> fields);
             var dir = FlowFieldSurveyor.SampleFlowVector(start, fields);
@@ -148,6 +152,7 @@ namespace Trailblazer.Tests.Pathing
 
             PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            request.Prepare();
 
             FlowFieldSurveyor.Shared.FindPath(request, out SwiftDictionary<int, FlowField> fields);
 
@@ -165,6 +170,7 @@ namespace Trailblazer.Tests.Pathing
 
             PathManager.GetValidPathRequest(new Vector3d(0, 0, 0), new Vector3d(5, 0, 5), out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            request.Prepare();
 
             bool success = FlowFieldSurveyor.Shared.FindPath(request, out SwiftDictionary<int, FlowField> result);
 
@@ -190,6 +196,7 @@ namespace Trailblazer.Tests.Pathing
 
             PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            request.Prepare();
 
             var guide = new FlowFieldGuide();
             bool initialized = guide.Initialize(request);
@@ -223,6 +230,7 @@ namespace Trailblazer.Tests.Pathing
 
             PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            request.Prepare();
 
             FlowFieldSurveyor.Shared.FindPath(request, out SwiftDictionary<int, FlowField> fields);
             var vec = FlowFieldSurveyor.SampleFlowVector(start, fields);

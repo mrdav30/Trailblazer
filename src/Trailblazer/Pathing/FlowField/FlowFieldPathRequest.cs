@@ -25,6 +25,11 @@ namespace Trailblazer.Pathing
 
         public int? MaxPathSearchRange { get; set; }
 
+        public readonly bool IsValid =>
+            Start != null &&
+            End != null &&
+            MaxPathSearchRange.HasValue;
+
         /// <summary>
         /// Limits how much extra distance the flood will expand after the target is reached.
         /// </summary>
@@ -49,6 +54,15 @@ namespace Trailblazer.Pathing
                 ExtraFloodRange = DefaultExtraFloodRange,
                 MaxPathSearchRange = null
             };
+        }
+
+        public void Prepare()
+        {
+            if (!MaxPathSearchRange.HasValue
+                && PathManager.GetMaxSearchSize(Start, End, out int searchSize))
+            {
+                MaxPathSearchRange = searchSize;
+            }
         }
 
         public override readonly bool Equals(object obj) =>

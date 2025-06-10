@@ -36,6 +36,12 @@ namespace Trailblazer.Pathing
         private int _greatestDistance;
 
         /// <summary>
+        /// The distance from the end node to the starting node during flood fill.
+        /// Used to define the flood radius.
+        /// </summary>
+        private int _distanceToStart;
+
+        /// <summary>
         /// Tracks partitions that were affected during the flood fill.
         /// These will be used to construct the final flow field result.
         /// </summary>
@@ -46,27 +52,32 @@ namespace Trailblazer.Pathing
         /// </summary>
         /// <param name="request">A flow field path request containing the start, end, and search parameters.</param>
         /// <param name="result">A dictionary of flow fields indexed by spawn token.</param>
+        /// <param name="distanceToTarget">The distance between the start and end voxel.</param>
         /// <returns><c>true</c> if a valid path is found; otherwise <c>false</c>.</returns>
         public bool FindPath(
             FlowFieldPathRequest request,
-            out SwiftDictionary<int, FlowField> result) => FindPath(request, out result, out _);
+            out SwiftDictionary<int, FlowField> result,
+            out int distanceToTarget)
+        {
+            bool success = FindPath(request, out result);
+            distanceToTarget = _distanceToStart;
+            return success;
+        }
 
         /// <summary>
         /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
         /// </summary>
         /// <param name="request">A flow field path request containing the start, end, and search parameters.</param>
         /// <param name="result">A dictionary of flow fields indexed by spawn token.</param>
-        /// <param name="distanceToTarget">The distance between the start and end voxel.</param>
         /// <returns><c>true</c> if a valid path is found; otherwise <c>false</c>.</returns>
         public bool FindPath(
             FlowFieldPathRequest request, 
-            out SwiftDictionary<int, FlowField> result,
-            out int distanceToTarget)
+            out SwiftDictionary<int, FlowField> result)
         {
-            distanceToTarget = 0;
             result = null;
-            if (request.HasZeroDisplacement ||
-                !request.End.TryGetPartition(out PathPartition targetPartition))
+            if (!request.IsValid
+                || request.HasZeroDisplacement 
+                || !request.End.TryGetPartition(out PathPartition targetPartition))
             {
                 return false;
             }
@@ -77,15 +88,16 @@ namespace Trailblazer.Pathing
             PathHeap.FastClear();
 
             _greatestDistance = 0;
+            _distanceToStart = 0;
 
             // Start from the end and move towards the start voxel
             PathHeap.Add(targetPartition);
 
-            if(!FloodPath(out distanceToTarget))
+            if(!FloodPath())
                 return false;
 
             if (_marked.Count > 0)
-                result = GenerateFlowFields(_request.End, distanceToTarget);
+                result = GenerateFlowFields();
 
             return result.Count > 0;
         }
@@ -95,24 +107,23 @@ namespace Trailblazer.Pathing
         /// Starts from the goal and expands outward until the start voxel is reached or search range is exceeded.
         /// </summary>
         /// <returns><c>true</c> if the start voxel is reached within the maximum range; otherwise <c>false</c>.</returns>
-        public bool FloodPath(out int distanceToStart)
+        private bool FloodPath()
         {
             bool targetReached = false;
-            distanceToStart = 0;
 
             int iterations = 0;
-            int searchSize = _request.MaxPathSearchRange ?? PathManager.DefaultMaxPathSearchRange;
+            int searchSize = _request.MaxPathSearchRange.Value;
             while (PathHeap.RemoveFirst(out PathPartition current) 
                 && iterations++ < searchSize)
             {
                 // Check if we found our way to the start voxel
                 if (!targetReached && current.VoxelSpawnToken == _request.Start.SpawnToken)
                 {
-                    distanceToStart = current.HeapCost;
+                    _distanceToStart = current.HeapCost;
                     targetReached = true;
                 }
 
-                if (targetReached && current.HeapCost >= distanceToStart + _request.ExtraFloodRange)
+                if (targetReached && current.HeapCost >= _distanceToStart + _request.ExtraFloodRange)
                     break;
 
                 if (current.HeapCost > _greatestDistance)
@@ -132,7 +143,7 @@ namespace Trailblazer.Pathing
         /// </summary>
         /// <param name="current">The current path partition being evaluated.</param>
         /// <param name="unitSize">The size of the navigating agent.</param>
-        public void AnalyzeNeighborDistance(PathPartition current, Fixed64 unitSize)
+        private void AnalyzeNeighborDistance(PathPartition current, Fixed64 unitSize)
         {
             // Check each straight line neighbour of this voxel (no diagonals)
             // We will only ever visit every voxel once as we are always visiting voxels in the most efficient order
@@ -160,16 +171,14 @@ namespace Trailblazer.Pathing
         /// Converts the results of the flood fill phase into directional flow fields pointing toward the goal.
         /// Each partition is assigned a direction vector blending shortest path and direct-to-goal direction.
         /// </summary>
-        /// <param name="end">The goal voxel for the flow field.</param>
-        /// <param name="distanceToStart">The distance between the start and end voxel.</param>
         /// <returns>A dictionary of directional flow field data indexed by voxel spawn tokens.</returns>
-        public SwiftDictionary<int, FlowField> GenerateFlowFields(Voxel end, int distanceToStart)
+        private SwiftDictionary<int, FlowField> GenerateFlowFields()
         {
             SwiftDictionary<int, FlowField> output = new()
             {
                 // Ensure end voxel is include, it shouldn't point anywhere
                 {
-                    end.SpawnToken,
+                    _request.End.SpawnToken,
                     new FlowField()
                     {
                         Direction = Vector3d.Zero,
@@ -178,11 +187,11 @@ namespace Trailblazer.Pathing
                 }
             };
 
-            Fixed64 totalDistance = distanceToStart + Fixed64.One; // total flood radius
+            Fixed64 totalDistance = _distanceToStart + Fixed64.One; // total flood radius
             foreach (PathPartition current in _marked)
             {
                 // end voxel shouldn't be marked, but just in case...
-                if (current.VoxelSpawnToken == end.SpawnToken)
+                if (current.VoxelSpawnToken == _request.End.SpawnToken)
                     continue;
 
                 FlowField currentFlow = new()
@@ -214,7 +223,7 @@ namespace Trailblazer.Pathing
                     Fixed64 alpha = FixedMath.Clamp01((totalDistance - currentFlow.DistanceToTarget) / totalDistance); // closer = alpha → 1
 
                     // blend with the lowest-cost vector
-                    Vector3d direct = (end.WorldPosition - current.VoxelPosition).Normalize();
+                    Vector3d direct = (_request.End.WorldPosition - current.VoxelPosition).Normalize();
                     Vector3d field = (minPartition.VoxelPosition - current.VoxelPosition).Normalize();
 
                     Vector3d blended = field * alpha + direct * (Fixed64.One - alpha);

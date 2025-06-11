@@ -2,8 +2,30 @@
 
 namespace Trailblazer
 {
-    internal static class HashHelper
+    internal static class Util
     {
+        /// <summary>
+        /// Clamp a value to the inclusive range [min, max].
+        /// </summary>
+        /// <remarks>
+        /// In newer versions of the .NET Framework, there is a System.Math.Clamp() method. 
+        /// </remarks>
+        /// <typeparam name="T">The type of value.</typeparam>
+        /// <param name="value">The value to clamp.</param>
+        /// <param name="min">The minimum value.</param>
+        /// <param name="max">The maximum value.</param>
+        /// <returns>The clamped value.</returns>
+        public static T Clamp<T>(T value, T min, T max) where T : System.IComparable<T>
+        {
+            if (value.CompareTo(max) > 0)
+                return max;
+
+            if (value.CompareTo(min) < 0)
+                return min;
+
+            return value;
+        }
+
         public static int CombineHashCodes(
             this ITuple tupled,
             int seed = 5381,

@@ -1,0 +1,39 @@
+﻿using SwiftCollections;
+
+namespace Trailblazer.Pathing
+{
+    public struct FlowFieldSurveyResult : ISurveyResult
+    {
+        // key = voxel spawn token, value = vector flow field
+        public SwiftDictionary<int, FlowField> Fields { get; private set; }
+
+        public readonly bool IsValid => Fields != null && Fields.Count > 0;
+
+        public bool IsInUse { get; private set; }
+
+        public int LastUsedFrame { get; private set; }
+
+        public int RequestHashKey { get; private set; }
+
+        public static readonly FlowFieldSurveyResult Empty = new FlowFieldSurveyResult();
+
+        public static FlowFieldSurveyResult Create(SwiftDictionary<int, FlowField> fields, int key)
+        {
+            return new FlowFieldSurveyResult()
+            {
+                Fields = fields,
+                IsInUse = false,
+                LastUsedFrame = -1,
+                RequestHashKey = key
+            };
+        }
+
+        public void MarkInUse() => IsInUse = true;
+
+        public void Release()
+        {
+            IsInUse = false;
+            LastUsedFrame = TrailblazerManager.FrameCount;
+        }
+    }
+}

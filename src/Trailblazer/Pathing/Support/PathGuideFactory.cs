@@ -1,8 +1,5 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
-using SwiftCollections;
-using System.Collections.Generic;
-using Trailblazer.Navigation.Steering;
 
 namespace Trailblazer.Pathing
 {
@@ -14,24 +11,24 @@ namespace Trailblazer.Pathing
     {
         private const int MaxFramesUnused = 600;
 
-        private static readonly ReusableGuideCache<AStarGuide> _cachedAStar = new();
+        private static readonly ReusableSurveyResultCache<AStarSurveyResult> _cachedAStarResults = new();
 
         /// <summary>
-        /// Returns the number of active (pooled or in-use) A* guides currently tracked.
+        /// Returns the number of active (pooled or in-use) A* results currently tracked.
         /// </summary>
-        public static int ActiveAStarGuideCount => _cachedAStar.Count;
+        public static int ActiveAStarGuideCount => _cachedAStarResults.Count;
 
-        private static readonly ReusableGuideCache<FlowFieldGuide> _cachedFlow = new();
+        private static readonly ReusableSurveyResultCache<FlowFieldSurveyResult> _cachedFlowResults = new();
 
         /// <summary>
         /// Returns the number of active (pooled or in-use) FlowField guides currently tracked.
         /// </summary>
-        public static int ActiveFlowGuideCount => _cachedFlow.Count;
+        public static int ActiveFlowGuideCount => _cachedFlowResults.Count;
 
         /// <summary>
         /// Indicates whether any pathing guides are currently pooled and available.
         /// </summary>
-        public static bool IsPooling => _cachedAStar.Count > 0 || _cachedFlow.Count > 0;
+        public static bool IsPooling => ActiveAStarGuideCount > 0 || ActiveFlowGuideCount > 0;
 
         /// <summary>
         /// Attempts to remove guides from the pool that haven't been used for a configured number of frames.
@@ -41,11 +38,9 @@ namespace Trailblazer.Pathing
         {
             if (!IsPooling) return;
 
-            _cachedAStar.EvictStaleEntries(currentFrame, MaxFramesUnused);
-            _cachedFlow.EvictStaleEntries(currentFrame, MaxFramesUnused);
+            _cachedAStarResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
+            _cachedFlowResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
         }
-
- 
 
         /// <summary>
         /// Requests a guide of a specific type using the given origin, destination, and request parameters.
@@ -54,10 +49,19 @@ namespace Trailblazer.Pathing
         /// <param name="origin">The world position to start the path from.</param>
         /// <param name="destination">The destination world position.</param>
         /// <param name="request">The configuration describing the path search.</param>
-        /// <returns>The pooled or newly created guide instance.</returns>
-        public static T RequestGuide<T>(Vector3d origin, Vector3d destination, IPathRequest request) where T : IGuide
+        /// <param name="result">The resolved guide or default if the request was invalid.</param>
+        /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
+        public static bool RequestGuide<T>(
+            Vector3d origin, 
+            Vector3d destination, 
+            IPathRequest request, 
+            out T result) where T : IGuide
         {
-            return (T)RequestGuide(origin, destination, request);
+            result = default;
+            bool success = RequestGuide(origin, destination, request, out IGuide guide);
+            if (success)
+                result = (T)guide;
+            return success;
         }
 
         /// <summary>
@@ -66,16 +70,22 @@ namespace Trailblazer.Pathing
         /// <param name="origin">The world position to start from.</param>
         /// <param name="destination">The world destination to path toward.</param>
         /// <param name="request">The configuration describing the path request.</param>
-        /// <returns>The resolved guide or null if the request was invalid.</returns>
-        public static IGuide RequestGuide(Vector3d origin, Vector3d destination, IPathRequest request)
+        /// <param name="result">The resolved guide or null if the request was invalid.</param>
+        /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
+        public static bool RequestGuide(
+            Vector3d origin, 
+            Vector3d destination, 
+            IPathRequest request,
+            out IGuide result)
         {
+            result = null;
             if (!PathManager.GetValidPathRequest(origin, destination, out Voxel startVoxel, out Voxel endVoxel))
-                return null;
+                return false;
 
             request.Start = startVoxel;
             request.End = endVoxel;
 
-            return RequestGuide(request);
+            return RequestGuide(request, out result);
         }
 
         /// <summary>
@@ -83,40 +93,43 @@ namespace Trailblazer.Pathing
         /// </summary>
         /// <typeparam name="T">The concrete guide type to return.</typeparam>
         /// <param name="request">The path request with validated parameters.</param>
-        /// <returns>The resolved or pooled guide.</returns>
-        public static T RequestGuide<T>(IPathRequest request) where T : IGuide
+        /// <param name="result">The resolved guide or null if the request was invalid.</param>
+        /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
+        public static bool RequestGuide<T>(IPathRequest request, out T result) where T : IGuide
         {
-            return (T)RequestGuide(request);
+            result = default;
+            bool success = RequestGuide(request, out IGuide guide);
+            if (success)
+                result = (T)guide;
+            return success;
         }
 
         /// <summary>
         /// Routes the path request to the appropriate guide implementation based on type.
         /// </summary>
         /// <param name="request">The polymorphic request to resolve (AStar or FlowField).</param>
-        /// <returns>The resolved or pooled guide.</returns>
-        public static IGuide RequestGuide(IPathRequest request)
+        /// <param name="result">The resolved guide or null if the request was invalid.</param>
+        /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
+        public static bool RequestGuide(IPathRequest request, out IGuide result)
         {
-            IGuide guide = null;
-
+            result = null;
             request.Prepare();
             if (!request.IsValid)
-                return null;
+                return false;
 
             switch (request)
             {
                 case AStarPathRequest a:
-                    guide = RequestAStar(a);
+                    result = RequestAStar(a);
                     break;
                 case FlowFieldPathRequest f:
-                    guide = RequestFlowField(f);
+                    result = RequestFlowField(f);
                     break;
                 default:
                     break;
             }
 
-            guide?.MarkInUse();
-
-            return guide;
+            return result != null;
         }
 
         /// <summary>
@@ -126,9 +139,17 @@ namespace Trailblazer.Pathing
         /// <returns>A valid AStarGuide instance.</returns>
         public static AStarGuide RequestAStar(AStarPathRequest request)
         {
-            if (!_cachedAStar.TryGetOrCreate(request, () => { return new AStarGuide(); }, out AStarGuide guide))
+            bool pathFound = _cachedAStarResults.TryGetOrCreate(request,
+                () => AStarSurveyor.Shared.FindPath(request),
+                out AStarSurveyResult path);
+
+            if (!pathFound)
                 return null;
 
+            path.MarkInUse();
+
+            AStarGuide guide = new();
+            guide.Initialize(path);
             return guide;
         }
 
@@ -139,9 +160,19 @@ namespace Trailblazer.Pathing
         /// <returns>A valid FlowFieldGuide instance.</returns>
         public static FlowFieldGuide RequestFlowField(FlowFieldPathRequest request)
         {
-            if (!_cachedFlow.TryGetOrCreate(request, () => { return new FlowFieldGuide(); }, out FlowFieldGuide guide))
+            bool pathFound = _cachedFlowResults.TryGetOrCreate(request,
+                () => FlowFieldSurveyor.Shared.FindPath(request),
+                out FlowFieldSurveyResult path);
+
+            // Make sure the start voxel is within the current fields collection
+            // Note: for flow fields, the SpawnToken of the Start voxel is not included
+            if (!pathFound || !path.Fields.ContainsKey(request.Start.SpawnToken))
                 return null;
 
+            path.MarkInUse();
+
+            FlowFieldGuide guide = new();
+            guide.Initialize(path);
             return guide;
         }
 
@@ -157,10 +188,10 @@ namespace Trailblazer.Pathing
             switch (guide)
             {
                 case AStarGuide a:
-                    _cachedAStar.Return(a, dispose);
+                    _cachedAStarResults.Return(a.TrailMap, dispose);
                     break;
                 case FlowFieldGuide f:
-                    _cachedFlow.Return(f, dispose);
+                    _cachedFlowResults.Return(f.FlowMap, dispose);
                     break;
             }
         }
@@ -170,8 +201,8 @@ namespace Trailblazer.Pathing
         /// </summary>
         public static void FlushPools()
         {
-            _cachedAStar.Clear();
-            _cachedFlow.Clear();
+            _cachedAStarResults.Clear();
+            _cachedFlowResults.Clear();
         }
     }
 }

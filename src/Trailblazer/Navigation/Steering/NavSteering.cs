@@ -3,7 +3,6 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using System;
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using Trailblazer.Pathing;
 
@@ -77,22 +76,20 @@ namespace Trailblazer.Navigation.Steering
         /// </summary>
         public Vector3d Destination { get; protected set; }
 
+        public Vector3d TargetDirection { get; protected set; }
+
         /// <summary>
         /// The pathfinding configuration used for the current movement request, including size, and type.
         /// </summary>
         public IPathRequest CurrentRequest { get; protected set; }
 
         /// <summary>
-        /// Index or key used to track the agent’s progress along its assigned guide.
-        /// For AStar, this represents the waypoint index. 
-        /// For FlowField, this corresponds to the SpawnToken of the current voxel.
-        /// </summary>
-        public int CurrentIndex { get; protected set; }
-
-        /// <summary>
         /// Current guide used to compute the desired path or flow.
         /// </summary>
-        public IGuide TrailGuide { get; protected set; }
+        private IGuide _trailGuide;
+
+        /// <inheritdoc cref="_trailGuide"/>
+        public IGuide TrailGuide => _trailGuide;
 
         /// <summary>
         /// Whether the navigator is following a path or guide to the destination.
@@ -140,7 +137,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Indicates whether the agent is actively following a guide path with queued waypoints.
         /// </summary>
-        public bool IsFollowingGuide => !HasLineOfSightPath && TrailGuide != null;
+        public bool IsFollowingGuide => !HasLineOfSightPath && _trailGuide != null;
 
         /// <summary>
         /// Has this unit arrived at destination?
@@ -262,7 +259,6 @@ namespace Trailblazer.Navigation.Steering
             }
 
             IsFollowingTrail = true;
-            CurrentIndex = 0;
             CurrentRequest = pathRequest;
             CurrentRequest.End = destinationVoxel;
             Destination = destination;
@@ -311,9 +307,8 @@ namespace Trailblazer.Navigation.Steering
             IsAtDestination = true;
             Destination = navigator.Position;
 
-            CurrentIndex = -1;
             CurrentRequest = null;
-            TrailGuide = null;
+            _trailGuide = null;
 
             Events = new();
         }
@@ -346,9 +341,18 @@ namespace Trailblazer.Navigation.Steering
                     _pathCheckCooldown = PathRecheckCooldownFrames;
                 }
 
-                Vector3d direction = FindTargetDirection(navigator);
-                if (direction != Vector3d.Zero)
-                    UpdateMovementStatus(navigator.Position, direction, navigator.Speed, navigator.StuckThresholdSpeed);
+                TargetDirection = FindTargetDirection(navigator);
+                if (TargetDirection != Vector3d.Zero)
+                {
+                    if (!IsAtDestination)
+                        CheckStuckStatus(navigator.Position, navigator.Speed, navigator.StuckThresholdSpeed);
+
+                    if (_trailGuide is IWaypointGuide waypointGuide && ShouldAdvanceToNextWaypoint(navigator.Position))
+                        waypointGuide.AdvanceWaypoint();
+
+                    // Pass the request to the NavMotor (even if we just arrived since we were close enough)
+                    Events.OnStartTraversal?.Invoke(TargetDirection);
+                }
             }
             else
             {
@@ -361,43 +365,6 @@ namespace Trailblazer.Navigation.Steering
 
             _autoStopFrameCount = _autoStopFrameCount--;
             _pathCheckCooldown = _pathCheckCooldown--;
-        }
-
-        /// <summary>
-        /// Computes the steering direction toward the destination or along the path.
-        /// </summary>
-        protected virtual Vector3d FindTargetDirection(INavigate body)
-        {
-            Vector3d targetDirection = Vector3d.Zero;
-            if (HasLineOfSightPath)
-                targetDirection = Destination - body.Position;
-            else if (TrailGuide != null && TrailGuide.IsValid)
-            {
-                if (!TrailGuide.HasWaypoints)
-                    CurrentIndex = TrailGuide.GetIndex(body.Position);
-
-                targetDirection = TrailGuide.GetMovementDirection(body.Position, CurrentIndex);
-            }
-            else
-            {
-                Debug.WriteLine("No vialable movement direction found.");
-                return targetDirection;
-            }
-
-            if(targetDirection == Vector3d.Zero)
-                return Vector3d.Zero;
-
-            // This is now the direction we want to be travelling in 
-            targetDirection.Normalize(out _distanceToTarget);
-
-            // Calculate steering and flocking forces for all agents
-            if (IsInGroup)
-                targetDirection += ComputeGroupSteering(body.Position, body.Speed);
-
-            // Avoid any intersection agents!
-            targetDirection += CalculateAvoidanceForce(body);
-
-            return targetDirection.Normal;
         }
 
         /// <summary>
@@ -452,72 +419,88 @@ namespace Trailblazer.Navigation.Steering
             }
 
             HasLineOfSightPath = IsDestinationInSight(
-                origin, 
-                Destination, 
-                CurrentRequest.UnitSize, 
+                origin,
+                Destination,
+                CurrentRequest.UnitSize,
                 CurrentRequest.AllowUnwalkable);
             if (HasLineOfSightPath)
                 return;  // no path required
 
             _pathCheckCooldown = PathRecheckCooldownFrames;
 
-            TrailGuide = PathGuideFactory.RequestGuide(CurrentRequest);
-            if (TrailGuide == null || !TrailGuide.IsValid)
+            if (!PathGuideFactory.RequestGuide(CurrentRequest, out _trailGuide))
             {
                 Debug.WriteLine($"Unable to retrieve a guide to {Destination}");
                 Arrive();
             }
-
-            if (TrailGuide.HasWaypoints)
-                CurrentIndex = 0;
         }
 
         /// <summary>
-        /// Evaluates the agent's current movement direction and velocity, updating stuck and arrival state.
+        /// Computes the steering direction toward the destination or along the path.
         /// </summary>
-        protected virtual void UpdateMovementStatus(
-            Vector3d position,
-            Vector3d direction,
-            Fixed64 speed,
-            Fixed64 stuckThreshold)
+        protected virtual Vector3d FindTargetDirection(INavigate body)
         {
-            Fixed64 moveAmount = FixedMath.Clamp01(direction.x.Abs() + direction.z.Abs());
-            bool reachedTarget = _distanceToTarget < _closingDistance * StopMultiplier;
-            bool noInput = moveAmount == Fixed64.Zero;
-
-            if (!IsFollowingGuide && (reachedTarget || (!IsStuck && noInput)))
+            Vector3d targetDirection = Vector3d.Zero;
+            if (HasLineOfSightPath)
+                targetDirection = Destination - body.Position;
+            else if (IsFollowingGuide)
             {
-                Arrive();
-                direction = Vector3d.Zero;
+                if (_trailGuide is IWaypointGuide waypointGuide)
+                    targetDirection = waypointGuide.GetMovementDirection(body.Position);
+                else
+                    _trailGuide.TryGetMovementDirection(body.Position, out targetDirection);
+            }
+            else
+            {
+                Debug.WriteLine("No vialable movement direction found.");
+                return targetDirection;
             }
 
-            if (!IsAtDestination)
-            {
-                CheckStuckStatus(speed, stuckThreshold);
+            if (targetDirection == Vector3d.Zero)
+                return Vector3d.Zero;
 
-                if (TrailGuide != null && TrailGuide.HasWaypoints && ShouldAdvanceToNextWaypoint(position, direction))
-                    CurrentIndex++;
-            }
+            // This is now the direction we want to be travelling in 
+            targetDirection.Normalize(out _distanceToTarget);
 
-            // Pass the request to the NavMotor (even if we just arrived since we were close enough)
-            Events.OnStartTraversal?.Invoke(direction);
+            // Calculate steering and flocking forces for all agents
+            if (IsInGroup)
+                targetDirection += ComputeGroupSteering(body.Position, body.Speed);
+
+            // Avoid any intersection agents!
+            targetDirection += CalculateAvoidanceForce(body);
+
+            return targetDirection.Normal;
         }
 
         /// <summary>
         /// Determines whether the agent should advance to the next waypoint based on proximity and heading alignment.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ShouldAdvanceToNextWaypoint(Vector3d position, Vector3d direction)
+        public bool ShouldAdvanceToNextWaypoint(Vector3d position)
         {
-            return _distanceToTarget < _closingDistance && Vector3d.Dot(position, direction) < Fixed64.Epsilon
+            return _distanceToTarget < _closingDistance && Vector3d.Dot(position, TargetDirection) < Fixed64.Epsilon
                 || _distanceToTarget < _closingDistance * GlobalGridManager.VoxelSize;
         }
 
         /// <summary>
-        /// Evaluates whether the agent is stuck based on recent movement patterns.
+        /// Evaluates the agent's current movement direction and velocity, updating stuck and arrival state.
         /// </summary>
-        protected virtual void CheckStuckStatus(Fixed64 speed, Fixed64 stuckThreshold)
+        protected virtual void CheckStuckStatus(
+            Vector3d position,
+            Fixed64 speed,
+            Fixed64 stuckThreshold)
         {
+            Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.x.Abs() + TargetDirection.z.Abs());
+            bool reachedTarget = _distanceToTarget < _closingDistance * StopMultiplier;
+            bool noInput = moveAmount == Fixed64.Zero;
+
+            if (!IsFollowingGuide && (reachedTarget || (!IsStuck && noInput)))
+            {
+                Arrive();
+                TargetDirection = Vector3d.Zero;
+                return;
+            }
+
             if (!CanAutoStop)
                 return;
 
@@ -537,24 +520,21 @@ namespace Trailblazer.Navigation.Steering
                         if (IsInGroup)
                             MovementGroupID = -1;  // Attempt to repath agent by themselves
 
-                        // Try to move to the next waypoint
-                        if (IsFollowingGuide)
+                        if (IsFollowingGuide && _trailGuide.TryGetFallbackDirection(position, out Vector3d fallback))
                         {
-                            CurrentIndex++;
+                            TargetDirection = fallback;
                             _repathTries++;
                             _stuckFrameCount = 0;
                             return;
                         }
-                        else
-                        {
-                            _shouldRequestPathThisFrame = true;
 
-                            // Reset the guide and have them try a new path (don't pool a bad path)
-                            if(TrailGuide != null)
-                            {
-                                PathGuideFactory.ReturnGuide(TrailGuide, true);
-                                TrailGuide = null;
-                            }
+                        _shouldRequestPathThisFrame = true;
+
+                        // Reset the guide and have them try a new path (don't pool a bad path)
+                        if (_trailGuide != null)
+                        {
+                            PathGuideFactory.ReturnGuide(_trailGuide, true);
+                            _trailGuide = null;
                         }
 
                         _repathTries++;
@@ -565,10 +545,10 @@ namespace Trailblazer.Navigation.Steering
                         // we've tried to many times, we stuck stuck
                         IsStuck = true;
                         // Reset the guide and have them try a new path (don't pool a bad path)
-                        if (TrailGuide != null)
+                        if (_trailGuide != null)
                         {
-                            PathGuideFactory.ReturnGuide(TrailGuide, true);
-                            TrailGuide = null;
+                            PathGuideFactory.ReturnGuide(_trailGuide, true);
+                            _trailGuide = null;
                         }
                         Arrive();
                         return;
@@ -592,14 +572,14 @@ namespace Trailblazer.Navigation.Steering
         {
             StopMove();
 
-            if(TrailGuide != null)
-                PathGuideFactory.ReturnGuide(TrailGuide);
+            if (_trailGuide != null)
+                PathGuideFactory.ReturnGuide(_trailGuide);
 
-            CurrentIndex = -1; // Reset for reuse Safety
-            TrailGuide = null;
+            _trailGuide = null;
             CurrentRequest = null;
             _distanceToTarget = Fixed64.Zero;
             IsAtDestination = true;
+            TargetDirection = Vector3d.Zero;
 
             Events.OnArrive?.Invoke();
         }

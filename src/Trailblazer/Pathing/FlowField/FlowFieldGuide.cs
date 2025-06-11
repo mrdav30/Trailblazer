@@ -1,6 +1,5 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
-using SwiftCollections;
 
 namespace Trailblazer.Pathing
 {
@@ -10,105 +9,63 @@ namespace Trailblazer.Pathing
     /// </summary>
     public class FlowFieldGuide : IGuide
     {
-        public bool PathFound => _fields != null;
+        public static readonly Fixed64 DefaultFieldSearchRange = new(10);
 
-        public bool IsValid => PathFound && _fields.Count > 0;
+        public FlowFieldSurveyResult FlowMap { get; private set; }
 
-        public bool IsInUse { get; private set; }
-
-        public int LastUsedFrame { get; private set; }
-
-        // key = voxel spawn token, value = vector flow field
-        private SwiftDictionary<int, FlowField> _fields;
-
-        private int _fieldSearchRange;
-
-        public int RequestHashKey { get; private set; }
-
-        public bool HasWaypoints => false;
-
-        public bool Initialize(IPathRequest request)
+        public bool Initialize(FlowFieldSurveyResult surveyResult)
         {
-            if (request is not FlowFieldPathRequest flowFieldRequest || !request.IsValid)
+            if (!surveyResult.IsValid)
                 return false;
 
-            int requestHashKey = request.RequestCacheKey;
-            if (RequestHashKey == requestHashKey && IsValid)
-            {
-                // Make sure the start voxel is within the current fields collection
-                if (_fields.ContainsKey(request.Start.SpawnToken))
-                    return true;
-            }
+            FlowMap = surveyResult;
 
-            if (!FlowFieldSurveyor.Shared.FindPath(flowFieldRequest, out SwiftDictionary<int, FlowField> foundFields))
+            return true;
+        }
+
+        public bool TryGetMovementDirection(Vector3d origin, out Vector3d direction)
+        {
+            direction = Vector3d.Zero;
+            if (!FlowMap.IsValid)
                 return false;
 
-            _fields = foundFields;
-            _fieldSearchRange = flowFieldRequest.ExtraFloodRange;
-            RequestHashKey = requestHashKey;
-
-            return PathFound;
-        }
-
-        public void MarkInUse() => IsInUse = true;
-
-        public bool HasArrived(int index)
-        {
-            if (!_fields.TryGetValue(index, out FlowField currentField))
+            direction = FlowFieldSurveyor.SampleFlowVector(origin, FlowMap.Fields);
+            if (direction == Vector3d.Zero)
                 return false;
 
-            return PathFound && currentField.IsGoal;
+            direction = direction.Normal;
+            return true;
         }
 
-        public int GetIndex(Vector3d from)
+        public bool FlowFieldContainsPosition(Vector3d origin)
         {
-            if (!PathFound
-                || _fields == null
-                || _fields.Count <= 0
-                || !GlobalGridManager.TryGetGridAndVoxel(from, out _, out Voxel currentVoxel))
+            if (!GlobalGridManager.TryGetGridAndVoxel(origin, out _, out Voxel currentVoxel)
+                || !FlowMap.Fields.ContainsKey(currentVoxel.SpawnToken))
             {
-                return -1;
+                return false;
             }
 
-            if (_fields.ContainsKey(currentVoxel.SpawnToken))
-                return currentVoxel.SpawnToken;
-
-            if (!FlowFieldSurveyor.TryGetNearestFlowAnchor(from, _fields, out Voxel destination, _fieldSearchRange))
-                return -1;
-
-            return destination.SpawnToken;
+            return true;
         }
 
-        public Vector3d GetMovementDirection(Vector3d from, int index)
+        public bool TryGetFallbackDirection(Vector3d origin, out Vector3d fallbackDirection)
         {
-            if (!PathFound || _fields == null || _fields.Count <= 0)
-                return Vector3d.Zero;
-
-            if (_fields.ContainsKey(index))
-            {
-                Vector3d direction = FlowFieldSurveyor.SampleFlowVector(from, _fields);
-                if (direction == Vector3d.Zero)
-                    return Vector3d.Zero;
-
-                return (direction - from).Normal;
+            fallbackDirection = Vector3d.Zero;
+            if (!GlobalGridManager.TryGetGridAndVoxel(origin, out _, out Voxel currentVoxel)
+                || !FlowMap.Fields.ContainsKey(currentVoxel.SpawnToken))
+            {  
+                return false; 
             }
 
-            return Vector3d.Zero;
-        }
+            bool voxelFound = FlowFieldSurveyor.TryGetNearestFlowAnchor(origin,
+                FlowMap.Fields,
+                DefaultFieldSearchRange,
+                out Voxel destination);
+            if (!voxelFound)
+                return false;
 
-        public void Release()
-        {
-            IsInUse = false;
-            LastUsedFrame = TrailblazerManager.FrameCount;
-        }
-
-        public void Dispose()
-        {
-            IsInUse = false;
-            LastUsedFrame = -1;
-            _fields = null;
-            RequestHashKey = -1;
-            _fieldSearchRange = 0;
+            fallbackDirection = (destination.WorldPosition - origin).Normalize();
+            return true;
         }
     }
 }

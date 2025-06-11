@@ -36,13 +36,13 @@ namespace Trailblazer.Tests.Pathing
 
             var request = AStarPathRequest.CreateEmpty();
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(origin, target, request);
+            bool success = PathGuideFactory.RequestGuide(origin, target, request, out AStarGuide guide);
 
-            Assert.True(guide.IsValid);
-            Assert.NotNull(guide.Path);
-            Assert.Equal(3, guide.Path!.Count); // start, middle, end
-            Assert.Equal(origin, guide.Path[0]);
-            Assert.Equal(target, guide.Path.Last());
+            Assert.True(success);
+            Assert.NotNull(guide);
+            Assert.Equal(3, guide.TrailMap.Path!.Count); // start, middle, end
+            Assert.Equal(origin, guide.TrailMap.Path[0]);
+            Assert.Equal(target, guide.TrailMap.Path.Last());
 
             PathManager.Unload("Line");
         }
@@ -57,8 +57,9 @@ namespace Trailblazer.Tests.Pathing
 
             var request = AStarPathRequest.CreateEmpty();
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, unreachableTarget, request);
+            bool success = PathGuideFactory.RequestGuide(Vector3d.Zero, unreachableTarget, request, out AStarGuide guide);
 
+            Assert.False(success);
             Assert.Null(guide);
 
             PathManager.Unload("Isolated");
@@ -89,7 +90,7 @@ namespace Trailblazer.Tests.Pathing
             var request = AStarPathRequest.CreateEmpty();
             request.MaxClimbHeight = maxHeightDifference;
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(5, 5, 0), request);
+            bool success = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(5, 5, 0), request, out AStarGuide guide);
 
             Assert.True(heightViolationTriggered);
 
@@ -121,10 +122,10 @@ namespace Trailblazer.Tests.Pathing
             var request = AStarPathRequest.CreateEmpty();
             request.Heuristic = method;
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(start, target, request);
+            bool success = PathGuideFactory.RequestGuide(start, target, request, out AStarGuide guide);
 
+            Assert.True(success);
             Assert.NotNull(guide);
-            Assert.True(guide.IsValid);
 
             PathManager.Unload("Diag");
         }
@@ -137,8 +138,9 @@ namespace Trailblazer.Tests.Pathing
 
             var request = AStarPathRequest.CreateEmpty();
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(pos, pos, request);
+            bool success = PathGuideFactory.RequestGuide(pos, pos, request, out AStarGuide guide);
 
+            Assert.False(success);
             Assert.Null(guide);
 
             PathManager.Unload("SameSpot");
@@ -166,10 +168,11 @@ namespace Trailblazer.Tests.Pathing
 
             var request = AStarPathRequest.CreateEmpty();
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(start, target, request);
+            bool success = PathGuideFactory.RequestGuide(start, target, request, out AStarGuide guide);
 
+            Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Contains(new Vector3d(2, 0, 1), guide.Path!); // Must have detoured around
+            Assert.Contains(new Vector3d(2, 0, 1), guide.TrailMap.Path!); // Must have detoured around
 
             PathManager.Unload("Detour");
         }
@@ -194,9 +197,10 @@ namespace Trailblazer.Tests.Pathing
             var request = AStarPathRequest.CreateEmpty();
             request.UnitSize = (Fixed64)2;
 
-            AStarGuide guide =
-                PathGuideFactory.RequestGuide<AStarGuide>(new Vector3d(0, 0, 1), new Vector3d(4, 0, 1), request);
+            bool success =
+                PathGuideFactory.RequestGuide(new Vector3d(0, 0, 1), new Vector3d(4, 0, 1), request, out AStarGuide guide);
 
+            Assert.False(success);
             Assert.Null(guide);
 
             PathManager.Unload("Choke");
@@ -218,11 +222,11 @@ namespace Trailblazer.Tests.Pathing
 
             var request = AStarPathRequest.CreateEmpty();
 
-            AStarGuide guide =
-                PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(2, 0, 0), request);
+            bool success1 =
+                PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 0), request, out AStarGuide guide);
 
+            Assert.True(success1);
             Assert.NotNull(guide);
-            Assert.True(guide.IsValid);
 
             // Second request with blocked path
             PathManager.Unload("ResetTest");
@@ -240,9 +244,10 @@ namespace Trailblazer.Tests.Pathing
 
             var failedRequest = AStarPathRequest.CreateEmpty();
 
-            AStarGuide failedGuide =
-                PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(2, 0, 0), failedRequest);
+            bool success2 =
+                PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 0), failedRequest, out AStarGuide failedGuide);
 
+            Assert.False(success2);
             Assert.Null(failedGuide);
 
             PathManager.Unload("ResetTestBlocked");
@@ -260,8 +265,9 @@ namespace Trailblazer.Tests.Pathing
             var request = AStarPathRequest.CreateEmpty();
             request.MaxPathSearchRange = 10;
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(49, 0, 0), request);
+            bool success = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(49, 0, 0), request, out AStarGuide guide);
 
+            Assert.False(success);
             Assert.Null(guide);
 
             PathManager.Unload("SearchCap");
@@ -286,10 +292,11 @@ namespace Trailblazer.Tests.Pathing
             var request = AStarPathRequest.CreateEmpty();
             request.UseSplineSmoothing = true;
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(Vector3d.Zero, new Vector3d(2, 0, 2), request);
+            bool success = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 2), request, out AStarGuide guide);
 
+            Assert.True(success);
             Assert.NotNull(guide);
-            Assert.True(guide.Path!.Count > 3); // should have inserted curve points
+            Assert.True(guide.TrailMap.Path!.Count > 3); // should have inserted curve points
 
             PathManager.Unload("LSpline");
         }
@@ -311,10 +318,11 @@ namespace Trailblazer.Tests.Pathing
             var request = AStarPathRequest.CreateEmpty();
             request.UseSplineSmoothing = true;
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(start, end, request);
+            bool success = PathGuideFactory.RequestGuide(start, end, request, out AStarGuide guide);
 
+            Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Equal(2, guide.Path!.Count); // No smoothing applied
+            Assert.Equal(2, guide.TrailMap.Path!.Count); // No smoothing applied
 
             PathManager.Unload("ShortSpline");
         }
@@ -341,11 +349,12 @@ namespace Trailblazer.Tests.Pathing
             var request = AStarPathRequest.CreateEmpty();
             request.UseSplineSmoothing = true;
 
-            AStarGuide guide = PathGuideFactory.RequestGuide<AStarGuide>(start, end, request);
+            bool success = PathGuideFactory.RequestGuide(start, end, request, out AStarGuide guide);
 
+            Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Equal(start, guide.Path!.First());
-            Assert.Equal(end, guide.Path.Last());
+            Assert.Equal(start, guide.TrailMap.Path!.First());
+            Assert.Equal(end, guide.TrailMap.Path.Last());
 
             PathManager.Unload("SplineEnds");
         }

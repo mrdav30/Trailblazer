@@ -3,7 +3,6 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
 using System;
-using System.Collections.Concurrent;
 using System.Threading;
 
 namespace Trailblazer.Pathing
@@ -63,16 +62,14 @@ namespace Trailblazer.Pathing
         /// Returns true if a valid path was found and outputs the resulting waypoint list.
         /// </summary>
         /// <param name="request">The pathfinding request containing start/end info and constraints.</param>
-        /// <param name="result">The list of path waypoints if successful; otherwise null.</param>
-        /// <returns>True if a path is found; false otherwise.</returns>
-        public bool FindPath(AStarPathRequest request, out SwiftList<Vector3d> result)
+        /// <returns>The list of path waypoints if successful; otherwise null.</returns>
+        public AStarSurveyResult FindPath(AStarPathRequest request)
         {
-            result = null;
             if (!request.IsValid
                 || request.HasZeroDisplacement 
                 || !request.Start.TryGetPartition(out PathPartition startPartition))
             {
-                return false;
+                return AStarSurveyResult.Empty;
             }
 
             _request = request;
@@ -85,11 +82,10 @@ namespace Trailblazer.Pathing
             PathHeap.Add(startPartition);
 
             if (!TracePath())
-                return false;
+                return AStarSurveyResult.Empty;
 
             SwiftList<Voxel> rawVoxelPath = GetRawpath();
-            result = SmoothPath(rawVoxelPath);
-            return true;
+            return AStarSurveyResult.Create(SmoothPath(rawVoxelPath), request.RequestCacheKey);
         }
 
         /// <summary>

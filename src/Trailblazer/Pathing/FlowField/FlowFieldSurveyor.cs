@@ -51,35 +51,14 @@ namespace Trailblazer.Pathing
         /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
         /// </summary>
         /// <param name="request">A flow field path request containing the start, end, and search parameters.</param>
-        /// <param name="result">A dictionary of flow fields indexed by spawn token.</param>
-        /// <param name="distanceToTarget">The distance between the start and end voxel.</param>
-        /// <returns><c>true</c> if a valid path is found; otherwise <c>false</c>.</returns>
-        public bool FindPath(
-            FlowFieldPathRequest request,
-            out SwiftDictionary<int, FlowField> result,
-            out int distanceToTarget)
+        /// <returns>A dictionary of flow fields indexed by spawn token.</returns>
+        public FlowFieldSurveyResult FindPath(FlowFieldPathRequest request)
         {
-            bool success = FindPath(request, out result);
-            distanceToTarget = _distanceToStart;
-            return success;
-        }
-
-        /// <summary>
-        /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
-        /// </summary>
-        /// <param name="request">A flow field path request containing the start, end, and search parameters.</param>
-        /// <param name="result">A dictionary of flow fields indexed by spawn token.</param>
-        /// <returns><c>true</c> if a valid path is found; otherwise <c>false</c>.</returns>
-        public bool FindPath(
-            FlowFieldPathRequest request, 
-            out SwiftDictionary<int, FlowField> result)
-        {
-            result = null;
             if (!request.IsValid
                 || request.HasZeroDisplacement 
                 || !request.End.TryGetPartition(out PathPartition targetPartition))
             {
-                return false;
+                return FlowFieldSurveyResult.Empty;
             }
 
             _request = request;
@@ -93,13 +72,10 @@ namespace Trailblazer.Pathing
             // Start from the end and move towards the start voxel
             PathHeap.Add(targetPartition);
 
-            if(!FloodPath())
-                return false;
+            if(!FloodPath() || _marked.Count <= 0)
+                return FlowFieldSurveyResult.Empty;
 
-            if (_marked.Count > 0)
-                result = GenerateFlowFields();
-
-            return result.Count > 0;
+            return FlowFieldSurveyResult.Create(GenerateFlowFields(), request.RequestCacheKey);
         }
 
         /// <summary>
@@ -293,14 +269,14 @@ namespace Trailblazer.Pathing
         public static bool TryGetNearestFlowAnchor(
             Vector3d origin,
             SwiftDictionary<int, FlowField> fields,
-            out Voxel result,
-            double range)
+            Fixed64 range,
+            out Voxel result)
         {
             result = null;
             if (fields == null || fields.Count == 0)
                 return false;
 
-            Fixed64 minDistanceSq = new(range * range);
+            Fixed64 minDistanceSq = range * range;
             bool found = false;
 
             foreach (FlowField flow in fields.Values)

@@ -67,27 +67,30 @@ namespace Trailblazer.Pathing
         /// <returns>The list of path waypoints if successful; otherwise null.</returns>
         public AStarSurveyResult FindPath(AStarPathRequest request)
         {
-            if (!request.IsValid
-                || request.HasZeroDisplacement 
-                || !request.Start.TryGetPartition(out PathPartition startPartition))
+            lock (SurveyorLock.GlobalLock)
             {
-                return AStarSurveyResult.Empty;
+                if (!request.IsValid
+                    || request.HasZeroDisplacement
+                    || !request.Start.TryGetPartition(out PathPartition startPartition))
+                {
+                    return AStarSurveyResult.Empty;
+                }
+
+                _request = request;
+
+                _voxelData.Clear();
+                _pathHeap.FastClear();
+
+                // Trace path from the start to the end
+                _voxelData.Add(_request.Start.SpawnToken, new());
+                _pathHeap.Add(startPartition);
+
+                if (!TracePath())
+                    return AStarSurveyResult.Empty;
+
+                SwiftList<Voxel> rawVoxelPath = GetRawpath();
+                return AStarSurveyResult.Create(SmoothPath(rawVoxelPath), request.RequestCacheKey);
             }
-
-            _request = request;
-
-            _voxelData.Clear();
-            _pathHeap.FastClear();
-
-            // Trace path from the start to the end
-            _voxelData.Add(_request.Start.SpawnToken, new());
-            _pathHeap.Add(startPartition);
-
-            if (!TracePath())
-                return AStarSurveyResult.Empty;
-
-            SwiftList<Voxel> rawVoxelPath = GetRawpath();
-            return AStarSurveyResult.Create(SmoothPath(rawVoxelPath), request.RequestCacheKey);
         }
 
         /// <summary>

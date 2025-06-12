@@ -56,28 +56,31 @@ namespace Trailblazer.Pathing
         /// <returns>A dictionary of flow fields indexed by spawn token.</returns>
         public FlowFieldSurveyResult FindPath(FlowFieldPathRequest request)
         {
-            if (!request.IsValid
-                || request.HasZeroDisplacement 
-                || !request.End.TryGetPartition(out PathPartition targetPartition))
+            lock (SurveyorLock.GlobalLock)
             {
-                return FlowFieldSurveyResult.Empty;
+                if (!request.IsValid
+                || request.HasZeroDisplacement
+                || !request.End.TryGetPartition(out PathPartition targetPartition))
+                {
+                    return FlowFieldSurveyResult.Empty;
+                }
+
+                _request = request;
+
+                _marked.Clear();
+                _pathHeap.FastClear();
+
+                _greatestDistance = 0;
+                _distanceToStart = 0;
+
+                // Start from the end and move towards the start voxel
+                _pathHeap.Add(targetPartition);
+
+                if (!FloodPath() || _marked.Count <= 0)
+                    return FlowFieldSurveyResult.Empty;
+
+                return FlowFieldSurveyResult.Create(GenerateFlowFields(), request.RequestCacheKey);
             }
-
-            _request = request;
-
-            _marked.Clear();
-            _pathHeap.FastClear();
-
-            _greatestDistance = 0;
-            _distanceToStart = 0;
-
-            // Start from the end and move towards the start voxel
-            _pathHeap.Add(targetPartition);
-
-            if(!FloodPath() || _marked.Count <= 0)
-                return FlowFieldSurveyResult.Empty;
-
-            return FlowFieldSurveyResult.Create(GenerateFlowFields(), request.RequestCacheKey);
         }
 
         /// <summary>

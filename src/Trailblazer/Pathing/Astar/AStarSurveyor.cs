@@ -285,6 +285,7 @@ namespace Trailblazer.Pathing
                 Vector3d dir = (current.VoxelPosition - previous.VoxelPosition).Normal;
 
                 // Only add this voxel if direction changed
+                // TODO: should we move this up into GetRawpath?
                 if (!dir.FuzzyEqual(lastDir, _directionChangeTolerance))
                 {
                     result[i] = new()
@@ -301,69 +302,76 @@ namespace Trailblazer.Pathing
                 current.PathCost = 0;
             }
 
-            //if (_request.UseSplineSmoothing)
-            //    outputVectorPath = CatmullSmooth(outputVectorPath);
-
             return result;
         }
 
-        // TODO: call the below logic per waypoint request, not against the entire surveyor result
+        /// <summary>
+        /// Applies Catmull-Rom spline smoothing to a set of input path points to produce a smoother curve.
+        /// </summary>
+        /// <param name="input">The input path of waypoints.</param>
+        /// <param name="resolutionPerSegment">The number of interpolated points per segment.</param>
+        /// <returns>A smoothed path using Catmull-Rom spline interpolation.</returns>
+        public static AStarWaypoint[] CatmullSmooth(AStarWaypoint[] input, int resolutionPerSegment = 3)
+        {
+            if (input.Length < 4) return input;
 
-        ///// <summary>
-        ///// Applies Catmull-Rom spline smoothing to a set of input path points to produce a smoother curve.
-        ///// </summary>
-        ///// <param name="input">The input path of waypoints.</param>
-        ///// <param name="resolutionPerSegment">The number of interpolated points per segment.</param>
-        ///// <returns>A smoothed path using Catmull-Rom spline interpolation.</returns>
-        //public static AStarWaypoint[] CatmullSmooth(AStarWaypoint[] input, int resolutionPerSegment = 3)
-        //{
-        //    if (input.Length < 4) return input;
+            // size = smoothing points + 2 for start/end points
+            AStarWaypoint[] output = new AStarWaypoint[((input.Length - 3) * resolutionPerSegment) + 2];
 
-        //    AStarWaypoint[] output = new AStarWaypoint[(input.Length * resolutionPerSegment) - 2];
+            // Add the starting point
+            output[0] = input[0];
 
-        //    // Add the starting point
-        //    output[0] = input[0];
+            int outputIndex = 1; // Start at 1 because output[0] = input[0] 
+            for (int i = 0; i < input.Length - 3; i++)
+            {
+                Vector3d p0 = input[i].Position;
+                Vector3d p1 = input[i + 1].Position;
+                Vector3d p2 = input[i + 2].Position;
+                Vector3d p3 = input[i + 3].Position;
 
-        //    for (int i = 0; i < input.Length - 3; i++)
-        //    {
-        //        Vector3d p0 = input[i].Position;
-        //        Vector3d p1 = input[i + 1].Position;
-        //        Vector3d p2 = input[i + 2].Position;
-        //        Vector3d p3 = input[i + 3].Position;
+                // j starts at 1 to skip duplicate of first point
+                for (int j = 1; j <= resolutionPerSegment; j++)
+                {
+                    Fixed64 t = new(j / (double)resolutionPerSegment);
 
-        //        for (int j = 0; j <= resolutionPerSegment; j++)
-        //        {
-        //            output[i + j] = input[i];                  
-        //            Fixed64 t = new(j / (double)resolutionPerSegment);
-        //            output[i + j].Position = CatmullRom(p0, p1, p2, p3, t);
-        //        }
-        //    }
+                    // You should create a new waypoint here:
+                    output[outputIndex] = new AStarWaypoint
+                    {
+                        Position = CatmullRom(p0, p1, p2, p3, t),
+                        GlobalIndex = input[i + 1].GlobalIndex,
+                        PathCost = input[i + 1].PathCost,
+                        IsGoal = false
+                    };
 
-        //    // Add the final point
-        //    output[input.Length] = input.FromEnd(1);
-        //    return output;
-        //}
+                    outputIndex++;
+                }
+            }
 
-        ///// <summary>
-        ///// Computes the interpolated point along a Catmull-Rom spline given four control points.
-        ///// </summary>
-        ///// <param name="p0">The first control point.</param>
-        ///// <param name="p1">The second control point.</param>
-        ///// <param name="p2">The third control point.</param>
-        ///// <param name="p3">The fourth control point.</param>
-        ///// <param name="t">Interpolation factor between 0 and 1.</param>
-        ///// <returns>The interpolated point on the spline.</returns>
-        //public static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
-        //{
-        //    // Classic Catmull-Rom basis matrix
-        //    Fixed64 t2 = t * t;
-        //    Fixed64 t3 = t2 * t;
+            // Add the final point
+            output[outputIndex] = input[input.Length - 1];
+            return output;
+        }
 
-        //    return
-        //        ((-t3 + 2 * t2 - t) * p0 +
-        //         (3 * t3 - 5 * t2 + 2) * p1 +
-        //         (-3 * t3 + 4 * t2 + t) * p2 +
-        //         (t3 - t2) * p3) / 2;
-        //}
+        /// <summary>
+        /// Computes the interpolated point along a Catmull-Rom spline given four control points.
+        /// </summary>
+        /// <param name="p0">The first control point.</param>
+        /// <param name="p1">The second control point.</param>
+        /// <param name="p2">The third control point.</param>
+        /// <param name="p3">The fourth control point.</param>
+        /// <param name="t">Interpolation factor between 0 and 1.</param>
+        /// <returns>The interpolated point on the spline.</returns>
+        public static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
+        {
+            // Classic Catmull-Rom basis matrix
+            Fixed64 t2 = t * t;
+            Fixed64 t3 = t2 * t;
+
+            return
+                ((-t3 + 2 * t2 - t) * p0 +
+                 (3 * t3 - 5 * t2 + 2) * p1 +
+                 (-3 * t3 + 4 * t2 + t) * p2 +
+                 (t3 - t2) * p3) / 2;
+        }
     }
 }

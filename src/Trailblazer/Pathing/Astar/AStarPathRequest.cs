@@ -35,11 +35,6 @@ namespace Trailblazer.Pathing
 
         public HeuristicMethod Heuristic { get; set; }
 
-        /// <summary>
-        /// Indicates whether a smoothing algorithm like spline interpolation should be applied to the final path.
-        /// </summary>
-        public bool UseSplineSmoothing { get; set; }
-
         public readonly int RequestCacheKey => GetHashCode();
 
         public static AStarPathRequest CreateEmpty() => Create(null, null);
@@ -59,7 +54,6 @@ namespace Trailblazer.Pathing
                 Heuristic = heuristic,
                 AllowUnwalkable = allowUnwalkable,
                 MaxClimbHeight = GlobalGridManager.VoxelSize,
-                UseSplineSmoothing = false,
                 MaxPathSearchRange = null
             };
         }
@@ -87,7 +81,6 @@ namespace Trailblazer.Pathing
                 AllowUnwalkable,
                 Heuristic,
                 MaxClimbHeight,
-                UseSplineSmoothing,
                 MaxPathSearchRange ?? -1
             ).CombineHashCodes();
         }

@@ -6,10 +6,17 @@ namespace Trailblazer.Pathing
     {
         public AStarSurveyResult TrailMap { get; private set; }
 
+        private AStarWaypoint[] _smoothedWaypoints;
+
         /// <summary>
         /// Index or key used to track the agent’s progress along the trail.
         /// </summary>
         public int CurrentWaypointIndex { get; private set; }
+
+        /// <summary>
+        /// Indicates whether a smoothing algorithm like spline interpolation should be applied to the final path.
+        /// </summary>
+        public bool UseSplineSmoothing { get; set; }
 
         private int _lastTriedIndex;
 
@@ -24,18 +31,33 @@ namespace Trailblazer.Pathing
             return true;
         }
 
+        public AStarWaypoint[] ActiveWaypoints
+        {
+            get
+            {
+                if (UseSplineSmoothing)
+                {
+                    if (_smoothedWaypoints == null && TrailMap.Waypoints.Length >= 4)
+                        _smoothedWaypoints = AStarSurveyor.CatmullSmooth(TrailMap.Waypoints);
+                    return _smoothedWaypoints ?? TrailMap.Waypoints;
+                }
+
+                return TrailMap.Waypoints;
+            }
+        }
+
         public bool HasArrived()
         {
-            return TrailMap.IsValid && CurrentWaypointIndex == TrailMap.Waypoints.Length - 1;
+            return TrailMap.IsValid && CurrentWaypointIndex == ActiveWaypoints.Length - 1;
         }
 
         public int GetIndex(Vector3d from)
         {
             Fixed64 minDistSq = Fixed64.MAX_VALUE;
             int bestIndex = -1;
-            for (int i = 0; i < TrailMap.Waypoints.Length; i++)
+            for (int i = 0; i < ActiveWaypoints.Length; i++)
             {
-                Fixed64 distSq = (from - TrailMap.Waypoints[i].Position).SqrMagnitude;
+                Fixed64 distSq = (from - ActiveWaypoints[i].Position).SqrMagnitude;
                 if (distSq < minDistSq)
                 {
                     minDistSq = distSq;
@@ -62,16 +84,16 @@ namespace Trailblazer.Pathing
             if (closestIndex == -1)
                 return false;
 
-            direction = (TrailMap.Waypoints[closestIndex].Position - origin).Normalize();
+            direction = (ActiveWaypoints[closestIndex].Position - origin).Normalize();
             return true;
         }
 
         public Vector3d GetMovementDirection(Vector3d origin)
         {
-            if (!TrailMap.IsValid || CurrentWaypointIndex < 0 || CurrentWaypointIndex >= TrailMap.Waypoints.Length)
+            if (!TrailMap.IsValid || CurrentWaypointIndex < 0 || CurrentWaypointIndex >= ActiveWaypoints.Length)
                 return Vector3d.Zero;
 
-            Vector3d movementDirection = TrailMap.Waypoints[CurrentWaypointIndex].Position;
+            Vector3d movementDirection = ActiveWaypoints[CurrentWaypointIndex].Position;
             if (movementDirection == Vector3d.Zero)
                 return Vector3d.Zero;
 
@@ -82,18 +104,18 @@ namespace Trailblazer.Pathing
         {
             fallbackDirection = Vector3d.Zero;
 
-            if (TrailMap.Waypoints.Length == 0)
+            if (ActiveWaypoints.Length == 0)
                 return false;
 
             // Start from CurrentIndex + 1 and search forward
-            int searchStart = Util.Clamp(_lastTriedIndex, 0, TrailMap.Waypoints.Length - 1);
+            int searchStart = Util.Clamp(_lastTriedIndex, 0, ActiveWaypoints.Length - 1);
                 
             Fixed64 minDistSq = Fixed64.MAX_VALUE;
             int bestIndex = -1;
 
-            for (int i = searchStart; i < TrailMap.Waypoints.Length; i++)
+            for (int i = searchStart; i < ActiveWaypoints.Length; i++)
             {
-                Fixed64 distSq = (from - TrailMap.Waypoints[i].Position).SqrMagnitude;
+                Fixed64 distSq = (from - ActiveWaypoints[i].Position).SqrMagnitude;
                 if (distSq < minDistSq)
                 {
                     minDistSq = distSq;
@@ -103,7 +125,7 @@ namespace Trailblazer.Pathing
 
             if (bestIndex >= 0)
             {
-                fallbackDirection = (TrailMap.Waypoints[bestIndex].Position - from).Normal;
+                fallbackDirection = (ActiveWaypoints[bestIndex].Position - from).Normal;
                 _lastTriedIndex = bestIndex;
                 return true;
             }
@@ -113,13 +135,13 @@ namespace Trailblazer.Pathing
 
         public bool TryGetWaypointAt(int index, out AStarWaypoint waypoint)
         {
-            if (!TrailMap.IsValid || index < 0 || index >= TrailMap.Waypoints.Length)
+            if (!TrailMap.IsValid || index < 0 || index >= ActiveWaypoints.Length)
             {
                 waypoint = default;
                 return false;
             }
 
-            waypoint = TrailMap.Waypoints[index];
+            waypoint = ActiveWaypoints[index];
             return true;
         }
     }

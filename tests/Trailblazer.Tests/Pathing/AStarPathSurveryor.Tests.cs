@@ -40,9 +40,9 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Equal(3, guide.TrailMap.Waypoints!.Length); // start, middle, end
-            Assert.Equal(origin, guide.TrailMap.Waypoints[0].Position);
-            Assert.Equal(target, guide.TrailMap.Waypoints.Last().Position);
+            Assert.Equal(3, guide.ActiveWaypoints!.Length); // start, middle, end
+            Assert.Equal(origin, guide.ActiveWaypoints[0].Position);
+            Assert.Equal(target, guide.ActiveWaypoints.Last().Position);
 
             PathManager.Unload("Line");
         }
@@ -173,7 +173,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.True(success);
             Assert.NotNull(guide);
             // Must have detoured around
-            Assert.Contains(new Vector3d(2, 0, 1), guide.TrailMap.Waypoints.Select(p => p.Position).ToList()); 
+            Assert.Contains(new Vector3d(2, 0, 1), guide.ActiveWaypoints.Select(p => p.Position).ToList()); 
 
             PathManager.Unload("Detour");
         }
@@ -291,13 +291,13 @@ namespace Trailblazer.Tests.Pathing
             PathManager.InitializeMap("LSpline");
 
             var request = AStarPathRequest.CreateEmpty();
-            request.UseSplineSmoothing = true;
 
             bool success = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 2), request, out AStarGuide guide);
+            guide.UseSplineSmoothing = true;
 
             Assert.True(success);
             Assert.NotNull(guide);
-            Assert.True(guide.TrailMap.Waypoints!.Length > 3); // should have inserted curve points
+            Assert.True(guide.ActiveWaypoints!.Length > 4); // should have inserted curve points
 
             PathManager.Unload("LSpline");
         }
@@ -317,13 +317,13 @@ namespace Trailblazer.Tests.Pathing
             var end = new Vector3d(1, 0, 0);
 
             var request = AStarPathRequest.CreateEmpty();
-            request.UseSplineSmoothing = true;
 
             bool success = PathGuideFactory.RequestGuide(start, end, request, out AStarGuide guide);
+            guide.UseSplineSmoothing = true;
 
             Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Equal(2, guide.TrailMap.Waypoints!.Length); // No smoothing applied
+            Assert.Equal(2, guide.ActiveWaypoints!.Length); // No smoothing applied
 
             PathManager.Unload("ShortSpline");
         }
@@ -348,14 +348,14 @@ namespace Trailblazer.Tests.Pathing
             var end = new Vector3d(3, 0, 3);
 
             var request = AStarPathRequest.CreateEmpty();
-            request.UseSplineSmoothing = true;
 
             bool success = PathGuideFactory.RequestGuide(start, end, request, out AStarGuide guide);
+            guide.UseSplineSmoothing = true;
 
             Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Equal(start, guide.TrailMap.Waypoints!.First().Position);
-            Assert.Equal(end, guide.TrailMap.Waypoints.Last().Position);
+            Assert.Equal(start, guide.ActiveWaypoints!.First().Position);
+            Assert.Equal(end, guide.ActiveWaypoints.Last().Position);
 
             PathManager.Unload("SplineEnds");
         }

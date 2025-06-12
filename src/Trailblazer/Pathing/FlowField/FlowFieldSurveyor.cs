@@ -27,6 +27,8 @@ namespace Trailblazer.Pathing
 
         #endregion
 
+        private readonly PathHeap _pathHeap = new();
+
         private FlowFieldPathRequest _request;
 
         /// <summary>
@@ -64,13 +66,13 @@ namespace Trailblazer.Pathing
             _request = request;
 
             _marked.Clear();
-            PathHeap.FastClear();
+            _pathHeap.FastClear();
 
             _greatestDistance = 0;
             _distanceToStart = 0;
 
             // Start from the end and move towards the start voxel
-            PathHeap.Add(targetPartition);
+            _pathHeap.Add(targetPartition);
 
             if(!FloodPath() || _marked.Count <= 0)
                 return FlowFieldSurveyResult.Empty;
@@ -89,25 +91,25 @@ namespace Trailblazer.Pathing
 
             int iterations = 0;
             int searchSize = _request.MaxPathSearchRange.Value;
-            while (PathHeap.RemoveFirst(out PathPartition current) 
+            while (_pathHeap.RemoveFirst(out PathPartition current) 
                 && iterations++ < searchSize)
             {
                 // Check if we found our way to the start voxel
                 if (!targetReached && current.VoxelSpawnToken == _request.Start.SpawnToken)
                 {
-                    _distanceToStart = current.HeapCost;
+                    _distanceToStart = current.PathCost;
                     targetReached = true;
                 }
 
-                if (targetReached && current.HeapCost >= _distanceToStart + _request.ExtraFloodRange)
+                if (targetReached && current.PathCost >= _distanceToStart + _request.ExtraFloodRange)
                     break;
 
-                if (current.HeapCost > _greatestDistance)
-                    _greatestDistance = current.HeapCost;
+                if (current.PathCost > _greatestDistance)
+                    _greatestDistance = current.PathCost;
 
                 AnalyzeNeighborDistance(current, _request.UnitSize);
 
-                PathHeap.SetClosed(current);
+                _pathHeap.SetClosed(current);
             }
 
             return targetReached;
@@ -125,20 +127,20 @@ namespace Trailblazer.Pathing
             // We will only ever visit every voxel once as we are always visiting voxels in the most efficient order
             foreach (TraversableVoxel neighbor in PathManager.GetWalkableStraightNeighbors(current.GlobalIndex))
             {
-                if (PathHeap.IsClosed(neighbor.Partition) || neighbor.Partition.Unpassable(unitSize))
+                if (_pathHeap.IsClosed(neighbor.Partition) || neighbor.Partition.Unpassable(unitSize))
                     continue;
 
-                int neighborToll = current.HeapCost + 1;
-                if (!PathHeap.Contains(neighbor.Partition))
+                int neighborToll = current.PathCost + 1;
+                if (!_pathHeap.Contains(neighbor.Partition))
                 {
-                    neighbor.Partition.HeapCost = neighborToll;
-                    PathHeap.Add(neighbor.Partition);
+                    neighbor.Partition.PathCost = neighborToll;
+                    _pathHeap.Add(neighbor.Partition);
                     _marked.Add(neighbor.Partition);
                 }
-                else if (neighborToll < neighbor.Partition.HeapCost)
+                else if (neighborToll < neighbor.Partition.PathCost)
                 {
-                    neighbor.Partition.HeapCost = neighborToll;
-                    PathHeap.SortUp(neighbor.Partition);
+                    neighbor.Partition.PathCost = neighborToll;
+                    _pathHeap.SortUp(neighbor.Partition);
                 }
             }
         }
@@ -173,7 +175,7 @@ namespace Trailblazer.Pathing
                 FlowField currentFlow = new()
                 {
                     GlobalIndex = current.GlobalIndex,
-                    DistanceToTarget = current.HeapCost
+                    DistanceToTarget = current.PathCost
                 };
 
                 // Go through all neighbours and find the one with the lowest distance
@@ -182,10 +184,10 @@ namespace Trailblazer.Pathing
                 foreach(TraversableVoxel neighbor in PathManager.GetWalkableNeighbors(current.GlobalIndex))
                 {
                     // check closed heap version to ensure neighbor was part of flood phase
-                    if (!PathHeap.IsClosed(neighbor.Partition)) 
+                    if (!_pathHeap.IsClosed(neighbor.Partition)) 
                         continue;
 
-                    int dist = neighbor.Partition.HeapCost - current.HeapCost;
+                    int dist = neighbor.Partition.PathCost - current.PathCost;
                     if (dist < minDistance)
                     {
                         minPartition = neighbor.Partition;
@@ -196,7 +198,8 @@ namespace Trailblazer.Pathing
                 // If we found a valid neighbour, point in its direction by applying distance-weighted blending
                 if (minPartition != null)
                 {
-                    Fixed64 alpha = FixedMath.Clamp01((totalDistance - currentFlow.DistanceToTarget) / totalDistance); // closer = alpha → 1
+                    // closer = alpha → 1
+                    Fixed64 alpha = FixedMath.Clamp01((totalDistance - currentFlow.DistanceToTarget) / totalDistance); 
 
                     // blend with the lowest-cost vector
                     Vector3d direct = (_request.End.WorldPosition - current.VoxelPosition).Normalize();

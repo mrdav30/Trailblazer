@@ -46,9 +46,11 @@ namespace Trailblazer.Pathing
         /// </summary>
         private static readonly Fixed64 _directionChangeTolerance = new(0.01);
 
-        private AStarPathRequest _request;
+        private readonly PathHeap _pathHeap = new();
 
         private readonly SwiftDictionary<int, AStarVoxelData> _voxelData = new();
+
+        private AStarPathRequest _request;
 
 #nullable enable
         /// <summary>
@@ -75,11 +77,11 @@ namespace Trailblazer.Pathing
             _request = request;
 
             _voxelData.Clear();
-            PathHeap.FastClear();
+            _pathHeap.FastClear();
 
             // Trace path from the start to the end
             _voxelData.Add(_request.Start.SpawnToken, new());
-            PathHeap.Add(startPartition);
+            _pathHeap.Add(startPartition);
 
             if (!TracePath())
                 return AStarSurveyResult.Empty;
@@ -96,7 +98,7 @@ namespace Trailblazer.Pathing
         {
             int iterations = 0;
             int searchSize = _request.MaxPathSearchRange.Value;
-            while (PathHeap.RemoveFirst(out PathPartition currentPartition) 
+            while (_pathHeap.RemoveFirst(out PathPartition currentPartition) 
                 && iterations++ < searchSize)
             {
                 if (currentPartition.VoxelSpawnToken == _request.End.SpawnToken)
@@ -105,7 +107,7 @@ namespace Trailblazer.Pathing
                 if (ProcessNeighbors(currentPartition))
                     return true;
 
-                PathHeap.SetClosed(currentPartition);
+                _pathHeap.SetClosed(currentPartition);
             }
 
             return false;
@@ -146,7 +148,7 @@ namespace Trailblazer.Pathing
             PathPartition neighbor,
             int cost)
         {
-            if (PathHeap.IsClosed(neighbor) || neighbor.Unpassable(_request.UnitSize))
+            if (_pathHeap.IsClosed(neighbor) || neighbor.Unpassable(_request.UnitSize))
                 return false;
 
             // Skip neighbors that have a height difference greater than the allowed maximum
@@ -163,16 +165,16 @@ namespace Trailblazer.Pathing
                 return true;
             }
 
-            if (!PathHeap.Contains(neighbor))
+            if (!_pathHeap.Contains(neighbor))
             {
                 SetPathPartitionData(neighbor, current.GlobalIndex, cost);
-                PathHeap.Add(neighbor);
+                _pathHeap.Add(neighbor);
             }
             else if (_voxelData.TryGetValue(neighbor.VoxelSpawnToken, out AStarVoxelData data)
                 && data.MovementCost > cost)
             {
                 SetPathPartitionData(neighbor, current.GlobalIndex, cost);
-                PathHeap.SortUp(neighbor);
+                _pathHeap.SortUp(neighbor);
             }
 
             return false;
@@ -201,7 +203,7 @@ namespace Trailblazer.Pathing
                 _request.Heuristic);
 
             // Calculate the total cost (fCost) by adding the heuristic cost (hCost) to the movement cost (gCost)
-            partition.HeapCost = movementCost + heuristicCost;
+            partition.PathCost = movementCost + heuristicCost;
         }
 
         /// <summary>
@@ -227,7 +229,6 @@ namespace Trailblazer.Pathing
                     break; // break in the trail!
 
                 current = nextTrailVoxel;
-                partition.ClearHeapState();
             }
 
             // Ensure start position is included

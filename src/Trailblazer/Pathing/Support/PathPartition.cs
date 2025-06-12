@@ -58,6 +58,12 @@ namespace Trailblazer.Pathing
         /// </summary>
         public bool IsPartitioned { get; set; }
 
+        /// <summary>
+        /// The combined cost for use in pathfinding heap prioritization.
+        /// </summary>
+        [Transient]
+        public int PathCost { get; set; }
+
         #region Clearance Properties
 
         /// <summary>
@@ -76,35 +82,7 @@ namespace Trailblazer.Pathing
         public bool IsClearanceValid { get; private set; }
 
         #endregion
-
-        #region Transient Heap Properties
-
-        /// <summary>
-        /// The combined cost for use in pathfinding heap prioritization.
-        /// </summary>
-        [Transient]
-        public int HeapCost { get; set; }
-
-        /// <summary>
-        /// A version used to distinguish between heap insertions across frames.
-        /// </summary>
-        [Transient]
-        public uint HeapVersion { get; set; }
-
-        /// <summary>
-        /// A version used to track closed voxels in the heap for the current search.
-        /// </summary>
-        [Transient]
-        public uint ClosedHeapVersion { get; set; }
-
-        /// <summary>
-        /// The index of this voxel in the heap.
-        /// </summary>
-        [Transient]
-        public uint HeapIndex { get; set; }
-
-        #endregion
-
+       
         /// <summary>
         /// Maps that currently include this partition as part of their traversable space.
         /// </summary>
@@ -324,14 +302,5 @@ namespace Trailblazer.Pathing
         }
  
         public override int GetHashCode() => VoxelSpawnToken;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void ClearHeapState()
-        {
-            HeapCost = 0;
-            HeapVersion = 0;
-            ClosedHeapVersion = 0;
-            HeapIndex = 0;
-        }
     }
 }

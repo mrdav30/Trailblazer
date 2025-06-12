@@ -8,41 +8,43 @@ namespace Trailblazer.Tests.Pathing
         [Fact]
         public void RemoveFirst_WhenCountIsOne_ShouldClearRootSafely()
         {
-            PathHeap.FastClear();
-            var voxel = new PathPartition();
-            voxel.HeapCost = 1;
+            var heap = new PathHeap();
 
-            PathHeap.Add(voxel);
-            Assert.Equal(1u, PathHeap.Count);
+            var voxel = new PathPartition
+            {
+                PathCost = 1
+            };
 
-            PathHeap.RemoveFirst(out PathPartition removed);
+            heap.Add(voxel);
+            Assert.Equal(1u, heap.Count);
+
+            heap.RemoveFirst(out PathPartition removed);
             Assert.Equal(voxel, removed);
-            Assert.Equal(0u, PathHeap.Count);
+            Assert.Equal(0u, heap.Count);
 
             // Should not leave stale data
-            Assert.Null(PathHeap.PeekAt(0));
+            Assert.Null(heap.PeekAt(0));
         }
 
         [Fact]
         public void AStarHeap_ShouldSortAfterCostUpdate()
         {
-            PathHeap.FastClear();
+            var heap = new PathHeap();
 
-            var a = new PathPartition { HeapCost = 30 };
-            var b = new PathPartition { HeapCost = 20 };
-            var c = new PathPartition { HeapCost = 10 };
+            var a = new PathPartition { PathCost = 30 };
+            var b = new PathPartition { PathCost = 20 };
+            var c = new PathPartition { PathCost = 10 };
 
-            PathHeap.Add(a);
-            PathHeap.Add(b);
-            PathHeap.Add(c);
+            heap.Add(a);
+            heap.Add(b);
+            heap.Add(c);
 
             // Update 'a' to have lower cost than 'c'
-            a.HeapCost = 5;
-            PathHeap.SortUp(a);
+            a.PathCost = 5;
+            heap.SortUp(a);
 
-            PathHeap.RemoveFirst(out var first);
+            heap.RemoveFirst(out var first);
             Assert.Equal(a, first);
         }
-
     }
 }

@@ -15,7 +15,7 @@ namespace Trailblazer.Pathing
 
         public int RequestHashKey { get; private set; }
 
-        public static readonly FlowFieldSurveyResult Empty = new FlowFieldSurveyResult();
+        public static readonly FlowFieldSurveyResult Empty = new();
 
         public static FlowFieldSurveyResult Create(SwiftDictionary<int, FlowField> fields, int key)
         {

@@ -3,7 +3,6 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
 using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
@@ -46,7 +45,7 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// The spawn token that uniquely identifies this voxel.
         /// </summary>
-        public int VoxelSpawnToken { get; private set; }
+        public int VoxelToken { get; private set; }
 
         /// <summary>
         /// The world-space position of the voxel.
@@ -104,7 +103,7 @@ namespace Trailblazer.Pathing
             voxel.OnObstacleChange += HandleChange;
 
             GlobalIndex = voxel.GlobalIndex;
-            VoxelSpawnToken = voxel.SpawnToken;
+            VoxelToken = voxel.SpawnToken;
             VoxelPosition = voxel.WorldPosition;
 
             ClearanceDegree = Fixed64.MAX_VALUE;
@@ -127,7 +126,7 @@ namespace Trailblazer.Pathing
         public void Reset()
         {
             GlobalIndex = default;
-            VoxelSpawnToken = 0;
+            VoxelToken = 0;
 
             IsClearanceValid = false;
 
@@ -301,6 +300,6 @@ namespace Trailblazer.Pathing
             return heuristicCost.CeilToInt();
         }
  
-        public override int GetHashCode() => VoxelSpawnToken;
+        public override int GetHashCode() => VoxelToken;
     }
 }

@@ -1,6 +1,4 @@
 ﻿using FixedMathSharp;
-using SwiftCollections;
-using System;
 
 namespace Trailblazer.Pathing
 {
@@ -28,16 +26,16 @@ namespace Trailblazer.Pathing
 
         public bool HasArrived()
         {
-            return TrailMap.IsValid && CurrentWaypointIndex == TrailMap.Path.Count - 1;
+            return TrailMap.IsValid && CurrentWaypointIndex == TrailMap.Waypoints.Length - 1;
         }
 
         public int GetIndex(Vector3d from)
         {
             Fixed64 minDistSq = Fixed64.MAX_VALUE;
             int bestIndex = -1;
-            for (int i = 0; i < TrailMap.Path.Count; i++)
+            for (int i = 0; i < TrailMap.Waypoints.Length; i++)
             {
-                Fixed64 distSq = (from - TrailMap.Path[i]).SqrMagnitude;
+                Fixed64 distSq = (from - TrailMap.Waypoints[i].Position).SqrMagnitude;
                 if (distSq < minDistSq)
                 {
                     minDistSq = distSq;
@@ -64,16 +62,16 @@ namespace Trailblazer.Pathing
             if (closestIndex == -1)
                 return false;
 
-            direction = (TrailMap.Path[closestIndex] - origin).Normalize();
+            direction = (TrailMap.Waypoints[closestIndex].Position - origin).Normalize();
             return true;
         }
 
         public Vector3d GetMovementDirection(Vector3d origin)
         {
-            if (!TrailMap.IsValid || CurrentWaypointIndex < 0 || CurrentWaypointIndex >= TrailMap.Path.Count)
+            if (!TrailMap.IsValid || CurrentWaypointIndex < 0 || CurrentWaypointIndex >= TrailMap.Waypoints.Length)
                 return Vector3d.Zero;
 
-            Vector3d movementDirection = TrailMap.Path[CurrentWaypointIndex];
+            Vector3d movementDirection = TrailMap.Waypoints[CurrentWaypointIndex].Position;
             if (movementDirection == Vector3d.Zero)
                 return Vector3d.Zero;
 
@@ -84,18 +82,18 @@ namespace Trailblazer.Pathing
         {
             fallbackDirection = Vector3d.Zero;
 
-            if (TrailMap.Path.Count == 0)
+            if (TrailMap.Waypoints.Length == 0)
                 return false;
 
             // Start from CurrentIndex + 1 and search forward
-            int searchStart = Util.Clamp(_lastTriedIndex, 0, TrailMap.Path.Count - 1);
+            int searchStart = Util.Clamp(_lastTriedIndex, 0, TrailMap.Waypoints.Length - 1);
                 
             Fixed64 minDistSq = Fixed64.MAX_VALUE;
             int bestIndex = -1;
 
-            for (int i = searchStart; i < TrailMap.Path.Count; i++)
+            for (int i = searchStart; i < TrailMap.Waypoints.Length; i++)
             {
-                Fixed64 distSq = (from - TrailMap.Path[i]).SqrMagnitude;
+                Fixed64 distSq = (from - TrailMap.Waypoints[i].Position).SqrMagnitude;
                 if (distSq < minDistSq)
                 {
                     minDistSq = distSq;
@@ -105,7 +103,7 @@ namespace Trailblazer.Pathing
 
             if (bestIndex >= 0)
             {
-                fallbackDirection = (TrailMap.Path[bestIndex] - from).Normal;
+                fallbackDirection = (TrailMap.Waypoints[bestIndex].Position - from).Normal;
                 _lastTriedIndex = bestIndex;
                 return true;
             }
@@ -113,15 +111,15 @@ namespace Trailblazer.Pathing
             return false;
         }
 
-        public bool TryGetWaypointAt(int index, out Vector3d waypoint)
+        public bool TryGetWaypointAt(int index, out AStarWaypoint waypoint)
         {
-            if (!TrailMap.IsValid || index < 0 || index >= TrailMap.Path.Count)
+            if (!TrailMap.IsValid || index < 0 || index >= TrailMap.Waypoints.Length)
             {
-                waypoint = Vector3d.Zero;
+                waypoint = default;
                 return false;
             }
 
-            waypoint = TrailMap.Path[index];
+            waypoint = TrailMap.Waypoints[index];
             return true;
         }
     }

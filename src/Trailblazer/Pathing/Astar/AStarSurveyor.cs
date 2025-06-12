@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace Trailblazer.Pathing
 {
-    internal struct AStarVoxelData
+    internal struct AStarVoxelMeta
     {
         /// <summary>
         /// The movement penalty cost of this voxel.
@@ -46,9 +46,9 @@ namespace Trailblazer.Pathing
         /// </summary>
         private static readonly Fixed64 _directionChangeTolerance = new(0.01);
 
-        private readonly PathHeap _pathHeap = new();
+        private readonly PathHeap _heap = new();
 
-        private readonly SwiftDictionary<int, AStarVoxelData> _voxelData = new();
+        private readonly SwiftDictionary<int, AStarVoxelMeta> _meta = new();
 
         private AStarPathRequest _request;
 
@@ -78,18 +78,18 @@ namespace Trailblazer.Pathing
 
                 _request = request;
 
-                _voxelData.Clear();
-                _pathHeap.FastClear();
+                _meta.Clear();
+                _heap.FastClear();
 
                 // Trace path from the start to the end
-                _voxelData.Add(_request.Start.SpawnToken, new());
-                _pathHeap.Add(startPartition);
+                _meta.Add(_request.Start.SpawnToken, new());
+                _heap.Add(startPartition);
 
                 if (!TracePath())
                     return AStarSurveyResult.Empty;
 
-                SwiftList<Voxel> rawVoxelPath = GetRawpath();
-                return AStarSurveyResult.Create(SmoothPath(rawVoxelPath), request.RequestCacheKey);
+                SwiftList<PathPartition> voxelPath = GetRawpath();
+                return AStarSurveyResult.Create(BuildWaypoints(voxelPath), request.RequestCacheKey);
             }
         }
 
@@ -101,16 +101,16 @@ namespace Trailblazer.Pathing
         {
             int iterations = 0;
             int searchSize = _request.MaxPathSearchRange.Value;
-            while (_pathHeap.RemoveFirst(out PathPartition currentPartition) 
+            while (_heap.RemoveFirst(out PathPartition currentPartition) 
                 && iterations++ < searchSize)
             {
-                if (currentPartition.VoxelSpawnToken == _request.End.SpawnToken)
+                if (currentPartition.VoxelToken == _request.End.SpawnToken)
                     return true;
 
                 if (ProcessNeighbors(currentPartition))
                     return true;
 
-                _pathHeap.SetClosed(currentPartition);
+                _heap.SetClosed(currentPartition);
             }
 
             return false;
@@ -122,7 +122,7 @@ namespace Trailblazer.Pathing
         /// <returns>True if any neighbor is the target destination.</returns>
         private bool ProcessNeighbors(PathPartition current)
         {
-            if (!_voxelData.TryGetValue(current.VoxelSpawnToken, out AStarVoxelData data))
+            if (!_meta.TryGetValue(current.VoxelToken, out AStarVoxelMeta data))
                 return false;
 
             int cost = data.MovementCost + PathPartition.StraightCost;
@@ -151,7 +151,7 @@ namespace Trailblazer.Pathing
             PathPartition neighbor,
             int cost)
         {
-            if (_pathHeap.IsClosed(neighbor) || neighbor.Unpassable(_request.UnitSize))
+            if (_heap.IsClosed(neighbor) || neighbor.Unpassable(_request.UnitSize))
                 return false;
 
             // Skip neighbors that have a height difference greater than the allowed maximum
@@ -162,22 +162,22 @@ namespace Trailblazer.Pathing
                 return false;
             }
 
-            if (neighbor.VoxelSpawnToken == _request.End.SpawnToken)
+            if (neighbor.VoxelToken == _request.End.SpawnToken)
             {
                 SetPathPartitionData(neighbor, current.GlobalIndex, cost);
                 return true;
             }
 
-            if (!_pathHeap.Contains(neighbor))
+            if (!_heap.Contains(neighbor))
             {
                 SetPathPartitionData(neighbor, current.GlobalIndex, cost);
-                _pathHeap.Add(neighbor);
+                _heap.Add(neighbor);
             }
-            else if (_voxelData.TryGetValue(neighbor.VoxelSpawnToken, out AStarVoxelData data)
-                && data.MovementCost > cost)
+            else if (_meta.TryGetValue(neighbor.VoxelToken, out AStarVoxelMeta neighborData)
+                && neighborData.MovementCost > cost)
             {
                 SetPathPartitionData(neighbor, current.GlobalIndex, cost);
-                _pathHeap.SortUp(neighbor);
+                _heap.SortUp(neighbor);
             }
 
             return false;
@@ -194,7 +194,7 @@ namespace Trailblazer.Pathing
             GlobalVoxelIndex nextTrailCoordinates,
             int movementCost)
         {
-            _voxelData.Add(partition.VoxelSpawnToken, new AStarVoxelData
+            _meta.Add(partition.VoxelToken, new AStarVoxelMeta
             {
                 MovementCost = movementCost,
                 NextTrailIndex = nextTrailCoordinates
@@ -213,19 +213,17 @@ namespace Trailblazer.Pathing
         /// Reconstructs the raw voxel-based path from the destination to the origin by walking backwards through trail links.
         /// </summary>
         /// <returns>A list of voxels from start to end representing the raw path.</returns>
-        private SwiftList<Voxel> GetRawpath()
+        private SwiftList<PathPartition> GetRawpath()
         {
-            SwiftList<Voxel> rawVoxelPath = new();
+            SwiftList<PathPartition> result = new();
 
             Voxel current = _request.End;
             while (current.SpawnToken != _request.Start.SpawnToken)
             {
-                rawVoxelPath.Insert(0, current);
+                PathPartition currentPartition = current.GetPartitionOrDefault<PathPartition>();
+                result.Insert(0, currentPartition);
 
-                if (!current.TryGetPartition(out PathPartition partition))
-                    continue;
-
-                if (!_voxelData.TryGetValue(current.SpawnToken, out AStarVoxelData data) || !data.NextTrailIndex.HasValue)
+                if (!_meta.TryGetValue(current.SpawnToken, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
                     break; // break in the trail!
 
                 if (!GlobalGridManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
@@ -235,117 +233,137 @@ namespace Trailblazer.Pathing
             }
 
             // Ensure start position is included
-            rawVoxelPath.Insert(0, _request.Start);
-            return rawVoxelPath;
+            PathPartition startPartition = _request.Start.GetPartitionOrDefault<PathPartition>();
+            result.Insert(0, startPartition);
+
+            return result;
         }
 
         /// <summary>
         /// Constructs a smoothed version of the path using direction changes and optional spline smoothing.
         /// </summary>
-        /// <param name="rawVoxelPath">The unsmoothed list of voxels produced by pathfinding.</param>
+        /// <param name="path">The unsmoothed list of voxels produced by pathfinding.</param>
         /// <returns>A smoothed list of world positions.</returns>
-        private SwiftList<Vector3d> SmoothPath(SwiftList<Voxel> rawVoxelPath)
+        private AStarWaypoint[] BuildWaypoints(SwiftList<PathPartition> path)
         {
-            SwiftList<Vector3d> outputVectorPath = new();
-            if (rawVoxelPath.Count == 0)
-                return outputVectorPath;
+            AStarWaypoint[] result = new AStarWaypoint[path.Count];
+            if (path.Count == 0)
+                return result;
 
             Vector3d lastDir = Vector3d.Zero;
 
             // If the path actually goes somewhere → include the start
-            if (rawVoxelPath[0].SpawnToken != rawVoxelPath.FromEnd(1).SpawnToken)
-                outputVectorPath.Add(rawVoxelPath[0].WorldPosition);
+            if (path[0].VoxelToken != path.FromEnd(1).VoxelToken)
+                result[0] = new()
+                {
+                    Position = path[0].VoxelPosition,
+                    GlobalIndex = path[0].GlobalIndex,
+                    PathCost = path[0].PathCost
+                };
 
-            for (int i = 1; i < rawVoxelPath.Count - 1; i++)
+            for (int i = 1; i < path.Count; i++)
             {
-                Voxel current = rawVoxelPath[i];
-                Voxel previous = rawVoxelPath[i - 1];
-
-                if (!current.TryGetPartition(out PathPartition partition))
-                    continue;
+                PathPartition current = path[i];
+                PathPartition previous = path[i - 1];
 
                 // Preserve voxels near unwalkable tiles
-                if (partition.GetNeighborClearance() <= _request.UnitSize + 1)
+                if (current.GetNeighborClearance() <= _request.UnitSize + 1)
                 {
-                    outputVectorPath.Add(current.WorldPosition);
+                    result[i] = new()
+                    {
+                        Position = current.VoxelPosition,
+                        GlobalIndex = current.GlobalIndex,
+                        PathCost = current.PathCost,
+                        IsGoal = current.VoxelToken == _request.End.SpawnToken
+                    };
                     lastDir = Vector3d.Zero;
+                    // Reset for next run
+                    current.PathCost = 0;
                     continue;
                 }
 
-                Vector3d dir = (current.WorldPosition - previous.WorldPosition).Normal;
+                Vector3d dir = (current.VoxelPosition - previous.VoxelPosition).Normal;
 
                 // Only add this voxel if direction changed
                 if (!dir.FuzzyEqual(lastDir, _directionChangeTolerance))
                 {
-                    outputVectorPath.Add(current.WorldPosition);
+                    result[i] = new()
+                    {
+                        Position = current.VoxelPosition,
+                        GlobalIndex = current.GlobalIndex,
+                        PathCost = current.PathCost,
+                        IsGoal = current.VoxelToken == _request.End.SpawnToken
+                    };
                     lastDir = dir;
                 }
+
+                // Reset for next run
+                current.PathCost = 0;
             }
 
-            // Ensure target position is included
-            outputVectorPath.Add(_request.End.WorldPosition);
+            //if (_request.UseSplineSmoothing)
+            //    outputVectorPath = CatmullSmooth(outputVectorPath);
 
-            if (_request.UseSplineSmoothing)
-                outputVectorPath = CatmullSmooth(outputVectorPath);
-
-            return outputVectorPath;
+            return result;
         }
 
-        /// <summary>
-        /// Applies Catmull-Rom spline smoothing to a set of input path points to produce a smoother curve.
-        /// </summary>
-        /// <param name="input">The input path of waypoints.</param>
-        /// <param name="resolutionPerSegment">The number of interpolated points per segment.</param>
-        /// <returns>A smoothed path using Catmull-Rom spline interpolation.</returns>
-        public static SwiftList<Vector3d> CatmullSmooth(SwiftList<Vector3d> input, int resolutionPerSegment = 3)
-        {
-            if (input.Count < 4) return input;
+        // TODO: call the below logic per waypoint request, not against the entire surveyor result
 
-            // Add the starting point
-            SwiftList<Vector3d> output = new() {
-                input[0]
-            };
+        ///// <summary>
+        ///// Applies Catmull-Rom spline smoothing to a set of input path points to produce a smoother curve.
+        ///// </summary>
+        ///// <param name="input">The input path of waypoints.</param>
+        ///// <param name="resolutionPerSegment">The number of interpolated points per segment.</param>
+        ///// <returns>A smoothed path using Catmull-Rom spline interpolation.</returns>
+        //public static AStarWaypoint[] CatmullSmooth(AStarWaypoint[] input, int resolutionPerSegment = 3)
+        //{
+        //    if (input.Length < 4) return input;
 
-            for (int i = 0; i < input.Count - 3; i++)
-            {
-                Vector3d p0 = input[i];
-                Vector3d p1 = input[i + 1];
-                Vector3d p2 = input[i + 2];
-                Vector3d p3 = input[i + 3];
+        //    AStarWaypoint[] output = new AStarWaypoint[(input.Length * resolutionPerSegment) - 2];
 
-                for (int j = 0; j <= resolutionPerSegment; j++)
-                {
-                    Fixed64 t = new(j / (double)resolutionPerSegment);
-                    output.Add(CatmullRom(p0, p1, p2, p3, t));
-                }
-            }
+        //    // Add the starting point
+        //    output[0] = input[0];
 
-            // Add the final point
-            output.Add(input.FromEnd(1));
+        //    for (int i = 0; i < input.Length - 3; i++)
+        //    {
+        //        Vector3d p0 = input[i].Position;
+        //        Vector3d p1 = input[i + 1].Position;
+        //        Vector3d p2 = input[i + 2].Position;
+        //        Vector3d p3 = input[i + 3].Position;
 
-            return output;
-        }
+        //        for (int j = 0; j <= resolutionPerSegment; j++)
+        //        {
+        //            output[i + j] = input[i];                  
+        //            Fixed64 t = new(j / (double)resolutionPerSegment);
+        //            output[i + j].Position = CatmullRom(p0, p1, p2, p3, t);
+        //        }
+        //    }
 
-        /// <summary>
-        /// Computes the interpolated point along a Catmull-Rom spline given four control points.
-        /// </summary>
-        /// <param name="p0">The first control point.</param>
-        /// <param name="p1">The second control point.</param>
-        /// <param name="p2">The third control point.</param>
-        /// <param name="p3">The fourth control point.</param>
-        /// <param name="t">Interpolation factor between 0 and 1.</param>
-        /// <returns>The interpolated point on the spline.</returns>
-        public static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
-        {
-            // Classic Catmull-Rom basis matrix
-            Fixed64 t2 = t * t;
-            Fixed64 t3 = t2 * t;
+        //    // Add the final point
+        //    output[input.Length] = input.FromEnd(1);
+        //    return output;
+        //}
 
-            return
-                ((-t3 + 2 * t2 - t) * p0 +
-                 (3 * t3 - 5 * t2 + 2) * p1 +
-                 (-3 * t3 + 4 * t2 + t) * p2 +
-                 (t3 - t2) * p3) / 2;
-        }
+        ///// <summary>
+        ///// Computes the interpolated point along a Catmull-Rom spline given four control points.
+        ///// </summary>
+        ///// <param name="p0">The first control point.</param>
+        ///// <param name="p1">The second control point.</param>
+        ///// <param name="p2">The third control point.</param>
+        ///// <param name="p3">The fourth control point.</param>
+        ///// <param name="t">Interpolation factor between 0 and 1.</param>
+        ///// <returns>The interpolated point on the spline.</returns>
+        //public static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
+        //{
+        //    // Classic Catmull-Rom basis matrix
+        //    Fixed64 t2 = t * t;
+        //    Fixed64 t3 = t2 * t;
+
+        //    return
+        //        ((-t3 + 2 * t2 - t) * p0 +
+        //         (3 * t3 - 5 * t2 + 2) * p1 +
+        //         (-3 * t3 + 4 * t2 + t) * p2 +
+        //         (t3 - t2) * p3) / 2;
+        //}
     }
 }

@@ -1,13 +1,10 @@
-﻿using FixedMathSharp;
-using SwiftCollections;
-
-namespace Trailblazer.Pathing
+﻿namespace Trailblazer.Pathing
 {
     public struct AStarSurveyResult : ISurveyResult
     {
-        public SwiftList<Vector3d> Path { get; private set; }
+        public AStarWaypoint[] Waypoints { get; private set; }
 
-        public readonly bool IsValid => Path != null && Path.Count > 0;
+        public readonly bool IsValid => Waypoints != null && Waypoints.Length > 0;
 
         public bool IsInUse { get; private set; }
 
@@ -17,11 +14,11 @@ namespace Trailblazer.Pathing
 
         public static readonly AStarSurveyResult Empty = new AStarSurveyResult();
 
-        public static AStarSurveyResult Create(SwiftList<Vector3d> path, int key)
+        public static AStarSurveyResult Create(AStarWaypoint[] waypoints, int key)
         {
             return new AStarSurveyResult()
             {
-                Path = path,
+                Waypoints = waypoints,
                 IsInUse = false,
                 LastUsedFrame = -1,
                 RequestHashKey = key

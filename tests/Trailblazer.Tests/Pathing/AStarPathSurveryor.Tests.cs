@@ -40,9 +40,9 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Equal(3, guide.TrailMap.Path!.Count); // start, middle, end
-            Assert.Equal(origin, guide.TrailMap.Path[0]);
-            Assert.Equal(target, guide.TrailMap.Path.Last());
+            Assert.Equal(3, guide.TrailMap.Waypoints!.Length); // start, middle, end
+            Assert.Equal(origin, guide.TrailMap.Waypoints[0].Position);
+            Assert.Equal(target, guide.TrailMap.Waypoints.Last().Position);
 
             PathManager.Unload("Line");
         }
@@ -172,7 +172,8 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Contains(new Vector3d(2, 0, 1), guide.TrailMap.Path!); // Must have detoured around
+            // Must have detoured around
+            Assert.Contains(new Vector3d(2, 0, 1), guide.TrailMap.Waypoints.Select(p => p.Position).ToList()); 
 
             PathManager.Unload("Detour");
         }
@@ -296,7 +297,7 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(success);
             Assert.NotNull(guide);
-            Assert.True(guide.TrailMap.Path!.Count > 3); // should have inserted curve points
+            Assert.True(guide.TrailMap.Waypoints!.Length > 3); // should have inserted curve points
 
             PathManager.Unload("LSpline");
         }
@@ -322,7 +323,7 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Equal(2, guide.TrailMap.Path!.Count); // No smoothing applied
+            Assert.Equal(2, guide.TrailMap.Waypoints!.Length); // No smoothing applied
 
             PathManager.Unload("ShortSpline");
         }
@@ -353,8 +354,8 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(success);
             Assert.NotNull(guide);
-            Assert.Equal(start, guide.TrailMap.Path!.First());
-            Assert.Equal(end, guide.TrailMap.Path.Last());
+            Assert.Equal(start, guide.TrailMap.Waypoints!.First().Position);
+            Assert.Equal(end, guide.TrailMap.Waypoints.Last().Position);
 
             PathManager.Unload("SplineEnds");
         }

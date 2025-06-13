@@ -3,6 +3,8 @@ using GridForge.Grids;
 using SwiftCollections;
 using System.Threading;
 using System;
+using SwiftCollections.Pool;
+using System.Collections.Concurrent;
 
 namespace Trailblazer.Pathing
 {
@@ -12,7 +14,7 @@ namespace Trailblazer.Pathing
     /// </summary>
     public class FlowFieldSurveyor
     {
-        #region Singleton Instance
+        #region Singleton Instances
 
         /// <summary>
         /// A lazily initialized singleton instance of the pathfinder.
@@ -25,17 +27,21 @@ namespace Trailblazer.Pathing
         /// </summary>
         public static FlowFieldSurveyor Shared => _instance.Value;
 
+        /// <summary>
+        /// Tracks partitions that were affected during the flood fill.
+        /// These will be used to construct the final flow field result.
+        /// </summary>
+        private static readonly Lazy<SwiftHashSetPool<PathPartition>> _markedPool =
+            new(() => new SwiftHashSetPool<PathPartition>());
+
+        /// <inheritdoc cref="_markedPool"/>
+        public static SwiftHashSetPool<PathPartition> MarkedPool => _markedPool.Value;
+
         #endregion
 
         private readonly PathHeap _heap = new();
 
         private FlowFieldPathRequest _request;
-
-        /// <summary>
-        /// The maximum distance found during the flood phase of path generation.
-        /// Used to weight blending toward the goal.
-        /// </summary>
-        private int _greatestDistance;
 
         /// <summary>
         /// The distance from the end node to the starting node during flood fill.
@@ -47,7 +53,7 @@ namespace Trailblazer.Pathing
         /// Tracks partitions that were affected during the flood fill.
         /// These will be used to construct the final flow field result.
         /// </summary>
-        private readonly SwiftHashSet<PathPartition> _marked = new();
+        private SwiftHashSet<PathPartition> _marked;
 
         /// <summary>
         /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
@@ -67,19 +73,25 @@ namespace Trailblazer.Pathing
 
                 _request = request;
 
-                _marked.Clear();
+                _marked = MarkedPool.Rent();
                 _heap.FastClear();
 
-                _greatestDistance = 0;
                 _distanceToStart = 0;
 
                 // Start from the end and move towards the start voxel
                 _heap.Add(targetPartition);
 
                 if (!FloodPath() || _marked.Count <= 0)
+                {
+                    MarkedPool.Release(_marked);
+                    _marked = null;
                     return FlowFieldSurveyResult.Empty;
+                }
 
-                return FlowFieldSurveyResult.Create(GenerateFlowFields(), request.RequestCacheKey);
+                SwiftDictionary<int, FlowField> flowFields = GenerateFlowFields();
+                MarkedPool.Release(_marked);
+                _marked = null;
+                return FlowFieldSurveyResult.Create(flowFields, request.RequestCacheKey);
             }
         }
 
@@ -107,9 +119,6 @@ namespace Trailblazer.Pathing
                 if (targetReached && current.PathCost >= _distanceToStart + _request.ExtraFloodRange)
                     break;
 
-                if (current.PathCost > _greatestDistance)
-                    _greatestDistance = current.PathCost;
-
                 AnalyzeNeighborDistance(current, _request.UnitSize);
 
                 _heap.SetClosed(current);
@@ -130,20 +139,21 @@ namespace Trailblazer.Pathing
             // We will only ever visit every voxel once as we are always visiting voxels in the most efficient order
             foreach (TraversableVoxel neighbor in PathManager.GetWalkableStraightNeighbors(current.GlobalIndex))
             {
-                if (_heap.IsClosed(neighbor.Partition) || neighbor.Partition.Unpassable(unitSize))
+                PathPartition neighborPartition = neighbor.Partition;
+                if (_heap.IsClosed(neighborPartition) || neighborPartition.Unpassable(unitSize))
                     continue;
 
                 int neighborToll = current.PathCost + 1;
-                if (!_heap.Contains(neighbor.Partition))
+                if (!_heap.Contains(neighborPartition))
                 {
-                    neighbor.Partition.PathCost = neighborToll;
-                    _heap.Add(neighbor.Partition);
-                    _marked.Add(neighbor.Partition);
+                    neighborPartition.PathCost = neighborToll;
+                    _heap.Add(neighborPartition);
+                    _marked.Add(neighborPartition);
                 }
                 else if (neighborToll < neighbor.Partition.PathCost)
                 {
-                    neighbor.Partition.PathCost = neighborToll;
-                    _heap.SortUp(neighbor.Partition);
+                    neighborPartition.PathCost = neighborToll;
+                    _heap.SortUp(neighborPartition);
                 }
             }
         }
@@ -155,7 +165,7 @@ namespace Trailblazer.Pathing
         /// <returns>A dictionary of directional flow field data indexed by voxel spawn tokens.</returns>
         private SwiftDictionary<int, FlowField> GenerateFlowFields()
         {
-            SwiftDictionary<int, FlowField> output = new()
+            SwiftDictionary<int, FlowField> result = new(_marked.Count + 1)
             {
                 // Ensure end voxel is include, it shouldn't point anywhere
                 {
@@ -183,7 +193,7 @@ namespace Trailblazer.Pathing
 
                 // Go through all neighbours and find the one with the lowest distance
                 PathPartition minPartition = null;
-                int minDistance = _greatestDistance;
+                int minDistance = int.MaxValue;
                 foreach(TraversableVoxel neighbor in PathManager.GetWalkableNeighbors(current.GlobalIndex))
                 {
                     PathPartition neighborPartition = neighbor.Partition;
@@ -191,6 +201,7 @@ namespace Trailblazer.Pathing
                     if (!_heap.IsClosed(neighborPartition)) 
                         continue;
 
+                    // safe comparison for monotonic wavefront
                     int dist = neighborPartition.PathCost - current.PathCost;
                     if (dist < minDistance)
                     {
@@ -214,10 +225,11 @@ namespace Trailblazer.Pathing
                     currentFlow.Direction = blended.Normalize();
                 }
 
-                output.Add(current.VoxelToken, currentFlow);
+                result.Add(current.VoxelToken, currentFlow);
+                current.PathCost = int.MaxValue;
             }
 
-            return output;
+            return result;
         }
 
         /// <summary>

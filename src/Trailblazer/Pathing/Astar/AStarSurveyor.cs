@@ -28,7 +28,7 @@ namespace Trailblazer.Pathing
     /// </summary>
     public class AStarSurveyor
     {
-        #region Singleton Instance
+        #region Singleton Instances
 
         /// <summary>
         /// A lazily initialized singleton instance of the pathfinder.
@@ -253,12 +253,15 @@ namespace Trailblazer.Pathing
                 return null;
 
             SwiftList<AStarWaypoint> result = WaypointListPool.Rent();
+            result.EnsureCapacity(path.Count);
+            PathPartition start = path[0];
             result.Add(new()
             {
-                Position = path[0].VoxelPosition,
-                PathCost = path[0].PathCost,
-                GlobalIndex = path[0].GlobalIndex
+                Position = start.VoxelPosition,
+                PathCost = start.PathCost,
+                GlobalIndex = start.GlobalIndex
             });
+            start.PathCost = int.MaxValue;
 
             Vector3d lastDirection = Vector3d.Zero;
 
@@ -274,21 +277,24 @@ namespace Trailblazer.Pathing
                     result.Add(new()
                     {
                         Position = path[i].VoxelPosition,
-                        GlobalIndex = path[i].GlobalIndex,
-                        PathCost = path[i].PathCost
+                        PathCost = path[i].PathCost,
+                        GlobalIndex = path[i].GlobalIndex
                     });
                 }
 
                 lastDirection = direction;
+                path[i].PathCost = int.MaxValue;
             }
 
+            PathPartition end = path.FromEnd(1);
             result.Add(new()
             {
-                Position = path.FromEnd(1).VoxelPosition,
-                PathCost = path.FromEnd(1).PathCost,
-                GlobalIndex = path.FromEnd(1).GlobalIndex,
+                Position = end.VoxelPosition,
+                PathCost = end.PathCost,
+                GlobalIndex = end.GlobalIndex,
                 IsGoal = true
             });
+            end.PathCost = int.MaxValue;
 
             AStarWaypoint[] finalResult = result.ToArray();
             WaypointListPool.Release(result);

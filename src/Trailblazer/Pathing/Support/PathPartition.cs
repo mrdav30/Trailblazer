@@ -61,7 +61,7 @@ namespace Trailblazer.Pathing
         /// The combined cost for use in pathfinding heap prioritization.
         /// </summary>
         [Transient]
-        public int PathCost { get; set; }
+        public int PathCost { get; set; } = int.MaxValue;
 
         #region Clearance Properties
 

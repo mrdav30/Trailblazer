@@ -2,7 +2,9 @@
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
+using SwiftCollections.Pool;
 using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace Trailblazer.Pathing
@@ -39,12 +41,12 @@ namespace Trailblazer.Pathing
         /// </summary>
         public static AStarSurveyor Shared => _instance.Value;
 
-        #endregion
+        private static readonly Lazy<SwiftListPool<AStarWaypoint>> _waypointListPool =
+            new(() => new SwiftListPool<AStarWaypoint>());
 
-        /// <summary>
-        /// The directional tolerance used to detect changes in path heading when smoothing a path.
-        /// </summary>
-        private static readonly Fixed64 _directionChangeTolerance = new(0.01);
+        public static SwiftListPool<AStarWaypoint> WaypointListPool => _waypointListPool.Value;
+
+        #endregion
 
         private readonly PathHeap _heap = new();
 
@@ -101,7 +103,7 @@ namespace Trailblazer.Pathing
         {
             int iterations = 0;
             int searchSize = _request.MaxPathSearchRange.Value;
-            while (_heap.RemoveFirst(out PathPartition currentPartition) 
+            while (_heap.RemoveFirst(out PathPartition currentPartition)
                 && iterations++ < searchSize)
             {
                 if (currentPartition.VoxelToken == _request.End.SpawnToken)
@@ -246,63 +248,51 @@ namespace Trailblazer.Pathing
         /// <returns>A smoothed list of world positions.</returns>
         private AStarWaypoint[] BuildWaypoints(SwiftList<PathPartition> path)
         {
-            AStarWaypoint[] result = new AStarWaypoint[path.Count];
-            if (path.Count == 0)
-                return result;
+            // return early if the start is the same as the end
+            if (path.Count == 0 || path[0].VoxelToken == path.FromEnd(1).VoxelToken)
+                return null;
 
-            Vector3d lastDir = Vector3d.Zero;
-
-            // If the path actually goes somewhere → include the start
-            if (path[0].VoxelToken != path.FromEnd(1).VoxelToken)
-                result[0] = new()
-                {
-                    Position = path[0].VoxelPosition,
-                    GlobalIndex = path[0].GlobalIndex,
-                    PathCost = path[0].PathCost
-                };
-
-            for (int i = 1; i < path.Count; i++)
+            SwiftList<AStarWaypoint> result = WaypointListPool.Rent();
+            result.Add(new()
             {
-                PathPartition current = path[i];
-                PathPartition previous = path[i - 1];
+                Position = path[0].VoxelPosition,
+                PathCost = path[0].PathCost,
+                GlobalIndex = path[0].GlobalIndex
+            });
 
-                // Preserve voxels near unwalkable tiles
-                if (current.GetNeighborClearance() <= _request.UnitSize + 1)
+            Vector3d lastDirection = Vector3d.Zero;
+
+            for (int i = 1; i < path.Count - 1; i++)
+            {
+                Vector3d direction = (path[i + 1].VoxelPosition - path[i].VoxelPosition).Normalize();
+
+                bool preserveUnwalkable = path[i].GetNeighborClearance() <= _request.UnitSize + 1;
+                bool directionChanged = !lastDirection.FuzzyEqual(direction);
+
+                if (preserveUnwalkable || directionChanged)
                 {
-                    result[i] = new()
+                    result.Add(new()
                     {
-                        Position = current.VoxelPosition,
-                        GlobalIndex = current.GlobalIndex,
-                        PathCost = current.PathCost,
-                        IsGoal = current.VoxelToken == _request.End.SpawnToken
-                    };
-                    lastDir = Vector3d.Zero;
-                    // Reset for next run
-                    current.PathCost = 0;
-                    continue;
+                        Position = path[i].VoxelPosition,
+                        GlobalIndex = path[i].GlobalIndex,
+                        PathCost = path[i].PathCost
+                    });
                 }
 
-                Vector3d dir = (current.VoxelPosition - previous.VoxelPosition).Normal;
-
-                // Only add this voxel if direction changed
-                // TODO: should we move this up into GetRawpath?
-                if (!dir.FuzzyEqual(lastDir, _directionChangeTolerance))
-                {
-                    result[i] = new()
-                    {
-                        Position = current.VoxelPosition,
-                        GlobalIndex = current.GlobalIndex,
-                        PathCost = current.PathCost,
-                        IsGoal = current.VoxelToken == _request.End.SpawnToken
-                    };
-                    lastDir = dir;
-                }
-
-                // Reset for next run
-                current.PathCost = 0;
+                lastDirection = direction;
             }
 
-            return result;
+            result.Add(new()
+            {
+                Position = path.FromEnd(1).VoxelPosition,
+                PathCost = path.FromEnd(1).PathCost,
+                GlobalIndex = path.FromEnd(1).GlobalIndex,
+                IsGoal = true
+            });
+
+            AStarWaypoint[] finalResult = result.ToArray();
+            WaypointListPool.Release(result);
+            return finalResult;
         }
 
         /// <summary>
@@ -361,7 +351,8 @@ namespace Trailblazer.Pathing
         /// <param name="p3">The fourth control point.</param>
         /// <param name="t">Interpolation factor between 0 and 1.</param>
         /// <returns>The interpolated point on the spline.</returns>
-        public static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
         {
             // Classic Catmull-Rom basis matrix
             Fixed64 t2 = t * t;

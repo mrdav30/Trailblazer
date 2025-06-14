@@ -48,6 +48,6 @@ namespace Trailblazer.Pathing
         /// </summary>
         public int RequestCacheKey { get; }
 
-        void Prepare();
+        bool Prepare();
     }
 }

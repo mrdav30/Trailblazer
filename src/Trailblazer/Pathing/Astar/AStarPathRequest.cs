@@ -58,13 +58,15 @@ namespace Trailblazer.Pathing
             };
         }
 
-        public void Prepare()
+        public bool Prepare()
         {
             if (!MaxPathSearchRange.HasValue
                 && PathManager.GetMaxSearchSize(Start, End, out int searchSize))
             {
                 MaxPathSearchRange = searchSize;
             }
+
+            return IsValid;
         }
 
         public override readonly bool Equals(object obj) =>
@@ -83,6 +85,17 @@ namespace Trailblazer.Pathing
                 MaxClimbHeight,
                 MaxPathSearchRange ?? -1
             ).CombineHashCodes();
+        }
+    }
+
+    public static class AStarRequestExtensions
+    {
+        public static AStarPathRequest Validate(this AStarPathRequest request)
+        {
+            if (request.Prepare())
+                return request;
+
+            return default;
         }
     }
 }

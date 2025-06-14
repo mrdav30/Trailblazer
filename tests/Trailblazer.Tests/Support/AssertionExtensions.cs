@@ -12,12 +12,17 @@ namespace Trailblazer.Tests
 
         protected override string Identifier => "fixed64";
 
-        public AndConstraint<Fixed64Assertions> BeApproximately(Fixed64 expected, Fixed64 tolerance, string because = "", params object[] becauseArgs)
+        public AndConstraint<Fixed64Assertions> BeApproximately(
+            Fixed64 expected, 
+            Fixed64? tolerance = null, 
+            string because = "", params object[] becauseArgs)
         {
+            Fixed64 limit = tolerance ?? Fixed64.Epsilon;
+
             this.CurrentAssertionChain
-                .ForCondition(((Fixed64)Subject - expected).Abs() <= tolerance)
+                .ForCondition(((Fixed64)Subject - expected).Abs() <= limit)
                 .BecauseOf(because, becauseArgs)
-                .FailWith($"Expected {Subject} to be approximately {expected} ± {tolerance}, but found {Subject}.");
+                .FailWith($"Expected {Subject} to be approximately {expected} ± {limit}, but found {Subject}.");
 
             return new AndConstraint<Fixed64Assertions>(this);
         }
@@ -37,25 +42,51 @@ namespace Trailblazer.Tests
 
         protected override string Identifier => "vector3d";
 
-        public AndConstraint<Vector3dAssertions> BeApproximately(Vector3d expected, Fixed64 tolerance, string because = "", params object[] becauseArgs)
+        public AndConstraint<Vector3dAssertions> BeApproximately(
+            Vector3d expected, 
+            Fixed64? tolerance = null, 
+            string because = "", params object[] becauseArgs)
         {
+            Fixed64 limit = tolerance ?? Fixed64.Epsilon;
+
             this.CurrentAssertionChain
-                .ForCondition(((Vector3d)Subject - expected).Magnitude <= tolerance)
+                .ForCondition(((Vector3d)Subject - expected).Magnitude <= limit)
                 .BecauseOf(because, becauseArgs)
-                .FailWith($"Expected {Subject} to be approximately {expected} ± {tolerance}, but found {Subject}.");
+                .FailWith($"Expected {Subject} to be approximately {expected} ± {limit}, but found {Subject}.");
 
             return new AndConstraint<Vector3dAssertions>(this);
         }
 
-        public AndConstraint<Vector3dAssertions> HaveComponentApproximately(Vector3d expected, Fixed64 tolerance, string because = "", params object[] becauseArgs)
+        public AndConstraint<Vector3dAssertions> NotBeApproximately(
+            Vector3d expected, 
+            Fixed64? tolerance = null, 
+            string because = "", 
+            params object[] becauseArgs)
         {
+            Fixed64 limit = tolerance ?? Fixed64.Epsilon;
+
+            this.CurrentAssertionChain
+                .ForCondition(((Vector3d)Subject - expected).Magnitude >= limit)
+                .BecauseOf(because, becauseArgs)
+                .FailWith($"Expected {Subject} to <c>not</c> be approximately {expected} ± {limit}, but found {Subject}.");
+
+            return new AndConstraint<Vector3dAssertions>(this);
+        }
+
+        public AndConstraint<Vector3dAssertions> HaveComponentApproximately(
+            Vector3d expected, 
+            Fixed64? tolerance = null, 
+            string because = "", params object[] becauseArgs)
+        {
+            Fixed64 limit = tolerance ?? Fixed64.Epsilon;
+
             Vector3d subjectVector = (Vector3d)Subject;
             this.CurrentAssertionChain
-                .ForCondition((subjectVector.x - expected.x).Abs() <= tolerance
-                           && (subjectVector.y - expected.y).Abs() <= tolerance
-                           && (subjectVector.z - expected.z).Abs() <= tolerance)
+                .ForCondition((subjectVector.x - expected.x).Abs() <= limit
+                           && (subjectVector.y - expected.y).Abs() <= limit
+                           && (subjectVector.z - expected.z).Abs() <= limit)
                 .BecauseOf(because, becauseArgs)
-                .FailWith($"Expected {Subject} components to be approximately {expected} ± {tolerance}, but found {Subject}.");
+                .FailWith($"Expected {Subject} components to be approximately {expected} ± {limit}, but found {Subject}.");
 
             return new AndConstraint<Vector3dAssertions>(this);
         }

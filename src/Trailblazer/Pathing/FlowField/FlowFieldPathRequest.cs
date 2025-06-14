@@ -40,8 +40,23 @@ namespace Trailblazer.Pathing
         public static FlowFieldPathRequest CreateEmpty() => Create(null, null);
 
         public static FlowFieldPathRequest Create(
-            Voxel start, 
-            Voxel end, 
+            Vector3d start,
+            Vector3d end,
+            Fixed64? unitSize = null,
+            bool allowUnwalkable = false)
+        {
+            if (!GlobalGridManager.TryGetGridAndVoxel(start, out _, out Voxel startVoxel)
+                || !GlobalGridManager.TryGetGridAndVoxel(end, out _, out Voxel endVoxel))
+            {
+                return default;
+            }
+
+            return Create(startVoxel, endVoxel, unitSize, allowUnwalkable);
+        }
+
+        public static FlowFieldPathRequest Create(
+            Voxel start,
+            Voxel end,
             Fixed64? unitSize = null,
             bool allowUnwalkable = false)
         {
@@ -56,13 +71,15 @@ namespace Trailblazer.Pathing
             };
         }
 
-        public void Prepare()
+        public bool Prepare()
         {
             if (!MaxPathSearchRange.HasValue
                 && PathManager.GetMaxSearchSize(Start, End, out int searchSize))
             {
                 MaxPathSearchRange = searchSize;
             }
+
+            return IsValid;
         }
 
         public override readonly bool Equals(object obj) =>
@@ -80,6 +97,17 @@ namespace Trailblazer.Pathing
                 ExtraFloodRange,
                 MaxPathSearchRange ?? -1
             ).CombineHashCodes();
+        }
+    }
+
+    public static class FlowFieldRequestExtensions
+    {
+        public static FlowFieldPathRequest Validate(this FlowFieldPathRequest request)
+        {
+            if (request.Prepare())
+                return request;
+
+            return default;
         }
     }
 }

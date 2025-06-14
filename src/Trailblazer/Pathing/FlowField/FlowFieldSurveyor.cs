@@ -79,6 +79,7 @@ namespace Trailblazer.Pathing
                 _distanceToStart = 0;
 
                 // Start from the end and move towards the start voxel
+                targetPartition.PathCost = 0;
                 _heap.Add(targetPartition);
 
                 if (!FloodPath() || _marked.Count <= 0)
@@ -173,6 +174,7 @@ namespace Trailblazer.Pathing
                     new FlowField()
                     {
                         Direction = Vector3d.Zero,
+                        GlobalIndex = _request.End.GlobalIndex,
                         IsGoal = true
                     }
                 }

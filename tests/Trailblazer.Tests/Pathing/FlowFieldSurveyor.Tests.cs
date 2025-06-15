@@ -405,5 +405,191 @@ namespace Trailblazer.Tests.Pathing
 
             PathManager.Unload("FlowGradientTest");
         }
+
+        [Fact]
+        public void FlowField_ShouldRespect_DirectionalResolutionBias()
+        {
+            bool[,,] data = new bool[1, 3, 3];
+            for (int x = 0; x < 3; x++)
+                for (int z = 0; z < 3; z++)
+                    data[0, x, z] = true;
+
+            PathTestFactory.RegisterFromData("DirectionalBias", data, Vector3d.Zero);
+
+            Vector3d start = new(1, 0, 1);
+            Vector3d goal = new(2, 0, 2);
+
+            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var result = FlowFieldSurveyor.Shared.FindPath(request);
+
+            Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+
+            flow.x.Should().BeApproximately(flow.z, (Fixed64)0.05);
+            flow.x.Should().BeGreaterThan(Fixed64.Zero);
+            flow.z.Should().BeGreaterThan(Fixed64.Zero);
+
+            PathManager.Unload("DirectionalBias");
+        }
+
+        [Fact]
+        public void FlowField_ShouldPrefer_CardinalOverDiagonal_WhenEqualCost()
+        {
+            bool[,,] data = new bool[1, 3, 3];
+            for (int x = 0; x < 3; x++)
+                for (int z = 0; z < 3; z++)
+                    data[0, x, z] = true;
+
+            PathTestFactory.RegisterFromData("CardinalOverDiagonal", data, Vector3d.Zero);
+
+            Vector3d start = new(1, 0, 1);
+            Vector3d goal = new(1, 0, 0);
+
+            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var result = FlowFieldSurveyor.Shared.FindPath(request);
+
+            Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+            flow.Should().Be(Vector3d.Backward);
+
+            PathManager.Unload("CardinalOverDiagonal");
+        }
+
+        [Fact]
+        public void FlowField_ShouldProduceDifferentDirections_ForDifferentGoals()
+        {
+            bool[,,] data = new bool[1, 5, 5];
+            for (int x = 0; x < 5; x++)
+                for (int z = 0; z < 5; z++)
+                    data[0, x, z] = true;
+
+            PathTestFactory.RegisterFromData("DifferentGoals", data, Vector3d.Zero);
+
+            Vector3d start = new(2, 0, 2);
+            var request1 = FlowFieldPathRequest.Create(start, new Vector3d(0, 0, 0)).Validate();
+            var request2 = FlowFieldPathRequest.Create(start, new Vector3d(4, 0, 4)).Validate();
+
+            var result1 = FlowFieldSurveyor.Shared.FindPath(request1);
+            var result2 = FlowFieldSurveyor.Shared.FindPath(request2);
+
+            FlowField field1 = FlowFieldSurveyor.GetFlowField(start, result1.Fields);
+            FlowField field2 = FlowFieldSurveyor.GetFlowField(start, result2.Fields);
+
+            field1.Direction.Should().NotBe(Vector3d.Zero);
+            field2.Direction.Should().NotBe(Vector3d.Zero);
+            field1.Direction.Should().NotBe(field2.Direction);
+
+            PathManager.Unload("DifferentGoals");
+        }
+
+        [Fact]
+        public void FlowField_ShouldBeDeterministic_WithSameGoal()
+        {
+            bool[,,] data = new bool[1, 5, 5];
+            for (int z = 0; z < 5; z++)
+                for (int x = 0; x < 5; x++)
+                    data[0, z, x] = true;
+
+            PathTestFactory.RegisterFromData("DeterminismTest", data, Vector3d.Zero);
+
+            var start = new Vector3d(4, 0, 4);
+            var end = new Vector3d(0, 0, 0);
+
+            var request1 = FlowFieldPathRequest.Create(start, end);
+            request1.Prepare();
+            var result1 = FlowFieldSurveyor.Shared.FindPath(request1);
+
+            var request2 = FlowFieldPathRequest.Create(start, end);
+            request2.Prepare();
+            var result2 = FlowFieldSurveyor.Shared.FindPath(request2);
+
+            result1.Fields.Count.Should().Be(result2.Fields.Count);
+
+            foreach (var kvp in result1.Fields)
+            {
+                result2.Fields.Should().ContainKey(kvp.Key);
+                FlowField field1 = kvp.Value;
+                FlowField field2 = result2.Fields[kvp.Key];
+
+                field1.Direction.Should().Be(field2.Direction);
+                field1.DistanceToTarget.Should().Be(field2.DistanceToTarget);
+            }
+
+            PathManager.Unload("DeterminismTest");
+        }
+
+        [Fact]
+        public void FlowField_ShouldReroute_WhenAdjacentBlockersExist()
+        {
+            bool[,,] data = new bool[1, 3, 3];
+            data[0, 0, 0] = true;
+            data[0, 0, 2] = true;
+            data[0, 2, 0] = true;
+            data[0, 2, 2] = true;
+            data[0, 1, 0] = false;
+            data[0, 1, 1] = false;
+            data[0, 1, 2] = false;
+
+            PathTestFactory.RegisterFromData("RerouteAroundBlockers", data, Vector3d.Zero);
+
+            var start = new Vector3d(0, 0, 2);
+            var goal = new Vector3d(2, 0, 0);
+            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var result = FlowFieldSurveyor.Shared.FindPath(request);
+
+            Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+            flow.Should().NotBe(Vector3d.Left);
+
+            PathManager.Unload("RerouteAroundBlockers");
+        }
+
+        [Fact]
+        public void FlowField_ShouldHandle_UnreachableGoal_AtGridEdge()
+        {
+            bool[,,] data = new bool[1, 4, 4];
+            for (int x = 0; x < 4; x++)
+                for (int z = 0; z < 4; z++)
+                    data[0, x, z] = true;
+
+            PathTestFactory.RegisterFromData("EdgeGoalTest", data, Vector3d.Zero);
+
+            var start = new Vector3d(2, 0, 2);
+            var goal = new Vector3d(5, 0, 5);
+            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var result = FlowFieldSurveyor.Shared.FindPath(request);
+
+            result.IsValid.Should().BeFalse();
+
+            PathManager.Unload("EdgeGoalTest");
+        }
+
+        [Fact]
+        public void FlowField_ShouldProduce_ConsistentResults()
+        {
+            bool[,,] data = new bool[1, 5, 5];
+            for (int x = 0; x < 5; x++)
+                for (int z = 0; z < 5; z++)
+                    data[0, x, z] = true;
+
+            PathTestFactory.RegisterFromData("ConsistencyTest", data, Vector3d.Zero);
+
+            var start = new Vector3d(4, 0, 4);
+            var end = new Vector3d(0, 0, 0);
+
+            var request1 = FlowFieldPathRequest.Create(start, end).Validate();
+            var result1 = FlowFieldSurveyor.Shared.FindPath(request1);
+
+            var request2 = FlowFieldPathRequest.Create(start, end).Validate();
+            var result2 = FlowFieldSurveyor.Shared.FindPath(request2);
+
+            result1.Fields.Count.Should().Be(result2.Fields.Count);
+
+            foreach (var kv in result1.Fields)
+            {
+                result2.Fields.TryGetValue(kv.Key, out var f2).Should().BeTrue();
+                f2.Direction.Should().Be(kv.Value.Direction);
+                f2.DistanceToTarget.Should().Be(kv.Value.DistanceToTarget);
+            }
+
+            PathManager.Unload("ConsistencyTest");
+        }
     }
 }

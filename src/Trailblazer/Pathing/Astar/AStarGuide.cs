@@ -108,7 +108,7 @@ namespace Trailblazer.Pathing
                 return false;
 
             // Start from CurrentIndex + 1 and search forward
-            int searchStart = Util.Clamp(_lastTriedIndex, 0, ActiveWaypoints.Length - 1);
+            int searchStart = FixedMath.Clamp(_lastTriedIndex, 0, ActiveWaypoints.Length - 1);
                 
             Fixed64 minDistSq = Fixed64.MAX_VALUE;
             int bestIndex = -1;

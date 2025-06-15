@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
+using SwiftCollections;
 using System;
 
 namespace Trailblazer.Pathing

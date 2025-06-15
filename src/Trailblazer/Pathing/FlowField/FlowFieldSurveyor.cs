@@ -264,10 +264,10 @@ namespace Trailblazer.Pathing
             Vector3d topRight = corner + new Vector3d(GlobalGridManager.VoxelSize, Fixed64.Zero, GlobalGridManager.VoxelSize);
 
             // Get flow vectors
-            Vector3d f00 = GetFlowVector(bottomLeft, fields);
-            Vector3d f10 = GetFlowVector(bottomRight, fields);
-            Vector3d f01 = GetFlowVector(topLeft, fields);
-            Vector3d f11 = GetFlowVector(topRight, fields);
+            Vector3d f00 = GetFlowDirection(bottomLeft, fields);
+            Vector3d f10 = GetFlowDirection(bottomRight, fields);
+            Vector3d f01 = GetFlowDirection(topLeft, fields);
+            Vector3d f11 = GetFlowDirection(topRight, fields);
 
             // Bilinear interpolation
             Vector3d zHigh = f00 * (Fixed64.One - dx) + f10 * dx;
@@ -323,7 +323,7 @@ namespace Trailblazer.Pathing
         /// <param name="position">The position to query within the flow field.</param>
         /// <param name="fields">Flow field data indexed by spawn token.</param>
         /// <returns>The direction vector, or <c>Vector3d.Zero</c> if no field exists.</returns>
-        public static Vector3d GetFlowVector(Vector3d position, SwiftDictionary<int, FlowField> fields)
+        public static Vector3d GetFlowDirection(Vector3d position, SwiftDictionary<int, FlowField> fields)
         {
             if (GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
             {
@@ -331,6 +331,16 @@ namespace Trailblazer.Pathing
                     return field.Direction;
             }
             return Vector3d.Zero;
+        }
+
+        public static FlowField GetFlowField(Vector3d position, SwiftDictionary<int, FlowField> fields)
+        {
+            if (GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
+            {
+                if (fields.TryGetValue(voxel.SpawnToken, out FlowField field))
+                    return field;
+            }
+            return default;
         }
     }
 }

@@ -111,7 +111,11 @@ namespace Trailblazer.Pathing
         /// <param name="unitSize">The size of the navigating unit.</param>
         /// <param name="allowUnwalkable">Whether to permit unwalkable voxels.</param>
         /// <returns>True if a path is required; otherwise, false.</returns>
-        public static bool NeedsPath(Vector3d startPos, Vector3d endPos, Fixed64 unitSize, bool allowUnwalkable = false)
+        public static bool NeedsPath(
+            Vector3d startPos, 
+            Vector3d endPos, 
+            Fixed64 unitSize, 
+            bool allowUnwalkable = false)
         {
             foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(startPos, endPos))
             {

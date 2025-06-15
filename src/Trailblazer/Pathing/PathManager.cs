@@ -8,6 +8,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using GridForge.Spatial;
+using System.Threading;
+using System.Linq;
 
 namespace Trailblazer.Pathing
 {
@@ -28,7 +30,21 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Gets an enumerable collection of all currently registered navigation charts.
         /// </summary>
-        public static IEnumerable<NavigationChart> AllMaps => _loadedMaps.Values;
+        public static IEnumerable<NavigationChart> AllMaps
+        {
+            get
+            {
+                _mapLock.EnterReadLock();
+                try
+                {
+                    return _loadedMaps.Values.ToArray(); // Safe snapshot
+                }
+                finally
+                {
+                    _mapLock.ExitReadLock();
+                }
+            }
+        }
 
         /// <summary>
         /// Pool of reusable <see cref="PathPartition"/> instances used for partitioning the navigation grid.
@@ -37,6 +53,12 @@ namespace Trailblazer.Pathing
             () => new PathPartition(),
             actionOnRelease: partition => partition.Reset()
         );
+
+        /// <summary>
+        /// Lock for managing concurrent access to NavigationChart operations.
+        /// Ensures thread safety for read/write operations.
+        /// </summary>
+        private static readonly ReaderWriterLockSlim _mapLock = new();
 
         /// <summary>
         /// Attempts to get valid start and end voxels based on provided world positions.
@@ -48,9 +70,9 @@ namespace Trailblazer.Pathing
         /// <param name="endVoxel">Resolved end voxel.</param>
         /// <returns>True if both voxels were resolved successfully; otherwise, false.</returns>
         public static bool GetValidPathRequest(
-            Vector3d start, 
-            Vector3d end, 
-            out Voxel startVoxel, 
+            Vector3d start,
+            Vector3d end,
+            out Voxel startVoxel,
             out Voxel endVoxel)
         {
             endVoxel = null;
@@ -92,7 +114,7 @@ namespace Trailblazer.Pathing
         /// <returns>True if both voxels belong to valid grids; otherwise, false.</returns>
         public static bool GetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)
         {
-            if (!GlobalGridManager.TryGetGrid(start.GlobalIndex.GridIndex, out VoxelGrid startGrid) 
+            if (!GlobalGridManager.TryGetGrid(start.GlobalIndex.GridIndex, out VoxelGrid startGrid)
                 || !GlobalGridManager.TryGetGrid(end.GlobalIndex.GridIndex, out VoxelGrid endGrid))
             {
                 maxSearchSize = 0;
@@ -147,7 +169,15 @@ namespace Trailblazer.Pathing
                 return false;
             }
 
-            _loadedMaps.Add(map.Name, map);
+            _mapLock.EnterWriteLock();
+            try
+            {
+                _loadedMaps.Add(map.Name, map);
+            }
+            finally 
+            { 
+                _mapLock.ExitWriteLock(); 
+            }
             return true;
         }
 
@@ -157,7 +187,18 @@ namespace Trailblazer.Pathing
         /// <param name="name">The map name to check.</param>
         /// <returns>True if registered; otherwise, false.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool IsMapRegistered(string name) => _loadedMaps.ContainsKey(name);
+        public static bool IsMapRegistered(string name)
+        {
+            _mapLock.EnterReadLock();
+            try
+            {
+                return _loadedMaps.ContainsKey(name);
+            }
+            finally 
+            { 
+                _mapLock.ExitReadLock(); 
+            }
+        }
 
         /// <summary>
         /// Attempts to retrieve a registered navigation chart by name.
@@ -166,8 +207,18 @@ namespace Trailblazer.Pathing
         /// <param name="map">The retrieved navigation chart.</param>
         /// <returns>True if the map exists; otherwise, false.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryGetNavigationMap(string name, out NavigationChart map) 
-            => _loadedMaps.TryGetValue(name, out map);
+        public static bool TryGetNavigationMap(string name, out NavigationChart map)
+        {
+            _mapLock.EnterReadLock();
+            try
+            {
+                return _loadedMaps.TryGetValue(name, out map);
+            }
+            finally
+            {
+                _mapLock.ExitReadLock();
+            }
+        }
 
         /// <summary>
         /// Initializes all registered navigation maps by assigning walkable voxels to partitions.
@@ -256,7 +307,15 @@ namespace Trailblazer.Pathing
                 }
             }
 
-            _loadedMaps.Remove(name);
+            _mapLock.EnterWriteLock();
+            try
+            {
+                _loadedMaps.Remove(name);
+            }
+            finally 
+            { 
+                _mapLock.ExitWriteLock(); 
+            }
 
             // TODO: find a way to only clear relevant pools
             if (PathGuideFactory.IsPooling)
@@ -268,7 +327,15 @@ namespace Trailblazer.Pathing
         /// </summary>
         public static void ClearAll()
         {
-            _loadedMaps.Clear();
+            _mapLock.EnterWriteLock();
+            try
+            {
+                _loadedMaps.Clear();
+            }
+            finally 
+            { 
+                _mapLock.ExitWriteLock(); 
+            }
 
             if (PathGuideFactory.IsPooling)
                 PathGuideFactory.FlushPools();

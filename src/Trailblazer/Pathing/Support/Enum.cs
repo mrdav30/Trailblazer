@@ -8,7 +8,7 @@
         //Chebyshev?
     }
 
-    public enum StraightNeighbors
+    public enum PerpendicularDirections
     {
         West = 0,  //  (-1, 0, 0)
         South = 1,  //  (0, 0, -1)
@@ -18,7 +18,7 @@
         Above = 25  //  (0, 1, 0)
     };
 
-    public enum DiagonalNeighbors
+    public enum DiagonalDirections
     {
         SouthWest = 4,  //  (-1, 0, -1)
         NorthWest = 5,  //  (-1, 0, 1)

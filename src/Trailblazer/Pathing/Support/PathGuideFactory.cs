@@ -79,7 +79,7 @@ namespace Trailblazer.Pathing
             out IGuide result)
         {
             result = null;
-            if (!PathManager.GetValidPathRequest(origin, destination, out Voxel startVoxel, out Voxel endVoxel))
+            if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startVoxel, out Voxel endVoxel))
                 return false;
 
             request.Start = startVoxel;

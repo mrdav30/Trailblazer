@@ -4,13 +4,15 @@ using Trailblazer.Pathing;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System.Linq;
+using FluentAssertions;
+using System.Collections.Generic;
 
 namespace Trailblazer.Tests.Pathing
 {
     [Collection("PathingCollection")]
-    public class AStarPathSurveryorTests
+    public class AStarSurveryorTests
     {
-        public AStarPathSurveryorTests()
+        public AStarSurveryorTests()
         {
             var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
             GlobalGridManager.TryAddGrid(config, out _);
@@ -44,7 +46,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.Equal(origin, guide.ActiveWaypoints[0].Position);
             Assert.Equal(target, guide.ActiveWaypoints.Last().Position);
 
-            PathManager.Unload("Line");
+            PathManager.UnloadChart("Line");
         }
 
         [Fact]
@@ -62,19 +64,20 @@ namespace Trailblazer.Tests.Pathing
             Assert.False(success);
             Assert.Null(guide);
 
-            PathManager.Unload("Isolated");
+            PathManager.UnloadChart("Isolated");
         }
 
         [Fact]
         public void AStar_ShouldReportHeightLimitViolation()
         {
-            bool[,,] data = new bool[6, 6, 1];
-            for (int i = 0; i < 6; i++)
-                data[i, i, 0] = true;
+            bool[,,] data = new bool[6, 6, 6];
+            for (int y = 0; y < 6; y++)
+                for (int x = 0; x < 6; x++)
+                    data[y, x, 0] = true;
 
-            var map = NavigationChart.From3D("HeightSpy", data, new Vector3d(0, 0, 0), Fixed64.One);
+            var map = NavigationChart.From3D("HeightSpy", data, Vector3d.Zero, Fixed64.One);
             PathManager.Register(map);
-            PathManager.InitializeMap("HeightSpy");
+            PathManager.InitializeChart("HeightSpy");
 
             Fixed64 maxHeightDifference = Fixed64.Half;
             bool heightViolationTriggered = false;
@@ -94,7 +97,7 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(heightViolationTriggered);
 
-            PathManager.Unload("HeightSpy");
+            PathManager.UnloadChart("HeightSpy");
         }
 
         [Theory]
@@ -117,7 +120,7 @@ namespace Trailblazer.Tests.Pathing
             }, start, Fixed64.One);
 
             PathManager.Register(map);
-            PathManager.InitializeMap("Diag");
+            PathManager.InitializeChart("Diag");
 
             var request = AStarPathRequest.CreateEmpty();
             request.Heuristic = method;
@@ -127,7 +130,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.True(success);
             Assert.NotNull(guide);
 
-            PathManager.Unload("Diag");
+            PathManager.UnloadChart("Diag");
         }
 
         [Fact]
@@ -143,7 +146,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.False(success);
             Assert.Null(guide);
 
-            PathManager.Unload("SameSpot");
+            PathManager.UnloadChart("SameSpot");
         }
 
         [Fact]
@@ -173,9 +176,11 @@ namespace Trailblazer.Tests.Pathing
             Assert.True(success);
             Assert.NotNull(guide);
             // Must have detoured around
-            Assert.Contains(new Vector3d(2, 0, 1), guide.ActiveWaypoints.Select(p => p.Position).ToList()); 
+            List<Vector3d> waypoints = guide.ActiveWaypoints.Select(p => p.Position).ToList();
+            Assert.Contains(new Vector3d(2, 0, 2), waypoints);
+            Assert.Contains(new Vector3d(3, 0, 1), waypoints);
 
-            PathManager.Unload("Detour");
+            PathManager.UnloadChart("Detour");
         }
 
         [Fact]
@@ -204,7 +209,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.False(success);
             Assert.Null(guide);
 
-            PathManager.Unload("Choke");
+            PathManager.UnloadChart("Choke");
         }
 
         [Fact]
@@ -230,7 +235,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.NotNull(guide);
 
             // Second request with blocked path
-            PathManager.Unload("ResetTest");
+            PathManager.UnloadChart("ResetTest");
 
             var badData = new bool[1, 3, 1]
             {
@@ -251,7 +256,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.False(success2);
             Assert.Null(failedGuide);
 
-            PathManager.Unload("ResetTestBlocked");
+            PathManager.UnloadChart("ResetTestBlocked");
         }
 
         [Fact]
@@ -271,7 +276,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.False(success);
             Assert.Null(guide);
 
-            PathManager.Unload("SearchCap");
+            PathManager.UnloadChart("SearchCap");
         }
 
         [Fact]
@@ -288,7 +293,7 @@ namespace Trailblazer.Tests.Pathing
             }, new Vector3d(0, 0, 0), Fixed64.One);
 
             PathManager.Register(map);
-            PathManager.InitializeMap("LSpline");
+            PathManager.InitializeChart("LSpline");
 
             var request = AStarPathRequest.CreateEmpty();
 
@@ -299,7 +304,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.NotNull(guide);
             Assert.True(guide.ActiveWaypoints!.Length > 4); // should have inserted curve points
 
-            PathManager.Unload("LSpline");
+            PathManager.UnloadChart("LSpline");
         }
 
         [Fact]
@@ -325,9 +330,8 @@ namespace Trailblazer.Tests.Pathing
             Assert.NotNull(guide);
             Assert.Equal(2, guide.ActiveWaypoints!.Length); // No smoothing applied
 
-            PathManager.Unload("ShortSpline");
+            PathManager.UnloadChart("ShortSpline");
         }
-
 
         [Fact]
         public void AStarSpline_ShouldIncludeOriginalEndpoints()
@@ -357,8 +361,164 @@ namespace Trailblazer.Tests.Pathing
             Assert.Equal(start, guide.ActiveWaypoints!.First().Position);
             Assert.Equal(end, guide.ActiveWaypoints.Last().Position);
 
-            PathManager.Unload("SplineEnds");
+            PathManager.UnloadChart("SplineEnds");
         }
 
+        [Fact]
+        public void AStar_ShouldNotCutDiagonallyThroughCorner()
+        {
+            var data = new bool[1, 2, 2]
+            {
+                {
+                    { true, false },
+                    { false, true }
+                }
+            };
+
+            PathTestFactory.RegisterFromData("CornerCut", data, Vector3d.Zero);
+
+            var request = AStarPathRequest.CreateEmpty();
+            request.UnitSize = (Fixed64)1;
+            bool success = PathGuideFactory.RequestGuide(new Vector3d(0, 0, 0), new Vector3d(1, 0, 1), request, out AStarGuide guide);
+
+            Assert.False(success);
+            Assert.Null(guide);
+
+            PathManager.UnloadChart("CornerCut");
+        }
+
+        [Fact]
+        public void AStar_ShouldChooseShortestPath_WhenAllCostsEqual()
+        {
+            var data = new bool[1, 3, 3]
+            {
+                {
+                    { true, true, true },
+                    { true, true, true },
+                    { true, true, true }
+                }
+            };
+
+            PathTestFactory.RegisterFromData("ShortestPath", data, new Vector3d(0, 0, 0));
+
+            var request = AStarPathRequest.CreateEmpty();
+            bool success = PathGuideFactory.RequestGuide(new Vector3d(0, 0, 0), new Vector3d(2, 0, 2), request, out AStarGuide guide);
+
+            Assert.True(success);
+            Assert.NotNull(guide);
+
+            // Ensure path goes through (1,0,1) as optimal diagonal
+            Assert.Contains(new Vector3d(1, 0, 1), guide.ActiveWaypoints.Select(w => w.Position));
+
+            PathManager.UnloadChart("ShortestPath");
+        }
+
+        [Fact]
+        public void AStar_ShouldFailOnFullyBlockedMap()
+        {
+            var data = new bool[1, 3, 3]
+            {
+                {
+                    { false, false, false },
+                    { false, false, false },
+                    { false, false, false }
+                }
+            };
+
+            PathTestFactory.RegisterFromData("BlockedMap", data, new Vector3d(0, 0, 0));
+
+            var request = AStarPathRequest.CreateEmpty();
+            bool success = PathGuideFactory.RequestGuide(new Vector3d(0, 0, 0), new Vector3d(2, 0, 2), request, out AStarGuide guide);
+
+            Assert.False(success);
+            Assert.Null(guide);
+
+            PathManager.UnloadChart("BlockedMap");
+        }
+
+        [Fact]
+        public void AStar_ShouldReturnConsistentPath_ForSameRequest()
+        {
+            var data = new bool[1, 3, 1]
+            {
+                {
+                    { true },
+                    { true },
+                    { true }
+                }
+            };
+
+            PathTestFactory.RegisterFromData("Consistent", data, Vector3d.Zero);
+
+            var request = AStarPathRequest.CreateEmpty();
+
+            bool success1 = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 0), request, out AStarGuide guide1);
+            bool success2 = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 0), request, out AStarGuide guide2);
+
+            Assert.True(success1);
+            Assert.True(success2);
+            Assert.Equal(guide1.ActiveWaypoints.Length, guide2.ActiveWaypoints.Length);
+
+            PathManager.UnloadChart("Consistent");
+        }
+
+        [Fact]
+        public void AStar_HeuristicChoice_ShouldAffectPathPathing()
+        {
+            var data = new bool[1, 5, 5];
+
+            // Create a map with a cross-pattern obstacle to force different choices
+            for (int z = 0; z < 5; z++)
+            {
+                for (int x = 0; x < 5; x++)
+                    data[0, z, x] = true;
+            }
+
+            // Create a wall along center row (except at edge)
+            data[0, 2, 1] = false;
+            data[0, 2, 2] = false;
+            data[0, 2, 3] = false;
+
+            PathTestFactory.RegisterFromData("HeuristicImpact", data, Vector3d.Zero);
+
+            var start = new Vector3d(1, 0, 2);
+            var end = new Vector3d(4, 0, 2);
+
+            var manhattanRequest = AStarPathRequest.CreateEmpty();
+            manhattanRequest.Heuristic = HeuristicMethod.Manhattan;
+
+            var euclideanRequest = AStarPathRequest.CreateEmpty();
+            euclideanRequest.Heuristic = HeuristicMethod.Euclidean;
+
+            PathGuideFactory.RequestGuide(start, end, manhattanRequest, out AStarGuide manhattan);
+            PathGuideFactory.RequestGuide(start, end, euclideanRequest, out AStarGuide euclidean);
+
+            // Both should succeed
+            manhattan.Should().NotBeNull();
+            euclidean.Should().NotBeNull();
+
+            // But they should not take the exact same paths (due to tie-breaking preferences)
+            var manhattanPath = manhattan.ActiveWaypoints
+                .Select(wp => wp.Position)
+                .Skip(1)
+                .SkipFromEnd(1)
+                .ToArray();
+
+            var euclideanPath = euclidean.ActiveWaypoints
+                .Select(wp => wp.Position)
+                .Skip(1)
+                .SkipFromEnd(1)
+                .ToArray();
+
+            manhattanPath.Should().NotEqual(euclideanPath);
+
+            manhattan.ActiveWaypoints.First().Position.Should().Be(start);
+            manhattan.ActiveWaypoints.Last().Position.Should().Be(end);
+
+            euclidean.ActiveWaypoints.First().Position.Should().Be(start);
+            euclidean.ActiveWaypoints.Last().Position.Should().Be(end);
+
+            PathManager.UnloadChart("HeuristicImpact");
+        }
     }
 }

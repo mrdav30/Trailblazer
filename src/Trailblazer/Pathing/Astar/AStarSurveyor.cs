@@ -4,6 +4,8 @@ using GridForge.Spatial;
 using SwiftCollections;
 using SwiftCollections.Pool;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -85,6 +87,7 @@ namespace Trailblazer.Pathing
 
                 // Trace path from the start to the end
                 _meta.Add(_request.Start.SpawnToken, new());
+                startPartition.PathCost = 0;
                 _heap.Add(startPartition);
 
                 if (!TracePath())
@@ -127,17 +130,71 @@ namespace Trailblazer.Pathing
             if (!_meta.TryGetValue(current.VoxelToken, out AStarVoxelMeta data))
                 return false;
 
+            // Loop through all perpendicular neighbors first
             int cost = data.MovementCost + PathPartition.StraightCost;
-            foreach (TraversableVoxel neighbor in PathManager.GetWalkableStraightNeighbors(current.GlobalIndex))
+            foreach (LinearDirection dir in PathManager.PerpendicularDirections)
             {
-                if (ProcessNeighbor(current, neighbor.Partition, cost))
+                // pull the neighbor partition directly out of our baked neighbors[]
+                PathPartition nPart = current.Neighbors[(int)dir];
+                if (nPart is null || _heap.IsClosed(nPart) || nPart.IsImpassable(_request.UnitSize))
+                    continue;  // either out-of-bounds or blocked
+
+                if (ProcessNeighbor(current, nPart, cost))
                     return true;
             }
 
             cost = data.MovementCost + PathPartition.DiagonalCost;
-            foreach (TraversableVoxel neighbor in PathManager.GetWalkableDiagonalNeighbors(current.GlobalIndex))
+            foreach (LinearDirection dir in PathManager.DiagonalDirections)
             {
-                if (ProcessNeighbor(current, neighbor.Partition, cost))
+                // 1) pull the neighbor partition directly
+                PathPartition nPart = current.Neighbors[(int)dir];
+                if (nPart is null || _heap.IsClosed(nPart) || nPart.IsImpassable(_request.UnitSize))
+                    continue;  // either out-of-bounds or blocked
+
+                // 2) get the raw offset for this dir
+                var (dx, dy, dz) = GlobalGridManager.DirectionOffsets[(int)dir];
+
+                // 3) ensure each single‐axis “leg” is passable
+                bool blocked = false;
+
+                // X‐leg
+                if (dx != 0)
+                {
+                    var legDir = dx > 0
+                               ? LinearDirection.North
+                               : LinearDirection.West;
+                    var legPart = current.Neighbors[(int)legDir];
+                    if (legPart == null || legPart.IsImpassable(_request.UnitSize))
+                        blocked = true;
+                }
+
+                // Y‐leg
+                if (!blocked && dy != 0)
+                {
+                    var legDir = dy > 0
+                               ? LinearDirection.Above
+                               : LinearDirection.Below;
+                    var legPart = current.Neighbors[(int)legDir];
+                    if (legPart == null || legPart.IsImpassable(_request.UnitSize))
+                        blocked = true;
+                }
+
+                // Z‐leg
+                if (!blocked && dz != 0)
+                {
+                    var legDir = dz > 0
+                               ? LinearDirection.East
+                               : LinearDirection.South;
+                    var legPart = current.Neighbors[(int)legDir];
+                    if (legPart == null || legPart.IsImpassable(_request.UnitSize))
+                        blocked = true;
+                }
+
+                if (blocked)
+                    continue;
+
+                // 4) finally, process the neighbor
+                if (ProcessNeighbor(current, nPart, cost))
                     return true;
             }
 
@@ -153,9 +210,6 @@ namespace Trailblazer.Pathing
             PathPartition neighbor,
             int cost)
         {
-            if (_heap.IsClosed(neighbor) || neighbor.Unpassable(_request.UnitSize))
-                return false;
-
             // Skip neighbors that have a height difference greater than the allowed maximum
             Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
             if (heightDifference > _request.MaxClimbHeight)
@@ -269,7 +323,7 @@ namespace Trailblazer.Pathing
             {
                 Vector3d direction = (path[i + 1].VoxelPosition - path[i].VoxelPosition).Normalize();
 
-                bool preserveUnwalkable = path[i].GetNeighborClearance() <= _request.UnitSize + 1;
+                bool preserveUnwalkable = path[i].GetNeighborClearance() <= (byte)_request.UnitSize + 1;
                 bool directionChanged = !lastDirection.FuzzyEqual(direction);
 
                 if (preserveUnwalkable || directionChanged)

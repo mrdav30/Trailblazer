@@ -14,7 +14,7 @@ namespace Trailblazer.Tests
 
             var map = NavigationChart.From3D(mapName, data, minBounds, Fixed64.One);
             PathManager.Register(map);
-            PathManager.InitializeMap(mapName);
+            PathManager.InitializeChart(mapName);
             return map;
         }
 
@@ -22,7 +22,7 @@ namespace Trailblazer.Tests
         {
             var map = NavigationChart.From3D(name, data, minBounds, GlobalGridManager.VoxelSize);
             PathManager.Register(map);
-            PathManager.InitializeMap(name);
+            PathManager.InitializeChart(name);
             return map;
         }
 

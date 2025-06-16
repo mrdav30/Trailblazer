@@ -2,7 +2,10 @@
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
+using SwiftCollections.Pool;
 using System;
+using System.Collections.Generic;
+using System.Drawing;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
@@ -28,12 +31,17 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Default value indicating unlimited clearance in degrees.
         /// </summary>
-        public static readonly Fixed64 DefaultDegree = Fixed64.MAX_VALUE;
+        public static readonly byte DefaultDegree = byte.MaxValue;
 
         /// <summary>
         /// Maximum clearance degree allowed for valid traversal.
         /// </summary>
-        public static readonly Fixed64 DefaultDegreeCap = (Fixed64)8;
+        public static readonly byte DefaultDegreeCap = 8;
+
+        private static readonly Lazy<SwiftQueuePool<(PathPartition v, byte dist)>> _clearanceQueuePool =
+            new(() => new SwiftQueuePool<(PathPartition v, byte dist)>());
+
+        internal static SwiftQueuePool<(PathPartition v, byte dist)> ClearanceQueuePool => _clearanceQueuePool.Value;
 
         #endregion
 
@@ -52,6 +60,8 @@ namespace Trailblazer.Pathing
         /// </summary>
         public Vector3d VoxelPosition { get; private set; }
 
+        public bool IsWalkable { get; private set; }
+
         /// <summary>
         /// Indicates whether the voxel has been partitioned and is in use.
         /// </summary>
@@ -63,17 +73,16 @@ namespace Trailblazer.Pathing
         [Transient]
         public int PathCost { get; set; } = int.MaxValue;
 
-        #region Clearance Properties
+#nullable enable
+        public PathPartition?[]? Neighbors { get; private set; }
+#nullable disable
 
-        /// <summary>
-        /// The direction used when calculating neighbor clearance.
-        /// </summary>
-        public LinearDirection ClearanceDirection { get; private set; }
+        #region Clearance Properties
 
         /// <summary>
         /// The number of traversable connections until the nearest unwalkable voxel.
         /// </summary>
-        public Fixed64 ClearanceDegree { get; private set; }
+        public byte ClearanceDegree { get; private set; }
 
         /// <summary>
         /// Indicates whether the clearance degree has been computed and is valid.
@@ -81,23 +90,28 @@ namespace Trailblazer.Pathing
         public bool IsClearanceValid { get; private set; }
 
         #endregion
-       
+
+        #region Chart Properties
+
         /// <summary>
         /// Maps that currently include this partition as part of their traversable space.
         /// </summary>
-        private readonly SwiftHashSet<string> _mapOwners = new();
+        private readonly SwiftHashSet<string> _chartOwners = new();
 
-        ///<inheritdoc cref="_mapOwners"/>
-        public SwiftHashSet<string> MapOwners => _mapOwners;
+        ///<inheritdoc cref="_chartOwners"/>
+        public SwiftHashSet<string> ChartOwners => _chartOwners;
 
         /// <summary>
         /// Returns true if any map currently references this partition.
         /// </summary>
-        public bool HasAnyOwners => _mapOwners.Count > 0;
+        public bool HasAnyOwners => _chartOwners.Count > 0;
+
+        #endregion
 
         /// <summary>
         /// Called when this partition is attached to a voxel, initializing key references and state.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnAddToVoxel(Voxel voxel)
         {
             voxel.OnObstacleChange += HandleChange;
@@ -106,8 +120,9 @@ namespace Trailblazer.Pathing
             VoxelToken = voxel.SpawnToken;
             VoxelPosition = voxel.WorldPosition;
 
-            ClearanceDegree = Fixed64.MAX_VALUE;
-            ClearanceDirection = LinearDirection.None;
+            IsWalkable = !voxel.IsBlocked;
+
+            ClearanceDegree = DefaultDegree;
 
             IsPartitioned = true;
         }
@@ -120,20 +135,45 @@ namespace Trailblazer.Pathing
             PathManager.PartitionPool.Release(this);
         }
 
+        public void BindNeighbors()
+        {
+#nullable enable
+            Neighbors = new PathPartition?[26];
+#nullable disable
+
+            GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out var voxel);
+
+            // for each of the 26 LinearDirection values (except None)
+            foreach (LinearDirection dir in PathManager.AllDirections)
+            {
+                // use Voxel’s cached neighbor lookup
+                if (voxel.TryGetNeighborFromDirection(dir, out var neighborVoxel, useCache: true)
+                 && neighborVoxel.TryGetPartition(out PathPartition neighborPart))
+                {
+                    Neighbors[(int)dir] = neighborPart;
+                }
+                // else leave null = “blocked or missing”
+            }
+        }
+
         /// <summary>
         /// Resets this partition's internal state, preparing it for reuse or reattachment.
         /// </summary>
-        public void Reset()
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void Reset()
         {
             GlobalIndex = default;
             VoxelToken = 0;
 
             IsClearanceValid = false;
 
-            ClearanceDegree = DefaultDegree;
-            ClearanceDirection = LinearDirection.None;
+            IsWalkable = false;
 
-            _mapOwners.Clear();
+            Neighbors = null;
+
+            ClearanceDegree = DefaultDegree;
+
+            _chartOwners.Clear();
 
             IsPartitioned = false;
         }
@@ -141,100 +181,100 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Handles any obstacle changes on the associated voxel and invalidates clearance as needed.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void HandleChange(GridChange changeType, Voxel voxel)
         {
             // regardless of change type, we need to update clearance
 
+            IsWalkable = !voxel.IsBlocked;
+            ClearanceDegree = DefaultDegree;
             IsClearanceValid = false;
-            CheckNeighborClearance();
-        }
-
-        /// <summary>
-        /// If this unit is too fat to fit.
-        /// </summary>
-        internal bool Unpassable(Fixed64 size)
-        {
-            if (size <= Fixed64.Zero) return false;
-
-            //  If there's an unwalkable within the size's number of connections, the unit cannot pass
-            CheckNeighborClearance();
-            return size > ClearanceDegree;
         }
 
         /// <summary>
         /// Returns the cached or recalculated clearance value to nearby obstacles.
         /// </summary>
-        public Fixed64 GetNeighborClearance()
+        public byte GetNeighborClearance()
         {
-            CheckNeighborClearance();
+            CheckClearance();
             return ClearanceDegree;
+        }
+
+        /// <summary>
+        /// If this unit is too fat to fit.
+        /// </summary>
+        internal bool IsImpassable(Fixed64 unitSize)
+        {
+            if (unitSize <= Fixed64.Zero)
+                return false;
+
+            CheckClearance();
+
+            // How many voxels wide our agent is, in cell terms
+            int required = (unitSize / GlobalGridManager.VoxelSize).CeilToInt();
+            // If there aren't at least that many free voxels around, it can't go
+            return required > ClearanceDegree;
         }
 
         /// <summary>
         /// Validates or recalculates the clearance degree from nearby voxels.
         /// </summary>
-        private void CheckNeighborClearance()
+        private void CheckClearance()
         {
-            if (IsClearanceValid)
-                return;
+            if (Neighbors == null)
+                throw new InvalidOperationException("Must call BindNeighbors() before clearance.");
 
-            if (!GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out Voxel voxel))
-            {
-                Console.WriteLine($"Invalidate coordiante provided to setup partition: {GlobalIndex}");
-                return;
-            }
+            if (IsClearanceValid) return;
+            IsClearanceValid = true;
 
-            if (voxel.IsBlocked)
+            if (!GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out Voxel origin)
+             || !IsWalkable)
             {
-                ClearanceDegree = Fixed64.Zero;
-                ClearanceDirection = LinearDirection.None;
-                IsClearanceValid = true;
+                ClearanceDegree = origin?.IsBlocked == true ? (byte)0 : DefaultDegreeCap;
                 return;
             }
 
-            //  refresh source in case the map changed
-            if (voxel.TryGetNeighborFromDirection(ClearanceDirection, out Voxel source)
-                && source.TryGetPartition(out PathPartition sourcePartition))
+            // BFS from this voxel until we hit any blocked-or-missing neighbor
+            byte best = DefaultDegreeCap;
+            SwiftQueue<(PathPartition v, byte dist)> q = ClearanceQueuePool.Rent();
+            SwiftHashSet<PathPartition> visited = PathManager.PartitionSetPool.Rent();
+
+            q.Enqueue((this, 0));
+            visited.Add(this);
+
+            // stop BFS either when queue empty or we’ve already found best=1
+            while (q.Count > 0 && best > 1)
             {
-                Fixed64 prevSourceDegree = sourcePartition.ClearanceDegree;
-                if (sourcePartition.ClearanceDegree < ClearanceDegree)
+                (PathPartition part, byte dist) = q.Dequeue();
+
+                // any neighbor that’s missing or blocked → candidate = dist+1
+                for (int i = 0; i < part.Neighbors.Length; i++)
                 {
-                    sourcePartition.CheckNeighborClearance();
+                    byte nextDist = (byte)(dist + 1);
+                    PathPartition nPart = part.Neighbors[i];
 
-                    if (sourcePartition.ClearanceDegree != prevSourceDegree)
+                    // 1) missing or blocked → candidate radius = nextDist
+                    if (nPart == null || !nPart.IsWalkable)
                     {
-                        // Clearance from direction can no longer be trusted!
-                        ClearanceDegree = DefaultDegree;
-                        ClearanceDirection = LinearDirection.None;
+                        best = Math.Min(best, nextDist);
+                        continue;
+                    }
+
+                    // 2) otherwise, keep exploring *only* up to your cap
+                    if (nextDist < best
+                     && nextDist < DefaultDegreeCap
+                     && visited.Add(nPart))
+                    {
+                        q.Enqueue((nPart, nextDist));
                     }
                 }
-                else
-                    ClearanceDegree = sourcePartition.ClearanceDegree + Fixed64.One;
             }
 
-            //This method isn't always 100% accurate but after several updates, it will have a better picture of the map
-            //TODO: Test this thoroughly and visualize
-            foreach (LinearDirection direction in Enum.GetValues(typeof(LinearDirection)))
-            {
-                if (!voxel.TryGetNeighborFromDirection(direction, out Voxel neighbor)
-                    || neighbor.IsBlocked
-                    || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                {
-                    ClearanceDegree = Fixed64.One;
-                    ClearanceDirection = direction;
-                    break;
-                }
+            // clamp to cap so you never return > DefaultDegreeCap
+            ClearanceDegree = (byte)Math.Min(best, DefaultDegreeCap);
 
-                if (neighborPartition.ClearanceDegree < ClearanceDegree
-                    && neighborPartition.ClearanceDegree < DefaultDegreeCap)
-                {
-                    //  Cap clearance to 8. Something larger than that won't work very well with pathfinding.
-                    ClearanceDegree = neighborPartition.ClearanceDegree + Fixed64.One;
-                    ClearanceDirection = direction;
-                }
-            }
-
-            IsClearanceValid = true;
+            ClearanceQueuePool.Release(q);
+            PathManager.PartitionSetPool.Release(visited);
         }
 
         #region TraversableNavMap Management
@@ -243,19 +283,19 @@ namespace Trailblazer.Pathing
         /// Registers the map name as one that owns this partition.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddOwner(string mapName) => _mapOwners.Add(mapName);
+        public void AddOwner(string mapName) => _chartOwners.Add(mapName);
 
         /// <summary>
         /// Removes the map name from those that reference this partition.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void RemoveOwner(string mapName) => _mapOwners.Remove(mapName);
+        public void RemoveOwner(string mapName) => _chartOwners.Remove(mapName);
 
         /// <summary>
         /// Returns true if the partition is claimed by the given map name.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool BelongsTo(string mapName) => _mapOwners.Contains(mapName);
+        public bool BelongsTo(string mapName) => _chartOwners.Contains(mapName);
 
         #endregion
 
@@ -299,7 +339,7 @@ namespace Trailblazer.Pathing
 
             return heuristicCost.CeilToInt();
         }
- 
+
         public override int GetHashCode() => VoxelToken;
     }
 }

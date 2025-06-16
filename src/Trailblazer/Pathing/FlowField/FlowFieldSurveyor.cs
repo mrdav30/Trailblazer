@@ -138,23 +138,27 @@ namespace Trailblazer.Pathing
         {
             // Check each straight line neighbour of this voxel (no diagonals)
             // We will only ever visit every voxel once as we are always visiting voxels in the most efficient order
-            foreach (TraversableVoxel neighbor in PathManager.GetWalkableStraightNeighbors(current.GlobalIndex))
+            foreach (LinearDirection dir in PathManager.PerpendicularDirections)
             {
-                PathPartition neighborPartition = neighbor.Partition;
-                if (_heap.IsClosed(neighborPartition) || neighborPartition.Unpassable(unitSize))
+                // pull the neighbor partition directly out of our baked neighbors[]
+                PathPartition nPart = current.Neighbors[(int)dir];
+                if (nPart is null)
+                    continue;  // either out-of-bounds or blocked
+
+                if (_heap.IsClosed(nPart) || nPart.IsImpassable(unitSize))
                     continue;
 
                 int neighborToll = current.PathCost + 1;
-                if (!_heap.Contains(neighborPartition))
+                if (!_heap.Contains(nPart))
                 {
-                    neighborPartition.PathCost = neighborToll;
-                    _heap.Add(neighborPartition);
-                    _marked.Add(neighborPartition);
+                    nPart.PathCost = neighborToll;
+                    _heap.Add(nPart);
+                    _marked.Add(nPart);
                 }
-                else if (neighborToll < neighbor.Partition.PathCost)
+                else if (neighborToll < nPart.PathCost)
                 {
-                    neighborPartition.PathCost = neighborToll;
-                    _heap.SortUp(neighborPartition);
+                    nPart.PathCost = neighborToll;
+                    _heap.SortUp(nPart);
                 }
             }
         }
@@ -196,18 +200,18 @@ namespace Trailblazer.Pathing
                 // Go through all neighbours and find the one with the lowest distance
                 PathPartition minPartition = null;
                 int minDistance = int.MaxValue;
-                foreach(TraversableVoxel neighbor in PathManager.GetWalkableNeighbors(current.GlobalIndex))
+                for (int i = 0; i < current.Neighbors.Length; i++)
                 {
-                    PathPartition neighborPartition = neighbor.Partition;
+                    PathPartition nPart = current.Neighbors[i];
                     // check closed heap version to ensure neighbor was part of flood phase
-                    if (!_heap.IsClosed(neighborPartition)) 
+                    if (nPart == null || !nPart.IsWalkable || !_heap.IsClosed(nPart)) 
                         continue;
 
                     // safe comparison for monotonic wavefront
-                    int dist = neighborPartition.PathCost - current.PathCost;
+                    int dist = nPart.PathCost - current.PathCost;
                     if (dist < minDistance)
                     {
-                        minPartition = neighborPartition;
+                        minPartition = nPart;
                         minDistance = dist;
                     }
                 }

@@ -10,39 +10,41 @@ using System.Runtime.CompilerServices;
 using GridForge.Spatial;
 using System.Threading;
 using System.Linq;
+using System.Collections.Concurrent;
 
 namespace Trailblazer.Pathing
 {
     /// <summary>
-    /// Manages registration, initialization, and validation of navigation maps,
-    /// as well as providing global pathfinding utilities like voxel validation,
-    /// path necessity checks, and partition pooling.
+    /// Manages registration, initialization, and validation of navigation charts,
+    /// as well as providing global pathfinding utilities and neighbor discovery.
     /// </summary>
     public static class PathManager
     {
+        #region Properties
+
         public static readonly int DefaultMaxPathSearchRange = 1000;
 
         /// <summary>
         /// Internal dictionary of all registered navigation charts, keyed by their unique names.
         /// </summary>
-        private static readonly SwiftDictionary<string, NavigationChart> _loadedMaps = new();
+        private static readonly SwiftDictionary<string, NavigationChart> _navigationChartMap = new();
+
+        /// <summary>
+        /// Lock for managing concurrent access to <c>_navigationChartMap</c> operations.
+        /// Ensures thread safety for read/write operations.
+        /// </summary>
+        private static readonly ReaderWriterLockSlim _navigationChartMapLock = new();
 
         /// <summary>
         /// Gets an enumerable collection of all currently registered navigation charts.
         /// </summary>
-        public static IEnumerable<NavigationChart> AllMaps
+        public static IEnumerable<NavigationChart> AllCharts
         {
             get
             {
-                _mapLock.EnterReadLock();
-                try
-                {
-                    return _loadedMaps.Values.ToArray(); // Safe snapshot
-                }
-                finally
-                {
-                    _mapLock.ExitReadLock();
-                }
+                _navigationChartMapLock.EnterReadLock();
+                try { return _navigationChartMap.Values.ToArray(); }
+                finally { _navigationChartMapLock.ExitReadLock(); }
             }
         }
 
@@ -54,56 +56,272 @@ namespace Trailblazer.Pathing
             actionOnRelease: partition => partition.Reset()
         );
 
-        /// <summary>
-        /// Lock for managing concurrent access to NavigationChart operations.
-        /// Ensures thread safety for read/write operations.
-        /// </summary>
-        private static readonly ReaderWriterLockSlim _mapLock = new();
+        private static readonly Lazy<SwiftHashSetPool<PathPartition>> _partitionSetPool =
+            new(() => new SwiftHashSetPool<PathPartition>());
+        internal static SwiftHashSetPool<PathPartition> PartitionSetPool => _partitionSetPool.Value;
 
         /// <summary>
-        /// Attempts to get valid start and end voxels based on provided world positions.
-        /// Falls back to the closest walkable neighbor if necessary.
+        /// All 26 neighbor directions excluding None.
         /// </summary>
-        /// <param name="start">The start position in world space.</param>
-        /// <param name="end">The end position in world space.</param>
-        /// <param name="startVoxel">Resolved start voxel.</param>
-        /// <param name="endVoxel">Resolved end voxel.</param>
-        /// <returns>True if both voxels were resolved successfully; otherwise, false.</returns>
-        public static bool GetValidPathRequest(
-            Vector3d start,
-            Vector3d end,
-            out Voxel startVoxel,
-            out Voxel endVoxel)
+        public static readonly LinearDirection[] AllDirections =
+            Enum.GetValues(typeof(LinearDirection))
+                .Cast<LinearDirection>()
+                .Where(d => d != LinearDirection.None)
+                .ToArray();
+
+        public static readonly LinearDirection[] PerpendicularDirections
+          = AllDirections
+              .Where(IsPerpendicularNeighbor)
+              .ToArray();
+
+        public static readonly LinearDirection[] DiagonalDirections
+          = AllDirections
+              .Where(IsDiagonalNeighbor)
+              .ToArray();
+
+        #endregion
+
+        #region Navigation Map Management
+
+        /// <summary>
+        /// Attempts to register a new navigation chart with the manager.
+        /// </summary>
+        /// <param name="chart">The map to register.</param>
+        /// <returns>True if successful, false if a duplicate name exists.</returns>
+        public static bool Register(NavigationChart chart)
         {
-            endVoxel = null;
-            if (!GlobalGridManager.TryGetGridAndVoxel(start, out _, out startVoxel))
-            {
-                Console.WriteLine("Unable to find a valid start voxel for {startPos}");
+            if (IsChartRegistered(chart.Name))
                 return false;
-            }
 
-            if (startVoxel.IsBlocked || !startVoxel.TryGetPartition<PathPartition>(out _))
-            {
-                if (!VoxelFinder.TryGetClosestWalkableNeighbor(startVoxel, out Voxel closestNeighbor))
-                    return false;
-                startVoxel = closestNeighbor;
-            }
-
-            if (!GlobalGridManager.TryGetGridAndVoxel(end, out _, out endVoxel))
-            {
-                Console.WriteLine("Unable to find a valid end voxel for {targetPos}");
-                return false;
-            }
-
-            if (endVoxel.IsBlocked || !endVoxel.TryGetPartition<PathPartition>(out _))
-            {
-                if (!VoxelFinder.TryGetClosestWalkableNeighbor(endVoxel, out Voxel closestNeighbor))
-                    return false;
-                endVoxel = closestNeighbor;
-            }
-
+            _navigationChartMapLock.EnterWriteLock();
+            try { _navigationChartMap.Add(chart.Name, chart); }
+            finally { _navigationChartMapLock.ExitWriteLock(); }
             return true;
         }
+
+        /// <summary>
+        /// Checks if a navigation map is already registered under the specified name.
+        /// </summary>
+        /// <param name="name">The map name to check.</param>
+        /// <returns>True if registered; otherwise, false.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsChartRegistered(string name)
+        {
+            _navigationChartMapLock.EnterReadLock();
+            try { return _navigationChartMap.ContainsKey(name); }
+            finally { _navigationChartMapLock.ExitReadLock(); }
+        }
+
+        /// <summary>
+        /// Attempts to retrieve a registered navigation chart by name.
+        /// </summary>
+        /// <param name="name">The name of the map.</param>
+        /// <param name="chart">The retrieved navigation chart.</param>
+        /// <returns>True if the map exists; otherwise, false.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryGetNavigationChart(string name, out NavigationChart chart)
+        {
+            _navigationChartMapLock.EnterReadLock();
+            try { return _navigationChartMap.TryGetValue(name, out chart); }
+            finally { _navigationChartMapLock.ExitReadLock(); }
+        }
+
+        /// <summary>
+        /// Initializes all registered navigation maps by assigning walkable voxels to partitions.
+        /// </summary>
+        public static void InitializeAllCharts()
+        {
+            foreach (NavigationChart chart in AllCharts)
+                InitializeChart(chart.Name);
+        }
+
+        /// <summary>
+        /// Initializes a specific navigation map, assigning voxels to partitions.
+        /// </summary>
+        /// <param name="name">The name of the map to initialize.</param>
+        public static void InitializeChart(string name)
+        {
+            if (!TryGetNavigationChart(name, out var chart) || chart.IsInitialized) return;
+
+            SwiftHashSet<PathPartition> allChartPartitions = PartitionSetPool.Rent();
+            foreach (Vector3d pos in chart.GetWalkablePositions())
+            {
+                if (!GlobalGridManager.TryGetGridAndVoxel(pos, out _, out Voxel voxel))
+                    continue;
+
+                if (!voxel.TryGetPartition(out PathPartition part))
+                {
+                    part = PartitionPool.Rent();
+                    voxel.TryAddPartition(part);
+                }
+
+                part.AddOwner(chart.Name);
+                allChartPartitions.Add(part);
+            }
+
+            // bind neighbor pointers for each partition
+            foreach (PathPartition part in allChartPartitions)
+                part.BindNeighbors();
+
+            PartitionSetPool.Release(allChartPartitions);
+            chart.IsInitialized = true;
+        }
+
+        /// <summary>
+        /// Unloads all registered maps, removing ownerships and partitions from walkable voxels.
+        /// </summary>
+        public static void UnloadAllCharts()
+        {
+            foreach (NavigationChart chart in AllCharts)
+                UnloadChart(chart.Name);
+        }
+
+        /// <summary>
+        /// Unloads a navigation map by name and releases associated partitions.
+        /// </summary>
+        /// <param name="name">The name of the map to unload.</param>
+        public static void UnloadChart(string name)
+        {
+            if (!TryGetNavigationChart(name, out NavigationChart chart) || !chart.IsInitialized)
+                return;
+
+            foreach (Vector3d position in chart.GetWalkablePositions())
+            {
+                if (!GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
+                    continue;
+
+                if (voxel.TryGetPartition(out PathPartition partition) && partition.BelongsTo(name))
+                {
+                    partition.RemoveOwner(name);
+                    if (!partition.HasAnyOwners)
+                        voxel.TryRemovePartition<PathPartition>();
+
+                }
+            }
+
+            _navigationChartMapLock.EnterWriteLock();
+            try { _navigationChartMap.Remove(name); }
+            finally { _navigationChartMapLock.ExitWriteLock(); }
+
+            if (PathGuideFactory.IsPooling)
+                PathGuideFactory.FlushPools();
+        }
+
+        /// <summary>
+        /// Clears all registered maps, partitions, and guide pools.
+        /// </summary>
+        public static void ClearAll()
+        {
+            _navigationChartMapLock.EnterWriteLock();
+            try { _navigationChartMap.Clear(); }
+            finally { _navigationChartMapLock.ExitWriteLock(); }
+
+            if (PathGuideFactory.IsPooling)
+                PathGuideFactory.FlushPools();
+        }
+
+        #endregion
+
+        #region Neighbor Discovery
+
+        /// <summary>Returns all walkable neighbors of the voxel.</summary>
+        public static IEnumerable<TraversableVoxel> GetWalkableNeighbors(GlobalVoxelIndex idx)
+        {
+            if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel))
+                yield break;
+            foreach (TraversableVoxel tv in WalkableNeighborsOf(voxel))
+                yield return tv;
+        }
+
+        /// <summary>Returns walkable neighbors for a specific voxel.</summary>
+        public static IEnumerable<TraversableVoxel> WalkableNeighborsOf(Voxel voxel)
+        {
+            foreach (LinearDirection dir in AllDirections)
+            {
+                if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
+                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
+                yield return new TraversableVoxel { Voxel = neighbor, Partition = part, Direction = dir };
+            }
+        }
+
+        /// <summary>Returns all straight (orthogonal) neighbors.</summary>
+        public static IEnumerable<TraversableVoxel> GetWalkablePerpendicularNeighbors(GlobalVoxelIndex idx)
+        {
+            if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel)) 
+                yield break;
+            foreach (TraversableVoxel tv in WalkablePerpendicularNeighborsOf(voxel)) 
+                yield return tv;
+        }
+
+        /// <summary>Returns all straight (orthogonal) neighbors.</summary>
+        public static IEnumerable<TraversableVoxel> WalkablePerpendicularNeighborsOf(Voxel voxel)
+        {
+            foreach (LinearDirection dir in PerpendicularDirections)
+            {
+                if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
+                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
+                yield return new TraversableVoxel { Voxel = neighbor, Partition = part, Direction = dir };
+            }
+        }
+
+        /// <summary>Returns all diagonal neighbors, avoiding edge-cutting.</summary>
+        public static IEnumerable<TraversableVoxel> GetWalkableDiagonalNeighbors(GlobalVoxelIndex idx)
+        {
+            if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel)) 
+                yield break;
+            foreach (TraversableVoxel tv in WalkableDiagonalNeighborsOf(voxel)) 
+                yield return tv;
+        }
+
+        /// <summary>Returns all diagonal neighbors, avoiding edge-cutting.</summary>
+        public static IEnumerable<TraversableVoxel> WalkableDiagonalNeighborsOf(Voxel voxel)
+        {
+            foreach (LinearDirection dir in DiagonalDirections)
+            {
+                if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
+                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
+                if (HasBlockedEdgeNeighbor(voxel, dir)) continue;
+                yield return new TraversableVoxel { Voxel = neighbor, Partition = part, Direction = dir };
+            }
+        }
+
+        /// <summary>
+        /// For any multi-axis step (dx,dy,dz), ensures each single-axis "leg" is walkable.
+        /// </summary>
+        private static bool HasBlockedEdgeNeighbor(Voxel voxel, LinearDirection dir)
+        {
+            var(dx, dy, dz) = GlobalGridManager.DirectionOffsets[(int)dir];
+            // build legs for each non-zero axis
+            foreach (var (ax, ay, az) in new[] { (dx, 0, 0), (0, dy, 0), (0, 0, dz) })
+            {
+                if (ax == 0 && ay == 0 && az == 0) continue;
+                if (!voxel.TryGetNeighborFromOffset((ax, ay, az), out var edgeVoxel)
+                    || edgeVoxel.IsBlocked
+                    || !edgeVoxel.HasPartition<PathPartition>())
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>True for pure axis-aligned directions.</summary>
+        public static bool IsPerpendicularNeighbor(LinearDirection dir) =>
+            dir == LinearDirection.West || dir == LinearDirection.East ||
+            dir == LinearDirection.North || dir == LinearDirection.South ||
+            dir == LinearDirection.Above || dir == LinearDirection.Below;
+
+        /// <summary>True for any diagonal step (multiple axes).</summary>
+        public static bool IsDiagonalNeighbor(LinearDirection dir)
+        {
+            var (dx, dy, dz) = GlobalGridManager.DirectionOffsets[(int)dir];
+            int axes = (dx != 0 ? 1 : 0) + (dy != 0 ? 1 : 0) + (dz != 0 ? 1 : 0);
+            return axes >= 2;
+        }
+
+        #endregion
+
+        #region Utility Methods
 
         /// <summary>
         /// Determines the maximum number of voxels to search based on the start and end voxel's grid sizes.
@@ -134,9 +352,9 @@ namespace Trailblazer.Pathing
         /// <param name="allowUnwalkable">Whether to permit unwalkable voxels.</param>
         /// <returns>True if a path is required; otherwise, false.</returns>
         public static bool NeedsPath(
-            Vector3d startPos, 
-            Vector3d endPos, 
-            Fixed64 unitSize, 
+            Vector3d startPos,
+            Vector3d endPos,
+            Fixed64 unitSize,
             bool allowUnwalkable = false)
         {
             foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(startPos, endPos))
@@ -147,394 +365,11 @@ namespace Trailblazer.Pathing
                     if (!voxel.TryGetPartition(out PathPartition partition))
                         return true;
 
-                    if (!allowUnwalkable && !voxel.IsBlocked && partition.Unpassable(unitSize))
+                    if (!allowUnwalkable && !voxel.IsBlocked && partition.IsImpassable(unitSize))
                         return true;
                 }
             }
             return false;
-        }
-
-        #region Navigation Map Management
-
-        /// <summary>
-        /// Attempts to register a new navigation chart with the manager.
-        /// </summary>
-        /// <param name="map">The map to register.</param>
-        /// <returns>True if successful, false if a duplicate name exists.</returns>
-        public static bool Register(NavigationChart map)
-        {
-            if (IsMapRegistered(map.Name))
-            {
-                Debug.WriteLine($"Map named {map.Name} already exists!");
-                return false;
-            }
-
-            _mapLock.EnterWriteLock();
-            try
-            {
-                _loadedMaps.Add(map.Name, map);
-            }
-            finally 
-            { 
-                _mapLock.ExitWriteLock(); 
-            }
-            return true;
-        }
-
-        /// <summary>
-        /// Checks if a navigation map is already registered under the specified name.
-        /// </summary>
-        /// <param name="name">The map name to check.</param>
-        /// <returns>True if registered; otherwise, false.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool IsMapRegistered(string name)
-        {
-            _mapLock.EnterReadLock();
-            try
-            {
-                return _loadedMaps.ContainsKey(name);
-            }
-            finally 
-            { 
-                _mapLock.ExitReadLock(); 
-            }
-        }
-
-        /// <summary>
-        /// Attempts to retrieve a registered navigation chart by name.
-        /// </summary>
-        /// <param name="name">The name of the map.</param>
-        /// <param name="map">The retrieved navigation chart.</param>
-        /// <returns>True if the map exists; otherwise, false.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryGetNavigationMap(string name, out NavigationChart map)
-        {
-            _mapLock.EnterReadLock();
-            try
-            {
-                return _loadedMaps.TryGetValue(name, out map);
-            }
-            finally
-            {
-                _mapLock.ExitReadLock();
-            }
-        }
-
-        /// <summary>
-        /// Initializes all registered navigation maps by assigning walkable voxels to partitions.
-        /// </summary>
-        public static void InitializeAllMaps()
-        {
-            foreach (NavigationChart navMap in AllMaps)
-                InitializeMap(navMap.Name);
-        }
-
-        /// <summary>
-        /// Initializes a specific navigation map, assigning voxels to partitions.
-        /// </summary>
-        /// <param name="name">The name of the map to initialize.</param>
-        public static void InitializeMap(string name)
-        {
-            if (!TryGetNavigationMap(name, out NavigationChart map))
-            {
-                Debug.WriteLine($"Map named {map.Name} is not registered!");
-                return;
-            }
-
-            if (map.IsInitialized)
-                return;
-
-            foreach (Vector3d pos in map.GetWalkablePositions())
-            {
-                if (!GlobalGridManager.TryGetGridAndVoxel(pos, out _, out Voxel voxel))
-                    continue;
-
-                if (!voxel.TryGetPartition(out PathPartition partition))
-                {
-                    partition = PartitionPool.Rent();
-                    voxel.TryAddPartition(partition);
-                }
-
-                partition.AddOwner(map.Name);
-            }
-
-            map.IsInitialized = true;
-        }
-
-        /// <summary>
-        /// Unloads all registered maps, removing ownerships and partitions from walkable voxels.
-        /// </summary>
-        public static void UnloadAllMaps()
-        {
-            foreach (NavigationChart navMap in AllMaps)
-                Unload(navMap.Name);
-        }
-
-        /// <summary>
-        /// Unloads a specific navigation map.
-        /// </summary>
-        /// <param name="navMap">The map to unload.</param>
-        public static void Unload(NavigationChart navMap)
-        {
-            Unload(navMap.Name);
-        }
-
-        /// <summary>
-        /// Unloads a navigation map by name and releases associated partitions.
-        /// </summary>
-        /// <param name="name">The name of the map to unload.</param>
-        public static void Unload(string name)
-        {
-            if (!TryGetNavigationMap(name, out NavigationChart map))
-            {
-                Debug.WriteLine($"Map named {map.Name} is not registered!");
-                return;
-            }
-
-            if (!map.IsInitialized)
-                return;
-
-            foreach (Vector3d position in map.GetWalkablePositions())
-            {
-                if (!GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
-                    continue;
-
-                if (voxel.TryGetPartition(out PathPartition partition) && partition.BelongsTo(name))
-                {
-                    partition.RemoveOwner(name);
-                    if (!partition.HasAnyOwners)
-                        voxel.TryRemovePartition<PathPartition>();
-                }
-            }
-
-            _mapLock.EnterWriteLock();
-            try
-            {
-                _loadedMaps.Remove(name);
-            }
-            finally 
-            { 
-                _mapLock.ExitWriteLock(); 
-            }
-
-            // TODO: find a way to only clear relevant pools
-            if (PathGuideFactory.IsPooling)
-                PathGuideFactory.FlushPools();
-        }
-
-        /// <summary>
-        /// Clears all registered maps, partitions, and guide pools.
-        /// </summary>
-        public static void ClearAll()
-        {
-            _mapLock.EnterWriteLock();
-            try
-            {
-                _loadedMaps.Clear();
-            }
-            finally 
-            { 
-                _mapLock.ExitWriteLock(); 
-            }
-
-            if (PathGuideFactory.IsPooling)
-                PathGuideFactory.FlushPools();
-        }
-
-        #endregion
-
-        #region Neighbor Discovery
-
-        /// <summary>
-        /// Checks if any edge neighbors of a diagonal neighbor are blocked.
-        /// </summary>
-        /// <param name="currentVoxel">The current voxel.</param>
-        /// <param name="diagonalIndex">The index of the diagonal neighbor in the 3x3x3 grid.</param>
-        /// <returns>True if any edge neighbors are blocked; otherwise, false.</returns>
-        private static bool HasBlockedEdgeNeighbor(Voxel currentVoxel, LinearDirection diagonalIndex)
-        {
-            // Define the relative offsets for the two edge neighbors of each diagonal neighbor
-            var edgeOffsets = diagonalIndex switch
-            {
-                LinearDirection.SouthWest => new[] { (x: -1, z: 0), (x: 0, z: -1) }, // South-West
-                LinearDirection.NorthWest => new[] { (x: -1, z: 0), (x: 0, z: 1) },  // North-West
-                LinearDirection.SouthEast => new[] { (x: 1, z: 0), (x: 0, z: -1) },  // South-East
-                LinearDirection.NorthEast => new[] { (x: 1, z: 0), (x: 0, z: 1) },   // North-East
-                _ => Array.Empty<(int x, int z)>()
-            };
-
-            foreach (var (xOffset, zOffset) in edgeOffsets)
-            {
-                // Calculate the linear index of the edge neighbor in the 3x3x3 grid
-                LinearDirection edgeDirection = GlobalGridManager.GetNeighborDirectionFromOffset((xOffset, 0, zOffset));
-
-                if (currentVoxel.TryGetNeighborFromDirection(edgeDirection, out Voxel edgeNeighbor))
-                {
-                    // Check if the edge neighbor is blocked or not walkable
-                    if (edgeNeighbor.IsBlocked)
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Returns all walkable neighbors of the partition’s current voxel.
-        /// </summary>
-        public static IEnumerable<TraversableVoxel> GetWalkableNeighbors(GlobalVoxelIndex coordinates)
-        {
-            if (!GlobalGridManager.TryGetGridAndVoxel(coordinates, out _, out Voxel voxel))
-                yield break;
-
-            // Get all neighbors and their associated information
-            foreach (TraversableVoxel neighbor in WalkableNeighborsOf(voxel))
-                yield return neighbor;
-        }
-
-        /// <summary>
-        /// Returns walkable neighbors for a specific voxel.
-        /// </summary>
-        public static IEnumerable<TraversableVoxel> WalkableNeighborsOf(Voxel voxel)
-        {
-            // Get all neighbors and their associated information
-            foreach ((LinearDirection direction, Voxel neighbor) in voxel.GetNeighbors())
-            {
-                if (neighbor == null) continue;
-
-                // Skip blocked neighbors or neighbors that do not have a path partition
-                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                    continue;
-
-                yield return new TraversableVoxel()
-                {
-                    Voxel = neighbor,
-                    Partition = neighborPartition,
-                    Direction = direction
-                };
-            }
-        }
-
-        /// <summary>
-        /// Returns all walkable straight (orthogonal) neighbors of the partition’s voxel.
-        /// </summary>
-        public static IEnumerable<TraversableVoxel> GetWalkableStraightNeighbors(GlobalVoxelIndex coordinates)
-        {
-            if (!GlobalGridManager.TryGetGridAndVoxel(coordinates, out _, out Voxel voxel))
-                yield break;
-
-            // Get all neighbors and their associated information
-            foreach (TraversableVoxel neighbor in WalkableStraightNeighborsOf(voxel))
-                yield return neighbor;
-        }
-
-        /// <summary>
-        /// Returns straight walkable neighbors for a specific voxel.
-        /// </summary>
-        public static IEnumerable<TraversableVoxel> WalkableStraightNeighborsOf(Voxel voxel)
-        {
-            foreach (LinearDirection direction in Enum.GetValues(typeof(StraightNeighbors)))
-            {
-                if (!voxel.TryGetNeighborFromDirection(direction, out Voxel neighbor))
-                    continue;
-
-                // Skip blocked neighbors or neighbors that do not have a path partition
-                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                    continue;
-
-                yield return new TraversableVoxel()
-                {
-                    Voxel = neighbor,
-                    Partition = neighborPartition,
-                    Direction = direction
-                };
-            }
-        }
-
-        /// <summary>
-        /// Returns all walkable diagonal neighbors of the partition’s voxel.
-        /// </summary>
-        public static IEnumerable<TraversableVoxel> GetWalkableDiagonalNeighbors(GlobalVoxelIndex coordinates)
-        {
-            if (!GlobalGridManager.TryGetGridAndVoxel(coordinates, out _, out Voxel voxel))
-                yield break;
-
-            // Get all neighbors and their associated information
-            foreach (TraversableVoxel neighbor in WalkableDiagonalNeighborsOf(voxel))
-                yield return neighbor;
-        }
-
-        /// <summary>
-        /// Returns diagonal walkable neighbors for a specific voxel, avoiding blocked adjacent edges.
-        /// </summary>
-        public static IEnumerable<TraversableVoxel> WalkableDiagonalNeighborsOf(Voxel voxel)
-        {
-            foreach (LinearDirection direction in Enum.GetValues(typeof(DiagonalNeighbors)))
-            {
-                if (!voxel.TryGetNeighborFromDirection(direction, out Voxel neighbor))
-                    continue;
-
-                // Skip blocked neighbors or neighbors that do not have a path partition
-                if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition neighborPartition))
-                    continue;
-
-                // Check for edge neighbors that share an edge with the diagonal neighbor
-                if (!HasBlockedEdgeNeighbor(voxel, direction))
-                    yield return new TraversableVoxel()
-                    {
-                        Voxel = neighbor,
-                        Partition = neighborPartition,
-                        Direction = direction
-                    };
-            }
-        }
-
-        /// <summary>
-        /// Determines if the given direction is considered straight (orthogonal).
-        /// </summary>
-        public static bool IsStraightNeighbor(LinearDirection direction)
-        {
-            return direction switch
-            {
-                LinearDirection.West
-                or LinearDirection.South
-                or LinearDirection.East
-                or LinearDirection.North
-                or LinearDirection.Below
-                or LinearDirection.Above => true,
-                _ => false,
-            };
-        }
-
-        /// <summary>
-        /// Determines if the given direction is considered diagonal.
-        /// </summary>
-        public static bool IsDiagnolNeighbor(LinearDirection direction)
-        {
-            return direction switch
-            {
-                LinearDirection.SouthWest
-                or LinearDirection.NorthWest
-                or LinearDirection.SouthEast
-                or LinearDirection.NorthEast
-                or LinearDirection.BelowWest
-                or LinearDirection.BelowSouth
-                or LinearDirection.BelowEast
-                or LinearDirection.BelowNorth
-                or LinearDirection.BelowSouthWest
-                or LinearDirection.BelowNorthWest
-                or LinearDirection.BelowSouthEast
-                or LinearDirection.BelowNorthEast
-                or LinearDirection.AboveWest
-                or LinearDirection.AboveSouth
-                or LinearDirection.AboveEast
-                or LinearDirection.AboveNorth
-                or LinearDirection.AboveSouthWest
-                or LinearDirection.AboveNorthWest
-                or LinearDirection.AboveSouthEast
-                or LinearDirection.AboveNorthEast => true,
-                _ => false,
-            };
         }
 
         #endregion

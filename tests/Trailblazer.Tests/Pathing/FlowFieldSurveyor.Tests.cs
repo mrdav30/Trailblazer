@@ -31,7 +31,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(4, 0, 0);
 
-            PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
+            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.Prepare();
 
@@ -45,7 +45,7 @@ namespace Trailblazer.Tests.Pathing
             for (int i = 1; i < sorted.Count; i++)
                 Assert.True(sorted[i].DistanceToTarget > sorted[i - 1].DistanceToTarget);
 
-            PathManager.Unload("FloodTest");
+            PathManager.UnloadChart("FloodTest");
         }
 
         [Fact]
@@ -67,7 +67,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(1, 0, 0);
             var end = new Vector3d(1, 0, 4);
 
-            PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
+            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.UnitSize = (Fixed64)2;
             request.Prepare();
@@ -77,7 +77,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.False(result.IsValid);
             Assert.Null(result.Fields);
 
-            PathManager.Unload("BlockedChoke");
+            PathManager.UnloadChart("BlockedChoke");
         }
 
         [Fact]
@@ -93,7 +93,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(-2, 0, 0);
             var end = new Vector3d(4, 0, 4);
 
-            PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
+            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.ExtraFloodRange = 5;
             request.Prepare();
@@ -106,7 +106,7 @@ namespace Trailblazer.Tests.Pathing
             foreach (FlowField flow in result.Fields.Values)
                 Assert.True(flow.DistanceToTarget <= distanceToTarget + request.ExtraFloodRange);
 
-            PathManager.Unload("ShortRange");
+            PathManager.UnloadChart("ShortRange");
         }
 
         [Fact]
@@ -126,7 +126,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(2, 0, 0);
 
-            PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
+            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.Prepare();
 
@@ -138,7 +138,7 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(angleDiff > Fixed64.Half);
 
-            PathManager.Unload("LineDir");
+            PathManager.UnloadChart("LineDir");
         }
 
         [Fact]
@@ -154,7 +154,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(2, 0, 0);
 
-            PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
+            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.Prepare();
 
@@ -163,7 +163,7 @@ namespace Trailblazer.Tests.Pathing
             var goalField = result.Fields.Values.First(f => f.IsGoal);
             Assert.Equal(Vector3d.Zero, goalField.Direction);
 
-            PathManager.Unload("GoalZero");
+            PathManager.UnloadChart("GoalZero");
         }
 
         [Fact]
@@ -172,7 +172,7 @@ namespace Trailblazer.Tests.Pathing
             PathTestFactory.RegisterSingleWalkablePoint("IsolatedStart", new Vector3d(0, 0, 0));
             PathTestFactory.RegisterSingleWalkablePoint("IsolatedEnd", new Vector3d(5, 0, 5));
 
-            PathManager.GetValidPathRequest(new Vector3d(0, 0, 0), new Vector3d(5, 0, 5), out Voxel startVoxel, out Voxel endVoxel);
+            VoxelFinder.TryGetPathEdgeVoxels(new Vector3d(0, 0, 0), new Vector3d(5, 0, 5), out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.Prepare();
 
@@ -181,8 +181,8 @@ namespace Trailblazer.Tests.Pathing
             Assert.False(result.IsValid);
             Assert.Null(result.Fields);
 
-            PathManager.Unload("IsolatedStart");
-            PathManager.Unload("IsolatedEnd");
+            PathManager.UnloadChart("IsolatedStart");
+            PathManager.UnloadChart("IsolatedEnd");
         }
 
         [Fact]
@@ -198,7 +198,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(2, 0, 0);
 
-            PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
+            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.Prepare();
 
@@ -213,7 +213,7 @@ namespace Trailblazer.Tests.Pathing
             guide.TryGetMovementDirection(start, out Vector3d dir);
             Assert.True(dir.Magnitude > Fixed64.Zero);
 
-            PathManager.Unload("GuideTest");
+            PathManager.UnloadChart("GuideTest");
         }
 
         [Fact]
@@ -233,7 +233,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 1);
             var end = new Vector3d(2, 0, 1);
 
-            PathManager.GetValidPathRequest(start, end, out Voxel startVoxel, out Voxel endVoxel);
+            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.Prepare();
 
@@ -243,7 +243,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.True(vec.x > Fixed64.Zero); // ensure direction favors straight axis
             Assert.True(vec.z.Abs() < Fixed64.Half);
 
-            PathManager.Unload("ZigZag");
+            PathManager.UnloadChart("ZigZag");
         }
 
         [Fact]
@@ -276,7 +276,7 @@ namespace Trailblazer.Tests.Pathing
 
             dir1.Should().NotBeApproximately(dir2);
 
-            PathManager.Unload("MultiGoal");
+            PathManager.UnloadChart("MultiGoal");
         }
 
         [Fact]
@@ -304,7 +304,7 @@ namespace Trailblazer.Tests.Pathing
             flow.x.Should().BeGreaterThan(Fixed64.Zero);
             flow.z.Should().BeGreaterThan(Fixed64.Zero);
 
-            PathManager.Unload("DiagonalGoal");
+            PathManager.UnloadChart("DiagonalGoal");
         }
 
         [Fact]
@@ -329,7 +329,7 @@ namespace Trailblazer.Tests.Pathing
 
             result.Fields.Should().BeNull();
 
-            PathManager.Unload("UnitSizeTooBig");
+            PathManager.UnloadChart("UnitSizeTooBig");
         }
 
         [Fact]
@@ -356,7 +356,7 @@ namespace Trailblazer.Tests.Pathing
 
             flow.Should().Be(Vector3d.Zero);
 
-            PathManager.Unload("OutsideField");
+            PathManager.UnloadChart("OutsideField");
         }
 
         [Fact]
@@ -403,7 +403,7 @@ namespace Trailblazer.Tests.Pathing
                     .BeLessThan(field.DistanceToTarget, $"Direction from index {index} should lead downhill");
             }
 
-            PathManager.Unload("FlowGradientTest");
+            PathManager.UnloadChart("FlowGradientTest");
         }
 
         [Fact]
@@ -428,7 +428,7 @@ namespace Trailblazer.Tests.Pathing
             flow.x.Should().BeGreaterThan(Fixed64.Zero);
             flow.z.Should().BeGreaterThan(Fixed64.Zero);
 
-            PathManager.Unload("DirectionalBias");
+            PathManager.UnloadChart("DirectionalBias");
         }
 
         [Fact]
@@ -450,7 +450,7 @@ namespace Trailblazer.Tests.Pathing
             Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
             flow.Should().Be(Vector3d.Backward);
 
-            PathManager.Unload("CardinalOverDiagonal");
+            PathManager.UnloadChart("CardinalOverDiagonal");
         }
 
         [Fact]
@@ -477,7 +477,7 @@ namespace Trailblazer.Tests.Pathing
             field2.Direction.Should().NotBe(Vector3d.Zero);
             field1.Direction.Should().NotBe(field2.Direction);
 
-            PathManager.Unload("DifferentGoals");
+            PathManager.UnloadChart("DifferentGoals");
         }
 
         [Fact]
@@ -513,7 +513,7 @@ namespace Trailblazer.Tests.Pathing
                 field1.DistanceToTarget.Should().Be(field2.DistanceToTarget);
             }
 
-            PathManager.Unload("DeterminismTest");
+            PathManager.UnloadChart("DeterminismTest");
         }
 
         [Fact]
@@ -538,7 +538,7 @@ namespace Trailblazer.Tests.Pathing
             Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
             flow.Should().NotBe(Vector3d.Left);
 
-            PathManager.Unload("RerouteAroundBlockers");
+            PathManager.UnloadChart("RerouteAroundBlockers");
         }
 
         [Fact]
@@ -558,7 +558,7 @@ namespace Trailblazer.Tests.Pathing
 
             result.IsValid.Should().BeFalse();
 
-            PathManager.Unload("EdgeGoalTest");
+            PathManager.UnloadChart("EdgeGoalTest");
         }
 
         [Fact]
@@ -589,7 +589,7 @@ namespace Trailblazer.Tests.Pathing
                 f2.DistanceToTarget.Should().Be(kv.Value.DistanceToTarget);
             }
 
-            PathManager.Unload("ConsistencyTest");
+            PathManager.UnloadChart("ConsistencyTest");
         }
     }
 }

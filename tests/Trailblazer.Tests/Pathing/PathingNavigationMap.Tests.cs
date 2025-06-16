@@ -18,7 +18,7 @@ namespace Trailblazer.Tests.Pathing
             var map = PathTestFactory.BuildSinglePointMap("TestMap", new Vector3d(0, 0, 0));
             PathManager.Register(map);
 
-            Assert.True(PathManager.TryGetNavigationMap("TestMap", out var retrieved));
+            Assert.True(PathManager.TryGetNavigationChart("TestMap", out var retrieved));
             Assert.Equal(map, retrieved);
         }
 
@@ -30,7 +30,7 @@ namespace Trailblazer.Tests.Pathing
 
             var map = PathTestFactory.BuildSinglePointMap("InitMap", new Vector3d(0, 0, 0));
             PathManager.Register(map);
-            PathManager.InitializeMap("InitMap");
+            PathManager.InitializeChart("InitMap");
 
             Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
             Assert.True(voxel.TryGetPartition<PathPartition>(out _));
@@ -49,8 +49,8 @@ namespace Trailblazer.Tests.Pathing
             PathManager.Register(mapA);
             PathManager.Register(mapB);
 
-            PathManager.InitializeMap("MapA");
-            PathManager.InitializeMap("MapB");
+            PathManager.InitializeChart("MapA");
+            PathManager.InitializeChart("MapB");
 
             // Validate partition exists and belongs to both
             GlobalGridManager.TryGetGridAndVoxel(pos, out _, out Voxel voxel);
@@ -58,7 +58,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.True(partition.BelongsTo("MapA"));
             Assert.True(partition.BelongsTo("MapB"));
 
-            PathManager.Unload("MapA");
+            PathManager.UnloadChart("MapA");
 
             // Should still be there because MapB owns it
             Assert.True(voxel.TryGetPartition<PathPartition>(out var afterUnload));
@@ -80,8 +80,8 @@ namespace Trailblazer.Tests.Pathing
 
             var map = PathTestFactory.BuildSinglePointMap("DuplicateInit", new Vector3d(0, 0, 0));
             PathManager.Register(map);
-            PathManager.InitializeMap("DuplicateInit");
-            PathManager.InitializeMap("DuplicateInit"); // idempotent
+            PathManager.InitializeChart("DuplicateInit");
+            PathManager.InitializeChart("DuplicateInit"); // idempotent
 
             GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel);
             var count = voxel.TryGetPartition<PathPartition>(out var partition) ? 1 : 0;

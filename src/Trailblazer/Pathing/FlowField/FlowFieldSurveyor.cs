@@ -5,6 +5,7 @@ using System.Threading;
 using System;
 using SwiftCollections.Pool;
 using System.Collections.Concurrent;
+using System.Linq;
 
 namespace Trailblazer.Pathing
 {
@@ -27,19 +28,17 @@ namespace Trailblazer.Pathing
         /// </summary>
         public static FlowFieldSurveyor Shared => _instance.Value;
 
+        #endregion
+
+        private readonly PathHeap _heap = new();
+
         /// <summary>
         /// Tracks partitions that were affected during the flood fill.
         /// These will be used to construct the final flow field result.
         /// </summary>
-        private static readonly Lazy<SwiftHashSetPool<PathPartition>> _markedPool =
-            new(() => new SwiftHashSetPool<PathPartition>());
+        private readonly SwiftHashSet<PathPartition> _marked = new();
 
-        /// <inheritdoc cref="_markedPool"/>
-        public static SwiftHashSetPool<PathPartition> MarkedPool => _markedPool.Value;
-
-        #endregion
-
-        private readonly PathHeap _heap = new();
+        private readonly SwiftHashSet<string> _chartKeys = new();
 
         private FlowFieldPathRequest _request;
 
@@ -48,12 +47,6 @@ namespace Trailblazer.Pathing
         /// Used to define the flood radius.
         /// </summary>
         private int _distanceToStart;
-
-        /// <summary>
-        /// Tracks partitions that were affected during the flood fill.
-        /// These will be used to construct the final flow field result.
-        /// </summary>
-        private SwiftHashSet<PathPartition> _marked;
 
         /// <summary>
         /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
@@ -66,33 +59,30 @@ namespace Trailblazer.Pathing
             {
                 if (!request.IsValid
                 || request.HasZeroDisplacement
-                || !request.End.TryGetPartition(out PathPartition targetPartition))
+                || !request.End.TryGetPartition(out PathPartition targetPart))
                 {
                     return FlowFieldSurveyResult.Empty;
                 }
 
                 _request = request;
 
-                _marked = MarkedPool.Rent();
                 _heap.FastClear();
+                _marked.Clear();
+                _chartKeys.Clear();
 
                 _distanceToStart = 0;
 
                 // Start from the end and move towards the start voxel
-                targetPartition.PathCost = 0;
-                _heap.Add(targetPartition);
+                targetPart.PathCost = 0;
+                _heap.Add(targetPart);
+                _chartKeys.AddRange(targetPart.ChartOwners);
 
                 if (!FloodPath() || _marked.Count <= 0)
-                {
-                    MarkedPool.Release(_marked);
-                    _marked = null;
                     return FlowFieldSurveyResult.Empty;
-                }
 
                 SwiftDictionary<int, FlowField> flowFields = GenerateFlowFields();
-                MarkedPool.Release(_marked);
-                _marked = null;
-                return FlowFieldSurveyResult.Create(flowFields, request.RequestCacheKey);
+                string[] chartsUsed = _chartKeys.ToArray();
+                return FlowFieldSurveyResult.Create(flowFields, chartsUsed, request.RequestCacheKey);
             }
         }
 
@@ -233,6 +223,7 @@ namespace Trailblazer.Pathing
 
                 result.Add(current.VoxelToken, currentFlow);
                 current.PathCost = int.MaxValue;
+                _chartKeys.AddRange(current.ChartOwners);
             }
 
             return result;

@@ -43,16 +43,17 @@ namespace Trailblazer.Pathing
         /// </summary>
         public static AStarSurveyor Shared => _instance.Value;
 
-        private static readonly Lazy<SwiftListPool<AStarWaypoint>> _waypointListPool =
-            new(() => new SwiftListPool<AStarWaypoint>());
-
-        public static SwiftListPool<AStarWaypoint> WaypointListPool => _waypointListPool.Value;
-
         #endregion
 
         private readonly PathHeap _heap = new();
 
         private readonly SwiftDictionary<int, AStarVoxelMeta> _meta = new();
+
+        private readonly SwiftList<PathPartition> _rawPath = new();
+
+        private readonly SwiftList<AStarWaypoint> _waypoints = new();
+
+        private readonly SwiftHashSet<string> _chartKeys = new();
 
         private AStarPathRequest _request;
 
@@ -82,8 +83,11 @@ namespace Trailblazer.Pathing
 
                 _request = request;
 
-                _meta.Clear();
                 _heap.FastClear();
+                _meta.Clear();
+                _rawPath.FastClear();
+                _waypoints.FastClear();
+                _chartKeys.Clear();
 
                 // Trace path from the start to the end
                 _meta.Add(_request.Start.SpawnToken, new());
@@ -93,8 +97,14 @@ namespace Trailblazer.Pathing
                 if (!TracePath())
                     return AStarSurveyResult.Empty;
 
-                SwiftList<PathPartition> voxelPath = GetRawpath();
-                return AStarSurveyResult.Create(BuildWaypoints(voxelPath), request.RequestCacheKey);
+                BuildRawPath();
+                BuildWaypoints();
+
+                AStarWaypoint[] waypoints = _waypoints.ToArray();
+                string[] chartKeys = _chartKeys.ToArray();
+                return AStarSurveyResult.Create(waypoints, chartKeys, request.RequestCacheKey);
+
+                // TODO: should we also clear collections at the end for GC?  maybe flag to determine if dirty?
             }
         }
 
@@ -269,15 +279,13 @@ namespace Trailblazer.Pathing
         /// Reconstructs the raw voxel-based path from the destination to the origin by walking backwards through trail links.
         /// </summary>
         /// <returns>A list of voxels from start to end representing the raw path.</returns>
-        private SwiftList<PathPartition> GetRawpath()
+        private void BuildRawPath()
         {
-            SwiftList<PathPartition> result = new();
-
             Voxel current = _request.End;
             while (current.SpawnToken != _request.Start.SpawnToken)
             {
                 PathPartition currentPartition = current.GetPartitionOrDefault<PathPartition>();
-                result.Insert(0, currentPartition);
+                _rawPath.Insert(0, currentPartition);
 
                 if (!_meta.TryGetValue(current.SpawnToken, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
                     break; // break in the trail!
@@ -290,58 +298,56 @@ namespace Trailblazer.Pathing
 
             // Ensure start position is included
             PathPartition startPartition = _request.Start.GetPartitionOrDefault<PathPartition>();
-            result.Insert(0, startPartition);
-
-            return result;
+            _rawPath.Insert(0, startPartition);
         }
 
         /// <summary>
         /// Constructs a smoothed version of the path using direction changes and optional spline smoothing.
         /// </summary>
-        /// <param name="path">The unsmoothed list of voxels produced by pathfinding.</param>
         /// <returns>A smoothed list of world positions.</returns>
-        private AStarWaypoint[] BuildWaypoints(SwiftList<PathPartition> path)
+        private void BuildWaypoints()
         {
             // return early if the start is the same as the end
-            if (path.Count == 0 || path[0].VoxelToken == path.FromEnd(1).VoxelToken)
-                return null;
+            if (_rawPath.Count == 0 || _rawPath[0].VoxelToken == _rawPath.FromEnd(1).VoxelToken)
+                return;
 
-            SwiftList<AStarWaypoint> result = WaypointListPool.Rent();
-            result.EnsureCapacity(path.Count);
-            PathPartition start = path[0];
-            result.Add(new()
+            _waypoints.EnsureCapacity(_rawPath.Count);
+            PathPartition start = _rawPath[0];
+            _waypoints.Add(new()
             {
                 Position = start.VoxelPosition,
                 PathCost = start.PathCost,
                 GlobalIndex = start.GlobalIndex
             });
             start.PathCost = int.MaxValue;
+            _chartKeys.AddRange(start.ChartOwners);
 
             Vector3d lastDirection = Vector3d.Zero;
 
-            for (int i = 1; i < path.Count - 1; i++)
+            for (int i = 1; i < _rawPath.Count - 1; i++)
             {
-                Vector3d direction = (path[i + 1].VoxelPosition - path[i].VoxelPosition).Normalize();
+                Vector3d direction = (_rawPath[i + 1].VoxelPosition - _rawPath[i].VoxelPosition).Normalize();
 
-                bool preserveUnwalkable = path[i].GetNeighborClearance() <= (byte)_request.UnitSize + 1;
+                bool preserveUnwalkable = _rawPath[i].GetNeighborClearance() <= (byte)_request.UnitSize + 1;
                 bool directionChanged = !lastDirection.FuzzyEqual(direction);
 
                 if (preserveUnwalkable || directionChanged)
                 {
-                    result.Add(new()
+                    _waypoints.Add(new()
                     {
-                        Position = path[i].VoxelPosition,
-                        PathCost = path[i].PathCost,
-                        GlobalIndex = path[i].GlobalIndex
+                        Position = _rawPath[i].VoxelPosition,
+                        PathCost = _rawPath[i].PathCost,
+                        GlobalIndex = _rawPath[i].GlobalIndex
                     });
                 }
 
                 lastDirection = direction;
-                path[i].PathCost = int.MaxValue;
+                _rawPath[i].PathCost = int.MaxValue;
+                _chartKeys.AddRange(_rawPath[i].ChartOwners);
             }
 
-            PathPartition end = path.FromEnd(1);
-            result.Add(new()
+            PathPartition end = _rawPath.FromEnd(1);
+            _waypoints.Add(new()
             {
                 Position = end.VoxelPosition,
                 PathCost = end.PathCost,
@@ -349,10 +355,7 @@ namespace Trailblazer.Pathing
                 IsGoal = true
             });
             end.PathCost = int.MaxValue;
-
-            AStarWaypoint[] finalResult = result.ToArray();
-            WaypointListPool.Release(result);
-            return finalResult;
+            _chartKeys.AddRange(end.ChartOwners);
         }
 
         /// <summary>

@@ -1,44 +1,35 @@
-﻿namespace Trailblazer.Pathing
+﻿using System;
+
+namespace Trailblazer.Pathing
 {
-    public struct AStarSurveyResult : ISurveyResult
+    public class AStarSurveyResult : SurveyResult
     {
         public AStarWaypoint[] Waypoints { get; private set; }
 
-        public bool IsValid { get; set; }
+        public override bool HasPath => IsValid && Waypoints != null && Waypoints.Length > 0;
 
-        public readonly bool HasPath => !IsValid && Waypoints != null && Waypoints.Length > 0;
+        public static readonly AStarSurveyResult Empty = new();
 
-        public bool IsInUse { get; private set; }
-
-        public int LastUsedFrame { get; private set; }
-
-        public int RequestHashKey { get; private set; }
-
-        public static readonly AStarSurveyResult Empty = new AStarSurveyResult();
-
-        public static AStarSurveyResult Create(AStarWaypoint[] waypoints, int key)
+        public static AStarSurveyResult Create(
+            AStarWaypoint[] waypoints, 
+            string[] chartsUtilized, 
+            int key)
         {
             return new AStarSurveyResult()
             {
-                Waypoints = waypoints,
+                IsValid = true,
                 IsInUse = false,
+                ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
+                Waypoints = waypoints,
                 LastUsedFrame = -1,
                 RequestHashKey = key
             };
         }
 
-        public void MarkInUse() => IsInUse = true;
-
-        public void MarkInvalid()
+        public override void Reset()
         {
-            IsValid = false;
+            base.Reset();
             Waypoints = null;
-        }
-
-        public void Release()
-        {
-            IsInUse = false;
-            LastUsedFrame = TrailblazerManager.FrameCount;
         }
     }
 }

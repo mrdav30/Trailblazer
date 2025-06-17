@@ -81,7 +81,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// The pathfinding configuration used for the current movement request, including size, and type.
         /// </summary>
-        public IPathRequest CurrentRequest { get; protected set; }
+        private IPathRequest _currentRequest;
 
         /// <summary>
         /// Current guide used to compute the desired path or flow.
@@ -259,8 +259,8 @@ namespace Trailblazer.Navigation.Steering
             }
 
             IsFollowingTrail = true;
-            CurrentRequest = pathRequest;
-            CurrentRequest.End = destinationVoxel;
+            _currentRequest = pathRequest;
+            _currentRequest.End = destinationVoxel;
             Destination = destination;
 
             _repathTries = 0;
@@ -307,7 +307,7 @@ namespace Trailblazer.Navigation.Steering
             IsAtDestination = true;
             Destination = navigator.Position;
 
-            CurrentRequest = null;
+            _currentRequest = null;
             _trailGuide = null;
 
             Events = new();
@@ -323,7 +323,7 @@ namespace Trailblazer.Navigation.Steering
 
             if (IsFollowingTrail)
             {
-                if (!HasViableDestination || CurrentRequest == null)
+                if (!HasViableDestination || _currentRequest == null)
                     return;
 
                 // check if agent has to pathfind, otherwise straight path to rely on destination
@@ -335,8 +335,8 @@ namespace Trailblazer.Navigation.Steering
                     HasLineOfSightPath = IsDestinationInSight(
                         navigator.Position,
                         Destination,
-                        CurrentRequest.UnitSize,
-                        CurrentRequest.AllowUnwalkable);
+                        _currentRequest.UnitSize,
+                        _currentRequest.AllowUnwalkable);
 
                     _pathCheckCooldown = PathRecheckCooldownFrames;
                 }
@@ -373,16 +373,16 @@ namespace Trailblazer.Navigation.Steering
         protected virtual void ValidateMovementPath(Vector3d origin, Fixed64 unitSize)
         {
             // Check to see if unit size has changed since the last frame
-            if (unitSize != CurrentRequest.UnitSize)
+            if (unitSize != _currentRequest.UnitSize)
             {
-                CurrentRequest.UnitSize = unitSize;
+                _currentRequest.UnitSize = unitSize;
                 _shouldRequestPathThisFrame = true;
             }
 
             bool isCurrentPositionValid = false;
             Voxel currentVoxel = null;
             // if size requires consideration, use old next-best-voxel system
-            if (CurrentRequest.UnitSize <= GlobalGridManager.VoxelSize)
+            if (_currentRequest.UnitSize <= GlobalGridManager.VoxelSize)
             {
                 isCurrentPositionValid = VoxelFinder.GetStartVoxel(
                     origin,
@@ -390,12 +390,12 @@ namespace Trailblazer.Navigation.Steering
                     out currentVoxel);
             }
 
-            if (!isCurrentPositionValid || CurrentRequest.UnitSize > GlobalGridManager.VoxelSize)
+            if (!isCurrentPositionValid || _currentRequest.UnitSize > GlobalGridManager.VoxelSize)
             {
                 isCurrentPositionValid = VoxelFinder.GetClosestVoxelForSize(
                     origin,
                     Destination,
-                    CurrentRequest.UnitSize,
+                    _currentRequest.UnitSize,
                     out currentVoxel);
             }
 
@@ -406,13 +406,13 @@ namespace Trailblazer.Navigation.Steering
                 return;
             }
 
-            CurrentRequest.Start = currentVoxel;
+            _currentRequest.Start = currentVoxel;
 
             if (!_shouldRequestPathThisFrame)
                 return;
 
             _shouldRequestPathThisFrame = false;
-            if (CurrentRequest.HasZeroDisplacement && _repathTries >= 1)
+            if (_currentRequest.HasZeroDisplacement && _repathTries >= 1)
             {
                 Arrive();
                 return;
@@ -421,14 +421,14 @@ namespace Trailblazer.Navigation.Steering
             HasLineOfSightPath = IsDestinationInSight(
                 origin,
                 Destination,
-                CurrentRequest.UnitSize,
-                CurrentRequest.AllowUnwalkable);
+                _currentRequest.UnitSize,
+                _currentRequest.AllowUnwalkable);
             if (HasLineOfSightPath)
                 return;  // no path required
 
             _pathCheckCooldown = PathRecheckCooldownFrames;
 
-            if (!PathGuideFactory.RequestGuide(CurrentRequest, out _trailGuide))
+            if (!_currentRequest.Validate() || !PathGuideFactory.RequestGuide(_currentRequest, out _trailGuide))
             {
                 Debug.WriteLine($"Unable to retrieve a guide to {Destination}");
                 Arrive();
@@ -576,7 +576,7 @@ namespace Trailblazer.Navigation.Steering
                 PathGuideFactory.ReturnGuide(_trailGuide);
 
             _trailGuide = null;
-            CurrentRequest = null;
+            _currentRequest = null;
             _distanceToTarget = Fixed64.Zero;
             IsAtDestination = true;
             TargetDirection = Vector3d.Zero;

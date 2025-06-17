@@ -1,7 +1,7 @@
 ﻿using FixedMathSharp;
 using System;
 
-namespace Trailblazer.Pathing.Support
+namespace Trailblazer.Pathing
 {
     public static class NavigationChartExtensions
     {

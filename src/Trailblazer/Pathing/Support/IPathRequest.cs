@@ -48,6 +48,8 @@ namespace Trailblazer.Pathing
         /// </summary>
         public int RequestCacheKey { get; }
 
-        bool Prepare();
+        bool Prepare(Vector3d origin, Vector3d target);
+
+        bool Validate();
     }
 }

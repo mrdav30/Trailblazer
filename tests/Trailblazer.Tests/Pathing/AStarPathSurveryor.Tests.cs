@@ -6,6 +6,8 @@ using GridForge.Grids;
 using System.Linq;
 using FluentAssertions;
 using System.Collections.Generic;
+using SwiftCollections;
+using System;
 
 namespace Trailblazer.Tests.Pathing
 {
@@ -36,15 +38,17 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("Line", data, origin);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(origin, target);
 
-            bool success = PathGuideFactory.RequestGuide(origin, target, request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.True(success);
             Assert.NotNull(guide);
             Assert.Equal(3, guide.ActiveWaypoints!.Length); // start, middle, end
             Assert.Equal(origin, guide.ActiveWaypoints[0].Position);
             Assert.Equal(target, guide.ActiveWaypoints.Last().Position);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("Line");
         }
@@ -57,12 +61,14 @@ namespace Trailblazer.Tests.Pathing
 
             var unreachableTarget = new Vector3d(4, 0, 4);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(Vector3d.Zero, unreachableTarget);
 
-            bool success = PathGuideFactory.RequestGuide(Vector3d.Zero, unreachableTarget, request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.False(success);
             Assert.Null(guide);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("Isolated");
         }
@@ -90,12 +96,14 @@ namespace Trailblazer.Tests.Pathing
             };
 #endif
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(5, 5, 0));
             request.MaxClimbHeight = maxHeightDifference;
-
-            bool success = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(5, 5, 0), request, out AStarGuide guide);
+  
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.True(heightViolationTriggered);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("HeightSpy");
         }
@@ -122,13 +130,15 @@ namespace Trailblazer.Tests.Pathing
             PathManager.Register(map);
             PathManager.InitializeChart("Diag");
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(start, target);
             request.Heuristic = method;
 
-            bool success = PathGuideFactory.RequestGuide(start, target, request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.True(success);
             Assert.NotNull(guide);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("Diag");
         }
@@ -139,12 +149,14 @@ namespace Trailblazer.Tests.Pathing
             var pos = new Vector3d(1, 0, 1);
             PathTestFactory.RegisterSingleWalkablePoint("SameSpot", pos);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(pos, pos);
 
-            bool success = PathGuideFactory.RequestGuide(pos, pos, request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.False(success);
             Assert.Null(guide);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("SameSpot");
         }
@@ -169,9 +181,9 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var target = new Vector3d(4, 0, 0);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(start, target);
 
-            bool success = PathGuideFactory.RequestGuide(start, target, request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.True(success);
             Assert.NotNull(guide);
@@ -179,6 +191,8 @@ namespace Trailblazer.Tests.Pathing
             List<Vector3d> waypoints = guide.ActiveWaypoints.Select(p => p.Position).ToList();
             Assert.Contains(new Vector3d(2, 0, 2), waypoints);
             Assert.Contains(new Vector3d(3, 0, 1), waypoints);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("Detour");
         }
@@ -200,14 +214,16 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("Choke", data, Vector3d.Zero);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(new Vector3d(0, 0, 1), new Vector3d(4, 0, 1));
             request.UnitSize = (Fixed64)2;
 
             bool success =
-                PathGuideFactory.RequestGuide(new Vector3d(0, 0, 1), new Vector3d(4, 0, 1), request, out AStarGuide guide);
+                PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.False(success);
             Assert.Null(guide);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("Choke");
         }
@@ -226,13 +242,15 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("ResetTest", data, Vector3d.Zero);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0));
 
             bool success1 =
-                PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 0), request, out AStarGuide guide);
+                PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.True(success1);
             Assert.NotNull(guide);
+
+          //  PathGuideFactory.ReturnGuide(guide);
 
             // Second request with blocked path
             PathManager.UnloadChart("ResetTest");
@@ -248,13 +266,15 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("ResetTestBlocked", badData, Vector3d.Zero);
 
-            var failedRequest = AStarPathRequest.CreateEmpty();
+            var failedRequest = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0));
 
             bool success2 =
-                PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 0), failedRequest, out AStarGuide failedGuide);
+                PathGuideFactory.RequestGuide(failedRequest, out AStarGuide failedGuide);
 
             Assert.False(success2);
             Assert.Null(failedGuide);
+
+            PathGuideFactory.ReturnGuide(failedGuide);
 
             PathManager.UnloadChart("ResetTestBlocked");
         }
@@ -268,13 +288,15 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("SearchCap", data, Vector3d.Zero);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(49, 0, 0));
             request.MaxPathSearchRange = 10;
 
-            bool success = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(49, 0, 0), request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.False(success);
             Assert.Null(guide);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("SearchCap");
         }
@@ -295,14 +317,16 @@ namespace Trailblazer.Tests.Pathing
             PathManager.Register(map);
             PathManager.InitializeChart("LSpline");
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 2));
 
-            bool success = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 2), request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
             guide.UseSplineSmoothing = true;
 
             Assert.True(success);
             Assert.NotNull(guide);
             Assert.True(guide.ActiveWaypoints!.Length > 4); // should have inserted curve points
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("LSpline");
         }
@@ -321,14 +345,16 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(1, 0, 0);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(start, end);
 
-            bool success = PathGuideFactory.RequestGuide(start, end, request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
             guide.UseSplineSmoothing = true;
 
             Assert.True(success);
             Assert.NotNull(guide);
             Assert.Equal(2, guide.ActiveWaypoints!.Length); // No smoothing applied
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("ShortSpline");
         }
@@ -351,15 +377,17 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(3, 0, 3);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(start, end);
 
-            bool success = PathGuideFactory.RequestGuide(start, end, request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
             guide.UseSplineSmoothing = true;
 
             Assert.True(success);
             Assert.NotNull(guide);
             Assert.Equal(start, guide.ActiveWaypoints!.First().Position);
             Assert.Equal(end, guide.ActiveWaypoints.Last().Position);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("SplineEnds");
         }
@@ -377,12 +405,14 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("CornerCut", data, Vector3d.Zero);
 
-            var request = AStarPathRequest.CreateEmpty();
+            var request = AStarPathRequest.Create(new Vector3d(0, 0, 0), new Vector3d(1, 0, 1));
             request.UnitSize = (Fixed64)1;
-            bool success = PathGuideFactory.RequestGuide(new Vector3d(0, 0, 0), new Vector3d(1, 0, 1), request, out AStarGuide guide);
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.False(success);
             Assert.Null(guide);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("CornerCut");
         }
@@ -401,14 +431,16 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("ShortestPath", data, new Vector3d(0, 0, 0));
 
-            var request = AStarPathRequest.CreateEmpty();
-            bool success = PathGuideFactory.RequestGuide(new Vector3d(0, 0, 0), new Vector3d(2, 0, 2), request, out AStarGuide guide);
+            var request = AStarPathRequest.Create(new Vector3d(0, 0, 0), new Vector3d(2, 0, 2));
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.True(success);
             Assert.NotNull(guide);
 
             // Ensure path goes through (1,0,1) as optimal diagonal
             Assert.Contains(new Vector3d(1, 0, 1), guide.ActiveWaypoints.Select(w => w.Position));
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("ShortestPath");
         }
@@ -427,11 +459,13 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("BlockedMap", data, new Vector3d(0, 0, 0));
 
-            var request = AStarPathRequest.CreateEmpty();
-            bool success = PathGuideFactory.RequestGuide(new Vector3d(0, 0, 0), new Vector3d(2, 0, 2), request, out AStarGuide guide);
+            var request = AStarPathRequest.Create(new Vector3d(0, 0, 0), new Vector3d(2, 0, 2));
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.False(success);
             Assert.Null(guide);
+
+            PathGuideFactory.ReturnGuide(guide);
 
             PathManager.UnloadChart("BlockedMap");
         }
@@ -450,14 +484,16 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("Consistent", data, Vector3d.Zero);
 
-            var request = AStarPathRequest.CreateEmpty();
-
-            bool success1 = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 0), request, out AStarGuide guide1);
-            bool success2 = PathGuideFactory.RequestGuide(Vector3d.Zero, new Vector3d(2, 0, 0), request, out AStarGuide guide2);
+            var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0));
+            bool success1 = PathGuideFactory.RequestGuide(request, out AStarGuide guide1);
+            bool success2 = PathGuideFactory.RequestGuide(request, out AStarGuide guide2);
 
             Assert.True(success1);
             Assert.True(success2);
             Assert.Equal(guide1.ActiveWaypoints.Length, guide2.ActiveWaypoints.Length);
+
+            PathGuideFactory.ReturnGuide(guide1);
+            PathGuideFactory.ReturnGuide(guide2);
 
             PathManager.UnloadChart("Consistent");
         }
@@ -484,14 +520,14 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(1, 0, 2);
             var end = new Vector3d(4, 0, 2);
 
-            var manhattanRequest = AStarPathRequest.CreateEmpty();
+            var manhattanRequest = AStarPathRequest.Create(start, end);
             manhattanRequest.Heuristic = HeuristicMethod.Manhattan;
 
-            var euclideanRequest = AStarPathRequest.CreateEmpty();
+            var euclideanRequest = AStarPathRequest.Create(start, end);
             euclideanRequest.Heuristic = HeuristicMethod.Euclidean;
 
-            PathGuideFactory.RequestGuide(start, end, manhattanRequest, out AStarGuide manhattan);
-            PathGuideFactory.RequestGuide(start, end, euclideanRequest, out AStarGuide euclidean);
+            PathGuideFactory.RequestGuide(manhattanRequest, out AStarGuide manhattan);
+            PathGuideFactory.RequestGuide(euclideanRequest, out AStarGuide euclidean);
 
             // Both should succeed
             manhattan.Should().NotBeNull();
@@ -517,6 +553,9 @@ namespace Trailblazer.Tests.Pathing
 
             euclidean.ActiveWaypoints.First().Position.Should().Be(start);
             euclidean.ActiveWaypoints.Last().Position.Should().Be(end);
+
+            PathGuideFactory.ReturnGuide(manhattan);
+            PathGuideFactory.ReturnGuide(euclidean);
 
             PathManager.UnloadChart("HeuristicImpact");
         }

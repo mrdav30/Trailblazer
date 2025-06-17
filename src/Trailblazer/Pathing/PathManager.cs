@@ -11,6 +11,7 @@ using GridForge.Spatial;
 using System.Threading;
 using System.Linq;
 using System.Collections.Concurrent;
+using System.Xml.Linq;
 
 namespace Trailblazer.Pathing
 {
@@ -84,7 +85,6 @@ namespace Trailblazer.Pathing
         internal static void Tick(int currentFrame)
         {
             PathGuideFactory.CullExpiredGuides(currentFrame);
-            ProcessPendingUnloads();
         }
 
 
@@ -145,12 +145,18 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Initializes a specific navigation map, assigning voxels to partitions.
         /// </summary>
-        /// <param name="name">The name of the map to initialize.</param>
-        public static void InitializeChart(string name)
+        /// <param name="chartKey">The name of the map to initialize.</param>
+        public static void InitializeChart(string chartKey)
         {
-            if (!TryGetNavigationChart(name, out var chart) || chart.IsInitialized) return;
+            if (string.IsNullOrEmpty(chartKey)
+                || !TryGetNavigationChart(chartKey, out var chart)
+                || chart.IsInitialized)
+            {
+                return;
+            }
 
             SwiftHashSet<PathPartition> allChartPartitions = PartitionSetPool.Rent();
+            SwiftQueue<string> existingChartKeys = new(); // TODO: pool
             foreach (Vector3d pos in chart.GetWalkablePositions())
             {
                 if (!GlobalGridManager.TryGetGridAndVoxel(pos, out _, out Voxel voxel))
@@ -162,16 +168,24 @@ namespace Trailblazer.Pathing
                     voxel.TryAddPartition(part);
                 }
 
+                if (part.HasAnyOwners)
+                    existingChartKeys.EnqueueRange(part.ChartOwners);
+
                 part.AddOwner(chart.Name);
                 allChartPartitions.Add(part);
             }
 
-            // bind neighbor pointers for each partition
+            // bind new neighbor pointers for each partition since they could have changed
             foreach (PathPartition part in allChartPartitions)
                 part.BindNeighbors();
 
             PartitionSetPool.Release(allChartPartitions);
             chart.IsInitialized = true;
+
+            // invalidate existing paths that new charts partitions are in
+            while (existingChartKeys.Count > 0)
+                PathGuideFactory.InvalidateCacheFor(existingChartKeys.Dequeue());
+            // TODO: release existingChartKeys
         }
 
         /// <summary>
@@ -186,32 +200,50 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// Unloads a navigation map by name and releases associated partitions.
         /// </summary>
-        /// <param name="name">The name of the map to unload.</param>
-        public static void UnloadChart(string name)
+        /// <param name="chartKey">The name of the map to unload.</param>
+        public static void UnloadChart(string chartKey)
         {
-            if (!TryGetNavigationChart(name, out NavigationChart chart) || !chart.IsInitialized)
+            if (string.IsNullOrEmpty(chartKey)
+                || !TryGetNavigationChart(chartKey, out NavigationChart chart)
+                || !chart.IsInitialized)
+            {
                 return;
+            }
 
+            // invalidate any survey results currently using this chart
+            PathGuideFactory.InvalidateCacheFor(chartKey);
+
+            SwiftHashSet<PathPartition> stillActivePartitions = PartitionSetPool.Rent();
             foreach (Vector3d position in chart.GetWalkablePositions())
             {
                 if (!GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
                     continue;
 
-                if (voxel.TryGetPartition(out PathPartition partition) && partition.BelongsTo(name))
+                if (voxel.TryGetPartition(out PathPartition part) && part.BelongsTo(chartKey))
                 {
-                    partition.RemoveOwner(name);
-                    if (!partition.HasAnyOwners)
+                    part.RemoveOwner(chartKey);
+                    if (!part.HasAnyOwners)
                         voxel.TryRemovePartition<PathPartition>();
+                    else
+                    {
+                        // if partition still belongs to a chart, reset it's clearance values and rebind neighbors
+                        part.HandleChange(GridChange.Update, voxel);
+                        stillActivePartitions.Add(part);
+                    }
 
+                    continue;
                 }
             }
 
-            _navigationChartMapLock.EnterWriteLock();
-            try { _navigationChartMap.Remove(name); }
-            finally { _navigationChartMapLock.ExitWriteLock(); }
+            // bind neighbor pointers for each partition
+            foreach (PathPartition part in stillActivePartitions)
+                part.BindNeighbors();
 
-            if (PathGuideFactory.IsPooling)
-                PathGuideFactory.FlushPools();
+            PartitionSetPool.Release(stillActivePartitions);
+
+            _navigationChartMapLock.EnterWriteLock();
+            try { _navigationChartMap.Remove(chartKey); }
+            finally { _navigationChartMapLock.ExitWriteLock(); }
         }
 
         /// <summary>
@@ -224,7 +256,7 @@ namespace Trailblazer.Pathing
             finally { _navigationChartMapLock.ExitWriteLock(); }
 
             if (PathGuideFactory.IsPooling)
-                PathGuideFactory.FlushPools();
+                PathGuideFactory.FlushCache(true);
         }
 
         #endregion
@@ -254,9 +286,9 @@ namespace Trailblazer.Pathing
         /// <summary>Returns all straight (orthogonal) neighbors.</summary>
         public static IEnumerable<TraversableVoxel> GetWalkablePerpendicularNeighbors(GlobalVoxelIndex idx)
         {
-            if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel)) 
+            if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel))
                 yield break;
-            foreach (TraversableVoxel tv in WalkablePerpendicularNeighborsOf(voxel)) 
+            foreach (TraversableVoxel tv in WalkablePerpendicularNeighborsOf(voxel))
                 yield return tv;
         }
 
@@ -274,9 +306,9 @@ namespace Trailblazer.Pathing
         /// <summary>Returns all diagonal neighbors, avoiding edge-cutting.</summary>
         public static IEnumerable<TraversableVoxel> GetWalkableDiagonalNeighbors(GlobalVoxelIndex idx)
         {
-            if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel)) 
+            if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel))
                 yield break;
-            foreach (TraversableVoxel tv in WalkableDiagonalNeighborsOf(voxel)) 
+            foreach (TraversableVoxel tv in WalkableDiagonalNeighborsOf(voxel))
                 yield return tv;
         }
 
@@ -297,7 +329,7 @@ namespace Trailblazer.Pathing
         /// </summary>
         private static bool HasBlockedEdgeNeighbor(Voxel voxel, LinearDirection dir)
         {
-            var(dx, dy, dz) = GlobalGridManager.DirectionOffsets[(int)dir];
+            var (dx, dy, dz) = GlobalGridManager.DirectionOffsets[(int)dir];
             // build legs for each non-zero axis
             foreach (var (ax, ay, az) in new[] { (dx, 0, 0), (0, dy, 0), (0, 0, dz) })
             {

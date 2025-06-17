@@ -2,6 +2,7 @@
 using GridForge.Grids;
 using SwiftCollections;
 using System;
+using System.Net;
 
 namespace Trailblazer.Pathing
 {
@@ -41,13 +42,29 @@ namespace Trailblazer.Pathing
         public static AStarPathRequest CreateEmpty() => Create(null, null);
 
         public static AStarPathRequest Create(
+            Vector3d start,
+            Vector3d end,
+            Fixed64? unitSize = null,
+            HeuristicMethod heuristic = HeuristicMethod.Manhattan,
+            bool allowUnwalkable = false)
+        {
+            if (!GlobalGridManager.TryGetGridAndVoxel(start, out _, out Voxel startVoxel)
+                || !GlobalGridManager.TryGetGridAndVoxel(end, out _, out Voxel endVoxel))
+            {
+                return default;
+            }
+
+            return Create(startVoxel, endVoxel, unitSize, heuristic, allowUnwalkable);
+        }
+
+        public static AStarPathRequest Create(
             Voxel start, 
             Voxel end, 
             Fixed64? unitSize = null, 
             HeuristicMethod heuristic = HeuristicMethod.Manhattan, 
             bool allowUnwalkable = false)
         {
-            return new AStarPathRequest
+            AStarPathRequest request = new()
             {
                 Start = start,
                 End = end,
@@ -57,10 +74,33 @@ namespace Trailblazer.Pathing
                 MaxClimbHeight = GlobalGridManager.VoxelSize,
                 MaxPathSearchRange = null
             };
+
+            if (request.Start != null && request.End != null)
+                request.Validate();
+            return request;
         }
 
-        public bool Prepare()
+        public bool Prepare(Vector3d origin, Vector3d target)
         {
+            bool endPointsFound = VoxelFinder.TryGetPathEdgeVoxels(
+                origin,
+                target,
+                out Voxel startVoxel,
+                out Voxel endVoxel);
+            if (!endPointsFound)
+                return false;
+
+            Start = startVoxel;
+            End = endVoxel;
+
+            return true;
+        }
+
+        // If path created without valid nodes, then set later, this must be called before processing the request
+        public bool Validate()
+        {
+            if(Start == null || End == null) return false;
+
             if (!MaxPathSearchRange.HasValue
                 && PathManager.GetMaxSearchSize(Start, End, out int searchSize))
             {
@@ -86,17 +126,6 @@ namespace Trailblazer.Pathing
                 MaxClimbHeight,
                 MaxPathSearchRange ?? -1
             ).CombineHashCodes();
-        }
-    }
-
-    public static class AStarRequestExtensions
-    {
-        public static AStarPathRequest Validate(this AStarPathRequest request)
-        {
-            if (request.Prepare())
-                return request;
-
-            return default;
         }
     }
 }

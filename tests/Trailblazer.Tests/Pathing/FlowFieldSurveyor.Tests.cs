@@ -33,11 +33,10 @@ namespace Trailblazer.Tests.Pathing
 
             VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
-            request.Prepare();
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
-            Assert.True(result.IsValid);
+            Assert.True(result.HasPath);
             Assert.NotNull(result.Fields);
             Assert.Equal(5, result.Fields.Count);
 
@@ -70,11 +69,10 @@ namespace Trailblazer.Tests.Pathing
             VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.UnitSize = (Fixed64)2;
-            request.Prepare();
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
-            Assert.False(result.IsValid);
+            Assert.False(result.HasPath);
             Assert.Null(result.Fields);
 
             PathManager.UnloadChart("BlockedChoke");
@@ -96,11 +94,10 @@ namespace Trailblazer.Tests.Pathing
             VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
             request.ExtraFloodRange = 5;
-            request.Prepare();
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
-            Assert.True(result.IsValid);
+            Assert.True(result.HasPath);
              
             var distanceToTarget = Vector3d.Distance(start, end).CeilToInt();
             foreach (FlowField flow in result.Fields.Values)
@@ -128,7 +125,6 @@ namespace Trailblazer.Tests.Pathing
 
             VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
-            request.Prepare();
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
             var dir = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
@@ -156,7 +152,6 @@ namespace Trailblazer.Tests.Pathing
 
             VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
-            request.Prepare();
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -174,11 +169,10 @@ namespace Trailblazer.Tests.Pathing
 
             VoxelFinder.TryGetPathEdgeVoxels(new Vector3d(0, 0, 0), new Vector3d(5, 0, 5), out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
-            request.Prepare();
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
-            Assert.False(result.IsValid);
+            Assert.False(result.HasPath);
             Assert.Null(result.Fields);
 
             PathManager.UnloadChart("IsolatedStart");
@@ -200,7 +194,6 @@ namespace Trailblazer.Tests.Pathing
 
             VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
-            request.Prepare();
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -235,7 +228,6 @@ namespace Trailblazer.Tests.Pathing
 
             VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
-            request.Prepare();
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
             var vec = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
@@ -262,9 +254,9 @@ namespace Trailblazer.Tests.Pathing
             Vector3d start = new(2, 0, 2);
 
             // Try two different end goals and compare flow field results
-            var request1 = FlowFieldPathRequest.Create(start, new Vector3d(0, 0, 0)).Validate();
+            var request1 = FlowFieldPathRequest.Create(start, new Vector3d(0, 0, 0));
             var flowResult1 = FlowFieldSurveyor.Shared.FindPath(request1);
-            var request2 = FlowFieldPathRequest.Create(start, new Vector3d(4, 0, 4)).Validate();
+            var request2 = FlowFieldPathRequest.Create(start, new Vector3d(4, 0, 4));
             var flowResult2 = FlowFieldSurveyor.Shared.FindPath(request2);
 
             // Both results should be valid and flow toward the respective goals
@@ -294,7 +286,7 @@ namespace Trailblazer.Tests.Pathing
             Vector3d start = new(2, 0, 2);
             Vector3d goal = new(4, 0, 4);
 
-            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var request = FlowFieldPathRequest.Create(start, goal);
 
             var result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -322,7 +314,7 @@ namespace Trailblazer.Tests.Pathing
             Vector3d start = new Vector3d(1, 0, 1);
             Vector3d goal = new Vector3d(2, 0, 2);
 
-            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var request = FlowFieldPathRequest.Create(start, goal);
             request.UnitSize = (Fixed64)10; // UnitSize larger than grid
 
             var result = FlowFieldSurveyor.Shared.FindPath(request);
@@ -347,7 +339,7 @@ namespace Trailblazer.Tests.Pathing
             Vector3d start = new(2, 0, 2);
             Vector3d goal = new(4, 0, 4);
 
-            var result = FlowFieldSurveyor.Shared.FindPath(FlowFieldPathRequest.Create(start, goal).Validate());
+            var result = FlowFieldSurveyor.Shared.FindPath(FlowFieldPathRequest.Create(start, goal));
 
             // Sample outside of known field bounds
             Vector3d outsidePos = new(10, 0, 10);
@@ -375,7 +367,6 @@ namespace Trailblazer.Tests.Pathing
             var end = new Vector3d(0, 0, 0);
 
             var request = FlowFieldPathRequest.Create(start, end);
-            request.Prepare();
             var result = FlowFieldSurveyor.Shared.FindPath(request);
 
             foreach (var pair in result.Fields)
@@ -419,7 +410,7 @@ namespace Trailblazer.Tests.Pathing
             Vector3d start = new(1, 0, 1);
             Vector3d goal = new(2, 0, 2);
 
-            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var request = FlowFieldPathRequest.Create(start, goal);
             var result = FlowFieldSurveyor.Shared.FindPath(request);
 
             Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
@@ -444,7 +435,7 @@ namespace Trailblazer.Tests.Pathing
             Vector3d start = new(1, 0, 1);
             Vector3d goal = new(1, 0, 0);
 
-            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var request = FlowFieldPathRequest.Create(start, goal);
             var result = FlowFieldSurveyor.Shared.FindPath(request);
 
             Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
@@ -464,8 +455,8 @@ namespace Trailblazer.Tests.Pathing
             PathTestFactory.RegisterFromData("DifferentGoals", data, Vector3d.Zero);
 
             Vector3d start = new(2, 0, 2);
-            var request1 = FlowFieldPathRequest.Create(start, new Vector3d(0, 0, 0)).Validate();
-            var request2 = FlowFieldPathRequest.Create(start, new Vector3d(4, 0, 4)).Validate();
+            var request1 = FlowFieldPathRequest.Create(start, new Vector3d(0, 0, 0));
+            var request2 = FlowFieldPathRequest.Create(start, new Vector3d(4, 0, 4));
 
             var result1 = FlowFieldSurveyor.Shared.FindPath(request1);
             var result2 = FlowFieldSurveyor.Shared.FindPath(request2);
@@ -494,11 +485,9 @@ namespace Trailblazer.Tests.Pathing
             var end = new Vector3d(0, 0, 0);
 
             var request1 = FlowFieldPathRequest.Create(start, end);
-            request1.Prepare();
             var result1 = FlowFieldSurveyor.Shared.FindPath(request1);
 
             var request2 = FlowFieldPathRequest.Create(start, end);
-            request2.Prepare();
             var result2 = FlowFieldSurveyor.Shared.FindPath(request2);
 
             result1.Fields.Count.Should().Be(result2.Fields.Count);
@@ -532,7 +521,7 @@ namespace Trailblazer.Tests.Pathing
 
             var start = new Vector3d(0, 0, 2);
             var goal = new Vector3d(2, 0, 0);
-            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var request = FlowFieldPathRequest.Create(start, goal);
             var result = FlowFieldSurveyor.Shared.FindPath(request);
 
             Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
@@ -553,10 +542,10 @@ namespace Trailblazer.Tests.Pathing
 
             var start = new Vector3d(2, 0, 2);
             var goal = new Vector3d(5, 0, 5);
-            var request = FlowFieldPathRequest.Create(start, goal).Validate();
+            var request = FlowFieldPathRequest.Create(start, goal);
             var result = FlowFieldSurveyor.Shared.FindPath(request);
 
-            result.IsValid.Should().BeFalse();
+            result.HasPath.Should().BeFalse();
 
             PathManager.UnloadChart("EdgeGoalTest");
         }
@@ -574,10 +563,10 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(4, 0, 4);
             var end = new Vector3d(0, 0, 0);
 
-            var request1 = FlowFieldPathRequest.Create(start, end).Validate();
+            var request1 = FlowFieldPathRequest.Create(start, end);
             var result1 = FlowFieldSurveyor.Shared.FindPath(request1);
 
-            var request2 = FlowFieldPathRequest.Create(start, end).Validate();
+            var request2 = FlowFieldPathRequest.Create(start, end);
             var result2 = FlowFieldSurveyor.Shared.FindPath(request2);
 
             result1.Fields.Count.Should().Be(result2.Fields.Count);

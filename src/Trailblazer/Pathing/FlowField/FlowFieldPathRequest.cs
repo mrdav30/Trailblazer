@@ -61,7 +61,7 @@ namespace Trailblazer.Pathing
             Fixed64? unitSize = null,
             bool allowUnwalkable = false)
         {
-            return new FlowFieldPathRequest()
+            FlowFieldPathRequest request = new()
             {
                 Start = start,
                 End = end,
@@ -70,10 +70,33 @@ namespace Trailblazer.Pathing
                 ExtraFloodRange = DefaultExtraFloodRange,
                 MaxPathSearchRange = null
             };
+
+            if (request.Start != null && request.End != null)
+                request.Validate();
+            return request;
         }
 
-        public bool Prepare()
+        public bool Prepare(Vector3d origin, Vector3d target)
         {
+            bool endPointsFound = VoxelFinder.TryGetPathEdgeVoxels(
+                origin,
+                target,
+                out Voxel startVoxel,
+                out Voxel endVoxel);
+            if (!endPointsFound)
+                return false;
+
+            Start = startVoxel;
+            End = endVoxel;
+
+            return true;
+        }
+
+        // If path created without valid nodes, then set later, this must be called before processing the request
+        public bool Validate()
+        {
+            if (Start == null || End == null) return false;
+
             if (!MaxPathSearchRange.HasValue
                 && PathManager.GetMaxSearchSize(Start, End, out int searchSize))
             {
@@ -98,17 +121,6 @@ namespace Trailblazer.Pathing
                 ExtraFloodRange,
                 MaxPathSearchRange ?? -1
             ).CombineHashCodes();
-        }
-    }
-
-    public static class FlowFieldRequestExtensions
-    {
-        public static FlowFieldPathRequest Validate(this FlowFieldPathRequest request)
-        {
-            if (request.Prepare())
-                return request;
-
-            return default;
         }
     }
 }

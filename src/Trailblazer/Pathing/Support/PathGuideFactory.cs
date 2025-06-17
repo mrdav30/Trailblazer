@@ -1,5 +1,8 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
+using System;
+using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
 {
@@ -30,6 +33,8 @@ namespace Trailblazer.Pathing
         /// </summary>
         public static bool IsPooling => ActiveAStarGuideCount > 0 || ActiveFlowGuideCount > 0;
 
+        public static bool AnyInUse => _cachedAStarResults.CountInUse > 0 || _cachedFlowResults.CountInUse > 0;
+
         /// <summary>
         /// Attempts to remove guides from the pool that haven't been used for a configured number of frames.
         /// </summary>
@@ -40,52 +45,6 @@ namespace Trailblazer.Pathing
 
             _cachedAStarResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
             _cachedFlowResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
-        }
-
-        /// <summary>
-        /// Requests a guide of a specific type using the given origin, destination, and request parameters.
-        /// </summary>
-        /// <typeparam name="T">The guide type to return (AStarGuide or FlowFieldGuide).</typeparam>
-        /// <param name="origin">The world position to start the path from.</param>
-        /// <param name="destination">The destination world position.</param>
-        /// <param name="request">The configuration describing the path search.</param>
-        /// <param name="result">The resolved guide or default if the request was invalid.</param>
-        /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
-        public static bool RequestGuide<T>(
-            Vector3d origin, 
-            Vector3d destination, 
-            IPathRequest request, 
-            out T result) where T : IGuide
-        {
-            result = default;
-            bool success = RequestGuide(origin, destination, request, out IGuide guide);
-            if (success)
-                result = (T)guide;
-            return success;
-        }
-
-        /// <summary>
-        /// Attempts to retrieve a guide for the given path request using validated voxels internally.
-        /// </summary>
-        /// <param name="origin">The world position to start from.</param>
-        /// <param name="destination">The world destination to path toward.</param>
-        /// <param name="request">The configuration describing the path request.</param>
-        /// <param name="result">The resolved guide or null if the request was invalid.</param>
-        /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
-        public static bool RequestGuide(
-            Vector3d origin, 
-            Vector3d destination, 
-            IPathRequest request,
-            out IGuide result)
-        {
-            result = null;
-            if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startVoxel, out Voxel endVoxel))
-                return false;
-
-            request.Start = startVoxel;
-            request.End = endVoxel;
-
-            return RequestGuide(request, out result);
         }
 
         /// <summary>
@@ -112,23 +71,19 @@ namespace Trailblazer.Pathing
         /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
         public static bool RequestGuide(IPathRequest request, out IGuide result)
         {
-            result = null;
-            request.Prepare();
             if (!request.IsValid)
-                return false;
-
-            switch (request)
             {
-                case AStarPathRequest a:
-                    result = RequestAStar(a);
-                    break;
-                case FlowFieldPathRequest f:
-                    result = RequestFlowField(f);
-                    break;
-                default:
-                    break;
+                Console.WriteLine("Request is invalid, call prepare on request before requesting guide");
+                result = null;
+                return false;
             }
-
+  
+            result = request switch
+            {
+                AStarPathRequest a => RequestAStar(a),
+                FlowFieldPathRequest f => RequestFlowField(f),
+                _ => null,
+            };
             return result != null;
         }
 
@@ -141,15 +96,13 @@ namespace Trailblazer.Pathing
         {
             bool pathFound = _cachedAStarResults.TryGetOrCreate(request,
                 () => AStarSurveyor.Shared.FindPath(request),
-                out AStarSurveyResult path);
+                out AStarSurveyResult result);
 
             if (!pathFound)
                 return null;
 
-            path.MarkInUse();
-
             AStarGuide guide = new();
-            guide.Initialize(path);
+            guide.Initialize(result);
             return guide;
         }
 
@@ -162,17 +115,16 @@ namespace Trailblazer.Pathing
         {
             bool pathFound = _cachedFlowResults.TryGetOrCreate(request,
                 () => FlowFieldSurveyor.Shared.FindPath(request),
-                out FlowFieldSurveyResult path);
+                out FlowFieldSurveyResult result);
 
             // Make sure the start voxel is within the current fields collection
             // Note: for flow fields, the SpawnToken of the Start voxel is not included
-            if (!pathFound || !path.Fields.ContainsKey(request.Start.SpawnToken))
+            if (!pathFound || !result.Fields.ContainsKey(request.Start.SpawnToken))
                 return null;
 
-            path.MarkInUse();
 
             FlowFieldGuide guide = new();
-            guide.Initialize(path);
+            guide.Initialize(result);
             return guide;
         }
 
@@ -196,13 +148,38 @@ namespace Trailblazer.Pathing
             }
         }
 
-        /// <summary>
-        /// Removes all cached guides from both A* and FlowField pools.
-        /// </summary>
-        public static void FlushPools()
+        public static void InvalidateCacheFor(string chartKey)
         {
-            _cachedAStarResults.Clear();
-            _cachedFlowResults.Clear();
+            if (string.IsNullOrEmpty(chartKey)) return;
+
+            _cachedAStarResults.InvalidateWhere(r => UsesChart(r, chartKey));
+            _cachedFlowResults.InvalidateWhere(r => UsesChart(r, chartKey));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool UsesChart(ISurveyResult result, string chartId)
+        {
+            var charts = result.ChartsUtilized;
+            if (charts == null)
+                return false;
+
+            for (int i = 0; i < charts.Length; i++)
+            {
+                if (charts[i] == chartId)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Removes all cached guides from both A* and FlowField caches.
+        /// </summary>
+        public static void FlushCache(bool force = false)
+        {
+            if(!force && AnyInUse) return;
+            _cachedAStarResults.InvalidateAll();
+            _cachedFlowResults.InvalidateAll();
         }
     }
 }

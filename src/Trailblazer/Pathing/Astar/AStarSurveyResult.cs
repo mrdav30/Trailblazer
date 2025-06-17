@@ -4,7 +4,9 @@
     {
         public AStarWaypoint[] Waypoints { get; private set; }
 
-        public readonly bool IsValid => Waypoints != null && Waypoints.Length > 0;
+        public bool IsValid { get; set; }
+
+        public readonly bool HasPath => !IsValid && Waypoints != null && Waypoints.Length > 0;
 
         public bool IsInUse { get; private set; }
 
@@ -26,6 +28,12 @@
         }
 
         public void MarkInUse() => IsInUse = true;
+
+        public void MarkInvalid()
+        {
+            IsValid = false;
+            Waypoints = null;
+        }
 
         public void Release()
         {

@@ -7,7 +7,9 @@ namespace Trailblazer.Pathing
         // key = voxel spawn token, value = vector flow field
         public SwiftDictionary<int, FlowField> Fields { get; private set; }
 
-        public readonly bool IsValid => Fields != null && Fields.Count > 0;
+        public bool IsValid { get; set; }
+
+        public readonly bool HasPath => Fields != null && Fields.Count > 0;
 
         public bool IsInUse { get; private set; }
 
@@ -29,6 +31,12 @@ namespace Trailblazer.Pathing
         }
 
         public void MarkInUse() => IsInUse = true;
+
+        public void MarkInvalid()
+        {
+            IsValid = false;
+            Fields = null;
+        }
 
         public void Release()
         {

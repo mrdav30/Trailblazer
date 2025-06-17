@@ -81,6 +81,13 @@ namespace Trailblazer.Pathing
 
         #endregion
 
+        internal static void Tick(int currentFrame)
+        {
+            PathGuideFactory.CullExpiredGuides(currentFrame);
+            ProcessPendingUnloads();
+        }
+
+
         #region Navigation Map Management
 
         /// <summary>

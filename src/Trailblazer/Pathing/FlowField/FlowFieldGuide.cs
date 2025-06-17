@@ -15,7 +15,7 @@ namespace Trailblazer.Pathing
 
         public bool Initialize(FlowFieldSurveyResult surveyResult)
         {
-            if (!surveyResult.IsValid)
+            if (!surveyResult.HasPath)
                 return false;
 
             FlowMap = surveyResult;
@@ -26,7 +26,7 @@ namespace Trailblazer.Pathing
         public bool TryGetMovementDirection(Vector3d origin, out Vector3d direction)
         {
             direction = Vector3d.Zero;
-            if (!FlowMap.IsValid)
+            if (!FlowMap.HasPath)
                 return false;
 
             direction = FlowFieldSurveyor.SampleFlowVector(origin, FlowMap.Fields);
@@ -39,7 +39,8 @@ namespace Trailblazer.Pathing
 
         public bool FlowFieldContainsPosition(Vector3d origin)
         {
-            if (!GlobalGridManager.TryGetGridAndVoxel(origin, out _, out Voxel currentVoxel)
+            if (!FlowMap.HasPath
+                || !GlobalGridManager.TryGetGridAndVoxel(origin, out _, out Voxel currentVoxel)
                 || !FlowMap.Fields.ContainsKey(currentVoxel.SpawnToken))
             {
                 return false;
@@ -51,7 +52,8 @@ namespace Trailblazer.Pathing
         public bool TryGetFallbackDirection(Vector3d origin, out Vector3d fallbackDirection)
         {
             fallbackDirection = Vector3d.Zero;
-            if (!GlobalGridManager.TryGetGridAndVoxel(origin, out _, out Voxel currentVoxel)
+            if (!FlowMap.HasPath
+                || !GlobalGridManager.TryGetGridAndVoxel(origin, out _, out Voxel currentVoxel)
                 || !FlowMap.Fields.ContainsKey(currentVoxel.SpawnToken))
             {  
                 return false; 

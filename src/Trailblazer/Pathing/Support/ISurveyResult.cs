@@ -2,10 +2,12 @@
 {
     public interface ISurveyResult
     {
-        /// <summary>
-        /// Indicates whether the result is currently valid and can be used.
-        /// </summary>
         bool IsValid { get; }
+
+        /// <summary>
+        /// Indicates whether the result has a valid path and can be used.
+        /// </summary>
+        bool HasPath { get; }
 
         /// <summary>
         /// Indicates whether the result is currently in use by an agent.
@@ -26,6 +28,8 @@
         /// Marks the result as in use for the current frame or request.
         /// </summary>
         void MarkInUse();
+
+        void MarkInvalid();
 
         /// <summary>
         /// Releases the result for reuse or reinitialization.

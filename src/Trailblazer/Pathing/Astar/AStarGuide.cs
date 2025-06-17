@@ -22,7 +22,7 @@ namespace Trailblazer.Pathing
 
         public bool Initialize(AStarSurveyResult surveyResult)
         {
-            if (!surveyResult.IsValid)
+            if (!surveyResult.HasPath)
                 return false;
 
             TrailMap = surveyResult;
@@ -48,7 +48,7 @@ namespace Trailblazer.Pathing
 
         public bool HasArrived()
         {
-            return TrailMap.IsValid && CurrentWaypointIndex == ActiveWaypoints.Length - 1;
+            return TrailMap.HasPath && CurrentWaypointIndex == ActiveWaypoints.Length - 1;
         }
 
         public int GetIndex(Vector3d from)
@@ -77,7 +77,7 @@ namespace Trailblazer.Pathing
         {
             direction = Vector3d.Zero;
 
-            if (!TrailMap.IsValid)
+            if (!TrailMap.HasPath)
                 return false;
 
             int closestIndex = GetIndex(origin);
@@ -90,7 +90,7 @@ namespace Trailblazer.Pathing
 
         public Vector3d GetMovementDirection(Vector3d origin)
         {
-            if (!TrailMap.IsValid || CurrentWaypointIndex < 0 || CurrentWaypointIndex >= ActiveWaypoints.Length)
+            if (!TrailMap.HasPath || CurrentWaypointIndex < 0 || CurrentWaypointIndex >= ActiveWaypoints.Length)
                 return Vector3d.Zero;
 
             Vector3d movementDirection = ActiveWaypoints[CurrentWaypointIndex].Position;
@@ -135,7 +135,7 @@ namespace Trailblazer.Pathing
 
         public bool TryGetWaypointAt(int index, out AStarWaypoint waypoint)
         {
-            if (!TrailMap.IsValid || index < 0 || index >= ActiveWaypoints.Length)
+            if (!TrailMap.HasPath || index < 0 || index >= ActiveWaypoints.Length)
             {
                 waypoint = default;
                 return false;

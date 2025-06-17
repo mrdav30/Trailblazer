@@ -56,7 +56,7 @@ namespace Trailblazer
             FrameCount++;
             TotalTime += DeltaTime;
 
-            PathGuideFactory.CullExpiredGuides(FrameCount);
+            PathManager.Tick(FrameCount);
         }
 
         /// <summary>

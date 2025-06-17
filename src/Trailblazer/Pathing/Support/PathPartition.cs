@@ -29,11 +29,6 @@ namespace Trailblazer.Pathing
         public const int DiagonalCost = 141;
 
         /// <summary>
-        /// Default value indicating unlimited clearance in degrees.
-        /// </summary>
-        public static readonly byte DefaultDegree = byte.MaxValue;
-
-        /// <summary>
         /// Maximum clearance degree allowed for valid traversal.
         /// </summary>
         public static readonly byte DefaultDegreeCap = 8;
@@ -82,12 +77,12 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// The number of traversable connections until the nearest unwalkable voxel.
         /// </summary>
-        public byte ClearanceDegree { get; private set; }
+        private byte _clearanceRadiusInVoxels;
 
         /// <summary>
         /// Indicates whether the clearance degree has been computed and is valid.
         /// </summary>
-        public bool IsClearanceValid { get; private set; }
+        private bool _isClearanceValid;
 
         #endregion
 
@@ -122,7 +117,7 @@ namespace Trailblazer.Pathing
 
             IsWalkable = !voxel.IsBlocked;
 
-            ClearanceDegree = DefaultDegree;
+            _clearanceRadiusInVoxels = DefaultDegreeCap;
 
             IsPartitioned = true;
         }
@@ -133,6 +128,41 @@ namespace Trailblazer.Pathing
         {
             voxel.OnObstacleChange -= HandleChange;
             PathManager.PartitionPool.Release(this);
+        }
+
+        /// <summary>
+        /// Resets this partition's internal state, preparing it for reuse or reattachment.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void Reset()
+        {
+            GlobalIndex = default;
+            VoxelToken = 0;
+
+            _isClearanceValid = false;
+
+            IsWalkable = false;
+
+            Neighbors = null;
+
+            _clearanceRadiusInVoxels = DefaultDegreeCap;
+
+            _chartOwners.Clear();
+
+            IsPartitioned = false;
+        }
+
+        /// <summary>
+        /// Handles any obstacle changes on the associated voxel and invalidates clearance as needed.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void HandleChange(GridChange changeType, Voxel voxel)
+        {
+            // regardless of change type, we need to update clearance
+
+            IsWalkable = voxel != null && !voxel.IsBlocked;
+            _clearanceRadiusInVoxels = DefaultDegreeCap;
+            _isClearanceValid = false;
         }
 
         public void BindNeighbors()
@@ -157,47 +187,12 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>
-        /// Resets this partition's internal state, preparing it for reuse or reattachment.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void Reset()
-        {
-            GlobalIndex = default;
-            VoxelToken = 0;
-
-            IsClearanceValid = false;
-
-            IsWalkable = false;
-
-            Neighbors = null;
-
-            ClearanceDegree = DefaultDegree;
-
-            _chartOwners.Clear();
-
-            IsPartitioned = false;
-        }
-
-        /// <summary>
-        /// Handles any obstacle changes on the associated voxel and invalidates clearance as needed.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void HandleChange(GridChange changeType, Voxel voxel)
-        {
-            // regardless of change type, we need to update clearance
-
-            IsWalkable = !voxel.IsBlocked;
-            ClearanceDegree = DefaultDegree;
-            IsClearanceValid = false;
-        }
-
-        /// <summary>
         /// Returns the cached or recalculated clearance value to nearby obstacles.
         /// </summary>
         public byte GetNeighborClearance()
         {
             CheckClearance();
-            return ClearanceDegree;
+            return _clearanceRadiusInVoxels;
         }
 
         /// <summary>
@@ -208,12 +203,14 @@ namespace Trailblazer.Pathing
             if (unitSize <= Fixed64.Zero)
                 return false;
 
+            // Only evaluates local radial clearance from current voxel. 
+            // Does not account for directional corner blocking
             CheckClearance();
 
             // How many voxels wide our agent is, in cell terms
             int required = (unitSize / GlobalGridManager.VoxelSize).CeilToInt();
             // If there aren't at least that many free voxels around, it can't go
-            return required > ClearanceDegree;
+            return required > _clearanceRadiusInVoxels;
         }
 
         /// <summary>
@@ -224,13 +221,13 @@ namespace Trailblazer.Pathing
             if (Neighbors == null)
                 throw new InvalidOperationException("Must call BindNeighbors() before clearance.");
 
-            if (IsClearanceValid) return;
-            IsClearanceValid = true;
+            if (_isClearanceValid) return;
+            _isClearanceValid = true;
 
             if (!GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out Voxel origin)
              || !IsWalkable)
             {
-                ClearanceDegree = origin?.IsBlocked == true ? (byte)0 : DefaultDegreeCap;
+                _clearanceRadiusInVoxels = origin?.IsBlocked == true ? (byte)0 : DefaultDegreeCap;
                 return;
             }
 
@@ -271,7 +268,7 @@ namespace Trailblazer.Pathing
             }
 
             // clamp to cap so you never return > DefaultDegreeCap
-            ClearanceDegree = (byte)Math.Min(best, DefaultDegreeCap);
+            _clearanceRadiusInVoxels = (byte)Math.Min(best, DefaultDegreeCap);
 
             ClearanceQueuePool.Release(q);
             PathManager.PartitionSetPool.Release(visited);

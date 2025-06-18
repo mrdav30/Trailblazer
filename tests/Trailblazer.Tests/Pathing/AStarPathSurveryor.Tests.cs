@@ -559,5 +559,51 @@ namespace Trailblazer.Tests.Pathing
 
             PathManager.UnloadChart("HeuristicImpact");
         }
+
+        [Fact]
+        public void AStar_ShouldAvoidHighCostPartitions_WhenModifiersAreApplied()
+        {
+            // Build a 3x3 walkable grid
+            var data = new bool[1, 3, 3]
+            {
+        {
+            { true, true, true },
+            { true, true, true },
+            { true, true, true }
+        }
+            };
+
+            PathTestFactory.RegisterFromData("ModifierBias", data, Vector3d.Zero);
+
+            var start = new Vector3d(0, 0, 0);
+            var end = new Vector3d(2, 0, 2);
+
+            // Apply a high PathCostModifier to the direct diagonal path (1,0,1)
+            GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 1), out _, out Voxel diagonalVoxel);
+            diagonalVoxel.Should().NotBeNull("Expected midpoint voxel to exist");
+
+            var diagonalPartition = diagonalVoxel.GetPartitionOrDefault<PathPartition>();
+            diagonalPartition.Should().NotBeNull("Expected midpoint partition to exist");
+
+            diagonalPartition.PathCostModifier = 1000;
+
+            var request = AStarPathRequest.Create(start, end);
+
+            bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+            success.Should().BeTrue("Pathfinding should succeed even if one path is expensive");
+
+            var middlePositions = guide.ActiveWaypoints
+                .Select(p => p.Position)
+                .Skip(1)
+                .SkipFromEnd(1)
+                .ToArray();
+
+            middlePositions.Should().NotContain(new Vector3d(1, 0, 1),
+                "The path should avoid the heavily penalized partition");
+
+            PathGuideFactory.ReturnGuide(guide);
+            PathManager.UnloadChart("ModifierBias");
+        }
     }
 }

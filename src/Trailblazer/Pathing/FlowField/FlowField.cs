@@ -22,7 +22,7 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// The scalar distance from this voxel to the goal in grid steps.
         /// </summary>
-        public int DistanceToTarget { get; set; }
+        public int PathCost { get; set; }
 
         /// <summary>
         /// Indicates whether this voxel is the goal or anchor in the flow field.

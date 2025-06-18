@@ -63,10 +63,24 @@ namespace Trailblazer.Pathing
         public bool IsPartitioned { get; set; }
 
         /// <summary>
+        /// An optional cost bias for this partition. Positive values make the partition less desirable.
+        /// </summary>
+        public int PathCostModifier { get; set; }
+
+        /// <summary>
         /// The combined cost for use in pathfinding heap prioritization.
         /// </summary>
         [Transient]
-        public int PathCost { get; set; } = int.MaxValue;
+        internal int PathCost { get; set; } = int.MaxValue;
+
+        internal int PathCostTotal
+        {
+            get
+            {
+                if (PathCost == int.MaxValue) return int.MaxValue;
+                return PathCost + PathCostModifier;
+            }
+        }
 
 #nullable enable
         public PathPartition?[]? Neighbors { get; private set; }
@@ -104,8 +118,9 @@ namespace Trailblazer.Pathing
         #endregion
 
         /// <summary>
-        /// Called when this partition is attached to a voxel, initializing key references and state.
+        /// Attaches a partition to a specified <see cref="Voxel"/>, updating its state and invoking initialization logic.
         /// </summary>
+        /// <param name="voxel">The target voxel where the partition will be added.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnAddToVoxel(Voxel voxel)
         {
@@ -122,7 +137,13 @@ namespace Trailblazer.Pathing
             IsPartitioned = true;
         }
 
+        /// <summary>
+        /// Detaches a partition from a specified <see cref="Voxel"/>, resetting its state and invoking cleanup logic.
+        /// </summary>
+        /// <param name="voxel">The target voxel from which the partition will be removed.</param>
+        /// <remarks>
         /// This will call <see cref="Reset"/> as an action on release
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void OnRemoveFromVoxel(Voxel voxel)
         {
@@ -142,6 +163,8 @@ namespace Trailblazer.Pathing
             _isClearanceValid = false;
 
             IsWalkable = false;
+
+            PathCostModifier = 0;
 
             Neighbors = null;
 

@@ -42,11 +42,7 @@ namespace Trailblazer.Pathing
 
         private FlowFieldPathRequest _request;
 
-        /// <summary>
-        /// The distance from the end node to the starting node during flood fill.
-        /// Used to define the flood radius.
-        /// </summary>
-        private int _distanceToStart;
+        private int _startDistanceMetric;
 
         /// <summary>
         /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
@@ -70,7 +66,7 @@ namespace Trailblazer.Pathing
                 _marked.Clear();
                 _chartKeys.Clear();
 
-                _distanceToStart = 0;
+                _startDistanceMetric = 0;
 
                 // Start from the end and move towards the start voxel
                 targetPart.PathCost = 0;
@@ -97,17 +93,23 @@ namespace Trailblazer.Pathing
 
             int iterations = 0;
             int searchSize = _request.MaxPathSearchRange.Value;
-            while (_heap.RemoveFirst(out PathPartition current) 
+            int maxFloodRange = 0;
+
+            while (_heap.RemoveFirst(out PathPartition current)
                 && iterations++ < searchSize)
             {
                 // Check if we found our way to the start voxel
-                if (!targetReached && current.VoxelToken == _request.Start.SpawnToken)
+                if (!targetReached)
                 {
-                    _distanceToStart = current.PathCost;
-                    targetReached = true;
-                }
+                    if (current.VoxelToken == _request.Start.SpawnToken)
+                    {
+                        _startDistanceMetric = current.PathCost;
+                        maxFloodRange = current.PathCost + _request.ExtraFloodRange;
+                        targetReached = true;
+                    }
 
-                if (targetReached && current.PathCost >= _distanceToStart + _request.ExtraFloodRange)
+                }
+                else if (current.PathCost >= maxFloodRange)
                     break;
 
                 AnalyzeNeighborDistance(current, _request.UnitSize);
@@ -138,16 +140,16 @@ namespace Trailblazer.Pathing
                 if (_heap.IsClosed(nPart) || nPart.IsImpassable(unitSize))
                     continue;
 
-                int neighborToll = current.PathCost + 1;
+                int newCost = current.PathCost + 1;
                 if (!_heap.Contains(nPart))
                 {
-                    nPart.PathCost = neighborToll;
+                    nPart.PathCost = newCost;
                     _heap.Add(nPart);
                     _marked.Add(nPart);
                 }
-                else if (neighborToll < nPart.PathCost)
+                else if (nPart.PathCost > newCost)
                 {
-                    nPart.PathCost = neighborToll;
+                    nPart.PathCost = newCost;
                     _heap.SortUp(nPart);
                 }
             }
@@ -174,7 +176,7 @@ namespace Trailblazer.Pathing
                 }
             };
 
-            Fixed64 totalDistance = _distanceToStart + Fixed64.One; // total flood radius
+            Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
             foreach (PathPartition current in _marked)
             {
                 // end voxel shouldn't be marked, but just in case...
@@ -184,47 +186,50 @@ namespace Trailblazer.Pathing
                 FlowField currentFlow = new()
                 {
                     GlobalIndex = current.GlobalIndex,
-                    DistanceToTarget = current.PathCost
+                    PathCost = current.PathCostTotal
                 };
 
                 // Go through all neighbours and find the one with the lowest distance
                 PathPartition minPartition = null;
-                int minDistance = int.MaxValue;
+                int minCost = int.MaxValue;
                 for (int i = 0; i < current.Neighbors.Length; i++)
                 {
                     PathPartition nPart = current.Neighbors[i];
                     // check closed heap version to ensure neighbor was part of flood phase
-                    if (nPart == null || !nPart.IsWalkable || !_heap.IsClosed(nPart)) 
+                    if (nPart == null || !_heap.IsClosed(nPart))
                         continue;
 
-                    // safe comparison for monotonic wavefront
-                    int dist = nPart.PathCost - current.PathCost;
-                    if (dist < minDistance)
+                    int dist = nPart.PathCostTotal - current.PathCost;
+                    if (dist < minCost)
                     {
                         minPartition = nPart;
-                        minDistance = dist;
+                        minCost = dist;
                     }
                 }
 
                 // If we found a valid neighbour, point in its direction by applying distance-weighted blending
                 if (minPartition != null)
                 {
-                    // closer = alpha → 1
-                    Fixed64 alpha = FixedMath.Clamp01((totalDistance - currentFlow.DistanceToTarget) / totalDistance); 
-
-                    // blend with the lowest-cost vector
-                    Vector3d direct = (_request.End.WorldPosition - current.VoxelPosition).Normalize();
                     Vector3d field = (minPartition.VoxelPosition - current.VoxelPosition).Normalize();
-
-                    Vector3d blended = field * alpha + direct * (Fixed64.One - alpha);
-
-                    currentFlow.Direction = blended.Normalize();
+                    if (minCost == 1)
+                        currentFlow.Direction = field;
+                    else
+                    {
+                        // blend with the lowest-cost vector
+                        Vector3d direct = (_request.End.WorldPosition - current.VoxelPosition).Normalize();
+                        // closer = alpha → 1
+                        Fixed64 alpha = FixedMath.Clamp01((totalDistance - current.PathCost) / totalDistance);
+                        Vector3d blended = field * alpha + direct * (Fixed64.One - alpha);
+                        currentFlow.Direction = blended.Normalize();
+                    }
                 }
 
                 result.Add(current.VoxelToken, currentFlow);
-                current.PathCost = int.MaxValue;
                 _chartKeys.AddRange(current.ChartOwners);
             }
+
+            foreach (PathPartition part in _marked)
+                part.PathCost = int.MaxValue;
 
             return result;
         }

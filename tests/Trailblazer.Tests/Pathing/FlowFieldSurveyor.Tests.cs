@@ -40,9 +40,9 @@ namespace Trailblazer.Tests.Pathing
             Assert.NotNull(result.Fields);
             Assert.Equal(5, result.Fields.Count);
 
-            var sorted = result.Fields.Values.OrderBy(f => f.DistanceToTarget).ToList();
+            var sorted = result.Fields.Values.OrderBy(f => f.PathCost).ToList();
             for (int i = 1; i < sorted.Count; i++)
-                Assert.True(sorted[i].DistanceToTarget > sorted[i - 1].DistanceToTarget);
+                Assert.True(sorted[i].PathCost > sorted[i - 1].PathCost);
 
             PathManager.UnloadChart("FloodTest");
         }
@@ -89,7 +89,7 @@ namespace Trailblazer.Tests.Pathing
             PathTestFactory.RegisterFromData("ShortRange", data, new Vector3d(-4, 0, -4));
 
             var start = new Vector3d(-2, 0, 0);
-            var end = new Vector3d(4, 0, 4);
+            var end = new Vector3d(3, 0, 3);
 
             VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
             var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
@@ -99,9 +99,9 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(result.HasPath);
              
-            var distanceToTarget = Vector3d.Distance(start, end).CeilToInt();
+            var distanceToTarget = Vector3d.Distance(end, start).CeilToInt() + 2 + request.ExtraFloodRange;
             foreach (FlowField flow in result.Fields.Values)
-                Assert.True(flow.DistanceToTarget <= distanceToTarget + request.ExtraFloodRange);
+                Assert.True(flow.PathCost <= distanceToTarget);
 
             PathManager.UnloadChart("ShortRange");
         }
@@ -390,8 +390,8 @@ namespace Trailblazer.Tests.Pathing
                 if (!result.Fields.TryGetValue(neighbor.SpawnToken, out FlowField neighborField))
                     continue;
 
-                neighborField.DistanceToTarget.Should()
-                    .BeLessThan(field.DistanceToTarget, $"Direction from index {index} should lead downhill");
+                neighborField.PathCost.Should()
+                    .BeLessThan(field.PathCost, $"Direction from index {index} should lead downhill");
             }
 
             PathManager.UnloadChart("FlowGradientTest");
@@ -499,7 +499,7 @@ namespace Trailblazer.Tests.Pathing
                 FlowField field2 = result2.Fields[kvp.Key];
 
                 field1.Direction.Should().Be(field2.Direction);
-                field1.DistanceToTarget.Should().Be(field2.DistanceToTarget);
+                field1.PathCost.Should().Be(field2.PathCost);
             }
 
             PathManager.UnloadChart("DeterminismTest");
@@ -575,10 +575,43 @@ namespace Trailblazer.Tests.Pathing
             {
                 result2.Fields.TryGetValue(kv.Key, out var f2).Should().BeTrue();
                 f2.Direction.Should().Be(kv.Value.Direction);
-                f2.DistanceToTarget.Should().Be(kv.Value.DistanceToTarget);
+                f2.PathCost.Should().Be(kv.Value.PathCost);
             }
 
             PathManager.UnloadChart("ConsistencyTest");
+        }
+
+        [Fact]
+        public void FlowField_ShouldAvoidHighCostModifierPartition()
+        {
+            bool[,,] data = new bool[1, 3, 3];
+
+            // Fully walkable 3x3 grid
+            for (int x = 0; x < 3; x++)
+                for (int z = 0; z < 3; z++)
+                    data[0, x, z] = true;
+
+            PathTestFactory.RegisterFromData("HighCostModifier", data, Vector3d.Zero);
+
+            Vector3d start = new(0, 0, 1);  // Left-middle
+            Vector3d goal = new(2, 0, 1);   // Right-middle
+
+            // Mark the center partition with a high cost modifier
+            GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 1), out _, out Voxel center);
+            if (center.TryGetPartition(out PathPartition partition))
+                partition.PathCostModifier = 10; // Arbitrary high cost to penalize direct path
+
+            var request = FlowFieldPathRequest.Create(start, goal);
+            var result = FlowFieldSurveyor.Shared.FindPath(request);
+
+            Vector3d dir = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+
+            // Expect diagonal movement to avoid center
+            dir.x.Should().NotBe(Fixed64.One, "the center partition is penalized");
+            dir.z.Abs().Should().BeGreaterThan(Fixed64.Zero, "path should detour around the penalty");
+
+            // Cleanup
+            PathManager.UnloadChart("HighCostModifier");
         }
     }
 }

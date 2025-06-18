@@ -271,8 +271,9 @@ namespace Trailblazer.Pathing
                 _request.End.WorldPosition,
                 _request.Heuristic);
 
-            // Calculate the total cost (fCost) by adding the heuristic cost (hCost) to the movement cost (gCost)
-            partition.PathCost = movementCost + heuristicCost;
+            // Calculate the total cost (fCost) by adding modifier to the heuristic cost (hCost)
+            // and to the movement cost (gCost)
+            partition.PathCost = partition.PathCostModifier + movementCost + heuristicCost;
         }
 
         /// <summary>

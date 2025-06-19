@@ -353,7 +353,7 @@ namespace Trailblazer.Pathing
         /// <returns>The direction vector, or <c>Vector3d.Zero</c> if no field exists.</returns>
         public static Vector3d GetFlowDirection(Vector3d position, SwiftDictionary<int, FlowField> fields)
         {
-            if (GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
+            if (GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
             {
                 if (fields.TryGetValue(voxel.SpawnToken, out FlowField field))
                     return field.Direction;
@@ -363,7 +363,7 @@ namespace Trailblazer.Pathing
 
         public static FlowField GetFlowField(Vector3d position, SwiftDictionary<int, FlowField> fields)
         {
-            if (GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
+            if (GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
             {
                 if (fields.TryGetValue(voxel.SpawnToken, out FlowField field))
                     return field;

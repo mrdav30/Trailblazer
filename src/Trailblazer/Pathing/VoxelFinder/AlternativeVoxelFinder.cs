@@ -74,7 +74,7 @@ namespace Trailblazer.Pathing
                     _worldPos.x + _direction.x,
                     Fixed64.Zero,
                     _worldPos.z + _direction.z);
-                if (GlobalGridManager.TryGetGridAndVoxel(checkPosition, out _, out Voxel checkVoxel))
+                if (GlobalGridManager.TryGetVoxel(checkPosition, out Voxel checkVoxel))
                 {
                     if (CheckPathVoxel(checkVoxel, out nextVoxel))
                         return true;

@@ -613,5 +613,34 @@ namespace Trailblazer.Tests.Pathing
             // Cleanup
             PathManager.UnloadChart("HighCostModifier");
         }
+
+        [Fact]
+        public void FlowField_ShouldNotIncludeDiagonal_WhenLegsAreBlocked()
+        {
+            bool[,,] data = new bool[1, 3, 3];
+
+            // All walkable except the two "leg" cells
+            for (int x = 0; x < 3; x++)
+                for (int z = 0; z < 3; z++)
+                    data[0, x, z] = true;
+
+            data[0, 1, 0] = false; // West leg
+            data[0, 0, 1] = false; // South leg
+
+            PathTestFactory.RegisterFromData("BlockedDiagonal", data, Vector3d.Zero);
+
+            Vector3d start = new(0, 0, 0);
+            Vector3d goal = new(2, 0, 2);
+
+            var request = FlowFieldPathRequest.Create(start, goal);
+            request.Validate();
+
+            var result = FlowFieldSurveyor.Shared.FindPath(request);
+
+            result.IsValid.Should().BeFalse();
+            result.Fields.Should().BeNull();
+
+            PathManager.UnloadChart("BlockedDiagonal");
+        }
     }
 }

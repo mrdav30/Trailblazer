@@ -26,7 +26,7 @@ namespace Trailblazer.Pathing
             out Voxel targetVoxel)
         {
             targetVoxel = default;
-            if (!GlobalGridManager.TryGetGridAndVoxel(origin, out _, out originVoxel))
+            if (!GlobalGridManager.TryGetVoxel(origin, out originVoxel))
             {
                 Console.WriteLine($"Unable to find a valid start voxel for {origin}");
                 return false;
@@ -39,7 +39,7 @@ namespace Trailblazer.Pathing
                 originVoxel = closestNeighbor;
             }
 
-            if (!GlobalGridManager.TryGetGridAndVoxel(target, out _, out targetVoxel))
+            if (!GlobalGridManager.TryGetVoxel(target, out targetVoxel))
             {
                 Console.WriteLine($"Unable to find a valid end voxel for {target}");
                 return false;
@@ -86,7 +86,7 @@ namespace Trailblazer.Pathing
             out Voxel targetVoxel, 
             bool allowUnwalkable = false)
         {
-            if (!GlobalGridManager.TryGetGridAndVoxel(target, out _, out targetVoxel))
+            if (!GlobalGridManager.TryGetVoxel(target, out targetVoxel))
             {
                 // If null, it is off the grid. Raycast back onto grid for closest viable voxel to the destination.
                 foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(target, origin))
@@ -125,7 +125,7 @@ namespace Trailblazer.Pathing
             out Voxel originVoxel, 
             bool allowUnwalkable = false)
         {
-            if (!GlobalGridManager.TryGetGridAndVoxel(origin, out _, out originVoxel))
+            if (!GlobalGridManager.TryGetVoxel(origin, out originVoxel))
             {
                 // If null, it is off the grid. Raycast back onto grid for closest viable voxel to the destination.
                 foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(origin, target))
@@ -176,7 +176,7 @@ namespace Trailblazer.Pathing
             out Voxel targetVoxel, 
             bool allowUnwalkable = false)
         {
-            if (GlobalGridManager.TryGetGridAndVoxel(origin, out _, out targetVoxel)
+            if (GlobalGridManager.TryGetVoxel(origin, out targetVoxel)
                 && (!targetVoxel.IsBlocked || allowUnwalkable)
                 && targetVoxel.TryGetPartition(out PathPartition retPart)
                 && !retPart.IsImpassable(unitSize))

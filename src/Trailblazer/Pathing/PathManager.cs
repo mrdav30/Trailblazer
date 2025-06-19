@@ -5,13 +5,10 @@ using SwiftCollections.Pool;
 using SwiftCollections;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using GridForge.Spatial;
 using System.Threading;
 using System.Linq;
-using System.Collections.Concurrent;
-using System.Xml.Linq;
 
 namespace Trailblazer.Pathing
 {
@@ -159,7 +156,7 @@ namespace Trailblazer.Pathing
             SwiftQueue<string> existingChartKeys = new(); // TODO: pool
             foreach (Vector3d pos in chart.GetWalkablePositions())
             {
-                if (!GlobalGridManager.TryGetGridAndVoxel(pos, out _, out Voxel voxel))
+                if (!GlobalGridManager.TryGetVoxel(pos, out Voxel voxel))
                     continue;
 
                 if (!voxel.TryGetPartition(out PathPartition part))
@@ -216,7 +213,7 @@ namespace Trailblazer.Pathing
             SwiftHashSet<PathPartition> stillActivePartitions = PartitionSetPool.Rent();
             foreach (Vector3d position in chart.GetWalkablePositions())
             {
-                if (!GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel))
+                if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
                     continue;
 
                 if (voxel.TryGetPartition(out PathPartition part) && part.BelongsTo(chartKey))

@@ -40,7 +40,7 @@ namespace Trailblazer.Pathing
         public bool FlowFieldContainsPosition(Vector3d origin)
         {
             if (!FlowMap.HasPath
-                || !GlobalGridManager.TryGetGridAndVoxel(origin, out _, out Voxel currentVoxel)
+                || !GlobalGridManager.TryGetVoxel(origin, out Voxel currentVoxel)
                 || !FlowMap.Fields.ContainsKey(currentVoxel.SpawnToken))
             {
                 return false;
@@ -53,7 +53,7 @@ namespace Trailblazer.Pathing
         {
             fallbackDirection = Vector3d.Zero;
             if (!FlowMap.HasPath
-                || !GlobalGridManager.TryGetGridAndVoxel(origin, out _, out Voxel currentVoxel)
+                || !GlobalGridManager.TryGetVoxel(origin, out Voxel currentVoxel)
                 || !FlowMap.Fields.ContainsKey(currentVoxel.SpawnToken))
             {  
                 return false; 

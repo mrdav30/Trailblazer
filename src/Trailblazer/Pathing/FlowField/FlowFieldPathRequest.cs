@@ -46,8 +46,8 @@ namespace Trailblazer.Pathing
             Fixed64? unitSize = null,
             bool allowUnwalkable = false)
         {
-            if (!GlobalGridManager.TryGetGridAndVoxel(start, out _, out Voxel startVoxel)
-                || !GlobalGridManager.TryGetGridAndVoxel(end, out _, out Voxel endVoxel))
+            if (!GlobalGridManager.TryGetVoxel(start, out Voxel startVoxel)
+                || !GlobalGridManager.TryGetVoxel(end, out Voxel endVoxel))
             {
                 return default;
             }

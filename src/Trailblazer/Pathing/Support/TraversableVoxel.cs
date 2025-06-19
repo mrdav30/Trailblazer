@@ -8,6 +8,6 @@ namespace Trailblazer.Pathing
 
         public PathPartition Partition { get; set; }
 
-        public LinearDirection Direction { get; set; }
+        public SpatialDirection Direction { get; set; }
     }
 }

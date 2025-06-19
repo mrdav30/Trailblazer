@@ -140,75 +140,54 @@ namespace Trailblazer.Pathing
             if (!_meta.TryGetValue(current.VoxelToken, out AStarVoxelMeta data))
                 return false;
 
-            // Loop through all perpendicular neighbors first
-            int cost = data.MovementCost + PathPartition.StraightCost;
-            foreach (LinearDirection dir in PathManager.PerpendicularDirections)
+            if (TryProcessDirection(current, PathManager.PerpendicularDirections, data.MovementCost + PathPartition.StraightCost))
+                return true;
+            if(TryProcessDirection(current, PathManager.DiagonalDirections, data.MovementCost + PathPartition.DiagonalCost, true))
+                return true;
+
+            return false;
+        }
+
+        private bool TryProcessDirection(PathPartition current, SpatialDirection[] directions, int cost, bool checkEdges = false)
+        {
+            foreach (SpatialDirection dir in directions)
             {
-                // pull the neighbor partition directly out of our baked neighbors[]
-                PathPartition nPart = current.Neighbors[(int)dir];
-                if (nPart is null || _heap.IsClosed(nPart) || nPart.IsImpassable(_request.UnitSize))
-                    continue;  // either out-of-bounds or blocked
-
-                if (ProcessNeighbor(current, nPart, cost))
-                    return true;
-            }
-
-            cost = data.MovementCost + PathPartition.DiagonalCost;
-            foreach (LinearDirection dir in PathManager.DiagonalDirections)
-            {
-                // 1) pull the neighbor partition directly
-                PathPartition nPart = current.Neighbors[(int)dir];
-                if (nPart is null || _heap.IsClosed(nPart) || nPart.IsImpassable(_request.UnitSize))
-                    continue;  // either out-of-bounds or blocked
-
-                // 2) get the raw offset for this dir
-                (int dx, int dy, int dz) = GlobalGridManager.DirectionOffsets[(int)dir];
-
-                // 3) ensure each single‐axis “leg” is passable
-                bool blocked = false;
-
-                // X‐leg
-                if (dx != 0)
-                {
-                    LinearDirection legDir = dx > 0
-                               ? LinearDirection.North
-                               : LinearDirection.West;
-                    PathPartition legPart = current.Neighbors[(int)legDir];
-                    if (legPart == null || legPart.IsImpassable(_request.UnitSize))
-                        blocked = true;
-                }
-
-                // Y‐leg
-                if (!blocked && dy != 0)
-                {
-                    LinearDirection legDir = dy > 0
-                               ? LinearDirection.Above
-                               : LinearDirection.Below;
-                    PathPartition legPart = current.Neighbors[(int)legDir];
-                    if (legPart == null || legPart.IsImpassable(_request.UnitSize))
-                        blocked = true;
-                }
-
-                // Z‐leg
-                if (!blocked && dz != 0)
-                {
-                    LinearDirection legDir = dz > 0
-                               ? LinearDirection.East
-                               : LinearDirection.South;
-                    PathPartition legPart = current.Neighbors[(int)legDir];
-                    if (legPart == null || legPart.IsImpassable(_request.UnitSize))
-                        blocked = true;
-                }
-
-                if (blocked)
+                PathPartition neighbor = current.Neighbors[(int)dir];
+                if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request.UnitSize))
                     continue;
 
-                // 4) finally, process the neighbor
-                if (ProcessNeighbor(current, nPart, cost))
+                if (checkEdges && !HasValidDiagonalLegs(current, dir))
+                    continue;
+
+                if (ProcessNeighbor(current, neighbor, cost))
                     return true;
             }
 
             return false;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool HasValidDiagonalLegs(PathPartition current, SpatialDirection diagonal)
+        {
+            (int dx, int dy, int dz) = GlobalGridManager.DirectionOffsets[(int)diagonal];
+
+            if (dx != 0 && !IsLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
+                return false;
+
+            if (dy != 0 && !IsLegClear(current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below))
+                return false;
+
+            if (dz != 0 && !IsLegClear(current, dz > 0 ? SpatialDirection.East : SpatialDirection.South))
+                return false;
+
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool IsLegClear(PathPartition current, SpatialDirection legDir)
+        {
+            PathPartition leg = current.Neighbors[(int)legDir];
+            return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request.UnitSize);
         }
 
         /// <summary>

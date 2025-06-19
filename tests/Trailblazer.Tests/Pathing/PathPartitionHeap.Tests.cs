@@ -16,11 +16,11 @@ namespace Trailblazer.Tests.Pathing
             };
 
             heap.Add(voxel);
-            Assert.Equal(1u, heap.Count);
+            Assert.Equal(1u, heap.HeapCount);
 
             heap.RemoveFirst(out PathPartition removed);
             Assert.Equal(voxel, removed);
-            Assert.Equal(0u, heap.Count);
+            Assert.Equal(0u, heap.HeapCount);
 
             // Should not leave stale data
             Assert.Null(heap.PeekAt(0));

@@ -61,18 +61,18 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// All 26 neighbor directions excluding None.
         /// </summary>
-        public static readonly LinearDirection[] AllDirections =
-            Enum.GetValues(typeof(LinearDirection))
-                .Cast<LinearDirection>()
-                .Where(d => d != LinearDirection.None)
+        public static readonly SpatialDirection[] AllDirections =
+            Enum.GetValues(typeof(SpatialDirection))
+                .Cast<SpatialDirection>()
+                .Where(d => d != SpatialDirection.None)
                 .ToArray();
 
-        public static readonly LinearDirection[] PerpendicularDirections
+        public static readonly SpatialDirection[] PerpendicularDirections
           = AllDirections
               .Where(IsPerpendicularNeighbor)
               .ToArray();
 
-        public static readonly LinearDirection[] DiagonalDirections
+        public static readonly SpatialDirection[] DiagonalDirections
           = AllDirections
               .Where(IsDiagonalNeighbor)
               .ToArray();
@@ -272,7 +272,7 @@ namespace Trailblazer.Pathing
         /// <summary>Returns walkable neighbors for a specific voxel.</summary>
         public static IEnumerable<TraversableVoxel> WalkableNeighborsOf(Voxel voxel)
         {
-            foreach (LinearDirection dir in AllDirections)
+            foreach (SpatialDirection dir in AllDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
                 if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
@@ -292,7 +292,7 @@ namespace Trailblazer.Pathing
         /// <summary>Returns all straight (orthogonal) neighbors.</summary>
         public static IEnumerable<TraversableVoxel> WalkablePerpendicularNeighborsOf(Voxel voxel)
         {
-            foreach (LinearDirection dir in PerpendicularDirections)
+            foreach (SpatialDirection dir in PerpendicularDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
                 if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
@@ -312,7 +312,7 @@ namespace Trailblazer.Pathing
         /// <summary>Returns all diagonal neighbors, avoiding edge-cutting.</summary>
         public static IEnumerable<TraversableVoxel> WalkableDiagonalNeighborsOf(Voxel voxel)
         {
-            foreach (LinearDirection dir in DiagonalDirections)
+            foreach (SpatialDirection dir in DiagonalDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
                 if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
@@ -324,14 +324,14 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// For any multi-axis step (dx,dy,dz), ensures each single-axis "leg" is walkable.
         /// </summary>
-        private static bool HasBlockedEdgeNeighbor(Voxel voxel, LinearDirection dir)
+        private static bool HasBlockedEdgeNeighbor(Voxel voxel, SpatialDirection dir)
         {
-            var (dx, dy, dz) = GlobalGridManager.DirectionOffsets[(int)dir];
+            (int dx, int dy, int dz) = GlobalGridManager.DirectionOffsets[(int)dir];
             // build legs for each non-zero axis
-            foreach (var (ax, ay, az) in new[] { (dx, 0, 0), (0, dy, 0), (0, 0, dz) })
+            foreach ((int ax, int ay, int az) in new[] { (dx, 0, 0), (0, dy, 0), (0, 0, dz) })
             {
                 if (ax == 0 && ay == 0 && az == 0) continue;
-                if (!voxel.TryGetNeighborFromOffset((ax, ay, az), out var edgeVoxel)
+                if (!voxel.TryGetNeighborFromOffset((ax, ay, az), out Voxel edgeVoxel)
                     || edgeVoxel.IsBlocked
                     || !edgeVoxel.HasPartition<PathPartition>())
                 {
@@ -342,13 +342,13 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>True for pure axis-aligned directions.</summary>
-        public static bool IsPerpendicularNeighbor(LinearDirection dir) =>
-            dir == LinearDirection.West || dir == LinearDirection.East ||
-            dir == LinearDirection.North || dir == LinearDirection.South ||
-            dir == LinearDirection.Above || dir == LinearDirection.Below;
+        public static bool IsPerpendicularNeighbor(SpatialDirection dir) =>
+            dir == SpatialDirection.West || dir == SpatialDirection.East ||
+            dir == SpatialDirection.North || dir == SpatialDirection.South ||
+            dir == SpatialDirection.Above || dir == SpatialDirection.Below;
 
         /// <summary>True for any diagonal step (multiple axes).</summary>
-        public static bool IsDiagonalNeighbor(LinearDirection dir)
+        public static bool IsDiagonalNeighbor(SpatialDirection dir)
         {
             var (dx, dy, dz) = GlobalGridManager.DirectionOffsets[(int)dir];
             int axes = (dx != 0 ? 1 : 0) + (dy != 0 ? 1 : 0) + (dz != 0 ? 1 : 0);

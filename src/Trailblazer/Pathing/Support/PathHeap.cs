@@ -1,5 +1,6 @@
 ﻿using SwiftCollections;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Remoting.Contexts;
@@ -43,12 +44,14 @@ namespace Trailblazer.Pathing
 
         private readonly SwiftDictionary<PathPartition, PathHeapMeta> _meta;
 
-        public uint CurrentHeapVersion = 0;
+        public uint CurrentHeapVersion { get; private set; } = 0;
 
         /// <summary>
         /// Gets the number of items in the heap.
         /// </summary>
-        public uint Count { get; private set; }
+        public uint HeapCount { get; private set; }
+
+        public int ClosedCount => _meta.Count;
 
         /// <summary>
         /// Current total capacity of the heap.
@@ -71,16 +74,16 @@ namespace Trailblazer.Pathing
             if (Contains(item))
                 return;
 
-            if (Count + 1 > _items.Length)
+            if (HeapCount + 1 > _items.Length)
                 Resize(_items.Length * 2);
 
             PathHeapMeta meta = new()
             {
-                HeapIndex = Count,
+                HeapIndex = HeapCount,
                 HeapVersion = CurrentHeapVersion
             };
             _meta[item] = meta;
-            _items[Count++] = item;
+            _items[HeapCount++] = item;
             SortUp(item);
         }
 
@@ -92,8 +95,8 @@ namespace Trailblazer.Pathing
             int newCapacity = newSize <= DefaultCapacity ? DefaultCapacity : newSize;
 
             PathPartition[] newArray = new PathPartition[newCapacity];
-            if (Count > 0)
-                Array.Copy(_items, 0, newArray, 0, Count);
+            if (HeapCount > 0)
+                Array.Copy(_items, 0, newArray, 0, HeapCount);
             _items = newArray;
 
             _meta.EnsureCapacity(newCapacity);
@@ -111,7 +114,7 @@ namespace Trailblazer.Pathing
         /// <returns>The removed PathPartition.</returns>
         public bool RemoveFirst(out PathPartition result)
         {
-            if (Count == 0)
+            if (HeapCount == 0)
             {
                 result = null;
                 return false;
@@ -121,19 +124,19 @@ namespace Trailblazer.Pathing
             if (!_meta.TryGetValue(result, out PathHeapMeta meta))
                 return false;
 
-            Count--;
+            HeapCount--;
 
-            if (Count == 0)
+            if (HeapCount == 0)
                 _items[0] = null;
             else
             {
-                PathPartition temp = _items[Count];
+                PathPartition temp = _items[HeapCount];
                 PathHeapMeta tempMeta = _meta[temp];
                 _items[0] = temp;
                 tempMeta.HeapIndex = 0;
-                _items[Count] = null;
+                _items[HeapCount] = null;
 
-                if (Count > 1)
+                if (HeapCount > 1)
                     SortDown(temp);
             }
 
@@ -192,7 +195,7 @@ namespace Trailblazer.Pathing
         {
             PathHeapMeta meta = _meta[item];
             uint index = meta.HeapIndex;
-            while (index > 0 && index < Count)
+            while (index > 0 && index < HeapCount)
             {
                 uint parentIndex = (index - 1) / 2;
                 PathPartition parent = _items[parentIndex];
@@ -218,10 +221,10 @@ namespace Trailblazer.Pathing
                 uint right = left + 1;
                 uint lowest = index;
 
-                if (left < Count && _items[left].PathCost < _items[lowest].PathCost)
+                if (left < HeapCount && _items[left].PathCost < _items[lowest].PathCost)
                     lowest = left;
 
-                if (right < Count && _items[right].PathCost < _items[lowest].PathCost)
+                if (right < HeapCount && _items[right].PathCost < _items[lowest].PathCost)
                     lowest = right;
 
                 if (lowest == index)
@@ -252,12 +255,22 @@ namespace Trailblazer.Pathing
             metaB.HeapIndex = indexA;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public IEnumerable<PathPartition> EnumerateClosed()
+        {
+            foreach (KeyValuePair<PathPartition, PathHeapMeta> kvp in _meta)
+            {
+                if (kvp.Value.ClosedHeapVersion == CurrentHeapVersion)
+                    yield return kvp.Key;
+            }
+        }
+
         /// <summary>
         /// Clears the heap quickly by incrementing the heap version.
         /// </summary>
         public void FastClear()
         {
-            Count = 0;
+            HeapCount = 0;
             CurrentHeapVersion++;
             _meta.Clear();
         }
@@ -267,7 +280,7 @@ namespace Trailblazer.Pathing
         /// </summary>
         public void Reset()
         {
-            Count = 0;
+            HeapCount = 0;
             CurrentHeapVersion = 1;
             _meta.Clear();
             _meta.TrimExcess();

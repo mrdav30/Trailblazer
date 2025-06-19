@@ -196,8 +196,8 @@ namespace Trailblazer.Pathing
 
             GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out var voxel);
 
-            // for each of the 26 LinearDirection values (except None)
-            foreach (LinearDirection dir in PathManager.AllDirections)
+            // for each of the 26 SpatialDirection values (except None)
+            foreach (SpatialDirection dir in PathManager.AllDirections)
             {
                 // use Voxel’s cached neighbor lookup
                 if (voxel.TryGetNeighborFromDirection(dir, out var neighborVoxel, useCache: true)

@@ -60,14 +60,14 @@ namespace Trailblazer.Pathing
             closestNeighbor = null;
 
             // prefer straight neighbors since they cost less
-            foreach (LinearDirection dir in PathManager.PerpendicularDirections)
+            foreach (SpatialDirection dir in PathManager.PerpendicularDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor) 
                     || !closestNeighbor.HasPartition<PathPartition>()) continue;
                 return true;
             }
 
-            foreach (LinearDirection dir in PathManager.DiagonalDirections)
+            foreach (SpatialDirection dir in PathManager.DiagonalDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
                     || !closestNeighbor.HasPartition<PathPartition>()) continue;

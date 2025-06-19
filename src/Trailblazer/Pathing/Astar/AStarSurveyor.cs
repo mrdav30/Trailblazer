@@ -162,7 +162,7 @@ namespace Trailblazer.Pathing
                     continue;  // either out-of-bounds or blocked
 
                 // 2) get the raw offset for this dir
-                var (dx, dy, dz) = GlobalGridManager.DirectionOffsets[(int)dir];
+                (int dx, int dy, int dz) = GlobalGridManager.DirectionOffsets[(int)dir];
 
                 // 3) ensure each single‐axis “leg” is passable
                 bool blocked = false;
@@ -170,10 +170,10 @@ namespace Trailblazer.Pathing
                 // X‐leg
                 if (dx != 0)
                 {
-                    var legDir = dx > 0
+                    LinearDirection legDir = dx > 0
                                ? LinearDirection.North
                                : LinearDirection.West;
-                    var legPart = current.Neighbors[(int)legDir];
+                    PathPartition legPart = current.Neighbors[(int)legDir];
                     if (legPart == null || legPart.IsImpassable(_request.UnitSize))
                         blocked = true;
                 }
@@ -181,10 +181,10 @@ namespace Trailblazer.Pathing
                 // Y‐leg
                 if (!blocked && dy != 0)
                 {
-                    var legDir = dy > 0
+                    LinearDirection legDir = dy > 0
                                ? LinearDirection.Above
                                : LinearDirection.Below;
-                    var legPart = current.Neighbors[(int)legDir];
+                    PathPartition legPart = current.Neighbors[(int)legDir];
                     if (legPart == null || legPart.IsImpassable(_request.UnitSize))
                         blocked = true;
                 }
@@ -192,10 +192,10 @@ namespace Trailblazer.Pathing
                 // Z‐leg
                 if (!blocked && dz != 0)
                 {
-                    var legDir = dz > 0
+                    LinearDirection legDir = dz > 0
                                ? LinearDirection.East
                                : LinearDirection.South;
-                    var legPart = current.Neighbors[(int)legDir];
+                    PathPartition legPart = current.Neighbors[(int)legDir];
                     if (legPart == null || legPart.IsImpassable(_request.UnitSize))
                         blocked = true;
                 }

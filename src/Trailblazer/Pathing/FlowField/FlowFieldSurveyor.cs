@@ -199,6 +199,34 @@ namespace Trailblazer.Pathing
                     if (nPart == null || !_heap.IsClosed(nPart))
                         continue;
 
+                    // Prevent cutting corners: enforce diagonal leg clearance
+                    (int dx, _, int dz) = GlobalGridManager.DirectionOffsets[i];
+
+                    if (Math.Abs(dx) + Math.Abs(dz) == 2) // 2D diagonal (e.g. NW, SE)
+                    {
+                        // Ensure both legs are closed
+                        bool blocked = false;
+
+                        if (dx != 0)
+                        {
+                            LinearDirection legDir = dx > 0 ? LinearDirection.North : LinearDirection.West;
+                            PathPartition legPart = current.Neighbors[(int)legDir];
+                            if (legPart == null || !_heap.IsClosed(legPart) || legPart.IsImpassable(_request.UnitSize))
+                                blocked = true;
+                        }
+
+                        if (dz != 0 && !blocked)
+                        {
+                            LinearDirection legDir = dz > 0 ? LinearDirection.East : LinearDirection.South;
+                            PathPartition legPart = current.Neighbors[(int)legDir];
+                            if (legPart == null || !_heap.IsClosed(legPart) || legPart.IsImpassable(_request.UnitSize))
+                                blocked = true;
+                        }
+
+                        if (blocked)
+                            continue;
+                    }
+
                     int dist = nPart.PathCostTotal - current.PathCost;
                     if (dist < minCost)
                     {

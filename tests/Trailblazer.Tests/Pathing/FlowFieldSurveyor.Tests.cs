@@ -642,5 +642,73 @@ namespace Trailblazer.Tests.Pathing
 
             PathManager.UnloadChart("BlockedDiagonal");
         }
+
+        [Fact]
+        public void FlowField_ShouldFlow_Upward_WhenTargetIsAbove()
+        {
+            bool[,,] data = new bool[3, 1, 1];  // y, x, z
+
+            // Vertical stack of 3 walkable voxels
+            for (int y = 0; y < 3; y++)
+                data[y, 0, 0] = true;
+
+            PathTestFactory.RegisterFromData("VerticalAscend", data, Vector3d.Zero);
+
+            var request = FlowFieldPathRequest.Create(new Vector3d(0, 0, 0), new Vector3d(0, 2, 0));
+            var result = FlowFieldSurveyor.Shared.FindPath(request);
+
+            var dir = FlowFieldSurveyor.SampleFlowVector(new Vector3d(0, 0, 0), result.Fields);
+            dir.Should().Be(Vector3d.Up, "flow should direct agent upward");
+
+            PathManager.UnloadChart("VerticalAscend");
+        }
+
+        [Fact]
+        public void FlowField_ShouldFlow_Downward_WhenTargetIsBelow()
+        {
+            bool[,,] data = new bool[3, 1, 1];  // y, x, z
+
+            for (int y = 0; y < 3; y++)
+                data[y, 0, 0] = true;
+
+            PathTestFactory.RegisterFromData("VerticalDescend", data, Vector3d.Zero);
+
+            var request = FlowFieldPathRequest.Create(new Vector3d(0, 2, 0), new Vector3d(0, 0, 0));
+            var result = FlowFieldSurveyor.Shared.FindPath(request);
+
+            var dir = FlowFieldSurveyor.SampleFlowVector(new Vector3d(0, 2, 0), result.Fields);
+            dir.Should().Be(Vector3d.Down, "flow should direct agent downward");
+
+            PathManager.UnloadChart("VerticalDescend");
+        }
+
+        [Fact]
+        public void FlowField_ShouldHandle_ZigZagStairs()
+        {
+            bool[,,] data = new bool[3, 3, 3];  // y, x, z
+
+            // Create a stair-like path:
+            // (0,0,0) → (1,0,0) → (1,1,0) → (2,1,0)
+            data[0, 0, 0] = true;
+            data[0, 1, 0] = true;
+            data[1, 1, 0] = true;
+            data[2, 1, 0] = true;
+
+            PathTestFactory.RegisterFromData("ZigZagStairs", data, Vector3d.Zero);
+
+            var request = FlowFieldPathRequest.Create(new Vector3d(0, 0, 0), new Vector3d(1, 2, 0));
+            var result = FlowFieldSurveyor.Shared.FindPath(request);
+
+            var dir0 = FlowFieldSurveyor.SampleFlowVector(new Vector3d(0, 0, 0), result.Fields);
+            dir0.Should().Be(new Vector3d(1, 0, 0), "first step should be right");
+
+            var dir1 = FlowFieldSurveyor.SampleFlowVector(new Vector3d(1, 0, 0), result.Fields);
+            dir1.Should().Be(new Vector3d(0, 1, 0), "second step should go up");
+
+            var dir2 = FlowFieldSurveyor.SampleFlowVector(new Vector3d(1, 1, 0), result.Fields);
+            dir2.Should().Be(Vector3d.Up, "final step should go up");
+
+            PathManager.UnloadChart("ZigZagStairs");
+        }
     }
 }

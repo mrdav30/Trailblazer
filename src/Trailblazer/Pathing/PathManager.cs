@@ -342,18 +342,10 @@ namespace Trailblazer.Pathing
         }
 
         /// <summary>True for pure axis-aligned directions.</summary>
-        public static bool IsPerpendicularNeighbor(SpatialDirection dir) =>
-            dir == SpatialDirection.West || dir == SpatialDirection.East ||
-            dir == SpatialDirection.North || dir == SpatialDirection.South ||
-            dir == SpatialDirection.Above || dir == SpatialDirection.Below;
+        public static bool IsPerpendicularNeighbor(SpatialDirection dir) => (int)dir < 6;
 
         /// <summary>True for any diagonal step (multiple axes).</summary>
-        public static bool IsDiagonalNeighbor(SpatialDirection dir)
-        {
-            var (dx, dy, dz) = GlobalGridManager.DirectionOffsets[(int)dir];
-            int axes = (dx != 0 ? 1 : 0) + (dy != 0 ? 1 : 0) + (dz != 0 ? 1 : 0);
-            return axes >= 2;
-        }
+        public static bool IsDiagonalNeighbor(SpatialDirection dir) => (int)dir >= 6;
 
         #endregion
 

@@ -6,6 +6,7 @@ using System;
 using SwiftCollections.Pool;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
 {
@@ -32,12 +33,6 @@ namespace Trailblazer.Pathing
 
         private readonly PathHeap _heap = new();
 
-        /// <summary>
-        /// Tracks partitions that were affected during the flood fill.
-        /// These will be used to construct the final flow field result.
-        /// </summary>
-        private readonly SwiftHashSet<PathPartition> _marked = new();
-
         private readonly SwiftHashSet<string> _chartKeys = new();
 
         private FlowFieldPathRequest _request;
@@ -63,7 +58,6 @@ namespace Trailblazer.Pathing
                 _request = request;
 
                 _heap.FastClear();
-                _marked.Clear();
                 _chartKeys.Clear();
 
                 _startDistanceMetric = 0;
@@ -73,7 +67,7 @@ namespace Trailblazer.Pathing
                 _heap.Add(targetPart);
                 _chartKeys.AddRange(targetPart.ChartOwners);
 
-                if (!FloodPath() || _marked.Count <= 0)
+                if (!FloodPath())
                     return FlowFieldSurveyResult.Empty;
 
                 SwiftDictionary<int, FlowField> flowFields = GenerateFlowFields();
@@ -112,7 +106,7 @@ namespace Trailblazer.Pathing
                 else if (current.PathCost >= maxFloodRange)
                     break;
 
-                AnalyzeNeighborDistance(current, _request.UnitSize);
+                AnalyzeNeighborDistance(current);
 
                 _heap.SetClosed(current);
             }
@@ -125,34 +119,60 @@ namespace Trailblazer.Pathing
         /// Ensures the wavefront expands in an optimal order.
         /// </summary>
         /// <param name="current">The current path partition being evaluated.</param>
-        /// <param name="unitSize">The size of the navigating agent.</param>
-        private void AnalyzeNeighborDistance(PathPartition current, Fixed64 unitSize)
+        private void AnalyzeNeighborDistance(PathPartition current)
         {
-            // Check each straight line neighbour of this voxel (no diagonals)
-            // We will only ever visit every voxel once as we are always visiting voxels in the most efficient order
-            foreach (LinearDirection dir in PathManager.PerpendicularDirections)
-            {
-                // pull the neighbor partition directly out of our baked neighbors[]
-                PathPartition nPart = current.Neighbors[(int)dir];
-                if (nPart is null)
-                    continue;  // either out-of-bounds or blocked
+            TryProcessDirection(current, PathManager.PerpendicularDirections);
+            TryProcessDirection(current, PathManager.DiagonalDirections, true);
+        }
 
-                if (_heap.IsClosed(nPart) || nPart.IsImpassable(unitSize))
+        private void TryProcessDirection(PathPartition current, SpatialDirection[] directions, bool checkEdges = false)
+        {
+            foreach (SpatialDirection dir in directions)
+            {
+                PathPartition neighbor = current.Neighbors[(int)dir];
+                if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request.UnitSize))
+                    continue;
+
+                if (checkEdges && !HasValidDiagonalLegs(current, dir))
                     continue;
 
                 int newCost = current.PathCost + 1;
-                if (!_heap.Contains(nPart))
+
+                if (!_heap.Contains(neighbor))
                 {
-                    nPart.PathCost = newCost;
-                    _heap.Add(nPart);
-                    _marked.Add(nPart);
+                    neighbor.PathCost = newCost;
+                    _heap.Add(neighbor);
                 }
-                else if (nPart.PathCost > newCost)
+                else if (neighbor.PathCost > newCost)
                 {
-                    nPart.PathCost = newCost;
-                    _heap.SortUp(nPart);
+                    neighbor.PathCost = newCost;
+                    _heap.SortUp(neighbor);
                 }
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool HasValidDiagonalLegs(PathPartition current, SpatialDirection diagonal)
+        {
+            (int dx, int dy, int dz) = GlobalGridManager.DirectionOffsets[(int)diagonal];
+
+            if (dx != 0 && !IsLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
+                return false;
+
+            if (dy != 0 && !IsLegClear(current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below))
+                return false;
+
+            if (dz != 0 && !IsLegClear(current, dz > 0 ? SpatialDirection.East : SpatialDirection.South))
+                return false;
+
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool IsLegClear(PathPartition current, SpatialDirection legDir)
+        {
+            PathPartition leg = current.Neighbors[(int)legDir];
+            return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request.UnitSize);
         }
 
         /// <summary>
@@ -162,32 +182,24 @@ namespace Trailblazer.Pathing
         /// <returns>A dictionary of directional flow field data indexed by voxel spawn tokens.</returns>
         private SwiftDictionary<int, FlowField> GenerateFlowFields()
         {
-            SwiftDictionary<int, FlowField> result = new(_marked.Count + 1)
-            {
-                // Ensure end voxel is include, it shouldn't point anywhere
-                {
-                    _request.End.SpawnToken,
-                    new FlowField()
-                    {
-                        Direction = Vector3d.Zero,
-                        GlobalIndex = _request.End.GlobalIndex,
-                        IsGoal = true
-                    }
-                }
-            };
+            SwiftDictionary<int, FlowField> result = new(_heap.ClosedCount);
+           // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
 
-            Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
-            foreach (PathPartition current in _marked)
+            foreach (PathPartition current in _heap.EnumerateClosed())
             {
-                // end voxel shouldn't be marked, but just in case...
-                if (current.VoxelToken == _request.End.SpawnToken)
-                    continue;
-
                 FlowField currentFlow = new()
                 {
                     GlobalIndex = current.GlobalIndex,
                     PathCost = current.PathCostTotal
                 };
+
+                if (current.VoxelToken == _request.End.SpawnToken)
+                {
+                    // Ensure end voxel is include, it shouldn't point anywhere
+                    currentFlow.IsGoal = true;
+                    result.Add(current.VoxelToken, currentFlow);
+                    continue;
+                }
 
                 // Go through all neighbours and find the one with the lowest distance
                 PathPartition minPartition = null;
@@ -199,64 +211,33 @@ namespace Trailblazer.Pathing
                     if (nPart == null || !_heap.IsClosed(nPart))
                         continue;
 
-                    // Prevent cutting corners: enforce diagonal leg clearance
-                    (int dx, _, int dz) = GlobalGridManager.DirectionOffsets[i];
+                    if (i > 6 && !HasValidDiagonalLegs(current, (SpatialDirection)i))
+                        continue;
 
-                    if (Math.Abs(dx) + Math.Abs(dz) == 2) // 2D diagonal (e.g. NW, SE)
-                    {
-                        // Ensure both legs are closed
-                        bool blocked = false;
-
-                        if (dx != 0)
-                        {
-                            LinearDirection legDir = dx > 0 ? LinearDirection.North : LinearDirection.West;
-                            PathPartition legPart = current.Neighbors[(int)legDir];
-                            if (legPart == null || !_heap.IsClosed(legPart) || legPart.IsImpassable(_request.UnitSize))
-                                blocked = true;
-                        }
-
-                        if (dz != 0 && !blocked)
-                        {
-                            LinearDirection legDir = dz > 0 ? LinearDirection.East : LinearDirection.South;
-                            PathPartition legPart = current.Neighbors[(int)legDir];
-                            if (legPart == null || !_heap.IsClosed(legPart) || legPart.IsImpassable(_request.UnitSize))
-                                blocked = true;
-                        }
-
-                        if (blocked)
-                            continue;
-                    }
-
-                    int dist = nPart.PathCostTotal - current.PathCost;
-                    if (dist < minCost)
+                    int cost = nPart.PathCostTotal;
+                    if (cost < minCost)
                     {
                         minPartition = nPart;
-                        minCost = dist;
+                        minCost = nPart.PathCostTotal;
                     }
                 }
 
                 // If we found a valid neighbour, point in its direction by applying distance-weighted blending
                 if (minPartition != null)
                 {
-                    Vector3d field = (minPartition.VoxelPosition - current.VoxelPosition).Normalize();
-                    if (minCost == 1)
-                        currentFlow.Direction = field;
+                    Vector3d raw = minPartition.VoxelPosition - current.VoxelPosition;
+
+                    if (raw == Vector3d.Zero)
+                        currentFlow.Direction = Vector3d.Zero;
                     else
-                    {
-                        // blend with the lowest-cost vector
-                        Vector3d direct = (_request.End.WorldPosition - current.VoxelPosition).Normalize();
-                        // closer = alpha → 1
-                        Fixed64 alpha = FixedMath.Clamp01((totalDistance - current.PathCost) / totalDistance);
-                        Vector3d blended = field * alpha + direct * (Fixed64.One - alpha);
-                        currentFlow.Direction = blended.Normalize();
-                    }
+                        currentFlow.Direction = raw.Normalize();
                 }
 
                 result.Add(current.VoxelToken, currentFlow);
                 _chartKeys.AddRange(current.ChartOwners);
             }
 
-            foreach (PathPartition part in _marked)
+            foreach (PathPartition part in _heap.EnumerateClosed())
                 part.PathCost = int.MaxValue;
 
             return result;

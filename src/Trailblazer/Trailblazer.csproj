@@ -71,7 +71,7 @@
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="GridForge" Version="1.1.5">
+		<PackageReference Include="GridForge" Version="1.1.6">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>

@@ -2,9 +2,7 @@
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
-using SwiftCollections.Pool;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -30,6 +28,20 @@ namespace Trailblazer.Pathing
     /// </summary>
     public class AStarSurveyor
     {
+        #region Constants
+
+        /// <summary>
+        /// Cost applied for straight (orthogonal) pathfinding moves.
+        /// </summary>
+        public const int StraightCost = 100;
+
+        /// <summary>
+        /// Cost applied for diagonal pathfinding moves.
+        /// </summary>
+        public const int DiagonalCost = 141;
+
+        #endregion
+
         #region Singleton Instances
 
         /// <summary>
@@ -95,8 +107,12 @@ namespace Trailblazer.Pathing
                 _heap.Add(startPartition);
 
                 if (!TracePath())
+                {
+                    foreach (PathPartition part in _heap.EnumerateClosed())
+                        part.PathCost = 0;
                     return AStarSurveyResult.Empty;
-
+                }
+                    
                 BuildRawPath();
                 BuildWaypoints();
 
@@ -140,9 +156,9 @@ namespace Trailblazer.Pathing
             if (!_meta.TryGetValue(current.VoxelToken, out AStarVoxelMeta data))
                 return false;
 
-            if (TryProcessDirection(current, PathManager.PerpendicularDirections, data.MovementCost + PathPartition.StraightCost))
+            if (TryProcessDirection(current, PathManager.PerpendicularDirections, data.MovementCost + StraightCost))
                 return true;
-            if(TryProcessDirection(current, PathManager.DiagonalDirections, data.MovementCost + PathPartition.DiagonalCost, true))
+            if(TryProcessDirection(current, PathManager.DiagonalDirections, data.MovementCost + DiagonalCost, true))
                 return true;
 
             return false;
@@ -245,7 +261,7 @@ namespace Trailblazer.Pathing
                 NextTrailIndex = nextTrailCoordinates
             });
 
-            int heuristicCost = PathPartition.CalculateHeuristic(
+            int heuristicCost = CalculateHeuristic(
                 partition.VoxelPosition,
                 _request.End.WorldPosition,
                 _request.Heuristic);
@@ -336,6 +352,47 @@ namespace Trailblazer.Pathing
             });
             end.PathCost = int.MaxValue;
             _chartKeys.AddRange(end.ChartOwners);
+        }
+
+        /// <summary>
+        /// Calculates the heuristic cost for the current voxel based on the target voxel and the heuristic method used.
+        /// This implementation takes into account the X, Y, and Z axes for pathfinding.
+        /// </summary>
+        public static int CalculateHeuristic(
+            Vector3d currentVoxel,
+            Vector3d targetVoxel,
+            HeuristicMethod heuristicMethod)
+        {
+            Fixed64 heuristicCost = Fixed64.MAX_VALUE;
+
+            // Calculate the absolute distance in each axis
+            Vector3d dst = Vector3d.Abs(currentVoxel - targetVoxel);
+
+            switch (heuristicMethod)
+            {
+                case HeuristicMethod.Manhattan:
+                    // Sum the distances and multiply by 100 for the heuristic cost
+                    heuristicCost = (dst.x + dst.y + dst.z) * StraightCost;
+                    break;
+                case HeuristicMethod.Octile:
+                    // Find the max of the three distances
+                    Fixed64 maxXY = FixedMath.Max(dst.x, dst.y);
+                    Fixed64 max = FixedMath.Max(maxXY, dst.z);
+                    // Calculate the heuristic cost using the max and sum of other distances
+                    heuristicCost = (max * DiagonalCost) + ((dst.x + dst.y + dst.z - max - max) * StraightCost);
+                    break;
+                case HeuristicMethod.Euclidean:
+                    // Calculate the squared distance and find the square root
+                    Fixed64 d = dst.x * dst.x + dst.y * dst.y + dst.z * dst.z;
+                    d = FixedMath.Sqrt(d);
+                    // Multiply the result by 100 for the heuristic cost
+                    heuristicCost = d * StraightCost;
+                    break;
+                default:
+                    break;
+            }
+
+            return heuristicCost.CeilToInt();
         }
 
         /// <summary>

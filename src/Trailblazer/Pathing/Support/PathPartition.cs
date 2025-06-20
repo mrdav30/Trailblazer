@@ -4,8 +4,6 @@ using GridForge.Spatial;
 using SwiftCollections;
 using SwiftCollections.Pool;
 using System;
-using System.Collections.Generic;
-using System.Drawing;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
@@ -17,16 +15,6 @@ namespace Trailblazer.Pathing
     public class PathPartition : IVoxelPartition
     {
         #region Constants
-
-        /// <summary>
-        /// Cost applied for straight (orthogonal) pathfinding moves.
-        /// </summary>
-        public const int StraightCost = 100;
-
-        /// <summary>
-        /// Cost applied for diagonal pathfinding moves.
-        /// </summary>
-        public const int DiagonalCost = 141;
 
         /// <summary>
         /// Maximum clearance degree allowed for valid traversal.
@@ -318,48 +306,7 @@ namespace Trailblazer.Pathing
         public bool BelongsTo(string mapName) => _chartOwners.Contains(mapName);
 
         #endregion
-
-        /// <summary>
-        /// Calculates the heuristic cost for the current voxel based on the target voxel and the heuristic method used.
-        /// This implementation takes into account the X, Y, and Z axes for pathfinding.
-        /// </summary>
-        public static int CalculateHeuristic(
-            Vector3d currentVoxel,
-            Vector3d targetVoxel,
-            HeuristicMethod heuristicMethod)
-        {
-            Fixed64 heuristicCost = Fixed64.MAX_VALUE;
-
-            // Calculate the absolute distance in each axis
-            Vector3d dst = Vector3d.Abs(currentVoxel - targetVoxel);
-
-            switch (heuristicMethod)
-            {
-                case HeuristicMethod.Manhattan:
-                    // Sum the distances and multiply by 100 for the heuristic cost
-                    heuristicCost = (dst.x + dst.y + dst.z) * StraightCost;
-                    break;
-                case HeuristicMethod.Octile:
-                    // Find the max of the three distances
-                    Fixed64 maxXY = FixedMath.Max(dst.x, dst.y);
-                    Fixed64 max = FixedMath.Max(maxXY, dst.z);
-                    // Calculate the heuristic cost using the max and sum of other distances
-                    heuristicCost = (max * DiagonalCost) + ((dst.x + dst.y + dst.z - max - max) * StraightCost);
-                    break;
-                case HeuristicMethod.Euclidean:
-                    // Calculate the squared distance and find the square root
-                    Fixed64 d = dst.x * dst.x + dst.y * dst.y + dst.z * dst.z;
-                    d = FixedMath.Sqrt(d);
-                    // Multiply the result by 100 for the heuristic cost
-                    heuristicCost = d * StraightCost;
-                    break;
-                default:
-                    break;
-            }
-
-            return heuristicCost.CeilToInt();
-        }
-
+ 
         public override int GetHashCode() => VoxelToken;
     }
 }

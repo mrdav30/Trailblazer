@@ -3,8 +3,6 @@ using GridForge.Grids;
 using SwiftCollections;
 using System.Threading;
 using System;
-using SwiftCollections.Pool;
-using System.Collections.Concurrent;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
@@ -68,7 +66,11 @@ namespace Trailblazer.Pathing
                 _chartKeys.AddRange(targetPart.ChartOwners);
 
                 if (!FloodPath())
+                {
+                    foreach (PathPartition part in _heap.EnumerateClosed())
+                        part.PathCost = 0;
                     return FlowFieldSurveyResult.Empty;
+                }
 
                 SwiftDictionary<int, FlowField> flowFields = GenerateFlowFields();
                 string[] chartsUsed = _chartKeys.ToArray();

@@ -2,10 +2,17 @@
 using GridForge.Grids;
 using SwiftCollections;
 using System;
-using System.Net;
 
 namespace Trailblazer.Pathing
 {
+    public enum HeuristicMethod
+    {
+        Manhattan,
+        Octile,
+        Euclidean
+        //Chebyshev?
+    }
+
     /// <summary>
     /// A pathfinding request used for A* trail generation, including options for climb height, heuristic weighting,
     /// and path smoothing. Implements value-based comparison and hashing for guide pooling.

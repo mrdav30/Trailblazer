@@ -218,8 +218,8 @@ namespace Trailblazer.Navigation
         /// <param name="isRequestingJump">Whether the navigator intends to jump during traversal.</param>
         /// <param name="allowUnwalkable">Whether the navigator can traverse to an unwalkable voxel.</param>
         public virtual void ApplyGuidedTravelRequest(
-            Vector3d destination,
             IPathRequest pathRequest,
+            Vector3d destination,
             TrekRate? rate = null,
             bool? isRequestingJump = null,
             bool? allowUnwalkable = null)
@@ -232,10 +232,10 @@ namespace Trailblazer.Navigation
 
             IsManuallyControlled = false;
 
-            if (pathRequest.IsValid)
-                Steering.ApplyPathRequest(pathRequest);
-            else
-                Steering.ApplyPathRequest(Position, destination, UnitSize, pathRequest);
+            if (!pathRequest.IsValid)
+                pathRequest.TryPrepare(Position, destination, UnitSize);
+
+            Steering.ApplyPathRequest(pathRequest, destination);
         }
 
         /// <summary>

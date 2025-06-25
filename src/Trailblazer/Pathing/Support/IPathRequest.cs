@@ -10,17 +10,10 @@ namespace Trailblazer.Pathing
     /// </summary>
     public interface IPathRequest
     {
-        Vector3d Origin { get; }
-
         /// <summary>
         /// Most recently evaluated grid voxel under the agent.
         /// </summary>
         Voxel StartNode { get; }
-
-        /// <summary>
-        /// The final destination this agent is attempting to reach.
-        /// </summary>
-        Vector3d Destination { get; }
 
         /// <summary>
         /// Final grid voxel targeted as the destination.
@@ -61,11 +54,13 @@ namespace Trailblazer.Pathing
         /// </summary>
         public int RequestCacheKey { get; }
 
-        bool TryPrepare(Vector3d origin, Vector3d destination, Fixed64 unitSize);
+        bool TryPrepare(Vector3d origin, Vector3d destination, Fixed64? unitSize);
 
-        bool TrySetOrigin(Vector3d origin, bool resetSearchRange = true);
+        bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false);
 
-        bool TrySetDestination(Vector3d destination, bool resetSearchRange = true);
+        bool TrySetDestination(Vector3d destination, bool resetSearchRange = false);
+
+        bool TrySetUnitSize(Fixed64 unitSize);
 
         bool Validate();
     }

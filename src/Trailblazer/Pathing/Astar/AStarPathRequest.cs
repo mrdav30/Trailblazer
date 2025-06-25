@@ -56,8 +56,6 @@ namespace Trailblazer.Pathing
 
             AStarPathRequest request = new()
             {
-                _origin = origin,
-                _destination = destination,
                 _startNode = startNode,
                 _endNode = endNode,
                 UnitSize = unitSize,

@@ -98,8 +98,11 @@ namespace Trailblazer.Tests.Navigation.Steering
             steer.OnInitialize(agent);
 
             var request = AStarPathRequest.DefaultRequest;
-            steer.ApplyPathRequest(agent.Position, agent.Position, Fixed64.One, request);
+            request.TryPrepare(agent.Position, agent.Position, Fixed64.One);
 
+            request.IsValid.Should().BeTrue();
+
+            steer.ApplyPathRequest(request);
             steer.OnSimulate(agent);
 
             steer.IsAtDestination.Should().BeTrue();
@@ -268,11 +271,14 @@ namespace Trailblazer.Tests.Navigation.Steering
             steer.OnInitialize(agent);
 
             var request = AStarPathRequest.DefaultRequest;
-            steer.ApplyPathRequest(agent.Position, new Vector3d(1, 0, 0), Fixed64.One, request);
+            request.TryPrepare(agent.Position, new Vector3d(1, 0, 0), Fixed64.One);
 
+            request.IsValid.Should().BeTrue();
+
+            steer.ApplyPathRequest(request);
             steer.SetTrailGuide(waypointGuide.Object);
-
             steer.OnSimulate(agent);
+
             waypointGuide.Verify(x => x.AdvanceWaypoint(), Times.AtLeastOnce);
 
             PathManager.UnloadChart("AdvanceWaypoint");
@@ -334,6 +340,106 @@ namespace Trailblazer.Tests.Navigation.Steering
             steer.ShouldMove.Should().BeTrue();
 
             PathManager.UnloadChart("LargeSize");
+        }
+
+        [Fact]
+        public void NavSteering_Should_Repath_When_UnitSizeChanges()
+        {
+            var data = new bool[1, 3, 1];
+            for (int i = 0; i < 3; i++)
+                data[0, i, 0] = true;
+
+            PathTestFactory.RegisterFromData("RepathUnitSize", data, Vector3d.Zero);
+
+            var steer = new NavSteering();
+            var agent = new MockSteerAgent(Vector3d.Zero);
+            steer.OnInitialize(agent);
+
+            var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0));
+            request.TryPrepare(agent.Position, new Vector3d(2, 0, 0), Fixed64.One);
+
+            request.IsValid.Should().BeTrue();
+
+            steer.ApplyPathRequest(request);
+            steer.OnSimulate(agent);  // simulate one frame normally
+
+            // simulate a size change mid-path
+            request.TrySetUnitSize((Fixed64)2);
+            steer.OnSimulate(agent);
+
+            steer.CurrentRequest.UnitSize.Should().Be((Fixed64)2);
+
+            PathManager.UnloadChart("RepathUnitSize");
+        }
+
+        [Fact]
+        public void NavSteering_Should_Handle_MissingPathGracefully()
+        {
+            var data = new bool[1, 3, 2]
+            {
+                {
+                    { true, true },
+                    { false, true },
+                    { true, true }
+                }
+            };
+
+            PathTestFactory.RegisterFromData("MissingPath", data, Vector3d.Zero);
+
+            var steer = new NavSteering();
+            var agent = new MockSteerAgent(Vector3d.Zero);
+            steer.OnInitialize(agent);
+
+            var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0));
+            steer.ApplyPathRequest(request);
+
+            // get a guide
+            steer.OnSimulate(agent);
+
+            steer.TrailGuide.Should().NotBeNull();
+
+            // simulate lost guide
+            steer.SetTrailGuide(null);
+            steer.OnSimulate(agent);
+
+            // shouldn't throw, should just move with Vector3d.Zero
+            steer.TargetDirection.Should().Be(Vector3d.Zero);
+
+            PathManager.UnloadChart("MissingPath");
+        }
+
+        [Fact]
+        public void NavSteering_Should_ReturnGuide_OnArrive()
+        {
+            var data = new bool[1, 3, 2]
+            {
+                {
+                    { true, true },
+                    { false, true },
+                    { true, true }
+                }
+            };
+            PathTestFactory.RegisterFromData("ReturnGuide", data, Vector3d.Zero);
+
+            var steer = new NavSteering();
+            var agent = new MockSteerAgent(Vector3d.Zero);
+            steer.OnInitialize(agent);
+
+            var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0));
+            steer.ApplyPathRequest(request);
+
+            // simulate successful guide retrieval
+            steer.OnSimulate(agent);
+
+            var guide = steer.TrailGuide;
+            guide.Should().NotBeNull();
+
+            steer.Arrive();
+
+            steer.TrailGuide.Should().BeNull();
+            steer.ShouldMove.Should().BeFalse();
+
+            PathManager.UnloadChart("ReturnGuide");
         }
     }
 }

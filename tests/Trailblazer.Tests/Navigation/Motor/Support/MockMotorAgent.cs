@@ -2,10 +2,17 @@
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 
-namespace Trailblazer.Tests
+namespace Trailblazer.Tests.Navigation.Motor
 {
-    public class MockAgent : Navigator
+    public class MockMotorAgent : Navigator
     {
+        public MockMotorAgent() { }
+
+        public MockMotorAgent(Vector3d position)
+        {
+            Setup(position);
+        }
+
         public override void Initialize(TraversalCondition surfaceState)
         {
             base.Initialize(surfaceState);

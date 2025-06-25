@@ -18,23 +18,29 @@ namespace Trailblazer.Pathing
         /// <param name="target">The end position in world space.</param>
         /// <param name="originVoxel">Resolved start voxel.</param>
         /// <param name="targetVoxel">Resolved end voxel.</param>
+        /// <param name="unitSize">The size of the unit in voxels</param>
         /// <returns>True if both voxels were resolved successfully; otherwise, false.</returns>
         public static bool TryGetPathEdgeVoxels(
-            Vector3d origin, 
-            Vector3d target, 
-            out Voxel originVoxel, 
-            out Voxel targetVoxel)
+            Vector3d origin,
+            Vector3d target,
+            out Voxel originVoxel,
+            out Voxel targetVoxel,
+            Fixed64? unitSize = null)
         {
             targetVoxel = default;
+            bool checkPassable = unitSize.HasValue && unitSize.Value != GlobalGridManager.VoxelSize;
+
             if (!GlobalGridManager.TryGetVoxel(origin, out originVoxel))
             {
                 Console.WriteLine($"Unable to find a valid start voxel for {origin}");
                 return false;
             }
 
-            if (originVoxel.IsBlocked || !originVoxel.HasPartition<PathPartition>())
+            if (originVoxel.IsBlocked
+                || !originVoxel.TryGetPartition(out PathPartition originPart)
+                || checkPassable && originPart.IsImpassable(unitSize.Value))
             {
-                if (!TryGetClosestWalkableNeighbor(originVoxel, out Voxel closestNeighbor))
+                if (!TryGetClosestWalkableVoxel(originVoxel, out Voxel closestNeighbor, unitSize))
                     return false;
                 originVoxel = closestNeighbor;
             }
@@ -45,9 +51,11 @@ namespace Trailblazer.Pathing
                 return false;
             }
 
-            if (targetVoxel.IsBlocked || !targetVoxel.HasPartition<PathPartition>())
+            if (targetVoxel.IsBlocked
+                || !targetVoxel.TryGetPartition(out PathPartition targetPart)
+                || checkPassable && targetPart.IsImpassable(unitSize.Value))
             {
-                if (!TryGetClosestWalkableNeighbor(targetVoxel, out Voxel closestNeighbor))
+                if (!TryGetClosestWalkableVoxel(targetVoxel, out Voxel closestNeighbor, unitSize))
                     return false;
                 targetVoxel = closestNeighbor;
             }
@@ -55,22 +63,28 @@ namespace Trailblazer.Pathing
             return true;
         }
 
-        public static bool TryGetClosestWalkableNeighbor(Voxel voxel, out Voxel closestNeighbor)
+        public static bool TryGetClosestWalkableVoxel(
+            Voxel voxel,
+            out Voxel closestNeighbor,
+            Fixed64? unitSize = null)
         {
             closestNeighbor = null;
+            bool checkPassable = unitSize.HasValue && unitSize.Value != GlobalGridManager.VoxelSize;
 
             // prefer straight neighbors since they cost less
             foreach (SpatialDirection dir in PathManager.PerpendicularDirections)
             {
-                if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor) 
-                    || !closestNeighbor.HasPartition<PathPartition>()) continue;
+                if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
+                    || !closestNeighbor.TryGetPartition(out PathPartition part)
+                    || checkPassable && part.IsImpassable(unitSize.Value)) continue;
                 return true;
             }
 
             foreach (SpatialDirection dir in PathManager.DiagonalDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
-                    || !closestNeighbor.HasPartition<PathPartition>()) continue;
+                    || !closestNeighbor.TryGetPartition(out PathPartition part)
+                    || checkPassable && part.IsImpassable(unitSize.Value)) continue;
                 return true;
             }
 
@@ -81,11 +95,16 @@ namespace Trailblazer.Pathing
         /// Finds closest next-best-voxel also when destination is off invalid
         /// </summary>
         public static bool GetEndVoxel(
-            Vector3d origin, 
-            Vector3d target, 
-            out Voxel targetVoxel, 
-            bool allowUnwalkable = false)
+            Vector3d origin,
+            Vector3d target,
+            out Voxel targetVoxel,
+            bool allowUnwalkable = false,
+            Fixed64? unitSize = null)
         {
+            // if size requires consideration, use next-best-voxel system
+            if (unitSize.HasValue && unitSize.Value != GlobalGridManager.VoxelSize)
+                return GetClosestVoxelForSize(origin, target, unitSize.Value, out targetVoxel, allowUnwalkable);
+
             if (!GlobalGridManager.TryGetVoxel(target, out targetVoxel))
             {
                 // If null, it is off the grid. Raycast back onto grid for closest viable voxel to the destination.
@@ -107,7 +126,7 @@ namespace Trailblazer.Pathing
 
             if (targetVoxel.IsBlocked)
             {
-                if (allowUnwalkable && TryGetClosestWalkableNeighbor(targetVoxel, out _))
+                if (allowUnwalkable && TryGetClosestWalkableVoxel(targetVoxel, out _))
                     return true;
 
                 return StarCast(target, out targetVoxel);
@@ -120,11 +139,16 @@ namespace Trailblazer.Pathing
         /// Finds closest next-best-voxel
         /// </summary>
         public static bool GetStartVoxel(
-            Vector3d origin, 
-            Vector3d target, 
-            out Voxel originVoxel, 
-            bool allowUnwalkable = false)
+            Vector3d origin,
+            Vector3d target,
+            out Voxel originVoxel,
+            bool allowUnwalkable = false,
+            Fixed64? unitSize = null)
         {
+            // if size requires consideration, use next-best-voxel system
+            if (unitSize.HasValue && unitSize.Value != GlobalGridManager.VoxelSize)
+                return GetClosestVoxelForSize(origin, target, unitSize.Value, out originVoxel, allowUnwalkable);
+
             if (!GlobalGridManager.TryGetVoxel(origin, out originVoxel))
             {
                 // If null, it is off the grid. Raycast back onto grid for closest viable voxel to the destination.
@@ -146,7 +170,7 @@ namespace Trailblazer.Pathing
 
             if (originVoxel.IsBlocked)
             {
-                if (allowUnwalkable && TryGetClosestWalkableNeighbor(originVoxel, out _))
+                if (allowUnwalkable && TryGetClosestWalkableVoxel(originVoxel, out _))
                     return true;
 
                 return StarCast(origin, out originVoxel);
@@ -170,10 +194,10 @@ namespace Trailblazer.Pathing
         }
 
         public static bool GetClosestVoxelForSize(
-            Vector3d origin, 
-            Vector3d target, 
-            Fixed64 unitSize, 
-            out Voxel targetVoxel, 
+            Vector3d origin,
+            Vector3d target,
+            Fixed64 unitSize,
+            out Voxel targetVoxel,
             bool allowUnwalkable = false)
         {
             if (GlobalGridManager.TryGetVoxel(origin, out targetVoxel)

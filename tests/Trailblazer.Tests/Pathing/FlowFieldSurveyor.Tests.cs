@@ -31,8 +31,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(4, 0, 0);
 
-            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
-            var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            var request = FlowFieldPathRequest.Create(start, end);
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -50,25 +49,28 @@ namespace Trailblazer.Tests.Pathing
         [Fact]
         public void FlowField_ShouldRespectUnitSizeBlockers()
         {
-            bool[,,] data = new bool[1, 5, 3]
+            // Build 4-wide corridor with a 3-block choke
+            var data = new bool[1, 7, 4]
             {
                 {
-                    { true, true, true },
-                    { true, true, true },
-                    { false, true, false },
-                    { true, true, true },
-                    { true, true, true }
+                    { true, true, true, true },
+                    { true, true, true, true },
+                    { true, true, true, true },
+                    { false, true, false, false },
+                    { true, true, true, true },
+                    { true, true, true, true },
+                    { true, true, true, true },
                 }
             };
 
             PathTestFactory.RegisterFromData("BlockedChoke", data, Vector3d.Zero);
 
             var start = new Vector3d(1, 0, 0);
-            var end = new Vector3d(1, 0, 4);
+            var end = new Vector3d(5, 0, 0);
 
-            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
-            var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
-            request.UnitSize = (Fixed64)2;
+            var request = FlowFieldPathRequest.Create(start, end, Fixed64.Two);
+
+            request.IsValid.Should().BeTrue();
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -91,8 +93,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(-2, 0, 0);
             var end = new Vector3d(3, 0, 3);
 
-            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
-            var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            var request = FlowFieldPathRequest.Create(start, end);
             request.ExtraFloodRange = 5;
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
@@ -123,8 +124,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(2, 0, 0);
 
-            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
-            var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            var request = FlowFieldPathRequest.Create(start, end);
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
             var dir = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
@@ -150,8 +150,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(2, 0, 0);
 
-            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
-            var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            var request = FlowFieldPathRequest.Create(start, end);
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -167,8 +166,7 @@ namespace Trailblazer.Tests.Pathing
             PathTestFactory.RegisterSingleWalkablePoint("IsolatedStart", new Vector3d(0, 0, 0));
             PathTestFactory.RegisterSingleWalkablePoint("IsolatedEnd", new Vector3d(5, 0, 5));
 
-            VoxelFinder.TryGetPathEdgeVoxels(new Vector3d(0, 0, 0), new Vector3d(5, 0, 5), out Voxel startVoxel, out Voxel endVoxel);
-            var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            var request = FlowFieldPathRequest.Create(new Vector3d(0, 0, 0), new Vector3d(5, 0, 5));
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -192,8 +190,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 0);
             var end = new Vector3d(2, 0, 0);
 
-            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
-            var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            var request = FlowFieldPathRequest.Create(start, end);
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -226,8 +223,7 @@ namespace Trailblazer.Tests.Pathing
             var start = new Vector3d(0, 0, 1);
             var end = new Vector3d(2, 0, 1);
 
-            VoxelFinder.TryGetPathEdgeVoxels(start, end, out Voxel startVoxel, out Voxel endVoxel);
-            var request = FlowFieldPathRequest.Create(startVoxel, endVoxel);
+            var request = FlowFieldPathRequest.Create(start, end);
 
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
             var vec = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
@@ -311,11 +307,13 @@ namespace Trailblazer.Tests.Pathing
 
             PathTestFactory.RegisterFromData("UnitSizeTooBig", data, Vector3d.Zero);
 
-            Vector3d start = new Vector3d(1, 0, 1);
-            Vector3d goal = new Vector3d(2, 0, 2);
+            Vector3d start = new(1, 0, 1);
+            Vector3d goal = new(2, 0, 2);
 
-            var request = FlowFieldPathRequest.Create(start, goal);
-            request.UnitSize = (Fixed64)10; // UnitSize larger than grid
+            // UnitSize larger than grid
+            var request = FlowFieldPathRequest.Create(start, goal, (Fixed64)10);
+
+            request.IsValid.Should().BeFalse();
 
             var result = FlowFieldSurveyor.Shared.FindPath(request);
 

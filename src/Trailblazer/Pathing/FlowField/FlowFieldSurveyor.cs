@@ -48,7 +48,7 @@ namespace Trailblazer.Pathing
             {
                 if (!request.IsValid
                 || request.HasZeroDisplacement
-                || !request.End.TryGetPartition(out PathPartition targetPart))
+                || !request.EndNode.TryGetPartition(out PathPartition targetPart))
                 {
                     return FlowFieldSurveyResult.Empty;
                 }
@@ -97,7 +97,7 @@ namespace Trailblazer.Pathing
                 // Check if we found our way to the start voxel
                 if (!targetReached)
                 {
-                    if (current.VoxelToken == _request.Start.SpawnToken)
+                    if (current.VoxelToken == _request.StartNode.SpawnToken)
                     {
                         _startDistanceMetric = current.PathCost;
                         maxFloodRange = current.PathCost + _request.ExtraFloodRange;
@@ -195,7 +195,7 @@ namespace Trailblazer.Pathing
                     PathCost = current.PathCostTotal
                 };
 
-                if (current.VoxelToken == _request.End.SpawnToken)
+                if (current.VoxelToken == _request.EndNode.SpawnToken)
                 {
                     // Ensure end voxel is include, it shouldn't point anywhere
                     currentFlow.IsGoal = true;

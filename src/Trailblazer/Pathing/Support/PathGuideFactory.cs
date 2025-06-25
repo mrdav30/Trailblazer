@@ -119,7 +119,7 @@ namespace Trailblazer.Pathing
 
             // Make sure the start voxel is within the current fields collection
             // Note: for flow fields, the SpawnToken of the Start voxel is not included
-            if (!pathFound || !result.Fields.ContainsKey(request.Start.SpawnToken))
+            if (!pathFound || !result.Fields.ContainsKey(request.StartNode.SpawnToken))
                 return null;
 
 

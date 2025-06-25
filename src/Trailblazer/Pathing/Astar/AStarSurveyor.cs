@@ -88,7 +88,7 @@ namespace Trailblazer.Pathing
             {
                 if (!request.IsValid
                     || request.HasZeroDisplacement
-                    || !request.Start.TryGetPartition(out PathPartition startPartition))
+                    || !request.StartNode.TryGetPartition(out PathPartition startPartition))
                 {
                     return AStarSurveyResult.Empty;
                 }
@@ -102,7 +102,7 @@ namespace Trailblazer.Pathing
                 _chartKeys.Clear();
 
                 // Trace path from the start to the end
-                _meta.Add(_request.Start.SpawnToken, new());
+                _meta.Add(_request.StartNode.SpawnToken, new());
                 startPartition.PathCost = 0;
                 _heap.Add(startPartition);
 
@@ -135,7 +135,7 @@ namespace Trailblazer.Pathing
             while (_heap.RemoveFirst(out PathPartition currentPartition)
                 && iterations++ < searchSize)
             {
-                if (currentPartition.VoxelToken == _request.End.SpawnToken)
+                if (currentPartition.VoxelToken == _request.EndNode.SpawnToken)
                     return true;
 
                 if (ProcessNeighbors(currentPartition))
@@ -223,7 +223,7 @@ namespace Trailblazer.Pathing
                 return false;
             }
 
-            if (neighbor.VoxelToken == _request.End.SpawnToken)
+            if (neighbor.VoxelToken == _request.EndNode.SpawnToken)
             {
                 SetPathPartitionData(neighbor, current.GlobalIndex, cost);
                 return true;
@@ -263,7 +263,7 @@ namespace Trailblazer.Pathing
 
             int heuristicCost = CalculateHeuristic(
                 partition.VoxelPosition,
-                _request.End.WorldPosition,
+                _request.EndNode.WorldPosition,
                 _request.Heuristic);
 
             // Calculate the total cost (fCost) by adding modifier to the heuristic cost (hCost)
@@ -277,8 +277,8 @@ namespace Trailblazer.Pathing
         /// <returns>A list of voxels from start to end representing the raw path.</returns>
         private void BuildRawPath()
         {
-            Voxel current = _request.End;
-            while (current.SpawnToken != _request.Start.SpawnToken)
+            Voxel current = _request.EndNode;
+            while (current.SpawnToken != _request.StartNode.SpawnToken)
             {
                 PathPartition currentPartition = current.GetPartitionOrDefault<PathPartition>();
                 _rawPath.Insert(0, currentPartition);
@@ -293,7 +293,7 @@ namespace Trailblazer.Pathing
             }
 
             // Ensure start position is included
-            PathPartition startPartition = _request.Start.GetPartitionOrDefault<PathPartition>();
+            PathPartition startPartition = _request.StartNode.GetPartitionOrDefault<PathPartition>();
             _rawPath.Insert(0, startPartition);
         }
 

@@ -221,6 +221,7 @@ namespace Trailblazer.Pathing
             // How many voxels wide our agent is, in cell terms
             int required = (unitSize / GlobalGridManager.VoxelSize).CeilToInt();
             // If there aren't at least that many free voxels around, it can't go
+            
             return required > _clearanceRadiusInVoxels;
         }
 
@@ -264,6 +265,10 @@ namespace Trailblazer.Pathing
                     // 1) missing or blocked → candidate radius = nextDist
                     if (nPart == null || !nPart.IsWalkable)
                     {
+                        // skip above, below, or any above/below diagonals
+                        if (i == 4 || i == 5 || i >= 10)
+                            continue;
+
                         best = Math.Min(best, nextDist);
                         continue;
                     }

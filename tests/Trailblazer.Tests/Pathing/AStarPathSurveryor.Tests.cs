@@ -7,7 +7,6 @@ using System.Linq;
 using FluentAssertions;
 using System.Collections.Generic;
 using SwiftCollections;
-using System;
 
 namespace Trailblazer.Tests.Pathing
 {
@@ -200,22 +199,25 @@ namespace Trailblazer.Tests.Pathing
         [Fact]
         public void AStar_ShouldFailWhenClearanceTooLow()
         {
-            // Build 3-wide corridor with a 2-block choke
-            var data = new bool[1, 5, 3]
+            // Build 4-wide corridor with a 3-block choke
+            var data = new bool[1, 7, 4]
             {
                 {
-                    { true, true, true },
-                    { true, true, true },
-                    { false, true, false },
-                    { true, true, true },
-                    { true, true, true }
+                    { true, true, true, true },
+                    { true, true, true, true },
+                    { true, true, true, true },
+                    { false, true, false, false },
+                    { true, true, true, true },
+                    { true, true, true, true },
+                    { true, true, true, true },
                 }
             };
 
             PathTestFactory.RegisterFromData("Choke", data, Vector3d.Zero);
 
-            var request = AStarPathRequest.Create(new Vector3d(0, 0, 1), new Vector3d(4, 0, 1));
-            request.UnitSize = (Fixed64)2;
+            var request = AStarPathRequest.Create(new Vector3d(1, 0, 1), new Vector3d(4, 0, 1), Fixed64.Two);
+
+            request.IsValid.Should().BeTrue();
 
             bool success =
                 PathGuideFactory.RequestGuide(request, out AStarGuide guide);
@@ -406,7 +408,6 @@ namespace Trailblazer.Tests.Pathing
             PathTestFactory.RegisterFromData("CornerCut", data, Vector3d.Zero);
 
             var request = AStarPathRequest.Create(new Vector3d(0, 0, 0), new Vector3d(1, 0, 1));
-            request.UnitSize = (Fixed64)1;
             bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.False(success);

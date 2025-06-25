@@ -13,7 +13,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_GroundedScout_When_JumpIsTriggered_Then_ShouldApplyJumpForce()
         {
             // Arrange
-            var scout = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             // Act
             scout.Motor.Traverse(scout, Vector3d.Zero, TrekRate.Stationary, isRequestingJump: true);
@@ -27,7 +27,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AirborneScout_When_JumpIsTriggered_Then_ShouldNotApplyJumpForce()
         {
             // Arrange
-            var scout = MockAgentTestFactory.CreateMockAgent(
+            var scout = MockMotorAgentTestFactory.CreateMockAgent(
                 startPosition: Vector3d.Up,
                 startVelocity: Vector3d.Down,
                 startingMedium: TraversalMedium.Air);
@@ -48,7 +48,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutThatJumped_When_JumpCooldownNotExpired_Then_ShouldNotJump()
         {
             // Arrange
-            var scout = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             // Act - First Jump
             scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
@@ -74,7 +74,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutJumps_When_JumpIsReleasedMidAir_Then_GravityShouldResume()
         {
             // Arrange
-            var scout = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             // Act - First Jump
             scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
@@ -106,7 +106,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutCannotAffordJump_When_JumpRequested_Then_ShouldNotJump()
         {
             // Arrange
-            var scout = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
             scout.Motor.Events.CanAffordJump = () => false;
 
             // Act
@@ -122,7 +122,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutHoldingJump_When_Simulated_Then_GravityShouldBeTemporarilyReduced()
         {
             // Arrange
-            var scout = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             // Act - Initial Jump
             TrailblazerManager.Simulate();
@@ -149,7 +149,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutOnGround_When_JumpHeld_Then_ShouldJumpHigher()
         {
-            var scout = MockAgentTestFactory.CreateJumpReadyAgent();
+            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
             scout.ApplyInputTravelRequest(isRequestingJump: true);
             scout.Simulate();
@@ -169,7 +169,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutOnGround_When_JumpNotHeld_Then_ShouldNotJumpHigher()
         {
-            var scout = MockAgentTestFactory.CreateJumpReadyAgent();
+            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
             scout.ApplyInputTravelRequest(isRequestingJump: true);
             scout.Simulate();
@@ -189,7 +189,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutWhen_JumpingAgainstCeiling_Then_ShouldStopRising()
         {
-            var scout = MockAgentTestFactory.CreateJumpReadyAgent(startPosition: new Vector3d(0, 5, 0));
+            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent(startPosition: new Vector3d(0, 5, 0));
 
             scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Slow, isRequestingJump: true);
             scout.Simulate();
@@ -208,7 +208,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutHoldingJump_When_LandsOnGround_Then_ShouldResetJumpState()
         {
-            var scout = MockAgentTestFactory.CreateJumpReadyAgent();
+            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
             bool jumpStarted = false;
             bool jumpStopped = false;
@@ -253,7 +253,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutHoldingJump_When_HeldTooLong_Then_ShouldNotExceedMaxJump()
         {
-            var scout = MockAgentTestFactory.CreateJumpReadyAgent();
+            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
             var jumpLocomotion = scout.Motor.Locomotions.Jump;
             Fixed64 maxExpectedHeight = jumpLocomotion.BaseJumpHeight + jumpLocomotion.ExtraJumpHeight;
@@ -284,7 +284,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutTapsJump_When_ReleasedImmediately_Then_JumpHeightShouldBeReduced()
         {
-            var scout = MockAgentTestFactory.CreateJumpReadyAgent();
+            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
             // Start jump
             scout.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);

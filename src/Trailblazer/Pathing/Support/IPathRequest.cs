@@ -10,20 +10,27 @@ namespace Trailblazer.Pathing
     /// </summary>
     public interface IPathRequest
     {
+        Vector3d Origin { get; }
+
         /// <summary>
         /// Most recently evaluated grid voxel under the agent.
         /// </summary>
-        Voxel Start { get; set; }
+        Voxel StartNode { get; }
+
+        /// <summary>
+        /// The final destination this agent is attempting to reach.
+        /// </summary>
+        Vector3d Destination { get; }
 
         /// <summary>
         /// Final grid voxel targeted as the destination.
         /// </summary>
-        Voxel End { get; set; }
+        Voxel EndNode { get; }
 
         /// <summary>
         /// The physical unit diameter or size used to validate voxel walkability and clearance.
         /// </summary>
-        Fixed64 UnitSize { get; set; }
+        Fixed64 UnitSize { get; }
 
         /// <summary>
         /// Whether the start and end voxels are the same or null, indicating no meaningful travel is required.
@@ -41,6 +48,12 @@ namespace Trailblazer.Pathing
         /// </summary>
         int? MaxPathSearchRange { get; set; }
 
+        bool HasOrigin { get; }
+
+        bool HasDestination { get; }
+
+        bool HasValidEndpoints { get; }
+
         bool IsValid { get; }
 
         /// <summary>
@@ -48,7 +61,11 @@ namespace Trailblazer.Pathing
         /// </summary>
         public int RequestCacheKey { get; }
 
-        bool Prepare(Vector3d origin, Vector3d target);
+        bool TryPrepare(Vector3d origin, Vector3d destination, Fixed64 unitSize);
+
+        bool TrySetOrigin(Vector3d origin, bool resetSearchRange = true);
+
+        bool TrySetDestination(Vector3d destination, bool resetSearchRange = true);
 
         bool Validate();
     }

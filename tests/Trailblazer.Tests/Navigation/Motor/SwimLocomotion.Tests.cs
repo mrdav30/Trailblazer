@@ -14,7 +14,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutAtNeutralBuoyancy_When_Simulated_Then_ShouldRemainSuspended()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateWaterAgent(surfaceLevel: (Fixed64)99);
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: (Fixed64)99);
 
             agent.Motor.Locomotions.Swim.IsEnabled = true;
             agent.Motor.Locomotions.Swim.BuoyancyFactor = Fixed64.One; // Neutral buoyancy
@@ -36,7 +36,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutEntersWater_When_Simulated_Then_ShouldTransitionToSwimming()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             // Act - First frame, still on ground
             TrailblazerManager.Simulate();
@@ -59,7 +59,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutExitsWater_When_Simulated_Then_ShouldTransitionOutOfSwimming()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.One);
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.One);
 
             agent.Simulate();
             agent.CommitFrameMotion();
@@ -81,7 +81,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutInWater_When_Simulated_Then_ShouldApplyWaterDrag()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.One);
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.One);
             agent.Motor.Locomotions.Swim.IsEnabled = true;
 
             // Act - Enter Water
@@ -113,7 +113,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutAtWaterSurface_When_Simulated_Then_ShouldExperienceBuoyancyForces()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.One);
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.One);
             agent.Motor.Locomotions.Swim.IsEnabled = true;
 
             // Act - Simulate entry into water
@@ -140,7 +140,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutWithPositiveBuoyancy_When_Simulated_Then_ShouldFloatUp()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateWaterAgent(startPosition: Vector3d.Down * 5);
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent(startPosition: Vector3d.Down * 5);
 
             agent.Motor.Locomotions.Swim.IsEnabled = true;
             agent.Motor.Locomotions.Swim.BuoyancyFactor = Fixed64.FromRaw(0x180000000L); // ~1.5, meaning agent is more buoyant
@@ -165,7 +165,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutWithLowBuoyancy_When_Simulated_Then_ShouldSink()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateWaterAgent(startPosition: Vector3d.Down);
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent(startPosition: Vector3d.Down);
 
             agent.Motor.Locomotions.Swim.IsEnabled = true;
             agent.Motor.Locomotions.Swim.BuoyancyFactor = Fixed64.Half; // ~0.5, meaning agent is heavier than water
@@ -187,7 +187,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutResurfacesFromDive_When_BreathWasLow_Then_ShouldRegenerateBreath()
         {
-            var agent = MockAgentTestFactory.CreateWaterAgent();
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent();
             var swim = agent.Motor.Locomotions.Swim;
             swim.UnderwaterTimer = (Fixed64)30;
 
@@ -207,7 +207,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_DrowningDisabled_When_UnderwaterLong_Then_ShouldNotDrown()
         {
-            var agent = MockAgentTestFactory.CreateWaterAgent();
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent();
             var swim = agent.Motor.Locomotions.Swim;
             swim.CanDrown = false;
             swim.HoldBreathTime = Fixed64.One;
@@ -224,7 +224,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutDiving_When_MovesUp_Then_ShouldSwimUpward()
         {
             var initialPosition = new Vector3d(0, -2, 0);
-            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Water);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Water);
             agent.Motor.Locomotions.Swim.IsSwimming = true;
 
             for (int i = 0; i < 10; i++) // Simulate swimming upwards
@@ -241,7 +241,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutUnderwater_When_OutOfBreath_Then_ShouldTriggerDrowning()
         {
-            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, -5, 0), startingMedium: TraversalMedium.Water);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, -5, 0), startingMedium: TraversalMedium.Water);
 
             agent.Motor.Locomotions.Swim.HoldBreathTime = (Fixed64)3;
             agent.Motor.Locomotions.Swim.CanDrown = true;
@@ -259,7 +259,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_SwimmingScout_When_JumpRequested_Then_ShouldBreachWater()
         {
-            var agent = MockAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
             agent.Motor.Locomotions.Swim.CanBreachWater = true;
 
             bool breached = false;
@@ -279,7 +279,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_SwimmingScout_When_JumpRequestedButBreachDisabled_Then_ShouldNotJump()
         {
-            var agent = MockAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
             agent.Motor.Locomotions.Swim.CanBreachWater = false;
 
             bool breached = false;
@@ -299,7 +299,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutBreachesWater_When_ExitsWater_Then_ShouldStopSwimmingAndTriggerStopBreach()
         {
-            var agent = MockAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
+            var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
             agent.Motor.Locomotions.Swim.CanBreachWater = true;
 
             bool stopBreach = false;

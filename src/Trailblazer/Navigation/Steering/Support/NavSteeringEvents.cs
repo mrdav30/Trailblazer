@@ -14,6 +14,10 @@ namespace Trailblazer.Navigation
 
         public Action<Vector3d>? OnStartTraversal;
 
+        public Action? OnInvalidPath;
+
+        public Action? OnIsStuck;
+
         /// <summary>
         /// Called when unit arrives at destination
         /// </summary>

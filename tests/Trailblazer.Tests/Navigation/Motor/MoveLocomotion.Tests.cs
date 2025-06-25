@@ -13,7 +13,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_When_ForceIsApplied_Then_VelocityShouldIncrease()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             Vector3d initialPosition = agent.Position;
 
@@ -33,7 +33,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_SmallMovements_When_Simulated_Then_PositionShouldAccumulateCorrectly()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             // Act - Apply movement over multiple frames
             for (int i = 0; i < 10; i++)
@@ -56,12 +56,12 @@ namespace Trailblazer.Tests.Navigation.Motor
         {
             // Arrange
             var slopeLimit = Fixed64.FromRaw(0xB2B8C75C); // 2998454108L, converts to ~0.698131999932 radians or ~40 degrees; 
-            var platform = MockAgentTestFactory.CreatePlatform(
+            var platform = MockMotorAgentTestFactory.CreatePlatform(
                 startPosition: Vector3d.Zero,
                 platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right, slopeLimit)
             );
 
-            var agent = MockAgentTestFactory.CreatePlatformAgent(
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
                 startPosition: Vector3d.Zero,
                 platformMatrix: platform
             );
@@ -76,7 +76,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentWhenNoInput_Then_VelocityShouldDecayToZero()
         {
-            var agent = MockAgentTestFactory.CreateMockAgent(startVelocity: new Vector3d(5, 0, 0), startingMedium: TraversalMedium.Ground);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: new Vector3d(5, 0, 0), startingMedium: TraversalMedium.Ground);
 
             for (int i = 0; i < 100; i++) // Simulate multiple frames to test deceleration
             {
@@ -94,7 +94,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentMovesForward_When_ReversedInput_Then_ShouldDecelerate()
         {
             Vector3d iniitialVelocity = new(3, 0, 0);
-            var agent = MockAgentTestFactory.CreateMockAgent(startVelocity: iniitialVelocity, startingMedium: TraversalMedium.Ground);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: iniitialVelocity, startingMedium: TraversalMedium.Ground);
             agent.ApplyInputTravelRequest(new Vector3d(-1, 0, 0), rate: TrekRate.Moderate);
 
             for (int i = 0; i < 20; i++) // Apply opposing force over time
@@ -112,7 +112,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         {
             var slope = FixedMath.DegToRad((Fixed64)30);
             var ground = Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(slope, Fixed64.Zero, Fixed64.Zero));
-            var agent = MockAgentTestFactory.CreatePlatformAgent(startPosition: Vector3d.Zero, platformMatrix: ground);
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(startPosition: Vector3d.Zero, platformMatrix: ground);
 
             agent.ApplyInputTravelRequest(Vector3d.Right, rate: TrekRate.Slow);
             agent.Simulate();
@@ -131,12 +131,12 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentOnSlope_When_Simulated_Then_VelocityShouldAlignWithSlope()
         {
             // Arrange
-            var platform = MockAgentTestFactory.CreatePlatform(
+            var platform = MockMotorAgentTestFactory.CreatePlatform(
                 startPosition: Vector3d.Zero,
                 platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right, Fixed64.FromRaw(0x10000000L))
             );
 
-            var agent = MockAgentTestFactory.CreatePlatformAgent(
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
                 startPosition: Vector3d.Zero,
                 platformMatrix: platform
             );
@@ -153,12 +153,12 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentOnSlope_When_Simulated_Then_VelocityShouldBeProjectedOntoSlope()
         {
             // Arrange
-            var platform = MockAgentTestFactory.CreatePlatform(
+            var platform = MockMotorAgentTestFactory.CreatePlatform(
                 startPosition: Vector3d.Zero,
                 platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right, Fixed64.FromRaw(0x10000000L)) // Shallow slope
             );
 
-            var agent = MockAgentTestFactory.CreatePlatformAgent(
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
                 startPosition: Vector3d.Zero,
                 platformMatrix: platform
             );
@@ -184,12 +184,12 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentOnDownhillSlope_When_MovingDownhill_Then_ShouldAccelerate()
         {
             var slopeAngle = FixedMath.DegToRad((Fixed64)30);
-            var platform = MockAgentTestFactory.CreatePlatform(
+            var platform = MockMotorAgentTestFactory.CreatePlatform(
                 startPosition: Vector3d.Zero,
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
             );
 
-            var agent = MockAgentTestFactory.CreatePlatformAgent(
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
                 startPosition: Vector3d.Zero,
                 platformMatrix: platform
             );
@@ -209,12 +209,12 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentOnUphillSlope_When_MovingUphill_Then_ShouldDecelerate()
         {
             var slopeAngle = FixedMath.DegToRad((Fixed64)30);
-            var platform = MockAgentTestFactory.CreatePlatform(
+            var platform = MockMotorAgentTestFactory.CreatePlatform(
                 startPosition: Vector3d.Zero,
                 platformRotation: FixedQuaternion.FromEulerAngles(-slopeAngle, Fixed64.Zero, Fixed64.Zero)
             );
 
-            var agent = MockAgentTestFactory.CreatePlatformAgent(
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
                 startPosition: Vector3d.Zero,
                 platformMatrix: platform
             );
@@ -229,7 +229,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentOnFlatSurface_When_MovingForward_Then_ShouldMaintainSpeed()
         {
-            var agent = MockAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             agent.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Moderate);
             agent.Simulate();
@@ -251,7 +251,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentMoving_When_StopRequested_Then_ShouldStopImmediately()
         {
             var initialVelocity = new Vector3d(5, 0, 0);
-            var agent = MockAgentTestFactory.CreateMockAgent(startVelocity: initialVelocity, startingMedium: TraversalMedium.Ground);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: initialVelocity, startingMedium: TraversalMedium.Ground);
 
             agent.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary);
             agent.Simulate();
@@ -263,8 +263,8 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentWalkingOnHighFrictionGround_When_Moving_Then_ShouldMoveSlower()
         {
-            var lowFrictionScout = MockAgentTestFactory.CreatePlatformAgent(surfaceFriction: Fixed64.Zero);
-            var highFrictionScout = MockAgentTestFactory.CreatePlatformAgent(surfaceFriction: Fixed64.One);
+            var lowFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(surfaceFriction: Fixed64.Zero);
+            var highFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(surfaceFriction: Fixed64.One);
 
             // Simulate walking forward for both
             for (int i = 0; i < 5; i++)
@@ -290,7 +290,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentOnLowFrictionGround_When_StopsMoving_Then_ShouldSlideSlightly()
         {
-            var agent = MockAgentTestFactory.CreatePlatformAgent(surfaceFriction: Fixed64.Fraction(1, 100)); // Very low friction
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(surfaceFriction: Fixed64.Fraction(1, 100)); // Very low friction
 
             // Apply forward movement
             agent.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Fast);

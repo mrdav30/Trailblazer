@@ -22,6 +22,7 @@ namespace Trailblazer.Tests
             PathManager.ClearAll();
 
             GlobalGridManager.Reset();
+            TrailblazerManager.Reset();
         }
     }
 

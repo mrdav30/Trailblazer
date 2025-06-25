@@ -13,7 +13,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_FallingAgent_When_JumpIsTriggered_Then_ShouldNotJump()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateFallingAgent();
+            var agent = MockMotorAgentTestFactory.CreateFallingAgent();
 
             Vector3d expectedVelocity = Vector3d.Down;
             expectedVelocity.y += -agent.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
@@ -32,7 +32,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_FallingAgent_When_GroundIsDetected_Then_ShouldTransitionToGrounded()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateFallingAgent();
+            var agent = MockMotorAgentTestFactory.CreateFallingAgent();
 
             // Act - First Frame (Falling)
             TrailblazerManager.Simulate();
@@ -68,7 +68,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AirborneAgent_When_SimulatedOverMultipleFrames_Then_VelocityShouldMatchGravity()
         {
             // Arrange
-            var agent = MockAgentTestFactory.CreateMockAgent(
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(
                 startPosition: new Vector3d(0, 100, 0),
                 startingMedium: TraversalMedium.Air
             );
@@ -93,7 +93,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentInAir_When_NoMovement_Then_ShouldFallNaturally()
         {
             var initialPosition = new Vector3d(0, 10, 0);
-            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Air);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Air);
 
             for (int i = 0; i < 20; i++) // Simulate multiple frames
             {
@@ -108,7 +108,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentInAir_When_MovesForward_Then_ShouldStillBeAffectedByGravity()
         {
             var initialPosition = new Vector3d(0, 10, 0);
-            var agent = MockAgentTestFactory.CreateFallingAgent(startPosition: initialPosition);
+            var agent = MockMotorAgentTestFactory.CreateFallingAgent(startPosition: initialPosition);
 
             for (int i = 0; i < 20; i++)
             {
@@ -125,7 +125,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentFallsFar_When_Lands_Then_ShouldTriggerMaxFallHeightEvent()
         {
-            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
             agent.Motor.Locomotions.Fall.MaxFallHeight = Fixed64.One;
 
             bool eventCalled = false;
@@ -144,7 +144,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentFallsAndLands_When_FallHeightIsValid_Then_ShouldCallOnStopFallWithHeight()
         {
-            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
 
             Fixed64 fallHeight = Fixed64.Zero;
             agent.Motor.Events.OnStopFall += (height) => fallHeight = height;
@@ -164,10 +164,10 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentSlidesDownhill_When_SlopeIsShallow_Then_ShouldNotStartFalling()
         {
             var slopeAngle = FixedMath.DegToRad((Fixed64)10);
-            var platform = MockAgentTestFactory.CreatePlatform(
+            var platform = MockMotorAgentTestFactory.CreatePlatform(
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
-            var agent = MockAgentTestFactory.CreatePlatformAgent(
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
                 startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
             agent.Motor.Locomotions.Slide.SlopeLimit = (Fixed64)45;
@@ -183,10 +183,10 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentSlidesDownhill_When_SlopeIsSteep_Then_ShouldStartFalling()
         {
             var slopeAngle = FixedMath.DegToRad((Fixed64)60);
-            var platform = MockAgentTestFactory.CreatePlatform(
+            var platform = MockMotorAgentTestFactory.CreatePlatform(
                 platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
-            var agent = MockAgentTestFactory.CreatePlatformAgent(
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
                 startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
             agent.Motor.Locomotions.Slide.SlopeLimit = (Fixed64)45;
@@ -205,7 +205,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentStartsFallingMidJump_When_StillRising_Then_ShouldNotTriggerFallStart()
         {
-            var agent = MockAgentTestFactory.CreateJumpReadyAgent();
+            var agent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
             bool fallTriggered = false;
             agent.Motor.Events.OnStartFall += () => fallTriggered = true;
@@ -231,7 +231,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentFallsZeroDistance_When_Lands_Then_FallHeightShouldBeZero()
         {
-            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 0, 0), startingMedium: TraversalMedium.Air);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 0, 0), startingMedium: TraversalMedium.Air);
             agent.SetTraversalCondition(TraversalMedium.Ground, surfaceLevel: Fixed64.Zero);
 
             TrailblazerManager.Simulate();
@@ -244,7 +244,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentFalls_When_Lands_Then_FallStartShouldBeGreaterThanFallEnd()
         {
-            var agent = MockAgentTestFactory.CreateFallingAgent(startPosition: new Vector3d(0, 20, 0));
+            var agent = MockMotorAgentTestFactory.CreateFallingAgent(startPosition: new Vector3d(0, 20, 0));
 
             while (!agent.Motor.IsGrounded)
             {
@@ -261,7 +261,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentFalls_When_Disabled_Then_FallStateShouldReset()
         {
-            var agent = MockAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
 
             agent.Motor.Locomotions.Fall.IsFalling = true;
             agent.Motor.Locomotions.Fall.FallStart = (Fixed64)10;

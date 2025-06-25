@@ -230,10 +230,12 @@ namespace Trailblazer.Navigation
                 IsRequestingJump = isRequestingJump ?? false
             };
 
-            pathRequest.UnitSize = UnitSize;
-
             IsManuallyControlled = false;
-            Steering.ApplyPathRequest(Position, destination, pathRequest);
+
+            if (pathRequest.IsValid)
+                Steering.ApplyPathRequest(pathRequest);
+            else
+                Steering.ApplyPathRequest(Position, destination, UnitSize, pathRequest);
         }
 
         /// <summary>
@@ -292,7 +294,7 @@ namespace Trailblazer.Navigation
             Speed = Velocity != Vector3d.Zero ? Velocity.Magnitude : Fixed64.Zero;
             Acceleration = (Velocity - previousVelocity) / TrailblazerManager.DeltaTime;
 
-            if (Steering.IsFollowingTrail && Acceleration != Vector3d.Zero)
+            if (Steering.ShouldMove && Acceleration != Vector3d.Zero)
                 StuckThresholdSpeed = (Acceleration / TrailblazerManager.FrameRate).Magnitude;
             else
                 StuckThresholdSpeed = Fixed64.Zero;
@@ -314,7 +316,7 @@ namespace Trailblazer.Navigation
         {
             if (CanTurn)
                 //TODO: integrate this...only when the angle to request.Direction is above a threshold (e.g., > 10 degrees).
-                OnStartTurn?.Invoke(request.Direction); 
+                OnStartTurn?.Invoke(request.Direction);
 
             Motor.Traverse(request);
         }
@@ -328,7 +330,7 @@ namespace Trailblazer.Navigation
             _currentFrameRequest.CurrentPosition = Position;
             _currentFrameRequest.CurrentRotation = Rotation;
 
-            if (direction != Vector3d.Zero && !Steering.IsFollowingGuide)
+            if (direction != Vector3d.Zero && !Steering.HasTrailGuide)
             {
                 // Scaling direction before passing to the motor lets us modulate movement before acceleration is applied
                 Fixed64 deceleration = Acceleration != Vector3d.Zero ? Acceleration.Magnitude : BrakingPower;

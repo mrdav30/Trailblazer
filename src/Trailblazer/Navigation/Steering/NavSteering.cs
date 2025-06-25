@@ -3,6 +3,7 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using System;
 using System.Diagnostics;
+using System.Net;
 using System.Runtime.CompilerServices;
 using Trailblazer.Pathing;
 
@@ -45,7 +46,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Number of frames between pathfinding LOS rechecks.
         /// </summary>
-        protected const int PathRecheckCooldownFrames = 16;
+        protected const int DefaultPathRecheckCooldown = 16;
 
         /// <summary>
         /// Number of frames an agent must be below the movement threshold to be considered stuck.
@@ -71,17 +72,20 @@ namespace Trailblazer.Navigation.Steering
         /// </summary>
         public bool CanPathfind = true;
 
-        /// <summary>
-        /// The final destination this agent is attempting to reach.
-        /// </summary>
-        public Vector3d Destination { get; protected set; }
+        /// <inheritdoc cref="DefaultPathRecheckCooldown"/>
+        public int PathRecheckCooldownFrames = DefaultPathRecheckCooldown;
 
         public Vector3d TargetDirection { get; protected set; }
+
+        public Vector3d LastTargetDirection { get; protected set; }
 
         /// <summary>
         /// The pathfinding configuration used for the current movement request, including size, and type.
         /// </summary>
         private IPathRequest _currentRequest;
+
+        /// <inheritdoc cref="_currentRequest"/>
+        public IPathRequest CurrentRequest => _currentRequest;
 
         /// <summary>
         /// Current guide used to compute the desired path or flow.
@@ -94,7 +98,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Whether the navigator is following a path or guide to the destination.
         /// </summary>
-        public bool IsFollowingTrail { get; protected set; }
+        public bool ShouldMove { get; protected set; }
 
         /// <summary>
         /// Whether the agent has become stuck and exhausted repathing attempts.
@@ -107,18 +111,10 @@ namespace Trailblazer.Navigation.Steering
         public bool HasLineOfSightPath { get; protected set; }
 
         /// <summary>
-        /// Whether the destination voxel is reachable.
-        /// </summary>
-        public bool HasViableDestination { get; protected set; }
-
-        /// <summary>
         /// Current pathfinding search status.
         /// </summary>
         protected bool _shouldRequestPathThisFrame;
 
-        /// <summary>
-        /// Counter used to space out line-of-sight checks.
-        /// </summary>
         protected int _pathCheckCooldown;
 
         /// <summary>
@@ -137,7 +133,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Indicates whether the agent is actively following a guide path with queued waypoints.
         /// </summary>
-        public bool IsFollowingGuide => !HasLineOfSightPath && _trailGuide != null;
+        public bool HasTrailGuide => !HasLineOfSightPath && _trailGuide != null;
 
         /// <summary>
         /// Has this unit arrived at destination?
@@ -190,7 +186,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Container for delegate events that fire on pathfinding state changes (start, stop, arrive).
         /// </summary>
-        public NavSteeringEvents Events { get; protected set; }
+        public NavSteeringEvents Events { get; protected set; } = new();
 
         #endregion
 
@@ -204,22 +200,41 @@ namespace Trailblazer.Navigation.Steering
 
         #region Public Interface
 
-        // Needs to be called every frame from input system
-        // For AI pathfinding, only needs to be called once until agent destination is reached
         public virtual void ApplyPathRequest(
             Vector3d origin,
             Vector3d destination,
+            Fixed64 unitSize,
+            IPathRequest request,
+            int groupId = -1)
+        {
+            if (request == null)
+            {
+#if DEBUG
+                Debug.WriteLine("No path request detected.");
+#endif
+                Arrive();
+                return;
+            };
+
+            request.TryPrepare(origin, destination, unitSize);
+            ApplyPathRequest(request, groupId);
+        }
+
+        // Needs to be called every frame from input system
+        // For AI pathfinding, only needs to be called once until agent destination is reached
+        public virtual void ApplyPathRequest(
             IPathRequest pathRequest,
             int groupId = -1)
         {
-            // If direction was set, assume the navigator is being controlled
-            if (pathRequest == null)
+            // assume the navigator is being controlled
+            if (pathRequest == null || !pathRequest.HasValidEndpoints)
             {
-                Debug.WriteLine($"No trail guide requested.");
+#if DEBUG
+                Debug.WriteLine("Path request endpoints are not valid.");
+#endif
+                Arrive();
                 return;
             }
-
-            MovementGroupID = groupId;
 
             HasLineOfSightPath = false;
 
@@ -228,40 +243,10 @@ namespace Trailblazer.Navigation.Steering
             IsStuck = false;
             _stuckFrameCount = 0;
 
-            HasViableDestination = false;
-            Voxel destinationVoxel = null;
-            // if size requires consideration, use next-best-voxel system,
-            if (pathRequest.UnitSize <= GlobalGridManager.VoxelSize)
-            {
-                HasViableDestination = VoxelFinder.GetEndVoxel(
-                    origin,
-                    destination,
-                    out destinationVoxel,
-                    pathRequest.AllowUnwalkable);
-            }
+            MovementGroupID = groupId;
 
-            if (!HasViableDestination || pathRequest.UnitSize > GlobalGridManager.VoxelSize)
-            {
-                // Start from the end
-                HasViableDestination = VoxelFinder.GetClosestVoxelForSize(
-                    destination,
-                    origin,
-                    pathRequest.UnitSize,
-                    out destinationVoxel,
-                    pathRequest.AllowUnwalkable);
-            }
-
-            if (!HasViableDestination)
-            {
-                Debug.WriteLine("No viable destination found for agent.");
-                Arrive();
-                return;
-            }
-
-            IsFollowingTrail = true;
+            ShouldMove = true;
             _currentRequest = pathRequest;
-            _currentRequest.End = destinationVoxel;
-            Destination = destination;
 
             _repathTries = 0;
             _shouldRequestPathThisFrame = true;
@@ -275,6 +260,12 @@ namespace Trailblazer.Navigation.Steering
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void PauseAutoStop() => _autoStopFrameCount = AutoPauseStopTime;
 
+        public void SetTrailGuide(IGuide guide)
+        {
+            _trailGuide = guide;
+            _shouldRequestPathThisFrame = false;
+        }
+
         #endregion
 
         #region Simulation Lifecycle
@@ -285,7 +276,7 @@ namespace Trailblazer.Navigation.Steering
         public virtual void OnInitialize(INavigate navigator)
         {
             // Fatter objects can afford to land imprecisely
-            _closingDistance = FixedMath.Round(navigator.UnitRadius);
+            _closingDistance = FixedMath.Round(navigator.UnitRadius + GlobalGridManager.VoxelSize);
 
             MovementGroupID = -1;
 
@@ -296,21 +287,16 @@ namespace Trailblazer.Navigation.Steering
 
             _shouldRequestPathThisFrame = false;
             HasLineOfSightPath = false;
-            IsFollowingTrail = false;
-
-            HasViableDestination = false;
+            ShouldMove = false;
 
             IsStuck = false;
             _stuckFrameCount = 0;
             _repathTries = 0;
 
-            IsAtDestination = true;
-            Destination = navigator.Position;
+            IsAtDestination = false;
 
             _currentRequest = null;
             _trailGuide = null;
-
-            Events = new();
         }
 
         /// <summary>
@@ -321,33 +307,65 @@ namespace Trailblazer.Navigation.Steering
             if (!CanMove)
                 return;
 
-            if (IsFollowingTrail)
+            if (ShouldMove && !IsAtDestination)
             {
-                if (!HasViableDestination || _currentRequest == null)
+                if (_currentRequest == null)
+                {
+                    Arrive();
                     return;
+                }
 
                 // check if agent has to pathfind, otherwise straight path to rely on destination
                 if (CanPathfind)
-                    ValidateMovementPath(navigator.Position, navigator.UnitSize);
+                {
+                    if (!ValidateMovementPath(navigator.Position))
+                    {
+#if DEBUG
+                        Debug.WriteLine("Invalid path detected!");
+#endif
+                        Events.OnInvalidPath?.Invoke();
+                        Arrive();
+                        return;
+                    }
+                }
 
                 if (_pathCheckCooldown <= 0)
                 {
                     HasLineOfSightPath = IsDestinationInSight(
-                        navigator.Position,
-                        Destination,
+                        _currentRequest.Origin,
+                        _currentRequest.Destination,
                         _currentRequest.UnitSize,
                         _currentRequest.AllowUnwalkable);
 
                     _pathCheckCooldown = PathRecheckCooldownFrames;
                 }
 
+                LastTargetDirection = TargetDirection;
                 TargetDirection = FindTargetDirection(navigator);
+
+                // Check if we're close enough to stop moving
+                Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.x.Abs() + TargetDirection.z.Abs());
+                bool reachedTarget = _distanceToTarget < _closingDistance * StopMultiplier;
+                bool noInput = moveAmount == Fixed64.Zero;
+                if (!HasTrailGuide && (reachedTarget || (!IsStuck && noInput)))
+                {
+                    Arrive();
+                    return;
+                }
+
+                if (!CheckStuckStatus(navigator.Position, navigator.Speed, navigator.StuckThresholdSpeed))
+                {
+#if DEBUG
+                    Debug.WriteLine("Stuck agent arriving!");
+#endif
+                    Events.OnIsStuck?.Invoke();
+                    Arrive();
+                    return;
+                }
+
                 if (TargetDirection != Vector3d.Zero)
                 {
-                    if (!IsAtDestination)
-                        CheckStuckStatus(navigator.Position, navigator.Speed, navigator.StuckThresholdSpeed);
-
-                    if (_trailGuide is IWaypointGuide waypointGuide && ShouldAdvanceToNextWaypoint(navigator.Position))
+                    if (_trailGuide is IWaypointGuide waypointGuide && ShouldAdvanceToNextWaypoint())
                         waypointGuide.AdvanceWaypoint();
 
                     // Pass the request to the NavMotor (even if we just arrived since we were close enough)
@@ -357,82 +375,58 @@ namespace Trailblazer.Navigation.Steering
             else
             {
                 // Pass on the idle movement to the motor
-                Events.OnStartTraversal(Vector3d.Zero);
+                Events.OnStartTraversal?.Invoke(Vector3d.Zero);
 
-                if (navigator.Speed > Fixed64.Zero)
+                if (navigator.Speed <= Fixed64.Epsilon)
                     StoppedFrameCount++;
             }
 
-            _autoStopFrameCount = _autoStopFrameCount--;
-            _pathCheckCooldown = _pathCheckCooldown--;
+            _autoStopFrameCount--;
+            _pathCheckCooldown--;
         }
 
         /// <summary>
         /// Periodically called to initiate a pathfinding query based on the current position and destination.
         /// </summary>
-        protected virtual void ValidateMovementPath(Vector3d origin, Fixed64 unitSize)
+        protected virtual bool ValidateMovementPath(Vector3d origin)
         {
-            // Check to see if unit size has changed since the last frame
-            if (unitSize != _currentRequest.UnitSize)
-            {
-                _currentRequest.UnitSize = unitSize;
-                _shouldRequestPathThisFrame = true;
-            }
+            if (origin != _currentRequest.Origin)
+                _currentRequest.TrySetOrigin(origin);
 
-            bool isCurrentPositionValid = false;
-            Voxel currentVoxel = null;
-            // if size requires consideration, use old next-best-voxel system
-            if (_currentRequest.UnitSize <= GlobalGridManager.VoxelSize)
+            if (!_currentRequest.HasValidEndpoints)
             {
-                isCurrentPositionValid = VoxelFinder.GetStartVoxel(
-                    origin,
-                    Destination,
-                    out currentVoxel);
+#if DEBUG
+                Debug.WriteLine("Path request is using invalid endpoints!");
+#endif
+                return false;
             }
-
-            if (!isCurrentPositionValid || _currentRequest.UnitSize > GlobalGridManager.VoxelSize)
-            {
-                isCurrentPositionValid = VoxelFinder.GetClosestVoxelForSize(
-                    origin,
-                    Destination,
-                    _currentRequest.UnitSize,
-                    out currentVoxel);
-            }
-
-            if (!isCurrentPositionValid)
-            {
-                Debug.WriteLine("Agent is on an invalid position!");
-                Arrive();
-                return;
-            }
-
-            _currentRequest.Start = currentVoxel;
 
             if (!_shouldRequestPathThisFrame)
-                return;
+                return true;
 
             _shouldRequestPathThisFrame = false;
             if (_currentRequest.HasZeroDisplacement && _repathTries >= 1)
-            {
-                Arrive();
-                return;
-            }
+                return false;
 
             HasLineOfSightPath = IsDestinationInSight(
-                origin,
-                Destination,
+                _currentRequest.Origin,
+                _currentRequest.Destination,
                 _currentRequest.UnitSize,
                 _currentRequest.AllowUnwalkable);
             if (HasLineOfSightPath)
-                return;  // no path required
+                return true;  // no path required
 
             _pathCheckCooldown = PathRecheckCooldownFrames;
 
-            if (!_currentRequest.Validate() || !PathGuideFactory.RequestGuide(_currentRequest, out _trailGuide))
+            if (!_currentRequest.IsValid | !PathGuideFactory.RequestGuide(_currentRequest, out _trailGuide))
             {
-                Debug.WriteLine($"Unable to retrieve a guide to {Destination}");
-                Arrive();
+#if DEBUG
+                Debug.WriteLine($"Unable to retrieve a guide from {_currentRequest.Origin} to {_currentRequest.Destination}");
+#endif
+                return false;
             }
+
+            return true;
         }
 
         /// <summary>
@@ -442,8 +436,8 @@ namespace Trailblazer.Navigation.Steering
         {
             Vector3d targetDirection = Vector3d.Zero;
             if (HasLineOfSightPath)
-                targetDirection = Destination - body.Position;
-            else if (IsFollowingGuide)
+                targetDirection = _currentRequest.Destination - body.Position;
+            else if (HasTrailGuide)
             {
                 if (_trailGuide is IWaypointGuide waypointGuide)
                     targetDirection = waypointGuide.GetMovementDirection(body.Position);
@@ -452,7 +446,9 @@ namespace Trailblazer.Navigation.Steering
             }
             else
             {
+#if DEBUG
                 Debug.WriteLine("No vialable movement direction found.");
+#endif
                 return targetDirection;
             }
 
@@ -476,33 +472,22 @@ namespace Trailblazer.Navigation.Steering
         /// Determines whether the agent should advance to the next waypoint based on proximity and heading alignment.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ShouldAdvanceToNextWaypoint(Vector3d position)
+        public bool ShouldAdvanceToNextWaypoint()
         {
-            return _distanceToTarget < _closingDistance && Vector3d.Dot(position, TargetDirection) < Fixed64.Epsilon
+            return _distanceToTarget < _closingDistance && Vector3d.Dot(TargetDirection, LastTargetDirection) < Fixed64.Epsilon
                 || _distanceToTarget < _closingDistance * GlobalGridManager.VoxelSize;
         }
 
         /// <summary>
         /// Evaluates the agent's current movement direction and velocity, updating stuck and arrival state.
         /// </summary>
-        protected virtual void CheckStuckStatus(
+        protected virtual bool CheckStuckStatus(
             Vector3d position,
             Fixed64 speed,
             Fixed64 stuckThreshold)
         {
-            Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.x.Abs() + TargetDirection.z.Abs());
-            bool reachedTarget = _distanceToTarget < _closingDistance * StopMultiplier;
-            bool noInput = moveAmount == Fixed64.Zero;
-
-            if (!IsFollowingGuide && (reachedTarget || (!IsStuck && noInput)))
-            {
-                Arrive();
-                TargetDirection = Vector3d.Zero;
-                return;
-            }
-
             if (!CanAutoStop)
-                return;
+                return true;
 
             // If unit has not moved stuckThreshold in a frame, it's stuck
             if (stuckThreshold > Fixed64.Zero && speed < stuckThreshold)
@@ -513,21 +498,21 @@ namespace Trailblazer.Navigation.Steering
                 {
                     if (_repathTries < StuckRepathTries)
                     {
-                        Debug.WriteLine("Stuck Agent!");
-
                         HasLineOfSightPath = false;
 
                         if (IsInGroup)
                             MovementGroupID = -1;  // Attempt to repath agent by themselves
 
-                        if (IsFollowingGuide && _trailGuide.TryGetFallbackDirection(position, out Vector3d fallback))
+                        if (HasTrailGuide && _trailGuide.TryGetFallbackDirection(position, out Vector3d fallback))
                         {
                             TargetDirection = fallback;
                             _repathTries++;
                             _stuckFrameCount = 0;
-                            return;
+                            return true;
                         }
 
+                        // Attempt to find another path on the next frame
+                        TargetDirection = Vector3d.Zero;
                         _shouldRequestPathThisFrame = true;
 
                         // Reset the guide and have them try a new path (don't pool a bad path)
@@ -538,31 +523,31 @@ namespace Trailblazer.Navigation.Steering
                         }
 
                         _repathTries++;
-                    }
-                    else
-                    {
-                        Debug.WriteLine("Stuck Agent arriving!");
-                        // we've tried to many times, we stuck stuck
-                        IsStuck = true;
-                        // Reset the guide and have them try a new path (don't pool a bad path)
-                        if (_trailGuide != null)
-                        {
-                            PathGuideFactory.ReturnGuide(_trailGuide, true);
-                            _trailGuide = null;
-                        }
-                        Arrive();
-                        return;
+                        return true;
                     }
 
-                    _stuckFrameCount = 0;
+                    // we've tried to many times, we stuck stuck
+                    IsStuck = true;
+                    // Reset the guide and have them try a new path (don't pool a bad path)
+                    if (_trailGuide != null)
+                    {
+                        PathGuideFactory.ReturnGuide(_trailGuide, true);
+                        _trailGuide = null;
+                    }
+
+                    return false;
                 }
+
+                // Keep trying
+                return true;
             }
-            else
-            {
-                IsStuck = false;
-                _stuckFrameCount = 0;
-                _repathTries = 0;
-            }
+
+            // agent isn't stuck
+            IsStuck = false;
+            _stuckFrameCount = 0;
+            _repathTries = 0;
+
+            return true;
         }
 
         /// <summary>
@@ -589,7 +574,7 @@ namespace Trailblazer.Navigation.Steering
         /// </summary>
         public virtual void StopMove()
         {
-            if (!IsFollowingTrail)
+            if (!ShouldMove)
                 return;
 
             if (MovementGroupID != -1)
@@ -599,7 +584,7 @@ namespace Trailblazer.Navigation.Steering
             _stuckFrameCount = 0;
             StoppedFrameCount = 0;
 
-            IsFollowingTrail = false;
+            ShouldMove = false;
             _shouldRequestPathThisFrame = false;
             HasLineOfSightPath = false;
 
@@ -723,7 +708,7 @@ namespace Trailblazer.Navigation.Steering
             Fixed64 avoidRadius = range ?? DefaultSearchRange;
             Fixed64 minAvoidanceDistance = avoidRadius;
 
-            foreach (var entity in ScanManager.ScanRadius(body.Position, avoidRadius))
+            foreach (IVoxelOccupant entity in ScanManager.ScanRadius(body.Position, avoidRadius))
             {
                 if (entity is not INavigate other)
                     continue;

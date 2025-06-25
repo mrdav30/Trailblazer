@@ -165,8 +165,7 @@ namespace Trailblazer.Navigation
         {
             SurfaceState = surfaceState;
 
-            Steering = new NavSteering();
-            Steering.OnInitialize(this);
+            Steering = NavSteering.CreateNew(this);
 
             Steering.Events.OnStartTraversal += HandlePathStart;
 

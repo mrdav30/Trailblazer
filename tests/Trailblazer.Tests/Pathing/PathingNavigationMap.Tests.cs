@@ -20,6 +20,8 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(PathManager.TryGetNavigationChart("TestMap", out var retrieved));
             Assert.Equal(map, retrieved);
+
+            PathManager.UnloadChart("TestMap");
         }
 
         [Fact]
@@ -34,6 +36,8 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
             Assert.True(voxel.TryGetPartition<PathPartition>(out _));
+
+            PathManager.UnloadChart("InitMap");
         }
 
         [Fact]
@@ -63,6 +67,8 @@ namespace Trailblazer.Tests.Pathing
             // Should still be there because MapB owns it
             Assert.True(voxel.TryGetPartition<PathPartition>(out var afterUnload));
             Assert.True(afterUnload.BelongsTo("MapB"));
+
+            PathManager.UnloadChart("MapB");
         }
 
         [Fact]
@@ -70,6 +76,8 @@ namespace Trailblazer.Tests.Pathing
         {
             var map = PathTestFactory.BuildSinglePointMap("BoundsTest", new Vector3d(0, 0, 0));
             Assert.False(map.IsWalkable(new Vector3d(10, 0, 10))); // Way outside
+
+            PathManager.UnloadChart("BoundsTest");
         }
 
         [Fact]
@@ -88,6 +96,8 @@ namespace Trailblazer.Tests.Pathing
 
             Assert.True(count == 1);
             Assert.True(partition.BelongsTo("DuplicateInit"));
+
+            PathManager.UnloadChart("DuplicateInit");
         }
     }
 }

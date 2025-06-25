@@ -4,6 +4,7 @@ using GridForge.Spatial;
 using SwiftCollections;
 using SwiftCollections.Pool;
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
@@ -183,6 +184,15 @@ namespace Trailblazer.Pathing
 #nullable disable
 
             GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out var voxel);
+
+            if(voxel == null)
+            {
+#if DEBUG
+                Debug.WriteLine($"Partition at {GlobalIndex} is not attached to a voxel!");
+#endif
+                Neighbors = null;
+                return;
+            }
 
             // for each of the 26 SpatialDirection values (except None)
             foreach (SpatialDirection dir in PathManager.AllDirections)

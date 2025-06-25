@@ -2,6 +2,7 @@
 using GridForge.Grids;
 using SwiftCollections;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
 {
@@ -13,26 +14,28 @@ namespace Trailblazer.Pathing
     public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest>
     {
         public const int DefaultExtraFloodRange = 10;
-   
+
         /// <summary>
         /// Limits how much extra distance the flood will expand after the target is reached.
         /// </summary>
         public int ExtraFloodRange { get; set; }
 
-        public static readonly FlowFieldPathRequest DefaultRequest = new()
+        public FlowFieldPathRequest()
         {
-            _startNode = null,
-            _endNode = null,
-            UnitSize = GlobalGridManager.VoxelSize,
-            AllowUnwalkable = false,
-            ExtraFloodRange = DefaultExtraFloodRange,
-            MaxPathSearchRange = null
-        };
-
-        public static FlowFieldPathRequest Create(Vector3d origin, Vector3d destination)
-        {
-            return Create(origin, destination, GlobalGridManager.VoxelSize);
+            _startNode = null;
+            _endNode = null;
+            UnitSize = GlobalGridManager.VoxelSize;
+            AllowUnwalkable = false;
+            ExtraFloodRange = DefaultExtraFloodRange;
+            MaxPathSearchRange = null;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static FlowFieldPathRequest CreateEmpty() => new();
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static FlowFieldPathRequest Create(Vector3d origin, Vector3d destination) =>
+            Create(origin, destination, GlobalGridManager.VoxelSize);
 
         public static FlowFieldPathRequest Create(
             Vector3d origin,
@@ -41,7 +44,7 @@ namespace Trailblazer.Pathing
             bool allowUnwalkable = false)
         {
             if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
-                return DefaultRequest;
+                return CreateEmpty();
 
             FlowFieldPathRequest request = new()
             {
@@ -53,7 +56,9 @@ namespace Trailblazer.Pathing
                 MaxPathSearchRange = null
             };
 
-            return request.Validate() ? request : DefaultRequest;
+            request.Validate();
+
+            return request;
         }
 
         public override bool Equals(object obj) =>

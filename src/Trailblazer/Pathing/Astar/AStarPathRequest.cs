@@ -3,6 +3,7 @@ using GridForge.Grids;
 using SwiftCollections;
 using System;
 using System.Net;
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
 {
@@ -19,7 +20,7 @@ namespace Trailblazer.Pathing
     /// and path smoothing. Implements value-based comparison and hashing for guide pooling.
     /// </summary>
     public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
-    {      
+    {
         /// <summary>
         /// The maximum Y-axis height delta a unit can step or climb per voxel.
         /// Voxels exceeding this are ignored even if walkable and adjacent.
@@ -28,21 +29,23 @@ namespace Trailblazer.Pathing
 
         public HeuristicMethod Heuristic { get; set; }
 
-        public static readonly AStarPathRequest DefaultRequest = new()
+        public AStarPathRequest()
         {
-            _startNode = null,
-            _endNode = null,
-            UnitSize = GlobalGridManager.VoxelSize,
-            Heuristic = HeuristicMethod.Manhattan,
-            AllowUnwalkable = false,
-            MaxClimbHeight = GlobalGridManager.VoxelSize,
-            MaxPathSearchRange = null
-        };
-
-        public static AStarPathRequest Create(Vector3d origin,Vector3d destination)
-        {
-            return Create(origin, destination, GlobalGridManager.VoxelSize);
+            _startNode = null;
+            _endNode = null;
+            UnitSize = GlobalGridManager.VoxelSize;
+            Heuristic = HeuristicMethod.Manhattan;
+            AllowUnwalkable = false;
+            MaxClimbHeight = GlobalGridManager.VoxelSize;
+            MaxPathSearchRange = null;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static AStarPathRequest CreateEmpty() => new();
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static AStarPathRequest Create(Vector3d origin, Vector3d destination) =>
+            Create(origin, destination, GlobalGridManager.VoxelSize);
 
         public static AStarPathRequest Create(
             Vector3d origin,
@@ -52,7 +55,7 @@ namespace Trailblazer.Pathing
             bool allowUnwalkable = false)
         {
             if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
-                return DefaultRequest;
+                return CreateEmpty();
 
             AStarPathRequest request = new()
             {
@@ -65,9 +68,10 @@ namespace Trailblazer.Pathing
                 MaxPathSearchRange = null
             };
 
-            return request.Validate() ? request : DefaultRequest;
+            request.Validate();
+            return request;
         }
-   
+
         public override bool Equals(object obj) =>
             obj is AStarPathRequest other && Equals(other);
 
@@ -84,6 +88,6 @@ namespace Trailblazer.Pathing
                 MaxClimbHeight,
                 MaxPathSearchRange ?? -1
             ).CombineHashCodes();
-        }     
+        }
     }
 }

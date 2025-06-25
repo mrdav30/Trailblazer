@@ -34,8 +34,8 @@ namespace Trailblazer.Navigation.Motor
         /// This stores the current <see cref="Navigator.SurfaceState"/> for the frame.  
         /// </summary>
         /// <remarks>
-        /// This is only set on <see cref="OnInitialize(INavigate, TraversalCondition)"/>,
-        /// and updated at the end of the frame in <see cref="FinalizeTraversal(INavigate, TraversalCondition)"/>
+        /// This is only set on <see cref="OnInitialize(IMotor, TraversalCondition)"/>,
+        /// and updated at the end of the frame in <see cref="FinalizeTraversal(IMotor, TraversalCondition)"/>
         /// </remarks>
         public TransitState CurrentState { get; private set; }
 
@@ -138,21 +138,26 @@ namespace Trailblazer.Navigation.Motor
         /// <param name="navigator">The navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
         /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
-        public static NavMotor CreateNew(INavigate navigator, TraversalCondition initialCondition) => new(navigator, initialCondition);
+        public static NavMotor CreateNew(IMotor navigator, TraversalCondition initialCondition) => new(navigator, initialCondition);
+
+        /// <summary>
+        /// Initializes a new, empty instance of the <see cref="NavMotor"/> class.
+        /// </summary>
+        public NavMotor() { }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="NavMotor"/> class.
         /// </summary>
         /// <param name="navigator">The navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
-        public NavMotor(INavigate navigator, TraversalCondition initialCondition) => OnInitialize(navigator, initialCondition);
+        public NavMotor(IMotor navigator, TraversalCondition initialCondition) => OnInitialize(navigator, initialCondition);
 
         /// <summary>
         /// Prepares the controller by linking it to the given navigator and setting initial state values.
         /// </summary>
         /// <param name="navigator">The navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
-        public void OnInitialize(INavigate navigator, TraversalCondition initialCondition)
+        public void OnInitialize(IMotor navigator, TraversalCondition initialCondition)
         {
             if (navigator == null)
                 ThrowHelper.ThrowArgumentNullException(nameof(navigator));
@@ -178,7 +183,7 @@ namespace Trailblazer.Navigation.Motor
         /// <param name="traversalSpeed">The speed category of the movement (e.g., walk, jog, sprint).</param>
         /// <param name="isRequestingJump">Whether the navigator is attempting to jump.</param>
         public void Traverse(
-            INavigate navigator,
+            IMotor navigator,
             Vector3d movementDirection,
             TrekRate traversalSpeed,
             bool isRequestingJump = false)
@@ -644,7 +649,7 @@ namespace Trailblazer.Navigation.Motor
         /// This method updates the navigator's velocity, applies necessary adjustments based on traversal state changes,
         /// and processes platform movement or environmental effects as needed.
         /// </remarks>
-        public void FinalizeTraversal(INavigate navigator, TraversalCondition condition)
+        public void FinalizeTraversal(IMotor navigator, TraversalCondition condition)
         {
             if (!IsInitialized || !IsFrameLocked) return;
 

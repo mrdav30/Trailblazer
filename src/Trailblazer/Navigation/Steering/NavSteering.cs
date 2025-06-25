@@ -5,6 +5,7 @@ using System;
 using System.Diagnostics;
 using System.Net;
 using System.Runtime.CompilerServices;
+using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering
@@ -195,6 +196,28 @@ namespace Trailblazer.Navigation.Steering
 
         #endregion
 
+        #region Constructors
+
+        /// <summary>
+        /// Creates a new <see cref="NavSteering"/> instance and initializes it with the provided navigator.
+        /// </summary>
+        /// <param name="navigator">The navigator entity that this controller will manage.</param>
+        /// <returns>A new instance of <see cref="NavSteering"/>.</returns>
+        public static NavSteering CreateNew(ISteer navigator) => new(navigator);
+
+        /// <summary>
+        /// Initializes a new, empty instance of the <see cref="NavSteering"/> class.
+        /// </summary>
+        public NavSteering() { }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="NavSteering"/> class.
+        /// </summary>
+        /// <param name="navigator">The navigator entity that this controller will manage.</param>
+        public NavSteering(ISteer navigator) => OnInitialize(navigator);
+
+        #endregion
+
         #region Group Properties
 
         public int MovementGroupID { get; set; } = -1;
@@ -279,7 +302,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Initializes the navigator by setting up its defaults, events, traversal state, and movement controller.
         /// </summary>
-        public virtual void OnInitialize(INavigate navigator)
+        public virtual void OnInitialize(ISteer navigator)
         {
             // Fatter objects can afford to land imprecisely
             _closingDistance = FixedMath.Round(navigator.UnitRadius + GlobalGridManager.VoxelSize);
@@ -308,7 +331,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Called every simulation step to handle agent steering and movement logic.
         /// </summary>
-        public virtual void OnSimulate(INavigate navigator)
+        public virtual void OnSimulate(ISteer navigator)
         {
             if (!CanMove)
                 return;
@@ -442,7 +465,7 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Computes the steering direction toward the destination or along the path.
         /// </summary>
-        protected virtual Vector3d FindTargetDirection(INavigate body)
+        protected virtual Vector3d FindTargetDirection(ISteer body)
         {
             Vector3d targetDirection = Vector3d.Zero;
             if (HasLineOfSightPath)
@@ -639,7 +662,7 @@ namespace Trailblazer.Navigation.Steering
 
             foreach (IVoxelOccupant entity in ScanManager.ScanRadius(from, paddingRadius))
             {
-                if (entity is not INavigate other)
+                if (entity is not ISteer other)
                     continue;
 
                 Vector3d distance = from - entity.WorldPosition;
@@ -705,20 +728,20 @@ namespace Trailblazer.Navigation.Steering
         /// Calculates a lateral avoidance force based on nearby navigators' predicted collisions.
         /// </summary>
         public static Vector3d CalculateAvoidanceForce(
-            INavigate body,
+            ISteer body,
             Fixed64? range = null,
-            Func<INavigate, bool> filter = null)
+            Func<ISteer, bool> filter = null)
         {
             if (body.Speed <= Fixed64.Zero)
                 return Vector3d.Zero;
 
-            INavigate closest = null;
+            ISteer closest = null;
             Fixed64 avoidRadius = range ?? DefaultSearchRange;
             Fixed64 minAvoidanceDistance = avoidRadius;
 
             foreach (IVoxelOccupant entity in ScanManager.ScanRadius(body.Position, avoidRadius))
             {
-                if (entity is not INavigate other)
+                if (entity is not ISteer other)
                     continue;
 
                 if (filter != null && !filter(other))

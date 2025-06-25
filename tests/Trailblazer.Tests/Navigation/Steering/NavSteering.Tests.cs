@@ -21,10 +21,8 @@ namespace Trailblazer.Tests.Navigation.Steering
         [Fact]
         public void NavSteering_Should_InitializeCorrectly()
         {
-            var steer = new NavSteering();
             var agent = new MockSteerAgent();  // INavigate stub
-
-            steer.OnInitialize(agent);
+            var steer = new NavSteering(agent);
 
             steer.IsAtDestination.Should().BeFalse();
             steer.ShouldMove.Should().BeFalse();
@@ -97,7 +95,7 @@ namespace Trailblazer.Tests.Navigation.Steering
             var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
             steer.OnInitialize(agent);
 
-            var request = AStarPathRequest.DefaultRequest;
+            var request = AStarPathRequest.CreateEmpty();
             request.TryPrepare(agent.Position, agent.Position, Fixed64.One);
 
             request.IsValid.Should().BeTrue();
@@ -270,7 +268,7 @@ namespace Trailblazer.Tests.Navigation.Steering
             var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
             steer.OnInitialize(agent);
 
-            var request = AStarPathRequest.DefaultRequest;
+            var request = AStarPathRequest.CreateEmpty();
             request.TryPrepare(agent.Position, new Vector3d(1, 0, 0), Fixed64.One);
 
             request.IsValid.Should().BeTrue();
@@ -279,24 +277,35 @@ namespace Trailblazer.Tests.Navigation.Steering
             steer.SetTrailGuide(waypointGuide.Object);
             steer.OnSimulate(agent);
 
-            waypointGuide.Verify(x => x.AdvanceWaypoint(), Times.AtLeastOnce);
-
             PathManager.UnloadChart("AdvanceWaypoint");
+            waypointGuide.Verify(x => x.AdvanceWaypoint(), Times.AtLeastOnce);
         }
 
         [Fact]
         public void NavSteering_Should_StopMove_Without_Arrival()
         {
+            var data = new bool[1, 3, 3] {
+                {
+                    { true, true, true },
+                    { true, false, true },
+                    { true, true, true }
+                }
+            };
+
+            PathTestFactory.RegisterFromData("StopMove", data, Vector3d.Zero);
+
             var steer = new NavSteering();
             var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
             steer.OnInitialize(agent);
 
-            var request = AStarPathRequest.Create(agent.Position, new Vector3d(2, 0, 0));
+            var request = AStarPathRequest.Create(agent.Position, new Vector3d(2, 0, 2));
             steer.ApplyPathRequest(request);
             steer.StopMove();
 
             steer.ShouldMove.Should().BeFalse();
             steer.IsAtDestination.Should().BeFalse();
+
+            PathManager.UnloadChart("StopMove");
         }
 
         [Fact]
@@ -367,6 +376,8 @@ namespace Trailblazer.Tests.Navigation.Steering
             request.TrySetUnitSize((Fixed64)2);
             steer.OnSimulate(agent);
 
+            // TODO: this is a false positive, the CurrentRequest mutates based on the change we make here,
+            // but doesn't trigger a new path
             steer.CurrentRequest.UnitSize.Should().Be((Fixed64)2);
 
             PathManager.UnloadChart("RepathUnitSize");

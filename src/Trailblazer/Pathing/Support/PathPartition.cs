@@ -32,7 +32,7 @@ namespace Trailblazer.Pathing
         /// <summary>
         /// The global coordinate of the voxel this partition is attached to.
         /// </summary>
-        public GlobalVoxelIndex GlobalIndex { get; set; }
+        public GlobalVoxelIndex GlobalIndex { get; private set; }
 
         /// <summary>
         /// The spawn token that uniquely identifies this voxel.
@@ -105,6 +105,8 @@ namespace Trailblazer.Pathing
         public bool HasAnyOwners => _chartOwners.Count > 0;
 
         #endregion
+
+        public void SetParentIndex(GlobalVoxelIndex parentIndex) => GlobalIndex = parentIndex;
 
         /// <summary>
         /// Attaches a partition to a specified <see cref="Voxel"/>, updating its state and invoking initialization logic.
@@ -195,7 +197,7 @@ namespace Trailblazer.Pathing
             }
 
             // for each of the 26 SpatialDirection values (except None)
-            foreach (SpatialDirection dir in PathManager.AllDirections)
+            foreach (SpatialDirection dir in SpatialAwareness.AllDirections)
             {
                 // use Voxel’s cached neighbor lookup
                 if (voxel.TryGetNeighborFromDirection(dir, out var neighborVoxel, useCache: true)

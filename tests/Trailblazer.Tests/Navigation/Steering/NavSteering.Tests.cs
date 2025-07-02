@@ -1,4 +1,4 @@
-using FixedMathSharp;
+﻿using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
@@ -22,7 +22,7 @@ namespace Trailblazer.Tests.Navigation.Steering
         public void NavSteering_Should_InitializeCorrectly()
         {
             var agent = new MockSteerAgent();  // INavigate stub
-            var steer = new NavSteering(agent);
+            var steer = new NavSteering(agent.Radius);
 
             steer.IsAtDestination.Should().BeFalse();
             steer.ShouldMove.Should().BeFalse();
@@ -48,7 +48,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(start);
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = AStarPathRequest.Create(start, end);
             steer.ApplyPathRequest(request);
@@ -74,11 +74,11 @@ namespace Trailblazer.Tests.Navigation.Steering
             var steer = new NavSteering();
             var agent = new MockSteerAgent(start);
 
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
             var request = AStarPathRequest.Create(start, end);
             steer.ApplyPathRequest(request);
 
-            steer.OnSimulate(agent);
+            steer.GetHeading(agent);
 
             steer.HasLineOfSightPath.Should().BeTrue();
 
@@ -93,7 +93,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = AStarPathRequest.CreateEmpty();
             request.TryPrepare(agent.Position, agent.Position, Fixed64.One);
@@ -101,7 +101,7 @@ namespace Trailblazer.Tests.Navigation.Steering
             request.IsValid.Should().BeTrue();
 
             steer.ApplyPathRequest(request);
-            steer.OnSimulate(agent);
+            steer.GetHeading(agent);
 
             steer.IsAtDestination.Should().BeTrue();
 
@@ -125,7 +125,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(new Vector3d(0, 0, 0)) { Speed = Fixed64.Zero };
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = AStarPathRequest.Create(agent.Position, new Vector3d(1, 0, 0));
             steer.ApplyPathRequest(request);
@@ -137,7 +137,7 @@ namespace Trailblazer.Tests.Navigation.Steering
             };
 
             for (int i = 0; i < 100; i++)
-                steer.OnSimulate(agent);
+                steer.GetHeading(agent);
 
             stuck.Should().BeTrue();
             steer.IsStuck.Should().BeTrue();
@@ -156,7 +156,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = AStarPathRequest.Create(agent.Position, new Vector3d(2, 0, 0));
             steer.ApplyPathRequest(request);
@@ -174,7 +174,7 @@ namespace Trailblazer.Tests.Navigation.Steering
             };
 
             for (int i = 0; i < 100; i++)
-                steer.OnSimulate(agent);
+                steer.GetHeading(agent);
 
             invalid.Should().BeTrue();
             stopped.Should().BeTrue();  // no route
@@ -200,12 +200,12 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = FlowFieldPathRequest.Create(agent.Position, new Vector3d(4, 0, 0));
             steer.ApplyPathRequest(request);
 
-            steer.OnSimulate(agent);
+            steer.GetHeading(agent);
 
             steer.TrailGuide.Should().NotBeNull();
             steer.TrailGuide.Should().BeOfType<FlowFieldGuide>();
@@ -214,33 +214,85 @@ namespace Trailblazer.Tests.Navigation.Steering
         }
 
         [Fact]
-        public void NavSteering_Should_Apply_GroupSteeringBehavior()
+        public void NavSteering_Should_Apply_CombinedSteering()
         {
-            var agent = new MockSteerAgent(new Vector3d(0, 0, 0)) { Speed = (Fixed64)1 };
+            var agent = new MockSteerAgent(new Vector3d(0, 0, 0)) { Velocity = new Vector3d(1, 0, 0), Speed = (Fixed64)1 };
             var neighbor = new MockSteerAgent(new Vector3d(1, 0, 0)) { Velocity = new Vector3d(1, 0, 0) };
 
             GlobalGridManager.TryGetGrid(new Vector3d(1, 0, 0), out VoxelGrid grid);
             grid.TryAddVoxelOccupant(neighbor);
 
-            var result = NavSteering.ComputeGroupSteering(agent.Position, agent.Speed);
-            result.Should().NotBe(Vector3d.Zero);
+            var steer = new NavSteering();
+
+            var force = steer.ComputeCombinedSteering(
+                agent.Position, 
+                agent.Velocity, 
+                agent.Speed, 
+                agent.Size,
+                agent.GlobalId);
+            force.Should().NotBe(Vector3d.Zero);
 
             grid.TryRemoveVoxelOccupant(neighbor);
         }
 
         [Fact]
-        public void NavSteering_Should_Apply_AvoidanceForce_When_ObstacleInPath()
+        public void ComputeCombinedSteering_Should_ReturnZero_When_NoNeighbors()
         {
-            var agent = new MockSteerAgent(new Vector3d(0, 0, 0)) { Velocity = new Vector3d(1, 0, 0), Speed = (Fixed64)1 };
-            var blocker = new MockSteerAgent(new Vector3d(1, 0, 0));
+            // Arrange
+            var steer = new NavSteering();
+            var agent = new MockSteerAgent(new Vector3d(0, 0, 0))
+            {
+                Speed = Fixed64.One,           // non‐zero
+                Velocity = Vector3d.Zero,      // irrelevant here
+                Size = Fixed64.One
+            };
 
-            GlobalGridManager.TryGetGrid(new Vector3d(1, 0, 0), out VoxelGrid grid);
-            grid.TryAddVoxelOccupant(blocker);
+            // Act
+            var result = steer.ComputeCombinedSteering(
+                agent.Position,
+                agent.Velocity,
+                agent.Speed,
+                agent.Size,
+                agent.GlobalId);
 
-            var force = NavSteering.CalculateAvoidanceForce(agent);
-            force.Should().NotBe(Vector3d.Zero);
+            // Assert
+            result.Should().Be(Vector3d.Zero);
+        }
 
-            grid.TryRemoveVoxelOccupant(blocker);
+        [Fact]
+        public void ComputeCombinedSteering_Should_ReturnZero_When_SpeedIsZero()
+        {
+            // Arrange
+            var steer = new NavSteering();
+            var agent = new MockSteerAgent(new Vector3d(0, 0, 0))
+            {
+                Speed = Fixed64.Zero,       // zero ⇒ immediate exit
+                Velocity = new Vector3d(1, 0, 0),
+                Size = Fixed64.One
+            };
+
+            // even if there’s a neighbor in range…
+            var neighbor = new MockSteerAgent(new Vector3d(1, 0, 0))
+            {
+                Velocity = new Vector3d(1, 0, 0),
+                Size = Fixed64.One
+            };
+            GlobalGridManager.TryGetGrid(neighbor.Position, out var grid);
+            grid.TryAddVoxelOccupant(neighbor);
+
+            // Act
+            var result = steer.ComputeCombinedSteering(
+                agent.Position,
+                agent.Velocity,
+                agent.Speed,
+                agent.Size,
+                agent.GlobalId);
+
+            // Assert
+            result.Should().Be(Vector3d.Zero);
+
+            // Cleanup
+            grid.TryRemoveVoxelOccupant(neighbor);
         }
 
         [Fact]
@@ -266,7 +318,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = AStarPathRequest.CreateEmpty();
             request.TryPrepare(agent.Position, new Vector3d(1, 0, 0), Fixed64.One);
@@ -275,7 +327,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             steer.ApplyPathRequest(request);
             steer.SetTrailGuide(waypointGuide.Object);
-            steer.OnSimulate(agent);
+            steer.GetHeading(agent);
 
             PathManager.UnloadChart("AdvanceWaypoint");
             waypointGuide.Verify(x => x.AdvanceWaypoint(), Times.AtLeastOnce);
@@ -296,7 +348,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = AStarPathRequest.Create(agent.Position, new Vector3d(2, 0, 2));
             steer.ApplyPathRequest(request);
@@ -317,7 +369,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var agent = new MockSteerAgent();
             for (int i = 0; i < TrailblazerManager.FrameRate / 8; i++)
-                steer.OnSimulate(agent);
+                steer.GetHeading(agent);
 
             steer.CanAutoStop.Should().BeTrue();
         }
@@ -337,7 +389,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(Vector3d.Zero);
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             // Ensure larger than voxel size
             var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.Two);
@@ -362,7 +414,7 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(Vector3d.Zero);
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0));
             request.TryPrepare(agent.Position, new Vector3d(2, 0, 0), Fixed64.One);
@@ -370,11 +422,11 @@ namespace Trailblazer.Tests.Navigation.Steering
             request.IsValid.Should().BeTrue();
 
             steer.ApplyPathRequest(request);
-            steer.OnSimulate(agent);  // simulate one frame normally
+            steer.GetHeading(agent);  // simulate one frame normally
 
             // simulate a size change mid-path
             request.TrySetUnitSize((Fixed64)2);
-            steer.OnSimulate(agent);
+            steer.GetHeading(agent);
 
             // TODO: this is a false positive, the CurrentRequest mutates based on the change we make here,
             // but doesn't trigger a new path
@@ -399,19 +451,19 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(Vector3d.Zero);
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0));
             steer.ApplyPathRequest(request);
 
             // get a guide
-            steer.OnSimulate(agent);
+            steer.GetHeading(agent);
 
             steer.TrailGuide.Should().NotBeNull();
 
             // simulate lost guide
             steer.SetTrailGuide(null);
-            steer.OnSimulate(agent);
+            steer.GetHeading(agent);
 
             // shouldn't throw, should just move with Vector3d.Zero
             steer.TargetDirection.Should().Be(Vector3d.Zero);
@@ -434,13 +486,13 @@ namespace Trailblazer.Tests.Navigation.Steering
 
             var steer = new NavSteering();
             var agent = new MockSteerAgent(Vector3d.Zero);
-            steer.OnInitialize(agent);
+            steer.OnInitialize(agent.Radius);
 
             var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0));
             steer.ApplyPathRequest(request);
 
             // simulate successful guide retrieval
-            steer.OnSimulate(agent);
+            steer.GetHeading(agent);
 
             var guide = steer.TrailGuide;
             guide.Should().NotBeNull();

@@ -16,14 +16,21 @@ namespace Trailblazer.Tests.Navigation.Motor
             var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             Vector3d initialPosition = agent.Position;
+            var request = new TraversalRequest
+            {
+                Origin = agent.Position,
+                Rotation = agent.Rotation,
+                Direction = Vector3d.One,
+                Rate = TrekRate.Fast
+            };
 
             // Act
-            agent.Motor.Traverse(agent, Vector3d.One, TrekRate.Fast);
+            agent.Motor.Traverse(agent, request);
             agent.CommitFrameMotion();
 
             // Assert
             Vector3d newPosition = agent.Position;
-            var expectedVelocity = (newPosition - initialPosition) / TrailblazerManager.DeltaTime;
+            var expectedVelocity = (newPosition - initialPosition) * TrailblazerManager.InvDeltaTime;
 
             agent.Motor.Locomotions.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
             agent.Motor.Locomotions.Move.FrameVelocity.Should().Be(expectedVelocity);
@@ -66,8 +73,16 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
+            var request = new TraversalRequest
+            {
+                Origin = agent.Position,
+                Rotation = agent.Rotation,
+                Direction = Vector3d.Forward,
+                Rate = TrekRate.Slow
+            };
+
             // Act
-            agent.Motor.Traverse(agent, Vector3d.Forward, TrekRate.Slow);
+            agent.Motor.Traverse(agent, request);
 
             // Assert
             agent.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -118,10 +133,10 @@ namespace Trailblazer.Tests.Navigation.Motor
             agent.Simulate();
             agent.CommitFrameMotion();
 
-            var slopeAngle = Vector3d.Angle(Vector3d.Up, ground.Up);
             // calculate speed without slopespeed modifier
             var speed = agent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Slow);
-            var projectedVelocity = ((speed * Vector3d.Right) * TrailblazerManager.DeltaTime) / TrailblazerManager.DeltaTime;
+            var projectedVelocity = ((speed * Vector3d.Right) * TrailblazerManager.DeltaTime) 
+                * TrailblazerManager.InvDeltaTime;
 
             agent.Motor.Locomotions.Move.FrameVelocity.x.Should().BeLessThan(projectedVelocity.x); // Moving sideways should project velocity down slope
         }
@@ -141,8 +156,16 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
+            var request = new TraversalRequest
+            {
+                Origin = agent.Position,
+                Rotation = agent.Rotation,
+                Direction = Vector3d.Forward,
+                Rate = TrekRate.Slow
+            };
+
             // Act
-            agent.Motor.Traverse(agent, Vector3d.Forward, TrekRate.Slow);
+            agent.Motor.Traverse(agent, request);
             agent.CommitFrameMotion();
 
             // Assert

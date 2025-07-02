@@ -3,9 +3,7 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using System;
 using System.Diagnostics;
-using System.Net;
 using System.Runtime.CompilerServices;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering
@@ -22,12 +20,12 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Default range to scan for other agents when calculating steering behaviors.
         /// </summary>
-        protected static readonly Fixed64 DefaultSearchRange = Fixed64.One * 10;
+        protected static readonly Fixed64 DefaultGroupFactor = (Fixed64)10;
 
         /// <summary>
         /// Default padding radius used to maintain space between nearby agents.
         /// </summary>
-        protected static readonly Fixed64 DefaultAvoidPadding = Fixed64.One * 3;
+        protected static readonly Fixed64 DefaultAvoidFactor = (Fixed64)3;
 
         /// <summary>
         /// Default weights used for group-based steering calculations (separation, alignment, cohesion).
@@ -36,7 +34,8 @@ namespace Trailblazer.Navigation.Steering
         {
             Separation = (Fixed64)2,
             Alignment = Fixed64.Half,
-            Cohesion = (Fixed64)0.2f
+            Cohesion = (Fixed64)0.2f,
+            Avoidance = Fixed64.One
         };
 
         /// <summary>
@@ -64,6 +63,11 @@ namespace Trailblazer.Navigation.Steering
         /// </summary>
         protected static readonly int AutoPauseStopTime = TrailblazerManager.FrameRate / 8;
 
+        /// <summary>
+        /// Default braking factor applied when decelerating or stopping motion.
+        /// </summary>
+        public static readonly Fixed64 DefaultBrakingPower = (Fixed64)0.15d;
+
         #endregion
 
         #region Runtime State - Pathfinding
@@ -77,6 +81,8 @@ namespace Trailblazer.Navigation.Steering
         /// The final destination this agent is attempting to reach.
         /// </summary>
         public Vector3d Destination { get; protected set; }
+
+        private Fixed64 _lastUnitSize;
 
         /// <inheritdoc cref="DefaultPathRecheckCooldown"/>
         public int PathRecheckCooldownFrames = DefaultPathRecheckCooldown;
@@ -185,6 +191,27 @@ namespace Trailblazer.Navigation.Steering
         /// </summary>
         public Fixed64 StopMultiplier { get; set; } = DefaultDirectStop;
 
+        /// <summary>
+        /// How far to look for group neighbors (separation/alignment/cohesion).
+        /// </summary>
+        public Fixed64 GroupFactor { get; set; } = DefaultGroupFactor;
+
+        /// <summary>
+        /// How far to look for obstacles to avoid.
+        /// </summary>
+        public Fixed64 AvoidFactor { get; set; } = DefaultAvoidFactor;
+
+        /// <summary>
+        /// Weights for separating, aligning, and cohesion in group behavior.
+        /// Avoidance weight is baked in here as well.
+        /// </summary>
+        public GroupBehaviorWeights BehaviorWeights { get; set; } = DefaultBehaviorWeights;
+
+        /// <summary>
+        /// Friction-based deceleration rate used when slowing down on ground surfaces.
+        /// </summary>
+        public Fixed64 BrakingPower { get; set; } = DefaultBrakingPower;
+
         #endregion
 
         #region Events
@@ -201,9 +228,9 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Creates a new <see cref="NavSteering"/> instance and initializes it with the provided navigator.
         /// </summary>
-        /// <param name="navigator">The navigator entity that this controller will manage.</param>
+        /// <param name="radius">The radius of the navigator entity that this controller will manage.</param>
         /// <returns>A new instance of <see cref="NavSteering"/>.</returns>
-        public static NavSteering CreateNew(ISteer navigator) => new(navigator);
+        public static NavSteering CreateNew(Fixed64 radius) => new(radius);
 
         /// <summary>
         /// Initializes a new, empty instance of the <see cref="NavSteering"/> class.
@@ -213,8 +240,8 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Initializes a new instance of the <see cref="NavSteering"/> class.
         /// </summary>
-        /// <param name="navigator">The navigator entity that this controller will manage.</param>
-        public NavSteering(ISteer navigator) => OnInitialize(navigator);
+        /// <param name="radius">The radius of the navigator entity that this controller will manage.</param>
+        public NavSteering(Fixed64 radius) => OnInitialize(radius);
 
         #endregion
 
@@ -258,8 +285,8 @@ namespace Trailblazer.Navigation.Steering
             // NOTE: destination can be an exact point within a voxel, not neccesarily the voxel position
             Destination = destination ?? pathRequest.EndNode.WorldPosition;
 
-            // TODO: once _currentRequest is set here...it should not be mutable outside this class. do we need to clone?
             _currentRequest = pathRequest;
+            _lastUnitSize = pathRequest.UnitSize;
 
             _repathTries = 0;
             _shouldRequestPathThisFrame = true;
@@ -302,10 +329,10 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Initializes the navigator by setting up its defaults, events, traversal state, and movement controller.
         /// </summary>
-        public virtual void OnInitialize(ISteer navigator)
+        public virtual void OnInitialize(Fixed64 radius)
         {
             // Fatter objects can afford to land imprecisely
-            _closingDistance = FixedMath.Round(navigator.UnitRadius + GlobalGridManager.VoxelSize);
+            _closingDistance = FixedMath.Round(radius + GlobalGridManager.VoxelSize);
 
             LeaveMovementGroup();
 
@@ -331,17 +358,17 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Called every simulation step to handle agent steering and movement logic.
         /// </summary>
-        public virtual void OnSimulate(ISteer navigator)
+        public virtual Vector3d GetHeading(ISteer navigator)
         {
             if (!CanMove)
-                return;
+                return Vector3d.Zero;
 
             if (ShouldMove && !IsAtDestination)
             {
                 if (_currentRequest == null)
                 {
                     Arrive();
-                    return;
+                    return TargetDirection;
                 }
 
                 // check if agent has to pathfind, otherwise straight path to rely on destination
@@ -354,7 +381,7 @@ namespace Trailblazer.Navigation.Steering
 #endif
                         Events.OnInvalidPath?.Invoke();
                         Arrive();
-                        return;
+                        return Vector3d.Zero;
                     }
                 }
 
@@ -370,7 +397,15 @@ namespace Trailblazer.Navigation.Steering
                 }
 
                 LastTargetDirection = TargetDirection;
-                TargetDirection = FindTargetDirection(navigator);
+                TargetDirection = FindTargetDirection(navigator.Position);
+
+                // Calculate steering, flocking, and avoidance forces
+                TargetDirection += ComputeCombinedSteering(
+                    navigator.Position,
+                    navigator.Velocity,
+                    navigator.Speed,
+                    navigator.Radius,
+                    navigator.GlobalId);
 
                 // Check if we're close enough to stop moving
                 Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.x.Abs() + TargetDirection.z.Abs());
@@ -379,7 +414,7 @@ namespace Trailblazer.Navigation.Steering
                 if (!HasTrailGuide && (reachedTarget || (!IsStuck && noInput)))
                 {
                     Arrive();
-                    return;
+                    return Vector3d.Zero;
                 }
 
                 if (!CheckStuckStatus(navigator.Position, navigator.Speed, navigator.StuckThresholdSpeed))
@@ -387,9 +422,8 @@ namespace Trailblazer.Navigation.Steering
 #if DEBUG
                     Debug.WriteLine("Stuck agent arriving!");
 #endif
-                    Events.OnIsStuck?.Invoke();
                     Arrive();
-                    return;
+                    return Vector3d.Zero;
                 }
 
                 if (TargetDirection != Vector3d.Zero)
@@ -397,14 +431,13 @@ namespace Trailblazer.Navigation.Steering
                     if (_trailGuide is IWaypointGuide waypointGuide && ShouldAdvanceToNextWaypoint())
                         waypointGuide.AdvanceWaypoint();
 
-                    // Pass the request to the NavMotor (even if we just arrived since we were close enough)
-                    Events.OnStartTraversal?.Invoke(TargetDirection);
+                    if (HasTrailGuide)
+                        SetDeceleration(navigator.Acceleration, navigator.Speed);
                 }
             }
             else
             {
-                // Pass on the idle movement to the motor
-                Events.OnStartTraversal?.Invoke(Vector3d.Zero);
+                TargetDirection = Vector3d.Zero;
 
                 if (navigator.Speed <= Fixed64.Epsilon)
                     StoppedFrameCount++;
@@ -412,6 +445,9 @@ namespace Trailblazer.Navigation.Steering
 
             _autoStopFrameCount--;
             _pathCheckCooldown--;
+
+            Events.OnStartTraversal?.Invoke(TargetDirection);
+            return TargetDirection;
         }
 
         /// <summary>
@@ -424,9 +460,16 @@ namespace Trailblazer.Navigation.Steering
                 return true;
             _shouldRequestPathThisFrame = false;
 
-            // If navigator moved (or got moved), update the steering request.
-            // Note: this shouldn't have changed after calling ApplyRequest.
-            if (!_currentRequest.TrySetOrigin(origin) | !_currentRequest.HasValidEndpoints)
+            // detect size-change
+            if (_currentRequest.UnitSize != _lastUnitSize)
+            {
+                _lastUnitSize = _currentRequest.UnitSize;
+                _shouldRequestPathThisFrame = true;
+            }
+
+            // update origin
+            bool ok = _currentRequest.TrySetOrigin(origin);
+            if (!ok || !_currentRequest.HasValidEndpoints)
             {
 #if DEBUG
                 Debug.WriteLine("Path request is using invalid endpoints!");
@@ -434,12 +477,9 @@ namespace Trailblazer.Navigation.Steering
                 return false;
             }
 
+            // shortcut if no path needed
             if (_currentRequest.HasZeroDisplacement)
-            {
-                if (_repathTries >= 1) return false; // we're stuck and aren't moving
-                // We have no where to go
-                return true;
-            }
+                return _repathTries == 0;
 
             HasLineOfSightPath = IsDestinationInSight(
                 origin,
@@ -449,9 +489,9 @@ namespace Trailblazer.Navigation.Steering
             if (HasLineOfSightPath)
                 return true;  // no path required
 
+            // request guide
             _pathCheckCooldown = PathRecheckCooldownFrames;
-
-            if (!_currentRequest.IsValid | !PathGuideFactory.RequestGuide(_currentRequest, out _trailGuide))
+            if (!_currentRequest.IsValid || !PathGuideFactory.RequestGuide(_currentRequest, out _trailGuide))
             {
 #if DEBUG
                 Debug.WriteLine($"Unable to retrieve a guide from {origin} to {Destination}");
@@ -465,17 +505,17 @@ namespace Trailblazer.Navigation.Steering
         /// <summary>
         /// Computes the steering direction toward the destination or along the path.
         /// </summary>
-        protected virtual Vector3d FindTargetDirection(ISteer body)
+        protected virtual Vector3d FindTargetDirection(Vector3d position)
         {
             Vector3d targetDirection = Vector3d.Zero;
             if (HasLineOfSightPath)
-                targetDirection = Destination - body.Position;
+                targetDirection = Destination - position;
             else if (HasTrailGuide)
             {
                 if (_trailGuide is IWaypointGuide waypointGuide)
-                    targetDirection = waypointGuide.GetMovementDirection(body.Position);
+                    targetDirection = waypointGuide.GetMovementDirection(position);
                 else
-                    _trailGuide.TryGetMovementDirection(body.Position, out targetDirection);
+                    _trailGuide.TryGetMovementDirection(position, out targetDirection);
             }
 
             if (targetDirection == Vector3d.Zero)
@@ -487,25 +527,18 @@ namespace Trailblazer.Navigation.Steering
             }
 
             // This is now the direction we want to be travelling in 
-            targetDirection.Normalize(out _distanceToTarget);
-
-            // Calculate steering and flocking forces for all agents
-            if (IsInGroup)
-                targetDirection += ComputeGroupSteering(body.Position, body.Speed);
-
-            // Avoid any intersection agents!
-            targetDirection += CalculateAvoidanceForce(body);
-
-            return targetDirection.Normal;
+            return targetDirection.Normalize(out _distanceToTarget);
         }
 
         /// <summary>
-        /// Determines whether the agent should advance to the next waypoint based on proximity and heading alignment.
+        /// Returns true if we’re within closing distance _and_ our heading has flipped,
+        /// or if we’re very close relative to voxel size.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ShouldAdvanceToNextWaypoint()
         {
-            return _distanceToTarget < _closingDistance && Vector3d.Dot(TargetDirection, LastTargetDirection) < Fixed64.Epsilon
+            return (_distanceToTarget < _closingDistance
+                        && Vector3d.Dot(TargetDirection, LastTargetDirection) < Fixed64.Epsilon)
                 || _distanceToTarget < _closingDistance * GlobalGridManager.VoxelSize;
         }
 
@@ -566,6 +599,8 @@ namespace Trailblazer.Navigation.Steering
                         _trailGuide = null;
                     }
 
+                    Events.OnIsStuck?.Invoke();
+
                     return false;
                 }
 
@@ -579,6 +614,21 @@ namespace Trailblazer.Navigation.Steering
             _repathTries = 0;
 
             return true;
+        }
+
+        protected virtual void SetDeceleration(Vector3d acceleration, Fixed64 speed)
+        {
+            // Scaling direction before passing to the motor lets us
+            // modulate movement before acceleration is applied
+            Fixed64 deceleration = acceleration != Vector3d.Zero
+                ? acceleration.Magnitude
+                : BrakingPower;
+            Fixed64 slowDistance = speed / deceleration;
+            if (DistanceToTarget > Fixed64.Epsilon && DistanceToTarget <= slowDistance)
+            {
+                Fixed64 closingSpeed = DistanceToTarget / slowDistance;
+                TargetDirection *= closingSpeed; // reduce magnitude = slow down
+            }
         }
 
         /// <summary>
@@ -643,150 +693,99 @@ namespace Trailblazer.Navigation.Steering
         #region Steering Behaviors (Group & Avoidance)
 
         /// <summary>
-        /// Calculates a movement vector that encourages group cohesion, alignment, and separation.
+        /// Computes a combined steering vector—
+        /// Separation, Alignment, Cohesion, plus single-nearest obstacle avoidance.
         /// </summary>
-        public static Vector3d ComputeGroupSteering(
-            Vector3d from,
+        public Vector3d ComputeCombinedSteering(
+            Vector3d position,
+            Vector3d velocity,
             Fixed64 speed,
-            Fixed64? padding = null,
-            GroupBehaviorWeights? weights = null)
+            Fixed64 radius,
+            Guid id)
         {
-            int neighboursCount = 0;
-            Fixed64 paddingRadius = padding ?? DefaultAvoidPadding;
-            GroupBehaviorWeights groupWeights = weights ?? DefaultBehaviorWeights;
-
-            Vector3d totalForce = Vector3d.Zero;
-            Vector3d averageHeading = Vector3d.Zero;
-            //  Sum up the position of our neighbours
-            Vector3d centerOfMass = Vector3d.Zero;
-
-            foreach (IVoxelOccupant entity in ScanManager.ScanRadius(from, paddingRadius))
-            {
-                if (entity is not ISteer other)
-                    continue;
-
-                Vector3d distance = from - entity.WorldPosition;
-                distance.Normalize(out Fixed64 distanceMagnitude);
-
-                // Move away from neighbor if we are too close to
-                totalForce += (distance * (Fixed64.One - (distanceMagnitude / paddingRadius)));
-
-                //  Move closer to entities we are near but not close enough to
-                centerOfMass += entity.WorldPosition;
-
-                //  Change our direction to be closer to our neighbours that are within the max distance and are moving
-                if (other.Velocity != Vector3d.Zero)
-                    averageHeading += other.Velocity.Normal;
-
-                neighboursCount++;
-            }
-
-            if (neighboursCount <= 0)
+            if (speed <= Fixed64.Zero)
                 return Vector3d.Zero;
 
-            //  Separation calculates a force to move away from all of our neighbours. 
-            //  We do this by calculating a force from them to us and scaling it so the force is greater the closer they are.
-            Vector3d seperation = totalForce * (speed / (neighboursCount * Fixed64.One));
+            // we need to see everybody who might influence us—either for group or for avoidance
+            Fixed64 groupRadius = radius * GroupFactor;
+            Fixed64 invGR = Fixed64.One / groupRadius;
+            Fixed64 avoidRadius = radius * AvoidFactor;
+            Fixed64 scanRadius = FixedMath.Max(groupRadius, avoidRadius);
+            Fixed64 groupRadiusSq = groupRadius * groupRadius;
 
-            //  Cohesion and Alignment are for when other agents going to a similar location as us.
-            //  Otherwise we’ll get caught up when other agents move past.
-
-            Fixed64 invNeighborCount = Fixed64.One / neighboursCount;
-
-            //  Alignment calculates a force so that our direction is closer to our neighbours.
-            //  It does this similar to cohesion, but by summing up the direction vectors (normalised velocities) of ourself 
-            //  and our neighbours and working out the average direction.
-            //  Divide by amount of neighbors to get the average heading
-            Vector3d alignment = averageHeading * invNeighborCount;
-
-            //  Cohesion calculates a force that will bring us closer to our neighbours, so we move together as a group rather than individually.
-            //  Cohesion calculates the average position of our neighbours and ourself, and steers us towards it
-            //  seek this position
-            Vector3d cohesion = SteeringBehaviorSeek(from, centerOfMass * invNeighborCount, speed);
-
-            //  Combine them to come up with a total force to apply, decreasing the effect of cohesion
-            return (seperation * groupWeights.Separation) + (alignment * groupWeights.Alignment) + (cohesion * groupWeights.Cohesion);
-        }
-
-        /// <summary>
-        /// Seeks toward a target position with speed-based magnitude adjustment.
-        /// </summary>
-        private static Vector3d SteeringBehaviorSeek(Vector3d from, Vector3d destination, Fixed64 speed)
-        {
-            if (destination == from)
-                return Vector3d.Zero;
-
-            // Desired change of location
-            Vector3d desired = destination - from;
-
-            desired.Normalize(out Fixed64 desiredSpeed);
-            //Desired velocity (move there at maximum speed)
-            return desiredSpeed > Fixed64.Zero ? desired * (speed / desiredSpeed) : Vector3d.Zero;
-        }
-
-        /// <summary>
-        /// Calculates a lateral avoidance force based on nearby navigators' predicted collisions.
-        /// </summary>
-        public static Vector3d CalculateAvoidanceForce(
-            ISteer body,
-            Fixed64? range = null,
-            Func<ISteer, bool> filter = null)
-        {
-            if (body.Speed <= Fixed64.Zero)
-                return Vector3d.Zero;
+            // Accumulators
+            Vector3d separation = Vector3d.Zero;
+            Vector3d alignment = Vector3d.Zero;
+            Vector3d cohesionCM = Vector3d.Zero;
+            int groupCount = 0;
 
             ISteer closest = null;
-            Fixed64 avoidRadius = range ?? DefaultSearchRange;
-            Fixed64 minAvoidanceDistance = avoidRadius;
+            Fixed64 closestDistSq = avoidRadius * avoidRadius;
 
-            foreach (IVoxelOccupant entity in ScanManager.ScanRadius(body.Position, avoidRadius))
+            bool condition(IVoxelOccupant other) => 
+                other.GlobalId != id;
+            foreach (IVoxelOccupant entity in ScanManager.ScanRadius(position, scanRadius, condition))
             {
-                if (entity is not ISteer other)
+                // TODO: need to exclude self
+                if (entity is not ISteer other || other.Radius <= Fixed64.Zero)
                     continue;
 
-                if (filter != null && !filter(other))
-                    continue;
+                Vector3d offset = other.Position - position;
+                Fixed64 distSq = offset.SqrMagnitude;
 
-                Vector3d toOther = other.Position - body.Position;
-                toOther.Normalize(out Fixed64 distance);
-
-                if (distance < minAvoidanceDistance)
+                // Group behaviors
+                if (IsInGroup && distSq < groupRadiusSq)
                 {
+                    groupCount++;
+                    Fixed64 d = FixedMath.Sqrt(distSq);
+                    Fixed64 invD = Fixed64.One / d;
+                    Vector3d norm = offset * invD;  // offset.Normal
+                    // stronger separation the closer they are
+                    Fixed64 push = (groupRadius - d) * invGR;
+                    separation -= norm * push;
+                    alignment += other.Velocity.Normal;
+                    cohesionCM += other.Position;
+                }
+
+                // Track nearest for avoidance
+                if (distSq < closestDistSq)
+                {
+                    closestDistSq = distSq;
                     closest = other;
-                    minAvoidanceDistance = distance;
                 }
             }
 
-            if (closest == null)
-                return Vector3d.Zero;
-
-            // Direction from agent to the other
-            Vector3d avoidanceDir = closest.Position - body.Position;
-
-            if (closest.IsAvoidingLeft)
-                body.IsAvoidingLeft = true;
-            else
+            Vector3d groupForce = Vector3d.Zero;
+            // Finalize group forces
+            if (groupCount > 0)
             {
-                // Left/right test using 2D determinant
-                Fixed64 dot = body.Velocity.x * -avoidanceDir.z + body.Velocity.z * avoidanceDir.x;
-                body.IsAvoidingLeft = dot > Fixed64.Zero;
+                Vector3d sep = separation * BehaviorWeights.Separation;
+                Vector3d align = (alignment / groupCount).Normal * BehaviorWeights.Alignment;
+                Vector3d coh = ((cohesionCM / groupCount - position).Normal) * BehaviorWeights.Cohesion;
+                groupForce = sep + align + coh;
             }
 
-            // Rotate vector by ±90° in XZ
-            Vector3d perp = body.IsAvoidingLeft
-                ? new Vector3d(-avoidanceDir.z, Fixed64.Zero, avoidanceDir.x)
-                : new Vector3d(avoidanceDir.z, Fixed64.Zero, -avoidanceDir.x);
+            // Compute avoidance
+            Vector3d avoidance = Vector3d.Zero;
+            if (closest != null)
+            {
+                Vector3d dir = closest.Position - position;
+                // pick left/right dodge
+                bool dodgeLeft = Vector3d.Dot(velocity, dir) >= Fixed64.Zero;
+                Vector3d perp = dodgeLeft
+                    ? new(-dir.z, Fixed64.Zero, dir.x)
+                    : new(dir.z, Fixed64.Zero, -dir.x);
 
-            perp.Normalize();
+                // prioritize evasive action when facing direct collision(dot ~ ±1),
+                // and de-emphasize near misses(dot ~0)
+                Fixed64 dynamicAvoidWeight = Vector3d.Dot(velocity.Normal, dir.Normal);
+                Fixed64 totalAvoidWeight = BehaviorWeights.Avoidance * dynamicAvoidWeight;
+                avoidance = perp.Normal
+                    * ((radius + closest.Radius) / FixedMath.Sqrt(closestDistSq))
+                    * totalAvoidWeight;
+            }
 
-            // Adjust force based on combined radius
-            Fixed64 combinedRadius = body.UnitRadius + closest.UnitRadius;
-
-            // prioritize evasive action when facing direct collision (dot ~ ±1),
-            // and de-emphasize near misses (dot ~ 0).
-            Fixed64 angelWeight = FixedMath.Abs(Vector3d.Dot(body.Velocity.Normal, avoidanceDir.Normal));
-            Vector3d force = perp * (combinedRadius / minAvoidanceDistance) * angelWeight;
-            return force;
+            return groupForce + avoidance;
         }
 
         #endregion

@@ -14,9 +14,17 @@ namespace Trailblazer.Tests.Navigation.Motor
         {
             // Arrange
             var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+            var request = new TraversalRequest
+            {
+                Origin = scout.Position,
+                Rotation = scout.Rotation,
+                Direction = Vector3d.Zero,
+                Rate = TrekRate.Stationary,
+                IsRequestingJump = true
+            };
 
             // Act
-            scout.Motor.Traverse(scout, Vector3d.Zero, TrekRate.Stationary, isRequestingJump: true);
+            scout.Motor.Traverse(scout, request);
             scout.CommitFrameMotion();
 
             // Assert

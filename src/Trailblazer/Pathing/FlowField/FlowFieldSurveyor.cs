@@ -123,8 +123,8 @@ namespace Trailblazer.Pathing
         /// <param name="current">The current path partition being evaluated.</param>
         private void AnalyzeNeighborDistance(PathPartition current)
         {
-            TryProcessDirection(current, PathManager.PerpendicularDirections);
-            TryProcessDirection(current, PathManager.DiagonalDirections, true);
+            TryProcessDirection(current, SpatialAwareness.PerpendicularDirections);
+            TryProcessDirection(current, SpatialAwareness.DiagonalDirections, true);
         }
 
         private void TryProcessDirection(PathPartition current, SpatialDirection[] directions, bool checkEdges = false)
@@ -156,7 +156,7 @@ namespace Trailblazer.Pathing
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool HasValidDiagonalLegs(PathPartition current, SpatialDirection diagonal)
         {
-            (int dx, int dy, int dz) = GlobalGridManager.DirectionOffsets[(int)diagonal];
+            (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
             if (dx != 0 && !IsLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
                 return false;

@@ -20,25 +20,25 @@ namespace Trailblazer.Tests.Navigation.Motor
             Motor.Events.CanAffordJump = () => true;
 
             CheckTraversalCondition();
-            Motor.UpdateTraversal(SurfaceState, true);
+            Motor.UpdateTraversal(TraversalState, true);
         }
 
         private TraversalMedium? _previousMedium;
         // Update TraversalState based on output from controller
-        public override void CheckTraversalCondition()
+        protected override void CheckTraversalCondition()
         {
             // If scout is already grounded, maintain state unless velocity pushes it up
-            if (SurfaceState.Medium == TraversalMedium.Ground)
+            if (TraversalState.Medium == TraversalMedium.Ground)
             {
                 if (_velocityDelta.y > Fixed64.Zero)
                 {
                     // If scout is moving upwards, it should no longer be grounded
-                    _previousMedium = SurfaceState.Medium;
-                    SurfaceState.Medium = TraversalMedium.Air;
+                    _previousMedium = TraversalState.Medium;
+                    TraversalState.Medium = TraversalMedium.Air;
                     return;
                 }
 
-                var surfaceMatrix = SurfaceState.GroundState?.GroundMatrix;
+                var surfaceMatrix = TraversalState.GroundState?.GroundMatrix;
                 if (surfaceMatrix != null)
                 {
                     // Compute world Y value from surface plane based on scout's X/Z
@@ -55,22 +55,22 @@ namespace Trailblazer.Tests.Navigation.Motor
             }
 
             // If scout is airborne, check if it should transition to grounded
-            if (SurfaceState.Medium == TraversalMedium.Air)
+            if (TraversalState.Medium == TraversalMedium.Air)
             {
-                Fixed64 surfaceLevel = SurfaceState.SurfaceLevel;
+                Fixed64 surfaceLevel = TraversalState.SurfaceLevel;
                 Fixed64 scoutHeight = Position.y;
 
                 // Ensure velocity is downward and scout is within landing range
                 if (_velocityDelta.y < Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
                 {
                     // Set state to previous state or assume ground
-                    SurfaceState.Medium = _previousMedium ?? TraversalMedium.Ground;
+                    TraversalState.Medium = _previousMedium ?? TraversalMedium.Ground;
                     Position = new Vector3d(Position.x, surfaceLevel, Position.z);
 
-                    if (SurfaceState.Medium == TraversalMedium.Ground)
+                    if (TraversalState.Medium == TraversalMedium.Ground)
                     {
                         // Update ground normal if needed (assuming ground is flat for now)
-                        SurfaceState.GroundState ??= new GroundCondition
+                        TraversalState.GroundState ??= new GroundCondition
                         {
                             GroundMatrix = Fixed4x4.Identity, // Assuming a flat ground by default
                         };
@@ -80,9 +80,9 @@ namespace Trailblazer.Tests.Navigation.Motor
                 return;
             }
 
-            if (SurfaceState.Medium == TraversalMedium.Water)
+            if (TraversalState.Medium == TraversalMedium.Water)
             {
-                Fixed64 surfaceLevel = SurfaceState.SurfaceLevel;
+                Fixed64 surfaceLevel = TraversalState.SurfaceLevel;
                 Fixed64 scoutHeight = Position.y;
 
                 if (scoutHeight > surfaceLevel)
@@ -90,14 +90,19 @@ namespace Trailblazer.Tests.Navigation.Motor
                     if (_velocityDelta.y > Fixed64.Zero)
                     {
                         // If scout is moving upwards, it should no longer be grounded
-                        _previousMedium = SurfaceState.Medium;
-                        SurfaceState.Medium = TraversalMedium.Air;
+                        _previousMedium = TraversalState.Medium;
+                        TraversalState.Medium = TraversalMedium.Air;
                         return;
                     }
 
                     Position = new Vector3d(Position.x, surfaceLevel, Position.z);
                 }
             }
+        }
+
+        protected override void CheckVoxelOccupancy(bool init = false)
+        {
+            return;
         }
     }
 }

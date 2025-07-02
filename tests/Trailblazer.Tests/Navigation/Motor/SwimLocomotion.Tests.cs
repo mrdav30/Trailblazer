@@ -316,7 +316,7 @@ namespace Trailblazer.Tests.Navigation.Motor
                 TrailblazerManager.Simulate();
                 agent.Simulate();
                 agent.CommitFrameMotion();
-                if (agent.SurfaceState.Medium == TraversalMedium.Water)
+                if (agent.TraversalState.Medium == TraversalMedium.Water)
                     break;
             }
 

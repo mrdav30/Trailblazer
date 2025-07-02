@@ -31,11 +31,11 @@ namespace Trailblazer.Navigation.Motor
         public NavMotorEvents Events = new();
 
         /// <summary>
-        /// This stores the current <see cref="Navigator.SurfaceState"/> for the frame.  
+        /// This stores the current <see cref="Navigator.TraversalState"/> for the frame.  
         /// </summary>
         /// <remarks>
-        /// This is only set on <see cref="OnInitialize(IMotor, TraversalCondition)"/>,
-        /// and updated at the end of the frame in <see cref="FinalizeTraversal(IMotor, TraversalCondition)"/>
+        /// This is only set on <see cref="OnInitialize"/>,
+        /// and updated at the end of the frame in <see cref="FinalizeTraversal"/>
         /// </remarks>
         public TransitState CurrentState { get; private set; }
 
@@ -135,10 +135,11 @@ namespace Trailblazer.Navigation.Motor
         /// <summary>
         /// Creates a new <see cref="NavMotor"/> instance and initializes it with the provided navigator.
         /// </summary>
-        /// <param name="navigator">The navigator entity that this controller will manage.</param>
+        /// <param name="startingPosition">The position of the navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
         /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
-        public static NavMotor CreateNew(IMotor navigator, TraversalCondition initialCondition) => new(navigator, initialCondition);
+        public static NavMotor CreateNew(Vector3d startingPosition, TraversalCondition initialCondition) => 
+            new(startingPosition, initialCondition);
 
         /// <summary>
         /// Initializes a new, empty instance of the <see cref="NavMotor"/> class.
@@ -148,25 +149,23 @@ namespace Trailblazer.Navigation.Motor
         /// <summary>
         /// Initializes a new instance of the <see cref="NavMotor"/> class.
         /// </summary>
-        /// <param name="navigator">The navigator entity that this controller will manage.</param>
+        /// <param name="startingPosition">The position of the navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
-        public NavMotor(IMotor navigator, TraversalCondition initialCondition) => OnInitialize(navigator, initialCondition);
+        public NavMotor(Vector3d startingPosition, TraversalCondition initialCondition) => 
+            OnInitialize(startingPosition, initialCondition);
 
         /// <summary>
         /// Prepares the controller by linking it to the given navigator and setting initial state values.
         /// </summary>
-        /// <param name="navigator">The navigator entity that this controller will manage.</param>
+        /// <param name="startingPosition">The position of the navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
-        public void OnInitialize(IMotor navigator, TraversalCondition initialCondition)
+        public void OnInitialize(Vector3d startingPosition, TraversalCondition initialCondition)
         {
-            if (navigator == null)
-                ThrowHelper.ThrowArgumentNullException(nameof(navigator));
-
             CurrentState = new TransitState(initialCondition);
             if (CurrentState.GroundState.HasValue)
                 HandlePlatformChange(); // set the initial platform
 
-            Locomotions.Move.LastPosition = navigator.Position;
+            Locomotions.Move.LastPosition = startingPosition;
 
             IsInitialized = true;
         }
@@ -176,37 +175,15 @@ namespace Trailblazer.Navigation.Motor
         #region Phase 1 - Request Traversal
 
         /// <summary>
-        /// Requests movement input for the current simulation frame.
-        /// </summary>
-        /// <param name="navigator">The navigator entity that this controller will manage.</param>
-        /// <param name="movementDirection">The direction of movement, represented as a unit vector.</param>
-        /// <param name="traversalSpeed">The speed category of the movement (e.g., walk, jog, sprint).</param>
-        /// <param name="isRequestingJump">Whether the navigator is attempting to jump.</param>
-        public void Traverse(
-            IMotor navigator,
-            Vector3d movementDirection,
-            TrekRate traversalSpeed,
-            bool isRequestingJump = false)
-        {
-            Traverse(new TraversalRequest
-            {
-                CurrentPosition = navigator.Position,
-                CurrentRotation = navigator.Rotation,
-                Direction = movementDirection,
-                Rate = traversalSpeed,
-                IsRequestingJump = isRequestingJump
-            });
-        }
-
-        /// <summary>
         /// Processes a movement request and applies necessary forces.
         /// </summary>
         /// <remarks>
         /// This method locks the controller for the current frame to prevent duplicate force accumulation.  
         /// Movement forces such as gravity, jump, and platform adjustments are applied.
         /// </remarks>
+        /// <param name="navigator">The navigator this controller manages</param>
         /// <param name="traversalRequest">The movement request containing direction, speed, and jump state.</param>
-        public void Traverse(TraversalRequest traversalRequest)
+        public void Traverse(IMotor navigator, TraversalRequest traversalRequest)
         {
             if (!IsInitialized) return;
 
@@ -228,7 +205,7 @@ namespace Trailblazer.Navigation.Motor
             _forceOutput = Locomotions.Move.FrameVelocity;
 
             // Save last position before platform movement is applied for velocity calculation.
-            Locomotions.Move.LastPosition = traversalRequest.CurrentPosition;
+            Locomotions.Move.LastPosition = traversalRequest.Origin;
 
             // Update platform velocity prior to applying jump force
             UpdatePlatformVelocity();
@@ -250,11 +227,15 @@ namespace Trailblazer.Navigation.Motor
 
             ApplyJumpForce();
 
-            ApplyPlatformMovement();
+            ApplyPlatformMovement(navigator);
 
             // Apply the computed force
             if (_forceOutput != Vector3d.Zero)
-                Events.OnAddVelocityDelta?.Invoke(_forceOutput * TrailblazerManager.DeltaTime);
+            {
+                Vector3d velDelta = _forceOutput * TrailblazerManager.DeltaTime;
+                Events.OnAddVelocityDelta?.Invoke(velDelta);
+                navigator.AddVelocityDelta(velDelta);
+            }
 
             _frameTraversalRequest = default;
         }
@@ -274,7 +255,7 @@ namespace Trailblazer.Navigation.Motor
                     Vector3d previousPoint = Locomotions.Platform.LastTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
 
                     // Store platform velocity to use as a canceling force
-                    Locomotions.Platform.PlatformVelocity = (currentPoint - previousPoint) / TrailblazerManager.DeltaTime;
+                    Locomotions.Platform.PlatformVelocity = (currentPoint - previousPoint) * TrailblazerManager.InvDeltaTime;
                 }
 
                 Locomotions.Platform.LastTransform = Locomotions.Platform.ActiveTransform;
@@ -416,7 +397,7 @@ namespace Trailblazer.Navigation.Motor
         /// <returns>The target horizontal velocity.</returns>
         private Vector3d GetHorizontalVelocity()
         {
-            Fixed3x3 transposedMatrix = _frameTraversalRequest.CurrentRotation.ToMatrix3x3();
+            Fixed3x3 transposedMatrix = _frameTraversalRequest.Rotation.ToMatrix3x3();
             Vector3d desiredLocalDirection = Fixed3x3.InverseTransformDirection(transposedMatrix, _frameTraversalRequest.Direction);
             Fixed64 speed = MaxHoritzontalSpeedInDirection(desiredLocalDirection, _frameTraversalRequest.Rate);
 
@@ -614,7 +595,7 @@ namespace Trailblazer.Navigation.Motor
         /// This method updates the navigator’s position and rotation based on the platform’s transform,
         /// preventing unwanted movement shifts when transitioning between platforms.
         /// </remarks>
-        private void ApplyPlatformMovement()
+        private void ApplyPlatformMovement(IMotor navigator)
         {
             if (!IsMovingWithPlatform) return;
 
@@ -625,16 +606,19 @@ namespace Trailblazer.Navigation.Motor
             FixedQuaternion targetRotation = Locomotions.Platform.ActiveTransform.Rotation * Locomotions.Platform.ScoutLocalRotation;
             if (targetRotation != FixedQuaternion.Identity)
             {
-                FixedQuaternion rotationDiff = targetRotation * Locomotions.Platform.ScoutGlobalRotation.Inverse();
-                Events.OnAddRotationDelta?.Invoke(rotationDiff);
+                FixedQuaternion rotDelta = targetRotation * Locomotions.Platform.ScoutGlobalRotation.Inverse();
+                Events.OnAddRotationDelta?.Invoke(rotDelta);
+                navigator.AddRotationDelta(rotDelta);
             }
 
             Vector3d newGlobalPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
-            Vector3d moveDistance = newGlobalPoint - Locomotions.Platform.ScoutGlobalPoint;
-            if (moveDistance != Vector3d.Zero)
+            Vector3d posDelta = newGlobalPoint - Locomotions.Platform.ScoutGlobalPoint;
+            if (posDelta != Vector3d.Zero)
             {
-                Events.OnAddPositionDelta?.Invoke(moveDistance);
-                Locomotions.Move.LastPosition += moveDistance; // shift last position so it doesn't alter navigator's velocity
+                Events.OnAddPositionDelta?.Invoke(posDelta);
+                navigator.AddPositionDelta(posDelta);
+                // shift last position so it doesn't alter navigator's velocity
+                Locomotions.Move.LastPosition += posDelta;
             }
         }
 
@@ -649,14 +633,14 @@ namespace Trailblazer.Navigation.Motor
         /// This method updates the navigator's velocity, applies necessary adjustments based on traversal state changes,
         /// and processes platform movement or environmental effects as needed.
         /// </remarks>
-        public void FinalizeTraversal(IMotor navigator, TraversalCondition condition)
+        public void FinalizeTraversal(IMotor navigator)
         {
             if (!IsInitialized || !IsFrameLocked) return;
 
             // TODO: should we keep this...or just rely on INavigator?
-            Locomotions.Move.FrameVelocity = (navigator.Position - Locomotions.Move.LastPosition) / TrailblazerManager.DeltaTime;
+            Locomotions.Move.FrameVelocity = (navigator.Position - Locomotions.Move.LastPosition) * TrailblazerManager.InvDeltaTime;
 
-            CurrentState.Update(condition, CurrentState.ToTraversalCondition());
+            CurrentState.Update(navigator.TraversalState, CurrentState.ToTraversalCondition());
 
             // Make sure we aren't hitting the ceiling
             if (Locomotions.Move.FrameVelocity.y > Fixed64.Zero && CurrentState.CeilingLevel != Fixed64.MAX_VALUE)

@@ -18,10 +18,17 @@ namespace Trailblazer.Tests.Navigation.Motor
             Vector3d expectedVelocity = Vector3d.Down;
             expectedVelocity.y += -agent.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
 
-            TraversalCondition state = agent.SurfaceState;
+            var request = new TraversalRequest
+            {
+                Origin = agent.Position,
+                Rotation = agent.Rotation,
+                Direction = Vector3d.Zero,
+                Rate = TrekRate.Stationary,
+                IsRequestingJump = true
+            };
 
             // Act
-            agent.Motor.Traverse(agent, Vector3d.Zero, TrekRate.Stationary, isRequestingJump: true);
+            agent.Motor.Traverse(agent, request);
             agent.CommitFrameMotion();
 
             // Assert

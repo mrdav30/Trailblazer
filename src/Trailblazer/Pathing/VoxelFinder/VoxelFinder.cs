@@ -72,7 +72,7 @@ namespace Trailblazer.Pathing
             bool checkPassable = unitSize.HasValue && unitSize.Value != GlobalGridManager.VoxelSize;
 
             // prefer straight neighbors since they cost less
-            foreach (SpatialDirection dir in PathManager.PerpendicularDirections)
+            foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
                     || !closestNeighbor.TryGetPartition(out PathPartition part)
@@ -80,7 +80,7 @@ namespace Trailblazer.Pathing
                 return true;
             }
 
-            foreach (SpatialDirection dir in PathManager.DiagonalDirections)
+            foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
                     || !closestNeighbor.TryGetPartition(out PathPartition part)

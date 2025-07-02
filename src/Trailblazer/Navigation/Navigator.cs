@@ -1,7 +1,12 @@
 ﻿using System;
+using System.Linq;
 using FixedMathSharp;
+using GridForge.Grids;
+using GridForge.Spatial;
+using SwiftCollections;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
+using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation
@@ -23,60 +28,60 @@ namespace Trailblazer.Navigation
         /// </summary>
         public static readonly Fixed64 DefaultFootPositionAdjust = new(0.25f);
 
-        /// <summary>
-        /// Default braking factor applied when decelerating or stopping motion.
-        /// </summary>
-        public static readonly Fixed64 DefaultBrakingPower = (Fixed64)0.15d;
-
         #endregion
 
         #region State - Position / Rotation / Velocity
 
-        /// <inheritdoc cref="INavigate.Position"/>
         public Vector3d Position { get; protected set; }
+
+        public Vector3d LastPosition { get; protected set; }
+
+        public FixedQuaternion Rotation { get; protected set; } = FixedQuaternion.Identity;
+
+        public Vector3d Forward { get; protected set; }
+
+        public Vector3d Velocity { get; protected set; }
+
+        public Fixed64 Speed { get; protected set; }
+
+        public Vector3d Acceleration { get; protected set; }
 
         /// <summary>
         /// The change in position to apply during the current simulation frame.
         /// </summary>
         protected Vector3d _positionDelta;
 
-        /// <inheritdoc cref="INavigate.Rotation"/>
-        public FixedQuaternion Rotation { get; protected set; } = FixedQuaternion.Identity;
-
         /// <summary>
         /// The change in rotation to apply during the current simulation frame.
         /// </summary>
         protected FixedQuaternion _rotationDelta = FixedQuaternion.Identity;
-
-        /// <inheritdoc cref="INavigate.Velocity"/>
-        public Vector3d Velocity { get; protected set; }
 
         /// <summary>
         /// The velocity change computed during the simulation frame.
         /// </summary>
         protected Vector3d _velocityDelta;
 
-        /// <inheritdoc cref="INavigate.Speed"/>
-        public Fixed64 Speed { get; protected set; }
+        protected bool _isSet;
 
-        /// <summary>
-        /// The current acceleration vector of the navigator, updated each frame based on velocity change.
-        /// </summary>
-        public Vector3d Acceleration { get; protected set; }
+        protected bool _isInitialized;
+
+        public bool IsActive => _isSet && _isInitialized;
 
         #endregion
 
         #region State - Traversal / Steering
 
-        /// <summary>
-        /// The current traversal condition of the scout, including medium (ground, air, water) and surface level.
-        /// </summary>
-        public TraversalCondition SurfaceState { get; protected set; }
+        public TraversalCondition TraversalState { get; protected set; }
 
         /// <summary>
         /// The controller responsible for managing the navigator's desired movement direction.
         /// </summary>
         public NavSteering Steering { get; protected set; }
+
+        /// <summary>
+        /// The controller responsible for managing the navigator's rotation towards the movement direction.
+        /// </summary>
+        public NavTurning Turning { get; protected set; }
 
         /// <summary>
         /// The controller responsible for managing the navigator's movement and physics interactions.
@@ -96,44 +101,30 @@ namespace Trailblazer.Navigation
         /// <summary>
         /// The traversal request for the current frame, containing directional intent and travel mode.
         /// </summary>
-        private TraversalRequest _currentFrameRequest;
+        private TraversalRequest _currentFrameRequest = new();
 
         #endregion
 
         #region Settings
 
-        /// <summary>
-        /// Friction-based deceleration rate used when slowing down on ground surfaces.
-        /// </summary>
-        public Fixed64 BrakingPower { get; set; } = DefaultBrakingPower;
+        public Fixed64 Size { get; set; } = Fixed64.One;
 
-        /// <inheritdoc cref="INavigate.UnitSize"/>
-        public Fixed64 UnitSize { get; set; } = Fixed64.One;
+        public Fixed64 Radius => Size * Fixed64.Half;
 
         /// <summary>
         /// Adjustment factor for the foot position, used to determine ground contact points.
         /// </summary>
         public Fixed64 FootPositionAdjust { get; set; } = DefaultFootPositionAdjust;
 
-        /// <summary>
-        /// Determines whether the navigator can rotate toward a movement direction when starting traversal.
-        /// </summary>
-        public bool CanTurn = true;
-
-        /// <summary>
-        /// Event callback triggered when a new traversal direction requires a turn to align the facing rotation.
-        /// </summary>
-        public Action<Vector3d> OnStartTurn;
-
         #endregion
 
-        #region Computed Properties
+        #region Voxel Occupancy
 
-        /// <inheritdoc cref="INavigate.UnitRadius"/>
-        public Fixed64 UnitRadius => UnitSize * Fixed64.Half;
+        public Guid GlobalId { get; protected set; }
 
-        /// <inheritdoc cref="INavigate.IsAvoidingLeft"/>
-        public bool IsAvoidingLeft { get; set; }
+        public byte OccupantGroupId { get; set; } = 1;
+
+        public SwiftDictionary<GlobalVoxelIndex, int> OccupyingIndexMap { get; protected set; } = new();
 
         #endregion
 
@@ -142,46 +133,74 @@ namespace Trailblazer.Navigation
         /// <summary>
         /// Sets the initial configuration of the navigator, including position, rotation, velocity, and size.
         /// </summary>
-        /// <param name="startingPosition">Initial world-space position.</param>
-        /// <param name="startingRotation">Optional starting rotation.</param>
-        /// <param name="initialVelocity">Optional initial velocity.</param>
-        /// <param name="gridSize">Optional grid size (defaults to 1).</param>
+        /// <param name="position">Initial world-space position.</param>
+        /// <param name="rotation">Optional starting rotation.</param>
+        /// <param name="velocity">Optional initial velocity.</param>
+        /// <param name="size">Optional grid size (defaults to 1).</param>
         public virtual void Setup(
-            Vector3d startingPosition,
-            FixedQuaternion? startingRotation = null,
-            Vector3d? initialVelocity = null,
-            Fixed64? gridSize = null)
+            Vector3d position,
+            FixedQuaternion? rotation = null,
+            Vector3d? velocity = null,
+            Fixed64? size = null)
         {
-            Position = startingPosition;
-            Rotation = startingRotation ?? FixedQuaternion.Identity;
-            Velocity = initialVelocity ?? Vector3d.Zero;
-            UnitSize = gridSize ?? Fixed64.One;
+            GlobalId = GenerateGUID();
+
+            LastPosition = Position = position;
+            Rotation = rotation ?? FixedQuaternion.Identity;
+            if (Rotation != FixedQuaternion.Identity)
+                Forward = Rotation.Rotate(Vector3d.Forward);
+            else
+                Forward = Vector3d.Forward;
+            Velocity = velocity ?? Vector3d.Zero;
+            Size = size ?? Fixed64.One;
+
+            _isSet = true;
         }
 
         /// <summary>
         /// Initializes the navigator by setting up its defaults, events, traversal state, and movement controller.
         /// </summary>
-        public virtual void Initialize(TraversalCondition surfaceState)
+        public virtual void Initialize(TraversalCondition condition)
         {
-            SurfaceState = surfaceState;
+            TraversalState = condition;
 
-            Steering = NavSteering.CreateNew(this);
+            Steering = NavSteering.CreateNew(Radius);
 
-            Steering.Events.OnStartTraversal += HandlePathStart;
-
-            Motor = NavMotor.CreateNew(this, SurfaceState);
+            Motor = NavMotor.CreateNew(Position, TraversalState);
             Motor.SetVelocity(Velocity);
 
-            Motor.Events.OnAddPositionDelta += AddPositionDelta;
-            Motor.Events.OnAddRotationDelta += AddRotationDelta;
-            Motor.Events.OnAddVelocityDelta += AddVelocityDelta;
+            Turning = NavTurning.CreateNew(Radius);
+
+            CheckVoxelOccupancy(true);
+
+            _isInitialized = true;
         }
 
         /// <summary>
         /// Replaces the current traversal state with the given one.
         /// </summary>
         /// <param name="state">The new traversal condition to apply.</param>
-        public virtual void ReplaceTraversalState(TraversalCondition state) => SurfaceState = state;
+        public virtual void ReplaceTraversalState(TraversalCondition state) => TraversalState = state;
+
+        public virtual void Reset()
+        {
+            TraversalState = TraversalCondition.Empty;
+            _currentFrameRequest = TraversalRequest.Empty;
+
+            // store copy since this will mutate the collection
+            foreach (var idx in OccupyingIndexMap.Keys.ToArray())
+            {
+                if (!GlobalGridManager.TryGetGrid(idx.GridIndex, out VoxelGrid grid))
+                    continue;
+
+                grid.TryRemoveVoxelOccupant(idx.VoxelIndex, this);
+            }
+
+            OccupyingIndexMap.Clear();
+
+            _isSet = false;
+            _isInitialized = false;
+        }
 
         #endregion
 
@@ -198,12 +217,11 @@ namespace Trailblazer.Navigation
             TrekRate? rate = null,
             bool? isRequestingJump = null)
         {
-            _currentFrameRequest = new TraversalRequest()
-            {
-                Direction = direction ?? Vector3d.Zero,
-                Rate = rate ?? TrekRate.Stationary,
-                IsRequestingJump = isRequestingJump ?? false
-            };
+            if (!IsActive) return;
+
+            _currentFrameRequest.Direction = direction ?? Vector3d.Zero;
+            _currentFrameRequest.Rate = rate ?? TrekRate.Stationary;
+            _currentFrameRequest.IsRequestingJump = isRequestingJump ?? false;
 
             IsManuallyControlled = true;
         }
@@ -223,16 +241,16 @@ namespace Trailblazer.Navigation
             bool? isRequestingJump = null,
             bool? allowUnwalkable = null)
         {
-            _currentFrameRequest = new TraversalRequest()
-            {
-                Rate = rate ?? TrekRate.Stationary,
-                IsRequestingJump = isRequestingJump ?? false
-            };
+            if (!IsActive) return;
+
+            _currentFrameRequest.Direction = Vector3d.Zero;
+            _currentFrameRequest.Rate = rate ?? TrekRate.Stationary;
+            _currentFrameRequest.IsRequestingJump = isRequestingJump ?? false;
 
             IsManuallyControlled = false;
 
             if (!pathRequest.IsValid)
-                pathRequest.TryPrepare(Position, destination, UnitSize);
+                pathRequest.TryPrepare(Position, destination, Size);
 
             Steering.ApplyPathRequest(pathRequest, destination);
         }
@@ -257,15 +275,17 @@ namespace Trailblazer.Navigation
         /// </summary>
         public virtual void Simulate()
         {
-            if (IsManuallyControlled)
-            {
-                _currentFrameRequest.CurrentPosition = Position;
-                _currentFrameRequest.CurrentRotation = Rotation;
-                StartTraversal(_currentFrameRequest);
-                return;
-            }
+            if (!IsActive)
+                throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
-            Steering.OnSimulate(this);
+            _currentFrameRequest.Origin = Position;
+            _currentFrameRequest.Rotation = Rotation;
+
+            if (!IsManuallyControlled)
+                _currentFrameRequest.Direction = Steering.GetHeading(this);
+
+            StartTraversal(_currentFrameRequest);
+            Turning.OnSimulate(this);
         }
 
         /// <summary>
@@ -277,8 +297,13 @@ namespace Trailblazer.Navigation
         /// </remarks>
         public virtual void CommitFrameMotion()
         {
-            Vector3d lastPosition = Position;
+            if (!IsActive)
+                throw new InvalidOperationException("Navigator must be Setup and Initialized before CommitFrameMotion().");
+
+            LastPosition = Position;
             Position += _positionDelta + _velocityDelta;
+
+            CheckVoxelOccupancy();
 
             if (_rotationDelta != FixedQuaternion.Identity)
             {
@@ -286,12 +311,18 @@ namespace Trailblazer.Navigation
                 _rotationDelta = FixedQuaternion.Identity;
             }
 
+            if (Rotation != FixedQuaternion.Identity)
+                Forward = Rotation.Rotate(Vector3d.Forward);
+            else
+                Forward = Vector3d.Forward;
+
             CheckTraversalCondition();
 
             Vector3d previousVelocity = Velocity;
-            Velocity = (Position - lastPosition) / TrailblazerManager.DeltaTime;
+            Fixed64 invDelta = TrailblazerManager.InvDeltaTime;
+            Velocity = (Position - LastPosition) * invDelta;
             Speed = Velocity != Vector3d.Zero ? Velocity.Magnitude : Fixed64.Zero;
-            Acceleration = (Velocity - previousVelocity) / TrailblazerManager.DeltaTime;
+            Acceleration = (Velocity - previousVelocity) * invDelta;
 
             if (Steering.ShouldMove && Acceleration != Vector3d.Zero)
                 StuckThresholdSpeed = (Acceleration / TrailblazerManager.FrameRate).Magnitude;
@@ -301,7 +332,8 @@ namespace Trailblazer.Navigation
             _positionDelta = Vector3d.Zero;
             _velocityDelta = Vector3d.Zero;
 
-            Motor.FinalizeTraversal(this, SurfaceState);
+            Motor.FinalizeTraversal(this);
+            Turning.OnLateSimulate(this);
 
             // Reset travel request for next frame
             _currentFrameRequest = TraversalRequest.Empty;
@@ -313,36 +345,8 @@ namespace Trailblazer.Navigation
         /// <param name="request">The traversal request to initiate.</param>
         protected virtual void StartTraversal(TraversalRequest request)
         {
-            if (CanTurn)
-                //TODO: integrate this...only when the angle to request.Direction is above a threshold (e.g., > 10 degrees).
-                OnStartTurn?.Invoke(request.Direction);
-
-            Motor.Traverse(request);
-        }
-
-        /// <summary>
-        /// Called when a new guided path traversal begins, typically after a TrailGuide returns a direction to follow.
-        /// </summary>
-        /// <param name="direction">The direction vector produced by the pathfinding logic.</param>
-        protected virtual void HandlePathStart(Vector3d direction)
-        {
-            _currentFrameRequest.CurrentPosition = Position;
-            _currentFrameRequest.CurrentRotation = Rotation;
-
-            if (direction != Vector3d.Zero && !Steering.HasTrailGuide)
-            {
-                // Scaling direction before passing to the motor lets us modulate movement before acceleration is applied
-                Fixed64 deceleration = Acceleration != Vector3d.Zero ? Acceleration.Magnitude : BrakingPower;
-                Fixed64 slowDistance = Speed / deceleration;
-                if (Steering.DistanceToTarget > Fixed64.Epsilon && Steering.DistanceToTarget <= slowDistance)
-                {
-                    Fixed64 closingSpeed = Steering.DistanceToTarget / slowDistance;
-                    direction *= closingSpeed; // reduce magnitude = slow down
-                }
-            }
-
-            _currentFrameRequest.Direction = direction;
-            StartTraversal(_currentFrameRequest);
+            Turning.RequestTurnDirection(Forward, request.Direction);
+            Motor.Traverse(this, request);
         }
 
         #endregion
@@ -353,8 +357,8 @@ namespace Trailblazer.Navigation
         /// Updates the scout’s traversal state, including its current medium and surface information.
         /// </summary>
         /// <remarks>
-        /// Make sure to update this before the next <see cref="CommitFrameMotion"/> so <see cref="NavMotor.FinalizeTraversal(INavigate, TraversalCondition)"/> can update it's state.
-        /// If intent is to update before next <see cref="Simulate"/>, ensure that <see cref="NavMotor.UpdateTraversal(TraversalCondition, bool)"/> is called to update state.
+        /// Make sure to update this before the next <see cref="CommitFrameMotion"/> so <see cref="NavMotor.FinalizeTraversal"/> can update it's state.
+        /// If intent is to update before next <see cref="Simulate"/>, ensure that <see cref="NavMotor.UpdateTraversal"/> is called to update state.
         /// </remarks>
         /// <param name="medium">The traversal medium (e.g., ground, air, water).</param>
         /// <param name="surfaceLevel">The vertical surface level, if applicable.</param>
@@ -368,21 +372,23 @@ namespace Trailblazer.Navigation
             Fixed64? ceilingLevel = null,
             bool updateMotorState = false)
         {
-            SurfaceState.Medium = medium ?? SurfaceState.Medium;
-            SurfaceState.SurfaceLevel = surfaceLevel ?? SurfaceState.SurfaceLevel;
-            SurfaceState.GroundState = surfaceCondition ?? SurfaceState.GroundState;
-            SurfaceState.CeilingLevel = ceilingLevel ?? SurfaceState.CeilingLevel;
+            if (!IsActive) return;
+
+            TraversalState.Medium = medium ?? TraversalState.Medium;
+            TraversalState.SurfaceLevel = surfaceLevel ?? TraversalState.SurfaceLevel;
+            TraversalState.GroundState = surfaceCondition ?? TraversalState.GroundState;
+            TraversalState.CeilingLevel = ceilingLevel ?? TraversalState.CeilingLevel;
 
             if (updateMotorState)
-                Motor.UpdateTraversal(SurfaceState);
+                Motor.UpdateTraversal(TraversalState);
         }
 
         /// <summary>
         /// Performs a grounded surface check to determine the current traversal condition.
         /// Implementations should update the surface state based on collision or probe logic.
         /// </summary>
-        public abstract void CheckTraversalCondition();
-
+        protected abstract void CheckTraversalCondition();
+      
         #endregion
 
         #region Deltas - Position / Velocity / Rotation
@@ -391,7 +397,7 @@ namespace Trailblazer.Navigation
         /// Adds the given delta to the current frame’s position offset.
         /// </summary>
         /// <param name="positionDelta">The offset to apply to position this frame.</param>
-        protected virtual void AddPositionDelta(Vector3d positionDelta)
+        public virtual void AddPositionDelta(Vector3d positionDelta)
         {
             _positionDelta += positionDelta;
         }
@@ -400,7 +406,7 @@ namespace Trailblazer.Navigation
         /// Adds the given delta to the current frame’s rotation offset.
         /// </summary>
         /// <param name="rotationDelta">The offset to apply to rotation this frame.</param>
-        protected virtual void AddRotationDelta(FixedQuaternion rotationDelta)
+        public virtual void AddRotationDelta(FixedQuaternion rotationDelta)
         {
             _rotationDelta *= rotationDelta;
         }
@@ -409,20 +415,67 @@ namespace Trailblazer.Navigation
         /// Adds the given delta to the current frame’s velocity offset.
         /// </summary>
         /// <param name="velocityDelta">The offset to apply to velocity this frame.</param>
-        protected virtual void AddVelocityDelta(Vector3d velocityDelta)
+        public virtual void AddVelocityDelta(Vector3d velocityDelta)
         {
             // assume a mass of 1...for now
             _velocityDelta += velocityDelta;
         }
 
+        public virtual void ApplyRotation(FixedQuaternion rotation) => Rotation = rotation;
+
         #endregion
 
         #region Utilities
 
-        /// <inheritdoc cref="INavigate.GetFootPosition"/>
+        /// <inheritdoc cref="IMotor.GetFootPosition"/>
         public virtual Vector3d GetFootPosition()
         {
             return Position + Vector3d.Down * FootPositionAdjust;
+        }
+
+        protected virtual Guid GenerateGUID() => Guid.NewGuid();
+
+        #endregion
+
+        #region Occupancy Mangement
+
+        protected virtual void CheckVoxelOccupancy(bool init = false)
+        {
+            if (!init && Position == LastPosition) return;
+
+            bool voxelFound = GlobalGridManager.TryGetGridAndVoxel(
+                Position,
+                out VoxelGrid curGrid,
+                out Voxel curVoxel);
+            if (!voxelFound) return;
+
+            bool wasEmpty = OccupyingIndexMap.Count == 0;
+            if (curGrid.TryAddVoxelOccupant(curVoxel, this))
+                if (wasEmpty)
+                    return;  // assume agent has not occupied another voxel
+
+            bool lastVoxelFound = GlobalGridManager.TryGetGridAndVoxel(
+                LastPosition,
+                out VoxelGrid lastGrid,
+                out Voxel lastVoxel);
+
+            // check if position is still within the same voxel
+            if (!lastVoxelFound || curVoxel.SpawnToken == lastVoxel.SpawnToken)
+                return;
+
+            lastGrid.TryRemoveVoxelOccupant(lastVoxel, this);
+        }
+
+        public virtual void SetOccupancy(GlobalVoxelIndex index, int ticket)
+        {
+            if (!IsActive) return;
+            OccupyingIndexMap[index] = ticket;
+        }
+
+        public virtual void RemoveOccupancy(GlobalVoxelIndex index)
+        {
+            if (!IsActive) return;
+            OccupyingIndexMap.Remove(index);
         }
 
         #endregion

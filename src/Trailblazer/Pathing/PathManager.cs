@@ -58,25 +58,6 @@ namespace Trailblazer.Pathing
             new(() => new SwiftHashSetPool<PathPartition>());
         internal static SwiftHashSetPool<PathPartition> PartitionSetPool => _partitionSetPool.Value;
 
-        /// <summary>
-        /// All 26 neighbor directions excluding None.
-        /// </summary>
-        public static readonly SpatialDirection[] AllDirections =
-            Enum.GetValues(typeof(SpatialDirection))
-                .Cast<SpatialDirection>()
-                .Where(d => d != SpatialDirection.None)
-                .ToArray();
-
-        public static readonly SpatialDirection[] PerpendicularDirections
-          = AllDirections
-              .Where(IsPerpendicularNeighbor)
-              .ToArray();
-
-        public static readonly SpatialDirection[] DiagonalDirections
-          = AllDirections
-              .Where(IsDiagonalNeighbor)
-              .ToArray();
-
         #endregion
 
         internal static void Tick(int currentFrame)
@@ -272,7 +253,7 @@ namespace Trailblazer.Pathing
         /// <summary>Returns walkable neighbors for a specific voxel.</summary>
         public static IEnumerable<TraversableVoxel> WalkableNeighborsOf(Voxel voxel)
         {
-            foreach (SpatialDirection dir in AllDirections)
+            foreach (SpatialDirection dir in SpatialAwareness.AllDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
                 if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
@@ -292,7 +273,7 @@ namespace Trailblazer.Pathing
         /// <summary>Returns all straight (orthogonal) neighbors.</summary>
         public static IEnumerable<TraversableVoxel> WalkablePerpendicularNeighborsOf(Voxel voxel)
         {
-            foreach (SpatialDirection dir in PerpendicularDirections)
+            foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
                 if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
@@ -312,7 +293,7 @@ namespace Trailblazer.Pathing
         /// <summary>Returns all diagonal neighbors, avoiding edge-cutting.</summary>
         public static IEnumerable<TraversableVoxel> WalkableDiagonalNeighborsOf(Voxel voxel)
         {
-            foreach (SpatialDirection dir in DiagonalDirections)
+            foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
             {
                 if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
                 if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
@@ -326,7 +307,7 @@ namespace Trailblazer.Pathing
         /// </summary>
         private static bool HasBlockedEdgeNeighbor(Voxel voxel, SpatialDirection dir)
         {
-            (int dx, int dy, int dz) = GlobalGridManager.DirectionOffsets[(int)dir];
+            (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)dir];
             // build legs for each non-zero axis
             foreach ((int ax, int ay, int az) in new[] { (dx, 0, 0), (0, dy, 0), (0, 0, dz) })
             {
@@ -340,12 +321,6 @@ namespace Trailblazer.Pathing
             }
             return false;
         }
-
-        /// <summary>True for pure axis-aligned directions.</summary>
-        public static bool IsPerpendicularNeighbor(SpatialDirection dir) => (int)dir < 6;
-
-        /// <summary>True for any diagonal step (multiple axes).</summary>
-        public static bool IsDiagonalNeighbor(SpatialDirection dir) => (int)dir >= 6;
 
         #endregion
 

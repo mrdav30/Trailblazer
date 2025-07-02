@@ -1,11 +1,11 @@
 ﻿using FixedMathSharp;
 
-/// <summary>
-/// Defines the contract for a navigation guide responsible for computing and providing movement directions
-/// to reach a specified destination using a particular pathfinding strategy (e.g., A* or flow field).
-/// </summary>
 namespace Trailblazer.Pathing
 {
+    /// <summary>
+    /// Defines the contract for a navigation guide responsible for computing and providing movement directions
+    /// to reach a specified destination using a particular pathfinding strategy (e.g., A* or flow field).
+    /// </summary>
     public interface IGuide
     {
         /// <summary>

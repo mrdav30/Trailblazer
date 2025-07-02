@@ -6,11 +6,22 @@ namespace Trailblazer.Navigation
     [Serializable]
     public struct TraversalRequest
     {
-        [Transient]
-        public Vector3d CurrentPosition { get; set; }
+        /// <summary>
+        /// Represents an empty movement request with default values.
+        /// </summary>
+        public static readonly TraversalRequest Empty = new();
 
         [Transient]
-        public FixedQuaternion CurrentRotation { get; set; }
+        public Vector3d Origin { get; set; }
+
+        [Transient]
+        public FixedQuaternion Rotation { get; set; }
+
+        /// <summary>
+        /// Normalized distance of movement
+        /// </summary>
+        [Transient]
+        public Vector3d Direction { get; set; }
 
         /// <summary>
         /// The speed at which the scout wants to move.
@@ -23,16 +34,5 @@ namespace Trailblazer.Navigation
         /// </summary>
         [Transient]
         public bool IsRequestingJump { get; set; }
-
-        /// <summary>
-        /// Normalized distance of movement
-        /// </summary>
-        [Transient]
-        public Vector3d Direction { get; set; }
-
-        /// <summary>
-        /// Represents an empty movement request with default values.
-        /// </summary>
-        public static readonly TraversalRequest Empty = new();
     }
 }

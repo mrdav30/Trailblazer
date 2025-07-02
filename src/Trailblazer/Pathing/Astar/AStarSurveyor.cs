@@ -156,9 +156,9 @@ namespace Trailblazer.Pathing
             if (!_meta.TryGetValue(current.VoxelToken, out AStarVoxelMeta data))
                 return false;
 
-            if (TryProcessDirection(current, PathManager.PerpendicularDirections, data.MovementCost + StraightCost))
+            if (TryProcessDirection(current, SpatialAwareness.PerpendicularDirections, data.MovementCost + StraightCost))
                 return true;
-            if(TryProcessDirection(current, PathManager.DiagonalDirections, data.MovementCost + DiagonalCost, true))
+            if(TryProcessDirection(current, SpatialAwareness.DiagonalDirections, data.MovementCost + DiagonalCost, true))
                 return true;
 
             return false;
@@ -185,7 +185,7 @@ namespace Trailblazer.Pathing
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool HasValidDiagonalLegs(PathPartition current, SpatialDirection diagonal)
         {
-            (int dx, int dy, int dz) = GlobalGridManager.DirectionOffsets[(int)diagonal];
+            (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
             if (dx != 0 && !IsLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
                 return false;

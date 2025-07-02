@@ -23,9 +23,17 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
+            var request = new TraversalRequest
+            {
+                Origin = scout.Position,
+                Rotation = scout.Rotation,
+                Direction = Vector3d.Forward,
+                Rate = TrekRate.Slow
+            };
+
             // Act
-            scout.Motor.Traverse(scout, Vector3d.Forward, TrekRate.Slow);
-            scout.Motor.FinalizeTraversal(scout, scout.SurfaceState);
+            scout.Motor.Traverse(scout, request);
+            scout.Motor.FinalizeTraversal(scout);
 
             // Assert
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
@@ -45,8 +53,16 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
+            var request = new TraversalRequest
+            {
+                Origin = scout.Position,
+                Rotation = scout.Rotation,
+                Direction = Vector3d.Forward,
+                Rate = TrekRate.Slow
+            };
+
             // Act
-            scout.Motor.Traverse(scout,Vector3d.Forward, TrekRate.Slow);
+            scout.Motor.Traverse(scout, request);
 
             // Assert
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -85,12 +101,23 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.One); // max friction
 
+            var request = new TraversalRequest
+            {
+                Origin = scout.Position,
+                Rotation = scout.Rotation,
+                Direction = Vector3d.Zero,
+                Rate = TrekRate.Stationary
+            };
+
             // Simulate several frames to allow friction to take effect
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.Motor.Traverse(scout, Vector3d.Zero, TrekRate.Stationary);
-                scout.Motor.FinalizeTraversal(scout, scout.SurfaceState);
+                scout.Motor.Traverse(scout, request);
+                scout.Motor.FinalizeTraversal(scout);
+
+                request.Origin = scout.Position;
+                request.Rotation = scout.Rotation;
             }
 
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();

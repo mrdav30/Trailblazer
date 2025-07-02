@@ -28,6 +28,8 @@ namespace Trailblazer
         /// </remarks>
         public static Fixed64 DeltaTime { get; private set; } = Fixed64.One / (Fixed64)FrameRate;
 
+        public static Fixed64 InvDeltaTime => Fixed64.One / DeltaTime;
+
         /// <summary>
         /// The number of frames elapsed since the simulation started.
         /// </summary>
@@ -70,7 +72,7 @@ namespace Trailblazer
 
         public static int GetFrameFromTime(Fixed64 timestamp)
         {
-            return (timestamp / DeltaTime).FloorToInt();
+            return (timestamp * InvDeltaTime).FloorToInt();
         }
     }
 }

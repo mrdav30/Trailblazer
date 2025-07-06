@@ -285,7 +285,7 @@ namespace Trailblazer.Navigation
                 _currentFrameRequest.Direction = Steering.GetHeading(this);
 
             StartTraversal(_currentFrameRequest);
-            Turning.OnSimulate(this);
+            Turning.SimulateTurn(this);
         }
 
         /// <summary>
@@ -333,7 +333,6 @@ namespace Trailblazer.Navigation
             _velocityDelta = Vector3d.Zero;
 
             Motor.FinalizeTraversal(this);
-            Turning.OnLateSimulate(this);
 
             // Reset travel request for next frame
             _currentFrameRequest = TraversalRequest.Empty;

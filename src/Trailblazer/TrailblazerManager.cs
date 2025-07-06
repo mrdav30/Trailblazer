@@ -41,6 +41,15 @@ namespace Trailblazer
         public static Fixed64 TotalTime { get; private set; }
 
         /// <summary>
+        /// The total simulation time since the last late simulate frame (in seconds).
+        /// </summary>
+        public static Fixed64 AccumulatedTime { get; private set; }
+
+        public static bool ResetAccumulation { get; private set; }
+
+        public static Fixed64 ExpectedAccumulation { get; private set; }
+
+        /// <summary>
         /// Updates the simulation frame rate and recalculates the delta time.
         /// </summary>
         /// <param name="frameRate">The new frame rate value.</param>
@@ -59,6 +68,23 @@ namespace Trailblazer
             TotalTime += DeltaTime;
 
             PathManager.Tick(FrameCount);
+        }
+
+        public static void LateSimulate()
+        {
+            ResetAccumulation = true;
+        }
+
+        public static void Visualize()
+        {
+            if (ResetAccumulation)
+            {
+                AccumulatedTime = Fixed64.Zero;
+                ResetAccumulation = false;
+            }
+
+            AccumulatedTime += DeltaTime;
+            ExpectedAccumulation = AccumulatedTime / DeltaTime;
         }
 
         /// <summary>

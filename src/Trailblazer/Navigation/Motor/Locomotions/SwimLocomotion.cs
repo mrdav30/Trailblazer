@@ -69,9 +69,14 @@ namespace Trailblazer.Navigation.Motor
         private bool _isEnabled = true;
 
         /// <summary>
+        /// Determines whether the scout can actually swim.
+        /// </summary>
+        public bool CanSwim = true;
+
+        /// <summary>
         /// Determines whether the scout can breach the water surface when jumping.
         /// </summary>
-        public bool CanBreachWater;
+        public bool CanBreachWater = true;
 
         /// <summary>
         /// Determines whether the scout can drown if underwater for too long.

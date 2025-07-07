@@ -782,7 +782,7 @@ namespace Trailblazer.Navigation.Motor
             }
 
             // Transitioning out of water
-            if (Locomotions.Swim.IsSwimming && !IsInWater && WasInWater)
+            if (Locomotions.Swim.IsEnabled && !IsInWater && WasInWater)
                 Locomotions.Swim.ClearState();
         }
 
@@ -802,7 +802,7 @@ namespace Trailblazer.Navigation.Motor
 
             if (Locomotions.Swim.IsEnabled)
             {
-                Locomotions.Swim.IsSwimming = true;
+                Locomotions.Swim.IsSwimming = Locomotions.Swim.CanSwim;
                 Locomotions.Swim.IsDiving = position.y < CurrentState.SurfaceLevel;
 
                 Locomotions.Swim.UpdateDiveTime();
@@ -822,7 +822,7 @@ namespace Trailblazer.Navigation.Motor
         {
             if (!Locomotions.Fall.IsEnabled) return;
 
-            if (Locomotions.Swim.IsSwimming)
+            if (IsInWater)
             {
                 Locomotions.Fall.IsFalling = false;
                 return;

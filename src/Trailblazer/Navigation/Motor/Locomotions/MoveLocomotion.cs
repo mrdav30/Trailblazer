@@ -176,12 +176,6 @@ namespace Trailblazer.Navigation.Motor
         }
 
         /// <summary>
-        /// The world position from the previous frame, used for velocity calculations.
-        /// </summary>
-        [Transient]
-        public Vector3d LastPosition { get; set; }
-
-        /// <summary>
         /// The scout’s current velocity in world space.
         /// </summary>
         [Transient]

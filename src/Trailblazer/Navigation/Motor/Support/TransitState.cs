@@ -2,7 +2,7 @@
 using Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Represents the current traversal state and provides synchronization with TraversalCondition.
+/// Represents the current traversal state and provides synchronization with <see cref="TrekCondition"/>.
 /// </summary>
 public class TransitState
 {
@@ -36,9 +36,9 @@ public class TransitState
     /// <summary>
     /// The previous traversal state (for comparison and transition detection).
     /// </summary>
-    public TraversalCondition PreviousState { get; private set; }
+    public TrekCondition PreviousState { get; private set; }
 
-    public TransitState(TraversalCondition condition)
+    public TransitState(TrekCondition condition)
     {
         Update(condition, null);
     }
@@ -46,7 +46,7 @@ public class TransitState
     /// <summary>
     /// Updates the traversal state and retains the previous state for transition tracking.
     /// </summary>
-    public void Update(TraversalCondition condition, TraversalCondition previous)
+    public void Update(TrekCondition condition, TrekCondition previous)
     {
         PreviousState = previous;
         Medium = condition.Medium;
@@ -83,8 +83,8 @@ public class TransitState
     /// <summary>
     /// Returns a new TraversalCondition instance reflecting the current state.
     /// </summary>
-    public TraversalCondition ToTraversalCondition()
+    public TrekCondition ToTrekCondition()
     {
-        return new TraversalCondition(Medium, SurfaceLevel, GroundState, CeilingLevel);
+        return new TrekCondition(Medium, SurfaceLevel, GroundState, CeilingLevel);
     }
 }

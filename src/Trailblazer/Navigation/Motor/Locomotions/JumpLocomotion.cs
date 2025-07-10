@@ -60,6 +60,11 @@ namespace Trailblazer.Navigation.Motor
         private bool _isEnabled = true;
 
         /// <summary>
+        /// Maximum number of consecutive jumps allowed (e.g., 2 = double jump).
+        /// </summary>
+        public int MaxJumpCount = 1;
+
+        /// <summary>
         /// The cooldown time before another jump can be performed.
         /// </summary>
         public Fixed64 CooldownTime = DefaultCooldownTime;
@@ -152,7 +157,33 @@ namespace Trailblazer.Navigation.Motor
         [Transient]
         public bool IsCoolingDown { get; private set; }
 
+        /// <summary>
+        /// The current number of jumps performed since the last grounding.
+        /// </summary>
+        [Transient]
+        public int JumpCount { get; private set; }
+
+        /// <summary>
+        /// Returns true if more jumps are allowed.
+        /// </summary>
+        public bool CanJump => JumpCount < MaxJumpCount && !IsCoolingDown;
+
         #endregion
+
+        /// <summary>
+        /// Increments the jump counter.
+        /// </summary>
+        public void RegisterJump()
+        {
+            JumpCount++;
+            IsJumping = true;
+            IsHoldingJump = true;
+            JumpStartTime = TrailblazerManager.TotalTime;
+
+            // Start cooldown only if this was the last allowed jump
+            if (JumpCount >= MaxJumpCount)
+                StartCooldown();
+        }
 
         /// <summary>
         /// Starts the jump cooldown period, preventing another jump until the cooldown expires.
@@ -176,6 +207,16 @@ namespace Trailblazer.Navigation.Motor
                 CooldownTimer = Fixed64.Zero;
                 IsCoolingDown = false;
             }
+        }
+
+        /// <summary>
+        /// Resets jump state upon grounding.
+        /// </summary>
+        public void ResetJumpCounter()
+        {
+            JumpCount = 0;
+            IsJumping = false;
+            IsHoldingJump = false;
         }
 
         /// <summary>

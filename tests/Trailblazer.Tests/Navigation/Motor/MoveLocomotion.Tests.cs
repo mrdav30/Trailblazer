@@ -16,7 +16,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
             Vector3d initialPosition = agent.Position;
-            var request = new TraversalRequest
+            agent.FrameRequest = new()
             {
                 Origin = agent.Position,
                 Rotation = agent.Rotation,
@@ -25,8 +25,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             };
 
             // Act
-            agent.Motor.Traverse(agent, request);
-            agent.CommitFrameMotion();
+            agent.Simulate();
 
             // Assert
             Vector3d newPosition = agent.Position;
@@ -46,9 +45,9 @@ namespace Trailblazer.Tests.Navigation.Motor
             for (int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                agent.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Slow);
+                agent.FrameRequest.Direction = Vector3d.Forward;
+                agent.FrameRequest.Rate = TrekRate.Slow;
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             // Assert
@@ -73,7 +72,7 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
-            var request = new TraversalRequest
+            agent.FrameRequest = new TrekRequest
             {
                 Origin = agent.Position,
                 Rotation = agent.Rotation,
@@ -82,7 +81,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             };
 
             // Act
-            agent.Motor.Traverse(agent, request);
+            agent.Motor.Traverse(agent);
 
             // Assert
             agent.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -97,7 +96,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.CommitFrameMotion();
                 if (agent.Velocity == Vector3d.Zero)
                     break;
             }
@@ -109,17 +107,21 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentMovesForward_When_ReversedInput_Then_ShouldDecelerate()
         {
             Vector3d iniitialVelocity = new(3, 0, 0);
-            var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: iniitialVelocity, startingMedium: TraversalMedium.Ground);
-            agent.ApplyInputTravelRequest(new Vector3d(-1, 0, 0), rate: TrekRate.Moderate);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(
+                startVelocity: iniitialVelocity, 
+                startingMedium: TraversalMedium.Ground);
+
+            agent.FrameRequest.Direction = new(-1, 0, 0);
+            agent.FrameRequest.Rate = TrekRate.Moderate;
 
             for (int i = 0; i < 20; i++) // Apply opposing force over time
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
-            agent.Motor.Locomotions.Move.FrameVelocity.x.Should().BeLessThan(iniitialVelocity.x); // Should be slowing down
+            // Should be slowing down
+            agent.Motor.Locomotions.Move.FrameVelocity.x.Should().BeLessThan(iniitialVelocity.x); 
         }
 
         [Fact]
@@ -129,9 +131,10 @@ namespace Trailblazer.Tests.Navigation.Motor
             var ground = Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(slope, Fixed64.Zero, Fixed64.Zero));
             var agent = MockMotorAgentTestFactory.CreatePlatformAgent(startPosition: Vector3d.Zero, platformMatrix: ground);
 
-            agent.ApplyInputTravelRequest(Vector3d.Right, rate: TrekRate.Slow);
+            agent.FrameRequest.Direction = Vector3d.Right;
+            agent.FrameRequest.Rate = TrekRate.Slow;
+
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             // calculate speed without slopespeed modifier
             var speed = agent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Slow);
@@ -148,7 +151,9 @@ namespace Trailblazer.Tests.Navigation.Motor
             // Arrange
             var platform = MockMotorAgentTestFactory.CreatePlatform(
                 startPosition: Vector3d.Zero,
-                platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right, Fixed64.FromRaw(0x10000000L))
+                platformRotation: FixedQuaternion.FromAxisAngle(
+                    Vector3d.Right, 
+                    Fixed64.FromRaw(0x10000000L))
             );
 
             var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
@@ -156,7 +161,7 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
-            var request = new TraversalRequest
+            agent.FrameRequest = new()
             {
                 Origin = agent.Position,
                 Rotation = agent.Rotation,
@@ -165,8 +170,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             };
 
             // Act
-            agent.Motor.Traverse(agent, request);
-            agent.CommitFrameMotion();
+            agent.Simulate();
 
             // Assert
             agent.Motor.Locomotions.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
@@ -186,10 +190,11 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
+            agent.FrameRequest.Direction = Vector3d.Forward;
+            agent.FrameRequest.Rate = TrekRate.Slow;
+
             // Act
-            agent.ApplyInputTravelRequest(direction: Vector3d.Forward, rate: TrekRate.Slow);
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             // Assert - Projected vector must lie in the tangent plane of the slope
             var velocity = agent.Motor.Locomotions.Move.FrameVelocity;
@@ -220,9 +225,10 @@ namespace Trailblazer.Tests.Navigation.Motor
             for (int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                agent.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Slow);
+
+                agent.FrameRequest.Direction = Vector3d.Forward;
+                agent.FrameRequest.Rate = TrekRate.Slow;
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(agent.Motor.Locomotions.Move.MaxSlowSpeed);
@@ -242,9 +248,10 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
-            agent.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Moderate);
+            agent.FrameRequest.Direction = Vector3d.Forward;
+            agent.FrameRequest.Rate = TrekRate.Moderate;
+
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeLessThan(Fixed64.One);
         }
@@ -254,17 +261,17 @@ namespace Trailblazer.Tests.Navigation.Motor
         {
             var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
 
-            agent.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Moderate);
+            agent.FrameRequest.Direction = Vector3d.Forward;
+            agent.FrameRequest.Rate = TrekRate.Moderate;
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             // Simulate multiple frames
             for (int i = 0; i < 10; i++)
             {
                 TrailblazerManager.Simulate();
-                agent.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Moderate);
+                agent.FrameRequest.Direction = Vector3d.Forward;
+                agent.FrameRequest.Rate = TrekRate.Moderate;
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().Be(agent.Motor.Locomotions.Move.MaxModerateSpeed);
@@ -276,9 +283,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             var initialVelocity = new Vector3d(5, 0, 0);
             var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: initialVelocity, startingMedium: TraversalMedium.Ground);
 
-            agent.ApplyInputTravelRequest(Vector3d.Zero, rate: TrekRate.Stationary);
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             Assert.True(agent.Velocity <= initialVelocity && agent.Velocity >= Vector3d.Zero);
         }
@@ -294,14 +299,13 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
 
-                lowFrictionScout.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Moderate);
+                lowFrictionScout.FrameRequest.Direction = Vector3d.Forward;
+                lowFrictionScout.FrameRequest.Rate = TrekRate.Moderate;
                 lowFrictionScout.Simulate();
 
-                highFrictionScout.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Moderate);
+                highFrictionScout.FrameRequest.Direction = Vector3d.Forward;
+                highFrictionScout.FrameRequest.Rate = TrekRate.Moderate;
                 highFrictionScout.Simulate();
-
-                lowFrictionScout.CommitFrameMotion();
-                highFrictionScout.CommitFrameMotion();
             }
 
             var low = lowFrictionScout.Motor.Locomotions.Move.FrameVelocity.Magnitude;
@@ -313,19 +317,20 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_AgentOnLowFrictionGround_When_StopsMoving_Then_ShouldSlideSlightly()
         {
-            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(surfaceFriction: Fixed64.Fraction(1, 100)); // Very low friction
+            var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
+                surfaceFriction: Fixed64.Fraction(1, 100)); // Very low friction
 
             // Apply forward movement
-            agent.ApplyInputTravelRequest(Vector3d.Forward, rate: TrekRate.Fast);
+            agent.FrameRequest.Direction = Vector3d.Forward;
+            agent.FrameRequest.Rate = TrekRate.Fast;
+
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             var initialVelocity = agent.Motor.Locomotions.Move.FrameVelocity;
 
             // Stop input
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
             agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeLessThan(initialVelocity.Magnitude);

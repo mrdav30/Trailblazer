@@ -25,11 +25,12 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             // Assert - Position should remain stable within a small range
-            agent.Position.y.Should().BeApproximately(initialY, Fixed64.FromRaw(0x00001000)); // Small tolerance
+            agent.Position.y.Should().BeApproximately(
+                initialY,
+                Fixed64.FromRaw(0x00001000)); // Small tolerance
         }
 
         [Fact]
@@ -41,15 +42,14 @@ namespace Trailblazer.Tests.Navigation.Motor
             // Act - First frame, still on ground
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             // 2nd Frame - Enter Water
             TrailblazerManager.Simulate();
+
+            agent.FrameCondition.Medium = TraversalMedium.Water;
+            agent.FrameCondition.SurfaceLevel = agent.Position.y;
+
             agent.Simulate();
-
-            agent.SetTraversalCondition(TraversalMedium.Water, agent.Position.y);
-
-            agent.CommitFrameMotion();
 
             // Assert
             agent.Motor.Locomotions.Swim.IsSwimming.Should().BeTrue();
@@ -62,16 +62,14 @@ namespace Trailblazer.Tests.Navigation.Motor
             var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.One);
 
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             // Act - Exit water
 
             TrailblazerManager.Simulate();
+
+            agent.FrameCondition.Medium = TraversalMedium.Ground;
+
             agent.Simulate();
-
-            agent.SetTraversalCondition(TraversalMedium.Ground);
-
-            agent.CommitFrameMotion();
 
             // Assert
             agent.Motor.Locomotions.Swim.IsSwimming.Should().BeFalse();
@@ -86,17 +84,17 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             // Act - Enter Water
             TrailblazerManager.Simulate();
-            agent.ApplyInputTravelRequest(direction: Vector3d.Forward, rate: TrekRate.Slow);
+            agent.FrameRequest.Direction = Vector3d.Forward;
+            agent.FrameRequest.Rate = TrekRate.Slow;
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             // Act - Simulate 3 Frames
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                agent.ApplyInputTravelRequest(direction: Vector3d.Forward, rate: TrekRate.Slow);
+                agent.FrameRequest.Direction = Vector3d.Forward;
+                agent.FrameRequest.Rate = TrekRate.Slow;
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             // Assert
@@ -119,7 +117,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             // Act - Simulate entry into water
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             Fixed64 previousY = agent.Position.y;
 
@@ -128,7 +125,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             var tolerance = Fixed64.FromRaw(0x0800);
@@ -151,7 +147,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.CommitFrameMotion();
                 if (agent.Position.y == Fixed64.Zero) // we hit the surface
                     break;
             }
@@ -176,7 +171,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             // Assert - Scout should sink lower
@@ -198,7 +192,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             swim.UnderwaterTimer.Should().BeLessThan((Fixed64)30);
@@ -215,7 +208,6 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             swim.IsDrowning.Should().BeFalse();
         }
@@ -224,15 +216,17 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_ScoutDiving_When_MovesUp_Then_ShouldSwimUpward()
         {
             var initialPosition = new Vector3d(0, -2, 0);
-            var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Water);
+            var agent = MockMotorAgentTestFactory.CreateMockAgent(
+                startPosition: initialPosition,
+                startingMedium: TraversalMedium.Water);
             agent.Motor.Locomotions.Swim.IsSwimming = true;
 
             for (int i = 0; i < 10; i++) // Simulate swimming upwards
             {
                 TrailblazerManager.Simulate();
-                agent.ApplyInputTravelRequest(direction: Vector3d.Up, rate: TrekRate.Slow);
+                agent.FrameRequest.Direction = Vector3d.Up;
+                agent.FrameRequest.Rate = TrekRate.Slow;
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             agent.Position.y.Should().BeGreaterThan(initialPosition.y); // Should rise
@@ -250,7 +244,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.CommitFrameMotion();
             }
 
             agent.Motor.Locomotions.Swim.IsDrowning.Should().BeTrue();
@@ -266,10 +259,11 @@ namespace Trailblazer.Tests.Navigation.Motor
             agent.Motor.Events.OnStartWaterBreach += () => breached = true;
 
             // Request a jump while swimming
-            agent.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+
+            agent.FrameRequest.Rate = TrekRate.Stationary;
+            agent.FrameRequest.IsRequestingJump = true;
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             agent.Motor.Locomotions.Jump.IsJumping.Should().BeTrue();
             breached.Should().BeTrue();
@@ -286,10 +280,9 @@ namespace Trailblazer.Tests.Navigation.Motor
             agent.Motor.Events.OnStartWaterBreach += () => breached = true;
 
             // Request a jump while swimming, but breach is disabled
-            agent.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            agent.FrameRequest.IsRequestingJump = true;
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             agent.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
             breached.Should().BeFalse();
@@ -306,17 +299,15 @@ namespace Trailblazer.Tests.Navigation.Motor
             agent.Motor.Events.OnStopWaterBreach += () => stopBreach = true;
 
             // Simulate a jump breach
-            agent.ApplyInputTravelRequest(direction: Vector3d.Zero, rate: TrekRate.Stationary, isRequestingJump: true);
+            agent.FrameRequest.IsRequestingJump = true;
             TrailblazerManager.Simulate();
             agent.Simulate();
-            agent.CommitFrameMotion();
 
             for (int i = 0; i < 32; i++)
             {
                 TrailblazerManager.Simulate();
                 agent.Simulate();
-                agent.CommitFrameMotion();
-                if (agent.TraversalState.Medium == TraversalMedium.Water)
+                if (agent.FrameCondition.Medium == TraversalMedium.Water)
                     break;
             }
 

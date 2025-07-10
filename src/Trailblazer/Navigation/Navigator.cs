@@ -71,8 +71,6 @@ namespace Trailblazer.Navigation
 
         #region State - Traversal / Steering
 
-        public TraversalCondition TraversalState { get; protected set; }
-
         /// <summary>
         /// The controller responsible for managing the navigator's desired movement direction.
         /// </summary>
@@ -98,10 +96,9 @@ namespace Trailblazer.Navigation
         /// </summary>
         public bool IsManuallyControlled { get; protected set; }
 
-        /// <summary>
-        /// The traversal request for the current frame, containing directional intent and travel mode.
-        /// </summary>
-        private TraversalRequest _currentFrameRequest = new();
+        public TrekCondition FrameCondition { get; protected set; } = TrekCondition.CreateEmpty();
+
+        public TrekRequest FrameRequest { get; protected set; } = TrekRequest.CreateEmpty();
 
         #endregion
 
@@ -160,13 +157,13 @@ namespace Trailblazer.Navigation
         /// <summary>
         /// Initializes the navigator by setting up its defaults, events, traversal state, and movement controller.
         /// </summary>
-        public virtual void Initialize(TraversalCondition condition)
+        public virtual void Initialize(TrekCondition condition)
         {
-            TraversalState = condition;
+            FrameCondition = condition;
 
             Steering = NavSteering.CreateNew(Radius);
 
-            Motor = NavMotor.CreateNew(Position, TraversalState);
+            Motor = NavMotor.CreateNew(Position, FrameCondition);
             Motor.SetVelocity(Velocity);
 
             Turning = NavTurning.CreateNew(Radius);
@@ -180,12 +177,12 @@ namespace Trailblazer.Navigation
         /// Replaces the current traversal state with the given one.
         /// </summary>
         /// <param name="state">The new traversal condition to apply.</param>
-        public virtual void ReplaceTraversalState(TraversalCondition state) => TraversalState = state;
+        public virtual void ReplaceTrekCondition(TrekCondition state) => FrameCondition = state;
 
         public virtual void Reset()
         {
-            TraversalState = TraversalCondition.Empty;
-            _currentFrameRequest = TraversalRequest.Empty;
+            FrameCondition.Reset();
+            FrameRequest.Reset();
 
             // store copy since this will mutate the collection
             foreach (var idx in OccupyingIndexMap.Keys.ToArray())
@@ -212,16 +209,16 @@ namespace Trailblazer.Navigation
         /// <param name="direction">Desired direction of travel.</param>
         /// <param name="rate">Rate of travel (walk, run, etc.).</param>
         /// <param name="isRequestingJump">Whether the agent is requesting a jump action.</param>
-        public virtual void ApplyInputTravelRequest(
+        public virtual void ApplyInputTrekRequest(
             Vector3d? direction = null,
             TrekRate? rate = null,
             bool? isRequestingJump = null)
         {
             if (!IsActive) return;
 
-            _currentFrameRequest.Direction = direction ?? Vector3d.Zero;
-            _currentFrameRequest.Rate = rate ?? TrekRate.Stationary;
-            _currentFrameRequest.IsRequestingJump = isRequestingJump ?? false;
+            FrameRequest.Direction = direction ?? Vector3d.Zero;
+            FrameRequest.Rate = rate ?? TrekRate.Stationary;
+            FrameRequest.IsRequestingJump = isRequestingJump ?? false;
 
             IsManuallyControlled = true;
         }
@@ -234,7 +231,7 @@ namespace Trailblazer.Navigation
         /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
         /// <param name="isRequestingJump">Whether the navigator intends to jump during traversal.</param>
         /// <param name="allowUnwalkable">Whether the navigator can traverse to an unwalkable voxel.</param>
-        public virtual void ApplyGuidedTravelRequest(
+        public virtual void ApplyGuidedTrekRequest(
             IPathRequest pathRequest,
             Vector3d destination,
             TrekRate? rate = null,
@@ -243,9 +240,9 @@ namespace Trailblazer.Navigation
         {
             if (!IsActive) return;
 
-            _currentFrameRequest.Direction = Vector3d.Zero;
-            _currentFrameRequest.Rate = rate ?? TrekRate.Stationary;
-            _currentFrameRequest.IsRequestingJump = isRequestingJump ?? false;
+            FrameRequest.Direction = Vector3d.Zero;
+            FrameRequest.Rate = rate ?? TrekRate.Stationary;
+            FrameRequest.IsRequestingJump = isRequestingJump ?? false;
 
             IsManuallyControlled = false;
 
@@ -258,13 +255,13 @@ namespace Trailblazer.Navigation
         /// <summary>
         /// Called to make the agent jump if allowed and in a valid state.
         /// </summary>
-        public virtual void ToggleJumpStatus(bool status) => _currentFrameRequest.IsRequestingJump = status;
+        public virtual void ToggleJumpStatus(bool status) => FrameRequest.IsRequestingJump = status;
 
         /// <summary>
         /// Changes the speed at which the navigator is currently traveling without altering direction.
         /// </summary>
         /// <param name="rate">New traversal rate to apply (walk, run, etc.).</param>
-        public virtual void SetTraversalSpeed(TrekRate rate) => _currentFrameRequest.Rate = rate;
+        public virtual void SetTraversalSpeed(TrekRate rate) => FrameRequest.Rate = rate;
 
         #endregion
 
@@ -278,13 +275,14 @@ namespace Trailblazer.Navigation
             if (!IsActive)
                 throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
-            _currentFrameRequest.Origin = Position;
-            _currentFrameRequest.Rotation = Rotation;
+            FrameRequest.Origin = Position;
+            FrameRequest.Rotation = Rotation;
 
             if (!IsManuallyControlled)
-                _currentFrameRequest.Direction = Steering.GetHeading(this);
+                FrameRequest.Direction = Steering.GetHeading(this);
 
-            StartTraversal(_currentFrameRequest);
+            Turning.RequestTurnDirection(Forward, FrameRequest.Direction);
+            Motor.Traverse(this );
             Turning.SimulateTurn(this);
         }
 
@@ -316,7 +314,7 @@ namespace Trailblazer.Navigation
             else
                 Forward = Vector3d.Forward;
 
-            CheckTraversalCondition();
+            CheckTrekCondition();
 
             Vector3d previousVelocity = Velocity;
             Fixed64 invDelta = TrailblazerManager.InvDeltaTime;
@@ -335,17 +333,7 @@ namespace Trailblazer.Navigation
             Motor.FinalizeTraversal(this);
 
             // Reset travel request for next frame
-            _currentFrameRequest = TraversalRequest.Empty;
-        }
-
-        /// <summary>
-        /// Begins a new traversal session by forwarding the request to the motion controller.
-        /// </summary>
-        /// <param name="request">The traversal request to initiate.</param>
-        protected virtual void StartTraversal(TraversalRequest request)
-        {
-            Turning.RequestTurnDirection(Forward, request.Direction);
-            Motor.Traverse(this, request);
+            FrameRequest.Reset();
         }
 
         #endregion
@@ -364,7 +352,7 @@ namespace Trailblazer.Navigation
         /// <param name="surfaceCondition">The ground state data, if applicable.</param>
         /// <param name="ceilingLevel">The vertical ceiling level, if applicable.</param>
         /// <param name="updateMotorState">Flags whether or not to update the motor's internal surface state.  Otherwise, it should be updated at the end of the frame.</param>
-        public virtual void SetTraversalCondition(
+        public virtual void SetTrekCondition(
             TraversalMedium? medium = null,
             Fixed64? surfaceLevel = null,
             GroundCondition? surfaceCondition = null,
@@ -373,51 +361,37 @@ namespace Trailblazer.Navigation
         {
             if (!IsActive) return;
 
-            TraversalState.Medium = medium ?? TraversalState.Medium;
-            TraversalState.SurfaceLevel = surfaceLevel ?? TraversalState.SurfaceLevel;
-            TraversalState.GroundState = surfaceCondition ?? TraversalState.GroundState;
-            TraversalState.CeilingLevel = ceilingLevel ?? TraversalState.CeilingLevel;
+            FrameCondition.Medium = medium ?? FrameCondition.Medium;
+            FrameCondition.SurfaceLevel = surfaceLevel ?? FrameCondition.SurfaceLevel;
+            FrameCondition.GroundState = surfaceCondition ?? FrameCondition.GroundState;
+            FrameCondition.CeilingLevel = ceilingLevel ?? FrameCondition.CeilingLevel;
 
             if (updateMotorState)
-                Motor.UpdateTraversal(TraversalState);
+                Motor.UpdateTraversal(FrameCondition);
         }
 
-        /// <summary>
-        /// Performs a grounded surface check to determine the current traversal condition.
-        /// Implementations should update the surface state based on collision or probe logic.
-        /// </summary>
-        protected abstract void CheckTraversalCondition();
-      
+        public abstract void CheckTrekCondition();
+
         #endregion
 
         #region Deltas - Position / Velocity / Rotation
 
-        /// <summary>
-        /// Adds the given delta to the current frame’s position offset.
-        /// </summary>
-        /// <param name="positionDelta">The offset to apply to position this frame.</param>
-        public virtual void AddPositionDelta(Vector3d positionDelta)
+        public virtual void AddPositionDelta(Vector3d delta)
         {
-            _positionDelta += positionDelta;
+            _positionDelta += delta;
+            // shift last position so it doesn't alter navigator's velocity
+            LastPosition += delta;
         }
 
-        /// <summary>
-        /// Adds the given delta to the current frame’s rotation offset.
-        /// </summary>
-        /// <param name="rotationDelta">The offset to apply to rotation this frame.</param>
-        public virtual void AddRotationDelta(FixedQuaternion rotationDelta)
+        public virtual void AddRotationDelta(FixedQuaternion delta)
         {
-            _rotationDelta *= rotationDelta;
+            _rotationDelta *= delta;
         }
 
-        /// <summary>
-        /// Adds the given delta to the current frame’s velocity offset.
-        /// </summary>
-        /// <param name="velocityDelta">The offset to apply to velocity this frame.</param>
-        public virtual void AddVelocityDelta(Vector3d velocityDelta)
+        public virtual void AddVelocityDelta(Vector3d delta)
         {
             // assume a mass of 1...for now
-            _velocityDelta += velocityDelta;
+            _velocityDelta += delta;
         }
 
         public virtual void ApplyRotation(FixedQuaternion rotation) => Rotation = rotation;
@@ -426,7 +400,6 @@ namespace Trailblazer.Navigation
 
         #region Utilities
 
-        /// <inheritdoc cref="IMotor.GetFootPosition"/>
         public virtual Vector3d GetFootPosition()
         {
             return Position + Vector3d.Down * FootPositionAdjust;

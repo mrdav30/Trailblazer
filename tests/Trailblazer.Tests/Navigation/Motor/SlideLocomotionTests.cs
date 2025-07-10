@@ -23,7 +23,7 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
-            var request = new TraversalRequest
+            scout.FrameRequest = new()
             {
                 Origin = scout.Position,
                 Rotation = scout.Rotation,
@@ -32,7 +32,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             };
 
             // Act
-            scout.Motor.Traverse(scout, request);
+            scout.Motor.Traverse(scout);
             scout.Motor.FinalizeTraversal(scout);
 
             // Assert
@@ -53,7 +53,7 @@ namespace Trailblazer.Tests.Navigation.Motor
                 platformMatrix: platform
             );
 
-            var request = new TraversalRequest
+            scout.FrameRequest = new()
             {
                 Origin = scout.Position,
                 Rotation = scout.Rotation,
@@ -62,7 +62,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             };
 
             // Act
-            scout.Motor.Traverse(scout, request);
+            scout.Motor.Traverse(scout);
 
             // Assert
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -84,7 +84,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 scout.Simulate();
-                scout.CommitFrameMotion();
             }
 
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
@@ -101,7 +100,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.One); // max friction
 
-            var request = new TraversalRequest
+            var request = new TrekRequest
             {
                 Origin = scout.Position,
                 Rotation = scout.Rotation,
@@ -113,7 +112,8 @@ namespace Trailblazer.Tests.Navigation.Motor
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.Motor.Traverse(scout, request);
+                scout.FrameRequest = request;
+                scout.Motor.Traverse(scout);
                 scout.Motor.FinalizeTraversal(scout);
 
                 request.Origin = scout.Position;
@@ -139,9 +139,6 @@ namespace Trailblazer.Tests.Navigation.Motor
 
                 lowFrictionScout.Simulate();
                 highFrictionScout.Simulate();
-
-                lowFrictionScout.CommitFrameMotion();
-                highFrictionScout.CommitFrameMotion();
             }
 
             var low = lowFrictionScout.Motor.Locomotions.Move.FrameVelocity.Magnitude;
@@ -172,7 +169,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 scout.Simulate();
-                scout.CommitFrameMotion();
             }
 
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
@@ -184,13 +180,13 @@ namespace Trailblazer.Tests.Navigation.Motor
             };
 
             // Flatten slope
-            scout.SetTraversalCondition(TraversalMedium.Ground, surfaceCondition: shallowSlopeSurface);
+            scout.FrameCondition.Medium = TraversalMedium.Ground;
+            scout.FrameCondition.GroundState = shallowSlopeSurface;
 
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
                 scout.Simulate();
-                scout.CommitFrameMotion();
             }
 
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -209,15 +205,12 @@ namespace Trailblazer.Tests.Navigation.Motor
             scout.Motor.Locomotions.Slide.SlopeLimit = (Fixed64)45;
             scout.Motor.Locomotions.Slide.SidewaysControl = (Fixed64)1;
 
-            // Provide sideways input (e.g. strafe right)
-            Vector3d sidewaysInput = Vector3d.Right;
-
             for (int i = 0; i < 3; i++)
             {
                 TrailblazerManager.Simulate();
-                scout.ApplyInputTravelRequest(direction: sidewaysInput, rate: TrekRate.Slow);
+                scout.FrameRequest.Direction = Vector3d.Right;
+                scout.FrameRequest.Rate = TrekRate.Slow;
                 scout.Simulate();
-                scout.CommitFrameMotion();
             }
 
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
@@ -231,16 +224,21 @@ namespace Trailblazer.Tests.Navigation.Motor
         {
             var slopeAngle = FixedMath.DegToRad((Fixed64)60);
             var platform = MockMotorAgentTestFactory.CreatePlatform(
-                platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
+                platformRotation: FixedQuaternion.FromEulerAngles(
+                    slopeAngle, 
+                    Fixed64.Zero, 
+                    Fixed64.Zero)
             );
 
-            var scout = MockMotorAgentTestFactory.CreateFallingAgent(startPosition: new Vector3d(0, 2, 0), surfaceLevel: Fixed64.Zero, platformMatrix: platform);
+            var scout = MockMotorAgentTestFactory.CreateFallingAgent(
+                startPosition: new Vector3d(0, 2, 0), 
+                surfaceLevel: Fixed64.Zero, 
+                platformMatrix: platform);
 
             for (int i = 0; i < 32; i++)
             {
                 TrailblazerManager.Simulate();
                 scout.Simulate();
-                scout.CommitFrameMotion();
                 if (scout.Motor.IsGrounded)
                     break;
             }
@@ -248,7 +246,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             // simulate 1 more frame to capture grounded slope
             TrailblazerManager.Simulate();
             scout.Simulate();
-            scout.CommitFrameMotion();
 
             scout.Motor.IsGrounded.Should().BeTrue();
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
@@ -269,7 +266,6 @@ namespace Trailblazer.Tests.Navigation.Motor
             {
                 TrailblazerManager.Simulate();
                 scout.Simulate();
-                scout.CommitFrameMotion();
             }
 
             scout.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();

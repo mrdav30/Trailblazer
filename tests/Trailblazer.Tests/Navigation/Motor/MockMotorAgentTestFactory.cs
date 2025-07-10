@@ -14,7 +14,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             TraversalMedium startingMedium = TraversalMedium.Unknown,
             Fixed64? surfaceLevel = null)
         {
-            TraversalCondition condition = TraversalCondition.Empty;
+            TrekCondition condition = TrekCondition.CreateEmpty();
             switch (startingMedium)
             {
                 case TraversalMedium.Ground:
@@ -40,13 +40,12 @@ namespace Trailblazer.Tests.Navigation.Motor
                     break;
             }
 
-            MockMotorAgent agent = new MockMotorAgent();
-            agent.Setup(
+            MockMotorAgent agent = new(
                 startPosition ?? Vector3d.Zero,
+                condition,
                 null,
                 startVelocity ?? Vector3d.Zero
             );
-            agent.Initialize(condition);
 
             return agent;
         }
@@ -60,7 +59,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             Fixed64? surfaceLevel = null,
             Fixed4x4? platformMatrix = null)
         {
-            TraversalCondition condition = new TraversalCondition
+            TrekCondition condition = new()
             {
                 Medium = TraversalMedium.Air,
                 SurfaceLevel = surfaceLevel ?? -(Fixed64)999,
@@ -77,13 +76,12 @@ namespace Trailblazer.Tests.Navigation.Motor
                 };
             }
 
-            MockMotorAgent agent = new MockMotorAgent();
-            agent.Setup(
+            MockMotorAgent agent = new(
                 startPosition ?? Vector3d.Zero,
+                condition,
                 null,
                 startVelocity ?? Vector3d.Down
             );
-            agent.Initialize(condition);
 
             agent.Motor.Locomotions.Fall.IsFalling = true;
 
@@ -99,7 +97,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             Fixed64? surfaceFriction = null,
             MotionTransfer motionTransfer = MotionTransfer.None)
         {
-            TraversalCondition condition = new TraversalCondition
+            TrekCondition condition = new()
             {
                 Medium = TraversalMedium.Ground,
                 CeilingLevel = Fixed64.MAX_VALUE,
@@ -112,9 +110,10 @@ namespace Trailblazer.Tests.Navigation.Motor
                 }
             };
 
-            MockMotorAgent agent = new MockMotorAgent();
-            agent.Setup(startPosition ?? Vector3d.Zero);
-            agent.Initialize(condition);
+            MockMotorAgent agent = new(
+                startPosition ?? Vector3d.Zero,
+                condition
+            );
 
             return agent;
 
@@ -123,23 +122,24 @@ namespace Trailblazer.Tests.Navigation.Motor
 
         public static MockMotorAgent CreateWaterAgent(Vector3d? startPosition = null, Fixed64? surfaceLevel = null)
         {
-            TraversalCondition condition = new TraversalCondition
+            TrekCondition condition = new()
             {
                 Medium = TraversalMedium.Water,
                 SurfaceLevel = surfaceLevel ?? Fixed64.Zero,
                 CeilingLevel = Fixed64.MAX_VALUE
             };
 
-            MockMotorAgent agent = new MockMotorAgent();
-            agent.Setup(startPosition ?? Vector3d.Zero);
-            agent.Initialize(condition);
+            MockMotorAgent agent = new(
+                startPosition ?? Vector3d.Zero,
+                condition
+            );
 
             return agent;
         }
 
         public static MockMotorAgent CreateJumpReadyAgent(Vector3d? startPosition = null)
         {
-            TraversalCondition condition = new TraversalCondition
+            TrekCondition condition = new()
             {
                 Medium = TraversalMedium.Ground,
                 CeilingLevel = Fixed64.MAX_VALUE,
@@ -150,9 +150,10 @@ namespace Trailblazer.Tests.Navigation.Motor
                 }
             };
 
-            MockMotorAgent agent = new MockMotorAgent();
-            agent.Setup(startPosition ?? Vector3d.Zero);
-            agent.Initialize(condition);
+            MockMotorAgent agent = new MockMotorAgent(
+                startPosition ?? Vector3d.Zero,
+                condition
+            );
 
             return agent;
         }

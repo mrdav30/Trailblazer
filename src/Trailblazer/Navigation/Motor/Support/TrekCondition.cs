@@ -1,11 +1,12 @@
 ﻿using FixedMathSharp;
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Navigation.Motor
 {
     /// <summary>
     /// Represents the traversal state of a scout, including its movement medium and surface interactions.
     /// </summary>
-    public class TraversalCondition
+    public class TrekCondition
     {
         /// <summary>
         /// Defines the medium in which the scout is currently moving.
@@ -28,12 +29,7 @@ namespace Trailblazer.Navigation.Motor
         /// </summary>
         public GroundCondition? GroundState;
 
-        /// <summary>
-        /// Represents an empty traversal condition with default values.
-        /// </summary>
-        public readonly static TraversalCondition Empty = new();
-
-        public TraversalCondition(
+        public TrekCondition(
             TraversalMedium medium = TraversalMedium.Unknown,
             Fixed64? surfaceLevel = null,
             GroundCondition? surfaceCondition = null,
@@ -43,6 +39,20 @@ namespace Trailblazer.Navigation.Motor
             SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
             GroundState = surfaceCondition ?? null;
             CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
+        }
+
+        /// <summary>
+        /// Represents an empty traversal condition with default values.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static TrekCondition CreateEmpty() => new();
+
+        public void Reset()
+        {
+            Medium = TraversalMedium.Unknown;
+            SurfaceLevel = Fixed64.Zero;
+            GroundState = null;
+            CeilingLevel = Fixed64.MAX_VALUE;
         }
     }
 }

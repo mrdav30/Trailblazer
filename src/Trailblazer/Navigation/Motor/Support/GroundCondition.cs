@@ -39,6 +39,6 @@ namespace Trailblazer.Navigation.Motor
         /// <summary>
         /// Represents an empty surface state with default values.
         /// </summary>
-        public static readonly GroundCondition Empty = new();
+        public static GroundCondition CreateEmpty() => new();
     }
 }

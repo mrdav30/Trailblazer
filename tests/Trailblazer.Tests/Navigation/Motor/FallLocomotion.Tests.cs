@@ -272,5 +272,18 @@ namespace Trailblazer.Tests.Navigation.Motor
             agent.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
             agent.Motor.Locomotions.Fall.FallStart.Should().Be(Fixed64.Zero);
         }
+
+        [Fact]
+        public void Given_ScoutFalling_When_CalculatingMaxSpeed_Then_ControlMultiplierShouldApply()
+        {
+            var scout = MockMotorAgentTestFactory.CreateFallingAgent();
+
+            scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)4;
+            scout.Motor.Locomotions.Fall.FallControlMultiplier = (Fixed64)0.25;
+
+            var speed = scout.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Moderate);
+
+            speed.Should().BeApproximately((Fixed64)1, Fixed64.Epsilon);
+        }
     }
 }

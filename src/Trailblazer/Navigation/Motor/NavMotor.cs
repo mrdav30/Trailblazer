@@ -138,7 +138,7 @@ namespace Trailblazer.Navigation.Motor
         /// <param name="startingPosition">The position of the navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
         /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
-        public static NavMotor CreateNew(Vector3d startingPosition, TrekCondition initialCondition) => 
+        public static NavMotor CreateNew(Vector3d startingPosition, TrekCondition initialCondition) =>
             new(startingPosition, initialCondition);
 
         /// <summary>
@@ -151,7 +151,7 @@ namespace Trailblazer.Navigation.Motor
         /// </summary>
         /// <param name="startingPosition">The position of the navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
-        public NavMotor(Vector3d startingPosition, TrekCondition initialCondition) => 
+        public NavMotor(Vector3d startingPosition, TrekCondition initialCondition) =>
             OnInitialize(startingPosition, initialCondition);
 
         /// <summary>
@@ -214,7 +214,7 @@ namespace Trailblazer.Navigation.Motor
             ComputeMovementForces();
 
             // Reset this before applying gravity
-            if (!_frameRequest.IsRequestingJump || !Locomotions.Jump.CanJump) 
+            if (!_frameRequest.IsRequestingJump || !Locomotions.Jump.CanJump)
                 Locomotions.Jump.IsHoldingJump = false;
 
             // Apply external forces such as gravity, water drag, and friction.
@@ -362,7 +362,8 @@ namespace Trailblazer.Navigation.Motor
                 return result;
             }
 
-            if (Locomotions.Platform.IsEnabled && Locomotions.Platform.MovementTransfer == MotionTransfer.PermaTransfer)
+            if (Locomotions.Platform.IsEnabled
+                && Locomotions.Platform.MovementTransfer == MotionTransfer.PermaTransfer)
             {
                 result += Locomotions.Platform.FramePlatformVelocity;
                 result.y = Fixed64.Zero;
@@ -461,9 +462,22 @@ namespace Trailblazer.Navigation.Motor
             }
 
             Fixed64 length = new Vector3d(temp.x, Fixed64.Zero, temp.z * zAxisEllipseMultiplier).Magnitude;
-            return length * (IsInWater
+            Fixed64 baseSpeed = length * (IsInWater
                 ? Locomotions.Swim.MaxSwimSidewaysSpeed
                 : Locomotions.Move.MaxSidewaysSpeed);
+
+            if (IsGrounded)
+                return baseSpeed;
+
+            // Apply reduced control when jumping or falling
+            Fixed64 controlMultiplier = Fixed64.One;
+
+            if (Locomotions.Jump.IsJumping && !IsGrounded)
+                controlMultiplier = Locomotions.Jump.JumpControlMultiplier;
+            else if (Locomotions.Fall.IsFalling && !IsGrounded)
+                controlMultiplier = Locomotions.Fall.FallControlMultiplier;
+
+            return baseSpeed * controlMultiplier;
         }
 
         /// <summary>
@@ -472,20 +486,13 @@ namespace Trailblazer.Navigation.Motor
         /// <returns>The acceleration limit depending on whether the navigator is grounded, airborne, or swimming.</returns>
         public Fixed64 GetMaxAcceleration()
         {
-            if (IsInWater)
-                return Locomotions.Swim.MaxSwimAcceleration;
+            if (IsInWater) return Locomotions.Swim.MaxSwimAcceleration;
 
-            if (IsGrounded)
-                return Locomotions.Move.MaxGroundAcceleration;
+            if (IsGrounded) return Locomotions.Move.MaxGroundAcceleration;
 
-            if (Locomotions.Jump.IsJumping)
-                return Locomotions.Move.MaxAirAcceleration;// * Locomotions.Jump.JumpControlMultiplier;
-
-            if (Locomotions.Fall.IsFalling)
-                return Locomotions.Move.MaxAirAcceleration;// * Locomotions.Fall.FallControlMultiplier;
-
-            if (IsInAir)
-                return Locomotions.Move.MaxAirAcceleration;
+            if (Locomotions.Jump.IsJumping
+                || Locomotions.Fall.IsFalling
+                || IsInAir) return Locomotions.Move.MaxAirAcceleration;
 
             return Fixed64.MAX_VALUE; // fallback, should never be hit
         }
@@ -544,8 +551,8 @@ namespace Trailblazer.Navigation.Motor
         /// </remarks>
         private void ApplyJumpForce()
         {
-            if (!(Locomotions.Jump.IsEnabled 
-                && Locomotions.IsInControl 
+            if (!(Locomotions.Jump.IsEnabled
+                && Locomotions.IsInControl
                 && _frameRequest.IsRequestingJump)) return;
 
             // Prevent jumping while in active fall state (e.g., walking off a ledge)
@@ -570,14 +577,19 @@ namespace Trailblazer.Navigation.Motor
             }
             else
             {
-                // Calculate the jumping direction
-                Fixed64 slerpAmount = IsTooSteep(FrameSlopeAngle)
+                // Store jump direction the first time we jump
+                if (!Locomotions.Jump.IsJumping)
+                {
+                    // Calculate the jumping direction
+                    Fixed64 slerpAmount = IsTooSteep(FrameSlopeAngle)
                     ? Locomotions.Jump.SteepPerpendicularJumpAmount
                     : Locomotions.Jump.PerpendicularJumpAmount;
 
-                // Store jump direction the first time we jump
-                if (!Locomotions.Jump.IsJumping)
-                    Locomotions.Jump.FrameJumpDirection = Vector3d.Slerp(Vector3d.Up, CurrentState.SurfaceNormal, slerpAmount);
+                    Locomotions.Jump.FrameJumpDirection = Vector3d.Slerp(
+                        Vector3d.Up,
+                        CurrentState.SurfaceNormal,
+                        slerpAmount);
+                }
 
                 jumpForce = Locomotions.Jump.FrameJumpDirection * GetVerticalJumpSpeed();
 
@@ -639,8 +651,7 @@ namespace Trailblazer.Navigation.Motor
         {
             if (!IsInitialized || !IsFrameLocked) return;
 
-            // TODO: should we keep this...or just rely on INavigator?
-            Locomotions.Move.FrameVelocity = (navigator.Position - navigator.LastPosition) 
+            Locomotions.Move.FrameVelocity = (navigator.Position - navigator.LastPosition)
                 * TrailblazerManager.InvDeltaTime;
 
             CurrentState.Update(navigator.FrameCondition, CurrentState.ToTrekCondition());
@@ -866,7 +877,7 @@ namespace Trailblazer.Navigation.Motor
             }
 
             // Ensure we don't trigger falling when moving naturally down a slope
-            bool isSlidingTooSleep = Locomotions.Slide.IsSliding 
+            bool isSlidingTooSleep = Locomotions.Slide.IsSliding
                 && FrameSlopeAngle.Abs() > Locomotions.Slide.SlopeLimit;
 
             // Check if the navigator is in freefall (not simply moving downhill)

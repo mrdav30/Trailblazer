@@ -6,7 +6,7 @@ namespace Trailblazer.Tests.Navigation.Motor
     public static class MockMotorAgentTestFactory
     {
         /// <summary>
-        /// Generates a Scout (no platform logic)
+        /// Generates an agent (no platform logic)
         /// </summary>
         public static MockMotorAgent CreateMockAgent(
             Vector3d? startPosition = null,
@@ -51,7 +51,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         }
 
         /// <summary>
-        /// Generates a Falling Scout (for gravity tests)
+        /// Generates a Falling agent (for gravity tests)
         /// </summary>
         public static MockMotorAgent CreateFallingAgent(
             Vector3d? startPosition = null,
@@ -89,7 +89,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         }
 
         /// <summary>
-        /// Generates a Scout + Platform (Separation of Concerns)
+        /// Generates an agent + Platform (Separation of Concerns)
         /// </summary>
         public static MockMotorAgent CreatePlatformAgent(
             Vector3d? startPosition = null,
@@ -150,7 +150,7 @@ namespace Trailblazer.Tests.Navigation.Motor
                 }
             };
 
-            MockMotorAgent agent = new MockMotorAgent(
+            MockMotorAgent agent = new(
                 startPosition ?? Vector3d.Zero,
                 condition
             );

@@ -440,5 +440,39 @@ namespace Trailblazer.Tests.Navigation.Motor
             scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
             scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThan(Fixed64.Zero);
         }
+
+        [Fact]
+        public void Given_ScoutJumping_When_CalculatingMaxSpeed_Then_ControlMultiplierShouldApply()
+        {
+            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+            scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)6;
+            scout.Motor.Locomotions.Jump.JumpControlMultiplier = (Fixed64)0.5;
+
+            scout.FrameRequest.IsRequestingJump = true;
+            scout.Simulate();
+
+            var speed = scout.Motor.MaxHoritzontalSpeedInDirection(
+                Vector3d.Right, 
+                TrekRate.Moderate);
+
+            speed.Should().Be((Fixed64)3);
+        }
+
+        [Fact]
+        public void Given_ScoutJumping_When_ControlMultiplierIsZero_Then_NoHorizontalSpeed()
+        {
+            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+            scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)8;
+            scout.Motor.Locomotions.Jump.JumpControlMultiplier = Fixed64.Zero;
+
+            scout.FrameRequest.IsRequestingJump = true;
+            scout.Simulate();
+
+            var speed = scout.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Left, TrekRate.Fast);
+
+            speed.Should().Be(Fixed64.Zero);
+        }
     }
 }

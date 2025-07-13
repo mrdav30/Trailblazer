@@ -335,5 +335,19 @@ namespace Trailblazer.Tests.Navigation.Motor
             agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
             agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeLessThan(initialVelocity.Magnitude);
         }
+
+        [Fact]
+        public void Given_ScoutGrounded_When_Moving_Then_ControlMultiplierShouldNotAffectSpeed()
+        {
+            var scout = MockMotorAgentTestFactory.CreateMockAgent(
+                startingMedium: TraversalMedium.Ground);
+            scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)5;
+
+            var speed = scout.Motor.MaxHoritzontalSpeedInDirection(
+                Vector3d.Right, 
+                TrekRate.Moderate);
+
+            speed.Should().BeApproximately((Fixed64)5, Fixed64.Epsilon);
+        }
     }
 }

@@ -1,9 +1,4 @@
-﻿using FixedMathSharp;
-using FluentAssertions;
-using Trailblazer.Navigation;
-using Xunit;
-
-namespace Trailblazer.Tests.Navigation
+﻿namespace Trailblazer.Tests.Navigation
 {
 
     //public class NavigatorTests
@@ -62,5 +57,5 @@ namespace Trailblazer.Tests.Navigation
 
     //        nav.GetFootPosition().Should().Be(expected);
     //    }
-   // }
+    // }
 }

@@ -7,462 +7,461 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-namespace Trailblazer.Pathing
-{
-    internal struct AStarVoxelMeta
-    {
-        /// <summary>
-        /// The movement penalty cost of this voxel.
-        /// </summary>
-        public int MovementCost;
+namespace Trailblazer.Pathing;
 
-        /// <summary>
-        /// The next voxel in the trail path.
-        /// </summary>
-        public GlobalVoxelIndex? NextTrailIndex;
+internal struct AStarVoxelMeta
+{
+    /// <summary>
+    /// The movement penalty cost of this voxel.
+    /// </summary>
+    public int MovementCost;
+
+    /// <summary>
+    /// The next voxel in the trail path.
+    /// </summary>
+    public GlobalVoxelIndex? NextTrailIndex;
+}
+
+/// <summary>
+/// Executes A* pathfinding logic using partitioned grids to find viable navigation paths for agents.
+/// Supports climb height constraints and optional spline smoothing of the final path.
+/// </summary>
+public class AStarSurveyor
+{
+    #region Constants
+
+    /// <summary>
+    /// Cost applied for straight (orthogonal) pathfinding moves.
+    /// </summary>
+    public const int StraightCost = 100;
+
+    /// <summary>
+    /// Cost applied for diagonal pathfinding moves.
+    /// </summary>
+    public const int DiagonalCost = 141;
+
+    #endregion
+
+    #region Singleton Instances
+
+    /// <summary>
+    /// A lazily initialized singleton instance of the pathfinder.
+    /// </summary>
+    private static readonly Lazy<AStarSurveyor> _instance =
+        new(() => new AStarSurveyor(), LazyThreadSafetyMode.ExecutionAndPublication);
+
+    /// <summary>
+    /// Gets the shared instance of the pathfinder.
+    /// </summary>
+    public static AStarSurveyor Shared => _instance.Value;
+
+    #endregion
+
+    private readonly PathHeap _heap = new();
+
+    private readonly SwiftDictionary<int, AStarVoxelMeta> _meta = new();
+
+    private readonly SwiftList<PathPartition> _rawPath = new();
+
+    private readonly SwiftList<AStarWaypoint> _waypoints = new();
+
+    private readonly SwiftHashSet<string> _chartKeys = new();
+
+    private AStarPathRequest _request;
+
+#nullable enable
+    /// <summary>
+    /// Optional callback triggered when a height difference exceeds the allowed climb height during pathfinding.
+    /// </summary>
+    public static Action<GlobalVoxelIndex, GlobalVoxelIndex, Fixed64>? OnHeightLimitViolated;
+#nullable disable
+
+    /// <summary>
+    /// Attempts to find a path between the start and end points provided in the request. 
+    /// Returns true if a valid path was found and outputs the resulting waypoint list.
+    /// </summary>
+    /// <param name="request">The pathfinding request containing start/end info and constraints.</param>
+    /// <returns>The list of path waypoints if successful; otherwise null.</returns>
+    public AStarSurveyResult FindPath(AStarPathRequest request)
+    {
+        lock (SurveyorLock.GlobalLock)
+        {
+            if (!request.IsValid
+                || request.HasZeroDisplacement
+                || !request.StartNode.TryGetPartition(out PathPartition startPartition))
+            {
+                return AStarSurveyResult.Empty;
+            }
+
+            _request = request;
+
+            _heap.FastClear();
+            _meta.Clear();
+            _rawPath.FastClear();
+            _waypoints.FastClear();
+            _chartKeys.Clear();
+
+            // Trace path from the start to the end
+            _meta.Add(_request.StartNode.SpawnToken, new());
+            startPartition.PathCost = 0;
+            _heap.Add(startPartition);
+
+            if (!TracePath())
+            {
+                foreach (PathPartition part in _heap.EnumerateClosed())
+                    part.PathCost = 0;
+                return AStarSurveyResult.Empty;
+            }
+
+            BuildRawPath();
+            BuildWaypoints();
+
+            AStarWaypoint[] waypoints = _waypoints.ToArray();
+            string[] chartKeys = _chartKeys.ToArray();
+            return AStarSurveyResult.Create(waypoints, chartKeys, request.RequestCacheKey);
+
+            // TODO: should we also clear collections at the end for GC?  maybe flag to determine if dirty?
+        }
     }
 
     /// <summary>
-    /// Executes A* pathfinding logic using partitioned grids to find viable navigation paths for agents.
-    /// Supports climb height constraints and optional spline smoothing of the final path.
+    /// Executes the core A* loop to find a valid trail between the start and end voxels.
     /// </summary>
-    public class AStarSurveyor
+    /// <returns>True if the path to the target was found; false otherwise.</returns>
+    private bool TracePath()
     {
-        #region Constants
-
-        /// <summary>
-        /// Cost applied for straight (orthogonal) pathfinding moves.
-        /// </summary>
-        public const int StraightCost = 100;
-
-        /// <summary>
-        /// Cost applied for diagonal pathfinding moves.
-        /// </summary>
-        public const int DiagonalCost = 141;
-
-        #endregion
-
-        #region Singleton Instances
-
-        /// <summary>
-        /// A lazily initialized singleton instance of the pathfinder.
-        /// </summary>
-        private static readonly Lazy<AStarSurveyor> _instance =
-            new(() => new AStarSurveyor(), LazyThreadSafetyMode.ExecutionAndPublication);
-
-        /// <summary>
-        /// Gets the shared instance of the pathfinder.
-        /// </summary>
-        public static AStarSurveyor Shared => _instance.Value;
-
-        #endregion
-
-        private readonly PathHeap _heap = new();
-
-        private readonly SwiftDictionary<int, AStarVoxelMeta> _meta = new();
-
-        private readonly SwiftList<PathPartition> _rawPath = new();
-
-        private readonly SwiftList<AStarWaypoint> _waypoints = new();
-
-        private readonly SwiftHashSet<string> _chartKeys = new();
-
-        private AStarPathRequest _request;
-
-#nullable enable
-        /// <summary>
-        /// Optional callback triggered when a height difference exceeds the allowed climb height during pathfinding.
-        /// </summary>
-        public static Action<GlobalVoxelIndex, GlobalVoxelIndex, Fixed64>? OnHeightLimitViolated;
-#nullable disable
-
-        /// <summary>
-        /// Attempts to find a path between the start and end points provided in the request. 
-        /// Returns true if a valid path was found and outputs the resulting waypoint list.
-        /// </summary>
-        /// <param name="request">The pathfinding request containing start/end info and constraints.</param>
-        /// <returns>The list of path waypoints if successful; otherwise null.</returns>
-        public AStarSurveyResult FindPath(AStarPathRequest request)
+        int iterations = 0;
+        int searchSize = _request.MaxPathSearchRange.Value;
+        while (_heap.RemoveFirst(out PathPartition currentPartition)
+            && iterations++ < searchSize)
         {
-            lock (SurveyorLock.GlobalLock)
-            {
-                if (!request.IsValid
-                    || request.HasZeroDisplacement
-                    || !request.StartNode.TryGetPartition(out PathPartition startPartition))
-                {
-                    return AStarSurveyResult.Empty;
-                }
-
-                _request = request;
-
-                _heap.FastClear();
-                _meta.Clear();
-                _rawPath.FastClear();
-                _waypoints.FastClear();
-                _chartKeys.Clear();
-
-                // Trace path from the start to the end
-                _meta.Add(_request.StartNode.SpawnToken, new());
-                startPartition.PathCost = 0;
-                _heap.Add(startPartition);
-
-                if (!TracePath())
-                {
-                    foreach (PathPartition part in _heap.EnumerateClosed())
-                        part.PathCost = 0;
-                    return AStarSurveyResult.Empty;
-                }
-
-                BuildRawPath();
-                BuildWaypoints();
-
-                AStarWaypoint[] waypoints = _waypoints.ToArray();
-                string[] chartKeys = _chartKeys.ToArray();
-                return AStarSurveyResult.Create(waypoints, chartKeys, request.RequestCacheKey);
-
-                // TODO: should we also clear collections at the end for GC?  maybe flag to determine if dirty?
-            }
-        }
-
-        /// <summary>
-        /// Executes the core A* loop to find a valid trail between the start and end voxels.
-        /// </summary>
-        /// <returns>True if the path to the target was found; false otherwise.</returns>
-        private bool TracePath()
-        {
-            int iterations = 0;
-            int searchSize = _request.MaxPathSearchRange.Value;
-            while (_heap.RemoveFirst(out PathPartition currentPartition)
-                && iterations++ < searchSize)
-            {
-                if (currentPartition.VoxelToken == _request.EndNode.SpawnToken)
-                    return true;
-
-                if (ProcessNeighbors(currentPartition))
-                    return true;
-
-                _heap.SetClosed(currentPartition);
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Indicates whether straight and diagonal neighbor voxels should be processed during pathfinding.
-        /// </summary>
-        /// <returns>True if any neighbor is the target destination.</returns>
-        private bool ProcessNeighbors(PathPartition current)
-        {
-            if (!_meta.TryGetValue(current.VoxelToken, out AStarVoxelMeta data))
-                return false;
-
-            if (TryProcessDirection(current, SpatialAwareness.PerpendicularDirections, data.MovementCost + StraightCost))
-                return true;
-            if (TryProcessDirection(current, SpatialAwareness.DiagonalDirections, data.MovementCost + DiagonalCost, true))
+            if (currentPartition.VoxelToken == _request.EndNode.SpawnToken)
                 return true;
 
+            if (ProcessNeighbors(currentPartition))
+                return true;
+
+            _heap.SetClosed(currentPartition);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Indicates whether straight and diagonal neighbor voxels should be processed during pathfinding.
+    /// </summary>
+    /// <returns>True if any neighbor is the target destination.</returns>
+    private bool ProcessNeighbors(PathPartition current)
+    {
+        if (!_meta.TryGetValue(current.VoxelToken, out AStarVoxelMeta data))
+            return false;
+
+        if (TryProcessDirection(current, SpatialAwareness.PerpendicularDirections, data.MovementCost + StraightCost))
+            return true;
+        if (TryProcessDirection(current, SpatialAwareness.DiagonalDirections, data.MovementCost + DiagonalCost, true))
+            return true;
+
+        return false;
+    }
+
+    private bool TryProcessDirection(PathPartition current, SpatialDirection[] directions, int cost, bool checkEdges = false)
+    {
+        foreach (SpatialDirection dir in directions)
+        {
+            PathPartition neighbor = current.Neighbors[(int)dir];
+            if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request.UnitSize))
+                continue;
+
+            if (checkEdges && !HasValidDiagonalLegs(current, dir))
+                continue;
+
+            if (ProcessNeighbor(current, neighbor, cost))
+                return true;
+        }
+
+        return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool HasValidDiagonalLegs(PathPartition current, SpatialDirection diagonal)
+    {
+        (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
+
+        if (dx != 0 && !IsLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
+            return false;
+
+        if (dy != 0 && !IsLegClear(current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below))
+            return false;
+
+        if (dz != 0 && !IsLegClear(current, dz > 0 ? SpatialDirection.East : SpatialDirection.South))
+            return false;
+
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsLegClear(PathPartition current, SpatialDirection legDir)
+    {
+        PathPartition leg = current.Neighbors[(int)legDir];
+        return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request.UnitSize);
+    }
+
+    /// <summary>
+    /// Determines whether a given neighbor voxel should be considered for path expansion.
+    /// </summary>
+    /// <returns>True if the neighbor is the target destination.</returns>
+    private bool ProcessNeighbor(
+        PathPartition current,
+        PathPartition neighbor,
+        int cost)
+    {
+        // Skip neighbors that have a height difference greater than the allowed maximum
+        Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
+        if (heightDifference > _request.MaxClimbHeight)
+        {
+            OnHeightLimitViolated?.Invoke(current.GlobalIndex, neighbor.GlobalIndex, heightDifference);
             return false;
         }
 
-        private bool TryProcessDirection(PathPartition current, SpatialDirection[] directions, int cost, bool checkEdges = false)
+        if (neighbor.VoxelToken == _request.EndNode.SpawnToken)
         {
-            foreach (SpatialDirection dir in directions)
-            {
-                PathPartition neighbor = current.Neighbors[(int)dir];
-                if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request.UnitSize))
-                    continue;
-
-                if (checkEdges && !HasValidDiagonalLegs(current, dir))
-                    continue;
-
-                if (ProcessNeighbor(current, neighbor, cost))
-                    return true;
-            }
-
-            return false;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool HasValidDiagonalLegs(PathPartition current, SpatialDirection diagonal)
-        {
-            (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
-
-            if (dx != 0 && !IsLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
-                return false;
-
-            if (dy != 0 && !IsLegClear(current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below))
-                return false;
-
-            if (dz != 0 && !IsLegClear(current, dz > 0 ? SpatialDirection.East : SpatialDirection.South))
-                return false;
-
+            SetPathPartitionData(neighbor, current.GlobalIndex, cost);
             return true;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool IsLegClear(PathPartition current, SpatialDirection legDir)
+        if (!_heap.Contains(neighbor))
         {
-            PathPartition leg = current.Neighbors[(int)legDir];
-            return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request.UnitSize);
+            SetPathPartitionData(neighbor, current.GlobalIndex, cost);
+            _heap.Add(neighbor);
+        }
+        else if (_meta.TryGetValue(neighbor.VoxelToken, out AStarVoxelMeta neighborData)
+            && neighborData.MovementCost > cost)
+        {
+            SetPathPartitionData(neighbor, current.GlobalIndex, cost);
+            _heap.SortUp(neighbor);
         }
 
-        /// <summary>
-        /// Determines whether a given neighbor voxel should be considered for path expansion.
-        /// </summary>
-        /// <returns>True if the neighbor is the target destination.</returns>
-        private bool ProcessNeighbor(
-            PathPartition current,
-            PathPartition neighbor,
-            int cost)
+        return false;
+    }
+
+    /// <summary>
+    /// Assigns pathfinding data to a path partition, including cost and direction toward the next trail voxel.
+    /// </summary>
+    /// <param name="partition">The path partition being updated.</param>
+    /// <param name="nextTrailCoordinates">The coordinates of the parent partition leading to this one.</param>
+    /// <param name="movementCost">The cumulative movement cost to this partition.</param>
+    private void SetPathPartitionData(
+        PathPartition partition,
+        GlobalVoxelIndex nextTrailCoordinates,
+        int movementCost)
+    {
+        _meta.Add(partition.VoxelToken, new AStarVoxelMeta
         {
-            // Skip neighbors that have a height difference greater than the allowed maximum
-            Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
-            if (heightDifference > _request.MaxClimbHeight)
-            {
-                OnHeightLimitViolated?.Invoke(current.GlobalIndex, neighbor.GlobalIndex, heightDifference);
-                return false;
-            }
+            MovementCost = movementCost,
+            NextTrailIndex = nextTrailCoordinates
+        });
 
-            if (neighbor.VoxelToken == _request.EndNode.SpawnToken)
-            {
-                SetPathPartitionData(neighbor, current.GlobalIndex, cost);
-                return true;
-            }
+        int heuristicCost = CalculateHeuristic(
+            partition.VoxelPosition,
+            _request.EndNode.WorldPosition,
+            _request.Heuristic);
 
-            if (!_heap.Contains(neighbor))
-            {
-                SetPathPartitionData(neighbor, current.GlobalIndex, cost);
-                _heap.Add(neighbor);
-            }
-            else if (_meta.TryGetValue(neighbor.VoxelToken, out AStarVoxelMeta neighborData)
-                && neighborData.MovementCost > cost)
-            {
-                SetPathPartitionData(neighbor, current.GlobalIndex, cost);
-                _heap.SortUp(neighbor);
-            }
+        // Calculate the total cost (fCost) by adding modifier to the heuristic cost (hCost)
+        // and to the movement cost (gCost)
+        partition.PathCost = partition.PathCostModifier + movementCost + heuristicCost;
+    }
 
-            return false;
+    /// <summary>
+    /// Reconstructs the raw voxel-based path from the destination to the origin by walking backwards through trail links.
+    /// </summary>
+    /// <returns>A list of voxels from start to end representing the raw path.</returns>
+    private void BuildRawPath()
+    {
+        Voxel current = _request.EndNode;
+        while (current.SpawnToken != _request.StartNode.SpawnToken)
+        {
+            PathPartition currentPartition = current.GetPartitionOrDefault<PathPartition>();
+            _rawPath.Insert(0, currentPartition);
+
+            if (!_meta.TryGetValue(current.SpawnToken, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
+                break; // break in the trail!
+
+            if (!GlobalGridManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
+                break; // break in the trail!
+
+            current = nextTrailVoxel;
         }
 
-        /// <summary>
-        /// Assigns pathfinding data to a path partition, including cost and direction toward the next trail voxel.
-        /// </summary>
-        /// <param name="partition">The path partition being updated.</param>
-        /// <param name="nextTrailCoordinates">The coordinates of the parent partition leading to this one.</param>
-        /// <param name="movementCost">The cumulative movement cost to this partition.</param>
-        private void SetPathPartitionData(
-            PathPartition partition,
-            GlobalVoxelIndex nextTrailCoordinates,
-            int movementCost)
+        // Ensure start position is included
+        PathPartition startPartition = _request.StartNode.GetPartitionOrDefault<PathPartition>();
+        _rawPath.Insert(0, startPartition);
+    }
+
+    /// <summary>
+    /// Constructs a smoothed version of the path using direction changes and optional spline smoothing.
+    /// </summary>
+    /// <returns>A smoothed list of world positions.</returns>
+    private void BuildWaypoints()
+    {
+        // return early if the start is the same as the end
+        if (_rawPath.Count == 0 || _rawPath[0].VoxelToken == _rawPath.FromEnd(1).VoxelToken)
+            return;
+
+        _waypoints.EnsureCapacity(_rawPath.Count);
+        PathPartition start = _rawPath[0];
+        _waypoints.Add(new()
         {
-            _meta.Add(partition.VoxelToken, new AStarVoxelMeta
-            {
-                MovementCost = movementCost,
-                NextTrailIndex = nextTrailCoordinates
-            });
+            Position = start.VoxelPosition,
+            PathCost = start.PathCost,
+            GlobalIndex = start.GlobalIndex
+        });
+        start.PathCost = int.MaxValue;
+        _chartKeys.AddRange(start.ChartOwners);
 
-            int heuristicCost = CalculateHeuristic(
-                partition.VoxelPosition,
-                _request.EndNode.WorldPosition,
-                _request.Heuristic);
+        Vector3d lastDirection = Vector3d.Zero;
 
-            // Calculate the total cost (fCost) by adding modifier to the heuristic cost (hCost)
-            // and to the movement cost (gCost)
-            partition.PathCost = partition.PathCostModifier + movementCost + heuristicCost;
-        }
-
-        /// <summary>
-        /// Reconstructs the raw voxel-based path from the destination to the origin by walking backwards through trail links.
-        /// </summary>
-        /// <returns>A list of voxels from start to end representing the raw path.</returns>
-        private void BuildRawPath()
+        for (int i = 1; i < _rawPath.Count - 1; i++)
         {
-            Voxel current = _request.EndNode;
-            while (current.SpawnToken != _request.StartNode.SpawnToken)
+            Vector3d direction = (_rawPath[i + 1].VoxelPosition - _rawPath[i].VoxelPosition).Normalize();
+
+            bool preserveUnwalkable = _rawPath[i].GetNeighborClearance() <= (byte)_request.UnitSize + 1;
+            bool directionChanged = !lastDirection.FuzzyEqual(direction);
+
+            if (preserveUnwalkable || directionChanged)
             {
-                PathPartition currentPartition = current.GetPartitionOrDefault<PathPartition>();
-                _rawPath.Insert(0, currentPartition);
-
-                if (!_meta.TryGetValue(current.SpawnToken, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
-                    break; // break in the trail!
-
-                if (!GlobalGridManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
-                    break; // break in the trail!
-
-                current = nextTrailVoxel;
-            }
-
-            // Ensure start position is included
-            PathPartition startPartition = _request.StartNode.GetPartitionOrDefault<PathPartition>();
-            _rawPath.Insert(0, startPartition);
-        }
-
-        /// <summary>
-        /// Constructs a smoothed version of the path using direction changes and optional spline smoothing.
-        /// </summary>
-        /// <returns>A smoothed list of world positions.</returns>
-        private void BuildWaypoints()
-        {
-            // return early if the start is the same as the end
-            if (_rawPath.Count == 0 || _rawPath[0].VoxelToken == _rawPath.FromEnd(1).VoxelToken)
-                return;
-
-            _waypoints.EnsureCapacity(_rawPath.Count);
-            PathPartition start = _rawPath[0];
-            _waypoints.Add(new()
-            {
-                Position = start.VoxelPosition,
-                PathCost = start.PathCost,
-                GlobalIndex = start.GlobalIndex
-            });
-            start.PathCost = int.MaxValue;
-            _chartKeys.AddRange(start.ChartOwners);
-
-            Vector3d lastDirection = Vector3d.Zero;
-
-            for (int i = 1; i < _rawPath.Count - 1; i++)
-            {
-                Vector3d direction = (_rawPath[i + 1].VoxelPosition - _rawPath[i].VoxelPosition).Normalize();
-
-                bool preserveUnwalkable = _rawPath[i].GetNeighborClearance() <= (byte)_request.UnitSize + 1;
-                bool directionChanged = !lastDirection.FuzzyEqual(direction);
-
-                if (preserveUnwalkable || directionChanged)
+                _waypoints.Add(new()
                 {
-                    _waypoints.Add(new()
-                    {
-                        Position = _rawPath[i].VoxelPosition,
-                        PathCost = _rawPath[i].PathCost,
-                        GlobalIndex = _rawPath[i].GlobalIndex
-                    });
-                }
-
-                lastDirection = direction;
-                _rawPath[i].PathCost = int.MaxValue;
-                _chartKeys.AddRange(_rawPath[i].ChartOwners);
+                    Position = _rawPath[i].VoxelPosition,
+                    PathCost = _rawPath[i].PathCost,
+                    GlobalIndex = _rawPath[i].GlobalIndex
+                });
             }
 
-            PathPartition end = _rawPath.FromEnd(1);
-            _waypoints.Add(new()
-            {
-                Position = end.VoxelPosition,
-                PathCost = end.PathCost,
-                GlobalIndex = end.GlobalIndex,
-                IsGoal = true
-            });
-            end.PathCost = int.MaxValue;
-            _chartKeys.AddRange(end.ChartOwners);
+            lastDirection = direction;
+            _rawPath[i].PathCost = int.MaxValue;
+            _chartKeys.AddRange(_rawPath[i].ChartOwners);
         }
 
-        /// <summary>
-        /// Calculates the heuristic cost for the current voxel based on the target voxel and the heuristic method used.
-        /// This implementation takes into account the X, Y, and Z axes for pathfinding.
-        /// </summary>
-        public static int CalculateHeuristic(
-            Vector3d currentVoxel,
-            Vector3d targetVoxel,
-            HeuristicMethod heuristicMethod)
+        PathPartition end = _rawPath.FromEnd(1);
+        _waypoints.Add(new()
         {
-            Fixed64 heuristicCost = Fixed64.MAX_VALUE;
+            Position = end.VoxelPosition,
+            PathCost = end.PathCost,
+            GlobalIndex = end.GlobalIndex,
+            IsGoal = true
+        });
+        end.PathCost = int.MaxValue;
+        _chartKeys.AddRange(end.ChartOwners);
+    }
 
-            // Calculate the absolute distance in each axis
-            Vector3d dst = Vector3d.Abs(currentVoxel - targetVoxel);
+    /// <summary>
+    /// Calculates the heuristic cost for the current voxel based on the target voxel and the heuristic method used.
+    /// This implementation takes into account the X, Y, and Z axes for pathfinding.
+    /// </summary>
+    public static int CalculateHeuristic(
+        Vector3d currentVoxel,
+        Vector3d targetVoxel,
+        HeuristicMethod heuristicMethod)
+    {
+        Fixed64 heuristicCost = Fixed64.MAX_VALUE;
 
-            switch (heuristicMethod)
-            {
-                case HeuristicMethod.Manhattan:
-                    // Sum the distances and multiply by 100 for the heuristic cost
-                    heuristicCost = (dst.x + dst.y + dst.z) * StraightCost;
-                    break;
-                case HeuristicMethod.Octile:
-                    // Find the max of the three distances
-                    Fixed64 maxXY = FixedMath.Max(dst.x, dst.y);
-                    Fixed64 max = FixedMath.Max(maxXY, dst.z);
-                    // Calculate the heuristic cost using the max and sum of other distances
-                    heuristicCost = (max * DiagonalCost) + ((dst.x + dst.y + dst.z - max - max) * StraightCost);
-                    break;
-                case HeuristicMethod.Euclidean:
-                    // Calculate the squared distance and find the square root
-                    Fixed64 d = dst.x * dst.x + dst.y * dst.y + dst.z * dst.z;
-                    d = FixedMath.Sqrt(d);
-                    // Multiply the result by 100 for the heuristic cost
-                    heuristicCost = d * StraightCost;
-                    break;
-                default:
-                    break;
-            }
+        // Calculate the absolute distance in each axis
+        Vector3d dst = Vector3d.Abs(currentVoxel - targetVoxel);
 
-            return heuristicCost.CeilToInt();
+        switch (heuristicMethod)
+        {
+            case HeuristicMethod.Manhattan:
+                // Sum the distances and multiply by 100 for the heuristic cost
+                heuristicCost = (dst.x + dst.y + dst.z) * StraightCost;
+                break;
+            case HeuristicMethod.Octile:
+                // Find the max of the three distances
+                Fixed64 maxXY = FixedMath.Max(dst.x, dst.y);
+                Fixed64 max = FixedMath.Max(maxXY, dst.z);
+                // Calculate the heuristic cost using the max and sum of other distances
+                heuristicCost = (max * DiagonalCost) + ((dst.x + dst.y + dst.z - max - max) * StraightCost);
+                break;
+            case HeuristicMethod.Euclidean:
+                // Calculate the squared distance and find the square root
+                Fixed64 d = dst.x * dst.x + dst.y * dst.y + dst.z * dst.z;
+                d = FixedMath.Sqrt(d);
+                // Multiply the result by 100 for the heuristic cost
+                heuristicCost = d * StraightCost;
+                break;
+            default:
+                break;
         }
 
-        /// <summary>
-        /// Applies Catmull-Rom spline smoothing to a set of input path points to produce a smoother curve.
-        /// </summary>
-        /// <param name="input">The input path of waypoints.</param>
-        /// <param name="resolutionPerSegment">The number of interpolated points per segment.</param>
-        /// <returns>A smoothed path using Catmull-Rom spline interpolation.</returns>
-        public static AStarWaypoint[] CatmullSmooth(AStarWaypoint[] input, int resolutionPerSegment = 3)
+        return heuristicCost.CeilToInt();
+    }
+
+    /// <summary>
+    /// Applies Catmull-Rom spline smoothing to a set of input path points to produce a smoother curve.
+    /// </summary>
+    /// <param name="input">The input path of waypoints.</param>
+    /// <param name="resolutionPerSegment">The number of interpolated points per segment.</param>
+    /// <returns>A smoothed path using Catmull-Rom spline interpolation.</returns>
+    public static AStarWaypoint[] CatmullSmooth(AStarWaypoint[] input, int resolutionPerSegment = 3)
+    {
+        if (input.Length < 4) return input;
+
+        // size = smoothing points + 2 for start/end points
+        AStarWaypoint[] output = new AStarWaypoint[((input.Length - 3) * resolutionPerSegment) + 2];
+
+        // Add the starting point
+        output[0] = input[0];
+
+        int outputIndex = 1; // Start at 1 because output[0] = input[0] 
+        for (int i = 0; i < input.Length - 3; i++)
         {
-            if (input.Length < 4) return input;
+            Vector3d p0 = input[i].Position;
+            Vector3d p1 = input[i + 1].Position;
+            Vector3d p2 = input[i + 2].Position;
+            Vector3d p3 = input[i + 3].Position;
 
-            // size = smoothing points + 2 for start/end points
-            AStarWaypoint[] output = new AStarWaypoint[((input.Length - 3) * resolutionPerSegment) + 2];
-
-            // Add the starting point
-            output[0] = input[0];
-
-            int outputIndex = 1; // Start at 1 because output[0] = input[0] 
-            for (int i = 0; i < input.Length - 3; i++)
+            // j starts at 1 to skip duplicate of first point
+            for (int j = 1; j <= resolutionPerSegment; j++)
             {
-                Vector3d p0 = input[i].Position;
-                Vector3d p1 = input[i + 1].Position;
-                Vector3d p2 = input[i + 2].Position;
-                Vector3d p3 = input[i + 3].Position;
+                Fixed64 t = new(j / (double)resolutionPerSegment);
 
-                // j starts at 1 to skip duplicate of first point
-                for (int j = 1; j <= resolutionPerSegment; j++)
+                // You should create a new waypoint here:
+                output[outputIndex] = new AStarWaypoint
                 {
-                    Fixed64 t = new(j / (double)resolutionPerSegment);
+                    Position = CatmullRom(p0, p1, p2, p3, t),
+                    GlobalIndex = input[i + 1].GlobalIndex,
+                    PathCost = input[i + 1].PathCost,
+                    IsGoal = false
+                };
 
-                    // You should create a new waypoint here:
-                    output[outputIndex] = new AStarWaypoint
-                    {
-                        Position = CatmullRom(p0, p1, p2, p3, t),
-                        GlobalIndex = input[i + 1].GlobalIndex,
-                        PathCost = input[i + 1].PathCost,
-                        IsGoal = false
-                    };
-
-                    outputIndex++;
-                }
+                outputIndex++;
             }
-
-            // Add the final point
-            output[outputIndex] = input[input.Length - 1];
-            return output;
         }
 
-        /// <summary>
-        /// Computes the interpolated point along a Catmull-Rom spline given four control points.
-        /// </summary>
-        /// <param name="p0">The first control point.</param>
-        /// <param name="p1">The second control point.</param>
-        /// <param name="p2">The third control point.</param>
-        /// <param name="p3">The fourth control point.</param>
-        /// <param name="t">Interpolation factor between 0 and 1.</param>
-        /// <returns>The interpolated point on the spline.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
-        {
-            // Classic Catmull-Rom basis matrix
-            Fixed64 t2 = t * t;
-            Fixed64 t3 = t2 * t;
+        // Add the final point
+        output[outputIndex] = input[input.Length - 1];
+        return output;
+    }
 
-            return
-                ((-t3 + 2 * t2 - t) * p0 +
-                 (3 * t3 - 5 * t2 + 2) * p1 +
-                 (-3 * t3 + 4 * t2 + t) * p2 +
-                 (t3 - t2) * p3) / 2;
-        }
+    /// <summary>
+    /// Computes the interpolated point along a Catmull-Rom spline given four control points.
+    /// </summary>
+    /// <param name="p0">The first control point.</param>
+    /// <param name="p1">The second control point.</param>
+    /// <param name="p2">The third control point.</param>
+    /// <param name="p3">The fourth control point.</param>
+    /// <param name="t">Interpolation factor between 0 and 1.</param>
+    /// <returns>The interpolated point on the spline.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector3d CatmullRom(Vector3d p0, Vector3d p1, Vector3d p2, Vector3d p3, Fixed64 t)
+    {
+        // Classic Catmull-Rom basis matrix
+        Fixed64 t2 = t * t;
+        Fixed64 t3 = t2 * t;
+
+        return
+            ((-t3 + 2 * t2 - t) * p0 +
+             (3 * t3 - 5 * t2 + 2) * p1 +
+             (-3 * t3 + 4 * t2 + t) * p2 +
+             (t3 - t2) * p3) / 2;
     }
 }

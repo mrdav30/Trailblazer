@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigation.Motor;
+
+namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
 /// Represents the current traversal state and provides synchronization with <see cref="TrekCondition"/>.

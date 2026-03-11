@@ -4,78 +4,77 @@ using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
 
-namespace Trailblazer.Pathing
+namespace Trailblazer.Pathing;
+
+/// <summary>
+/// A pathfinding request used for flow field generation. Contains configuration for 
+/// destination targeting, dynamic agent sizing, and walkability override. 
+/// Implements value-based equality for guide pooling.
+/// </summary>
+public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest>
 {
+    public const int DefaultExtraFloodRange = 10;
+
     /// <summary>
-    /// A pathfinding request used for flow field generation. Contains configuration for 
-    /// destination targeting, dynamic agent sizing, and walkability override. 
-    /// Implements value-based equality for guide pooling.
+    /// Limits how much extra distance the flood will expand after the target is reached.
     /// </summary>
-    public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest>
+    public int ExtraFloodRange { get; set; }
+
+    public FlowFieldPathRequest()
     {
-        public const int DefaultExtraFloodRange = 10;
+        _startNode = null;
+        _endNode = null;
+        UnitSize = GlobalGridManager.VoxelSize;
+        AllowUnwalkable = false;
+        ExtraFloodRange = DefaultExtraFloodRange;
+        MaxPathSearchRange = null;
+    }
 
-        /// <summary>
-        /// Limits how much extra distance the flood will expand after the target is reached.
-        /// </summary>
-        public int ExtraFloodRange { get; set; }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static FlowFieldPathRequest CreateEmpty() => new();
 
-        public FlowFieldPathRequest()
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static FlowFieldPathRequest Create(Vector3d origin, Vector3d destination) =>
+        Create(origin, destination, GlobalGridManager.VoxelSize);
+
+    public static FlowFieldPathRequest Create(
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        bool allowUnwalkable = false)
+    {
+        if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
+            return CreateEmpty();
+
+        FlowFieldPathRequest request = new()
         {
-            _startNode = null;
-            _endNode = null;
-            UnitSize = GlobalGridManager.VoxelSize;
-            AllowUnwalkable = false;
-            ExtraFloodRange = DefaultExtraFloodRange;
-            MaxPathSearchRange = null;
-        }
+            _startNode = startNode,
+            _endNode = endNode,
+            UnitSize = unitSize,
+            AllowUnwalkable = allowUnwalkable,
+            ExtraFloodRange = DefaultExtraFloodRange,
+            MaxPathSearchRange = null
+        };
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static FlowFieldPathRequest CreateEmpty() => new();
+        request.Validate();
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static FlowFieldPathRequest Create(Vector3d origin, Vector3d destination) =>
-            Create(origin, destination, GlobalGridManager.VoxelSize);
+        return request;
+    }
 
-        public static FlowFieldPathRequest Create(
-            Vector3d origin,
-            Vector3d destination,
-            Fixed64 unitSize,
-            bool allowUnwalkable = false)
-        {
-            if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
-                return CreateEmpty();
+    public override bool Equals(object obj) =>
+        obj is FlowFieldPathRequest other && Equals(other);
 
-            FlowFieldPathRequest request = new()
-            {
-                _startNode = startNode,
-                _endNode = endNode,
-                UnitSize = unitSize,
-                AllowUnwalkable = allowUnwalkable,
-                ExtraFloodRange = DefaultExtraFloodRange,
-                MaxPathSearchRange = null
-            };
+    public bool Equals(FlowFieldPathRequest other) => RequestCacheKey == other.RequestCacheKey;
 
-            request.Validate();
-
-            return request;
-        }
-
-        public override bool Equals(object obj) =>
-            obj is FlowFieldPathRequest other && Equals(other);
-
-        public bool Equals(FlowFieldPathRequest other) => RequestCacheKey == other.RequestCacheKey;
-
-        public override int GetHashCode()
-        {
-            // Note: For FlowFields we don't care about the start voxel (only that the FlowField contains it)
-            return (
-                EndNode?.SpawnToken ?? 0,
-                UnitSize,
-                AllowUnwalkable,
-                ExtraFloodRange,
-                MaxPathSearchRange ?? -1
-            ).CombineHashCodes();
-        }
+    public override int GetHashCode()
+    {
+        // Note: For FlowFields we don't care about the start voxel (only that the FlowField contains it)
+        return (
+            EndNode?.SpawnToken ?? 0,
+            UnitSize,
+            AllowUnwalkable,
+            ExtraFloodRange,
+            MaxPathSearchRange ?? -1
+        ).CombineHashCodes();
     }
 }

@@ -4,89 +4,88 @@ using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
 
-namespace Trailblazer.Pathing
+namespace Trailblazer.Pathing;
+
+public enum HeuristicMethod
 {
-    public enum HeuristicMethod
+    Manhattan,
+    Octile,
+    Euclidean
+    //Chebyshev?
+}
+
+/// <summary>
+/// A pathfinding request used for A* trail generation, including options for climb height, heuristic weighting,
+/// and path smoothing. Implements value-based comparison and hashing for guide pooling.
+/// </summary>
+public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
+{
+    /// <summary>
+    /// The maximum Y-axis height delta a unit can step or climb per voxel.
+    /// Voxels exceeding this are ignored even if walkable and adjacent.
+    /// </summary>
+    public Fixed64 MaxClimbHeight { get; set; }
+
+    public HeuristicMethod Heuristic { get; set; }
+
+    public AStarPathRequest()
     {
-        Manhattan,
-        Octile,
-        Euclidean
-        //Chebyshev?
+        _startNode = null;
+        _endNode = null;
+        UnitSize = GlobalGridManager.VoxelSize;
+        Heuristic = HeuristicMethod.Manhattan;
+        AllowUnwalkable = false;
+        MaxClimbHeight = GlobalGridManager.VoxelSize;
+        MaxPathSearchRange = null;
     }
 
-    /// <summary>
-    /// A pathfinding request used for A* trail generation, including options for climb height, heuristic weighting,
-    /// and path smoothing. Implements value-based comparison and hashing for guide pooling.
-    /// </summary>
-    public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static AStarPathRequest CreateEmpty() => new();
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static AStarPathRequest Create(Vector3d origin, Vector3d destination) =>
+        Create(origin, destination, GlobalGridManager.VoxelSize);
+
+    public static AStarPathRequest Create(
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        HeuristicMethod heuristic = HeuristicMethod.Manhattan,
+        bool allowUnwalkable = false)
     {
-        /// <summary>
-        /// The maximum Y-axis height delta a unit can step or climb per voxel.
-        /// Voxels exceeding this are ignored even if walkable and adjacent.
-        /// </summary>
-        public Fixed64 MaxClimbHeight { get; set; }
+        if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
+            return CreateEmpty();
 
-        public HeuristicMethod Heuristic { get; set; }
-
-        public AStarPathRequest()
+        AStarPathRequest request = new()
         {
-            _startNode = null;
-            _endNode = null;
-            UnitSize = GlobalGridManager.VoxelSize;
-            Heuristic = HeuristicMethod.Manhattan;
-            AllowUnwalkable = false;
-            MaxClimbHeight = GlobalGridManager.VoxelSize;
-            MaxPathSearchRange = null;
-        }
+            _startNode = startNode,
+            _endNode = endNode,
+            UnitSize = unitSize,
+            Heuristic = heuristic,
+            AllowUnwalkable = allowUnwalkable,
+            MaxClimbHeight = GlobalGridManager.VoxelSize,
+            MaxPathSearchRange = null
+        };
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static AStarPathRequest CreateEmpty() => new();
+        request.Validate();
+        return request;
+    }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static AStarPathRequest Create(Vector3d origin, Vector3d destination) =>
-            Create(origin, destination, GlobalGridManager.VoxelSize);
+    public override bool Equals(object obj) =>
+        obj is AStarPathRequest other && Equals(other);
 
-        public static AStarPathRequest Create(
-            Vector3d origin,
-            Vector3d destination,
-            Fixed64 unitSize,
-            HeuristicMethod heuristic = HeuristicMethod.Manhattan,
-            bool allowUnwalkable = false)
-        {
-            if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
-                return CreateEmpty();
+    public bool Equals(AStarPathRequest other) => RequestCacheKey == other.RequestCacheKey;
 
-            AStarPathRequest request = new()
-            {
-                _startNode = startNode,
-                _endNode = endNode,
-                UnitSize = unitSize,
-                Heuristic = heuristic,
-                AllowUnwalkable = allowUnwalkable,
-                MaxClimbHeight = GlobalGridManager.VoxelSize,
-                MaxPathSearchRange = null
-            };
-
-            request.Validate();
-            return request;
-        }
-
-        public override bool Equals(object obj) =>
-            obj is AStarPathRequest other && Equals(other);
-
-        public bool Equals(AStarPathRequest other) => RequestCacheKey == other.RequestCacheKey;
-
-        public override int GetHashCode()
-        {
-            return (
-                StartNode?.SpawnToken ?? 0,
-                EndNode?.SpawnToken ?? 0,
-                UnitSize,
-                AllowUnwalkable,
-                Heuristic,
-                MaxClimbHeight,
-                MaxPathSearchRange ?? -1
-            ).CombineHashCodes();
-        }
+    public override int GetHashCode()
+    {
+        return (
+            StartNode?.SpawnToken ?? 0,
+            EndNode?.SpawnToken ?? 0,
+            UnitSize,
+            AllowUnwalkable,
+            Heuristic,
+            MaxClimbHeight,
+            MaxPathSearchRange ?? -1
+        ).CombineHashCodes();
     }
 }

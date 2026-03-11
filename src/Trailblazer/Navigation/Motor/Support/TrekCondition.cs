@@ -1,58 +1,57 @@
 ﻿using FixedMathSharp;
 using System.Runtime.CompilerServices;
 
-namespace Trailblazer.Navigation.Motor
+namespace Trailblazer.Navigation.Motor;
+
+/// <summary>
+/// Represents the traversal state of a scout, including its movement medium and surface interactions.
+/// </summary>
+public class TrekCondition
 {
     /// <summary>
-    /// Represents the traversal state of a scout, including its movement medium and surface interactions.
+    /// Defines the medium in which the scout is currently moving.
     /// </summary>
-    public class TrekCondition
+    public TraversalMedium Medium;
+
+    /// <summary>
+    /// Stores the height of the current surface, typically used for ground and water interactions.
+    /// </summary>
+    public Fixed64 SurfaceLevel;
+
+    /// <summary>
+    /// Stores the height of the ceiling above the scout, if applicable.
+    /// Defaults to Fixed64.MAX_VALUE, meaning no ceiling.
+    /// </summary>
+    public Fixed64 CeilingLevel;
+
+    /// <summary>
+    /// Contains data about the ground state, if applicable.
+    /// </summary>
+    public GroundCondition? GroundState;
+
+    public TrekCondition(
+        TraversalMedium medium = TraversalMedium.Unknown,
+        Fixed64? surfaceLevel = null,
+        GroundCondition? surfaceCondition = null,
+        Fixed64? ceilingLevel = null)
     {
-        /// <summary>
-        /// Defines the medium in which the scout is currently moving.
-        /// </summary>
-        public TraversalMedium Medium;
+        Medium = medium;
+        SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
+        GroundState = surfaceCondition ?? null;
+        CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
+    }
 
-        /// <summary>
-        /// Stores the height of the current surface, typically used for ground and water interactions.
-        /// </summary>
-        public Fixed64 SurfaceLevel;
+    /// <summary>
+    /// Represents an empty traversal condition with default values.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static TrekCondition CreateEmpty() => new();
 
-        /// <summary>
-        /// Stores the height of the ceiling above the scout, if applicable.
-        /// Defaults to Fixed64.MAX_VALUE, meaning no ceiling.
-        /// </summary>
-        public Fixed64 CeilingLevel;
-
-        /// <summary>
-        /// Contains data about the ground state, if applicable.
-        /// </summary>
-        public GroundCondition? GroundState;
-
-        public TrekCondition(
-            TraversalMedium medium = TraversalMedium.Unknown,
-            Fixed64? surfaceLevel = null,
-            GroundCondition? surfaceCondition = null,
-            Fixed64? ceilingLevel = null)
-        {
-            Medium = medium;
-            SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-            GroundState = surfaceCondition ?? null;
-            CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
-        }
-
-        /// <summary>
-        /// Represents an empty traversal condition with default values.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static TrekCondition CreateEmpty() => new();
-
-        public void Reset()
-        {
-            Medium = TraversalMedium.Unknown;
-            SurfaceLevel = Fixed64.Zero;
-            GroundState = null;
-            CeilingLevel = Fixed64.MAX_VALUE;
-        }
+    public void Reset()
+    {
+        Medium = TraversalMedium.Unknown;
+        SurfaceLevel = Fixed64.Zero;
+        GroundState = null;
+        CeilingLevel = Fixed64.MAX_VALUE;
     }
 }

@@ -4,13 +4,15 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using Trailblazer.Navigation.Motor;
+
+// TODO: these should be in a seperate utility project
+
+namespace Trailblazer.Support;
 
 [AttributeUsage(AttributeTargets.Property)]
 public class TransientAttribute : Attribute { }
 
-// TODO: these should be in a seperate utility project
-public static class ILocomotionExtensions
+public static class TransientExtensions
 {
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _transientPropertiesCache = new();
 
@@ -26,7 +28,7 @@ public static class ILocomotionExtensions
     /// <summary>
     /// Synchronizes all transient properties between two locomotion instances.
     /// </summary>
-    public static void SyncTransientState(this ITransientLocomotion source, ITransientLocomotion target)
+    public static void SyncTransientState(this ITransient source, ITransient target)
     {
         Debug.Assert(source != null, "Source locomotion cannot be null.");
         Debug.Assert(target != null, "Target locomotion cannot be null.");
@@ -39,7 +41,7 @@ public static class ILocomotionExtensions
     /// <summary>
     /// Clears all transient properties by resetting them to their default values.
     /// </summary>
-    public static void ClearTransientState(this ITransientLocomotion instance)
+    public static void ClearTransientState(this ITransient instance)
     {
         foreach (var prop in GetTransientProperties(instance.GetType()))
         {

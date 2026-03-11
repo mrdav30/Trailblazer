@@ -4,475 +4,474 @@ using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Xunit;
 
-namespace Trailblazer.Tests.Navigation.Motor
+namespace Trailblazer.Tests.Navigation.Motor;
+
+[Collection("TrailblazerCollection")]
+public class JumpLocomotionTests
 {
-    [Collection("TrailblazerCollection")]
-    public class JumpLocomotionTests
+    [Fact]
+    public void Given_GroundedScout_When_JumpIsTriggered_Then_ShouldApplyJumpForce()
     {
-        [Fact]
-        public void Given_GroundedScout_When_JumpIsTriggered_Then_ShouldApplyJumpForce()
+        // Arrange
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        scout.FrameRequest = new()
         {
-            // Arrange
-            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
-            scout.FrameRequest = new()
-            {
-                Origin = scout.Position,
-                Rotation = scout.Rotation,
-                Direction = Vector3d.Zero,
-                Rate = TrekRate.Stationary,
-                IsRequestingJump = true
-            };
+            Origin = scout.Position,
+            Rotation = scout.Rotation,
+            Direction = Vector3d.Zero,
+            Rate = TrekRate.Stationary,
+            IsRequestingJump = true
+        };
 
-            // Act
-            scout.Simulate();
+        // Act
+        scout.Simulate();
 
-            // Assert
-            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
-        }
+        // Assert
+        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
+    }
 
-        [Fact]
-        public void Given_AirborneScout_When_JumpIsTriggered_Then_ShouldNotApplyJumpForce()
+    [Fact]
+    public void Given_AirborneScout_When_JumpIsTriggered_Then_ShouldNotApplyJumpForce()
+    {
+        // Arrange
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(
+            startPosition: Vector3d.Up,
+            startVelocity: Vector3d.Down,
+            startingMedium: TraversalMedium.Air);
+
+        Vector3d expectedVelocity = Vector3d.Down;
+        expectedVelocity.y += -scout.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
+
+        // Act
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        // Assert
+        scout.Motor.Locomotions.Move.FrameVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+    }
+
+    [Fact]
+    public void Given_ScoutThatJumped_When_JumpCooldownNotExpired_Then_ShouldNotJump()
+    {
+        // Arrange
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+
+        // Act - First Jump
+        scout.FrameRequest.IsRequestingJump = true;
+
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        Fixed64 expectedJumpFrame = scout.Motor.Locomotions.Jump.JumpStartTime;
+
+        // Attempt to jump again immediately
+        scout.FrameRequest.IsRequestingJump = true;
+
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        // Assert
+        scout.Motor.IsInAir.Should().BeTrue();
+        scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
+        scout.Motor.Locomotions.Jump.JumpStartTime.Should().Be(expectedJumpFrame);
+    }
+
+    [Fact]
+    public void Given_ScoutJumps_When_JumpIsReleasedMidAir_Then_GravityShouldResume()
+    {
+        // Arrange
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+
+        // Act - First Jump
+        scout.FrameRequest.IsRequestingJump = true;
+
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        // Release jump after 2 frames
+        for (int i = 0; i < 29; i++)
         {
-            // Arrange
-            var scout = MockMotorAgentTestFactory.CreateMockAgent(
-                startPosition: Vector3d.Up,
-                startVelocity: Vector3d.Down,
-                startingMedium: TraversalMedium.Air);
-
-            Vector3d expectedVelocity = Vector3d.Down;
-            expectedVelocity.y += -scout.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
-
-            // Act
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            // Assert
-            scout.Motor.Locomotions.Move.FrameVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
-        }
-
-        [Fact]
-        public void Given_ScoutThatJumped_When_JumpCooldownNotExpired_Then_ShouldNotJump()
-        {
-            // Arrange
-            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
-
-            // Act - First Jump
-            scout.FrameRequest.IsRequestingJump = true;
-
             TrailblazerManager.Simulate();
             scout.Simulate();
-
-            Fixed64 expectedJumpFrame = scout.Motor.Locomotions.Jump.JumpStartTime;
-
-            // Attempt to jump again immediately
-            scout.FrameRequest.IsRequestingJump = true;
-
-            TrailblazerManager.Simulate();
-            scout.Simulate();
-
-            // Assert
-            scout.Motor.IsInAir.Should().BeTrue();
-            scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
-            scout.Motor.Locomotions.Jump.JumpStartTime.Should().Be(expectedJumpFrame);
         }
 
-        [Fact]
-        public void Given_ScoutJumps_When_JumpIsReleasedMidAir_Then_GravityShouldResume()
+        // Act - Simulate next frame
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        // Assert
+        scout.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
+        scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
+        scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we simulate 31
+        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
+    }
+
+    [Fact]
+    public void Given_ScoutCannotAffordJump_When_JumpRequested_Then_ShouldNotJump()
+    {
+        // Arrange
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        scout.Motor.Events.CanAffordJump = () => false;
+
+        // Act
+        scout.FrameRequest.IsRequestingJump = true;
+
+        scout.Simulate();
+
+        // Assert
+        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
+    }
+
+    [Fact]
+    public void Given_ScoutHoldingJump_When_Simulated_Then_GravityShouldBeTemporarilyReduced()
+    {
+        // Arrange
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+
+        // Act - Initial Jump
+        TrailblazerManager.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        Vector3d previousVelocity = scout.Motor.Locomotions.Move.FrameVelocity;
+
+        // Continue holding jump for 3 frames
+        for (int i = 0; i < 3; i++)
         {
-            // Arrange
-            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
-
-            // Act - First Jump
-            scout.FrameRequest.IsRequestingJump = true;
-
-            TrailblazerManager.Simulate();
-            scout.Simulate();
-
-            // Release jump after 2 frames
-            for (int i = 0; i < 29; i++)
-            {
-                TrailblazerManager.Simulate();
-                scout.Simulate();
-            }
-
-            // Act - Simulate next frame
-            TrailblazerManager.Simulate();
-            scout.Simulate();
-
-            // Assert
-            scout.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
-            scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
-            scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we simulate 31
-            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
-        }
-
-        [Fact]
-        public void Given_ScoutCannotAffordJump_When_JumpRequested_Then_ShouldNotJump()
-        {
-            // Arrange
-            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
-            scout.Motor.Events.CanAffordJump = () => false;
-
-            // Act
-            scout.FrameRequest.IsRequestingJump = true;
-
-            scout.Simulate();
-
-            // Assert
-            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
-        }
-
-        [Fact]
-        public void Given_ScoutHoldingJump_When_Simulated_Then_GravityShouldBeTemporarilyReduced()
-        {
-            // Arrange
-            var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
-
-            // Act - Initial Jump
             TrailblazerManager.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
-
-            Vector3d previousVelocity = scout.Motor.Locomotions.Move.FrameVelocity;
-
-            // Continue holding jump for 3 frames
-            for (int i = 0; i < 3; i++)
-            {
-                TrailblazerManager.Simulate();
-                scout.FrameRequest.IsRequestingJump = true;
-                scout.Simulate();
-            }
-
-            // Assert
-            var expected = previousVelocity.y - (scout.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime * 3);
-            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeGreaterThan(expected);
         }
 
-        [Fact]
-        public void Given_ScoutOnGround_When_JumpHeld_Then_ShouldJumpHigher()
-        {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        // Assert
+        var expected = previousVelocity.y - (scout.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime * 3);
+        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeGreaterThan(expected);
+    }
 
+    [Fact]
+    public void Given_ScoutOnGround_When_JumpHeld_Then_ShouldJumpHigher()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        for (int i = 0; i < 13; i++)
+        {
+            TrailblazerManager.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
-
-            for (int i = 0; i < 13; i++)
-            {
-                TrailblazerManager.Simulate();
-                scout.FrameRequest.IsRequestingJump = true;
-                scout.Simulate();
-            }
-
-            // Higher than default jump height
-            scout.Position.y.Should().BeGreaterThan(scout.Motor.Locomotions.Jump.BaseJumpHeight);
         }
 
-        [Fact]
-        public void Given_ScoutOnGround_When_JumpNotHeld_Then_ShouldNotJumpHigher()
-        {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        // Higher than default jump height
+        scout.Position.y.Should().BeGreaterThan(scout.Motor.Locomotions.Jump.BaseJumpHeight);
+    }
 
+    [Fact]
+    public void Given_ScoutOnGround_When_JumpNotHeld_Then_ShouldNotJumpHigher()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        for (int i = 0; i < 13; i++)
+        {
+            TrailblazerManager.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
-
-            for (int i = 0; i < 13; i++)
-            {
-                TrailblazerManager.Simulate();
-                scout.FrameRequest.IsRequestingJump = true;
-                scout.Simulate();
-            }
-
-            scout.Position.y.Should().BeGreaterThan(scout.Motor.Locomotions.Jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
         }
 
-        [Fact]
-        public void Given_ScoutWhen_JumpingAgainstCeiling_Then_ShouldStopRising()
+        scout.Position.y.Should().BeGreaterThan(scout.Motor.Locomotions.Jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
+    }
+
+    [Fact]
+    public void Given_ScoutWhen_JumpingAgainstCeiling_Then_ShouldStopRising()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent(new Vector3d(0, 5, 0));
+
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.FrameRequest.Rate = TrekRate.Slow;
+        scout.Simulate();
+
+        scout.Simulate();
+
+        scout.Motor.Locomotions.Jump.IsJumping.Should().BeTrue();
+
+        scout.FrameCondition = new(
+            TraversalMedium.Air,
+            surfaceLevel: Fixed64.FromRaw(5 << 16),
+            ceilingLevel: Fixed64.FromRaw(6 << 16)); // Simulate a ceiling
+
+        scout.Simulate();
+
+        // Jump should be canceled
+        scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
+        // Should stop rising
+        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void Given_ScoutHoldingJump_When_LandsOnGround_Then_ShouldResetJumpState()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+        bool jumpStarted = false;
+        bool jumpStopped = false;
+        bool fallStarted = false;
+        bool fallStopped = false;
+
+        scout.Motor.Events.OnStartJump += (avoidTimer) => jumpStarted = true;
+        scout.Motor.Events.OnStopJump += () => jumpStopped = true;
+        scout.Motor.Events.OnStartFall += () => fallStarted = true;
+        scout.Motor.Events.OnLandedFall += () => fallStopped = true;
+
+        // Start Jump
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.FrameRequest.Rate = TrekRate.Slow;
+        scout.Simulate();
+
+        // Simulate entire jump arc until landing
+        for (int i = 0; i < 30; i++)
         {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent(new Vector3d(0, 5, 0));
-
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.FrameRequest.Rate = TrekRate.Slow;
-            scout.Simulate();
-
-            scout.Simulate();
-
-            scout.Motor.Locomotions.Jump.IsJumping.Should().BeTrue();
-
-            scout.FrameCondition = new(
-                TraversalMedium.Air,
-                surfaceLevel: Fixed64.FromRaw(5 << 16),
-                ceilingLevel: Fixed64.FromRaw(6 << 16)); // Simulate a ceiling
-
-            scout.Simulate();
-
-            // Jump should be canceled
-            scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
-            // Should stop rising
-            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
-        }
-
-        [Fact]
-        public void Given_ScoutHoldingJump_When_LandsOnGround_Then_ShouldResetJumpState()
-        {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-
-            bool jumpStarted = false;
-            bool jumpStopped = false;
-            bool fallStarted = false;
-            bool fallStopped = false;
-
-            scout.Motor.Events.OnStartJump += (avoidTimer) => jumpStarted = true;
-            scout.Motor.Events.OnStopJump += () => jumpStopped = true;
-            scout.Motor.Events.OnStartFall += () => fallStarted = true;
-            scout.Motor.Events.OnLandedFall += () => fallStopped = true;
-
-            // Start Jump
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.FrameRequest.Rate = TrekRate.Slow;
-            scout.Simulate();
-
-            // Simulate entire jump arc until landing
-            for (int i = 0; i < 30; i++)
-            {
-                TrailblazerManager.Simulate();
-                scout.Simulate();
-                if (scout.Position.y <= Fixed64.Zero) // If we've landed
-                    break;
-            }
-
-            scout.Simulate();
-
-            scout.FrameCondition.Medium = TraversalMedium.Ground;
-            scout.FrameCondition.SurfaceLevel = Fixed64.Zero;
-
-            // Assert that jump state has been reset after actual landing
-            scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
-            jumpStarted.Should().BeTrue();
-            jumpStopped.Should().BeTrue();
-            fallStarted.Should().BeTrue();
-            // We treat landing a jump differently
-            fallStopped.Should().BeFalse();
-        }
-
-        [Fact]
-        public void Given_ScoutHoldingJump_When_HeldTooLong_Then_ShouldNotExceedMaxJump()
-        {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-
-            var jumpLocomotion = scout.Motor.Locomotions.Jump;
-            Fixed64 maxExpectedHeight = jumpLocomotion.BaseJumpHeight + jumpLocomotion.ExtraJumpHeight;
-
-            Fixed64 maxY = scout.Position.y;
-
-            // Start jump
-            scout.FrameRequest.IsRequestingJump = true;
             TrailblazerManager.Simulate();
             scout.Simulate();
-
-            // Continue holding jump and track peak height until we land
-            while (!scout.Motor.IsGrounded)
-            {
-                TrailblazerManager.Simulate();
-                scout.FrameRequest.IsRequestingJump = true;
-                scout.Simulate();
-
-                if (scout.Position.y > maxY)
-                    maxY = scout.Position.y;
-            }
-
-            maxY.Should().BeLessThanOrEqualTo(maxExpectedHeight);
+            if (scout.Position.y <= Fixed64.Zero) // If we've landed
+                break;
         }
 
-        [Fact]
-        public void Given_ScoutTapsJump_When_ReleasedImmediately_Then_JumpHeightShouldBeReduced()
+        scout.Simulate();
+
+        scout.FrameCondition.Medium = TraversalMedium.Ground;
+        scout.FrameCondition.SurfaceLevel = Fixed64.Zero;
+
+        // Assert that jump state has been reset after actual landing
+        scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
+        jumpStarted.Should().BeTrue();
+        jumpStopped.Should().BeTrue();
+        fallStarted.Should().BeTrue();
+        // We treat landing a jump differently
+        fallStopped.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Given_ScoutHoldingJump_When_HeldTooLong_Then_ShouldNotExceedMaxJump()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+        var jumpLocomotion = scout.Motor.Locomotions.Jump;
+        Fixed64 maxExpectedHeight = jumpLocomotion.BaseJumpHeight + jumpLocomotion.ExtraJumpHeight;
+
+        Fixed64 maxY = scout.Position.y;
+
+        // Start jump
+        scout.FrameRequest.IsRequestingJump = true;
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        // Continue holding jump and track peak height until we land
+        while (!scout.Motor.IsGrounded)
         {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-
-            // Start jump
-            scout.FrameRequest.IsRequestingJump = true;
-            TrailblazerManager.Simulate();
-            scout.Simulate();
-
-            // Tap release
-            for (int i = 0; i < 5; i++)
-            {
-                TrailblazerManager.Simulate();
-                scout.Simulate();
-            }
-
-            scout.Position.y.Should().BeGreaterThan((Fixed64)0.5).And.BeLessThan((Fixed64)1.0);
-        }
-
-        [Fact]
-        public void Given_ScoutWithMultipleJumps_When_JumpsInAir_Then_JumpCountShouldIncrement()
-        {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-            scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
-
-            // First jump
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
-
-            // Simulate midair
-            TrailblazerManager.Simulate();
-            scout.Simulate();
-
-            // Second jump in air
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            scout.Motor.Locomotions.Jump.JumpCount.Should().Be(2);
-        }
-
-        [Fact]
-        public void Given_Scout_When_JumpCountEqualsMax_Then_JumpShouldBeBlocked()
-        {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-            scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
-
-            // First jump (ground)
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            // Second jump (air)
             TrailblazerManager.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
 
-            scout.Motor.Locomotions.Jump.JumpCount.Should().Be(2);
-
-            var currentVelocity = scout.Velocity;
-
-            // Attempt third jump
-            TrailblazerManager.Simulate();
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            // Velocity shouldn't increase anymore
-            scout.Motor.Locomotions.Jump.JumpCount.Should().Be(2);
-            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThan(currentVelocity.y);
+            if (scout.Position.y > maxY)
+                maxY = scout.Position.y;
         }
 
-        [Fact]
-        public void Given_ScoutWithMidairJumps_When_LandsOnGround_Then_JumpCountShouldReset()
+        maxY.Should().BeLessThanOrEqualTo(maxExpectedHeight);
+    }
+
+    [Fact]
+    public void Given_ScoutTapsJump_When_ReleasedImmediately_Then_JumpHeightShouldBeReduced()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+        // Start jump
+        scout.FrameRequest.IsRequestingJump = true;
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        // Tap release
+        for (int i = 0; i < 5; i++)
         {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-            scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
-
-            // First jump
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            // Second jump
-            TrailblazerManager.Simulate();
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            // Land
-            for (int i = 0; i < 30; i++)
-            {
-                TrailblazerManager.Simulate();
-                scout.Simulate();
-                if (scout.Position.y <= Fixed64.Zero) break;
-            }
-
-            scout.FrameCondition.Medium = TraversalMedium.Ground;
-            scout.FrameCondition.SurfaceLevel = Fixed64.Zero;
-            scout.Simulate();
-
-            scout.Motor.Locomotions.Jump.JumpCount.Should().Be(0);
-        }
-
-        [Fact]
-        public void Given_ScoutMidairJump_When_SecondJumpOccurs_Then_VelocityShouldSpikeAgain()
-        {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-            scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
-
-            // First jump
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            var velocityAfterFirstJump = scout.Motor.Locomotions.Move.FrameVelocity.y;
-
-            // Midair frame
             TrailblazerManager.Simulate();
             scout.Simulate();
-
-            // Second jump
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            var velocityAfterSecondJump = scout.Motor.Locomotions.Move.FrameVelocity.y;
-
-            velocityAfterSecondJump.Should().BeGreaterThan(velocityAfterFirstJump);
         }
 
-        [Fact]
-        public void Given_ScoutJumpThenFall_When_JumpRequestedWhileFalling_Then_ShouldNotJump()
+        scout.Position.y.Should().BeGreaterThan((Fixed64)0.5).And.BeLessThan((Fixed64)1.0);
+    }
+
+    [Fact]
+    public void Given_ScoutWithMultipleJumps_When_JumpsInAir_Then_JumpCountShouldIncrement()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+
+        // First jump
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
+
+        // Simulate midair
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        // Second jump in air
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void Given_Scout_When_JumpCountEqualsMax_Then_JumpShouldBeBlocked()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+
+        // First jump (ground)
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        // Second jump (air)
+        TrailblazerManager.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(2);
+
+        var currentVelocity = scout.Velocity;
+
+        // Attempt third jump
+        TrailblazerManager.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        // Velocity shouldn't increase anymore
+        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(2);
+        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThan(currentVelocity.y);
+    }
+
+    [Fact]
+    public void Given_ScoutWithMidairJumps_When_LandsOnGround_Then_JumpCountShouldReset()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+
+        // First jump
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        // Second jump
+        TrailblazerManager.Simulate();
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        // Land
+        for (int i = 0; i < 30; i++)
         {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-            scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
-
-            // Frame 1: perform the initial jump
-            scout.FrameRequest.IsRequestingJump = true;
+            TrailblazerManager.Simulate();
             scout.Simulate();
-
-            scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
-
-            // Simulate until fall state is entered
-            while (!scout.Motor.Locomotions.Fall.IsFalling)
-            {
-                TrailblazerManager.Simulate();
-                scout.Simulate();
-            }
-
-            scout.Motor.Locomotions.Fall.IsFalling.Should().BeTrue();
-            scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
-
-            // Attempt second jump while falling
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
-
-            // Jump count should not increase
-            scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
-            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThan(Fixed64.Zero);
+            if (scout.Position.y <= Fixed64.Zero) break;
         }
 
-        [Fact]
-        public void Given_ScoutJumping_When_CalculatingMaxSpeed_Then_ControlMultiplierShouldApply()
+        scout.FrameCondition.Medium = TraversalMedium.Ground;
+        scout.FrameCondition.SurfaceLevel = Fixed64.Zero;
+        scout.Simulate();
+
+        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void Given_ScoutMidairJump_When_SecondJumpOccurs_Then_VelocityShouldSpikeAgain()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+
+        // First jump
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        var velocityAfterFirstJump = scout.Motor.Locomotions.Move.FrameVelocity.y;
+
+        // Midair frame
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        // Second jump
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        var velocityAfterSecondJump = scout.Motor.Locomotions.Move.FrameVelocity.y;
+
+        velocityAfterSecondJump.Should().BeGreaterThan(velocityAfterFirstJump);
+    }
+
+    [Fact]
+    public void Given_ScoutJumpThenFall_When_JumpRequestedWhileFalling_Then_ShouldNotJump()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+
+        // Frame 1: perform the initial jump
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
+
+        // Simulate until fall state is entered
+        while (!scout.Motor.Locomotions.Fall.IsFalling)
         {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-
-            scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)6;
-            scout.Motor.Locomotions.Jump.JumpControlMultiplier = (Fixed64)0.5;
-
-            scout.FrameRequest.IsRequestingJump = true;
+            TrailblazerManager.Simulate();
             scout.Simulate();
-
-            var speed = scout.Motor.MaxHoritzontalSpeedInDirection(
-                Vector3d.Right,
-                TrekRate.Moderate);
-
-            speed.Should().Be((Fixed64)3);
         }
 
-        [Fact]
-        public void Given_ScoutJumping_When_ControlMultiplierIsZero_Then_NoHorizontalSpeed()
-        {
-            var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        scout.Motor.Locomotions.Fall.IsFalling.Should().BeTrue();
+        scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
 
-            scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)8;
-            scout.Motor.Locomotions.Jump.JumpControlMultiplier = Fixed64.Zero;
+        // Attempt second jump while falling
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
 
-            scout.FrameRequest.IsRequestingJump = true;
-            scout.Simulate();
+        // Jump count should not increase
+        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
+        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThan(Fixed64.Zero);
+    }
 
-            var speed = scout.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Left, TrekRate.Fast);
+    [Fact]
+    public void Given_ScoutJumping_When_CalculatingMaxSpeed_Then_ControlMultiplierShouldApply()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
-            speed.Should().Be(Fixed64.Zero);
-        }
+        scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)6;
+        scout.Motor.Locomotions.Jump.JumpControlMultiplier = (Fixed64)0.5;
+
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        var speed = scout.Motor.MaxHoritzontalSpeedInDirection(
+            Vector3d.Right,
+            TrekRate.Moderate);
+
+        speed.Should().Be((Fixed64)3);
+    }
+
+    [Fact]
+    public void Given_ScoutJumping_When_ControlMultiplierIsZero_Then_NoHorizontalSpeed()
+    {
+        var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+        scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)8;
+        scout.Motor.Locomotions.Jump.JumpControlMultiplier = Fixed64.Zero;
+
+        scout.FrameRequest.IsRequestingJump = true;
+        scout.Simulate();
+
+        var speed = scout.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Left, TrekRate.Fast);
+
+        speed.Should().Be(Fixed64.Zero);
     }
 }

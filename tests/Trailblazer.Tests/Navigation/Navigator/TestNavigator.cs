@@ -1,11 +1,4 @@
-﻿using FluentAssertions;
-using FixedMathSharp;
-using Trailblazer.Navigation;
-using Xunit;
-using Trailblazer.Navigation.Motor;
-using Trailblazer.Navigation.Steering;
-
-namespace Trailblazer.Tests.Navigation
+﻿namespace Trailblazer.Tests.Navigation
 {
     //// A tiny concrete subclass so we can test the abstract Navigator
     //public class TestNavigator : Navigator

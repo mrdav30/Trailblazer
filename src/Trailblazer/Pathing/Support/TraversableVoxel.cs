@@ -1,14 +1,13 @@
 ﻿using GridForge.Grids;
 using GridForge.Spatial;
 
-namespace Trailblazer.Pathing
+namespace Trailblazer.Pathing;
+
+public struct TraversableVoxel
 {
-    public struct TraversableVoxel
-    {
-        public Voxel Voxel { get; set; }
+    public Voxel Voxel { get; set; }
 
-        public PathPartition Partition { get; set; }
+    public PathPartition Partition { get; set; }
 
-        public SpatialDirection Direction { get; set; }
-    }
+    public SpatialDirection Direction { get; set; }
 }

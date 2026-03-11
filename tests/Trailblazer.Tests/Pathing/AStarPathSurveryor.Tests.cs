@@ -104,13 +104,11 @@ public class AStarSurveryorTests : IDisposable
         Fixed64 maxHeightDifference = Fixed64.Half;
         bool heightViolationTriggered = false;
 
-#if DEBUG
         AStarSurveyor.OnHeightLimitViolated = (from, to, delta) =>
         {
             if (delta > maxHeightDifference)
                 heightViolationTriggered = true;
         };
-#endif
 
         var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(5, 5, 0));
         request.MaxClimbHeight = maxHeightDifference;

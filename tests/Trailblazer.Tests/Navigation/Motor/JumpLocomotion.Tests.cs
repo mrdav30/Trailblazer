@@ -1,8 +1,8 @@
-﻿using Xunit;
+﻿using FixedMathSharp;
 using FluentAssertions;
-using FixedMathSharp;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
+using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor
 {
@@ -199,8 +199,8 @@ namespace Trailblazer.Tests.Navigation.Motor
             scout.Motor.Locomotions.Jump.IsJumping.Should().BeTrue();
 
             scout.FrameCondition = new(
-                TraversalMedium.Air, 
-                surfaceLevel: Fixed64.FromRaw(5 << 16), 
+                TraversalMedium.Air,
+                surfaceLevel: Fixed64.FromRaw(5 << 16),
                 ceilingLevel: Fixed64.FromRaw(6 << 16)); // Simulate a ceiling
 
             scout.Simulate();
@@ -208,7 +208,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             // Jump should be canceled
             scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
             // Should stop rising
-            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero); 
+            scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
         }
 
         [Fact]
@@ -423,7 +423,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
 
             // Simulate until fall state is entered
-            while(!scout.Motor.Locomotions.Fall.IsFalling)
+            while (!scout.Motor.Locomotions.Fall.IsFalling)
             {
                 TrailblazerManager.Simulate();
                 scout.Simulate();
@@ -453,7 +453,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             scout.Simulate();
 
             var speed = scout.Motor.MaxHoritzontalSpeedInDirection(
-                Vector3d.Right, 
+                Vector3d.Right,
                 TrekRate.Moderate);
 
             speed.Should().Be((Fixed64)3);

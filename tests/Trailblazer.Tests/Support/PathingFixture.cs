@@ -1,8 +1,8 @@
-﻿using System;
-using Xunit;
+﻿using GridForge;
 using GridForge.Grids;
+using System;
 using Trailblazer.Pathing;
-using GridForge;
+using Xunit;
 
 namespace Trailblazer.Tests
 {

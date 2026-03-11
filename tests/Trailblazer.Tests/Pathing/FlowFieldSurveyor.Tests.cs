@@ -1,11 +1,10 @@
-﻿using Xunit;
-using FixedMathSharp;
-using Trailblazer.Pathing;
-using GridForge.Grids;
-using SwiftCollections;
-using System.Linq;
-using GridForge.Configuration;
+﻿using FixedMathSharp;
 using FluentAssertions;
+using GridForge.Configuration;
+using GridForge.Grids;
+using System.Linq;
+using Trailblazer.Pathing;
+using Xunit;
 
 namespace Trailblazer.Tests.Pathing
 {
@@ -99,7 +98,7 @@ namespace Trailblazer.Tests.Pathing
             FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
             Assert.True(result.HasPath);
-             
+
             var distanceToTarget = Vector3d.Distance(end, start).CeilToInt() + 2 + request.ExtraFloodRange;
             foreach (FlowField flow in result.Fields.Values)
                 Assert.True(flow.PathCost <= distanceToTarget);

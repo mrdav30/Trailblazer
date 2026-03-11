@@ -112,7 +112,7 @@ namespace Trailblazer.Pathing
                         part.PathCost = 0;
                     return AStarSurveyResult.Empty;
                 }
-                    
+
                 BuildRawPath();
                 BuildWaypoints();
 
@@ -158,7 +158,7 @@ namespace Trailblazer.Pathing
 
             if (TryProcessDirection(current, SpatialAwareness.PerpendicularDirections, data.MovementCost + StraightCost))
                 return true;
-            if(TryProcessDirection(current, SpatialAwareness.DiagonalDirections, data.MovementCost + DiagonalCost, true))
+            if (TryProcessDirection(current, SpatialAwareness.DiagonalDirections, data.MovementCost + DiagonalCost, true))
                 return true;
 
             return false;

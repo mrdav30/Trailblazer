@@ -1,13 +1,13 @@
-Trailblazer
-==============
+# Trailblazer
+
+**A movement system for deterministic, lockstep simulations.**
+
+Lightweight, framework-agnostic, and optimized for lockstep engines.
 
 ## 🧪 Testing and Validation
 
-Unit tests are used extensively to validate the correctness of mathematical 
-operations. Special **fuzzy comparisons** are employed where small precision 
-discrepancies might occur, mimicking floating-point behavior.
-
 To run the tests:
+
 ```bash
 dotnet test --configuration Release
 ```
@@ -16,16 +16,15 @@ dotnet test --configuration Release
 
 ## 🛠️ Compatibility
 
-- **.NET Framework** 4.7.2+
-- **.NET Core / .NET** 6+
+- **.NET** 8+
+- **.NET Standard** 2.1+
 - **Cross-Platform Support** (Windows, Linux, macOS)
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the `LICENSE` file
-for details.
+This project is licensed under the MIT License - see the `LICENSE` file for details.
 
 ---
 

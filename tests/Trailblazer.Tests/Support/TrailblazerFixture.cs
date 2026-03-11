@@ -1,5 +1,4 @@
-﻿using GridForge.Grids;
-using System;
+﻿using System;
 using Xunit;
 
 namespace Trailblazer.Tests

@@ -1,4 +1,4 @@
-﻿ using FixedMathSharp;
+﻿using FixedMathSharp;
 using Trailblazer.Navigation.Motor;
 
 /// <summary>
@@ -53,7 +53,7 @@ public class TransitState
         SurfaceLevel = condition.SurfaceLevel;
         GroundState = condition.GroundState;
 
-        if(Medium == TraversalMedium.Ground)
+        if (Medium == TraversalMedium.Ground)
         {
             SurfaceNormal = GroundState?.GroundNormal ?? Vector3d.Zero;
             SlopeAngle = Vector3d.Angle(Vector3d.Up, SurfaceNormal);

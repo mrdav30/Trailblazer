@@ -13,8 +13,8 @@ namespace Trailblazer.Tests
         protected override string Identifier => "fixed64";
 
         public AndConstraint<Fixed64Assertions> BeApproximately(
-            Fixed64 expected, 
-            Fixed64? tolerance = null, 
+            Fixed64 expected,
+            Fixed64? tolerance = null,
             string because = "", params object[] becauseArgs)
         {
             Fixed64 limit = tolerance ?? Fixed64.Epsilon;
@@ -43,8 +43,8 @@ namespace Trailblazer.Tests
         protected override string Identifier => "vector3d";
 
         public AndConstraint<Vector3dAssertions> BeApproximately(
-            Vector3d expected, 
-            Fixed64? tolerance = null, 
+            Vector3d expected,
+            Fixed64? tolerance = null,
             string because = "", params object[] becauseArgs)
         {
             Fixed64 limit = tolerance ?? Fixed64.Epsilon;
@@ -58,9 +58,9 @@ namespace Trailblazer.Tests
         }
 
         public AndConstraint<Vector3dAssertions> NotBeApproximately(
-            Vector3d expected, 
-            Fixed64? tolerance = null, 
-            string because = "", 
+            Vector3d expected,
+            Fixed64? tolerance = null,
+            string because = "",
             params object[] becauseArgs)
         {
             Fixed64 limit = tolerance ?? Fixed64.Epsilon;
@@ -74,8 +74,8 @@ namespace Trailblazer.Tests
         }
 
         public AndConstraint<Vector3dAssertions> HaveComponentApproximately(
-            Vector3d expected, 
-            Fixed64? tolerance = null, 
+            Vector3d expected,
+            Fixed64? tolerance = null,
             string because = "", params object[] becauseArgs)
         {
             Fixed64 limit = tolerance ?? Fixed64.Epsilon;

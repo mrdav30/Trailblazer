@@ -1,12 +1,12 @@
-﻿using Xunit;
-using FixedMathSharp;
-using Trailblazer.Pathing;
+﻿using FixedMathSharp;
+using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
-using System.Linq;
-using FluentAssertions;
-using System.Collections.Generic;
 using SwiftCollections;
+using System.Collections.Generic;
+using System.Linq;
+using Trailblazer.Pathing;
+using Xunit;
 
 namespace Trailblazer.Tests.Pathing
 {
@@ -97,7 +97,7 @@ namespace Trailblazer.Tests.Pathing
 
             var request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(5, 5, 0));
             request.MaxClimbHeight = maxHeightDifference;
-  
+
             bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
 
             Assert.True(heightViolationTriggered);
@@ -252,7 +252,7 @@ namespace Trailblazer.Tests.Pathing
             Assert.True(success1);
             Assert.NotNull(guide);
 
-          //  PathGuideFactory.ReturnGuide(guide);
+            //  PathGuideFactory.ReturnGuide(guide);
 
             // Second request with blocked path
             PathManager.UnloadChart("ResetTest");

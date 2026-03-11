@@ -2,7 +2,6 @@
 using GridForge.Grids;
 using SwiftCollections;
 using System;
-using System.Net;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing

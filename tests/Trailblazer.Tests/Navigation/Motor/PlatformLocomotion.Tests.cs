@@ -1,149 +1,148 @@
-﻿using Xunit;
+﻿using FixedMathSharp;
 using FluentAssertions;
-using FixedMathSharp;
 using Trailblazer.Navigation.Motor;
-using Trailblazer.Navigation;
+using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor
 {
     [Collection("TrailblazerCollection")]
     public class PlatformLocomotionTests
-	{
-		[Fact]
-		public void Given_ScoutOnMovingPlatform_When_SimulateRuns_Then_PositionShouldMatchPlatform()
-		{
-			// Arrange
-			var scout = MockMotorAgentTestFactory.CreatePlatformAgent();
+    {
+        [Fact]
+        public void Given_ScoutOnMovingPlatform_When_SimulateRuns_Then_PositionShouldMatchPlatform()
+        {
+            // Arrange
+            var scout = MockMotorAgentTestFactory.CreatePlatformAgent();
 
-			// Act
-			// 1st Frame
-			TrailblazerManager.Simulate();
-			scout.Simulate();
+            // Act
+            // 1st Frame
+            TrailblazerManager.Simulate();
+            scout.Simulate();
 
-			Vector3d newPlatformPoint = new(2, 0, 0);
-			Fixed4x4 updatedMatrix = Fixed4x4.SetTranslation(
-				scout.Motor.Locomotions.Platform.ActiveTransform,
-				newPlatformPoint
-			);
+            Vector3d newPlatformPoint = new(2, 0, 0);
+            Fixed4x4 updatedMatrix = Fixed4x4.SetTranslation(
+                scout.Motor.Locomotions.Platform.ActiveTransform,
+                newPlatformPoint
+            );
 
-			scout.Motor.Locomotions.Platform.ActiveTransform = updatedMatrix;
+            scout.Motor.Locomotions.Platform.ActiveTransform = updatedMatrix;
 
-			// 2nd Frame
-			TrailblazerManager.Simulate();
-			scout.Simulate();
+            // 2nd Frame
+            TrailblazerManager.Simulate();
+            scout.Simulate();
 
-			scout.FrameCondition = new(
-				TraversalMedium.Ground,
-				Fixed64.Zero,
-				new GroundCondition
-				{
-					GroundMatrix = updatedMatrix,
-					BaseObject = scout.Motor.Locomotions.Platform.ActivePlatform
-				}
-			);
+            scout.FrameCondition = new(
+                TraversalMedium.Ground,
+                Fixed64.Zero,
+                new GroundCondition
+                {
+                    GroundMatrix = updatedMatrix,
+                    BaseObject = scout.Motor.Locomotions.Platform.ActivePlatform
+                }
+            );
 
-			// Assert
-			scout.Position.Should().Be(scout.Motor.Locomotions.Platform.ActiveTransform.Translation);
-		}
+            // Assert
+            scout.Position.Should().Be(scout.Motor.Locomotions.Platform.ActiveTransform.Translation);
+        }
 
-		[Fact]
-		public void Given_ScoutOnRotatingPlatform_When_PlatformRotates_Then_ScoutShouldMatchRotation()
-		{
-			// Arrange
-			var scout = MockMotorAgentTestFactory.CreatePlatformAgent();
+        [Fact]
+        public void Given_ScoutOnRotatingPlatform_When_PlatformRotates_Then_ScoutShouldMatchRotation()
+        {
+            // Arrange
+            var scout = MockMotorAgentTestFactory.CreatePlatformAgent();
 
-			FixedQuaternion rotationChange = FixedQuaternion.FromAxisAngle(Vector3d.Up, Fixed64.FromRaw(0x10000000L)); // Small rotation
+            FixedQuaternion rotationChange = FixedQuaternion.FromAxisAngle(Vector3d.Up, Fixed64.FromRaw(0x10000000L)); // Small rotation
 
-			// Act
-			TrailblazerManager.Simulate();
-			scout.Simulate();
+            // Act
+            TrailblazerManager.Simulate();
+            scout.Simulate();
 
-			// Apply platform rotation
-			scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.CreateRotation(rotationChange) * scout.Motor.Locomotions.Platform.ActiveTransform;
+            // Apply platform rotation
+            scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.CreateRotation(rotationChange) * scout.Motor.Locomotions.Platform.ActiveTransform;
 
-			TrailblazerManager.Simulate();
-			scout.Simulate();
+            TrailblazerManager.Simulate();
+            scout.Simulate();
 
-			// Assert
-			scout.Motor.Locomotions.Platform.ActiveTransform.Rotation.Should().Be(scout.Rotation);
-		}
+            // Assert
+            scout.Motor.Locomotions.Platform.ActiveTransform.Rotation.Should().Be(scout.Rotation);
+        }
 
-		[Fact]
-		public void Given_ScoutOnMovingPlatform_Then_PositionShouldMatchPlatform()
-		{
-			// Arrange
-			var platform = MockMotorAgentTestFactory.CreatePlatform(startPosition: Vector3d.Zero);
-			var scout = MockMotorAgentTestFactory.CreatePlatformAgent(startPosition: Vector3d.Zero, platformMatrix: platform);
+        [Fact]
+        public void Given_ScoutOnMovingPlatform_Then_PositionShouldMatchPlatform()
+        {
+            // Arrange
+            var platform = MockMotorAgentTestFactory.CreatePlatform(startPosition: Vector3d.Zero);
+            var scout = MockMotorAgentTestFactory.CreatePlatformAgent(startPosition: Vector3d.Zero, platformMatrix: platform);
 
-			Vector3d expectedPosition = scout.Position;
+            Vector3d expectedPosition = scout.Position;
 
-			// Act
-			TrailblazerManager.Simulate();
-			scout.Simulate();
+            // Act
+            TrailblazerManager.Simulate();
+            scout.Simulate();
 
-			// Move platform
-			Vector3d movementDelta = new(1, 0, 0);
-			scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(
-				scout.Motor.Locomotions.Platform.ActiveTransform, movementDelta
-			);
+            // Move platform
+            Vector3d movementDelta = new(1, 0, 0);
+            scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(
+                scout.Motor.Locomotions.Platform.ActiveTransform, movementDelta
+            );
 
-			TrailblazerManager.Simulate();
-			scout.Simulate();
+            TrailblazerManager.Simulate();
+            scout.Simulate();
 
-			// Assert
-			scout.Position.Should().Be(expectedPosition + movementDelta);
-		}
+            // Assert
+            scout.Position.Should().Be(expectedPosition + movementDelta);
+        }
 
-		[Fact]
-		public void Given_ScoutOnRotatingPlatform_When_Simulated_Then_ShouldInheritRotation()
-		{
-			// Arrange
-			var scout = MockMotorAgentTestFactory.CreatePlatformAgent();
+        [Fact]
+        public void Given_ScoutOnRotatingPlatform_When_Simulated_Then_ShouldInheritRotation()
+        {
+            // Arrange
+            var scout = MockMotorAgentTestFactory.CreatePlatformAgent();
 
-			FixedQuaternion rotationChange = FixedQuaternion.FromAxisAngle(
-				Vector3d.Up, 
-				Fixed64.FromRaw(0x08000000L)); // Small rotation
+            FixedQuaternion rotationChange = FixedQuaternion.FromAxisAngle(
+                Vector3d.Up,
+                Fixed64.FromRaw(0x08000000L)); // Small rotation
 
-			// Act
-			TrailblazerManager.Simulate();
-			scout.Simulate();
+            // Act
+            TrailblazerManager.Simulate();
+            scout.Simulate();
 
-			scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetRotation(
-				scout.Motor.Locomotions.Platform.ActiveTransform, 
-				rotationChange);
-			scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.NormalizeRotationMatrix(
-				scout.Motor.Locomotions.Platform.ActiveTransform);
+            scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetRotation(
+                scout.Motor.Locomotions.Platform.ActiveTransform,
+                rotationChange);
+            scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.NormalizeRotationMatrix(
+                scout.Motor.Locomotions.Platform.ActiveTransform);
 
-			TrailblazerManager.Simulate();
-			scout.Simulate();
+            TrailblazerManager.Simulate();
+            scout.Simulate();
 
-			// Assert
-			scout.Rotation.Should().Be(scout.Motor.Locomotions.Platform.ActiveTransform.Rotation);
-		}
+            // Assert
+            scout.Rotation.Should().Be(scout.Motor.Locomotions.Platform.ActiveTransform.Rotation);
+        }
 
-		[Fact]
-		public void Given_ScoutJumpsBeforePlatformMoves_When_Simulated_Then_ShouldNotInheritFutureVelocity()
-		{
-			// Arrange
-			var platform = MockMotorAgentTestFactory.CreatePlatform();
-			var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, motionTransfer: MotionTransfer.InitTransfer);
+        [Fact]
+        public void Given_ScoutJumpsBeforePlatformMoves_When_Simulated_Then_ShouldNotInheritFutureVelocity()
+        {
+            // Arrange
+            var platform = MockMotorAgentTestFactory.CreatePlatform();
+            var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, motionTransfer: MotionTransfer.InitTransfer);
 
-			// Act 1 - Jump before platform movement
-			TrailblazerManager.Simulate();
-			scout.FrameRequest.IsRequestingJump = true;
-			scout.Simulate();
-
-			// Move platform afterward
-			scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(scout.Motor.Locomotions.Platform.ActiveTransform, new Vector3d(3, 0, 0));
-
-			// Act 2 - Simulate next frame after platform movement
-			TrailblazerManager.Simulate();
+            // Act 1 - Jump before platform movement
+            TrailblazerManager.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
 
-			// Assert - we didn't pick up any horizontal velocity from the platform
-			scout.Motor.Locomotions.Move.FrameVelocity.x.Should().Be(Fixed64.Zero);
-		}
+            // Move platform afterward
+            scout.Motor.Locomotions.Platform.ActiveTransform = Fixed4x4.SetTranslation(scout.Motor.Locomotions.Platform.ActiveTransform, new Vector3d(3, 0, 0));
+
+            // Act 2 - Simulate next frame after platform movement
+            TrailblazerManager.Simulate();
+            scout.FrameRequest.IsRequestingJump = true;
+            scout.Simulate();
+
+            // Assert - we didn't pick up any horizontal velocity from the platform
+            scout.Motor.Locomotions.Move.FrameVelocity.x.Should().Be(Fixed64.Zero);
+        }
 
         [Fact]
         public void Given_ScoutWithInitTransfer_When_Jumping_Then_ShouldInheritPlatformVelocity()
@@ -151,7 +150,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             var platform = MockMotorAgentTestFactory.CreatePlatform(startPosition: Vector3d.Zero);
             var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, motionTransfer: MotionTransfer.InitTransfer);
 
-			scout.Motor.Locomotions.Platform.PlatformVelocity = new Vector3d(1, 0, 0);
+            scout.Motor.Locomotions.Platform.PlatformVelocity = new Vector3d(1, 0, 0);
 
             TrailblazerManager.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
@@ -188,17 +187,17 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             scout.Motor.Locomotions.Platform.SetHoldPlatform(platform);
 
-			var newPlatform = MockMotorAgentTestFactory.CreatePlatform();
+            var newPlatform = MockMotorAgentTestFactory.CreatePlatform();
 
-			scout.Motor.Locomotions.Platform.ActivePlatform = newPlatform;
+            scout.Motor.Locomotions.Platform.ActivePlatform = newPlatform;
 
-			bool release = false;
+            bool release = false;
             // Simulate exceeding the max hold frame count
             for (int i = 0; i < PlatformLocomotion.MaxHoldPlatformFrames + 1; i++)
             {
                 release = scout.Motor.Locomotions.Platform.CanReleaseHoldOnPlatform();
-				if (release)
-					break;
+                if (release)
+                    break;
             }
 
             release.Should().BeTrue();
@@ -221,7 +220,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             var platform = MockMotorAgentTestFactory.CreatePlatform(startPosition: Vector3d.Zero);
             var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, motionTransfer: MotionTransfer.InitTransfer);
 
-			var initialPlatformVelocity = new Vector3d(1, 0, 0);
+            var initialPlatformVelocity = new Vector3d(1, 0, 0);
             scout.Motor.Locomotions.Platform.PlatformVelocity = initialPlatformVelocity;
 
             TrailblazerManager.Simulate();
@@ -260,13 +259,13 @@ namespace Trailblazer.Tests.Navigation.Motor
         [Fact]
         public void Given_ScoutUsesPlatformInertia_When_Lands_Then_FrameVelocityShouldBeCleared()
         {
-			var platform = MockMotorAgentTestFactory.CreatePlatform();
+            var platform = MockMotorAgentTestFactory.CreatePlatform();
             var scout = MockMotorAgentTestFactory.CreateFallingAgent(platformMatrix: platform);
             scout.Motor.Locomotions.Platform.FramePlatformVelocity = new Vector3d(2, 0, 0);
 
             scout.Simulate();
 
-			scout.FrameCondition.Medium = TraversalMedium.Ground;
+            scout.FrameCondition.Medium = TraversalMedium.Ground;
 
             scout.Motor.FinalizeTraversal(scout);
 

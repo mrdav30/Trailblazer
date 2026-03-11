@@ -13,7 +13,7 @@ namespace Trailblazer.Pathing
         public static readonly FlowFieldSurveyResult Empty = new();
 
         public static FlowFieldSurveyResult Create(
-            SwiftDictionary<int, FlowField> fields, 
+            SwiftDictionary<int, FlowField> fields,
             string[] chartsUtilized,
             int key)
         {

@@ -1,6 +1,4 @@
-﻿using FixedMathSharp;
-using GridForge.Spatial;
-using Trailblazer.Navigation.Turning;
+﻿using Trailblazer.Navigation.Turning;
 
 namespace Trailblazer.Navigation
 {

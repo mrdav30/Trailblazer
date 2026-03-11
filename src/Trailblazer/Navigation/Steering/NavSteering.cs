@@ -722,9 +722,9 @@ namespace Trailblazer.Navigation.Steering
             ISteer closest = null;
             Fixed64 closestDistSq = avoidRadius * avoidRadius;
 
-            bool condition(IVoxelOccupant other) => 
+            bool condition(IVoxelOccupant other) =>
                 other.GlobalId != id;
-            foreach (IVoxelOccupant entity in ScanManager.ScanRadius(position, scanRadius, condition))
+            foreach (IVoxelOccupant entity in GridScanManager.ScanRadius(position, scanRadius, condition))
             {
                 // TODO: need to exclude self
                 if (entity is not ISteer other || other.Radius <= Fixed64.Zero)

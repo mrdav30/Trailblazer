@@ -187,7 +187,7 @@ namespace Trailblazer.Pathing
 
             GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out var voxel);
 
-            if(voxel == null)
+            if (voxel == null)
             {
 #if DEBUG
                 Debug.WriteLine($"Partition at {GlobalIndex} is not attached to a voxel!");
@@ -233,7 +233,7 @@ namespace Trailblazer.Pathing
             // How many voxels wide our agent is, in cell terms
             int required = (unitSize / GlobalGridManager.VoxelSize).CeilToInt();
             // If there aren't at least that many free voxels around, it can't go
-            
+
             return required > _clearanceRadiusInVoxels;
         }
 
@@ -323,7 +323,7 @@ namespace Trailblazer.Pathing
         public bool BelongsTo(string mapName) => _chartOwners.Contains(mapName);
 
         #endregion
- 
+
         public override int GetHashCode() => VoxelToken;
     }
 }

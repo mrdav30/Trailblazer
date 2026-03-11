@@ -73,7 +73,7 @@ namespace Trailblazer.Pathing
 
         public void AdvanceWaypoint() => CurrentWaypointIndex++;
 
-        public bool TryGetMovementDirection(Vector3d origin,  out Vector3d direction)
+        public bool TryGetMovementDirection(Vector3d origin, out Vector3d direction)
         {
             direction = Vector3d.Zero;
 
@@ -109,7 +109,7 @@ namespace Trailblazer.Pathing
 
             // Start from CurrentIndex + 1 and search forward
             int searchStart = FixedMath.Clamp(_lastTriedIndex, 0, ActiveWaypoints.Length - 1);
-                
+
             Fixed64 minDistSq = Fixed64.MAX_VALUE;
             int bestIndex = -1;
 

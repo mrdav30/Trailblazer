@@ -1,6 +1,5 @@
 ﻿using FixedMathSharp;
 using System;
-using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Navigation.Turning
 {

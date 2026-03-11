@@ -1,10 +1,11 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
+using GridForge.Spatial;
 using SwiftCollections;
-using System.Threading;
 using System;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace Trailblazer.Pathing
 {
@@ -185,7 +186,7 @@ namespace Trailblazer.Pathing
         private SwiftDictionary<int, FlowField> GenerateFlowFields()
         {
             SwiftDictionary<int, FlowField> result = new(_heap.ClosedCount);
-           // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
+            // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
 
             foreach (PathPartition current in _heap.EnumerateClosed())
             {

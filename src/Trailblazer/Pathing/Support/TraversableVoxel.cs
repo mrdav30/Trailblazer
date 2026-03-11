@@ -1,4 +1,5 @@
 ﻿using GridForge.Grids;
+using GridForge.Spatial;
 
 namespace Trailblazer.Pathing
 {

@@ -170,9 +170,9 @@ namespace Trailblazer.Pathing
         /// <param name="interval">The spacing between each grid point.</param>
         /// <returns>A constructed NavigationChart instance.</returns>
         public static NavigationChart From3D(
-            string name, 
-            bool[,,] sourceMap, 
-            Vector3d minBounds, 
+            string name,
+            bool[,,] sourceMap,
+            Vector3d minBounds,
             Fixed64 interval)
         {
             int sizeY = sourceMap.GetLength(0);

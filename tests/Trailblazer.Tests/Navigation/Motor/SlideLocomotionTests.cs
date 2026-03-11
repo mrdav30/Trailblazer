@@ -1,8 +1,8 @@
-﻿using Xunit;
+﻿using FixedMathSharp;
 using FluentAssertions;
-using FixedMathSharp;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
+using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor
 {
@@ -225,14 +225,14 @@ namespace Trailblazer.Tests.Navigation.Motor
             var slopeAngle = FixedMath.DegToRad((Fixed64)60);
             var platform = MockMotorAgentTestFactory.CreatePlatform(
                 platformRotation: FixedQuaternion.FromEulerAngles(
-                    slopeAngle, 
-                    Fixed64.Zero, 
+                    slopeAngle,
+                    Fixed64.Zero,
                     Fixed64.Zero)
             );
 
             var scout = MockMotorAgentTestFactory.CreateFallingAgent(
-                startPosition: new Vector3d(0, 2, 0), 
-                surfaceLevel: Fixed64.Zero, 
+                startPosition: new Vector3d(0, 2, 0),
+                surfaceLevel: Fixed64.Zero,
                 platformMatrix: platform);
 
             for (int i = 0; i < 32; i++)

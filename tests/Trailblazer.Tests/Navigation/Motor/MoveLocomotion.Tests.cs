@@ -1,8 +1,8 @@
-﻿using Xunit;
+﻿using FixedMathSharp;
 using FluentAssertions;
-using FixedMathSharp;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
+using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor
 {
@@ -108,7 +108,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         {
             Vector3d iniitialVelocity = new(3, 0, 0);
             var agent = MockMotorAgentTestFactory.CreateMockAgent(
-                startVelocity: iniitialVelocity, 
+                startVelocity: iniitialVelocity,
                 startingMedium: TraversalMedium.Ground);
 
             agent.FrameRequest.Direction = new(-1, 0, 0);
@@ -121,7 +121,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             }
 
             // Should be slowing down
-            agent.Motor.Locomotions.Move.FrameVelocity.x.Should().BeLessThan(iniitialVelocity.x); 
+            agent.Motor.Locomotions.Move.FrameVelocity.x.Should().BeLessThan(iniitialVelocity.x);
         }
 
         [Fact]
@@ -138,7 +138,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             // calculate speed without slopespeed modifier
             var speed = agent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Slow);
-            var projectedVelocity = ((speed * Vector3d.Right) * TrailblazerManager.DeltaTime) 
+            var projectedVelocity = ((speed * Vector3d.Right) * TrailblazerManager.DeltaTime)
                 * TrailblazerManager.InvDeltaTime;
 
             agent.Motor.Locomotions.Move.FrameVelocity.x.Should().BeLessThan(projectedVelocity.x); // Moving sideways should project velocity down slope
@@ -152,7 +152,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             var platform = MockMotorAgentTestFactory.CreatePlatform(
                 startPosition: Vector3d.Zero,
                 platformRotation: FixedQuaternion.FromAxisAngle(
-                    Vector3d.Right, 
+                    Vector3d.Right,
                     Fixed64.FromRaw(0x10000000L))
             );
 
@@ -344,7 +344,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)5;
 
             var speed = scout.Motor.MaxHoritzontalSpeedInDirection(
-                Vector3d.Right, 
+                Vector3d.Right,
                 TrekRate.Moderate);
 
             speed.Should().BeApproximately((Fixed64)5, Fixed64.Epsilon);

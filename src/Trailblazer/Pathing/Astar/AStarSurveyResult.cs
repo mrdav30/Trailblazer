@@ -11,8 +11,8 @@ namespace Trailblazer.Pathing
         public static readonly AStarSurveyResult Empty = new();
 
         public static AStarSurveyResult Create(
-            AStarWaypoint[] waypoints, 
-            string[] chartsUtilized, 
+            AStarWaypoint[] waypoints,
+            string[] chartsUtilized,
             int key)
         {
             return new AStarSurveyResult()

@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Trailblazer.Navigation.Motor
+﻿namespace Trailblazer.Navigation.Motor
 {
     /// <summary>
     /// Defines the base interface for all locomotion modules that control specific movement behaviors.

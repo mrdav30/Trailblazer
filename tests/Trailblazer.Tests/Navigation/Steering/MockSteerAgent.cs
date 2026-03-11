@@ -6,7 +6,7 @@ using Trailblazer.Navigation;
 
 namespace Trailblazer.Tests.Navigation.Steering
 {
-    public class MockSteerAgent : ISteer 
+    public class MockSteerAgent : ISteer
     {
         public Guid GlobalId { get; private set; } = Guid.NewGuid();
         public Vector3d Position { get; private set; }

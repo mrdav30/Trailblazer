@@ -1,7 +1,6 @@
 ﻿using FixedMathSharp;
 using System;
 using System.Runtime.CompilerServices;
-using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Navigation
 {

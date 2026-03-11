@@ -1,8 +1,8 @@
-﻿using Xunit;
+﻿using FixedMathSharp;
 using FluentAssertions;
-using FixedMathSharp;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
+using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor
 {
@@ -16,7 +16,7 @@ namespace Trailblazer.Tests.Navigation.Motor
             var agent = MockMotorAgentTestFactory.CreateFallingAgent();
 
             Vector3d expectedVelocity = Vector3d.Down;
-            expectedVelocity.y += -agent.Motor.Locomotions.Move.GravityForce 
+            expectedVelocity.y += -agent.Motor.Locomotions.Move.GravityForce
                 * TrailblazerManager.DeltaTime;
 
             agent.FrameRequest.IsRequestingJump = true;
@@ -85,7 +85,7 @@ namespace Trailblazer.Tests.Navigation.Motor
 
             // Assert
             agent.Motor.Locomotions.Move.FrameVelocity.Should().BeApproximately(
-                expectedVelocity, 
+                expectedVelocity,
                 Fixed64.Epsilon);
         }
 
@@ -125,7 +125,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentFallsFar_When_Lands_Then_ShouldTriggerMaxFallHeightEvent()
         {
             var agent = MockMotorAgentTestFactory.CreateMockAgent(
-                startPosition: new Vector3d(0, 10, 0), 
+                startPosition: new Vector3d(0, 10, 0),
                 startingMedium: TraversalMedium.Air);
             agent.Motor.Locomotions.Fall.MaxFallHeight = Fixed64.One;
 
@@ -229,7 +229,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentFallsZeroDistance_When_Lands_Then_FallHeightShouldBeZero()
         {
             var agent = MockMotorAgentTestFactory.CreateMockAgent(
-                startPosition: new Vector3d(0, 0, 0), 
+                startPosition: new Vector3d(0, 0, 0),
                 startingMedium: TraversalMedium.Air);
 
             agent.FrameCondition.Medium = TraversalMedium.Ground;
@@ -261,7 +261,7 @@ namespace Trailblazer.Tests.Navigation.Motor
         public void Given_AgentFalls_When_Disabled_Then_FallStateShouldReset()
         {
             var agent = MockMotorAgentTestFactory.CreateMockAgent(
-                new(0, 10, 0), 
+                new(0, 10, 0),
                 startingMedium: TraversalMedium.Air);
 
             agent.Motor.Locomotions.Fall.IsFalling = true;

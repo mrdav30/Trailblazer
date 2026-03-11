@@ -1,8 +1,8 @@
-﻿using Xunit;
-using GridForge.Grids;
+﻿using FixedMathSharp;
 using GridForge.Configuration;
-using FixedMathSharp;
+using GridForge.Grids;
 using Trailblazer.Pathing;
+using Xunit;
 
 namespace Trailblazer.Tests.Pathing
 {

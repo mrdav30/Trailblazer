@@ -1,5 +1,4 @@
 ﻿using FixedMathSharp;
-using SwiftCollections;
 using System;
 using System.Diagnostics;
 
@@ -849,7 +848,8 @@ namespace Trailblazer.Navigation.Motor
             {
                 Locomotions.Fall.IsFalling = false;
                 return;
-            };
+            }
+            ;
 
             if (Locomotions.Fall.IsFalling)
             {

@@ -1,7 +1,4 @@
-﻿using FixedMathSharp;
-using GridForge.Grids;
-using System;
-using System.Linq;
+﻿using System;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing
@@ -77,7 +74,7 @@ namespace Trailblazer.Pathing
                 result = null;
                 return false;
             }
-  
+
             result = request switch
             {
                 AStarPathRequest a => RequestAStar(a),
@@ -177,7 +174,7 @@ namespace Trailblazer.Pathing
         /// </summary>
         public static void FlushCache(bool force = false)
         {
-            if(!force && AnyInUse) return;
+            if (!force && AnyInUse) return;
             _cachedAStarResults.InvalidateAll();
             _cachedFlowResults.InvalidateAll();
         }

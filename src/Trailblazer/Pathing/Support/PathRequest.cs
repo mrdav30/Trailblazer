@@ -33,8 +33,8 @@ namespace Trailblazer.Pathing
         public int RequestCacheKey => GetHashCode();
 
         public bool TryPrepare(
-            Vector3d origin, 
-            Vector3d destination, 
+            Vector3d origin,
+            Vector3d destination,
             Fixed64? unitSize = null)
         {
             bool success = VoxelFinder.TryGetPathEdgeVoxels(
@@ -59,7 +59,7 @@ namespace Trailblazer.Pathing
 
         public bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false)
         {
-            if ( _endNode == null) return false;
+            if (_endNode == null) return false;
 
             bool success = VoxelFinder.GetStartVoxel(
                 origin,

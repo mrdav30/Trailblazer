@@ -1,8 +1,8 @@
-﻿using Xunit;
+﻿using FixedMathSharp;
 using FluentAssertions;
-using FixedMathSharp;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
+using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor
 {

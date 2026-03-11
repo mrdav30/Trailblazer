@@ -1,14 +1,15 @@
 ﻿using FixedMathSharp;
+using GridForge;
 using GridForge.Grids;
+using GridForge.Spatial;
 using GridForge.Utility;
-using SwiftCollections.Pool;
 using SwiftCollections;
+using SwiftCollections.Pool;
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using GridForge.Spatial;
-using System.Threading;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace Trailblazer.Pathing
 {

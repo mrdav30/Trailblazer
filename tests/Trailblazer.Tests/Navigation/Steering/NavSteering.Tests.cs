@@ -225,9 +225,9 @@ namespace Trailblazer.Tests.Navigation.Steering
             var steer = new NavSteering();
 
             var force = steer.ComputeCombinedSteering(
-                agent.Position, 
-                agent.Velocity, 
-                agent.Speed, 
+                agent.Position,
+                agent.Velocity,
+                agent.Speed,
                 agent.Size,
                 agent.GlobalId);
             force.Should().NotBe(Vector3d.Zero);

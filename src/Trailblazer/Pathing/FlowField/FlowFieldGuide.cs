@@ -55,8 +55,8 @@ namespace Trailblazer.Pathing
             if (!FlowMap.HasPath
                 || !GlobalGridManager.TryGetVoxel(origin, out Voxel currentVoxel)
                 || !FlowMap.Fields.ContainsKey(currentVoxel.SpawnToken))
-            {  
-                return false; 
+            {
+                return false;
             }
 
             bool voxelFound = FlowFieldSurveyor.TryGetNearestFlowAnchor(origin,

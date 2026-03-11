@@ -11,6 +11,7 @@ public class TrailblazerFixture : IDisposable
     public void Dispose()
     {
         TrailblazerManager.Reset();
+        GC.SuppressFinalize(this);
     }
 }
 

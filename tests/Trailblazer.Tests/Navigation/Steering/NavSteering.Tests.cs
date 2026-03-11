@@ -3,6 +3,7 @@ using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
 using Moq;
+using System;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 using Xunit;
@@ -10,12 +11,28 @@ using Xunit;
 namespace Trailblazer.Tests.Navigation.Steering;
 
 [Collection("PathingCollection")]
-public class NavSteeringTests
+public class NavSteeringTests : IDisposable
 {
     public NavSteeringTests()
     {
+        if (GlobalGridManager.IsActive)
+            GlobalGridManager.Reset();
+        else
+            GlobalGridManager.Setup();
+
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         GlobalGridManager.TryAddGrid(config, out _);
+    }
+
+    public void Dispose()
+    {
+        PathManager.UnloadAllCharts();
+        PathManager.ClearAll();
+
+        GlobalGridManager.Reset();
+        TrailblazerManager.Reset();
+
+        GC.SuppressFinalize(this);
     }
 
     [Fact]

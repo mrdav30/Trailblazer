@@ -1,5 +1,7 @@
 ﻿using FixedMathSharp;
 using FluentAssertions;
+using GridForge.Grids;
+using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Xunit;
@@ -7,8 +9,14 @@ using Xunit;
 namespace Trailblazer.Tests.Navigation.Motor;
 
 [Collection("TrailblazerCollection")]
-public class FallLocomotionTests
+public class FallLocomotionTests : IDisposable
 {
+    public void Dispose()
+    {
+        TrailblazerManager.Reset();
+        GC.SuppressFinalize(this);
+    }
+
     [Fact]
     public void Given_FallingAgent_When_JumpIsTriggered_Then_ShouldNotJump()
     {

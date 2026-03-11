@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
 using FluentAssertions;
+using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Xunit;
@@ -7,8 +8,14 @@ using Xunit;
 namespace Trailblazer.Tests.Navigation.Motor;
 
 [Collection("TrailblazerCollection")]
-public class MoveLocomotionTests
+public class MoveLocomotionTests : IDisposable
 {
+    public void Dispose()
+    {
+        TrailblazerManager.Reset();
+        GC.SuppressFinalize(this);
+    }
+
     [Fact]
     public void Given_When_ForceIsApplied_Then_VelocityShouldIncrease()
     {

@@ -1,13 +1,20 @@
 ﻿using FixedMathSharp;
 using FluentAssertions;
+using System;
 using Trailblazer.Navigation.Motor;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor;
 
 [Collection("TrailblazerCollection")]
-public class PlatformLocomotionTests
+public class PlatformLocomotionTests : IDisposable
 {
+    public void Dispose()
+    {
+        TrailblazerManager.Reset();
+        GC.SuppressFinalize(this);
+    }
+
     [Fact]
     public void Given_ScoutOnMovingPlatform_When_SimulateRuns_Then_PositionShouldMatchPlatform()
     {

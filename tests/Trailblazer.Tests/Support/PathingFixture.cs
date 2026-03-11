@@ -12,8 +12,6 @@ public class PathingFixture : IDisposable
     {
         GridForgeLogger.Verbosity = GridForgeLogger.LogLevel.Error;
         GlobalGridManager.Setup();
-
-        // Optional: preload some static config here if needed later
     }
 
     public void Dispose()
@@ -23,6 +21,8 @@ public class PathingFixture : IDisposable
 
         GlobalGridManager.Reset();
         TrailblazerManager.Reset();
+
+        GC.SuppressFinalize(this);
     }
 }
 

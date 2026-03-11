@@ -1,14 +1,34 @@
 ﻿using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Grids;
+using System;
 using Trailblazer.Pathing;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing;
 
 [Collection("PathingCollection")]
-public class PathingNavigationMapTests
+public class PathingNavigationMapTests : IDisposable
 {
+    public PathingNavigationMapTests()
+    {
+        if (GlobalGridManager.IsActive)
+            GlobalGridManager.Reset();
+        else
+            GlobalGridManager.Setup();
+    }
+
+    public void Dispose()
+    {
+        PathManager.UnloadAllCharts();
+        PathManager.ClearAll();
+
+        GlobalGridManager.Reset();
+        TrailblazerManager.Reset();
+
+        GC.SuppressFinalize(this);
+    }
+
     [Fact]
     public void Register_AddsMapToManager()
     {

@@ -3,6 +3,7 @@ using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
 using SwiftCollections;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Trailblazer.Pathing;
@@ -11,12 +12,28 @@ using Xunit;
 namespace Trailblazer.Tests.Pathing;
 
 [Collection("PathingCollection")]
-public class AStarSurveryorTests
+public class AStarSurveryorTests : IDisposable
 {
     public AStarSurveryorTests()
     {
+        if (GlobalGridManager.IsActive)
+            GlobalGridManager.Reset();
+        else
+            GlobalGridManager.Setup();
+
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         GlobalGridManager.TryAddGrid(config, out _);
+    }
+
+    public void Dispose()
+    {
+        PathManager.UnloadAllCharts();
+        PathManager.ClearAll();
+
+        GlobalGridManager.Reset();
+        TrailblazerManager.Reset();
+
+        GC.SuppressFinalize(this);
     }
 
     [Fact]

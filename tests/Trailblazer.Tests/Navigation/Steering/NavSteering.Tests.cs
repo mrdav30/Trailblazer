@@ -677,4 +677,74 @@ public class NavSteeringTests : IDisposable
 
         PathManager.UnloadChart("GroupFallback");
     }
+
+    [Fact]
+    public void TrailblazerManager_Reset_Should_ClearMovementGroupCoordinatorState()
+    {
+        var data = new bool[1, 6, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData("MovementGroupReset", data, Vector3d.Zero);
+
+        var leader = new MockSteerAgent(new Vector3d(0, 0, 0))
+        {
+            Velocity = new Vector3d(1, 0, 0),
+            Speed = Fixed64.One
+        };
+        var neighbor = new MockSteerAgent(new Vector3d(1, 0, 0))
+        {
+            Velocity = new Vector3d(1, 0, 0),
+            Speed = Fixed64.One
+        };
+
+        var leaderSteer = new NavSteering();
+        leaderSteer.OnInitialize(leader.Radius);
+        leaderSteer.BehaviorWeights = new GroupBehaviorWeights
+        {
+            Separation = Fixed64.One,
+            Alignment = Fixed64.One,
+            Cohesion = Fixed64.One,
+            Avoidance = Fixed64.Zero
+        };
+
+        var neighborSteer = new NavSteering();
+        neighborSteer.OnInitialize(neighbor.Radius);
+
+        leaderSteer.ApplyPathRequest(AStarPathRequest.Create(leader.Position, new Vector3d(4, 0, 0)), groupId: 9);
+        neighborSteer.ApplyPathRequest(AStarPathRequest.Create(neighbor.Position, new Vector3d(4, 0, 0)), groupId: 9);
+
+        GlobalGridManager.TryGetGrid(neighbor.Position, out var grid);
+        grid.TryAddVoxelOccupant(neighbor);
+
+        neighborSteer.GetHeading(neighbor);
+        leaderSteer.GetHeading(leader);
+
+        leaderSteer.ComputeCombinedSteering(
+            leader.Position,
+            leader.Velocity,
+            leader.Speed,
+            leader.Radius,
+            leader.GlobalId).Should().NotBe(Vector3d.Zero);
+
+        TrailblazerManager.Reset();
+
+        leaderSteer.ComputeCombinedSteering(
+            leader.Position,
+            leader.Velocity,
+            leader.Speed,
+            leader.Radius,
+            leader.GlobalId).Should().Be(Vector3d.Zero);
+
+        grid.TryRemoveVoxelOccupant(neighbor);
+        PathManager.UnloadChart("MovementGroupReset");
+    }
 }

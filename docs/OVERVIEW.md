@@ -201,7 +201,7 @@ See also:
 
 ### 6.2 NavSteering
 
-`NavSteering` is the heading-generation layer. It consumes an `IPathRequest`, decides between direct line-of-sight travel and guide-following, blends in local steering influences, preserves formation offsets for shared movement groups, and manages arrival, stop, and repath logic for the active navigation session.
+`NavSteering` is the heading-generation layer. It consumes an `IPathRequest`, decides between direct line-of-sight travel and guide-following, blends in local steering influences, uses an internal movement-group coordinator to preserve formation offsets for shared group sessions, and manages arrival, stop, and repath logic for the active navigation session.
 
 See also:
 

@@ -171,6 +171,7 @@ It:
 - marks movement as active
 - schedules a path validation pass on the next `GetHeading(...)`
 - optionally assigns a movement group id for shared group steering
+- routes shared movement-group bookkeeping through an internal coordinator so hosts still only drive `NavSteering`
 
 If the request is invalid or lacks endpoints, `ApplyPathRequest(...)` calls `Arrive()` immediately.
 
@@ -449,7 +450,7 @@ When multiple steering sessions share the same non-negative `groupId` and exact 
 - if the group spreads too far or is already close enough to the shared destination that the formation would collapse, steering falls back to the shared destination for each member
 - that fallback uses a looser stop tolerance to reduce end-of-path crowding
 
-This behavior is local to the steering session. No separate movement-group manager needs to be driven by the host.
+This behavior is host-transparent. Shared movement-group membership is tracked by an internal coordinator, but hosts do not drive a separate movement-group manager.
 
 ### 13.2 Scan Radius
 
@@ -561,7 +562,7 @@ There is already a test note in `NavSteering.Tests` calling this out.
 
 ### Expecting movement groups to be fully implemented
 
-They are steering-local. Agents with the same `groupId` and exact destination preserve formation offsets while the group stays compact, then fall back to the shared destination when the group spreads out or reaches the end of the move.
+They are steering-owned behavior. Hosts only pass `groupId` through the steering API; an internal coordinator tracks shared membership while agents with the same `groupId` and exact destination preserve formation offsets when compact, then fall back to the shared destination when the group spreads out or reaches the end of the move.
 
 ### Reusing a `groupId` for different destinations
 

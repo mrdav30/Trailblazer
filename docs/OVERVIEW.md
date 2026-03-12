@@ -44,22 +44,11 @@ Important details:
 
 ### 2.2 PathManager
 
-`PathManager` is the global pathing registry and utility layer. It owns:
+`PathManager` is the global chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, manages chart ownership and unload behavior, exposes neighbor and direct-travel utilities, and participates in guide-cache maintenance.
 
-- chart registration via `Register(...)`
-- chart activation via `InitializeChart(...)` or `InitializeAllCharts()`
-- chart teardown via `UnloadChart(...)`, `UnloadAllCharts()`, and `ClearAll()`
-- `PathPartition` pooling and neighbor binding
-- neighbor discovery and straight-line viability checks
+See also:
 
-Key helpers:
-
-- `TryGetNavigationChart(...)`
-- `AllCharts`
-- `NeedsPath(startPos, endPos, unitSize, allowUnwalkable)`
-- `GetMaxSearchSize(startVoxel, endVoxel, out int maxSearchSize)`
-
-`NeedsPath(...)` is the first cheap decision point. If it returns `false`, a direct move is viable and a full guide may be unnecessary.
+- [`PATHMANAGER.MD`](PATHMANAGER.MD)
 
 ## 3. Path Requests
 
@@ -204,83 +193,31 @@ The navigation layer is built from four main pieces.
 
 ### 6.1 Navigator
 
-`Navigator` is the high-level coordinator and host-facing abstraction. It owns:
+`Navigator` is the host-facing orchestration layer. It owns transform and traversal state, composes `NavSteering`, `NavTurning`, and `NavMotor`, coordinates the `Simulate()` / `CommitFrameMotion()` lifecycle, and exposes the abstract `CheckTrekCondition()` hook so each host can provide its own world probing.
 
-- transform state such as `Position`, `Rotation`, `Velocity`, and `Acceleration`
-- traversal state such as `FrameCondition` and `FrameRequest`
-- controller instances for `NavSteering`, `NavTurning`, and `NavMotor`
-- occupancy tracking against the voxel grid
-- optional animation integration through `INavAnimationHandler`
+See also:
 
-Key lifecycle methods:
-
-- `Setup(...)`
-- `Initialize(TrekCondition condition)`
-- `ApplyInputTrekRequest(...)`
-- `ApplyGuidedTrekRequest(...)`
-- `Simulate()`
-- `CommitFrameMotion()`
-- `SetTrekCondition(...)`
-- `Reset()`
-
-`Navigator` is abstract because each host project must provide environment-specific traversal probing in `CheckTrekCondition()`.
+- [`NAVIGATOR.MD`](NAVIGATOR.MD)
 
 ### 6.2 NavSteering
 
-`NavSteering` decides where the navigator wants to move.
+`NavSteering` is the heading-generation layer. It consumes an `IPathRequest`, decides between direct line-of-sight travel and guide-following, blends in local steering influences, and manages arrival, stop, and repath logic for the active navigation session.
 
-It is responsible for:
+See also:
 
-- accepting an `IPathRequest`
-- determining whether a direct line-of-sight path is sufficient
-- resolving or refreshing a guide through `PathGuideFactory`
-- advancing waypoints or following flow vectors
-- stuck detection and repath attempts
-- group steering and local avoidance blending
-- arrival and stop events
-
-Notable state:
-
-- `Destination`
-- `CurrentRequest`
-- `TrailGuide`
-- `ShouldMove`
-- `HasLineOfSightPath`
-- `IsAtDestination`
-- `IsStuck`
+- [`NAVSTEERING.MD`](NAVSTEERING.MD)
 
 ### 6.3 NavTurning
 
-`NavTurning` manages deterministic facing updates.
+`NavTurning` is the deterministic facing layer. It buffers turn requests, promotes them into active target rotations, interpolates orientation over fixed simulation steps, and optionally derives auto-turns from collision movement.
 
-It:
+See also:
 
-- buffers requested turn directions
-- interpolates rotation toward a target quaternion
-- supports collision-triggered auto-turn logic
-- exposes `NeedsTurn(...)`, `RequestTurnDirection(...)`, and `SimulateTurn(...)`
+- [`NAVTURNING.MD`](NAVTURNING.MD)
 
 ### 6.4 NavMotor
 
-`NavMotor` applies the actual deterministic movement logic for the frame.
-
-It coordinates:
-
-- locomotion state through `LocomotionHandler`
-- ground, air, and water traversal
-- gravity and other environmental forces
-- jump handling
-- platform velocity transfer and movement
-- frame locking so movement is only applied once per simulation tick
-
-The locomotion subsystem lives under `Navigation/Motor/Locomotions` and includes:
-
-- `MoveLocomotion`
-- `JumpLocomotion`
-- `FallLocomotion`
-- `PlatformLocomotion`
-- `SlideLocomotion`
-- `SwimLocomotion`
+`NavMotor` is the deterministic movement-execution layer. It consumes the current `TrekRequest`, applies locomotion rules for ground, air, water, slopes, jumps, slides, and platforms, then reconciles traversal-state transitions after the host updates environment data for the frame.
 
 See also:
 

@@ -36,7 +36,7 @@ Keep these aligned whenever behavior or public API changes:
 
 | Path | Purpose | Notes |
 | --- | --- | --- |
-| [`docs`](docs) | Design notes and high-level explanations | Start with `docs/OVERVIEW.md`; `NAVMOTOR.MD` and `GRAVITY.MD` are supplemental. |
+| [`docs`](docs) | Design notes and high-level explanations | Start with `docs/OVERVIEW.md`; `PATHMANAGER.MD`, `NAVIGATOR.MD`, `NAVSTEERING.MD`, `NAVTURNING.MD`, `NAVMOTOR.MD`, and `GRAVITY.MD` are subsystem references. |
 | [`src/Trailblazer`](src/Trailblazer) | Main library project | Multi-targets `netstandard2.1` and `net8.0`. |
 | [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Chart management, A*, flow field, guide caching, voxel lookup | Most performance-sensitive and correctness-sensitive area. |
 | [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Runtime navigation stack | `Navigator`, `NavSteering`, `NavTurning`, `NavMotor`, locomotions, animation hooks. |

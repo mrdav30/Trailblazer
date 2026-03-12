@@ -206,6 +206,10 @@ Use `FlowFieldPathRequest` when:
 Start with:
 
 - [`docs/OVERVIEW.md`](docs/OVERVIEW.md)
+- [`docs/PATHMANAGER.MD`](docs/PATHMANAGER.MD)
+- [`docs/NAVIGATOR.MD`](docs/NAVIGATOR.MD)
+- [`docs/NAVSTEERING.MD`](docs/NAVSTEERING.MD)
+- [`docs/NAVTURNING.MD`](docs/NAVTURNING.MD)
 - [`docs/NAVMOTOR.MD`](docs/NAVMOTOR.MD)
 - [`docs/GRAVITY.MD`](docs/GRAVITY.MD)
 
@@ -216,6 +220,7 @@ If you are integrating or extending the runtime, the key source entry points are
 - [`src/Trailblazer/Pathing/Support/PathGuideFactory.cs`](src/Trailblazer/Pathing/Support/PathGuideFactory.cs)
 - [`src/Trailblazer/Navigation/Navigator.cs`](src/Trailblazer/Navigation/Navigator.cs)
 - [`src/Trailblazer/Navigation/Steering/NavSteering.cs`](src/Trailblazer/Navigation/Steering/NavSteering.cs)
+- [`src/Trailblazer/Navigation/Turning/NavTurning.cs`](src/Trailblazer/Navigation/Turning/NavTurning.cs)
 
 ## Testing and Validation
 
@@ -244,18 +249,37 @@ Note:
 - `net8.0`
 - Windows, Linux, and macOS host environments supported by .NET
 
-## Contributing
+---
 
-Contributions are welcome, especially in these areas:
+## 🤝 Contributing
 
-- pathing performance and allocation reduction
-- deterministic correctness and bug fixing
-- API surface cleanup
-- XML documentation and docs improvements
-- coverage expansion for caching and integration edge cases
+We welcome contributions! Please see our [CONTRIBUTING](https://github.com/mrdav30/Trailblazer/blob/main/CONTRIBUTING.md) guide for details on how to propose changes, report issues, and interact with the community.
 
-When changing behavior, update tests and documentation in the same pass.
+---
+
+## 👥 Contributors
+
+- **mrdav30** - Lead Developer
+- Contributions are welcome! Feel free to submit pull requests or report issues.
+
+---
+
+## 💬 Community & Support
+
+For questions, discussions, or general support, join the official Discord community:
+
+👉 **[Join the Discord Server](https://discord.gg/mhwK2QFNBA)**
+
+For bug reports or feature requests, please open an issue in this repository.
+
+We welcome feedback, contributors, and community discussion across all projects.
 
 ## License
 
-Trailblazer is licensed under the MIT License. See [`LICENSE.md`](LICENSE.md) for details.
+This project is licensed under the MIT License.
+
+See the following files for details:
+
+- LICENSE – standard MIT license
+- NOTICE – additional terms regarding project branding and redistribution
+- COPYRIGHT – authorship information

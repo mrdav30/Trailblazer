@@ -726,7 +726,7 @@ public class NavSteering
             other.GlobalId != id;
         foreach (IVoxelOccupant entity in GridScanManager.ScanRadius(position, scanRadius, condition))
         {
-            // TODO: need to exclude self
+            // TODO: need to exclude self explicity? condition should handle this but just in case
             if (entity is not ISteer other || other.Radius <= Fixed64.Zero)
                 continue;
 

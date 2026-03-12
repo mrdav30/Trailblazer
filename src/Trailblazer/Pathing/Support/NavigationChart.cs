@@ -3,6 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
+// TODO: Consider only allowing these 2 be 1 layer high and using the Y axis for verticality, as this is more common in games and simplifies indexing logic.
+// This would also allow us to use a more cache-friendly layout of X, Z, then Y, which is more intuitive for 2D grid-based pathfinding and reduces the likelihood of cache misses when iterating over walkable cells in a typical game scenario.
+
 namespace Trailblazer.Pathing;
 
 /// <summary>

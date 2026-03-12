@@ -241,13 +241,11 @@ public abstract class Navigator : INavigate
     /// <param name="pathRequest">The configuration for the type of path to request (e.g., A*, FlowField).</param>
     /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the navigator intends to jump during traversal.</param>
-    /// <param name="allowUnwalkable">Whether the navigator can traverse to an unwalkable voxel.</param>
     public virtual void ApplyGuidedTrekRequest(
         IPathRequest pathRequest,
         Vector3d destination,
         TrekRate? rate = null,
-        bool? isRequestingJump = null,
-        bool? allowUnwalkable = null)
+        bool? isRequestingJump = null)
     {
         if (!IsActive) return;
 

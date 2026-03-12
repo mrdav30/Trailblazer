@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Navigation.Turning;
 
@@ -47,9 +48,11 @@ public class NavTurning
     private Fixed64 _pendingInterpolation;
 
     /// <summary>
-    /// Squared movement distance threshold used to determine when to trigger an auto-turn after a collision.
+    /// Navigator radius cached so collision auto-turn thresholds can track frame-rate changes.
     /// </summary>
-    private Fixed64 _collisionTurnThreshold;
+    private Fixed64 _radius;
+
+    private bool _isInitialized;
 
     /// <summary>
     /// Flag indicating that a collision has occurred and an auto-turn should be considered.
@@ -108,8 +111,8 @@ public class NavTurning
     /// </summary>
     public void OnInitialize(Fixed64 radius)
     {
-        _collisionTurnThreshold = radius / TrailblazerManager.FrameRate * Fixed64.Half;
-        _collisionTurnThreshold *= _collisionTurnThreshold;
+        _radius = radius;
+        _isInitialized = true;
 
         TargetReached = true;
         TargetRotation = FixedQuaternion.Identity;
@@ -123,7 +126,7 @@ public class NavTurning
     public void SimulateTurn(ITurn navigator)
     {
         // 1) Preconditions
-        if (_collisionTurnThreshold == Fixed64.Zero)
+        if (!_isInitialized)
             throw new InvalidOperationException(
               "NavTurning.OnInitialize must be called before SimulateTurn()");
         if (!CanTurn) return;
@@ -184,7 +187,7 @@ public class NavTurning
 
         // 1) compute delta first
         Vector3d delta = position - lastPosition;
-        if (delta.SqrMagnitude < _collisionTurnThreshold
+        if (delta.SqrMagnitude < GetCollisionTurnThreshold()
             || !TargetReached
             || (CanTurnOnCollision?.Invoke() == false))
         {
@@ -196,6 +199,13 @@ public class NavTurning
         _isColliding = false;
         delta.Normalize();
         RequestTurnDirection(curDirection, delta);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private Fixed64 GetCollisionTurnThreshold()
+    {
+        Fixed64 threshold = _radius / TrailblazerManager.FrameRate * Fixed64.Half;
+        return threshold * threshold;
     }
 
     /// <summary>

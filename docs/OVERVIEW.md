@@ -245,13 +245,18 @@ TrailblazerManager.LateSimulate();
 
 What each stage does:
 
-1. `TrailblazerManager.Simulate()` advances frame counters and performs cache maintenance through `PathManager.Tick(...)`.
+1. `TrailblazerManager.Simulate()` advances frame counters and then runs ordered internal simulate hooks such as `PathManager.Tick()`.
 2. `Navigator.Simulate()` resolves heading, runs the motor, and updates turning.
 3. Host code refreshes surface and medium data based on the game world's current state.
 4. `Navigator.CommitFrameMotion()` finalizes deltas, updates velocity and acceleration, and finalizes motor state.
 5. `TrailblazerManager.LateSimulate()` marks the visual accumulation boundary.
 
 `TrailblazerManager.Visualize()` exists for accumulation tracking on the visual side, but it does not replace fixed-step simulation.
+
+Important maintenance rule:
+
+- when a subsystem needs frame-step, reset, or frame-rate-change maintenance, register an ordered internal `TrailblazerManager` lifecycle hook instead of hard-wiring that subsystem into the manager
+- if a value depends on `TrailblazerManager.FrameRate`, do not freeze it in a one-time snapshot unless the code also refreshes it from the frame-rate-change hook; prefer reading the manager live or recomputing from stored inputs
 
 ## 8. Direct Pathing Without Navigator
 

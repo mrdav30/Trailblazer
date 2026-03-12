@@ -122,6 +122,8 @@ Contributor expectations for alpha:
 - Preserve ASCII unless the file already requires otherwise.
 - Keep comments factual. Explain invariants, edge conditions, or reasons behind tricky logic.
 - Do not add comment noise around obvious assignments or straight-line code.
+- Split reusable or generic infrastructure into focused types and files instead of bundling it into an unrelated runtime class. Prefer one primary type per file unless the extra type is tightly scoped and truly private to that implementation.
+- Prefer `SwiftCollections` over `System.Collections*` types when a suitable collection already exists there, especially in runtime or hot-path code. If you intentionally keep a BCL collection, the reason should be obvious from the code or called out in review.
 
 ## Performance Guidance
 
@@ -240,6 +242,8 @@ If you are an automated coding agent working in this repository:
 - Prefer focused edits plus verification over sweeping cleanup.
 - If you change a public API or behavior, update both tests and docs in the same pass.
 - If you add comments, comment the invariant or the reason, not the syntax.
+- Do not leave generic helpers buried inside unrelated classes when they can stand alone as reusable support types.
+- Reach for `SwiftCollections` first before introducing `System.Collections`, `System.Collections.Generic`, or `System.Collections.Concurrent` into library code.
 
 ## Guidance for Human Contributors
 

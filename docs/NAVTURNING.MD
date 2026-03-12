@@ -123,9 +123,10 @@ Collision auto-turning uses a movement-distance threshold derived from:
 - navigator radius
 - `TrailblazerManager.FrameRate`
 
-That threshold is stored as squared distance in `_collisionTurnThreshold`.
+That threshold is evaluated as squared distance from the current manager frame rate rather than frozen once at initialization.
 
 This means collision auto-turning only triggers after the navigator has actually moved far enough since the previous frame.
+If `TrailblazerManager.SetFrameRate(...)` changes the simulation rate, collision auto-turning uses the new threshold on the next turn simulation.
 
 ## 6. Request Lifecycle
 
@@ -351,6 +352,10 @@ turning.SimulateTurn(host); // may begin actual rotation
 ### Calling SimulateTurn(...) before OnInitialize(...)
 
 This throws by design because the collision threshold has not been configured yet.
+
+### Caching frame-rate-derived thresholds once
+
+Avoid doing that in turning code. Values derived from `TrailblazerManager.FrameRate` should either be recomputed from stored inputs or refreshed from the manager's frame-rate lifecycle hook.
 
 ### Assuming RequestTurnDirection(...) rotates immediately
 

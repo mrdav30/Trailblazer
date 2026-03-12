@@ -9,9 +9,6 @@ using System.Reflection;
 
 namespace Trailblazer.Support;
 
-[AttributeUsage(AttributeTargets.Property)]
-public class TransientAttribute : Attribute { }
-
 public static class TransientExtensions
 {
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _transientPropertiesCache = new();
@@ -26,13 +23,13 @@ public static class TransientExtensions
     }
 
     /// <summary>
-    /// Synchronizes all transient properties between two locomotion instances.
+    /// Synchronizes all transient properties between two transient instances.
     /// </summary>
     public static void SyncTransientState(this ITransient source, ITransient target)
     {
-        Debug.Assert(source != null, "Source locomotion cannot be null.");
-        Debug.Assert(target != null, "Target locomotion cannot be null.");
-        Debug.Assert(source.GetType() == target.GetType(), "Locomotion type mismatch during SyncState.");
+        Debug.Assert(source != null, "Source cannot be null.");
+        Debug.Assert(target != null, "Target cannot be null.");
+        Debug.Assert(source.GetType() == target.GetType(), "Type mismatch during SyncState.");
 
         foreach (var prop in GetTransientProperties(source.GetType()))
             prop.SetValue(source, prop.GetValue(target));

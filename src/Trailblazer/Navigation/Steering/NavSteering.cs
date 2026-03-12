@@ -4,6 +4,7 @@ using GridForge.Spatial;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Trailblazer.Pathing;
 
@@ -16,6 +17,16 @@ namespace Trailblazer.Navigation.Steering;
 /// </summary>
 public class NavSteering
 {
+    [ModuleInitializer]
+    [SuppressMessage("Usage", "CA2255:Do not use 'ModuleInitializer'", Justification = "Steering reset hooks must self-register before TrailblazerManager methods run.")]
+    internal static void RegisterTrailblazerLifecycleHooks()
+    {
+        TrailblazerManager.RegisterOnReset(
+            owner: "NavSteering.ResetMovementGroups",
+            order: TrailblazerLifecycleOrder.NavigationReset,
+            callback: ResetMovementGroups);
+    }
+
     private enum MovementGroupTravelMode
     {
         None,
@@ -88,7 +99,7 @@ public class NavSteering
     /// <summary>
     /// Number of frames an agent must be below the movement threshold to be considered stuck.
     /// </summary>
-    protected static readonly int StuckFrameThreshold = TrailblazerManager.FrameRate / 4;
+    protected static int StuckFrameThreshold => TrailblazerManager.FrameRate / 4;
 
     /// <summary>
     /// Maximum number of repath attempts before declaring the agent fully stuck.
@@ -98,7 +109,7 @@ public class NavSteering
     /// <summary>
     /// Number of frames to wait before allowing auto-stop again.
     /// </summary>
-    protected static readonly int AutoPauseStopTime = TrailblazerManager.FrameRate / 8;
+    protected static int AutoPauseStopTime => TrailblazerManager.FrameRate / 8;
 
     /// <summary>
     /// Default braking factor applied when decelerating or stopping motion.

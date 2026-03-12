@@ -1,6 +1,7 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigation.Steering;
-using Trailblazer.Pathing;
+using SwiftCollections;
+using System;
+using Trailblazer.Support;
 
 namespace Trailblazer;
 
@@ -8,11 +9,23 @@ namespace Trailblazer;
 /// Provides global simulation parameters and timing management for the Trailblazer system.
 /// </summary>
 /// <remarks>
-/// This static class handles fixed-time updates, gravity settings, and frame progression.
-/// It ensures consistency across physics calculations and locomotion systems.
+/// This static class handles fixed-time updates, frame progression, and ordered internal lifecycle hooks.
+/// Subsystems should register maintenance work through those hooks instead of being hard-wired into the manager.
 /// </remarks>
 public static class TrailblazerManager
 {
+    internal static readonly LifecycleHookHandler HookHandler = new();
+
+    private static readonly SwiftList<OrderedLifecycleHook> _simulateHooks = new();
+
+    private static readonly SwiftList<OrderedLifecycleHook> _lateSimulateHooks = new();
+
+    private static readonly SwiftList<OrderedLifecycleHook> _visualizeHooks = new();
+
+    private static readonly SwiftList<OrderedLifecycleHook> _resetHooks = new();
+
+    private static readonly SwiftList<OrderedLifecycleHook> _frameRateChangedHooks = new();
+
     /// <summary>
     /// The fixed simulation frame rate.
     /// </summary>
@@ -51,29 +64,30 @@ public static class TrailblazerManager
     public static Fixed64 ExpectedAccumulation { get; private set; }
 
     /// <summary>
-    /// Updates the simulation frame rate and recalculates the delta time.
+    /// Updates the simulation frame rate, recalculates the delta time, and notifies ordered frame-rate hooks.
     /// </summary>
     /// <param name="frameRate">The new frame rate value.</param>
     public static void SetFrameRate(int frameRate)
     {
         FrameRate = frameRate;
         DeltaTime = Fixed64.One / (Fixed64)FrameRate;
+        HookHandler.InvokeHooks(_frameRateChangedHooks);
     }
 
     /// <summary>
-    /// Advances the simulation by incrementing the frame count.
+    /// Advances the simulation by incrementing the frame count and running ordered simulate hooks.
     /// </summary>
     public static void Simulate()
     {
         FrameCount++;
         TotalTime += DeltaTime;
-
-        PathManager.Tick(FrameCount);
+        HookHandler.InvokeHooks(_simulateHooks);
     }
 
     public static void LateSimulate()
     {
         ResetAccumulation = true;
+        HookHandler.InvokeHooks(_lateSimulateHooks);
     }
 
     public static void Visualize()
@@ -86,20 +100,39 @@ public static class TrailblazerManager
 
         AccumulatedTime += DeltaTime;
         ExpectedAccumulation = AccumulatedTime / DeltaTime;
+        HookHandler.InvokeHooks(_visualizeHooks);
     }
 
     /// <summary>
-    /// Resets the simulation frame count to zero.
+    /// Resets the simulation clock state and runs ordered reset hooks.
     /// </summary>
     public static void Reset()
     {
         FrameCount = 0;
         TotalTime = Fixed64.Zero;
-        NavSteering.ResetMovementGroups();
+        AccumulatedTime = Fixed64.Zero;
+        ExpectedAccumulation = Fixed64.Zero;
+        ResetAccumulation = false;
+        HookHandler.InvokeHooks(_resetHooks);
     }
 
     public static int GetFrameFromTime(Fixed64 timestamp)
     {
         return (timestamp * InvDeltaTime).FloorToInt();
     }
+
+    internal static IDisposable RegisterOnSimulate(string owner, int order, Action callback) =>
+        HookHandler.RegisterHook(_simulateHooks, owner, order, callback);
+
+    internal static IDisposable RegisterOnLateSimulate(string owner, int order, Action callback) =>
+        HookHandler.RegisterHook(_lateSimulateHooks, owner, order, callback);
+
+    internal static IDisposable RegisterOnVisualize(string owner, int order, Action callback) =>
+        HookHandler.RegisterHook(_visualizeHooks, owner, order, callback);
+
+    internal static IDisposable RegisterOnReset(string owner, int order, Action callback) =>
+        HookHandler.RegisterHook(_resetHooks, owner, order, callback);
+
+    internal static IDisposable RegisterOnFrameRateChanged(string owner, int order, Action callback) =>
+        HookHandler.RegisterHook(_frameRateChangedHooks, owner, order, callback);
 }

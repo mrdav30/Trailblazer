@@ -170,7 +170,7 @@ It:
 - stores the request and last known unit size
 - marks movement as active
 - schedules a path validation pass on the next `GetHeading(...)`
-- optionally assigns a movement group id
+- optionally assigns a movement group id for shared group steering
 
 If the request is invalid or lacks endpoints, `ApplyPathRequest(...)` calls `Arrive()` immediately.
 
@@ -178,6 +178,7 @@ Important detail:
 
 - `destination` can be an exact point inside a voxel
 - it is not required to be the voxel's `WorldPosition`
+- group membership is keyed by both `groupId` and the exact requested destination
 
 ### 6.2 OnInitialize(...)
 
@@ -231,8 +232,9 @@ This keeps straight-line checks cheaper in the common case.
 Once the request is valid:
 
 1. `LastTargetDirection` is preserved.
-2. `FindTargetDirection(...)` resolves the new target direction.
-3. `ComputeCombinedSteering(...)` adds group and avoidance influence.
+2. the effective `Destination` is resolved from the current movement-group state.
+3. `FindTargetDirection(...)` resolves the new target direction.
+4. `ComputeCombinedSteering(...)` adds group and avoidance influence.
 
 The resulting value becomes the heading returned to the caller.
 
@@ -387,6 +389,7 @@ This is one of the most important correctness paths in the class because it cros
 - halts active movement
 - resets stop-related counters
 - clears line-of-sight and scheduled path requests
+- leaves any active movement group
 - fires `OnStopMove`
 
 It does not mark the destination as reached.
@@ -396,7 +399,6 @@ It does not mark the destination as reached.
 `Arrive()`:
 
 - calls `StopMove()`
-- leaves any movement group
 - returns the active guide to `PathGuideFactory`
 - clears the current request
 - clears distance and direction state
@@ -426,6 +428,11 @@ This is why steering still needs guide resolution when LOS fails.
 
 ## 13. Group and Avoidance Steering
 
+`NavSteering` applies group behavior in two places:
+
+- movement-group target shaping through `groupId`
+- same-group local steering through `ComputeCombinedSteering(...)`
+
 `ComputeCombinedSteering(...)` blends:
 
 - separation
@@ -433,7 +440,18 @@ This is why steering still needs guide resolution when LOS fails.
 - cohesion
 - nearest-obstacle avoidance
 
-### 13.1 Scan Radius
+### 13.1 Movement-Group Target Shaping
+
+When multiple steering sessions share the same non-negative `groupId` and exact requested destination:
+
+- the group center is computed from recently updated members
+- if the group stays compact, each member preserves its relative formation offset from that center
+- if the group spreads too far or is already close enough to the shared destination that the formation would collapse, steering falls back to the shared destination for each member
+- that fallback uses a looser stop tolerance to reduce end-of-path crowding
+
+This behavior is local to the steering session. No separate movement-group manager needs to be driven by the host.
+
+### 13.2 Scan Radius
 
 The steering scan radius is derived from:
 
@@ -443,9 +461,9 @@ The steering scan radius is derived from:
 
 It queries nearby voxel occupants through `GridScanManager.ScanRadius(...)`.
 
-### 13.2 Group Behavior
+### 13.3 Group Behavior
 
-When `IsInGroup` is true, nearby steering agents inside the group radius contribute:
+When `IsInGroup` is true, only nearby steering agents in the same movement group session contribute:
 
 - separation force away from crowding
 - alignment force from neighbor velocity
@@ -453,7 +471,9 @@ When `IsInGroup` is true, nearby steering agents inside the group radius contrib
 
 Those contributions are weighted through `BehaviorWeights`.
 
-### 13.3 Avoidance
+Avoidance still considers any nearby occupant, including agents outside the movement group.
+
+### 13.4 Avoidance
 
 Avoidance tracks the nearest obstacle candidate inside the avoid radius and generates a perpendicular dodge direction.
 
@@ -463,12 +483,12 @@ The current implementation:
 - scales avoidance by proximity
 - multiplies by `BehaviorWeights.Avoidance`
 
-### 13.4 Current Caveats
+### 13.5 Current Caveats
 
 There are still known rough edges here:
 
-- movement groups are only partially implemented; `MovementGroupID` is real state, but group management is still marked TODO
-- the scan loop already filters by `GlobalId`, but the code also contains a TODO to exclude self more explicitly
+- group sessions are inferred from active steering state, so `StopMove()` or `Arrive()` removes the member from the group immediately
+- path sharing still comes from the normal guide/cache system; `FlowFieldPathRequest` remains the best fit when many grouped units share one destination
 
 Treat this area as active infrastructure rather than final flocking design.
 
@@ -541,7 +561,11 @@ There is already a test note in `NavSteering.Tests` calling this out.
 
 ### Expecting movement groups to be fully implemented
 
-They are not yet. Group IDs exist, but the actual group-management integration is still marked TODO.
+They are steering-local. Agents with the same `groupId` and exact destination preserve formation offsets while the group stays compact, then fall back to the shared destination when the group spreads out or reaches the end of the move.
+
+### Reusing a `groupId` for different destinations
+
+That is safe, but those sessions do not interact. Grouped steering only blends members that share both the `groupId` and the exact requested destination.
 
 ### Assuming avoidance is full collision resolution
 
@@ -570,6 +594,9 @@ Those tests currently cover:
 - invalid-path stop behavior
 - flow-field guide usage
 - combined steering
+- same-group steering filtering
+- formation-offset preservation
+- group fallback to the shared destination
 - waypoint advancement
 - stop versus arrive behavior
 - auto-stop cooldown

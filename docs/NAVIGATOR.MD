@@ -264,7 +264,10 @@ It:
 - sets movement rate and jump request
 - sets `IsManuallyControlled = false`
 - prepares the `IPathRequest` if needed
+- optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`
+
+Passing the same non-negative `groupId` to multiple navigators lets `NavSteering` preserve relative formation offsets while the group stays compact.
 
 ### 7.3 Other Request Helpers
 
@@ -487,6 +490,8 @@ navigator.SetTrekCondition(
 
 navigator.CommitFrameMotion();
 ```
+
+If several navigators should move as one group, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
 
 The essential rule is:
 

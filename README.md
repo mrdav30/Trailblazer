@@ -24,7 +24,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 - Dual pathing strategies: waypoint-based A* and destination-centric flow fields
 - Chart registration and invalidation through `PathManager`
 - Reusable guide caching through `PathGuideFactory`
-- Runtime steering, stuck detection, repathing, and local avoidance hooks
+- Runtime steering, group movement, stuck detection, repathing, and local avoidance hooks
 - Deterministic turning and locomotion-aware movement through `NavTurning` and `NavMotor`
 - Multi-targeted library build for `netstandard2.1` and `net8.0`
 
@@ -177,6 +177,8 @@ navigator.CommitFrameMotion();
 TrailblazerManager.LateSimulate();
 ```
 
+If several navigators should move as one formation, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
+
 ## Choosing Between A* and Flow Fields
 
 Use `AStarPathRequest` when:
@@ -189,7 +191,7 @@ Use `FlowFieldPathRequest` when:
 
 - many units can share the same destination
 - you want local vector sampling rather than waypoint following
-- you want destination-centric caching and group-friendly movement
+- you want destination-centric caching and group-friendly movement; paired `groupId` values can preserve relative offsets while the group stays cohesive
 
 ## Project Layout
 

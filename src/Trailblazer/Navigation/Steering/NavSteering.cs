@@ -2,6 +2,7 @@
 using GridForge.Grids;
 using GridForge.Spatial;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Trailblazer.Pathing;
@@ -15,6 +16,42 @@ namespace Trailblazer.Navigation.Steering;
 /// </summary>
 public class NavSteering
 {
+    private enum MovementGroupTravelMode
+    {
+        None,
+        Individual,
+        Formation,
+        GroupIndividual
+    }
+
+    private sealed class MovementGroupMember
+    {
+        public Guid OccupantId;
+        public bool HasOccupantId;
+        public Vector3d Position;
+        public Fixed64 Radius;
+        public Vector3d RequestedDestination;
+        public Vector3d FormationOffset;
+        public bool HasFormationOffset;
+        public int LastSeenFrame;
+    }
+
+    private sealed class MovementGroupMembership
+    {
+        public int GroupId;
+        public Vector3d RequestedDestination;
+        public int LastSeenFrame;
+    }
+
+    private sealed class MovementGroupState
+    {
+        public Dictionary<NavSteering, MovementGroupMember> Members { get; } = new();
+    }
+
+    private static readonly Dictionary<int, MovementGroupState> _movementGroups = new();
+
+    private static readonly Dictionary<Guid, MovementGroupMembership> _movementGroupMemberships = new();
+
     #region Constants & Defaults
 
     /// <summary>
@@ -68,6 +105,21 @@ public class NavSteering
     /// </summary>
     public static readonly Fixed64 DefaultBrakingPower = (Fixed64)0.15d;
 
+    /// <summary>
+    /// Group fallback stop tolerance used when a formation breaks apart near the goal.
+    /// </summary>
+    protected static readonly Fixed64 DefaultGroupIndividualStop = Fixed64.One;
+
+    /// <summary>
+    /// Number of members required before group movement preserves formation offsets.
+    /// </summary>
+    protected const int MinMovementGroupSize = 2;
+
+    /// <summary>
+    /// How many frames of group state history are kept so members can see each other across update order.
+    /// </summary>
+    protected const int MovementGroupHistoryFrames = 1;
+
     #endregion
 
     #region Runtime State - Pathfinding
@@ -81,6 +133,8 @@ public class NavSteering
     /// The final destination this agent is attempting to reach.
     /// </summary>
     public Vector3d Destination { get; protected set; }
+
+    private Vector3d _requestedDestination;
 
     private Fixed64 _lastUnitSize;
 
@@ -212,6 +266,14 @@ public class NavSteering
     /// </summary>
     public Fixed64 BrakingPower { get; set; } = DefaultBrakingPower;
 
+    private Fixed64 _agentRadius;
+
+    private Guid _ownerId;
+
+    private bool _hasOwnerId;
+
+    private MovementGroupTravelMode _movementGroupMode;
+
     #endregion
 
     #region Events
@@ -255,8 +317,12 @@ public class NavSteering
 
     #region Public Interface
 
-    // Needs to be called every frame from input system
-    // For AI pathfinding, only needs to be called once until agent destination is reached
+    /// <summary>
+    /// Starts or replaces the active steering request.
+    /// </summary>
+    /// <param name="pathRequest">The path request that defines the traversable start and end voxels.</param>
+    /// <param name="destination">Optional exact world-space destination. When omitted, the request end voxel position is used.</param>
+    /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between nearby members.</param>
     public virtual void ApplyPathRequest(
         IPathRequest pathRequest,
         Vector3d? destination = null,
@@ -279,17 +345,19 @@ public class NavSteering
         IsStuck = false;
         _stuckFrameCount = 0;
 
-        AddToMovementGroup(groupId);
-
         ShouldMove = true;
         // NOTE: destination can be an exact point within a voxel, not neccesarily the voxel position
-        Destination = destination ?? pathRequest.EndNode.WorldPosition;
+        _requestedDestination = destination ?? pathRequest.EndNode.WorldPosition;
+        Destination = _requestedDestination;
 
         _currentRequest = pathRequest;
         _lastUnitSize = pathRequest.UnitSize;
 
         _repathTries = 0;
         _shouldRequestPathThisFrame = true;
+
+        AddToMovementGroup(groupId);
+        UpdateMovementGroupState(pathRequest.StartNode.WorldPosition, true);
 
         Events.OnMoveRequestApplied?.Invoke();
     }
@@ -300,26 +368,44 @@ public class NavSteering
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void PauseAutoStop() => _autoStopFrameCount = AutoPauseStopTime;
 
+    /// <summary>
+    /// Replaces the current guide used for guided steering.
+    /// </summary>
+    /// <param name="guide">The guide to follow, or <c>null</c> to clear guided movement.</param>
     public void SetTrailGuide(IGuide guide)
     {
         _trailGuide = guide;
         _shouldRequestPathThisFrame = _trailGuide != null;
     }
 
+    /// <summary>
+    /// Assigns this steering session to a movement group.
+    /// </summary>
+    /// <param name="groupId">A non-negative group identifier. Negative values remove the current group assignment.</param>
     public void AddToMovementGroup(int groupId)
     {
-        if (groupId < 0) return;
+        if (groupId < 0)
+        {
+            LeaveMovementGroup();
+            return;
+        }
 
-        if (MovementGroupID >= 0) LeaveMovementGroup();
+        if (MovementGroupID >= 0 && MovementGroupID != groupId)
+            LeaveMovementGroup();
 
-        // TODO: integrate movement group logic
         MovementGroupID = groupId;
+        _movementGroupMode = MovementGroupTravelMode.Individual;
     }
 
+    /// <summary>
+    /// Removes this steering session from its current movement group.
+    /// </summary>
     public void LeaveMovementGroup()
     {
-        // TODO: integrate movement group logic
+        RemoveFromMovementGroupRegistry();
         MovementGroupID = -1;
+        _movementGroupMode = MovementGroupTravelMode.None;
+        Destination = _requestedDestination;
     }
 
     #endregion
@@ -332,6 +418,7 @@ public class NavSteering
     public virtual void OnInitialize(Fixed64 radius)
     {
         // Fatter objects can afford to land imprecisely
+        _agentRadius = radius;
         _closingDistance = FixedMath.Round(radius + GlobalGridManager.VoxelSize);
 
         LeaveMovementGroup();
@@ -353,6 +440,10 @@ public class NavSteering
 
         _currentRequest = null;
         _trailGuide = null;
+        _requestedDestination = Vector3d.Zero;
+        _ownerId = Guid.Empty;
+        _hasOwnerId = false;
+        _movementGroupMode = MovementGroupTravelMode.None;
     }
 
     /// <summary>
@@ -360,6 +451,8 @@ public class NavSteering
     /// </summary>
     public virtual Vector3d GetHeading(ISteer navigator)
     {
+        CacheOwner(navigator);
+
         if (!CanMove)
             return Vector3d.Zero;
 
@@ -370,6 +463,8 @@ public class NavSteering
                 Arrive();
                 return TargetDirection;
             }
+
+            UpdateMovementGroupState(navigator.Position);
 
             // check if agent has to pathfind, otherwise straight path to rely on destination
             if (CanPathfind)
@@ -409,7 +504,7 @@ public class NavSteering
 
             // Check if we're close enough to stop moving
             Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.x.Abs() + TargetDirection.z.Abs());
-            bool reachedTarget = _distanceToTarget < _closingDistance * StopMultiplier;
+            bool reachedTarget = _distanceToTarget < _closingDistance * GetActiveStopMultiplier();
             bool noInput = moveAmount == Fixed64.Zero;
             if (!HasTrailGuide && (reachedTarget || (!IsStuck && noInput)))
             {
@@ -638,13 +733,12 @@ public class NavSteering
     {
         StopMove();
 
-        LeaveMovementGroup();
-
         if (_trailGuide != null)
             PathGuideFactory.ReturnGuide(_trailGuide);
 
         _trailGuide = null;
         _currentRequest = null;
+        _requestedDestination = Vector3d.Zero;
         _distanceToTarget = Fixed64.Zero;
         IsAtDestination = true;
         Destination = Vector3d.Zero;
@@ -668,6 +762,7 @@ public class NavSteering
         ShouldMove = false;
         _shouldRequestPathThisFrame = false;
         HasLineOfSightPath = false;
+        LeaveMovementGroup();
 
         Events.OnStopMove?.Invoke();
     }
@@ -706,6 +801,8 @@ public class NavSteering
         if (speed <= Fixed64.Zero)
             return Vector3d.Zero;
 
+        int currentFrame = TrailblazerManager.FrameCount;
+
         // we need to see everybody who might influence us—either for group or for avoidance
         Fixed64 groupRadius = radius * GroupFactor;
         Fixed64 invGR = Fixed64.One / groupRadius;
@@ -726,15 +823,19 @@ public class NavSteering
             other.GlobalId != id;
         foreach (IVoxelOccupant entity in GridScanManager.ScanRadius(position, scanRadius, condition))
         {
-            // TODO: need to exclude self explicity? condition should handle this but just in case
             if (entity is not ISteer other || other.Radius <= Fixed64.Zero)
+                continue;
+
+            if (other.GlobalId == id)
                 continue;
 
             Vector3d offset = other.Position - position;
             Fixed64 distSq = offset.SqrMagnitude;
+            if (distSq <= Fixed64.Epsilon)
+                continue;
 
             // Group behaviors
-            if (IsInGroup && distSq < groupRadiusSq)
+            if (IsGroupNeighbor(other.GlobalId, currentFrame) && distSq < groupRadiusSq)
             {
                 groupCount++;
                 Fixed64 d = FixedMath.Sqrt(distSq);
@@ -786,6 +887,163 @@ public class NavSteering
         }
 
         return groupForce + avoidance;
+    }
+
+    #endregion
+
+    #region Movement Groups
+
+    internal static void ResetMovementGroups()
+    {
+        _movementGroups.Clear();
+        _movementGroupMemberships.Clear();
+    }
+
+    private void CacheOwner(ISteer navigator)
+    {
+        if (_hasOwnerId && _ownerId == navigator.GlobalId)
+            return;
+
+        if (_hasOwnerId)
+            _movementGroupMemberships.Remove(_ownerId);
+
+        _ownerId = navigator.GlobalId;
+        _hasOwnerId = true;
+    }
+
+    private void UpdateMovementGroupState(Vector3d position, bool resetFormationOffset = false)
+    {
+        Destination = _requestedDestination;
+        _movementGroupMode = IsInGroup ? MovementGroupTravelMode.Individual : MovementGroupTravelMode.None;
+
+        if (!IsInGroup || _currentRequest == null)
+            return;
+
+        if (!_movementGroups.TryGetValue(MovementGroupID, out MovementGroupState group))
+        {
+            group = new();
+            _movementGroups[MovementGroupID] = group;
+        }
+
+        if (!group.Members.TryGetValue(this, out MovementGroupMember self))
+        {
+            self = new();
+            group.Members[this] = self;
+            resetFormationOffset = true;
+        }
+
+        if (self.RequestedDestination != _requestedDestination)
+            resetFormationOffset = true;
+
+        self.Position = position;
+        self.Radius = _agentRadius;
+        self.RequestedDestination = _requestedDestination;
+        self.LastSeenFrame = TrailblazerManager.FrameCount;
+
+        if (resetFormationOffset)
+            self.HasFormationOffset = false;
+
+        if (_hasOwnerId)
+        {
+            if (self.HasOccupantId && self.OccupantId != _ownerId)
+                _movementGroupMemberships.Remove(self.OccupantId);
+
+            self.OccupantId = _ownerId;
+            self.HasOccupantId = true;
+
+            _movementGroupMemberships[_ownerId] = new MovementGroupMembership
+            {
+                GroupId = MovementGroupID,
+                RequestedDestination = _requestedDestination,
+                LastSeenFrame = self.LastSeenFrame
+            };
+        }
+
+        Vector3d groupCenter = Vector3d.Zero;
+        Fixed64 averageRadius = Fixed64.Zero;
+        int groupCount = 0;
+        int minFrame = TrailblazerManager.FrameCount - MovementGroupHistoryFrames;
+        foreach (MovementGroupMember member in group.Members.Values)
+        {
+            if (member.LastSeenFrame < minFrame || member.RequestedDestination != _requestedDestination)
+                continue;
+
+            groupCenter += member.Position;
+            averageRadius += member.Radius;
+            groupCount++;
+        }
+
+        if (groupCount < MinMovementGroupSize)
+            return;
+
+        groupCenter /= groupCount;
+        averageRadius = (averageRadius / groupCount) + (GlobalGridManager.VoxelSize * Fixed64.Half);
+
+        Fixed64 maxSpreadSq = Fixed64.Zero;
+        foreach (MovementGroupMember member in group.Members.Values)
+        {
+            if (member.LastSeenFrame < minFrame || member.RequestedDestination != _requestedDestination)
+                continue;
+
+            Vector3d formationOffset = member.Position - groupCenter;
+            if (!member.HasFormationOffset)
+            {
+                member.FormationOffset = formationOffset;
+                member.HasFormationOffset = true;
+            }
+
+            Fixed64 spreadSq = formationOffset.SqrMagnitude;
+            if (spreadSq > maxSpreadSq)
+                maxSpreadSq = spreadSq;
+        }
+
+        Fixed64 allowedSpreadSq = averageRadius * averageRadius * (Fixed64)(groupCount * 2);
+        Fixed64 distanceToSharedDestinationSq = (_requestedDestination - groupCenter).SqrMagnitude;
+        if (maxSpreadSq > allowedSpreadSq || distanceToSharedDestinationSq <= maxSpreadSq)
+        {
+            _movementGroupMode = MovementGroupTravelMode.GroupIndividual;
+            return;
+        }
+
+        _movementGroupMode = MovementGroupTravelMode.Formation;
+        Destination = _requestedDestination + self.FormationOffset;
+    }
+
+    private void RemoveFromMovementGroupRegistry()
+    {
+        if (MovementGroupID < 0)
+            return;
+
+        if (_movementGroups.TryGetValue(MovementGroupID, out MovementGroupState group))
+        {
+            if (group.Members.TryGetValue(this, out MovementGroupMember member) && member.HasOccupantId)
+                _movementGroupMemberships.Remove(member.OccupantId);
+
+            group.Members.Remove(this);
+            if (group.Members.Count == 0)
+                _movementGroups.Remove(MovementGroupID);
+        }
+        else if (_hasOwnerId)
+        {
+            _movementGroupMemberships.Remove(_ownerId);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private Fixed64 GetActiveStopMultiplier() =>
+        _movementGroupMode == MovementGroupTravelMode.GroupIndividual
+            ? DefaultGroupIndividualStop
+            : StopMultiplier;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsGroupNeighbor(Guid otherId, int currentFrame)
+    {
+        if (!IsInGroup || !_movementGroupMemberships.TryGetValue(otherId, out MovementGroupMembership membership))
+            return false;
+
+        return membership.GroupId == MovementGroupID
+            && membership.RequestedDestination == _requestedDestination
+            && membership.LastSeenFrame >= currentFrame - MovementGroupHistoryFrames;
     }
 
     #endregion

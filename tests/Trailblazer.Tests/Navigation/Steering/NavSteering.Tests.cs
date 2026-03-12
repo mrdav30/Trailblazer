@@ -4,6 +4,7 @@ using GridForge.Configuration;
 using GridForge.Grids;
 using Moq;
 using System;
+using Trailblazer.Navigation;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 using Xunit;
@@ -520,5 +521,161 @@ public class NavSteeringTests : IDisposable
         steer.ShouldMove.Should().BeFalse();
 
         PathManager.UnloadChart("ReturnGuide");
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_Should_OnlyUseNeighborsFromSameMovementGroup()
+    {
+        var data = new bool[1, 6, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData("MovementGroupSteering", data, Vector3d.Zero);
+
+        var leader = new MockSteerAgent(new Vector3d(0, 0, 0))
+        {
+            Velocity = new Vector3d(1, 0, 0),
+            Speed = Fixed64.One
+        };
+        var neighbor = new MockSteerAgent(new Vector3d(1, 0, 0))
+        {
+            Velocity = new Vector3d(1, 0, 0),
+            Speed = Fixed64.One
+        };
+
+        var leaderSteer = new NavSteering();
+        leaderSteer.OnInitialize(leader.Radius);
+        leaderSteer.BehaviorWeights = new GroupBehaviorWeights
+        {
+            Separation = Fixed64.One,
+            Alignment = Fixed64.One,
+            Cohesion = Fixed64.One,
+            Avoidance = Fixed64.Zero
+        };
+
+        var neighborSteer = new NavSteering();
+        neighborSteer.OnInitialize(neighbor.Radius);
+
+        leaderSteer.ApplyPathRequest(AStarPathRequest.Create(leader.Position, new Vector3d(4, 0, 0)), groupId: 1);
+        neighborSteer.ApplyPathRequest(AStarPathRequest.Create(neighbor.Position, new Vector3d(4, 0, 0)), groupId: 2);
+
+        GlobalGridManager.TryGetGrid(neighbor.Position, out var grid);
+        grid.TryAddVoxelOccupant(neighbor);
+
+        neighborSteer.GetHeading(neighbor);
+        leaderSteer.GetHeading(leader);
+
+        var force = leaderSteer.ComputeCombinedSteering(
+            leader.Position,
+            leader.Velocity,
+            leader.Speed,
+            leader.Radius,
+            leader.GlobalId);
+
+        force.Should().Be(Vector3d.Zero);
+
+        neighborSteer.ApplyPathRequest(AStarPathRequest.Create(neighbor.Position, new Vector3d(4, 0, 0)), groupId: 1);
+        neighborSteer.GetHeading(neighbor);
+
+        force = leaderSteer.ComputeCombinedSteering(
+            leader.Position,
+            leader.Velocity,
+            leader.Speed,
+            leader.Radius,
+            leader.GlobalId);
+
+        force.Should().NotBe(Vector3d.Zero);
+
+        grid.TryRemoveVoxelOccupant(neighbor);
+        PathManager.UnloadChart("MovementGroupSteering");
+    }
+
+    [Fact]
+    public void NavSteering_Should_PreserveFormationOffsets_ForCohesiveGroups()
+    {
+        var data = new bool[1, 7, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData("GroupFormation", data, Vector3d.Zero);
+
+        var firstAgent = new MockSteerAgent(new Vector3d(1, 0, 0)) { Speed = Fixed64.One };
+        var secondAgent = new MockSteerAgent(new Vector3d(2, 0, 0)) { Speed = Fixed64.One };
+
+        var firstSteer = new NavSteering();
+        firstSteer.OnInitialize(firstAgent.Radius);
+
+        var secondSteer = new NavSteering();
+        secondSteer.OnInitialize(secondAgent.Radius);
+
+        var sharedDestination = new Vector3d(4, 0, 0);
+        firstSteer.ApplyPathRequest(AStarPathRequest.Create(firstAgent.Position, sharedDestination), groupId: 5);
+        secondSteer.ApplyPathRequest(AStarPathRequest.Create(secondAgent.Position, sharedDestination), groupId: 5);
+
+        firstSteer.GetHeading(firstAgent);
+        secondSteer.GetHeading(secondAgent);
+
+        firstSteer.Destination.Should().Be(new Vector3d((Fixed64)3.5f, Fixed64.Zero, Fixed64.Zero));
+        secondSteer.Destination.Should().Be(new Vector3d((Fixed64)4.5f, Fixed64.Zero, Fixed64.Zero));
+
+        PathManager.UnloadChart("GroupFormation");
+    }
+
+    [Fact]
+    public void NavSteering_Should_FallBackToSharedDestination_WhenGroupIsSpreadOut()
+    {
+        var data = new bool[1, 8, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData("GroupFallback", data, Vector3d.Zero);
+
+        var firstAgent = new MockSteerAgent(new Vector3d(0, 0, 0)) { Speed = Fixed64.One };
+        var secondAgent = new MockSteerAgent(new Vector3d(5, 0, 0)) { Speed = Fixed64.One };
+
+        var firstSteer = new NavSteering();
+        firstSteer.OnInitialize(firstAgent.Radius);
+
+        var secondSteer = new NavSteering();
+        secondSteer.OnInitialize(secondAgent.Radius);
+
+        var sharedDestination = new Vector3d(7, 0, 0);
+        firstSteer.ApplyPathRequest(AStarPathRequest.Create(firstAgent.Position, sharedDestination), groupId: 7);
+        secondSteer.ApplyPathRequest(AStarPathRequest.Create(secondAgent.Position, sharedDestination), groupId: 7);
+
+        firstSteer.GetHeading(firstAgent);
+        secondSteer.GetHeading(secondAgent);
+
+        firstSteer.Destination.Should().Be(sharedDestination);
+        secondSteer.Destination.Should().Be(sharedDestination);
+
+        PathManager.UnloadChart("GroupFallback");
     }
 }

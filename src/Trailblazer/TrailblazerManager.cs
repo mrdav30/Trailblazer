@@ -1,4 +1,5 @@
 ﻿using FixedMathSharp;
+using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 
 namespace Trailblazer;
@@ -94,6 +95,7 @@ public static class TrailblazerManager
     {
         FrameCount = 0;
         TotalTime = Fixed64.Zero;
+        NavSteering.ResetMovementGroups();
     }
 
     public static int GetFrameFromTime(Fixed64 timestamp)

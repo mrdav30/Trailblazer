@@ -182,6 +182,9 @@ public static class PathManager
     /// <param name="chartKey">The name of the map to unload.</param>
     public static void UnloadChart(string chartKey)
     {
+        // TODO: should we allow unloading of non-initialized charts? It would be simpler to just remove them from the map, 
+        // but it could lead to issues if something tries to initialize a chart after it's been unloaded, 
+        // since the chart object would still exist but be inaccessible through the manager.
         if (string.IsNullOrEmpty(chartKey)
             || !TryGetNavigationChart(chartKey, out NavigationChart chart)
             || !chart.IsInitialized)
@@ -230,6 +233,7 @@ public static class PathManager
     /// </summary>
     public static void ClearAll()
     {
+        // TODO: should we call UnloadAllCharts here instead to ensure proper cleanup of partitions and cache invalidation? 
         _navigationChartMapLock.EnterWriteLock();
         try { _navigationChartMap.Clear(); }
         finally { _navigationChartMapLock.ExitWriteLock(); }

@@ -195,8 +195,7 @@ When touching global/static state, use the existing fixtures and patterns:
 Reset requirements are important because runtime state is shared through static managers:
 
 - `GlobalGridManager.Setup()` / `GlobalGridManager.Reset()`
-- `PathManager.UnloadAllCharts()`
-- `PathManager.ClearAll()`
+- `PathManager.Reset()`
 - `TrailblazerManager.Reset()`
 
 Do not leave charts, partitions, guides, or grid globals dirty after a test.

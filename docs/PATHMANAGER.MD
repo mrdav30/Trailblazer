@@ -67,8 +67,7 @@ The main entry points are:
 - `InitializeChart(string chartKey)`
 - `InitializeAllCharts()`
 - `UnloadChart(string chartKey)`
-- `UnloadAllCharts()`
-- `ClearAll()`
+- `Reset()`
 - `GetWalkableNeighbors(GlobalVoxelIndex idx)`
 - `WalkableNeighborsOf(Voxel voxel)`
 - `GetWalkablePerpendicularNeighbors(GlobalVoxelIndex idx)`
@@ -135,7 +134,7 @@ Important detail:
 - it materializes `ToArray()` under the read lock
 - callers get an enumerable snapshot, not a live view into the dictionary
 
-That is why `InitializeAllCharts()` and `UnloadAllCharts()` can iterate it safely.
+That is why `InitializeAllCharts()` and `Reset()` can iterate it safely.
 
 ## 6. Initialization Lifecycle
 
@@ -237,29 +236,20 @@ That means:
 
 ## 8. Clear and Teardown Behavior
 
-### 8.1 ClearAll()
+### 8.1 Reset()
 
-`ClearAll()` currently:
+`Reset()` currently:
 
 - clears the chart registry
 - flushes guide caches if pooling is active
 
-It does not walk live voxels and remove partitions itself.
+It will walk live voxels and remove partitions itself.
 
 That means the accurate teardown pattern is:
 
-1. `UnloadAllCharts()`
-2. `ClearAll()`
+1. `Reset()`
 
-Do not assume `ClearAll()` is a substitute for unloading initialized charts first.
-
-### 8.2 UnloadAllCharts()
-
-`UnloadAllCharts()` iterates the `AllCharts` snapshot and calls `UnloadChart(...)` for each chart.
-
-This is the normal path to remove live partition ownership correctly.
-
-### 8.3 Tick(...)
+### 8.2 Tick(...)
 
 `Tick(int currentFrame)` is an internal bridge from `TrailblazerManager` to guide-cache cleanup.
 
@@ -389,19 +379,17 @@ The usual chart lifecycle is:
 var chart = NavigationChart.From3D("Arena", data, minBounds, Fixed64.One);
 
 PathManager.Register(chart);
-PathManager.InitializeChart(chart.Name);
+PathManager.InitializeChart(chart);
 
 // ... use the chart through requests and guides ...
 
-PathManager.UnloadChart(chart.Name);
-PathManager.ClearAll();
+PathManager.UnloadChart(chart);
 ```
 
 For multi-chart teardown in tests or world resets, the normal pattern is:
 
 ```csharp
-PathManager.UnloadAllCharts();
-PathManager.ClearAll();
+PathManager.Reset();
 ```
 
 ## 15. Common Gotchas
@@ -409,10 +397,6 @@ PathManager.ClearAll();
 ### Registering a chart does not make it pathable
 
 You still need `InitializeChart(...)`.
-
-### Assuming ClearAll() removes live partitions
-
-It does not. Unload initialized charts first.
 
 ### Forgetting cache invalidation is tied to chart ownership
 

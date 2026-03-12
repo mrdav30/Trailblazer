@@ -47,6 +47,8 @@ public static class PathManager
         }
     }
 
+    internal static readonly SwiftHashSetPool<PathPartition> PartitionSetPool = new SwiftHashSetPool<PathPartition>();
+
     /// <summary>
     /// Pool of reusable <see cref="PathPartition"/> instances used for partitioning the navigation grid.
     /// </summary>
@@ -55,17 +57,12 @@ public static class PathManager
         actionOnRelease: partition => partition.Reset()
     );
 
-    private static readonly Lazy<SwiftHashSetPool<PathPartition>> _partitionSetPool =
-        new(() => new SwiftHashSetPool<PathPartition>());
-    internal static SwiftHashSetPool<PathPartition> PartitionSetPool => _partitionSetPool.Value;
-
     #endregion
 
     internal static void Tick(int currentFrame)
     {
         PathGuideFactory.CullExpiredGuides(currentFrame);
     }
-
 
     #region Navigation Map Management
 
@@ -167,33 +164,28 @@ public static class PathManager
         // TODO: release existingChartKeys
     }
 
-    /// <summary>
-    /// Unloads all registered maps, removing ownerships and partitions from walkable voxels.
-    /// </summary>
-    public static void UnloadAllCharts()
+    public static void UnloadChart(string chartKey)
     {
-        foreach (NavigationChart chart in AllCharts)
-            UnloadChart(chart.Name);
+        if (!TryGetNavigationChart(chartKey, out NavigationChart chart))
+            return;
+
+        UnloadChart(chart);
     }
 
     /// <summary>
     /// Unloads a navigation map by name and releases associated partitions.
     /// </summary>
-    /// <param name="chartKey">The name of the map to unload.</param>
-    public static void UnloadChart(string chartKey)
+    /// <param name="chart">The navigation chart to unload.</param>
+    public static void UnloadChart(NavigationChart chart)
     {
         // TODO: should we allow unloading of non-initialized charts? It would be simpler to just remove them from the map, 
         // but it could lead to issues if something tries to initialize a chart after it's been unloaded, 
         // since the chart object would still exist but be inaccessible through the manager.
-        if (string.IsNullOrEmpty(chartKey)
-            || !TryGetNavigationChart(chartKey, out NavigationChart chart)
-            || !chart.IsInitialized)
-        {
+        if (chart == null || !chart.IsInitialized)
             return;
-        }
 
         // invalidate any survey results currently using this chart
-        PathGuideFactory.InvalidateCacheFor(chartKey);
+        PathGuideFactory.InvalidateCacheFor(chart.Name);
 
         SwiftHashSet<PathPartition> stillActivePartitions = PartitionSetPool.Rent();
         foreach (Vector3d position in chart.GetWalkablePositions())
@@ -201,19 +193,17 @@ public static class PathManager
             if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
                 continue;
 
-            if (voxel.TryGetPartition(out PathPartition part) && part.BelongsTo(chartKey))
-            {
-                part.RemoveOwner(chartKey);
-                if (!part.HasAnyOwners)
-                    voxel.TryRemovePartition<PathPartition>();
-                else
-                {
-                    // if partition still belongs to a chart, reset it's clearance values and rebind neighbors
-                    part.HandleChange(GridChange.Update, voxel);
-                    stillActivePartitions.Add(part);
-                }
-
+            if (!voxel.TryGetPartition(out PathPartition part) || !part.BelongsTo(chart.Name))
                 continue;
+
+            part.RemoveOwner(chart.Name);
+            if (!part.HasAnyOwners)
+                voxel.TryRemovePartition<PathPartition>();
+            else
+            {
+                // if partition still belongs to a chart, reset it's clearance values and rebind neighbors
+                part.HandleChange(GridChange.Update, voxel);
+                stillActivePartitions.Add(part);
             }
         }
 
@@ -224,19 +214,45 @@ public static class PathManager
         PartitionSetPool.Release(stillActivePartitions);
 
         _navigationChartMapLock.EnterWriteLock();
-        try { _navigationChartMap.Remove(chartKey); }
+        try { _navigationChartMap.Remove(chart.Name); }
         finally { _navigationChartMapLock.ExitWriteLock(); }
     }
 
     /// <summary>
     /// Clears all registered maps, partitions, and guide pools.
     /// </summary>
-    public static void ClearAll()
+    public static void Reset()
     {
-        // TODO: should we call UnloadAllCharts here instead to ensure proper cleanup of partitions and cache invalidation? 
+        var allCharts = AllCharts;
+
+        // remove all partitions from voxels and clear navigation map references
         _navigationChartMapLock.EnterWriteLock();
-        try { _navigationChartMap.Clear(); }
-        finally { _navigationChartMapLock.ExitWriteLock(); }
+        try
+        {
+            foreach (NavigationChart chart in allCharts)
+            {
+                if (chart == null) continue;
+
+                foreach (Vector3d position in chart.GetWalkablePositions())
+                {
+                    if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
+                        continue;
+
+                    if (!voxel.TryGetPartition(out PathPartition part) || !part.BelongsTo(chart.Name))
+                        continue;
+
+                    part.RemoveOwner(chart.Name);
+                    if (!part.HasAnyOwners)
+                        voxel.TryRemovePartition<PathPartition>();
+                }
+            }
+
+            _navigationChartMap.Clear();
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitWriteLock();
+        }
 
         if (PathGuideFactory.IsPooling)
             PathGuideFactory.FlushCache(true);

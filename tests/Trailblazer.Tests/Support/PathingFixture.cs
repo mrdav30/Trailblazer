@@ -16,8 +16,7 @@ public class PathingFixture : IDisposable
 
     public void Dispose()
     {
-        PathManager.UnloadAllCharts();
-        PathManager.ClearAll();
+        PathManager.Reset();
 
         GlobalGridManager.Reset();
         TrailblazerManager.Reset();

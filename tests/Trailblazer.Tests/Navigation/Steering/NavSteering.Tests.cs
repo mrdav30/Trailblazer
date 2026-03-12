@@ -27,8 +27,7 @@ public class NavSteeringTests : IDisposable
 
     public void Dispose()
     {
-        PathManager.UnloadAllCharts();
-        PathManager.ClearAll();
+        PathManager.Reset();
 
         GlobalGridManager.Reset();
         TrailblazerManager.Reset();

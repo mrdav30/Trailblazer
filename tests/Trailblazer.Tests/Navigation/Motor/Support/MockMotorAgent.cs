@@ -42,7 +42,7 @@ public class MockMotorAgent : IMotor
         Rotation = rotation ?? FixedQuaternion.Identity;
         Velocity = velocity ?? Vector3d.Zero;
 
-        Motor = NavMotor.CreateNew(Position, FrameCondition);
+        Motor = NavMotor.CreateNew(FrameCondition);
         Motor.SetVelocity(Velocity);
 
         Motor.Events.CanAffordJump = () => true;

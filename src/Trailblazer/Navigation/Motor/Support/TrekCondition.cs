@@ -47,6 +47,15 @@ public class TrekCondition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static TrekCondition CreateEmpty() => new();
 
+    /// <summary>
+    /// Creates a deep copy of the current <see cref="TrekCondition"/> instance.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TrekCondition Clone() => new TrekCondition(Medium, SurfaceLevel, GroundState, CeilingLevel);
+
+    /// <summary>
+     /// Resets the traversal condition to default values, indicating an unknown state.
+     /// </summary>
     public void Reset()
     {
         Medium = TraversalMedium.Unknown;

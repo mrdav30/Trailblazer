@@ -5,26 +5,28 @@ namespace Trailblazer.Pathing;
 
 public abstract class PathRequest : IPathRequest
 {
-    protected Voxel _startNode;
-    public Voxel StartNode => _startNode;
+    public Vector3d Origin { get; protected set; }
 
-    protected Voxel _endNode;
-    public Voxel EndNode => _endNode;
+    public Voxel StartNode { get; protected set; }
+
+    public Vector3d TargetPosition { get; protected set; }
+
+    public Voxel EndNode { get; protected set; }
 
     public Fixed64 UnitSize { get; protected set; }
 
     public bool AllowUnwalkable { get; set; }
 
     public bool HasZeroDisplacement =>
-        _startNode == null
-        || _endNode == null
-        || _startNode.SpawnToken == _endNode.SpawnToken;
+        StartNode == null
+        || EndNode == null
+        || StartNode.SpawnToken == EndNode.SpawnToken;
 
     public int? MaxPathSearchRange { get; set; }
 
-    public bool HasOrigin => _startNode != null;
+    public bool HasOrigin => StartNode != null;
 
-    public bool HasDestination => _endNode != null;
+    public bool HasDestination => EndNode != null;
 
     public bool HasValidEndpoints => HasOrigin && HasDestination;
 
@@ -45,8 +47,8 @@ public abstract class PathRequest : IPathRequest
             unitSize);
 
         // need to set these even if null incase the new size invalidates the request
-        _startNode = startVoxel;
-        _endNode = endVoxel;
+        StartNode = startVoxel;
+        EndNode = endVoxel;
         UnitSize = unitSize ?? GlobalGridManager.VoxelSize;
 
         if (!success)
@@ -59,29 +61,29 @@ public abstract class PathRequest : IPathRequest
 
     public bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false)
     {
-        if (_endNode == null) return false;
+        if (EndNode == null) return false;
 
         bool success = VoxelFinder.GetStartVoxel(
             origin,
-            _endNode.WorldPosition,
+            EndNode.WorldPosition,
             out Voxel newVoxel,
             AllowUnwalkable,
             UnitSize);
 
         if (!success) return false;
 
-        if (_startNode != null)
+        if (StartNode != null)
         {
             // nothing to do here then
-            if (newVoxel.SpawnToken == _startNode.SpawnToken)
+            if (newVoxel.SpawnToken == StartNode.SpawnToken)
                 return true;
 
             // force reset if grid changed
-            if (newVoxel.GridIndex != _startNode.GridIndex)
+            if (newVoxel.GridIndex != StartNode.GridIndex)
                 resetSearchRange = true;
         }
 
-        _startNode = newVoxel;
+        StartNode = newVoxel;
 
         if (resetSearchRange)
         {
@@ -94,10 +96,10 @@ public abstract class PathRequest : IPathRequest
 
     public bool TrySetDestination(Vector3d destination, bool resetSearchRange = false)
     {
-        if (_startNode == null) return false;
+        if (StartNode == null) return false;
 
         bool success = VoxelFinder.GetEndVoxel(
-            _startNode.WorldPosition,
+            StartNode.WorldPosition,
             destination,
             out Voxel newVoxel,
             AllowUnwalkable,
@@ -105,18 +107,18 @@ public abstract class PathRequest : IPathRequest
 
         if (!success) return false;
 
-        if (_endNode != null)
+        if (EndNode != null)
         {
             // nothing to do here then
-            if (newVoxel.SpawnToken == _endNode.SpawnToken)
+            if (newVoxel.SpawnToken == EndNode.SpawnToken)
                 return true;
 
             // force reset if grid changed
-            if (newVoxel.GridIndex != _endNode.GridIndex)
+            if (newVoxel.GridIndex != EndNode.GridIndex)
                 resetSearchRange = true;
         }
 
-        _endNode = newVoxel;
+        EndNode = newVoxel;
 
         if (resetSearchRange)
         {
@@ -130,9 +132,9 @@ public abstract class PathRequest : IPathRequest
     public bool TrySetUnitSize(Fixed64 unitSize)
     {
         // no change
-        if (UnitSize == unitSize | !HasValidEndpoints) return false;
+        if (UnitSize == unitSize || !HasValidEndpoints) return false;
 
-        return TryPrepare(_startNode.WorldPosition, _endNode.WorldPosition, unitSize);
+        return TryPrepare(StartNode.WorldPosition, EndNode.WorldPosition, unitSize);
     }
 
     // If path created without valid nodes, then set later, this must be called before processing the request

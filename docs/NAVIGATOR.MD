@@ -110,7 +110,7 @@ Important public state includes:
 - `Turning`
 - `Motor`
 - `StuckThresholdSpeed`
-- `IsManuallyControlled`
+- `IsGuideded`
 - `FrameCondition`
 - `FrameRequest`
 - `Size`
@@ -162,7 +162,7 @@ Those deltas are applied in `CommitFrameMotion()`.
 - `FrameCondition`
 - `FrameRequest`
 - `StuckThresholdSpeed`
-- `IsManuallyControlled`
+- `IsGuideded`
 
 This is the state the lower-level controllers consume and update around the frame boundary.
 
@@ -250,7 +250,7 @@ Important detail:
 
 and sets:
 
-- `IsManuallyControlled = true`
+- `IsGuideded = true`
 
 In this mode, `Simulate()` does not ask `NavSteering` for a heading.
 
@@ -262,7 +262,7 @@ It:
 
 - clears the current manual direction
 - sets movement rate and jump request
-- sets `IsManuallyControlled = false`
+- sets `IsGuideded = false`
 - prepares the `IPathRequest` if needed
 - optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`

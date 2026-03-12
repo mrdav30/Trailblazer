@@ -48,11 +48,6 @@ namespace Trailblazer.Navigation.Motor
         #region Cache
 
         /// <summary>
-        /// Stores the movement request for the current frame.
-        /// </summary>
-        private TrekRequest _frameRequest;
-
-        /// <summary>
         /// Stores the slope angle for the current frame based on <see cref="TrekRequest.Direction"/>.
         /// </summary>
         public Fixed64 FrameSlopeAngle { get; private set; }
@@ -134,11 +129,9 @@ namespace Trailblazer.Navigation.Motor
         /// <summary>
         /// Creates a new <see cref="NavMotor"/> instance and initializes it with the provided navigator.
         /// </summary>
-        /// <param name="startingPosition">The position of the navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
         /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
-        public static NavMotor CreateNew(Vector3d startingPosition, TrekCondition initialCondition) =>
-            new(startingPosition, initialCondition);
+        public static NavMotor CreateNew(TrekCondition initialCondition) => new(initialCondition);
 
         /// <summary>
         /// Initializes a new, empty instance of the <see cref="NavMotor"/> class.
@@ -148,17 +141,14 @@ namespace Trailblazer.Navigation.Motor
         /// <summary>
         /// Initializes a new instance of the <see cref="NavMotor"/> class.
         /// </summary>
-        /// <param name="startingPosition">The position of the navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
-        public NavMotor(Vector3d startingPosition, TrekCondition initialCondition) =>
-            OnInitialize(startingPosition, initialCondition);
+        public NavMotor(TrekCondition initialCondition) => OnInitialize(initialCondition);
 
         /// <summary>
         /// Prepares the controller by linking it to the given navigator and setting initial state values.
         /// </summary>
-        /// <param name="startingPosition">The position of the navigator entity that this controller will manage.</param>
         /// <param name="initialCondition">The initial traversal condition of the navigator</param>
-        public void OnInitialize(Vector3d startingPosition, TrekCondition initialCondition)
+        public void OnInitialize(TrekCondition initialCondition)
         {
             CurrentState = new TransitState(initialCondition);
             if (CurrentState.GroundState.HasValue)
@@ -194,8 +184,8 @@ namespace Trailblazer.Navigation.Motor
                     $"InAir={IsInAir}, " +
                     $"Velocity={Locomotions.Move.FrameVelocity}");
 
-            _frameRequest = navigator.FrameRequest;
-            FrameSlopeAngle = CurrentState.GetSignedSlopeAngle(_frameRequest.Direction);
+            var frameRequest = navigator.FrameRequest.Clone();
+            FrameSlopeAngle = CurrentState.GetSignedSlopeAngle(frameRequest.Direction);
 
             // Store the current velocity for manipulation
             _forceOutput = Locomotions.Move.FrameVelocity;
@@ -210,16 +200,16 @@ namespace Trailblazer.Navigation.Motor
             if (Locomotions.Jump.IsCoolingDown)
                 Locomotions.Jump.UpdateCooldown();
 
-            ComputeMovementForces();
+            ComputeMovementForces(frameRequest);
 
             // Reset this before applying gravity
-            if (!_frameRequest.IsRequestingJump || !Locomotions.Jump.CanJump)
+            if (!frameRequest.IsRequestingJump || !Locomotions.Jump.CanJump)
                 Locomotions.Jump.IsHoldingJump = false;
 
             // Apply external forces such as gravity, water drag, and friction.
             ApplyEnvironmentalForces();
 
-            ApplyJumpForce();
+            ApplyJumpForce(frameRequest.IsRequestingJump);
 
             ApplyPlatformMovement(navigator);
 
@@ -230,8 +220,6 @@ namespace Trailblazer.Navigation.Motor
                 Events.OnAddVelocityDelta?.Invoke(velDelta);
                 navigator.AddVelocityDelta(velDelta);
             }
-
-            _frameRequest = default;
         }
 
         /// <summary>
@@ -266,7 +254,7 @@ namespace Trailblazer.Navigation.Motor
         /// This method determines whether the navigator is in control, calculates velocity adjustments,
         /// and applies constraints such as slope resistance and airborne drag.
         /// </remarks>
-        private void ComputeMovementForces()
+        private void ComputeMovementForces(TrekRequest frameRequest)
         {
             // Check if navigator is in control
             if (IsGrounded)
@@ -289,10 +277,10 @@ namespace Trailblazer.Navigation.Motor
             if (!IsGrounded || IsGrounded && WasInAir)
                 _forceOutput.y = Fixed64.Zero;
 
-            Vector3d desiredVelocity = GetDesiredVelocity();
+            Vector3d desiredVelocity = GetDesiredVelocity(frameRequest);
 
             // Apply Friction (resistance to motion)
-            if (IsGrounded && _frameRequest.Direction == Vector3d.Zero)
+            if (IsGrounded && frameRequest.Direction == Vector3d.Zero)
             {
                 Fixed64 friction = CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
                 if (friction > Fixed64.Zero && _forceOutput != Vector3d.Zero)
@@ -327,7 +315,7 @@ namespace Trailblazer.Navigation.Motor
         /// Determines the desired velocity based on input direction, movement constraints, and traversal state.
         /// </summary>
         /// <returns>The computed velocity vector that the navigator should move toward.</returns>
-        private Vector3d GetDesiredVelocity()
+        private Vector3d GetDesiredVelocity(TrekRequest frameRequest)
         {
             Vector3d result = Vector3d.Zero;
             if (Locomotions.Slide.IsSliding)
@@ -335,24 +323,24 @@ namespace Trailblazer.Navigation.Motor
                 // The direction we're sliding in
                 result = new Vector3d(CurrentState.SurfaceNormal.x, Fixed64.Zero, CurrentState.SurfaceNormal.z).Normal;
                 // Find the input movement direction projected onto the sliding direction
-                Vector3d projectedMoveDir = Vector3d.Project(_frameRequest.Direction, result);
+                Vector3d projectedMoveDir = Vector3d.Project(frameRequest.Direction, result);
 
                 // Add the sliding direction, the speed control, and the sideways control vectors
                 Vector3d speedContribution = projectedMoveDir * Locomotions.Slide.SpeedControl;
-                Vector3d sidewaysContribution = (_frameRequest.Direction - projectedMoveDir) * Locomotions.Slide.SidewaysControl;
+                Vector3d sidewaysContribution = (frameRequest.Direction - projectedMoveDir) * Locomotions.Slide.SidewaysControl;
 
                 // Multiply with the sliding speed
                 result += (speedContribution + sidewaysContribution) * Locomotions.Slide.SlidingSpeed;
             }
-            else if (Locomotions.IsInControl && _frameRequest.Rate != TrekRate.Stationary)
-                result = GetHorizontalVelocity();
+            else if (Locomotions.IsInControl && frameRequest.Rate != TrekRate.Stationary)
+                result = GetHorizontalVelocity(frameRequest);
 
             // Ensure smoother stops in water instead of abrupt halts
             if (IsInWater)
             {
                 // Calculates the maximum allowable vertical swimming speed
-                if (_frameRequest.Direction.y != Fixed64.Zero)
-                    result.y = _frameRequest.Direction.y * Locomotions.Swim.MaxSwimSpeed;
+                if (frameRequest.Direction.y != Fixed64.Zero)
+                    result.y = frameRequest.Direction.y * Locomotions.Swim.MaxSwimSpeed;
 
                 // Apply drag resistance (reduces speed as it increases)
                 if (result != Vector3d.Zero)
@@ -390,11 +378,11 @@ namespace Trailblazer.Navigation.Motor
         /// Computes the horizontal velocity based on movement input and current facing direction.
         /// </summary>
         /// <returns>The target horizontal velocity.</returns>
-        private Vector3d GetHorizontalVelocity()
+        private Vector3d GetHorizontalVelocity(TrekRequest frameRequest)
         {
-            Fixed3x3 transposedMatrix = _frameRequest.Rotation.ToMatrix3x3();
-            Vector3d desiredLocalDirection = Fixed3x3.InverseTransformDirection(transposedMatrix, _frameRequest.Direction);
-            Fixed64 speed = MaxHoritzontalSpeedInDirection(desiredLocalDirection, _frameRequest.Rate);
+            Fixed3x3 transposedMatrix = frameRequest.Rotation.ToMatrix3x3();
+            Vector3d desiredLocalDirection = Fixed3x3.InverseTransformDirection(transposedMatrix, frameRequest.Direction);
+            Fixed64 speed = MaxHoritzontalSpeedInDirection(desiredLocalDirection, frameRequest.Rate);
 
             speed *= Locomotions.Move.MoveSpeedMultiplier;
 
@@ -548,11 +536,11 @@ namespace Trailblazer.Navigation.Motor
         /// This method validates jump conditions, determines the jump direction, and calculates the jump force.
         /// If the navigator is on a platform, its velocity is adjusted accordingly.
         /// </remarks>
-        private void ApplyJumpForce()
+        private void ApplyJumpForce(bool requestJump)
         {
             if (!(Locomotions.Jump.IsEnabled
                 && Locomotions.IsInControl
-                && _frameRequest.IsRequestingJump)) return;
+                && requestJump)) return;
 
             // Prevent jumping while in active fall state (e.g., walking off a ledge)
             if (Locomotions.Fall.IsFalling)

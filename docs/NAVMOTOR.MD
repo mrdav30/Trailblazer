@@ -147,7 +147,7 @@ This frame lock is intentional. The motor is designed to process movement exactl
 
 At the start of traversal, the motor:
 
-1. caches `navigator.FrameRequest` into `_frameRequest`
+1. caches `navigator.FrameRequest` into `frameRequest`
 2. computes `FrameSlopeAngle` from `CurrentState.GetSignedSlopeAngle(...)`
 3. seeds `_forceOutput` from `Locomotions.Move.FrameVelocity`
 4. updates platform velocity through `UpdatePlatformVelocity()`

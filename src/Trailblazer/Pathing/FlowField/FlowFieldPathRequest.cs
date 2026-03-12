@@ -22,8 +22,8 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
 
     public FlowFieldPathRequest()
     {
-        _startNode = null;
-        _endNode = null;
+        StartNode = null;
+        EndNode = null;
         UnitSize = GlobalGridManager.VoxelSize;
         AllowUnwalkable = false;
         ExtraFloodRange = DefaultExtraFloodRange;
@@ -48,8 +48,8 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
 
         FlowFieldPathRequest request = new()
         {
-            _startNode = startNode,
-            _endNode = endNode,
+            StartNode = startNode,
+            EndNode = endNode,
             UnitSize = unitSize,
             AllowUnwalkable = allowUnwalkable,
             ExtraFloodRange = DefaultExtraFloodRange,

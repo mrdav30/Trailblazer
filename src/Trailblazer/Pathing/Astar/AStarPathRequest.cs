@@ -30,8 +30,8 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
 
     public AStarPathRequest()
     {
-        _startNode = null;
-        _endNode = null;
+        StartNode = null;
+        EndNode = null;
         UnitSize = GlobalGridManager.VoxelSize;
         Heuristic = HeuristicMethod.Manhattan;
         AllowUnwalkable = false;
@@ -58,8 +58,8 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
 
         AStarPathRequest request = new()
         {
-            _startNode = startNode,
-            _endNode = endNode,
+            StartNode = startNode,
+            EndNode = endNode,
             UnitSize = unitSize,
             Heuristic = heuristic,
             AllowUnwalkable = allowUnwalkable,

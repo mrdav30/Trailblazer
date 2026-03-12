@@ -1,4 +1,5 @@
 ﻿using FixedMathSharp;
+using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
@@ -95,7 +96,7 @@ public abstract class Navigator : INavigate
     /// <summary>
     /// Indicates whether the current traversal session is guided via a TrailGuide path (e.g., A* or flow field).
     /// </summary>
-    public bool IsManuallyControlled { get; protected set; }
+    public bool IsGuideded => FrameRequest.TargetPosition == null;
 
     public TrekCondition FrameCondition { get; protected set; } = TrekCondition.CreateEmpty();
 
@@ -170,11 +171,11 @@ public abstract class Navigator : INavigate
     /// </summary>
     public virtual void Initialize(TrekCondition condition)
     {
-        FrameCondition = condition;
+        FrameCondition = condition.Clone();
 
         Steering = NavSteering.CreateNew(Radius);
 
-        Motor = NavMotor.CreateNew(Position, FrameCondition);
+        Motor = NavMotor.CreateNew(FrameCondition);
         Motor.SetVelocity(Velocity);
 
         Turning = NavTurning.CreateNew(Radius);
@@ -188,7 +189,7 @@ public abstract class Navigator : INavigate
     /// Replaces the current traversal state with the given one.
     /// </summary>
     /// <param name="state">The new traversal condition to apply.</param>
-    public virtual void ReplaceTrekCondition(TrekCondition state) => FrameCondition = state;
+    public virtual void ReplaceTrekCondition(TrekCondition state) => FrameCondition = state.Clone();
 
     public virtual void Reset()
     {
@@ -227,11 +228,10 @@ public abstract class Navigator : INavigate
     {
         if (!IsActive) return;
 
+        FrameRequest.TargetPosition = null;  // clear any existing target position since this is a direct input request
         FrameRequest.Direction = direction ?? Vector3d.Zero;
         FrameRequest.Rate = rate ?? TrekRate.Stationary;
         FrameRequest.IsRequestingJump = isRequestingJump ?? false;
-
-        IsManuallyControlled = true;
     }
 
     /// <summary>
@@ -251,14 +251,19 @@ public abstract class Navigator : INavigate
     {
         if (!IsActive) return;
 
+        FrameRequest.TargetPosition = destination;
         FrameRequest.Direction = Vector3d.Zero;
         FrameRequest.Rate = rate ?? TrekRate.Stationary;
         FrameRequest.IsRequestingJump = isRequestingJump ?? false;
 
-        IsManuallyControlled = false;
-
         if (!pathRequest.IsValid)
-            pathRequest.TryPrepare(Position, destination, Size);
+        {
+            if (!pathRequest.TryPrepare(Position, destination, Size))
+            {
+                GridForgeLogger.Warn($"Failed to prepare path request for destination {destination} from position {Position} with size {Size}.");
+                return;
+            }
+        }
 
         Steering.ApplyPathRequest(pathRequest, destination, groupId);
     }
@@ -289,7 +294,7 @@ public abstract class Navigator : INavigate
         FrameRequest.Origin = Position;
         FrameRequest.Rotation = Rotation;
 
-        if (!IsManuallyControlled)
+        if (!IsGuideded)
             FrameRequest.Direction = Steering.GetHeading(this);
 
         Turning.RequestTurnDirection(Forward, FrameRequest.Direction);

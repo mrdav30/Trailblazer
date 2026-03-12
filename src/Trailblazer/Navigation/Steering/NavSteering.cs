@@ -1,4 +1,5 @@
 ﻿using FixedMathSharp;
+using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using System;
@@ -293,9 +294,7 @@ public class NavSteering
         // assume the navigator is being controlled
         if (pathRequest == null || !pathRequest.HasValidEndpoints)
         {
-#if DEBUG
-            Debug.WriteLine("Path request endpoints are not valid.");
-#endif
+            GridForgeLogger.Warn($"Invalid path request applied: {pathRequest}");
             Arrive();
             return;
         }

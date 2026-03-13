@@ -793,7 +793,7 @@ namespace Trailblazer.Navigation.Motor
 
             // Transitioning out of water
             if (Locomotions.Swim.IsEnabled && !IsInWater && WasInWater)
-                Locomotions.Swim.ClearState();
+                Locomotions.ClearState<SwimLocomotion>();
         }
 
         /// <summary>
@@ -804,9 +804,15 @@ namespace Trailblazer.Navigation.Motor
         /// </remarks>
         private void HandleSwimState(Vector3d position)
         {
-            if (!IsInWater) return;
+            if (!IsInWater)
+            {
+                if (Locomotions.Swim.IsEnabled && WasInWater)
+                    Locomotions.ClearState<SwimLocomotion>();
 
-            // Clear the transient state when entiring water for the first time
+                return;
+            }
+
+            // Clear the transient state when entering water for the first time
             if (!WasInWater)
                 Locomotions.ClearStateAll();
 
@@ -834,10 +840,10 @@ namespace Trailblazer.Navigation.Motor
 
             if (IsInWater)
             {
-                Locomotions.Fall.IsFalling = false;
+                if (Locomotions.Fall.IsFalling)
+                    Locomotions.ClearState<FallLocomotion>();
                 return;
             }
-            ;
 
             if (Locomotions.Fall.IsFalling)
             {
@@ -854,11 +860,14 @@ namespace Trailblazer.Navigation.Motor
                     if (Locomotions.Fall.FallHeight > Fixed64.Zero)
                         Events.OnStopFall?.Invoke(Locomotions.Fall.FallHeight);
 
+                    // Clear fall state after landing to reset max height and other properties for the next fall
+                    Locomotions.ClearState<FallLocomotion>();
+
                     return;
                 }
 
-                Fixed64 fallHeight = (Locomotions.Fall.FallStart - position.y).Abs();
-                if (fallHeight > Locomotions.Fall.MaxFallHeight)
+                Fixed64 currentFallHeight = (Locomotions.Fall.FallStart - position.y).Abs();
+                if (currentFallHeight > Locomotions.Fall.MaxFallHeight)
                     Events?.OnMaxFallHeightReached?.Invoke();
 
                 return;

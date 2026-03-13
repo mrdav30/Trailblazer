@@ -1,6 +1,15 @@
 ﻿using FixedMathSharp;
 using System;
 using Trailblazer.Support;
+using MemoryPack;
+
+
+#if NET8_0_OR_GREATER
+using System.Text.Json.Serialization;
+#endif
+#if !NET8_0_OR_GREATER
+using System.Text.Json.Serialization.Shim;
+#endif
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -12,7 +21,8 @@ namespace Trailblazer.Navigation.Motor;
 /// It allows the scout to inherit motion from platforms and supports different transfer states.
 /// </remarks>
 [Serializable]
-public class PlatformLocomotion : ITransientLocomotion
+[MemoryPackable]
+public partial class PlatformLocomotion : ITransientLocomotion
 {
     #region Constants
 
@@ -33,11 +43,15 @@ public class PlatformLocomotion : ITransientLocomotion
     /// <summary>
     /// Determines whether platform locomotion is enabled.
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     private bool _isEnabled = true;
 
     /// <summary>
     /// The height offset applied when interacting with moving platforms.
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 HeightAdjust = DefaultHeightAdjust;
 
     #endregion
@@ -45,6 +59,8 @@ public class PlatformLocomotion : ITransientLocomotion
     #region Transient State
 
     /// <inheritdoc cref="ILocomotion.IsEnabled"/>
+    [JsonIgnore]
+    [MemoryPackIgnore]
     public bool IsEnabled
     {
         get => _isEnabled;
@@ -52,7 +68,7 @@ public class PlatformLocomotion : ITransientLocomotion
         {
             _isEnabled = value;
             if (!_isEnabled)
-                ClearState();
+                ((ITransient)this).ClearTransientState();
         }
     }
 
@@ -60,84 +76,97 @@ public class PlatformLocomotion : ITransientLocomotion
     /// Indicates whether the scout has just landed on a new platform.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public bool IsNewPlatform { get; set; }
 
     /// <summary>
     /// Defines how movement is transferred from the platform to the scout.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public MotionTransfer MovementTransfer { get; set; }
 
     /// <summary>
     /// The platform object the scout is currently standing on.
     /// </summary>
     [Transient]
+    [JsonIgnore]
+    [MemoryPackIgnore]
     public object ActivePlatform { get; set; }
 
     /// <summary>
     /// The transformation matrix of the active platform.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed4x4 ActiveTransform { get; set; } = Fixed4x4.Identity;
 
     /// <summary>
     /// The transformation matrix of the last known platform.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed4x4 LastTransform { get; set; } = Fixed4x4.Identity;
-
-    /// <summary>
-    /// The global position of the scout on the platform.
-    /// </summary>
-    [Transient]
-    public Vector3d ScoutGlobalPoint { get; set; }
 
     /// <summary>
     /// The local position of the scout relative to the platform.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public Vector3d ScoutLocalPoint { get; set; }
-
-    /// <summary>
-    /// The global rotation of the scout on the platform.
-    /// </summary>
-    [Transient]
-    public FixedQuaternion ScoutGlobalRotation { get; set; } = FixedQuaternion.Identity;
 
     /// <summary>
     /// The local rotation of the scout relative to the platform.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public FixedQuaternion ScoutLocalRotation { get; set; } = FixedQuaternion.Identity;
 
     /// <summary>
     /// The velocity of the platform.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public Vector3d PlatformVelocity { get; set; }
 
     /// <summary>
     /// The last known platform velocity when the scout is airborne.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public Vector3d FramePlatformVelocity { get; set; }
 
     /// <summary>
     /// Indicates whether the scout is currently holding onto a platform.
     /// </summary>
     [Transient]
+
+    [JsonInclude]
+    [MemoryPackInclude]
     public bool IsHoldingPlatform { get; private set; }
 
     /// <summary>
     /// The last known platform the scout was attached to.
     /// </summary>
     [Transient]
+    [JsonIgnore]
+    [MemoryPackIgnore]
     public object HoldPlatform { get; private set; }
 
     /// <summary>
     /// The number of frames the scout has been holding onto a platform.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public int HoldPlatformFrames { get; private set; }
 
     #endregion
@@ -171,23 +200,5 @@ public class PlatformLocomotion : ITransientLocomotion
         }
 
         return false;
-    }
-
-    /// <summary>
-    /// Synchronizes platform movement state with another <see cref="PlatformLocomotion"/> instance.
-    /// </summary>
-    /// <param name="locomotion">The locomotion instance to sync with.</param>
-    public void SyncState(ITransient locomotion)
-    {
-        if (locomotion is not PlatformLocomotion other) return;
-        this.SyncTransientState(other);
-    }
-
-    /// <summary>
-    /// Resets platform-related state, clearing platform references and velocities.
-    /// </summary>
-    public void ClearState()
-    {
-        this.ClearTransientState();
     }
 }

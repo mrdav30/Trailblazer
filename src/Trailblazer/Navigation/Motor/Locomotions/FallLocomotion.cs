@@ -1,13 +1,23 @@
 ﻿using FixedMathSharp;
+using MemoryPack;
+using System;
 using Trailblazer.Support;
+
+#if NET8_0_OR_GREATER
+using System.Text.Json.Serialization;
+#endif
+#if !NET8_0_OR_GREATER
+using System.Text.Json.Serialization.Shim;
+#endif
 
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
 /// Handles the scout’s behavior when falling, including tracking fall distance and applying movement constraints.
 /// </summary>
-[System.Serializable]
-public class FallLocomotion : ITransientLocomotion
+[Serializable]
+[MemoryPackable]
+public partial class FallLocomotion : ITransientLocomotion
 {
     #region Constants
 
@@ -30,17 +40,23 @@ public class FallLocomotion : ITransientLocomotion
     /// Determines whether falling mechanics are enabled.
     /// If disabled, the scout will not experience fall behavior.
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     private bool _isEnabled = true;
 
     /// <summary>
     /// The maximum allowable fall height before the scout reaches a critical threshold (e.g., death or heavy impact).
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 MaxFallHeight = DefaultMaxFallHeight;
 
     /// <summary>
     /// A multiplier controlling how much movement input affects the scout while falling.
     /// Lower values reduce movement responsiveness.
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 FallControlMultiplier = DefaultFallControlMultiplier;
 
     #endregion
@@ -48,14 +64,16 @@ public class FallLocomotion : ITransientLocomotion
     #region Transient State
 
     /// <inheritdoc cref="ILocomotion.IsEnabled"/>
+    [JsonIgnore]
+    [MemoryPackIgnore]
     public bool IsEnabled
     {
         get => _isEnabled;
         set
         {
             _isEnabled = value;
-            if (!_isEnabled)
-                ClearState();
+            if (!value)
+                ((ITransientLocomotion)this).ClearTransientState();
         }
     }
 
@@ -63,42 +81,32 @@ public class FallLocomotion : ITransientLocomotion
     /// Indicates whether the scout is currently falling.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public bool IsFalling { get; set; }
 
     /// <summary>
     /// The vertical position where the scout started falling.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 FallStart { get; set; }
 
     /// <summary>
     /// The vertical position where the scout landed.
     /// </summary>
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 FallEnd { get; set; }
 
     /// <summary>
     /// The total distance fallen, calculated as the difference between <see cref="FallStart"/> and <see cref="FallEnd"/>.
     /// </summary>
+    [JsonIgnore]
+    [MemoryPackIgnore]
     public Fixed64 FallHeight => FallStart - FallEnd;
 
     #endregion
-
-    /// <summary>
-    /// Synchronizes the falling state with another <see cref="FallLocomotion"/> instance.
-    /// </summary>
-    /// <param name="locomotion">The locomotion instance to sync with.</param>
-    public void SyncState(ITransient locomotion)
-    {
-        if (locomotion is not FallLocomotion other) return;
-        this.SyncTransientState(other);
-    }
-
-    /// <summary>
-    /// Resets all fall-related properties, including the start and end height.
-    /// </summary>
-    public void ClearState()
-    {
-        this.ClearTransientState();
-    }
 }

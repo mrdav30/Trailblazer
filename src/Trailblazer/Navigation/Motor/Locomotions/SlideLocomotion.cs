@@ -1,5 +1,14 @@
 ﻿using FixedMathSharp;
+using MemoryPack;
+using System;
 using Trailblazer.Support;
+
+#if NET8_0_OR_GREATER
+using System.Text.Json.Serialization;
+#endif
+#if !NET8_0_OR_GREATER
+using System.Text.Json.Serialization.Shim;
+#endif
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -10,8 +19,9 @@ namespace Trailblazer.Navigation.Motor;
 /// This locomotion module determines when the scout should slide based on terrain steepness
 /// and controls how much influence the scout has over the slide direction and speed.
 /// </remarks>
-[System.Serializable]
-public class SlideLocomotion : ITransientLocomotion
+[Serializable]
+[MemoryPackable]
+public partial class SlideLocomotion : ITransientLocomotion
 {
     #region Constants
 
@@ -48,16 +58,22 @@ public class SlideLocomotion : ITransientLocomotion
     /// <summary>
     /// Determines whether sliding mechanics are enabled.
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     private bool _isEnabled = true;
 
     /// <summary>
     /// The slope angle threshold at which sliding begins.
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 SlopeLimit = DefaultSlopeLimit;
 
     /// <summary>
     /// The speed at which the scout slides when on a steep surface.
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 SlidingSpeed = DefaultSlidingSpeed;
 
     /// <summary>
@@ -66,11 +82,15 @@ public class SlideLocomotion : ITransientLocomotion
     /// <remarks>
     /// A higher value increases lateral movement freedom during a slide.
     /// </remarks>
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 SidewaysControl = DefaultSidewaysControl;
 
     /// <summary>
     /// Determines how much the scout can influence sliding speed.
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 SpeedControl = DefaultSpeedControl;
 
     #endregion
@@ -78,6 +98,8 @@ public class SlideLocomotion : ITransientLocomotion
     #region Transient State
 
     /// <inheritdoc cref="ILocomotion.IsEnabled"/>
+    [JsonIgnore]
+    [MemoryPackIgnore]
     public bool IsEnabled
     {
         get => _isEnabled;
@@ -85,7 +107,7 @@ public class SlideLocomotion : ITransientLocomotion
         {
             _isEnabled = value;
             if (!_isEnabled)
-                ClearState();
+                ((ITransient)this).ClearTransientState();
         }
     }
 
@@ -93,25 +115,9 @@ public class SlideLocomotion : ITransientLocomotion
     /// Indicates whether the scout is currently sliding.
     /// </summary>
     [Transient]
+    [JsonIgnore]
+    [MemoryPackIgnore]
     public bool IsSliding { get; set; }
 
     #endregion
-
-    /// <summary>
-    /// Synchronizes sliding state with another <see cref="SlideLocomotion"/> instance.
-    /// </summary>
-    /// <param name="locomotion">The locomotion instance to sync with.</param>
-    public void SyncState(ITransient locomotion)
-    {
-        if (locomotion is not SlideLocomotion other) return;
-        this.SyncTransientState(other);
-    }
-
-    /// <summary>
-    /// Resets sliding state, stopping any active slide.
-    /// </summary>
-    public void ClearState()
-    {
-        this.ClearTransientState();
-    }
 }

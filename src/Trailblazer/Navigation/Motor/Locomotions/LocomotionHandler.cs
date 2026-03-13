@@ -1,6 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+
+#if NET8_0_OR_GREATER
+using System.Text.Json.Serialization;
+#endif
+#if !NET8_0_OR_GREATER
+using System.Text.Json.Serialization.Shim;
+using MemoryPack;
+#endif
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -11,11 +20,14 @@ namespace Trailblazer.Navigation.Motor;
 /// This class coordinates multiple locomotion types, ensuring that movement states are properly managed.
 /// </remarks>
 [Serializable]
-public class LocomotionHandler
+[MemoryPackable]
+public partial class LocomotionHandler
 {
     /// <summary>
     /// Determines whether the scout has control over movement input.
     /// </summary>
+    [JsonInclude]
+    [MemoryPackInclude]
     public bool IsInControl = true;
 
     #region Locomotions
@@ -23,7 +35,9 @@ public class LocomotionHandler
     /// <summary>
     /// Handles general movement, including speed limits, acceleration, and velocity calculations.
     /// </summary>
-    public MoveLocomotion Move = new();
+    [JsonInclude]
+    [MemoryPackInclude]
+    public MoveLocomotion Move { get; private set; } = new();
 
     /// <summary>
     /// Manages movement when interacting with moving platforms or surfaces.
@@ -31,7 +45,9 @@ public class LocomotionHandler
     /// <remarks>
     /// This locomotion maintains platform velocity tracking and movement transfer states.
     /// </remarks>
-    public PlatformLocomotion Platform = new();
+    [JsonInclude]
+    [MemoryPackInclude]
+    public PlatformLocomotion Platform { get; private set; } = new();
 
     /// <summary>
     /// Controls the airborne state when a jump is executed successfully.
@@ -39,7 +55,9 @@ public class LocomotionHandler
     /// <remarks>
     /// This locomotion governs jump height, cooldown timing, and jump force calculations.
     /// </remarks>
-    public JumpLocomotion Jump = new();
+    [JsonInclude]
+    [MemoryPackInclude]
+    public JumpLocomotion Jump { get; private set; } = new();
 
     /// <summary>
     /// Handles the scout’s falling behavior when downward momentum is detected.
@@ -47,7 +65,9 @@ public class LocomotionHandler
     /// <remarks>
     /// This locomotion tracks fall distance, applies landing impact logic, and determines if a scout is free-falling.
     /// </remarks>
-    public FallLocomotion Fall = new();
+    [JsonInclude]
+    [MemoryPackInclude]
+    public FallLocomotion Fall { get; private set; } = new();
 
     /// <summary>
     /// Manages movement when sliding down steep surfaces.
@@ -55,7 +75,9 @@ public class LocomotionHandler
     /// <remarks>
     /// This locomotion determines when the scout should slide and how much control it has over movement during the slide.
     /// </remarks>
-    public SlideLocomotion Slide = new();
+    [JsonInclude]
+    [MemoryPackInclude]
+    public SlideLocomotion Slide { get; private set; } = new();
 
     /// <summary>
     /// Handles movement when the scout is in water, including buoyancy and water resistance.
@@ -63,7 +85,9 @@ public class LocomotionHandler
     /// <remarks>
     /// This locomotion tracks swim speed, dive time, and breath management.
     /// </remarks>
-    public SwimLocomotion Swim = new();
+    [JsonInclude]
+    [MemoryPackInclude]
+    public SwimLocomotion Swim { get; private set; } = new();
 
     #endregion
 
@@ -77,13 +101,27 @@ public class LocomotionHandler
     /// <param name="other">The locomotion handler instance to sync with.</param>
     public void SyncState(LocomotionHandler other)
     {
+        if (other == null) return;
+
         IsInControl = other.IsInControl;
 
         foreach (var locomotion in GetLocomotions())
         {
             if (locomotion.IsEnabled)
-                locomotion.SyncState(other.GetLocomotion(locomotion.GetType()));
+            {
+                ITransientLocomotion otherLocomotion = other.GetLocomotion(locomotion.GetType());
+                if (otherLocomotion == null) continue;
+                locomotion.SyncTransientState(otherLocomotion);
+            }
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ClearState<T>() where T : ITransientLocomotion
+    {
+        var locomotion = GetLocomotion(typeof(T));
+        if (locomotion != null && locomotion.IsEnabled)
+            locomotion.ClearTransientState();
     }
 
     /// <summary>
@@ -98,7 +136,7 @@ public class LocomotionHandler
         foreach (var locomotion in GetLocomotions())
         {
             if (locomotion.IsEnabled)
-                locomotion.ClearState();
+                locomotion.ClearTransientState();
         }
     }
 
@@ -118,6 +156,7 @@ public class LocomotionHandler
     /// <summary>
     /// Retrieves a locomotion instance of a specific type from the handler.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ITransientLocomotion GetLocomotion(Type type)
     {
         return GetLocomotions().FirstOrDefault(l => l.GetType() == type);

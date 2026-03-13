@@ -116,6 +116,11 @@ Important public state includes:
 - `Size`
 - `Radius`
 - `FootPositionAdjust`
+- `GuidedPathMode`
+- `GuidedAllowUnwalkable`
+- `GuidedAStarHeuristic`
+- `GuidedAStarMaxClimbHeight`
+- `GuidedFlowFieldExtraFloodRange`
 - `GlobalId`
 - `OccupantGroupId`
 - `OccupyingIndexMap`
@@ -263,12 +268,19 @@ It:
 - clears the current manual direction
 - sets movement rate and jump request
 - sets `IsGuideded = false`
-- reads the target position from the provided `IPathRequest`
-- requires the `IPathRequest` to already be valid
+- builds a concrete `IPathRequest` from the target position, the navigator's current state, and guided-path defaults
+- optionally overrides the navigator's default `GuidedPathMode` for a single request
 - optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`
 
 Passing the same non-negative `groupId` to multiple navigators lets `NavSteering` preserve relative formation offsets while the group stays compact.
+
+The built-in request factory currently supports:
+
+- `GuidedPathMode.AStar`
+- `GuidedPathMode.FlowField`
+
+If a project needs a different request shape, override the navigator's guided-request creation hook.
 
 ### 7.3 Other Request Helpers
 
@@ -476,8 +488,8 @@ navigator.Initialize(new TrekCondition(
     surfaceLevel: Fixed64.Zero,
     surfaceCondition: GroundCondition.CreateEmpty()));
 
-AStarPathRequest.TryCreate(navigator.Position, new Vector3d(5, 0, 5), navigator.Size, out var request);
-navigator.ApplyGuidedTrekRequest(request, rate: TrekRate.Moderate);
+navigator.GuidedPathMode = GuidedPathMode.AStar;
+navigator.ApplyGuidedTrekRequest(new Vector3d(5, 0, 5), rate: TrekRate.Moderate);
 
 TrailblazerManager.Simulate();
 navigator.Simulate();

@@ -1,61 +1,136 @@
-﻿namespace Trailblazer.Tests.Navigation
+using FixedMathSharp;
+using FluentAssertions;
+using GridForge.Configuration;
+using GridForge.Grids;
+using System;
+using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
+using Trailblazer.Pathing;
+using Xunit;
+
+namespace Trailblazer.Tests.Navigation;
+
+[Collection("PathingCollection")]
+public class NavigatorTests : IDisposable
 {
+    public NavigatorTests()
+    {
+        if (GlobalGridManager.IsActive)
+            GlobalGridManager.Reset();
+        else
+            GlobalGridManager.Setup();
 
-    //public class NavigatorTests
-    //{
-    //    [Fact]
-    //    public void Setup_Should_Initialize_Position_Rotation_Velocity_And_Size()
-    //    {
-    //        var nav = new TestNavigator();
-    //        var pos = new Vector3d(1, 2, 3);
-    //        var rot = FixedQuaternion.FromEulerAngles((Fixed64)0.1f, (Fixed64)0.2f, (Fixed64)0.3f);
-    //        var vel = new Vector3d(0.5, 0, 0);
-    //        nav.Setup(pos, rot, vel, (Fixed64)2);
+        var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
+        GlobalGridManager.TryAddGrid(config, out _);
+    }
 
-    //        nav.Position.Should().Be(pos);
-    //        nav.Rotation.Should().Be(rot);
-    //        nav.Velocity.Should().Be(vel);
-    //        nav.Size.Should().Be((Fixed64)2);
-    //    }
+    public void Dispose()
+    {
+        PathManager.Reset();
+        GlobalGridManager.Reset();
+        TrailblazerManager.Reset();
+        GC.SuppressFinalize(this);
+    }
 
-    //    [Fact]
-    //    public void Simulate_Should_Invoke_MotorTraverse_When_ManualControl()
-    //    {
-    //        var nav = new TestNavigator();
-    //        nav.IsManuallyControlled = true;
-    //        var direction = new Vector3d(1, 0, 0);
-    //        var rate = TrekRate.Walking;
+    [Fact]
+    public void ApplyGuidedTrekRequest_Should_CreateAStarRequest_FromNavigatorDefaults()
+    {
+        var data = new bool[1, 6, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorAStar", data, Vector3d.Zero);
 
-    //        nav.ApplyInputTravelRequest(direction, rate, isRequestingJump: false);
-    //        nav.Position = Vector3d.Zero;
-    //        nav.Rotation = FixedQuaternion.Identity;
-    //        nav.Simulate();
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.GuidedPathMode = GuidedPathMode.AStar;
+        navigator.GuidedAllowUnwalkable = true;
+        navigator.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
+        navigator.GuidedAStarMaxClimbHeight = (Fixed64)2;
 
-    //        nav.TraverseCalled.Should().BeTrue();
-    //        nav.LastTraverseRequest.Direction.Should().Be(direction);
-    //        nav.LastTraverseRequest.Rate.Should().Be(rate);
-    //    }
+        Vector3d target = new(4, 0, 0);
+        navigator.ApplyGuidedTrekRequest(target, rate: TrekRate.Moderate, groupId: 4);
 
-    //    [Fact]
-    //    public void Simulate_Should_Invoke_Steering_OnGuidedControl()
-    //    {
-    //        var nav = new TestNavigator();
-    //        nav.IsManuallyControlled = false;
+        navigator.FrameRequest.TargetPosition.Should().Be(target);
+        navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
+        navigator.Steering.MovementGroupID.Should().Be(4);
 
-    //        nav.Simulate();
-    //        nav.SteeringSimulated.Should().BeTrue();
-    //    }
+        var request = navigator.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
+        request.Origin.Should().Be(navigator.Position);
+        request.TargetPosition.Should().Be(target);
+        request.UnitSize.Should().Be(navigator.Size);
+        request.AllowUnwalkable.Should().BeTrue();
+        request.Heuristic.Should().Be(HeuristicMethod.Euclidean);
+        request.MaxClimbHeight.Should().Be((Fixed64)2);
 
-    //    [Fact]
-    //    public void GetFootPosition_Should_Return_PositionPlusDownOffset()
-    //    {
-    //        var nav = new TestNavigator();
-    //        nav.Position = new Vector3d(5, 5, 5);
-    //        nav.FootPositionAdjust = (Fixed64)0.75;
-    //        // Down is (0, -1, 0)
-    //        var expected = new Vector3d(5, 5, 5) + Vector3d.Down * (Fixed64)0.75;
+        PathManager.UnloadChart("NavigatorAStar");
+    }
 
-    //        nav.GetFootPosition().Should().Be(expected);
-    //    }
-    // }
+    [Fact]
+    public void ApplyGuidedTrekRequest_Should_Allow_PerCallPathModeOverride()
+    {
+        var data = new bool[1, 6, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorFlowField", data, Vector3d.Zero);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.GuidedPathMode = GuidedPathMode.AStar;
+        navigator.GuidedAllowUnwalkable = true;
+        navigator.GuidedFlowFieldExtraFloodRange = 24;
+
+        Vector3d target = new(4, 0, 0);
+        navigator.ApplyGuidedTrekRequest(target, pathMode: GuidedPathMode.FlowField, rate: TrekRate.Fast);
+
+        navigator.FrameRequest.TargetPosition.Should().Be(target);
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
+
+        var request = navigator.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
+        request.Origin.Should().Be(navigator.Position);
+        request.TargetPosition.Should().Be(target);
+        request.UnitSize.Should().Be(navigator.Size);
+        request.AllowUnwalkable.Should().BeTrue();
+        request.ExtraFloodRange.Should().Be(24);
+
+        PathManager.UnloadChart("NavigatorFlowField");
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_Should_IgnoreInvalidTargets_WithoutEnteringGuidedMode()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyGuidedTrekRequest(new Vector3d(100, 0, 100), rate: TrekRate.Moderate);
+
+        navigator.FrameRequest.TargetPosition.Should().BeNull();
+        navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
+        navigator.Steering.CurrentRequest.Should().BeNull();
+        navigator.Steering.ShouldMove.Should().BeFalse();
+    }
+
+    private static TestNavigator CreateNavigator(Vector3d position)
+    {
+        var navigator = new TestNavigator();
+        navigator.Setup(position, size: Fixed64.One);
+        navigator.Initialize(new TrekCondition(
+            medium: TraversalMedium.Ground,
+            surfaceLevel: Fixed64.Zero,
+            surfaceCondition: GroundCondition.CreateEmpty()));
+        return navigator;
+    }
 }

@@ -19,7 +19,7 @@ Trailblazer assumes:
 At a high level, the runtime loop is:
 
 1. Register and initialize one or more `NavigationChart` instances.
-2. Build an `IPathRequest` for an origin, destination, and unit size.
+2. Build an `IPathRequest` directly for lower-level pathing, or let `Navigator` create one from a target position and guided-path settings.
 3. Resolve that request into an `IGuide` through `PathGuideFactory`, or let `NavSteering` do that for you.
 4. Run `Navigator.Simulate()` on the fixed step.
 5. Update traversal medium and surface state from your own collision/environment code.

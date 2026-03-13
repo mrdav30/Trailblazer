@@ -60,7 +60,7 @@ The main entry points are:
 
 - `CreateNew(Fixed64 radius)`
 - `OnInitialize(Fixed64 radius)`
-- `ApplyPathRequest(IPathRequest pathRequest, Vector3d? destination = null, int groupId = -1)`
+- `ApplyPathRequest(IPathRequest pathRequest, int groupId = -1)`
 - `GetHeading(ISteer navigator)`
 - `PauseAutoStop()`
 - `SetTrailGuide(IGuide guide)`
@@ -114,7 +114,7 @@ Important public state includes:
 
 In normal `Navigator` usage, the steering integration looks like this:
 
-1. `ApplyGuidedTrekRequest(...)` accepts an already valid `IPathRequest` and forwards it to `Steering.ApplyPathRequest(...)`.
+1. `ApplyGuidedTrekRequest(...)` builds an internal `IPathRequest` from the target position plus navigator-owned defaults, then forwards it to `Steering.ApplyPathRequest(...)`.
 2. Each simulation tick, `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
 3. The resulting heading is passed to `NavTurning` and `NavMotor`.
 
@@ -516,8 +516,8 @@ These events are useful for:
 With a concrete `Navigator`, the usual flow is:
 
 ```csharp
-AStarPathRequest.TryCreate(origin, destination, navigator.Size, out var request);
-navigator.ApplyGuidedTrekRequest(request, rate: TrekRate.Moderate);
+navigator.GuidedPathMode = GuidedPathMode.AStar;
+navigator.ApplyGuidedTrekRequest(destination, rate: TrekRate.Moderate);
 
 TrailblazerManager.Simulate();
 navigator.Simulate();
@@ -526,7 +526,7 @@ navigator.CommitFrameMotion();
 
 Under the hood:
 
-1. `Navigator.ApplyGuidedTrekRequest(...)` reads the target position from an already valid request and forwards it to `NavSteering`.
+1. `Navigator.ApplyGuidedTrekRequest(...)` creates a built-in path request from the target position and navigator defaults, then forwards it to `NavSteering`.
 2. `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
 3. The returned heading is passed to turning and motor systems.
 

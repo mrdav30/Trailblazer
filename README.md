@@ -156,11 +156,11 @@ navigator.Initialize(new TrekCondition(
     surfaceCondition: GroundCondition.CreateEmpty()));
 
 Vector3d target = new(10, 0, 10);
-var request = FlowFieldPathRequest.Create(navigator.Position, target, navigator.Size);
+navigator.GuidedPathMode = GuidedPathMode.FlowField;
+navigator.GuidedFlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
 navigator.ApplyGuidedTrekRequest(
-    pathRequest: request,
-    destination: target,
+    target,
     rate: TrekRate.Moderate);
 
 TrailblazerManager.Simulate();
@@ -180,6 +180,8 @@ TrailblazerManager.LateSimulate();
 If several navigators should move as one formation, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
 
 ## Choosing Between A* and Flow Fields
+
+When you use `Navigator.ApplyGuidedTrekRequest(...)`, the navigator creates the concrete request internally based on `GuidedPathMode` and its guided-path defaults.
 
 Use `AStarPathRequest` when:
 

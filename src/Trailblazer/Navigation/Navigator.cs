@@ -115,6 +115,31 @@ public abstract class Navigator : INavigate
     /// </summary>
     public Fixed64 FootPositionAdjust { get; set; } = DefaultFootPositionAdjust;
 
+    /// <summary>
+    /// Default built-in path request mode used when guided travel does not specify an override.
+    /// </summary>
+    public GuidedPathMode GuidedPathMode { get; set; } = GuidedPathMode.AStar;
+
+    /// <summary>
+    /// Whether navigator-built guided requests may target unwalkable voxels.
+    /// </summary>
+    public bool GuidedAllowUnwalkable { get; set; }
+
+    /// <summary>
+    /// Default heuristic used when the navigator builds A* requests.
+    /// </summary>
+    public HeuristicMethod GuidedAStarHeuristic { get; set; } = HeuristicMethod.Manhattan;
+
+    /// <summary>
+    /// Default max climb height used when the navigator builds A* requests.
+    /// </summary>
+    public Fixed64 GuidedAStarMaxClimbHeight { get; set; } = Fixed64.One;
+
+    /// <summary>
+    /// Default extra flood range used when the navigator builds flow-field requests.
+    /// </summary>
+    public int GuidedFlowFieldExtraFloodRange { get; set; } = FlowFieldPathRequest.DefaultExtraFloodRange;
+
     #endregion
 
     #region Voxel Occupancy
@@ -235,32 +260,57 @@ public abstract class Navigator : INavigate
     }
 
     /// <summary>
-    /// Constructs and applies a guided traversal request toward a destination using a pathfinding paradigm.
+    /// Constructs and applies a guided traversal request toward a destination using navigator-owned path request defaults.
     /// </summary>
-    /// <param name="pathRequest">The configuration for the type of path to request (e.g., A*, FlowField).</param>
+    /// <param name="targetPosition">The desired world-space target position.</param>
+    /// <param name="pathMode">Optional override for the built-in path request mode. When omitted, <see cref="GuidedPathMode"/> is used.</param>
     /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the navigator intends to jump during traversal.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between navigators.</param>
     public virtual void ApplyGuidedTrekRequest(
-        IPathRequest pathRequest,
+        Vector3d targetPosition,
+        GuidedPathMode? pathMode = null,
         TrekRate? rate = null,
         bool? isRequestingJump = null,
         int groupId = -1)
     {
-        if (!IsActive || pathRequest == null) return;
+        if (!IsActive) return;
 
-        FrameRequest.TargetPosition = pathRequest.TargetPosition;
+        GuidedPathMode selectedPathMode = pathMode ?? GuidedPathMode;
+        if (!TryCreateGuidedPathRequest(targetPosition, selectedPathMode, out IPathRequest pathRequest))
+        {
+            GridForgeLogger.Warn(
+                $"Unable to create a {selectedPathMode} path request for navigator {GlobalId} at {Position} targeting {targetPosition}.");
+            return;
+        }
+
+        FrameRequest.TargetPosition = targetPosition;
         FrameRequest.Direction = Vector3d.Zero;
         FrameRequest.Rate = rate ?? TrekRate.Stationary;
         FrameRequest.IsRequestingJump = isRequestingJump ?? false;
 
-        if (!pathRequest.IsValid)
-        {
-            GridForgeLogger.Warn($"Invalid path request provided to navigator {GlobalId}. Request must have valid start and end nodes and a defined search range.");
-            return;
-        }
-
         Steering.ApplyPathRequest(pathRequest, groupId);
+    }
+
+    /// <summary>
+    /// Builds a concrete path request for guided travel from the navigator's current state and defaults.
+    /// Subclasses can override this to support custom request types without changing steering.
+    /// </summary>
+    protected virtual bool TryCreateGuidedPathRequest(
+        Vector3d targetPosition,
+        GuidedPathMode pathMode,
+        out IPathRequest pathRequest)
+    {
+        return NavigatorPathRequestFactory.TryCreate(
+            origin: Position,
+            targetPosition: targetPosition,
+            unitSize: Size,
+            pathMode: pathMode,
+            allowUnwalkable: GuidedAllowUnwalkable,
+            aStarHeuristic: GuidedAStarHeuristic,
+            aStarMaxClimbHeight: GuidedAStarMaxClimbHeight,
+            flowFieldExtraFloodRange: GuidedFlowFieldExtraFloodRange,
+            out pathRequest);
     }
 
     /// <summary>

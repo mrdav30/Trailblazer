@@ -68,9 +68,9 @@ public static class PathGuideFactory
     /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
     public static bool RequestGuide(IPathRequest request, out IGuide result)
     {
-        if (!request.IsValid)
+        if (request?.IsValid != true)
         {
-            Console.WriteLine("Request is invalid, call prepare on request before requesting guide");
+            Console.WriteLine("Request is invalid. Create or update the request before requesting a guide.");
             result = null;
             return false;
         }

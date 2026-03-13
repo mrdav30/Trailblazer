@@ -284,12 +284,8 @@ public class NavSteering
     /// Starts or replaces the active steering request.
     /// </summary>
     /// <param name="pathRequest">The path request that defines the traversable start and end voxels.</param>
-    /// <param name="destination">Optional exact world-space destination. When omitted, the request end voxel position is used.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between nearby members.</param>
-    public virtual void ApplyPathRequest(
-        IPathRequest pathRequest,
-        Vector3d? destination = null,
-        int groupId = -1)
+    public virtual void ApplyPathRequest(IPathRequest pathRequest, int groupId = -1)
     {
         // assume the navigator is being controlled
         if (pathRequest == null || !pathRequest.HasValidEndpoints)
@@ -308,7 +304,7 @@ public class NavSteering
 
         ShouldMove = true;
         // NOTE: destination can be an exact point within a voxel, not neccesarily the voxel position
-        _requestedDestination = destination ?? pathRequest.EndNode.WorldPosition;
+        _requestedDestination = pathRequest.TargetPosition;
         Destination = _requestedDestination;
 
         _currentRequest = pathRequest;

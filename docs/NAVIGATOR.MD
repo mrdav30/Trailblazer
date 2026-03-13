@@ -263,7 +263,8 @@ It:
 - clears the current manual direction
 - sets movement rate and jump request
 - sets `IsGuideded = false`
-- prepares the `IPathRequest` if needed
+- reads the target position from the provided `IPathRequest`
+- requires the `IPathRequest` to already be valid
 - optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`
 
@@ -475,8 +476,8 @@ navigator.Initialize(new TrekCondition(
     surfaceLevel: Fixed64.Zero,
     surfaceCondition: GroundCondition.CreateEmpty()));
 
-var request = AStarPathRequest.Create(navigator.Position, new Vector3d(5, 0, 5), navigator.Size);
-navigator.ApplyGuidedTrekRequest(request, new Vector3d(5, 0, 5), rate: TrekRate.Moderate);
+AStarPathRequest.TryCreate(navigator.Position, new Vector3d(5, 0, 5), navigator.Size, out var request);
+navigator.ApplyGuidedTrekRequest(request, rate: TrekRate.Moderate);
 
 TrailblazerManager.Simulate();
 navigator.Simulate();

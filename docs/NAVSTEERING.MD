@@ -114,7 +114,7 @@ Important public state includes:
 
 In normal `Navigator` usage, the steering integration looks like this:
 
-1. `ApplyGuidedTrekRequest(...)` prepares an `IPathRequest` and forwards it to `Steering.ApplyPathRequest(...)`.
+1. `ApplyGuidedTrekRequest(...)` accepts an already valid `IPathRequest` and forwards it to `Steering.ApplyPathRequest(...)`.
 2. Each simulation tick, `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
 3. The resulting heading is passed to `NavTurning` and `NavMotor`.
 
@@ -516,8 +516,8 @@ These events are useful for:
 With a concrete `Navigator`, the usual flow is:
 
 ```csharp
-var request = AStarPathRequest.Create(origin, destination, navigator.Size);
-navigator.ApplyGuidedTrekRequest(request, destination, rate: TrekRate.Moderate);
+AStarPathRequest.TryCreate(origin, destination, navigator.Size, out var request);
+navigator.ApplyGuidedTrekRequest(request, rate: TrekRate.Moderate);
 
 TrailblazerManager.Simulate();
 navigator.Simulate();
@@ -526,7 +526,7 @@ navigator.CommitFrameMotion();
 
 Under the hood:
 
-1. `Navigator.ApplyGuidedTrekRequest(...)` prepares the request and forwards it to `NavSteering`.
+1. `Navigator.ApplyGuidedTrekRequest(...)` reads the target position from an already valid request and forwards it to `NavSteering`.
 2. `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
 3. The returned heading is passed to turning and motor systems.
 

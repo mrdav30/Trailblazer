@@ -11,9 +11,19 @@ namespace Trailblazer.Pathing;
 public interface IPathRequest
 {
     /// <summary>
+    /// The origin world position.
+    /// </summary>
+    Vector3d Origin { get; }
+
+    /// <summary>
     /// Most recently evaluated grid voxel under the agent.
     /// </summary>
     Voxel StartNode { get; }
+
+    /// <summary>
+    /// The target world position. 
+    /// </summary>
+    Vector3d TargetPosition { get; }
 
     /// <summary>
     /// Final grid voxel targeted as the destination.
@@ -36,10 +46,10 @@ public interface IPathRequest
     bool AllowUnwalkable { get; }
 
     /// <summary>
-    /// An optional max search limit when generating the path.
-    /// If null, the search will continue until all walkable voxels are evaluated.
+    /// The max search limit used when generating the path.
+    /// Requests must have a value greater than zero before they are considered valid.
     /// </summary>
-    int? MaxPathSearchRange { get; set; }
+    int MaxPathSearchRange { get; set; }
 
     bool HasOrigin { get; }
 
@@ -54,13 +64,11 @@ public interface IPathRequest
     /// </summary>
     public int RequestCacheKey { get; }
 
-    bool TryPrepare(Vector3d origin, Vector3d destination, Fixed64? unitSize);
+    bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize);
 
     bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false);
 
     bool TrySetDestination(Vector3d destination, bool resetSearchRange = false);
 
     bool TrySetUnitSize(Fixed64 unitSize);
-
-    bool Validate();
 }

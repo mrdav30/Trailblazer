@@ -20,22 +20,20 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
     /// </summary>
     public int ExtraFloodRange { get; set; }
 
-    public FlowFieldPathRequest()
+    private FlowFieldPathRequest() { }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryCreateWithSize(Vector3d origin, Vector3d destination, Fixed64 unitSize, out FlowFieldPathRequest request)
     {
-        StartNode = null;
-        EndNode = null;
-        UnitSize = GlobalGridManager.VoxelSize;
-        AllowUnwalkable = false;
-        ExtraFloodRange = DefaultExtraFloodRange;
-        MaxPathSearchRange = null;
+        request = Create(origin, destination, unitSize);
+        if (request == null)
+            return false;
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FlowFieldPathRequest CreateEmpty() => new();
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static FlowFieldPathRequest Create(Vector3d origin, Vector3d destination) =>
-        Create(origin, destination, GlobalGridManager.VoxelSize);
+    public static bool TryCreate(Vector3d origin, Vector3d destination, out FlowFieldPathRequest request) =>
+        TryCreateWithSize(origin, destination, GlobalGridManager.VoxelSize, out request);
 
     public static FlowFieldPathRequest Create(
         Vector3d origin,
@@ -44,19 +42,21 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
         bool allowUnwalkable = false)
     {
         if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
-            return CreateEmpty();
+            return null;
 
         FlowFieldPathRequest request = new()
         {
+            Origin = origin,
             StartNode = startNode,
+            TargetPosition = destination,
             EndNode = endNode,
             UnitSize = unitSize,
             AllowUnwalkable = allowUnwalkable,
-            ExtraFloodRange = DefaultExtraFloodRange,
-            MaxPathSearchRange = null
+            ExtraFloodRange = DefaultExtraFloodRange
         };
 
-        request.Validate();
+        if (PathManager.TryGetMaxSearchSize(request.StartNode, request.EndNode, out int searchSize))
+            request.MaxPathSearchRange = searchSize;
 
         return request;
     }
@@ -74,7 +74,7 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
             UnitSize,
             AllowUnwalkable,
             ExtraFloodRange,
-            MaxPathSearchRange ?? -1
+            MaxPathSearchRange
         ).CombineHashCodes();
     }
 }

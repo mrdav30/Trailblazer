@@ -65,10 +65,10 @@ All guide requests implement `IPathRequest`. Shared request state includes:
 
 Shared request behavior is provided by `PathRequest`:
 
-- `TryPrepare(origin, destination, unitSize)` resolves start/end voxels and computes validation state
+- `UpdateRequest(origin, destination, unitSize)` resolves start/end voxels and computes validation state
 - `TrySetOrigin(...)` and `TrySetDestination(...)` update endpoints without recreating the request
 - `TrySetUnitSize(...)` revalidates the request for a different agent footprint
-- `Validate()` derives `MaxPathSearchRange` using `PathManager.GetMaxSearchSize(...)`
+- successful creation or endpoint reset derives `MaxPathSearchRange` using `PathManager.TryGetMaxSearchSize(...)`
 
 ### 3.1 AStarPathRequest
 
@@ -83,8 +83,7 @@ Additional configuration includes:
 Factory helpers:
 
 ```csharp
-var request = AStarPathRequest.Create(origin, destination);
-var empty = AStarPathRequest.CreateEmpty();
+AStarPathRequest.TryCreate(origin, destination, out var request);
 ```
 
 ### 3.2 FlowFieldPathRequest
@@ -98,8 +97,7 @@ Additional configuration includes:
 Factory helpers:
 
 ```csharp
-var request = FlowFieldPathRequest.Create(origin, destination);
-var empty = FlowFieldPathRequest.CreateEmpty();
+FlowFieldPathRequest.TryCreate(origin, destination, out var request);
 ```
 
 One important difference from A*:

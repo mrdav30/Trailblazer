@@ -365,7 +365,7 @@ public static class PathManager
     /// <param name="end">The end voxel.</param>
     /// <param name="maxSearchSize">The output max search size.</param>
     /// <returns>True if both voxels belong to valid grids; otherwise, false.</returns>
-    public static bool GetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)
+    public static bool TryGetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)
     {
         if (!GlobalGridManager.TryGetGrid(start.GlobalIndex.GridIndex, out VoxelGrid startGrid)
             || !GlobalGridManager.TryGetGrid(end.GlobalIndex.GridIndex, out VoxelGrid endGrid))

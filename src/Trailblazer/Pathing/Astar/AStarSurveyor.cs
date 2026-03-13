@@ -86,7 +86,7 @@ public class AStarSurveyor
     {
         lock (SurveyorLock.GlobalLock)
         {
-            if (!request.IsValid
+            if (request == null 
                 || request.HasZeroDisplacement
                 || !request.StartNode.TryGetPartition(out PathPartition startPartition))
             {
@@ -131,7 +131,7 @@ public class AStarSurveyor
     private bool TracePath()
     {
         int iterations = 0;
-        int searchSize = _request.MaxPathSearchRange.Value;
+        int searchSize = _request.MaxPathSearchRange;
         while (_heap.RemoveFirst(out PathPartition currentPartition)
             && iterations++ < searchSize)
         {

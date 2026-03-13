@@ -36,8 +36,6 @@ public class FlowFieldSurveyor
 
     private FlowFieldPathRequest _request;
 
-    private int _startDistanceMetric;
-
     /// <summary>
     /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
     /// </summary>
@@ -47,7 +45,7 @@ public class FlowFieldSurveyor
     {
         lock (SurveyorLock.GlobalLock)
         {
-            if (!request.IsValid
+            if (request == null
             || request.HasZeroDisplacement
             || !request.EndNode.TryGetPartition(out PathPartition targetPart))
             {
@@ -58,8 +56,6 @@ public class FlowFieldSurveyor
 
             _heap.FastClear();
             _chartKeys.Clear();
-
-            _startDistanceMetric = 0;
 
             // Start from the end and move towards the start voxel
             targetPart.PathCost = 0;
@@ -89,7 +85,7 @@ public class FlowFieldSurveyor
         bool targetReached = false;
 
         int iterations = 0;
-        int searchSize = _request.MaxPathSearchRange.Value;
+        int searchSize = _request.MaxPathSearchRange;
         int maxFloodRange = 0;
 
         while (_heap.RemoveFirst(out PathPartition current)
@@ -100,7 +96,6 @@ public class FlowFieldSurveyor
             {
                 if (current.VoxelToken == _request.StartNode.SpawnToken)
                 {
-                    _startDistanceMetric = current.PathCost;
                     maxFloodRange = current.PathCost + _request.ExtraFloodRange;
                     targetReached = true;
                 }

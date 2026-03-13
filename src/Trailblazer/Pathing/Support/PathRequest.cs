@@ -17,12 +17,7 @@ public abstract class PathRequest : IPathRequest
 
     public bool AllowUnwalkable { get; set; }
 
-    public bool HasZeroDisplacement =>
-        StartNode == null
-        || EndNode == null
-        || StartNode.SpawnToken == EndNode.SpawnToken;
-
-    public int? MaxPathSearchRange { get; set; }
+    public int MaxPathSearchRange { get; set; }
 
     public bool HasOrigin => StartNode != null;
 
@@ -30,11 +25,15 @@ public abstract class PathRequest : IPathRequest
 
     public bool HasValidEndpoints => HasOrigin && HasDestination;
 
-    public bool IsValid => HasValidEndpoints && MaxPathSearchRange.HasValue;
+    public bool IsValid => HasValidEndpoints && MaxPathSearchRange > 0;
+
+    public bool HasZeroDisplacement =>
+        !IsValid
+        || StartNode.SpawnToken == EndNode.SpawnToken;
 
     public int RequestCacheKey => GetHashCode();
 
-    public bool TryPrepare(
+    public bool UpdateRequest(
         Vector3d origin,
         Vector3d destination,
         Fixed64? unitSize = null)
@@ -47,6 +46,8 @@ public abstract class PathRequest : IPathRequest
             unitSize);
 
         // need to set these even if null incase the new size invalidates the request
+        Origin = origin;
+        TargetPosition = destination;
         StartNode = startVoxel;
         EndNode = endVoxel;
         UnitSize = unitSize ?? GlobalGridManager.VoxelSize;
@@ -54,7 +55,8 @@ public abstract class PathRequest : IPathRequest
         if (!success)
             return false;
 
-        Validate();
+        if (PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+            MaxPathSearchRange = searchSize;
 
         return true;
     }
@@ -65,12 +67,14 @@ public abstract class PathRequest : IPathRequest
 
         bool success = VoxelFinder.GetStartVoxel(
             origin,
-            EndNode.WorldPosition,
+            TargetPosition,
             out Voxel newVoxel,
             AllowUnwalkable,
             UnitSize);
 
         if (!success) return false;
+
+        Origin = origin;
 
         if (StartNode != null)
         {
@@ -87,8 +91,9 @@ public abstract class PathRequest : IPathRequest
 
         if (resetSearchRange)
         {
-            MaxPathSearchRange = null;
-            Validate();
+            MaxPathSearchRange = 0;
+            if (PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+                MaxPathSearchRange = searchSize;
         }
 
         return true;
@@ -99,13 +104,15 @@ public abstract class PathRequest : IPathRequest
         if (StartNode == null) return false;
 
         bool success = VoxelFinder.GetEndVoxel(
-            StartNode.WorldPosition,
+            Origin,
             destination,
             out Voxel newVoxel,
             AllowUnwalkable,
             UnitSize);
 
         if (!success) return false;
+
+        TargetPosition = destination;
 
         if (EndNode != null)
         {
@@ -122,8 +129,9 @@ public abstract class PathRequest : IPathRequest
 
         if (resetSearchRange)
         {
-            MaxPathSearchRange = null;
-            Validate();
+            MaxPathSearchRange = 0;
+            if (PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+                MaxPathSearchRange = searchSize;
         }
 
         return true;
@@ -134,23 +142,7 @@ public abstract class PathRequest : IPathRequest
         // no change
         if (UnitSize == unitSize || !HasValidEndpoints) return false;
 
-        return TryPrepare(StartNode.WorldPosition, EndNode.WorldPosition, unitSize);
-    }
-
-    // If path created without valid nodes, then set later, this must be called before processing the request
-    public bool Validate()
-    {
-        if (IsValid) return true;
-
-        if (!HasValidEndpoints) return false;
-
-        if (!MaxPathSearchRange.HasValue
-            && PathManager.GetMaxSearchSize(StartNode, EndNode, out int searchSize))
-        {
-            MaxPathSearchRange = searchSize;
-        }
-
-        return IsValid;
+        return UpdateRequest(Origin, TargetPosition, unitSize);
     }
 
     public override abstract int GetHashCode();

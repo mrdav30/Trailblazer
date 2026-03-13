@@ -237,35 +237,30 @@ public abstract class Navigator : INavigate
     /// <summary>
     /// Constructs and applies a guided traversal request toward a destination using a pathfinding paradigm.
     /// </summary>
-    /// <param name="destination">The target destination.</param>
     /// <param name="pathRequest">The configuration for the type of path to request (e.g., A*, FlowField).</param>
     /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the navigator intends to jump during traversal.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between navigators.</param>
     public virtual void ApplyGuidedTrekRequest(
         IPathRequest pathRequest,
-        Vector3d destination,
         TrekRate? rate = null,
         bool? isRequestingJump = null,
         int groupId = -1)
     {
-        if (!IsActive) return;
+        if (!IsActive || pathRequest == null) return;
 
-        FrameRequest.TargetPosition = destination;
+        FrameRequest.TargetPosition = pathRequest.TargetPosition;
         FrameRequest.Direction = Vector3d.Zero;
         FrameRequest.Rate = rate ?? TrekRate.Stationary;
         FrameRequest.IsRequestingJump = isRequestingJump ?? false;
 
         if (!pathRequest.IsValid)
         {
-            if (!pathRequest.TryPrepare(Position, destination, Size))
-            {
-                GridForgeLogger.Warn($"Failed to prepare path request for destination {destination} from position {Position} with size {Size}.");
-                return;
-            }
+            GridForgeLogger.Warn($"Invalid path request provided to navigator {GlobalId}. Request must have valid start and end nodes and a defined search range.");
+            return;
         }
 
-        Steering.ApplyPathRequest(pathRequest, destination, groupId);
+        Steering.ApplyPathRequest(pathRequest, groupId);
     }
 
     /// <summary>

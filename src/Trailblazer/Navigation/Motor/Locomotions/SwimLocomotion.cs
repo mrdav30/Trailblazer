@@ -192,24 +192,24 @@ public partial class SwimLocomotion : ITransientLocomotion
     /// Indicates whether the scout is currently swimming.
     /// </summary>
     [Transient]
-    [JsonIgnore]
-    [MemoryPackIgnore]
+    [JsonInclude]
+    [MemoryPackInclude]
     public bool IsSwimming { get; set; }
 
     /// <summary>
     /// Indicates whether the scout is currently diving (fully submerged).
     /// </summary>
     [Transient]
-    [JsonIgnore]
-    [MemoryPackIgnore]
+    [JsonInclude]
+    [MemoryPackInclude]
     public bool IsDiving { get; set; }
 
     /// <summary>
     /// The amount of time the scout has been underwater.
     /// </summary>
     [Transient]
-    [JsonIgnore]
-    [MemoryPackIgnore]
+    [JsonInclude]
+    [MemoryPackInclude]
     public Fixed64 UnderwaterTimer { get; set; }
 
     /// <summary>

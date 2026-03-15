@@ -41,7 +41,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 
 ### Navigation Layer
 
-- `Navigator` as the host-facing simulation abstraction
+- `Navigator` as the host-facing simulation coordinator
 - `NavSteering` for headings, direct-path checks, guide following, and repathing
 - `NavTurning` for deterministic facing updates
 - `NavMotor` and locomotion handlers for movement state transitions, gravity, jumps, slopes, swimming, sliding, and moving platforms
@@ -53,7 +53,7 @@ Trailblazer does not own your world simulation. Your game or simulation still su
 - global grid setup through `GridForge`
 - traversal medium and contact information
 - collision and environment probing
-- concrete navigator implementations
+- navigator setup and traversal-state refresh
 - any rendering, animation, or ECS integration
 
 ## Dependencies
@@ -150,10 +150,12 @@ using Trailblazer.Pathing;
 
 var navigator = new MyNavigator();
 navigator.Setup(new Vector3d(0, 0, 0), size: Fixed64.One);
-navigator.Initialize(new TrekCondition(
-    medium: TraversalMedium.Ground,
-    surfaceLevel: Fixed64.Zero,
-    surfaceCondition: new GroundCondition()));
+navigator.Initialize(new TrekCondition
+{
+    Medium = TraversalMedium.Ground,
+    SurfaceLevel = Fixed64.Zero,
+    GroundState = new GroundCondition()
+});
 
 Vector3d target = new(10, 0, 10);
 navigator.GuidedPathMode = GuidedPathMode.FlowField;
@@ -165,19 +167,13 @@ navigator.ApplyGuidedTrekRequest(
 
 TrailblazerManager.Simulate();
 navigator.Simulate();
-
-// Refresh ground, water, ceiling, and platform state from your host world here.
-navigator.SetTrekCondition(
-    medium: TraversalMedium.Ground,
-    surfaceLevel: Fixed64.Zero,
-    surfaceCondition: new GroundCondition(),
-    updateMotorState: true);
-
 navigator.CommitFrameMotion();
 TrailblazerManager.LateSimulate();
 ```
 
 If several navigators should move as one formation, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
+
+Concrete navigator types should implement `CheckTrekCondition()` to populate ground, water, ceiling, and platform state during `CommitFrameMotion()`.
 
 ## Choosing Between A* and Flow Fields
 

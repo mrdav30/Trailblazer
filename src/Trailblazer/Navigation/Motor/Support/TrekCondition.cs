@@ -6,7 +6,7 @@ namespace Trailblazer.Navigation.Motor;
 /// <summary>
 /// Represents the traversal state of a scout, including its movement medium and surface interactions.
 /// </summary>
-public class TrekCondition
+public struct TrekCondition
 {
     /// <summary>
     /// Defines the medium in which the scout is currently moving.

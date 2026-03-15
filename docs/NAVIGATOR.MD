@@ -1,6 +1,6 @@
 # Navigator Reference
 
-This document is the detailed reference for Trailblazer's `Navigator` base class.
+This document is the detailed reference for Trailblazer's `Navigator` class.
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
 If you need the subsystem references behind `Navigator`, read:
@@ -27,7 +27,7 @@ It is responsible for:
 - coordinating the simulation-step and commit-step lifecycle
 - exposing traversal state to the motor
 - tracking voxel occupancy for scan-based steering systems
-- providing an extension point for host-specific traversal probing
+- providing a hook for host-specific traversal probing
 
 It is not responsible for:
 
@@ -41,7 +41,7 @@ Those responsibilities belong to the respective subsystem classes and the pathin
 
 ## 2. Core Design Model
 
-The important design choice is that `Navigator` is a coordinator, not a subsystem implementation.
+`Navigator` is a coordinator, not a subsystem implementation.
 
 It combines three lower-level controllers:
 
@@ -54,23 +54,20 @@ and drives them through a two-step lifecycle:
 1. `Simulate()` for the fixed-step control pass
 2. `CommitFrameMotion()` for applying deltas, probing the environment, and finalizing state
 
-`Navigator` is also the main point where Trailblazer meets host code. It is abstract because the host must provide `CheckTrekCondition()` to update traversal state from its own world data.
+`Navigator` is intended to be subclassed.
+
+Concrete navigator types provide host-specific traversal probing by implementing `CheckTrekCondition()`.
 
 ## 3. Interface Role
 
-`Navigator` implements `INavigate`, which is a composition of:
+`Navigator` implements `INavigate`, which is now a thin runtime-state interface built on:
 
 - `ISteer`
-- `ITurn`
+- `LastPosition`
+- `Rotation`
+- `Forward`
 
-That makes `Navigator` the single object passed to:
-
-- steering as an `ISteer`
-- turning as an `ITurn`
-
-At the same time, `INavigate` exposes `FrameCondition`, `FrameRequest`, and `CheckTrekCondition()` so the host can coordinate traversal refresh and the motor can consume frame snapshots without a separate `IMotor` interface.
-
-This is the main reason `Navigator` exists as an orchestration object instead of a thinner data carrier.
+That keeps the steering-facing contract small while still letting turning or host code read the current frame state from the concrete `Navigator`.
 
 ## 4. Public Surface
 
@@ -89,9 +86,8 @@ The main entry points are:
 - `SetTrekCondition(...)`
 - `CheckTrekCondition()`
 - `AddPositionDelta(...)`
-- `AddRotationDelta(...)`
+- `ApplyRotationDelta(...)`
 - `AddVelocityDelta(...)`
-- `ApplyRotation(FixedQuaternion rotation)`
 - `GetFootPosition()`
 - `SetOccupancy(...)`
 - `RemoveOccupancy(...)`
@@ -111,8 +107,6 @@ Important public state includes:
 - `Motor`
 - `StuckThresholdSpeed`
 - `IsGuideded`
-- `FrameCondition`
-- `FrameRequest`
 - `Size`
 - `Radius`
 - `FootPositionAdjust`
@@ -127,6 +121,14 @@ Important public state includes:
 - `AnimationHandler`
 - `IsLockedOn`
 - `AnimDampTime`
+
+Protected frame-local state includes:
+
+- `_frameCondition`
+- `_frameRequest`
+- `_positionDelta`
+- `_rotationDelta`
+- `_velocityDelta`
 
 ## 5. State Ownership
 
@@ -152,24 +154,22 @@ These are the host-visible motion values produced across frames.
 - `_rotationDelta`
 - `_velocityDelta`
 
-Subsystems do not mutate `Position` or `Rotation` directly. They push deltas through:
-
-- `AddPositionDelta(...)`
-- `AddRotationDelta(...)`
-- `AddVelocityDelta(...)`
-
-Those deltas are applied in `CommitFrameMotion()`.
+Subsystems do not mutate committed transform state through a shared host interface. They return or accumulate deltas, and `Navigator` applies those deltas in `CommitFrameMotion()`.
 
 ### 5.3 Traversal State
 
 `Navigator` owns:
 
-- `FrameCondition`
-- `FrameRequest`
+- `_frameCondition`
+- `_frameRequest`
 - `StuckThresholdSpeed`
 - `IsGuideded`
 
-This is the state the lower-level controllers consume and update around the frame boundary.
+`_frameCondition` is the current traversal snapshot the motor will finalize against.
+`_frameRequest` is the current frame's travel intent.
+
+`IsGuideded` is explicit navigator state.
+It is turned on by `ApplyGuidedTrekRequest(...)` and turned off by `ApplyInputTrekRequest(...)` or `Reset()`.
 
 ### 5.4 Controller Instances
 
@@ -215,9 +215,9 @@ It does not create the steering, turning, or motor controllers yet.
 
 It:
 
-- stores the initial `FrameCondition`
+- stores the initial `_frameCondition`
 - creates `NavSteering` using `Radius`
-- creates `NavMotor` using `Position` and `FrameCondition`
+- creates `NavMotor` using `_frameCondition`
 - seeds motor velocity from the navigator's starting `Velocity`
 - creates `NavTurning` using `Radius`
 - performs initial voxel occupancy registration
@@ -231,15 +231,13 @@ After `Setup(...)` and `Initialize(...)`, `IsActive` becomes true.
 
 It:
 
-- resets `FrameCondition`
-- resets `FrameRequest`
+- resets `_frameCondition`
+- resets `_frameRequest`
 - removes the navigator from occupied voxels
 - clears `OccupyingIndexMap`
 - marks the navigator inactive
 
-Important detail:
-
-- after `Reset()`, the instance must go through `Setup(...)` and `Initialize(...)` again before reuse
+After `Reset()`, the instance must go through `Setup(...)` and `Initialize(...)` again before reuse.
 
 ## 7. Input and Travel Requests
 
@@ -247,17 +245,13 @@ Important detail:
 
 ### 7.1 Manual Input
 
-`ApplyInputTrekRequest(...)` writes directly into `FrameRequest`:
+`ApplyInputTrekRequest(...)` writes directly into `_frameRequest`:
 
 - `Direction`
 - `Rate`
 - `IsRequestingJump`
 
-and sets:
-
-- `IsGuideded = true`
-
-In this mode, `Simulate()` does not ask `NavSteering` for a heading.
+and marks the navigator as not guided.
 
 ### 7.2 Guided Travel
 
@@ -265,9 +259,9 @@ In this mode, `Simulate()` does not ask `NavSteering` for a heading.
 
 It:
 
+- sets `IsGuideded = true`
 - clears the current manual direction
 - sets movement rate and jump request
-- sets `IsGuideded = false`
 - builds a concrete `IPathRequest` from the target position, the navigator's current state, and guided-path defaults
 - optionally overrides the navigator's default `GuidedPathMode` for a single request
 - optionally accepts a shared `groupId` for grouped movement
@@ -280,7 +274,7 @@ The built-in request factory currently supports:
 - `GuidedPathMode.AStar`
 - `GuidedPathMode.FlowField`
 
-If a project needs a different request shape, override the navigator's guided-request creation hook.
+If a project needs a different request shape, override `TryCreateGuidedPathRequest(...)`.
 
 ### 7.3 Other Request Helpers
 
@@ -303,13 +297,16 @@ It first verifies that the navigator is active. If not, it throws.
 
 Then it:
 
-1. writes `FrameRequest.Origin = Position`
-2. writes `FrameRequest.Rotation = Rotation`
-3. asks steering for a heading if the navigator is not manually controlled
-4. requests turning toward the current movement direction
-5. runs `Motor.Traverse(this)`
-6. runs `Turning.SimulateTurn(this)`
-7. optionally updates animation parameters
+1. writes `_frameRequest.Origin = Position`
+2. writes `_frameRequest.FootPosition = GetFootPosition()`
+3. writes `_frameRequest.Rotation = Rotation`
+4. asks steering for a heading if the navigator is guided
+5. buffers turning toward the current movement direction
+6. runs `Motor.TryTraversal(...)`
+7. accumulates any returned deltas
+8. runs `Turning.TrySimulateTurn(...)`
+9. if a rotation was returned, stores it in `Rotation`
+10. optionally updates animation parameters
 
 This means `Simulate()` is where the controller stack is executed, but not where final position and velocity are committed.
 
@@ -330,8 +327,8 @@ Then it:
 7. recomputes `Velocity`, `Speed`, and `Acceleration`
 8. updates `StuckThresholdSpeed`
 9. clears frame deltas
-10. calls `Motor.FinalizeTraversal(this)`
-11. resets `FrameRequest`
+10. calls `Motor.FinalizeTraversal(...)`
+11. resets `_frameRequest`
 
 This is where the navigator becomes internally consistent for the next simulation frame.
 
@@ -347,9 +344,9 @@ This is one of the most important architectural rules in Trailblazer's navigatio
 
 ## 9. Traversal-State Ownership
 
-### 9.1 FrameCondition
+### 9.1 _frameCondition
 
-`FrameCondition` is the navigator's current traversal description:
+`_frameCondition` is the navigator's current traversal description:
 
 - medium
 - surface level
@@ -360,7 +357,7 @@ This state is consumed by `NavMotor`.
 
 ### 9.2 SetTrekCondition(...)
 
-`SetTrekCondition(...)` is the public helper for updating `FrameCondition`.
+`SetTrekCondition(...)` is the public helper for updating `_frameCondition`.
 
 It:
 
@@ -374,25 +371,29 @@ Use `updateMotorState: true` when the motor needs to see the new traversal state
 
 `CheckTrekCondition()` is abstract.
 
-This is the host-specific extension point where a concrete navigator should:
+Concrete navigator types implement it to:
 
 - probe the world
 - determine ground, air, or water medium
 - update surface normals and platform data
 - set ceiling constraints
-- write the result into `FrameCondition`
+- write the result into `_frameCondition`
 
-This method is the main reason `Navigator` remains abstract.
+### 9.4 ReplaceTrekCondition(...)
 
-## 10. Delta and Rotation APIs
+`ReplaceTrekCondition(...)` swaps `_frameCondition` wholesale.
 
-The delta methods are the write-path used by motor and turning systems.
+This is useful when a host already has a complete traversal snapshot and wants to replace the current one in a single call.
+
+## 10. Delta APIs
+
+The delta methods are the write-path used by the motor and host integration.
 
 ### 10.1 AddPositionDelta(...)
 
 Adds to `_positionDelta` and also shifts `LastPosition` so externally applied position deltas do not distort the velocity calculation.
 
-### 10.2 AddRotationDelta(...)
+### 10.2 ApplyRotationDelta(...)
 
 Accumulates rotational changes into `_rotationDelta`.
 
@@ -403,12 +404,6 @@ Adds to `_velocityDelta`.
 Current implementation detail:
 
 - it assumes a mass of `1`
-
-### 10.4 ApplyRotation(...)
-
-This is the immediate rotation sink used by `NavTurning`.
-
-Unlike delta-based methods, this directly overwrites `Rotation`.
 
 ## 11. Occupancy Management
 
@@ -433,7 +428,7 @@ These are called by the grid occupancy system to keep `OccupyingIndexMap` in syn
 
 `Reset()` explicitly removes the navigator from all tracked occupied voxels before deactivating it.
 
-This is important because grid occupancy is global/static infrastructure.
+This is important because grid occupancy is global or static infrastructure.
 
 ## 12. Animation Integration
 
@@ -448,7 +443,7 @@ The animation update uses:
 - sprinting state
 - damping time
 
-Animation integration is optional. If `AnimationHandler` is null, the simulation still runs normally.
+Animation integration is optional. If `AnimationHandler` is `null`, the simulation still runs normally.
 
 ## 13. Utility Methods and Extension Points
 
@@ -466,9 +461,9 @@ This is used by platform and ground-contact logic.
 
 That gives a subclass a way to control identity generation if needed for testing or determinism-related workflows.
 
-### 13.3 ReplaceTrekCondition(...)
+### 13.3 TryCreateGuidedPathRequest(...)
 
-This is a simple state replacement helper for swapping `FrameCondition` wholesale.
+This protected factory hook lets subclasses build custom request types without replacing steering.
 
 ## 14. Common Integration Pattern
 
@@ -483,33 +478,22 @@ navigator.Setup(
     velocity: Vector3d.Zero,
     size: Fixed64.One);
 
-navigator.Initialize(new TrekCondition(
-    medium: TraversalMedium.Ground,
-    surfaceLevel: Fixed64.Zero,
-    surfaceCondition: new GroundCondition()));
+navigator.Initialize(new TrekCondition
+{
+    Medium = TraversalMedium.Ground,
+    SurfaceLevel = Fixed64.Zero,
+    GroundState = new GroundCondition()
+});
 
 navigator.GuidedPathMode = GuidedPathMode.AStar;
 navigator.ApplyGuidedTrekRequest(new Vector3d(5, 0, 5), rate: TrekRate.Moderate);
 
 TrailblazerManager.Simulate();
 navigator.Simulate();
-
-// Host probes world state here.
-navigator.SetTrekCondition(
-    medium: TraversalMedium.Ground,
-    surfaceLevel: Fixed64.Zero,
-    surfaceCondition: new GroundCondition(),
-    updateMotorState: true);
-
 navigator.CommitFrameMotion();
 ```
 
 If several navigators should move as one group, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
-
-The essential rule is:
-
-- `Simulate()` runs the controller stack
-- `CommitFrameMotion()` applies and finalizes the frame
 
 ## 15. Common Gotchas
 
@@ -519,11 +503,11 @@ Both methods throw until the navigator has gone through `Setup(...)` and `Initia
 
 ### Treating Navigator as self-sufficient
 
-It is not. A concrete subclass must still implement `CheckTrekCondition()` using host-world data.
+It is not. Concrete navigators still need to refresh traversal state between `Simulate()` and `CommitFrameMotion()` through `CheckTrekCondition()`.
 
 ### Forgetting to update traversal state between simulation phases
 
-If `FrameCondition` is stale, `NavMotor.FinalizeTraversal(...)` will finalize against incorrect medium, surface, or ceiling data.
+If `_frameCondition` is stale, `NavMotor.FinalizeTraversal(...)` will finalize against incorrect medium, surface, or ceiling data.
 
 ### Forgetting that occupancy is part of behavior
 
@@ -535,19 +519,11 @@ Voxel occupancy is not cosmetic. It feeds scan-based steering and avoidance.
 
 ## 16. Testing Notes
 
-Current direct test coverage for `Navigator` is weak.
+Current direct coverage for navigator orchestration is still lighter than steering, turning, and motor coverage.
 
-The files under:
+The main direct support files are:
 
-- `tests/Trailblazer.Tests/Navigation/Navigator/Navigator.Tests.cs`
 - `tests/Trailblazer.Tests/Navigation/Navigator/Support/TestNavigator.cs`
+- `tests/Trailblazer.Tests/Navigation/Navigator/Navigator.Tests.cs`
 
-are currently commented out and appear stale relative to the current API.
-
-That means the best live behavioral coverage currently comes indirectly through:
-
-- steering tests
-- turning tests
-- motor/locomotion tests
-
-If `Navigator` behavior changes, especially around lifecycle, frame ordering, or traversal-state updates, this area would benefit from refreshed direct tests.
+If `Navigator` behavior changes, especially around lifecycle, frame ordering, or traversal-state updates, this area benefits from refreshed direct tests.

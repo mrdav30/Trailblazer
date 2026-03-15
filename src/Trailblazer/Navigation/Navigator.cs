@@ -18,7 +18,7 @@ namespace Trailblazer.Navigation;
 /// Base class representing a navigator, responsible for handling movement, traversal state, and simulation flow.
 /// </summary>
 /// <remarks>
-/// This class acts as a bridge between the simulation logic (`ScoutController`) and the entity's external representation.  
+/// This class acts as a bridge between the simulation logic and the entity's external representation.  
 /// It defines common traversal behaviors and lifecycle methods that can be extended by concrete implementations.
 /// </remarks>
 [Serializable]
@@ -97,11 +97,11 @@ public abstract class Navigator : INavigate
     /// <summary>
     /// Indicates whether the current traversal session is guided via a TrailGuide path (e.g., A* or flow field).
     /// </summary>
-    public bool IsGuideded => FrameRequest?.TargetPosition != null;
+    public bool IsGuideded { get; protected set; }
 
-    public TrekCondition FrameCondition { get; protected set; } = new();
+    protected TrekCondition _frameCondition = new();
 
-    public TrekRequest FrameRequest { get; protected set; } = new();
+    protected TrekRequest _frameRequest = new();
 
     #endregion
 
@@ -197,11 +197,11 @@ public abstract class Navigator : INavigate
     /// </summary>
     public virtual void Initialize(TrekCondition condition)
     {
-        FrameCondition = condition.Clone();
+        _frameCondition = condition.Clone();
 
         Steering = NavSteering.CreateNew(Radius);
 
-        Motor = NavMotor.CreateNew(FrameCondition);
+        Motor = NavMotor.CreateNew(_frameCondition);
         Motor.SetVelocity(Velocity);
 
         Turning = NavTurning.CreateNew(Radius);
@@ -215,12 +215,13 @@ public abstract class Navigator : INavigate
     /// Replaces the current traversal state with the given one.
     /// </summary>
     /// <param name="state">The new traversal condition to apply.</param>
-    public virtual void ReplaceTrekCondition(TrekCondition state) => FrameCondition = state.Clone();
+    public virtual void ReplaceTrekCondition(TrekCondition state) => _frameCondition = state.Clone();
 
     public virtual void Reset()
     {
-        FrameCondition.Reset();
-        FrameRequest.Reset();
+        _frameCondition.Reset();
+        _frameRequest.Reset();
+        IsGuideded = false;
 
         // store copy since this will mutate the collection
         foreach (var idx in OccupyingIndexMap.Keys.ToArray())
@@ -254,10 +255,10 @@ public abstract class Navigator : INavigate
     {
         if (!IsActive) return;
 
-        FrameRequest.TargetPosition = null;  // clear any existing target position since this is a direct input request
-        FrameRequest.Direction = direction ?? Vector3d.Zero;
-        FrameRequest.Rate = rate ?? TrekRate.Stationary;
-        FrameRequest.IsRequestingJump = isRequestingJump ?? false;
+        IsGuideded = false;
+        _frameRequest.Direction = direction ?? Vector3d.Zero;
+        _frameRequest.Rate = rate ?? TrekRate.Stationary;
+        _frameRequest.IsRequestingJump = isRequestingJump ?? false;
     }
 
     /// <summary>
@@ -285,10 +286,10 @@ public abstract class Navigator : INavigate
             return;
         }
 
-        FrameRequest.TargetPosition = targetPosition;
-        FrameRequest.Direction = Vector3d.Zero;
-        FrameRequest.Rate = rate ?? TrekRate.Stationary;
-        FrameRequest.IsRequestingJump = isRequestingJump ?? false;
+        IsGuideded = true;
+        _frameRequest.Direction = Vector3d.Zero;
+        _frameRequest.Rate = rate ?? TrekRate.Stationary;
+        _frameRequest.IsRequestingJump = isRequestingJump ?? false;
 
         Steering.ApplyPathRequest(pathRequest, groupId);
     }
@@ -317,13 +318,13 @@ public abstract class Navigator : INavigate
     /// <summary>
     /// Called to make the agent jump if allowed and in a valid state.
     /// </summary>
-    public virtual void ToggleJumpStatus(bool status) => FrameRequest.IsRequestingJump = status;
+    public virtual void ToggleJumpStatus(bool status) => _frameRequest.IsRequestingJump = status;
 
     /// <summary>
     /// Changes the speed at which the navigator is currently traveling without altering direction.
     /// </summary>
     /// <param name="rate">New traversal rate to apply (walk, run, etc.).</param>
-    public virtual void SetTraversalSpeed(TrekRate rate) => FrameRequest.Rate = rate;
+    public virtual void SetTraversalSpeed(TrekRate rate) => _frameRequest.Rate = rate;
 
     #endregion
 
@@ -337,24 +338,32 @@ public abstract class Navigator : INavigate
         if (!IsActive)
             throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
-        FrameRequest.Origin = Position;
-        FrameRequest.FootPosition = GetFootPosition();
-        FrameRequest.Rotation = Rotation;
+        _frameRequest.Origin = Position;
+        _frameRequest.FootPosition = GetFootPosition();
+        _frameRequest.Rotation = Rotation;
 
         if (IsGuideded)
-            FrameRequest.Direction = Steering.GetHeading(this);
+            _frameRequest.Direction = Steering.GetHeading(this);
 
-        Turning.RequestTurnDirection(Forward, FrameRequest.Direction);
-        ConsumeMotorOutput(Motor.Traverse(FrameRequest));
-        Turning.SimulateTurn(this);
+        Turning.RequestTurnDirection(Forward, _frameRequest.Direction);
+
+        if (Motor.TryTraversal(_frameRequest, out Vector3d vDelta, out Vector3d pDelta, out FixedQuaternion rDelta))
+        {
+            AddVelocityDelta(vDelta);
+            AddPositionDelta(pDelta);
+            ApplyRotationDelta(rDelta);
+        }
+
+        if (Turning.TrySimulateTurn(Position, LastPosition, Forward, Rotation, out FixedQuaternion appliedRotation))
+            Rotation = appliedRotation;
 
         if (AnimationHandler is null) return;
 
         NavAnimationUpdater.UpdateAnimationParameters(
             AnimationHandler,
-            FrameRequest.Direction,
+            _frameRequest.Direction,
             IsLockedOn,
-            FrameRequest.Rate == TrekRate.Fast,
+            _frameRequest.Rate == TrekRate.Fast,
             AnimDampTime
         );
     }
@@ -403,10 +412,10 @@ public abstract class Navigator : INavigate
         _positionDelta = Vector3d.Zero;
         _velocityDelta = Vector3d.Zero;
 
-        Motor.FinalizeTraversal(Position, LastPosition, Rotation, FrameCondition, newFootPosition: GetFootPosition());
+        Motor.FinalizeTraversal(Position, LastPosition, Rotation, _frameCondition, newFootPosition: GetFootPosition());
 
         // Reset travel request for next frame
-        FrameRequest.Reset();
+        _frameRequest.Reset();
     }
 
     #endregion
@@ -434,13 +443,13 @@ public abstract class Navigator : INavigate
     {
         if (!IsActive) return;
 
-        FrameCondition.Medium = medium ?? FrameCondition.Medium;
-        FrameCondition.SurfaceLevel = surfaceLevel ?? FrameCondition.SurfaceLevel;
-        FrameCondition.GroundState = surfaceCondition ?? FrameCondition.GroundState;
-        FrameCondition.CeilingLevel = ceilingLevel ?? FrameCondition.CeilingLevel;
+        _frameCondition.Medium = medium ?? _frameCondition.Medium;
+        _frameCondition.SurfaceLevel = surfaceLevel ?? _frameCondition.SurfaceLevel;
+        _frameCondition.GroundState = surfaceCondition ?? _frameCondition.GroundState;
+        _frameCondition.CeilingLevel = ceilingLevel ?? _frameCondition.CeilingLevel;
 
         if (updateMotorState)
-            Motor.UpdateTraversal(FrameCondition);
+            Motor.UpdateTraversal(_frameCondition);
     }
 
     public abstract void CheckTrekCondition();
@@ -449,39 +458,32 @@ public abstract class Navigator : INavigate
 
     #region Deltas - Position / Velocity / Rotation
 
-    private void ConsumeMotorOutput(MotorOutput output)
-    {
-        if (output.VelocityDelta != Vector3d.Zero)
-            AddVelocityDelta(output.VelocityDelta);
-        if (output.PositionDelta != Vector3d.Zero)
-            AddPositionDelta(output.PositionDelta);
-        if (output.RotationDelta != FixedQuaternion.Identity)
-            AddRotationDelta(output.RotationDelta);
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddPositionDelta(Vector3d delta)
     {
+        if (delta == Vector3d.Zero) return;
+
         _positionDelta += delta;
         // shift last position so it doesn't alter navigator's velocity
         LastPosition += delta;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public virtual void AddRotationDelta(FixedQuaternion delta)
+    public virtual void ApplyRotationDelta(FixedQuaternion delta)
     {
+        if (delta == FixedQuaternion.Identity) return;
+
         _rotationDelta *= delta;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddVelocityDelta(Vector3d delta)
     {
+        if (delta == Vector3d.Zero) return;
+
         // assume a mass of 1...for now
         _velocityDelta += delta;
     }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public virtual void ApplyRotation(FixedQuaternion rotation) => Rotation = rotation;
 
     #endregion
 

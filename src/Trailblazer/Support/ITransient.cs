@@ -10,8 +10,11 @@ using System.Reflection;
 namespace Trailblazer.Support;
 
 /// <summary>
-/// Defines a property state that may change per frame and require synchronization.
-/// Note: This interface is intended for properties that are not serialized and need to be reset or synced during runtime.
+/// Defines support for runtime properties marked with <see cref="TransientAttribute"/>.
+/// <para>
+/// In Trailblazer, "transient" means frame-local state that can be synchronized from another
+/// instance or cleared back to defaults. The attribute does not control serialization on its own.
+/// </para>
 /// </summary>
 public interface ITransient
 {
@@ -41,9 +44,6 @@ public interface ITransient
     }
 
     /// <summary>
-    /// Clears transient properties, resetting them to default values.
-    /// </summary>
-    /// <summary>
     /// Clears all transient properties by resetting them to their default values.
     /// </summary>
     public void ClearTransientState()
@@ -66,4 +66,3 @@ public interface ITransient
         }
     }
 }
-

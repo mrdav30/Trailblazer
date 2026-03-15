@@ -35,10 +35,10 @@ Those values are what make gravity and jumping deterministic from frame to frame
 
 ## 2. Frame Order
 
-Vertical motion is not handled in isolation. It is part of the `NavMotor.Traverse(...)` pipeline:
+Vertical motion is not handled in isolation. It is part of the `NavMotor.TryTraversal(...)` pipeline:
 
 1. Cache the current frame request.
-2. Start `_forceOutput` from `Locomotions.Move.FrameVelocity`.
+2. Start `_forceOutput` from `Handler.Move.FrameVelocity`.
 3. Compute movement intent and horizontal acceleration.
 4. Apply environmental forces through `ApplyEnvironmentalForces()`.
 5. Apply jump force through `ApplyJumpForce()`.
@@ -88,17 +88,17 @@ When `CurrentState.Medium == TraversalMedium.Air`, the motor applies gravity dir
 Current flow:
 
 ```csharp
-_forceOutput.y = Locomotions.Move.FrameVelocity.y - gravityStep;
+_forceOutput.y = Handler.Move.FrameVelocity.y - gravityStep;
 ```
 
 Then the motor clamps against terminal fall speed:
 
 ```csharp
-Fixed64 terminalFallSpeed = Locomotions.Move.FrameVelocity.y
+Fixed64 terminalFallSpeed = Handler.Move.FrameVelocity.y
     + (_forceOutput.y * TrailblazerManager.DeltaTime);
 
-if (terminalFallSpeed < -Locomotions.Move.TerminalVelocity)
-    _forceOutput.y = -Locomotions.Move.TerminalVelocity - Locomotions.Move.FrameVelocity.y;
+if (terminalFallSpeed < -Handler.Move.TerminalVelocity)
+    _forceOutput.y = -Handler.Move.TerminalVelocity - Handler.Move.FrameVelocity.y;
 ```
 
 What this means in practice:
@@ -116,7 +116,7 @@ Water does not use the same vertical rule as ground or air.
 When `CurrentState.Medium == TraversalMedium.Water`, Trailblazer applies buoyancy relative to gravity:
 
 ```csharp
-_forceOutput.y += gravityStep * (Locomotions.Swim.BuoyancyFactor - Fixed64.One);
+_forceOutput.y += gravityStep * (Handler.Swim.BuoyancyFactor - Fixed64.One);
 ```
 
 Interpretation of `BuoyancyFactor`:
@@ -178,7 +178,7 @@ While a jump is active and the jump input is still held, Trailblazer partially c
 
 ```csharp
 if (TrailblazerManager.TotalTime <= extraJumpLimit)
-    _forceOutput += Locomotions.Jump.FrameJumpDirection * gravityStep;
+    _forceOutput += Handler.Jump.FrameJumpDirection * gravityStep;
 ```
 
 This is the system that produces variable jump height.

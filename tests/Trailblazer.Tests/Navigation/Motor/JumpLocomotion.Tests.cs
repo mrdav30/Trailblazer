@@ -34,7 +34,7 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Assert
-        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
+        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -47,14 +47,14 @@ public class JumpLocomotionTests : IDisposable
             startingMedium: TraversalMedium.Air);
 
         Vector3d expectedVelocity = Vector3d.Down;
-        expectedVelocity.y += -scout.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
+        expectedVelocity.y += -scout.Motor.Handler.Move.GravityForce * TrailblazerManager.DeltaTime;
 
         // Act
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
         // Assert
-        scout.Motor.Locomotions.Move.FrameVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
+        scout.Motor.Handler.Move.FrameVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class JumpLocomotionTests : IDisposable
         TrailblazerManager.Simulate();
         scout.Simulate();
 
-        Fixed64 expectedJumpFrame = scout.Motor.Locomotions.Jump.JumpStartTime;
+        Fixed64 expectedJumpFrame = scout.Motor.Handler.Jump.JumpStartTime;
 
         // Attempt to jump again immediately
         scout.FrameRequest.IsRequestingJump = true;
@@ -79,8 +79,8 @@ public class JumpLocomotionTests : IDisposable
 
         // Assert
         scout.Motor.IsInAir.Should().BeTrue();
-        scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
-        scout.Motor.Locomotions.Jump.JumpStartTime.Should().Be(expectedJumpFrame);
+        scout.Motor.Handler.Jump.IsCoolingDown.Should().BeTrue();
+        scout.Motor.Handler.Jump.JumpStartTime.Should().Be(expectedJumpFrame);
     }
 
     [Fact]
@@ -107,10 +107,10 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Assert
-        scout.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
-        scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
-        scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we simulate 31
-        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
+        scout.Motor.Handler.Fall.IsFalling.Should().BeFalse();
+        scout.Motor.Handler.Jump.IsJumping.Should().BeFalse();
+        scout.Motor.Handler.Jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we simulate 31
+        scout.Motor.Handler.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Assert
-        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
+        scout.Motor.Handler.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class JumpLocomotionTests : IDisposable
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        Vector3d previousVelocity = scout.Motor.Locomotions.Move.FrameVelocity;
+        Vector3d previousVelocity = scout.Motor.Handler.Move.FrameVelocity;
 
         // Continue holding jump for 3 frames
         for (int i = 0; i < 3; i++)
@@ -151,8 +151,8 @@ public class JumpLocomotionTests : IDisposable
         }
 
         // Assert
-        var expected = previousVelocity.y - (scout.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime * 3);
-        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeGreaterThan(expected);
+        var expected = previousVelocity.y - (scout.Motor.Handler.Move.GravityForce * TrailblazerManager.DeltaTime * 3);
+        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeGreaterThan(expected);
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public class JumpLocomotionTests : IDisposable
         }
 
         // Higher than default jump height
-        scout.Position.y.Should().BeGreaterThan(scout.Motor.Locomotions.Jump.BaseJumpHeight);
+        scout.Position.y.Should().BeGreaterThan(scout.Motor.Handler.Jump.BaseJumpHeight);
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class JumpLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Position.y.Should().BeGreaterThan(scout.Motor.Locomotions.Jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
+        scout.Position.y.Should().BeGreaterThan(scout.Motor.Handler.Jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
     }
 
     [Fact]
@@ -203,7 +203,7 @@ public class JumpLocomotionTests : IDisposable
 
         scout.Simulate();
 
-        scout.Motor.Locomotions.Jump.IsJumping.Should().BeTrue();
+        scout.Motor.Handler.Jump.IsJumping.Should().BeTrue();
 
         scout.FrameCondition = new()
         {
@@ -215,9 +215,9 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Jump should be canceled
-        scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
+        scout.Motor.Handler.Jump.IsJumping.Should().BeFalse();
         // Should stop rising
-        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
+        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
     }
 
     [Fact]
@@ -255,7 +255,7 @@ public class JumpLocomotionTests : IDisposable
         scout.FrameCondition.SurfaceLevel = Fixed64.Zero;
 
         // Assert that jump state has been reset after actual landing
-        scout.Motor.Locomotions.Jump.IsJumping.Should().BeFalse();
+        scout.Motor.Handler.Jump.IsJumping.Should().BeFalse();
         jumpStarted.Should().BeTrue();
         jumpStopped.Should().BeTrue();
         fallStarted.Should().BeTrue();
@@ -268,7 +268,7 @@ public class JumpLocomotionTests : IDisposable
     {
         var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
-        var jumpLocomotion = scout.Motor.Locomotions.Jump;
+        var jumpLocomotion = scout.Motor.Handler.Jump;
         Fixed64 maxExpectedHeight = jumpLocomotion.BaseJumpHeight + jumpLocomotion.ExtraJumpHeight;
 
         Fixed64 maxY = scout.Position.y;
@@ -316,13 +316,13 @@ public class JumpLocomotionTests : IDisposable
     public void Given_ScoutWithMultipleJumps_When_JumpsInAir_Then_JumpCountShouldIncrement()
     {
         var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+        scout.Motor.Handler.Jump.MaxJumpCount = 2;
 
         // First jump
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
+        scout.Motor.Handler.Jump.JumpCount.Should().Be(1);
 
         // Simulate midair
         TrailblazerManager.Simulate();
@@ -332,14 +332,14 @@ public class JumpLocomotionTests : IDisposable
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(2);
+        scout.Motor.Handler.Jump.JumpCount.Should().Be(2);
     }
 
     [Fact]
     public void Given_Scout_When_JumpCountEqualsMax_Then_JumpShouldBeBlocked()
     {
         var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+        scout.Motor.Handler.Jump.MaxJumpCount = 2;
 
         // First jump (ground)
         scout.FrameRequest.IsRequestingJump = true;
@@ -350,7 +350,7 @@ public class JumpLocomotionTests : IDisposable
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(2);
+        scout.Motor.Handler.Jump.JumpCount.Should().Be(2);
 
         var currentVelocity = scout.Velocity;
 
@@ -360,15 +360,15 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Velocity shouldn't increase anymore
-        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(2);
-        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThan(currentVelocity.y);
+        scout.Motor.Handler.Jump.JumpCount.Should().Be(2);
+        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeLessThan(currentVelocity.y);
     }
 
     [Fact]
     public void Given_ScoutWithMidairJumps_When_LandsOnGround_Then_JumpCountShouldReset()
     {
         var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+        scout.Motor.Handler.Jump.MaxJumpCount = 2;
 
         // First jump
         scout.FrameRequest.IsRequestingJump = true;
@@ -391,20 +391,20 @@ public class JumpLocomotionTests : IDisposable
         scout.FrameCondition.SurfaceLevel = Fixed64.Zero;
         scout.Simulate();
 
-        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(0);
+        scout.Motor.Handler.Jump.JumpCount.Should().Be(0);
     }
 
     [Fact]
     public void Given_ScoutMidairJump_When_SecondJumpOccurs_Then_VelocityShouldSpikeAgain()
     {
         var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+        scout.Motor.Handler.Jump.MaxJumpCount = 2;
 
         // First jump
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        var velocityAfterFirstJump = scout.Motor.Locomotions.Move.FrameVelocity.y;
+        var velocityAfterFirstJump = scout.Motor.Handler.Move.FrameVelocity.y;
 
         // Midair frame
         TrailblazerManager.Simulate();
@@ -414,7 +414,7 @@ public class JumpLocomotionTests : IDisposable
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        var velocityAfterSecondJump = scout.Motor.Locomotions.Move.FrameVelocity.y;
+        var velocityAfterSecondJump = scout.Motor.Handler.Move.FrameVelocity.y;
 
         velocityAfterSecondJump.Should().BeGreaterThan(velocityAfterFirstJump);
     }
@@ -423,31 +423,31 @@ public class JumpLocomotionTests : IDisposable
     public void Given_ScoutJumpThenFall_When_JumpRequestedWhileFalling_Then_ShouldNotJump()
     {
         var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        scout.Motor.Locomotions.Jump.MaxJumpCount = 2;
+        scout.Motor.Handler.Jump.MaxJumpCount = 2;
 
         // Frame 1: perform the initial jump
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
+        scout.Motor.Handler.Jump.JumpCount.Should().Be(1);
 
         // Simulate until fall state is entered
-        while (!scout.Motor.Locomotions.Fall.IsFalling)
+        while (!scout.Motor.Handler.Fall.IsFalling)
         {
             TrailblazerManager.Simulate();
             scout.Simulate();
         }
 
-        scout.Motor.Locomotions.Fall.IsFalling.Should().BeTrue();
-        scout.Motor.Locomotions.Jump.IsCoolingDown.Should().BeTrue();
+        scout.Motor.Handler.Fall.IsFalling.Should().BeTrue();
+        scout.Motor.Handler.Jump.IsCoolingDown.Should().BeTrue();
 
         // Attempt second jump while falling
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
         // Jump count should not increase
-        scout.Motor.Locomotions.Jump.JumpCount.Should().Be(1);
-        scout.Motor.Locomotions.Move.FrameVelocity.y.Should().BeLessThan(Fixed64.Zero);
+        scout.Motor.Handler.Jump.JumpCount.Should().Be(1);
+        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeLessThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -455,8 +455,8 @@ public class JumpLocomotionTests : IDisposable
     {
         var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
-        scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)6;
-        scout.Motor.Locomotions.Jump.JumpControlMultiplier = (Fixed64)0.5;
+        scout.Motor.Handler.Move.MaxSidewaysSpeed = (Fixed64)6;
+        scout.Motor.Handler.Jump.JumpControlMultiplier = (Fixed64)0.5;
 
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
@@ -473,8 +473,8 @@ public class JumpLocomotionTests : IDisposable
     {
         var scout = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
-        scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)8;
-        scout.Motor.Locomotions.Jump.JumpControlMultiplier = Fixed64.Zero;
+        scout.Motor.Handler.Move.MaxSidewaysSpeed = (Fixed64)8;
+        scout.Motor.Handler.Jump.JumpControlMultiplier = Fixed64.Zero;
 
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();

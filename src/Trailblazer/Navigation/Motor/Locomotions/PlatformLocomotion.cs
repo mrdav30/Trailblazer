@@ -86,12 +86,18 @@ public partial class PlatformLocomotion : ITransientLocomotion
     public bool IsNewPlatform { get; set; }
 
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public PlatformHandle? ActivePlatform { get; set; }
 
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public PlatformHandle? PreviousPlatform { get; set; }
 
     [Transient]
+    [JsonInclude]
+    [MemoryPackInclude]
     public PlatformHandle? HoldPlatform { get; set; }
 
     /// <summary>
@@ -150,7 +156,17 @@ public partial class PlatformLocomotion : ITransientLocomotion
     [MemoryPackIgnore]
     public bool IsLockedToPlatform => MovementTransfer == MotionTransfer.PermaLocked;
 
+    [JsonIgnore]
+    [MemoryPackIgnore]
     public bool IsHoldingPlatform => IsEnabled && HoldPlatform?.Active == true;
+
+    /// <summary>
+    /// Indicates whether platform inertia (initial velocity transfer) has been applied.
+    /// </summary>
+    [JsonIgnore]
+    [MemoryPackIgnore]
+    public bool InteriaApplied => IsEnabled
+        && (MovementTransfer == MotionTransfer.InitTransfer || MovementTransfer == MotionTransfer.PermaTransfer);
 
     #endregion
 

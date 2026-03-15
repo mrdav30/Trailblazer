@@ -39,11 +39,11 @@ public class SlideLocomotionTests : IDisposable
         };
 
         // Act
-        scout.Motor.Traverse(frameRequest);
+        scout.Motor.TryTraversal(frameRequest, out _, out _, out _);
         scout.Motor.FinalizeTraversal(scout.Position, scout.LastPosition, scout.Rotation, scout.FrameCondition, scout.GetFootPosition());
 
         // Assert
-        scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
+        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
     }
 
     [Fact]
@@ -69,10 +69,10 @@ public class SlideLocomotionTests : IDisposable
         };
 
         // Act
-        scout.Motor.Traverse(frameRequest);
+        scout.Motor.TryTraversal(frameRequest, out _, out _, out _);
 
         // Assert
-        scout.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
+        scout.Motor.Handler.Slide.IsSliding.Should().BeFalse();
     }
 
 
@@ -93,8 +93,8 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
-        scout.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
+        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        scout.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -119,15 +119,15 @@ public class SlideLocomotionTests : IDisposable
         for (int i = 0; i < 3; i++)
         {
             TrailblazerManager.Simulate();
-            scout.Motor.Traverse(request);
+            scout.Motor.TryTraversal(request, out _, out _, out _);
             scout.Motor.FinalizeTraversal(scout.Position, scout.LastPosition, scout.Rotation, scout.FrameCondition, Vector3d.Zero);
 
             request.Origin = scout.Position;
             request.Rotation = scout.Rotation;
         }
 
-        scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
-        scout.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeLessThan((Fixed64)1);
+        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        scout.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeLessThan((Fixed64)1);
     }
 
     [Fact]
@@ -147,11 +147,11 @@ public class SlideLocomotionTests : IDisposable
             highFrictionScout.Simulate();
         }
 
-        var low = lowFrictionScout.Motor.Locomotions.Move.FrameVelocity.Magnitude;
-        var high = highFrictionScout.Motor.Locomotions.Move.FrameVelocity.Magnitude;
+        var low = lowFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
+        var high = highFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
 
-        lowFrictionScout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
-        highFrictionScout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
+        lowFrictionScout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        highFrictionScout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
 
         high.Should().BeLessThan(low);
     }
@@ -168,7 +168,7 @@ public class SlideLocomotionTests : IDisposable
         );
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
-        scout.Motor.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+        scout.Motor.Handler.Slide.SlopeLimit = (Fixed64)45;
 
         // Simulate sliding for a few frames
         for (int i = 0; i < 3; i++)
@@ -177,14 +177,12 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
+        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
 
         GroundCondition shallowSlopeSurface = new()
         {
             Platform = new PlatformHandle(1, Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero)))
         };
-
-        Guid test = new Guid();
 
         // Flatten slope
         scout.FrameCondition.Medium = TraversalMedium.Ground;
@@ -196,7 +194,7 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
+        scout.Motor.Handler.Slide.IsSliding.Should().BeFalse();
     }
 
     [Fact]
@@ -209,8 +207,8 @@ public class SlideLocomotionTests : IDisposable
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
 
-        scout.Motor.Locomotions.Slide.SlopeLimit = (Fixed64)45;
-        scout.Motor.Locomotions.Slide.SidewaysControl = (Fixed64)1;
+        scout.Motor.Handler.Slide.SlopeLimit = (Fixed64)45;
+        scout.Motor.Handler.Slide.SidewaysControl = (Fixed64)1;
 
         for (int i = 0; i < 3; i++)
         {
@@ -220,9 +218,9 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
+        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
 
-        var velocity = scout.Motor.Locomotions.Move.FrameVelocity;
+        var velocity = scout.Motor.Handler.Move.FrameVelocity;
         velocity.x.Should().NotBe(Fixed64.Zero, "Sideways input should influence sliding direction");
     }
 
@@ -255,7 +253,7 @@ public class SlideLocomotionTests : IDisposable
         scout.Simulate();
 
         scout.Motor.IsGrounded.Should().BeTrue();
-        scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
+        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
     }
 
     [Fact]
@@ -267,7 +265,7 @@ public class SlideLocomotionTests : IDisposable
         );
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
-        scout.Motor.Locomotions.Slide.IsEnabled = false;
+        scout.Motor.Handler.Slide.IsEnabled = false;
 
         for (int i = 0; i < 3; i++)
         {
@@ -275,6 +273,6 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
+        scout.Motor.Handler.Slide.IsSliding.Should().BeFalse();
     }
 }

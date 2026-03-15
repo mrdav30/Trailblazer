@@ -1,27 +1,24 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigation.Motor;
-using Trailblazer.Navigation.Turning;
 
 namespace Trailblazer.Navigation;
 
 /// <summary>
 /// Defines the core interface for a navigator entity, providing position, rotation, traversal state, and event handling.
 /// </summary>
-public interface INavigate : ISteer, ITurn
+public interface INavigate : ISteer
 {
     /// <summary>
-    /// The current traversal condition of the scout, including medium (ground, air, water) and surface level.
+    /// The last world position of the navigator.
     /// </summary>
-    TrekCondition FrameCondition { get; }
+    Vector3d LastPosition { get; }
 
     /// <summary>
-    /// The traversal request for the current frame, containing directional intent and travel mode.
+    /// The navigator's visual rotation in world space.
     /// </summary>
-    TrekRequest FrameRequest { get; }
+    FixedQuaternion Rotation { get; }
 
     /// <summary>
-    /// Performs a grounded surface check to determine the current traversal condition.
-    /// Implementations should update the surface state based on collision or probe logic.
+    /// The direction the navigator is currently facing.
     /// </summary>
-    void CheckTrekCondition();
+    Vector3d Forward { get; }
 }

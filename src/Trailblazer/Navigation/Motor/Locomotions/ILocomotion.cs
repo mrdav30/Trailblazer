@@ -14,4 +14,7 @@ public interface ILocomotion
     bool IsEnabled { get; set; }
 }
 
+/// <summary>
+/// Defines a locomotion module with frame-local runtime state that can be synced or cleared.
+/// </summary>
 public interface ITransientLocomotion : ILocomotion, ITransient { }

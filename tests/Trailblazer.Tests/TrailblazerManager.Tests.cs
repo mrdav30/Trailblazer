@@ -76,8 +76,8 @@ public class TrailblazerManagerTests : IDisposable
         TrailblazerManager.SetFrameRate(64);
 
         turning.NotifyCollision();
-        turning.SimulateTurn(navigator);
-        turning.SimulateTurn(navigator);
+        turning.TrySimulateTurn(navigator.Position, navigator.LastPosition, navigator.Forward, navigator.Rotation, out _);
+        turning.TrySimulateTurn(navigator.Position, navigator.LastPosition, navigator.Forward, navigator.Rotation, out _);
 
         turning.TargetReached.Should().BeFalse();
     }

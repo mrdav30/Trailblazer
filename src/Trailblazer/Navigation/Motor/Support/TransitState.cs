@@ -37,14 +37,14 @@ public class TransitState
     /// <summary>
     /// The previous traversal state (for comparison and transition detection).
     /// </summary>
-    public TrekCondition PreviousState { get; private set; }
+    public TrekCondition? PreviousState { get; private set; }
 
     public TransitState(TrekCondition condition)
     {
         Update(condition, null);
     }
 
-    public TransitState(TrekCondition condition, TrekCondition previous)
+    public TransitState(TrekCondition condition, TrekCondition? previous)
     {
         Update(condition, previous);
     }
@@ -52,7 +52,7 @@ public class TransitState
     /// <summary>
     /// Updates the traversal state and retains the previous state for transition tracking.
     /// </summary>
-    public void Update(TrekCondition condition, TrekCondition previous)
+    public void Update(TrekCondition condition, TrekCondition? previous)
     {
         PreviousState = previous;
         Medium = condition.Medium;

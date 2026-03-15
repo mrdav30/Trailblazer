@@ -78,11 +78,6 @@ public class NavTurning
     #region Actions and Functions
 
     /// <summary>
-    /// Event invoked whenever a new rotation quaternion should be applied to the navigator.
-    /// </summary>
-    public Action<FixedQuaternion> OnApplyRotation;
-
-    /// <summary>
     /// Optional predicate that determines whether an auto-turn is permitted after a collision.
     /// </summary>
 #nullable enable
@@ -123,13 +118,19 @@ public class NavTurning
     /// <summary>
     ///Advances the navigator’s rotation toward the <see cref="TargetRotation"/>, handling both buffered and auto-turn logic.
     /// </summary>
-    public void SimulateTurn(ITurn navigator)
+    public bool TrySimulateTurn(
+        Vector3d position,
+        Vector3d lastPosition,
+        Vector3d forward,
+        FixedQuaternion rotation,
+        out FixedQuaternion appliedRotation)
     {
+        appliedRotation = FixedQuaternion.Identity;
         // 1) Preconditions
         if (!_isInitialized)
             throw new InvalidOperationException(
               "NavTurning.OnInitialize must be called before SimulateTurn()");
-        if (!CanTurn) return;
+        if (!CanTurn) return false;
 
         // 2) If we’re idle (finished last turn):
         if (TargetReached)
@@ -146,10 +147,10 @@ public class NavTurning
             else
             {
                 CheckAutoTurn(
-                    navigator.Position,
-                    navigator.LastPosition,
-                    navigator.Forward);
-                return;    // only here do we exit early
+                    position,
+                    lastPosition,
+                    forward);
+                return false;    // only here do we exit early
             }
         }
 
@@ -159,20 +160,18 @@ public class NavTurning
                     : TurnRate * TrailblazerManager.DeltaTime;
         t = FixedMath.Clamp(t, Fixed64.Zero, Fixed64.One);
 
-        var next = FixedQuaternion.Slerp(navigator.Rotation, TargetRotation, t);
+        var next = FixedQuaternion.Slerp(rotation, TargetRotation, t);
 
         if (FixedQuaternion.Angle(next, TargetRotation) <= _arriveThresholdAngle)
         {
             // we’ve arrived
-            OnApplyRotation?.Invoke(TargetRotation);
-            navigator.ApplyRotation(TargetRotation);
+            appliedRotation = TargetRotation;
             StopTurn();
         }
         else
-        {
-            OnApplyRotation?.Invoke(next);
-            navigator.ApplyRotation(next);
-        }
+            appliedRotation = next;
+
+        return true;
     }
 
     /// <summary>
@@ -246,7 +245,7 @@ public class NavTurning
     public void StopTurn() => TargetReached = true;
 
     /// <summary>
-    /// Signals that a collision has occurred and an auto-turn should be evaluated on the next call to <see cref="SimulateTurn"/>.
+    /// Signals that a collision has occurred and an auto-turn should be evaluated on the next call to <see cref="TrySimulateTurn"/>.
     /// </summary>
     public void NotifyCollision()
     {

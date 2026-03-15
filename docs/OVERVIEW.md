@@ -191,7 +191,7 @@ The navigation layer is built from four main pieces.
 
 ### 6.1 Navigator
 
-`Navigator` is the host-facing orchestration layer. It owns transform and traversal state, composes `NavSteering`, `NavTurning`, and `NavMotor`, coordinates the `Simulate()` / `CommitFrameMotion()` lifecycle, and exposes the abstract `CheckTrekCondition()` hook so each host can provide its own world probing.
+`Navigator` is the host-facing orchestration layer. It owns transform and traversal state, composes `NavSteering`, `NavTurning`, and `NavMotor`, coordinates the `Simulate()` / `CommitFrameMotion()` lifecycle, and exposes an abstract `CheckTrekCondition()` hook so each host provides traversal probing explicitly.
 
 See also:
 
@@ -229,14 +229,6 @@ The fixed-step flow is usually:
 ```csharp
 TrailblazerManager.Simulate();
 navigator.Simulate();
-
-// Your host game updates terrain contact, water state, ceilings, moving platforms, etc.
-navigator.SetTrekCondition(
-    medium: TraversalMedium.Ground,
-    surfaceLevel: Fixed64.Zero,
-    surfaceCondition: new GroundCondition(),
-    updateMotorState: true);
-
 navigator.CommitFrameMotion();
 TrailblazerManager.LateSimulate();
 ```
@@ -245,7 +237,7 @@ What each stage does:
 
 1. `TrailblazerManager.Simulate()` advances frame counters and then runs ordered internal simulate hooks such as `PathManager.Tick()`.
 2. `Navigator.Simulate()` resolves heading, runs the motor, and updates turning.
-3. Host code refreshes surface and medium data based on the game world's current state.
+3. Host code refreshes surface and medium data through the concrete navigator's `CheckTrekCondition()` implementation, typically by calling `SetTrekCondition(...)` from inside that override before commit.
 4. `Navigator.CommitFrameMotion()` finalizes deltas, updates velocity and acceleration, and finalizes motor state.
 5. `TrailblazerManager.LateSimulate()` marks the visual accumulation boundary.
 
@@ -289,7 +281,7 @@ Before runtime pathing works correctly:
 3. Register the chart with `PathManager.Register(...)`.
 4. Call `PathManager.InitializeChart(chart.Name)`.
 5. Create and initialize your `Navigator`, or request guides directly.
-6. Keep traversal state up to date through `SetTrekCondition(...)` if using `Navigator`.
+6. Keep traversal state up to date through your concrete navigator's `CheckTrekCondition()` implementation.
 7. Unload charts or clear caches during teardown.
 
 ## 10. Common Gotchas

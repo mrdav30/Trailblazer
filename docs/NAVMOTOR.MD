@@ -13,13 +13,13 @@ The code referenced here lives primarily in:
 
 ## 1. What NavMotor Is
 
-`NavMotor` is the movement execution layer for a `Navigator`.
+`NavMotor` is the movement-execution layer for a `Navigator`.
 
 It is responsible for:
 
-- turning a frame's movement request into motion deltas
+- turning a frame's movement request into deterministic motion deltas
 - applying locomotion rules for ground, air, water, slopes, slides, jumps, and moving platforms
-- tracking traversal state transitions between frames
+- tracking traversal-state transitions between frames
 - producing deterministic movement output using fixed-point math and a fixed simulation timestep
 
 It is not responsible for:
@@ -33,9 +33,9 @@ Those responsibilities belong to `NavSteering`, `NavTurning`, and the host navig
 
 ## 2. Core Design Model
 
-The important design choice is that `NavMotor` is two-phase:
+`NavMotor` is intentionally two-phase:
 
-1. `Traverse(TrekRequest request)` computes this frame's `MotorOutput`.
+1. `TryTraversal(TrekRequest request, out Vector3d velocityDelta, out Vector3d positionDelta, out FixedQuaternion rotationDelta)` computes this frame's movement deltas.
 2. `FinalizeTraversal(...)` reconciles the result after the host has applied those deltas and refreshed traversal state.
 
 That split is what lets Trailblazer stay deterministic while still depending on host-owned surface, water, ceiling, and platform data.
@@ -43,9 +43,9 @@ That split is what lets Trailblazer stay deterministic while still depending on 
 Another important detail:
 
 - names like `_forceOutput` are historical
-- in practice, `NavMotor` works more like a velocity-oriented movement accumulator than a classical rigidbody force solver
+- in practice, `NavMotor` behaves more like a velocity-oriented movement accumulator than a classical rigidbody force solver
 
-The motor starts from `Locomotions.Move.FrameVelocity`, adjusts that output according to locomotion rules, then converts it into per-frame deltas.
+The motor starts from `Handler.Move.FrameVelocity`, adjusts that output according to locomotion rules, then converts it into per-frame deltas.
 
 ## 3. Public Surface
 
@@ -53,7 +53,7 @@ The main entry points are:
 
 - `CreateNew(TrekCondition initialCondition)`
 - `OnInitialize(TrekCondition condition)`
-- `Traverse(TrekRequest request)`
+- `TryTraversal(TrekRequest request, out Vector3d velocityDelta, out Vector3d positionDelta, out FixedQuaternion rotationDelta)`
 - `FinalizeTraversal(Vector3d newPosition, Vector3d lastPosition, FixedQuaternion newRotation, TrekCondition conditionRefresh, Vector3d? newFootPosition = null)`
 - `UpdateTraversal(TrekCondition newCondition, bool isInitializing = false)`
 - `SetVelocity(Vector3d velocity)`
@@ -63,7 +63,7 @@ The main entry points are:
 
 Important public state includes:
 
-- `Locomotions`
+- `Handler`
 - `Events`
 - `CurrentState`
 - `FrameSlopeAngle`
@@ -76,13 +76,12 @@ Important public state includes:
 - `IsInWater`
 - `WasInWater`
 - `InLimbo`
-- `IsPlatformInteriaApplied`
-- `Locomotions.Platform.IsActive`
-- `Locomotions.Platform.IsLockedToPlatform`
+- `Handler.Platform.IsActive`
+- `Handler.Platform.IsLockedToPlatform`
 
 ## 4. Host Contract
 
-`NavMotor` now operates on snapshots rather than a host interface. The host must supply:
+`NavMotor` operates on snapshots rather than a host interface. The host must supply:
 
 - a populated `TrekRequest`
 - the current post-application position and last position
@@ -93,8 +92,8 @@ Important public state includes:
 This is the expected contract around the two phases:
 
 1. Populate a `TrekRequest` for the frame.
-2. Call `Traverse(...)` and capture the returned `MotorOutput`.
-3. Apply the output deltas to position, rotation, and velocity.
+2. Call `TryTraversal(...)`.
+3. If the call returns `true`, apply the returned velocity, position, and rotation deltas.
 4. Re-evaluate the environment and refresh `TrekCondition`.
 5. Call `FinalizeTraversal(...)` with the updated state snapshot.
 
@@ -106,12 +105,12 @@ If the host needs to push a new traversal state into the motor before `FinalizeT
 
 That handler contains:
 
-- `MoveLocomotion`
-- `PlatformLocomotion`
-- `JumpLocomotion`
-- `FallLocomotion`
-- `SlideLocomotion`
-- `SwimLocomotion`
+- `Move`
+- `Platform`
+- `Jump`
+- `Fall`
+- `Slide`
+- `Swim`
 
 These locomotion objects are per-motor, not global. That means different navigators can run different movement parameters at the same time.
 
@@ -124,13 +123,13 @@ Examples:
 
 `CurrentState` is stored as a `TransitState`, which mirrors the current `TrekCondition` plus previous-state data used for transition logic.
 
-## 6. Phase 1: Traverse(...)
+## 6. Phase 1: TryTraversal(...)
 
-`Traverse(...)` is the movement-output phase.
+`TryTraversal(...)` is the movement-output phase.
 
 ### 6.1 Preconditions
 
-`Traverse(...)` returns immediately if:
+`TryTraversal(...)` returns `false` if:
 
 - the motor is not initialized
 - the frame is already locked
@@ -143,8 +142,8 @@ At the start of traversal, the motor:
 
 1. reads the supplied `TrekRequest`
 2. computes `FrameSlopeAngle` from `CurrentState.GetSignedSlopeAngle(...)`
-3. seeds `_forceOutput` from `Locomotions.Move.FrameVelocity`
-4. updates platform velocity through `Locomotions.Platform.UpdatePlatformVelocity()`
+3. seeds `_forceOutput` from `Handler.Move.FrameVelocity`
+4. updates platform velocity through `Handler.Platform.UpdatePlatformVelocity()`
 
 This is important because the motor starts from the previous frame's actual movement state, not from zero.
 
@@ -153,7 +152,7 @@ This is important because the motor starts from the previous frame's actual move
 Before applying movement:
 
 - `InLimbo` disables control until the motor regains a valid traversal context
-- jump cooldown is advanced through `Jump.UpdateCooldown()`
+- jump cooldown is advanced through `Handler.Jump.UpdateCooldown()`
 
 `InLimbo` means the motor is not grounded, not clearly swimming, and not in an active jump or fall state. It is effectively a guarded transitional state.
 
@@ -165,14 +164,14 @@ Responsibilities:
 
 - decide whether the navigator currently has control
 - detect steep-slope sliding
-- clear or preserve vertical output depending on grounded/airborne state
+- clear or preserve vertical output depending on grounded or airborne state
 - compute desired velocity
 - apply friction in grounded idle cases
 - clamp acceleration toward the desired velocity
 
 Key behaviors:
 
-- grounded steep slopes can force `Slide.IsSliding = true`
+- grounded steep slopes can force `Handler.Slide.IsSliding = true`
 - air control is reduced or disabled depending on locomotion state
 - grounded movement can be projected along the surface normal
 - slope speed multipliers can modify horizontal speed
@@ -194,7 +193,7 @@ This phase applies vertical environmental behavior:
 - water buoyancy
 - held-jump gravity offset
 
-This is the gravity/buoyancy stage, not the initial jump-impulse stage.
+This is the gravity and buoyancy stage, not the initial jump-impulse stage.
 
 For the full vertical model, see `GRAVITY.MD`.
 
@@ -212,32 +211,33 @@ If jumping is allowed this frame, `ApplyJumpForce()`:
 - updates jump locomotion state
 
 Ground jumps can be influenced by the current surface normal.
-Water jumps use `Swim.BreachJumpMultiplier`.
+Water jumps use `Handler.Swim.BreachJumpMultiplier`.
 
 ### 6.7 Platform Influence Output
 
-If the navigator is moving with a platform, `Traverse(...)` can include:
+If the navigator is moving with a platform, `TryTraversal(...)` can include:
 
-- `RotationDelta`
-- `PositionDelta`
+- `rotationDelta`
+- `positionDelta`
 
 These deltas are skipped if the navigator has just jumped, because platform velocity transfer is handled separately.
 
-### 6.8 MotorOutput
+### 6.8 Output Deltas
 
-At the end of `Traverse(...)`, the motor converts its movement state into a `MotorOutput`:
+At the end of `TryTraversal(...)`, the motor returns three deltas:
 
 ```csharp
-MotorOutput output = motor.Traverse(frameRequest);
+if (motor.TryTraversal(frameRequest, out var velocityDelta, out var positionDelta, out var rotationDelta))
+{
+    // Apply the returned deltas here.
+}
 ```
 
 The host then applies:
 
-```csharp
-output.VelocityDelta
-output.PositionDelta
-output.RotationDelta
-```
+- `velocityDelta`
+- `positionDelta`
+- `rotationDelta`
 
 ## 7. Phase 2: FinalizeTraversal(...)
 
@@ -246,11 +246,11 @@ output.RotationDelta
 By the time it runs, the host should already have:
 
 - applied all position, rotation, and velocity deltas
-- updated `FrameCondition` from environment probing
+- refreshed traversal state from environment probing
 
 ### 7.1 FrameVelocity Refresh
 
-The motor first recomputes `Locomotions.Move.FrameVelocity` from:
+The motor first recomputes `Handler.Move.FrameVelocity` from:
 
 - `newPosition`
 - `lastPosition`
@@ -315,11 +315,6 @@ It covers:
 - firing `OnLandedFall`
 - clearing swim state when leaving water
 
-One subtle but important distinction:
-
-- landing from a jump is not treated the same as landing from a fall
-- `OnStopJump` and `OnLandedFall` are separate event paths
-
 ### 7.7 HandleSwimState(...)
 
 This stage manages water-state bookkeeping.
@@ -327,7 +322,7 @@ This stage manages water-state bookkeeping.
 It can:
 
 - clear transient locomotion state on first entering water
-- toggle `Swim.IsSwimming`
+- toggle `Handler.Swim.IsSwimming`
 - track diving versus surface-level swimming
 - update underwater time
 - trigger drowning events
@@ -344,8 +339,6 @@ It:
 - emits max-fall-height and landing events
 - suppresses fall state while in water
 
-Fall classification depends on both traversal medium and movement direction. It is not just "velocity is negative."
-
 ### 7.9 HandlePlatformMovement(...)
 
 This final stage caches the navigator's current foot point and rotation relative to the active platform.
@@ -353,7 +346,7 @@ This final stage caches the navigator's current foot point and rotation relative
 Those cached values are used on the next frame to:
 
 - compute platform velocity
-- reconstruct local/platform-relative movement
+- reconstruct local or platform-relative movement
 - keep the navigator attached consistently to a moving transform
 
 ### 7.10 Unlock
@@ -364,7 +357,7 @@ At the end of finalization, `IsFrameLocked` is cleared so the next simulation st
 
 Each locomotion module owns a specific slice of behavior.
 
-### 8.1 MoveLocomotion
+### 8.1 Move
 
 Owns:
 
@@ -375,7 +368,7 @@ Owns:
 - terminal velocity
 - frame velocity storage
 
-### 8.2 JumpLocomotion
+### 8.2 Jump
 
 Owns:
 
@@ -387,7 +380,7 @@ Owns:
 - frame jump direction
 - avoid-grounding timer
 
-### 8.3 FallLocomotion
+### 8.3 Fall
 
 Owns:
 
@@ -396,7 +389,7 @@ Owns:
 - max fall height
 - fall control multiplier
 
-### 8.4 PlatformLocomotion
+### 8.4 Platform
 
 Owns:
 
@@ -404,10 +397,10 @@ Owns:
 - platform transforms
 - platform velocity
 - movement transfer mode
-- platform hold/release state
+- platform hold and release state
 - cached local attachment points
 
-### 8.5 SlideLocomotion
+### 8.5 Slide
 
 Owns:
 
@@ -417,7 +410,7 @@ Owns:
 - speed control during slides
 - the current sliding state
 
-### 8.6 SwimLocomotion
+### 8.6 Swim
 
 Owns:
 
@@ -452,40 +445,35 @@ These events are not just cosmetic. Some of them affect whether behavior is allo
 
 ## 10. Common Integration Pattern
 
-With a concrete `Navigator`, the usual order is:
+With a `Navigator`, the usual order is:
 
 ```csharp
 TrailblazerManager.Simulate();
 navigator.Simulate();
-
-// Host world updates medium, surface, ceiling, water, and platform state.
-navigator.SetTrekCondition(
-    medium: TraversalMedium.Ground,
-    surfaceLevel: Fixed64.Zero,
-    surfaceCondition: new GroundCondition(),
-    updateMotorState: true);
-
 navigator.CommitFrameMotion();
 ```
 
-With a lower-level host implementation, the equivalent pattern is:
+With lower-level motor usage, the equivalent pattern is:
 
 ```csharp
-MotorOutput output = motor.Traverse(frameRequest);
+if (motor.TryTraversal(frameRequest, out var velocityDelta, out var positionDelta, out var rotationDelta))
+{
+    // Host applies the deltas here.
+}
 
-// Host applies the deltas and refreshes TrekCondition here.
+// Host refreshes TrekCondition here.
 
 motor.FinalizeTraversal(newPosition, lastPosition, newRotation, refreshedCondition, newFootPosition);
 ```
 
 The essential rule is:
 
-- `Traverse(...)` consumes the current state
+- `TryTraversal(...)` consumes the current state
 - `FinalizeTraversal(...)` accepts the updated state for next frame
 
 ## 11. Common Gotchas
 
-### Calling Traverse(...) twice in one frame
+### Calling TryTraversal(...) twice in one frame
 
 The second call will do nothing because `IsFrameLocked` is still true.
 
@@ -493,17 +481,17 @@ The second call will do nothing because `IsFrameLocked` is still true.
 
 The motor will keep stale movement and traversal state, and the frame lock will not be cleared.
 
-### Treating FrameCondition as optional
+### Treating traversal refresh as optional
 
-It is not optional. `NavMotor` depends on host-provided `FrameCondition` for medium changes, surfaces, water, ceilings, and platforms.
+It is not optional. `NavMotor` depends on host-provided `TrekCondition` data for medium changes, surfaces, water, ceilings, and platforms.
 
 ### Assuming jump, fall, and air are interchangeable
 
 They are related, but distinct:
 
 - `IsInAir` describes the traversal medium
-- `Jump.IsJumping` describes an active jump state
-- `Fall.IsFalling` describes a classified fall state
+- `Handler.Jump.IsJumping` describes an active jump state
+- `Handler.Fall.IsFalling` describes a classified fall state
 
 ### Assuming platform movement is just positional parenting
 

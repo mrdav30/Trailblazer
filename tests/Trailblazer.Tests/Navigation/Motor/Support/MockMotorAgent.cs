@@ -1,4 +1,6 @@
 ﻿using FixedMathSharp;
+using Microsoft.VisualStudio.TestPlatform.Utilities;
+using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Tests.Navigation.Motor;
@@ -15,9 +17,9 @@ public class MockMotorAgent
 
     public Vector3d Velocity { get; set; }
 
-    public TrekCondition FrameCondition { get; set; }
+    public TrekCondition FrameCondition;
 
-    public TrekRequest FrameRequest { get; set; }
+    public TrekRequest FrameRequest;
 
     private Vector3d _positionDelta;
 
@@ -56,8 +58,12 @@ public class MockMotorAgent
         FrameRequest.FootPosition = GetFootPosition();
         FrameRequest.Rotation = Rotation;
 
-        var deltas = Motor.Traverse(FrameRequest);
-        ConsumeMotorOutput(deltas);
+        if (Motor.TryTraversal(FrameRequest, out var velocityDelta, out var positionDelta, out var rotationDelta))
+        {
+            AddVelocityDelta(velocityDelta);
+            AddPositionDelta(positionDelta);
+            ApplyRotationDelta(rotationDelta);
+        }
 
         LastPosition = Position;
         Position += _positionDelta + _velocityDelta;
@@ -158,30 +164,30 @@ public class MockMotorAgent
         }
     }
 
-    private void ConsumeMotorOutput(MotorOutput output)
-    {
-        if (output.VelocityDelta != Vector3d.Zero)
-            AddVelocityDelta(output.VelocityDelta);
-        if (output.PositionDelta != Vector3d.Zero)
-            AddPositionDelta(output.PositionDelta);
-        if (output.RotationDelta != FixedQuaternion.Identity)
-            AddRotationDelta(output.RotationDelta);
-    }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddPositionDelta(Vector3d delta)
     {
+        if (delta == Vector3d.Zero) return;
+
         _positionDelta += delta;
         // shift last position so it doesn't alter navigator's velocity
         LastPosition += delta;
     }
 
-    public virtual void AddRotationDelta(FixedQuaternion delta)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void ApplyRotationDelta(FixedQuaternion delta)
     {
+        if (delta == FixedQuaternion.Identity) return;
+
         _rotationDelta *= delta;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddVelocityDelta(Vector3d delta)
     {
+        if (delta == Vector3d.Zero) return;
+
+        // assume a mass of 1...for now
         _velocityDelta += delta;
     }
 

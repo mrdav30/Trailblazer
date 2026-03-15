@@ -38,8 +38,8 @@ public class MoveLocomotionTests : IDisposable
         Vector3d newPosition = agent.Position;
         var expectedVelocity = (newPosition - initialPosition) * TrailblazerManager.InvDeltaTime;
 
-        agent.Motor.Locomotions.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
-        agent.Motor.Locomotions.Move.FrameVelocity.Should().Be(expectedVelocity);
+        agent.Motor.Handler.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
+        agent.Motor.Handler.Move.FrameVelocity.Should().Be(expectedVelocity);
     }
 
     [Fact]
@@ -89,10 +89,10 @@ public class MoveLocomotionTests : IDisposable
         };
 
         // Act
-        agent.Motor.Traverse(frameRequest);
+        agent.Motor.TryTraversal(frameRequest, out _, out _, out _);
 
         // Assert
-        agent.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
+        agent.Motor.Handler.Slide.IsSliding.Should().BeFalse();
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class MoveLocomotionTests : IDisposable
                 break;
         }
 
-        agent.Motor.Locomotions.Move.FrameVelocity.Should().BeApproximately(Vector3d.Zero, Fixed64.Epsilon);
+        agent.Motor.Handler.Move.FrameVelocity.Should().BeApproximately(Vector3d.Zero, Fixed64.Epsilon);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class MoveLocomotionTests : IDisposable
         }
 
         // Should be slowing down
-        agent.Motor.Locomotions.Move.FrameVelocity.x.Should().BeLessThan(iniitialVelocity.x);
+        agent.Motor.Handler.Move.FrameVelocity.x.Should().BeLessThan(iniitialVelocity.x);
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public class MoveLocomotionTests : IDisposable
         var projectedVelocity = ((speed * Vector3d.Right) * TrailblazerManager.DeltaTime)
             * TrailblazerManager.InvDeltaTime;
 
-        agent.Motor.Locomotions.Move.FrameVelocity.x.Should().BeLessThan(projectedVelocity.x); // Moving sideways should project velocity down slope
+        agent.Motor.Handler.Move.FrameVelocity.x.Should().BeLessThan(projectedVelocity.x); // Moving sideways should project velocity down slope
     }
 
 
@@ -181,7 +181,7 @@ public class MoveLocomotionTests : IDisposable
         agent.Simulate();
 
         // Assert
-        agent.Motor.Locomotions.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
+        agent.Motor.Handler.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public class MoveLocomotionTests : IDisposable
         agent.Simulate();
 
         // Assert - Projected vector must lie in the tangent plane of the slope
-        var velocity = agent.Motor.Locomotions.Move.FrameVelocity;
+        var velocity = agent.Motor.Handler.Move.FrameVelocity;
         var slopeNormal = agent.Motor.CurrentState.SurfaceNormal;
         var expected = Vector3d.ProjectOnPlane(Vector3d.Forward, slopeNormal);
 
@@ -239,7 +239,7 @@ public class MoveLocomotionTests : IDisposable
             agent.Simulate();
         }
 
-        agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(agent.Motor.Locomotions.Move.MaxSlowSpeed);
+        agent.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(agent.Motor.Handler.Move.MaxSlowSpeed);
     }
 
     [Fact]
@@ -261,7 +261,7 @@ public class MoveLocomotionTests : IDisposable
 
         agent.Simulate();
 
-        agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeLessThan(Fixed64.One);
+        agent.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeLessThan(Fixed64.One);
     }
 
     [Fact]
@@ -282,7 +282,7 @@ public class MoveLocomotionTests : IDisposable
             agent.Simulate();
         }
 
-        agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().Be(agent.Motor.Locomotions.Move.MaxModerateSpeed);
+        agent.Motor.Handler.Move.FrameVelocity.Magnitude.Should().Be(agent.Motor.Handler.Move.MaxModerateSpeed);
     }
 
     [Fact]
@@ -316,8 +316,8 @@ public class MoveLocomotionTests : IDisposable
             highFrictionScout.Simulate();
         }
 
-        var low = lowFrictionScout.Motor.Locomotions.Move.FrameVelocity.Magnitude;
-        var high = highFrictionScout.Motor.Locomotions.Move.FrameVelocity.Magnitude;
+        var low = lowFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
+        var high = highFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
 
         high.Should().BeLessThan(low);
     }
@@ -334,14 +334,14 @@ public class MoveLocomotionTests : IDisposable
 
         agent.Simulate();
 
-        var initialVelocity = agent.Motor.Locomotions.Move.FrameVelocity;
+        var initialVelocity = agent.Motor.Handler.Move.FrameVelocity;
 
         // Stop input
         TrailblazerManager.Simulate();
         agent.Simulate();
 
-        agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
-        agent.Motor.Locomotions.Move.FrameVelocity.Magnitude.Should().BeLessThan(initialVelocity.Magnitude);
+        agent.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeLessThan(initialVelocity.Magnitude);
     }
 
     [Fact]
@@ -349,7 +349,7 @@ public class MoveLocomotionTests : IDisposable
     {
         var scout = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Ground);
-        scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)5;
+        scout.Motor.Handler.Move.MaxSidewaysSpeed = (Fixed64)5;
 
         var speed = scout.Motor.MaxHoritzontalSpeedInDirection(
             Vector3d.Right,

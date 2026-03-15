@@ -81,7 +81,7 @@ public static class MockMotorAgentTestFactory
             startVelocity ?? Vector3d.Down
         );
 
-        agent.Motor.Locomotions.Fall.IsFalling = true;
+        agent.Motor.Handler.Fall.IsFalling = true;
 
         return agent;
     }

@@ -5,10 +5,11 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Represents a movement request for a navigator to pass to <see cref="NavMotor"/> , containing the desired position, rotation, direction, speed, and jump intent.
+/// Represents a movement request for a navigator to pass to <see cref="NavMotor"/>,
+/// containing the current origin, foot position, rotation, direction, speed, and jump intent.
 /// </summary>
 [Serializable]
-public class TrekRequest
+public struct TrekRequest
 {
     /// <summary>
     /// The world position from which the scout is requesting movement. 
@@ -24,11 +25,6 @@ public class TrekRequest
     /// The desired rotation of the scout in world space, used for orientation and facing direction.
     /// </summary>
     public FixedQuaternion Rotation { get; set; }
-
-    /// <summary>
-    /// The target position the scout is trying to reach. 
-    /// </summary>
-    public Vector3d? TargetPosition { get; set; }
 
     /// <summary>
     /// Normalized distance of movement
@@ -58,12 +54,11 @@ public class TrekRequest
         Direction = Direction,
         Rate = Rate,
         IsRequestingJump = IsRequestingJump,
-        FootPosition = FootPosition,
-        TargetPosition = TargetPosition
+        FootPosition = FootPosition
     };
 
     /// <summary>
-    /// Resets the per-frame movement data while preserving any guided target owned by the current request.
+    /// Resets the per-frame movement data.
     /// </summary>
     public void Reset()
     {

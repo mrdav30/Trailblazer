@@ -115,8 +115,8 @@ public partial class SlideLocomotion : ITransientLocomotion
     /// Indicates whether the scout is currently sliding.
     /// </summary>
     [Transient]
-    [JsonIgnore]
-    [MemoryPackIgnore]
+    [JsonInclude]
+    [MemoryPackInclude]
     public bool IsSliding { get; set; }
 
     #endregion

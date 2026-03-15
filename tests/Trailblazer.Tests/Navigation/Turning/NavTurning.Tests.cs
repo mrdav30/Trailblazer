@@ -27,11 +27,11 @@ public class NavTurningTests
         turn.NotifyCollision();
 
         // first call: buffers but does not apply (TargetReached still true)
-        turn.SimulateTurn(mockNav);
+        turn.TrySimulateTurn(mockNav.Position, mockNav.LastPosition, mockNav.Forward, mockNav.Rotation, out _);
         turn.TargetReached.Should().BeTrue();
 
         // call again: now consumes buffer, TargetReached → false
-        turn.SimulateTurn(mockNav);
+        turn.TrySimulateTurn(mockNav.Position, mockNav.LastPosition, mockNav.Forward, mockNav.Rotation, out _);
         turn.TargetReached.Should().BeFalse();
     }
 
@@ -72,12 +72,12 @@ public class NavTurningTests
         turning.NotifyCollision();
 
         // First simulate: buffers the turn but does NOT consume it
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached
             .Should().BeTrue("we buffered a turn but haven't applied it yet");
 
         // Second simulate: consumes the buffer and kicks off the turn
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached
             .Should().BeFalse("after consuming the buffer, we should be mid‐turn");
     }
@@ -98,10 +98,10 @@ public class NavTurningTests
         turning.NotifyCollision();
 
         // Try twice—never buffers because veto is in place
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached.Should().BeTrue();
 
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached.Should().BeTrue();
     }
 
@@ -119,7 +119,7 @@ public class NavTurningTests
 
         // Request a “turn” to the exact same direction → immediate arrival
         turning.RequestTurnDirection(nav.Forward, nav.Forward);
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
 
         turning.TargetReached.Should().BeTrue("we were already facing the target, so we snap immediately");
         nav.Rotation.Should().Be(FixedQuaternion.Identity);
@@ -144,7 +144,7 @@ public class NavTurningTests
     {
         var turning = new NavTurning();
         var nav = new MockTurnAgent();
-        Action act = () => turning.SimulateTurn(nav);
+        Action act = () => turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         act.Should().Throw<InvalidOperationException>()
            .WithMessage("*must be called before SimulateTurn()*");
     }
@@ -163,7 +163,7 @@ public class NavTurningTests
         turning.CanTurn = false;
 
         turning.RequestTurnDirection(Vector3d.Right, Vector3d.Forward);
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
 
         // Should never leave the arrived state nor change rotation
         turning.TargetReached.Should().BeTrue();
@@ -185,7 +185,7 @@ public class NavTurningTests
         turning.TargetReached.Should().BeTrue("no turn requested for angles below threshold");
 
         // And SimulateTurn should immediately return (no buffering)
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached.Should().BeTrue();
     }
 
@@ -203,7 +203,7 @@ public class NavTurningTests
 
         // Request a 90° turn with interpolation = 1 ⇒ instant snap
         turning.RequestTurnDirection(nav.Forward, Vector3d.Forward, interpolation: Fixed64.One);
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
 
         // After the one call, we should have TargetReached = true and rotation == target
         turning.TargetReached.Should().BeTrue();
@@ -224,13 +224,13 @@ public class NavTurningTests
 
         // Force into arrived state
         turning.RequestTurnDirection(nav.Forward, nav.Forward);
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached.Should().BeTrue();
 
         // Multiple subsequent calls should leave rotation unchanged
         nav.Rotation = FixedQuaternion.FromDirection(Vector3d.Forward);
         for (int i = 0; i < 3; i++)
-            turning.SimulateTurn(nav);
+            turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
 
         nav.Rotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Forward));
     }
@@ -252,15 +252,15 @@ public class NavTurningTests
         turning.NotifyCollision();
 
         // First simulate: buffer only one turn
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached.Should().BeTrue();
 
         // Consume buffer
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached.Should().BeFalse();
 
         // No further buffers queued:
-        turning.SimulateTurn(nav);
+        turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
         turning.TargetReached.Should().BeFalse();
     }
 }

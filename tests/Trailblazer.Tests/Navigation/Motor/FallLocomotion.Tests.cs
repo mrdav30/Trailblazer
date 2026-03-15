@@ -24,7 +24,7 @@ public class FallLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateFallingAgent();
 
         Vector3d expectedVelocity = Vector3d.Down;
-        expectedVelocity.y += -agent.Motor.Locomotions.Move.GravityForce
+        expectedVelocity.y += -agent.Motor.Handler.Move.GravityForce
             * TrailblazerManager.DeltaTime;
 
         agent.FrameRequest.IsRequestingJump = true;
@@ -33,7 +33,7 @@ public class FallLocomotionTests : IDisposable
         agent.Simulate();
 
         // Assert
-        agent.Motor.Locomotions.Move.FrameVelocity.Should()
+        agent.Motor.Handler.Move.FrameVelocity.Should()
             .BeApproximately(expectedVelocity, Fixed64.Epsilon);
     }
 
@@ -88,11 +88,11 @@ public class FallLocomotionTests : IDisposable
             agent.Simulate();
 
             // Calculate expected velocity update from gravity impulse
-            expectedVelocity.y += -agent.Motor.Locomotions.Move.GravityForce * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -agent.Motor.Handler.Move.GravityForce * TrailblazerManager.DeltaTime;
         }
 
         // Assert
-        agent.Motor.Locomotions.Move.FrameVelocity.Should().BeApproximately(
+        agent.Motor.Handler.Move.FrameVelocity.Should().BeApproximately(
             expectedVelocity,
             Fixed64.Epsilon);
     }
@@ -135,7 +135,7 @@ public class FallLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
             startingMedium: TraversalMedium.Air);
-        agent.Motor.Locomotions.Fall.MaxFallHeight = Fixed64.One;
+        agent.Motor.Handler.Fall.MaxFallHeight = Fixed64.One;
 
         bool eventCalled = false;
         agent.Motor.Events.OnMaxFallHeightReached += () => eventCalled = true;
@@ -177,12 +177,12 @@ public class FallLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
-        agent.Motor.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+        agent.Motor.Handler.Slide.SlopeLimit = (Fixed64)45;
 
         TrailblazerManager.Simulate();
         agent.Simulate();
 
-        agent.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
+        agent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public class FallLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
-        agent.Motor.Locomotions.Slide.SlopeLimit = (Fixed64)45;
+        agent.Motor.Handler.Slide.SlopeLimit = (Fixed64)45;
 
         for (int i = 0; i < 2; i++)
         {
@@ -203,8 +203,8 @@ public class FallLocomotionTests : IDisposable
             agent.Simulate();
         }
 
-        agent.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
-        agent.Motor.Locomotions.Fall.IsFalling.Should().BeTrue();
+        agent.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        agent.Motor.Handler.Fall.IsFalling.Should().BeTrue();
     }
 
     [Fact]
@@ -246,7 +246,7 @@ public class FallLocomotionTests : IDisposable
         TrailblazerManager.Simulate();
         agent.Simulate();
 
-        agent.Motor.Locomotions.Fall.FallHeight.Should().Be(Fixed64.Zero);
+        agent.Motor.Handler.Fall.FallHeight.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -257,7 +257,7 @@ public class FallLocomotionTests : IDisposable
         bool eventCalled = false;
         agent.Motor.Events.OnStopFall += (height) =>
         {
-            var fallLocomotion = agent.Motor.Locomotions.Fall;
+            var fallLocomotion = agent.Motor.Handler.Fall;
             fallLocomotion.FallStart.Should().BeGreaterThan(fallLocomotion.FallEnd);
             fallLocomotion.FallHeight.Should().Be(fallLocomotion.FallStart - fallLocomotion.FallEnd);
             eventCalled = true;
@@ -279,13 +279,13 @@ public class FallLocomotionTests : IDisposable
             new(0, 10, 0),
             startingMedium: TraversalMedium.Air);
 
-        agent.Motor.Locomotions.Fall.IsFalling = true;
-        agent.Motor.Locomotions.Fall.FallStart = (Fixed64)10;
+        agent.Motor.Handler.Fall.IsFalling = true;
+        agent.Motor.Handler.Fall.FallStart = (Fixed64)10;
 
-        agent.Motor.Locomotions.Fall.IsEnabled = false;
+        agent.Motor.Handler.Fall.IsEnabled = false;
 
-        agent.Motor.Locomotions.Fall.IsFalling.Should().BeFalse();
-        agent.Motor.Locomotions.Fall.FallStart.Should().Be(Fixed64.Zero);
+        agent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
+        agent.Motor.Handler.Fall.FallStart.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -293,8 +293,8 @@ public class FallLocomotionTests : IDisposable
     {
         var scout = MockMotorAgentTestFactory.CreateFallingAgent();
 
-        scout.Motor.Locomotions.Move.MaxSidewaysSpeed = (Fixed64)4;
-        scout.Motor.Locomotions.Fall.FallControlMultiplier = (Fixed64)0.25;
+        scout.Motor.Handler.Move.MaxSidewaysSpeed = (Fixed64)4;
+        scout.Motor.Handler.Fall.FallControlMultiplier = (Fixed64)0.25;
 
         var speed = scout.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Moderate);
 

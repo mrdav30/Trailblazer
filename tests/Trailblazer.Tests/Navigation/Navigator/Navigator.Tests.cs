@@ -57,7 +57,7 @@ public class NavigatorTests : IDisposable
         Vector3d target = new(4, 0, 0);
         navigator.ApplyGuidedTrekRequest(target, rate: TrekRate.Moderate, groupId: 4);
 
-        navigator.FrameRequest.TargetPosition.Should().Be(target);
+        navigator.IsGuideded.Should().BeTrue();
         navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
         navigator.Steering.MovementGroupID.Should().Be(4);
@@ -97,7 +97,7 @@ public class NavigatorTests : IDisposable
         Vector3d target = new(4, 0, 0);
         navigator.ApplyGuidedTrekRequest(target, pathMode: GuidedPathMode.FlowField, rate: TrekRate.Fast);
 
-        navigator.FrameRequest.TargetPosition.Should().Be(target);
+        navigator.IsGuideded.Should().BeTrue();
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
 
         var request = navigator.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
@@ -117,10 +117,38 @@ public class NavigatorTests : IDisposable
 
         navigator.ApplyGuidedTrekRequest(new Vector3d(100, 0, 100), rate: TrekRate.Moderate);
 
-        navigator.FrameRequest.TargetPosition.Should().BeNull();
+        navigator.IsGuideded.Should().BeFalse();
         navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
         navigator.Steering.CurrentRequest.Should().BeNull();
         navigator.Steering.ShouldMove.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Reset_ShouldClearGuidedMode()
+    {
+        var data = new bool[1, 6, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorResetGuided", data, Vector3d.Zero);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
+
+        navigator.IsGuideded.Should().BeTrue();
+
+        navigator.Reset();
+
+        navigator.IsGuideded.Should().BeFalse();
+
+        PathManager.UnloadChart("NavigatorResetGuided");
     }
 
     [Fact]

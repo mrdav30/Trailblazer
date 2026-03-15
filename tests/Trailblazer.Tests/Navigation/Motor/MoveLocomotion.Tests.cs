@@ -69,7 +69,7 @@ public class MoveLocomotionTests : IDisposable
     {
         // Arrange
         var slopeLimit = Fixed64.FromRaw(0xB2B8C75C); // 2998454108L, converts to ~0.698131999932 radians or ~40 degrees; 
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             startPosition: Vector3d.Zero,
             platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right, slopeLimit)
         );
@@ -79,16 +79,17 @@ public class MoveLocomotionTests : IDisposable
             platformMatrix: platform
         );
 
-        agent.FrameRequest = new TrekRequest
+        TrekRequest frameRequest = new TrekRequest
         {
             Origin = agent.Position,
+            FootPosition = agent.GetFootPosition(),
             Rotation = agent.Rotation,
             Direction = Vector3d.Forward,
             Rate = TrekRate.Slow
         };
 
         // Act
-        agent.Motor.Traverse(agent);
+        agent.Motor.Traverse(frameRequest);
 
         // Assert
         agent.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -156,7 +157,7 @@ public class MoveLocomotionTests : IDisposable
     public void Given_AgentOnSlope_When_Simulated_Then_VelocityShouldAlignWithSlope()
     {
         // Arrange
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             startPosition: Vector3d.Zero,
             platformRotation: FixedQuaternion.FromAxisAngle(
                 Vector3d.Right,
@@ -187,7 +188,7 @@ public class MoveLocomotionTests : IDisposable
     public void Given_AgentOnSlope_When_Simulated_Then_VelocityShouldBeProjectedOntoSlope()
     {
         // Arrange
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             startPosition: Vector3d.Zero,
             platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right, Fixed64.FromRaw(0x10000000L)) // Shallow slope
         );
@@ -219,7 +220,7 @@ public class MoveLocomotionTests : IDisposable
     public void Given_AgentOnDownhillSlope_When_MovingDownhill_Then_ShouldAccelerate()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)30);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             startPosition: Vector3d.Zero,
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );
@@ -245,7 +246,7 @@ public class MoveLocomotionTests : IDisposable
     public void Given_AgentOnUphillSlope_When_MovingUphill_Then_ShouldDecelerate()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)30);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             startPosition: Vector3d.Zero,
             platformRotation: FixedQuaternion.FromEulerAngles(-slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );

@@ -12,19 +12,7 @@ public struct GroundCondition
     /// <summary>
     /// The object the scout is currently standing on.
     /// </summary>
-#nullable enable
-    public object? BaseObject;
-#nullable disable
-
-    /// <summary>
-    /// The transformation matrix of the surface object.
-    /// </summary>
-    public Fixed4x4? GroundMatrix;
-
-    /// <summary>
-    /// The normal vector of the surface, indicating its slope.
-    /// </summary>
-    public readonly Vector3d GroundNormal => GroundMatrix?.Up ?? Vector3d.Zero;
+    public PlatformHandle Platform;
 
     /// <summary>
     /// The current surface friction applied to movement.
@@ -36,8 +24,12 @@ public struct GroundCondition
     /// </summary>
     public MotionTransfer MotionTransferState;
 
-    /// <summary>
-    /// Represents an empty surface state with default values.
-    /// </summary>
-    public static GroundCondition CreateEmpty() => new();
+    public readonly Vector3d GroundNormal => Platform.Active ? Platform.Transform.Up : Vector3d.Zero;
+
+    public GroundCondition Clone() => new()
+    {
+        Platform = Platform,
+        SurfaceFriction = SurfaceFriction,
+        MotionTransferState = MotionTransferState
+    };
 }

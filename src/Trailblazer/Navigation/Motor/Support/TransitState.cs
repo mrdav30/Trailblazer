@@ -44,6 +44,11 @@ public class TransitState
         Update(condition, null);
     }
 
+    public TransitState(TrekCondition condition, TrekCondition previous)
+    {
+        Update(condition, previous);
+    }
+
     /// <summary>
     /// Updates the traversal state and retains the previous state for transition tracking.
     /// </summary>
@@ -86,6 +91,12 @@ public class TransitState
     /// </summary>
     public TrekCondition ToTrekCondition()
     {
-        return new TrekCondition(Medium, SurfaceLevel, GroundState, CeilingLevel);
+        return new TrekCondition()
+        {
+            Medium = Medium,
+            SurfaceLevel = SurfaceLevel,
+            GroundState = GroundState,
+            CeilingLevel = CeilingLevel
+        };
     }
 }

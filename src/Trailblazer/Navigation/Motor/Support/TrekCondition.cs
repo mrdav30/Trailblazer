@@ -22,40 +22,30 @@ public class TrekCondition
     /// Stores the height of the ceiling above the scout, if applicable.
     /// Defaults to Fixed64.MAX_VALUE, meaning no ceiling.
     /// </summary>
-    public Fixed64 CeilingLevel;
+    public Fixed64 CeilingLevel = Fixed64.MAX_VALUE;
 
     /// <summary>
     /// Contains data about the ground state, if applicable.
     /// </summary>
     public GroundCondition? GroundState;
 
-    public TrekCondition(
-        TraversalMedium medium = TraversalMedium.Unknown,
-        Fixed64? surfaceLevel = null,
-        GroundCondition? surfaceCondition = null,
-        Fixed64? ceilingLevel = null)
-    {
-        Medium = medium;
-        SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
-        GroundState = surfaceCondition ?? null;
-        CeilingLevel = ceilingLevel ?? Fixed64.MAX_VALUE;
-    }
-
-    /// <summary>
-    /// Represents an empty traversal condition with default values.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static TrekCondition CreateEmpty() => new();
+    public TrekCondition() { }
 
     /// <summary>
     /// Creates a deep copy of the current <see cref="TrekCondition"/> instance.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public TrekCondition Clone() => new TrekCondition(Medium, SurfaceLevel, GroundState, CeilingLevel);
+    public TrekCondition Clone() => new()
+    {
+        Medium = Medium,
+        SurfaceLevel = SurfaceLevel,
+        GroundState = GroundState?.Clone(),
+        CeilingLevel = CeilingLevel
+    };
 
     /// <summary>
-     /// Resets the traversal condition to default values, indicating an unknown state.
-     /// </summary>
+    /// Resets the traversal condition to default values, indicating an unknown state.
+    /// </summary>
     public void Reset()
     {
         Medium = TraversalMedium.Unknown;

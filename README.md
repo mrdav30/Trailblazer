@@ -153,7 +153,7 @@ navigator.Setup(new Vector3d(0, 0, 0), size: Fixed64.One);
 navigator.Initialize(new TrekCondition(
     medium: TraversalMedium.Ground,
     surfaceLevel: Fixed64.Zero,
-    surfaceCondition: GroundCondition.CreateEmpty()));
+    surfaceCondition: new GroundCondition()));
 
 Vector3d target = new(10, 0, 10);
 navigator.GuidedPathMode = GuidedPathMode.FlowField;
@@ -170,7 +170,7 @@ navigator.Simulate();
 navigator.SetTrekCondition(
     medium: TraversalMedium.Ground,
     surfaceLevel: Fixed64.Zero,
-    surfaceCondition: GroundCondition.CreateEmpty(),
+    surfaceCondition: new GroundCondition(),
     updateMotorState: true);
 
 navigator.CommitFrameMotion();

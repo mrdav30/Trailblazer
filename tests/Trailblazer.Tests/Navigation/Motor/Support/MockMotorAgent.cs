@@ -1,10 +1,9 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Tests.Navigation.Motor;
 
-public class MockMotorAgent : IMotor
+public class MockMotorAgent
 {
     private TraversalMedium? _previousMedium;
 
@@ -37,7 +36,7 @@ public class MockMotorAgent : IMotor
         LastPosition = Position = position;
 
         FrameCondition = condition;
-        FrameRequest = TrekRequest.CreateEmpty();
+        FrameRequest = new();
 
         Rotation = rotation ?? FixedQuaternion.Identity;
         Velocity = velocity ?? Vector3d.Zero;
@@ -54,9 +53,11 @@ public class MockMotorAgent : IMotor
     public void Simulate()
     {
         FrameRequest.Origin = Position;
+        FrameRequest.FootPosition = GetFootPosition();
         FrameRequest.Rotation = Rotation;
 
-        Motor.Traverse(this);
+        var deltas = Motor.Traverse(FrameRequest);
+        ConsumeMotorOutput(deltas);
 
         LastPosition = Position;
         Position += _positionDelta + _velocityDelta;
@@ -75,7 +76,7 @@ public class MockMotorAgent : IMotor
         _positionDelta = Vector3d.Zero;
         _velocityDelta = Vector3d.Zero;
 
-        Motor.FinalizeTraversal(this);
+        Motor.FinalizeTraversal(Position, LastPosition, Rotation, FrameCondition, GetFootPosition());
 
         // Reset travel request for next frame
         FrameRequest.Reset();
@@ -95,13 +96,13 @@ public class MockMotorAgent : IMotor
                 return;
             }
 
-            var surfaceMatrix = FrameCondition.GroundState?.GroundMatrix;
-            if (surfaceMatrix != null)
+            var platform = FrameCondition.GroundState?.Platform;
+            if (platform?.Active == true)
             {
                 // Compute world Y value from surface plane based on scout's X/Z
-                Vector3d localPosition = surfaceMatrix.Value.InverseTransformPoint(Position);
+                Vector3d localPosition = platform.Value.Transform.InverseTransformPoint(Position);
                 localPosition.y = Fixed64.Zero; // align to the platform's base plane
-                Vector3d alignedWorld = surfaceMatrix.Value.TransformPoint(localPosition);
+                Vector3d alignedWorld = platform.Value.Transform.TransformPoint(localPosition);
 
                 // Note: agent must be fully snapped to slope plane or velocity won't match projection.
                 if (Position.y < alignedWorld.y)
@@ -129,7 +130,7 @@ public class MockMotorAgent : IMotor
                     // Update ground normal if needed (assuming ground is flat for now)
                     FrameCondition.GroundState ??= new GroundCondition
                     {
-                        GroundMatrix = Fixed4x4.Identity, // Assuming a flat ground by default
+                        Platform = default, // Assuming a flat ground by default
                     };
                 }
             }
@@ -155,6 +156,16 @@ public class MockMotorAgent : IMotor
                 Position = new Vector3d(Position.x, surfaceLevel, Position.z);
             }
         }
+    }
+
+    private void ConsumeMotorOutput(MotorOutput output)
+    {
+        if (output.VelocityDelta != Vector3d.Zero)
+            AddVelocityDelta(output.VelocityDelta);
+        if (output.PositionDelta != Vector3d.Zero)
+            AddPositionDelta(output.PositionDelta);
+        if (output.RotationDelta != FixedQuaternion.Identity)
+            AddRotationDelta(output.RotationDelta);
     }
 
     public virtual void AddPositionDelta(Vector3d delta)

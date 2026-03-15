@@ -14,7 +14,7 @@ public static class MockMotorAgentTestFactory
         TraversalMedium startingMedium = TraversalMedium.Unknown,
         Fixed64? surfaceLevel = null)
     {
-        TrekCondition condition = TrekCondition.CreateEmpty();
+        TrekCondition condition = new();
         switch (startingMedium)
         {
             case TraversalMedium.Ground:
@@ -23,8 +23,7 @@ public static class MockMotorAgentTestFactory
                     condition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
                     condition.GroundState = new GroundCondition
                     {
-                        BaseObject = new object(), // Separate from platform
-                        GroundMatrix = Fixed4x4.Identity
+                        Platform = new(1, Fixed4x4.Identity)
                     };
                 }
                 break;
@@ -71,8 +70,7 @@ public static class MockMotorAgentTestFactory
             condition.GroundState = new GroundCondition
             {
                 MotionTransferState = MotionTransfer.InitTransfer,
-                GroundMatrix = platformMatrix.Value,
-                BaseObject = new object()
+                Platform = new(1, platformMatrix.Value)
             };
         }
 
@@ -103,8 +101,7 @@ public static class MockMotorAgentTestFactory
             CeilingLevel = Fixed64.MAX_VALUE,
             GroundState = new GroundCondition
             {
-                BaseObject = new object(), // Separate from platform
-                GroundMatrix = platformMatrix ?? Fixed4x4.Identity,
+                Platform = new(1, platformMatrix ?? Fixed4x4.Identity),
                 SurfaceFriction = surfaceFriction ?? Fixed64.Zero,
                 MotionTransferState = motionTransfer
             }
@@ -145,8 +142,7 @@ public static class MockMotorAgentTestFactory
             CeilingLevel = Fixed64.MAX_VALUE,
             GroundState = new GroundCondition
             {
-                BaseObject = new object(), // Separate from platform
-                GroundMatrix = Fixed4x4.Identity,
+                Platform = new(1, Fixed4x4.Identity)
             }
         };
 
@@ -161,7 +157,7 @@ public static class MockMotorAgentTestFactory
     /// <summary>
     /// Generates a Platform with Custom Position, Rotation, Velocity
     /// </summary>
-    public static Fixed4x4 CreatePlatform(
+    public static Fixed4x4 CreatePlatformTransform(
         Vector3d? startPosition = null,
         FixedQuaternion? platformRotation = null)
     {

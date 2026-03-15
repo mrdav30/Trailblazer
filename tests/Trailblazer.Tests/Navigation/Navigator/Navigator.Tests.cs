@@ -123,14 +123,44 @@ public class NavigatorTests : IDisposable
         navigator.Steering.ShouldMove.Should().BeFalse();
     }
 
+    [Fact]
+    public void Simulate_ShouldResolveHeading_ForGuidedRequests()
+    {
+        var data = new bool[1, 6, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorGuidedHeading", data, Vector3d.Zero);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
+        Vector3d.Dot(navigator.FrameRequest.Direction, Vector3d.Right).Should().BeGreaterThan(Fixed64.Zero);
+
+        PathManager.UnloadChart("NavigatorGuidedHeading");
+    }
+
     private static TestNavigator CreateNavigator(Vector3d position)
     {
         var navigator = new TestNavigator();
         navigator.Setup(position, size: Fixed64.One);
-        navigator.Initialize(new TrekCondition(
-            medium: TraversalMedium.Ground,
-            surfaceLevel: Fixed64.Zero,
-            surfaceCondition: GroundCondition.CreateEmpty()));
+        navigator.Initialize(new TrekCondition()
+        {
+            Medium = TraversalMedium.Ground,
+            SurfaceLevel = Fixed64.Zero,
+            GroundState = new GroundCondition()
+        });
         return navigator;
     }
 }

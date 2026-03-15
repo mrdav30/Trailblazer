@@ -51,15 +51,15 @@ public class FallLocomotionTests : IDisposable
         agent.Motor.IsInAir.Should().BeTrue();
 
         // Simulate hitting the ground before the next frame
-        agent.FrameCondition = new(
-            TraversalMedium.Ground,
-            Fixed64.Zero,
-            new GroundCondition
+        agent.FrameCondition = new()
+        {
+            Medium = TraversalMedium.Ground,
+            SurfaceLevel = Fixed64.Zero,
+            GroundState = new GroundCondition
             {
-                BaseObject = null,
-                GroundMatrix = Fixed4x4.Identity,
+                Platform = default
             }
-        );
+        };
 
         // 2nd Frame
         TrailblazerManager.Simulate();
@@ -171,7 +171,7 @@ public class FallLocomotionTests : IDisposable
     public void Given_AgentSlidesDownhill_When_SlopeIsShallow_Then_ShouldNotStartFalling()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)10);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
@@ -189,7 +189,7 @@ public class FallLocomotionTests : IDisposable
     public void Given_AgentSlidesDownhill_When_SlopeIsSteep_Then_ShouldStartFalling()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)60);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
@@ -254,15 +254,22 @@ public class FallLocomotionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateFallingAgent(new(0, 20, 0));
 
+        bool eventCalled = false;
+        agent.Motor.Events.OnStopFall += (height) =>
+        {
+            var fallLocomotion = agent.Motor.Locomotions.Fall;
+            fallLocomotion.FallStart.Should().BeGreaterThan(fallLocomotion.FallEnd);
+            fallLocomotion.FallHeight.Should().Be(fallLocomotion.FallStart - fallLocomotion.FallEnd);
+            eventCalled = true;
+        };
+
         while (!agent.Motor.IsGrounded)
         {
             TrailblazerManager.Simulate();
             agent.Simulate();
         }
 
-        var fallLocomotion = agent.Motor.Locomotions.Fall;
-        fallLocomotion.FallStart.Should().BeGreaterThan(fallLocomotion.FallEnd);
-        fallLocomotion.FallHeight.Should().Be(fallLocomotion.FallStart - fallLocomotion.FallEnd);
+        eventCalled.Should().BeTrue();
     }
 
     [Fact]

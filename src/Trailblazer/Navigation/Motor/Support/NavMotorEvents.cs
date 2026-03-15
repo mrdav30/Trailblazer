@@ -8,25 +8,7 @@ namespace Trailblazer.Navigation.Motor;
 /// </summary>
 public class NavMotorEvents
 {
-    /// <summary>
-    /// Event triggered when an external force is applied to the scout.
-    /// </summary>
-    /// <remarks>
-    /// This is typically used for acceleration-based movement adjustments.
-    /// </remarks>
-    public Action<Vector3d> OnAddVelocityDelta { get; set; }
-
 #nullable enable
-
-    /// <summary>
-    /// Event triggered when a platform applies a positional displacement to the scout.
-    /// </summary>
-    public Action<Vector3d>? OnAddPositionDelta { get; set; } = null;
-
-    /// <summary>
-    /// Event triggered when a platform applies a rotational displacement to the scout.
-    /// </summary>
-    public Action<FixedQuaternion>? OnAddRotationDelta { get; set; } = null;
 
     /// <summary>
     /// Function that determines if the scout can afford to perform a jump action.
@@ -82,5 +64,4 @@ public class NavMotorEvents
     /// </summary>
     public Action? OnMaxFallHeightReached { get; set; } = null;
 
-#nullable disable
 }

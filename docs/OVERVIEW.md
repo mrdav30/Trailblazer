@@ -234,7 +234,7 @@ navigator.Simulate();
 navigator.SetTrekCondition(
     medium: TraversalMedium.Ground,
     surfaceLevel: Fixed64.Zero,
-    surfaceCondition: GroundCondition.CreateEmpty(),
+    surfaceCondition: new GroundCondition(),
     updateMotorState: true);
 
 navigator.CommitFrameMotion();

@@ -35,8 +35,8 @@ Those responsibilities belong to `NavSteering`, `NavTurning`, and the host navig
 
 The important design choice is that `NavMotor` is two-phase:
 
-1. `Traverse(IMotor navigator)` computes this frame's movement output.
-2. `FinalizeTraversal(IMotor navigator)` reconciles the result after the host has applied deltas and refreshed traversal state.
+1. `Traverse(TrekRequest request)` computes this frame's `MotorOutput`.
+2. `FinalizeTraversal(...)` reconciles the result after the host has applied those deltas and refreshed traversal state.
 
 That split is what lets Trailblazer stay deterministic while still depending on host-owned surface, water, ceiling, and platform data.
 
@@ -51,10 +51,10 @@ The motor starts from `Locomotions.Move.FrameVelocity`, adjusts that output acco
 
 The main entry points are:
 
-- `CreateNew(Vector3d startingPosition, TrekCondition initialCondition)`
-- `OnInitialize(Vector3d startingPosition, TrekCondition initialCondition)`
-- `Traverse(IMotor navigator)`
-- `FinalizeTraversal(IMotor navigator)`
+- `CreateNew(TrekCondition initialCondition)`
+- `OnInitialize(TrekCondition condition)`
+- `Traverse(TrekRequest request)`
+- `FinalizeTraversal(Vector3d newPosition, Vector3d lastPosition, FixedQuaternion newRotation, TrekCondition conditionRefresh, Vector3d? newFootPosition = null)`
 - `UpdateTraversal(TrekCondition newCondition, bool isInitializing = false)`
 - `SetVelocity(Vector3d velocity)`
 - `GetVerticalJumpSpeed()`
@@ -76,33 +76,27 @@ Important public state includes:
 - `IsInWater`
 - `WasInWater`
 - `InLimbo`
-- `IsOnPlatform`
 - `IsPlatformInteriaApplied`
-- `IsMovingWithPlatform`
+- `Locomotions.Platform.IsActive`
+- `Locomotions.Platform.IsLockedToPlatform`
 
 ## 4. Host Contract
 
-`NavMotor` operates against the `IMotor` interface. The host must supply:
+`NavMotor` now operates on snapshots rather than a host interface. The host must supply:
 
-- `Position`
-- `LastPosition`
-- `Rotation`
-- `Velocity`
-- `FrameCondition`
-- `FrameRequest`
-- `AddPositionDelta(...)`
-- `AddRotationDelta(...)`
-- `AddVelocityDelta(...)`
-- `CheckTrekCondition()`
-- `GetFootPosition()`
+- a populated `TrekRequest`
+- the current post-application position and last position
+- the current post-application rotation
+- the refreshed `TrekCondition`
+- the current foot position when platform tracking is needed
 
 This is the expected contract around the two phases:
 
-1. Populate `FrameRequest` for the frame.
-2. Call `Traverse(...)`.
-3. Apply the resulting deltas to position, rotation, and velocity.
-4. Re-evaluate the environment and update `FrameCondition`.
-5. Call `FinalizeTraversal(...)`.
+1. Populate a `TrekRequest` for the frame.
+2. Call `Traverse(...)` and capture the returned `MotorOutput`.
+3. Apply the output deltas to position, rotation, and velocity.
+4. Re-evaluate the environment and refresh `TrekCondition`.
+5. Call `FinalizeTraversal(...)` with the updated state snapshot.
 
 If the host needs to push a new traversal state into the motor before `FinalizeTraversal(...)`, it can call `UpdateTraversal(...)` directly. This is what `Navigator.SetTrekCondition(updateMotorState: true)` is for.
 
@@ -147,10 +141,10 @@ This frame lock is intentional. The motor is designed to process movement exactl
 
 At the start of traversal, the motor:
 
-1. caches `navigator.FrameRequest` into `frameRequest`
+1. reads the supplied `TrekRequest`
 2. computes `FrameSlopeAngle` from `CurrentState.GetSignedSlopeAngle(...)`
 3. seeds `_forceOutput` from `Locomotions.Move.FrameVelocity`
-4. updates platform velocity through `UpdatePlatformVelocity()`
+4. updates platform velocity through `Locomotions.Platform.UpdatePlatformVelocity()`
 
 This is important because the motor starts from the previous frame's actual movement state, not from zero.
 
@@ -220,25 +214,30 @@ If jumping is allowed this frame, `ApplyJumpForce()`:
 Ground jumps can be influenced by the current surface normal.
 Water jumps use `Swim.BreachJumpMultiplier`.
 
-### 6.7 ApplyPlatformMovement(IMotor navigator)
+### 6.7 Platform Influence Output
 
-If the navigator is moving with a platform, the motor can apply:
+If the navigator is moving with a platform, `Traverse(...)` can include:
 
-- rotation deltas through `AddRotationDelta(...)`
-- position deltas through `AddPositionDelta(...)`
+- `RotationDelta`
+- `PositionDelta`
 
-This stage is skipped if the navigator has just jumped, because platform velocity transfer is handled separately.
+These deltas are skipped if the navigator has just jumped, because platform velocity transfer is handled separately.
 
-### 6.8 Velocity Delta Output
+### 6.8 MotorOutput
 
-At the end of `Traverse(...)`, the motor converts its movement output into a frame delta:
+At the end of `Traverse(...)`, the motor converts its movement state into a `MotorOutput`:
 
 ```csharp
-Vector3d velDelta = _forceOutput * TrailblazerManager.DeltaTime;
-navigator.AddVelocityDelta(velDelta);
+MotorOutput output = motor.Traverse(frameRequest);
 ```
 
-The `OnAddVelocityDelta` event is fired before the delta is applied.
+The host then applies:
+
+```csharp
+output.VelocityDelta
+output.PositionDelta
+output.RotationDelta
+```
 
 ## 7. Phase 2: FinalizeTraversal(...)
 
@@ -253,15 +252,15 @@ By the time it runs, the host should already have:
 
 The motor first recomputes `Locomotions.Move.FrameVelocity` from:
 
-- `navigator.Position`
-- `navigator.LastPosition`
+- `newPosition`
+- `lastPosition`
 - `TrailblazerManager.InvDeltaTime`
 
 This becomes the authoritative runtime velocity for the next frame.
 
 ### 7.2 TransitState Update
 
-The motor then updates `CurrentState` from `navigator.FrameCondition`, preserving the previous state for transition logic.
+The motor then updates `CurrentState` from the refreshed `TrekCondition`, preserving the previous state for transition logic.
 
 This is where medium transitions become visible to the motor:
 
@@ -286,6 +285,7 @@ The motor updates platform ownership and transforms by:
 
 - copying the current `GroundCondition`
 - detecting whether the active platform changed
+- refreshing same-id platform transforms without treating them as a platform swap
 - caching active and previous transforms
 - resetting `IsNewPlatform` appropriately
 
@@ -304,7 +304,7 @@ Examples:
 
 This logic is what makes `MotionTransfer.None`, `InitTransfer`, `PermaTransfer`, and `PermaLocked` meaningful in practice.
 
-### 7.6 HandleMovementTransitions()
+### 7.6 Movement Transition Handling
 
 This stage processes movement lifecycle events.
 
@@ -405,7 +405,7 @@ Owns:
 - platform velocity
 - movement transfer mode
 - platform hold/release state
-- cached local/global attachment points
+- cached local attachment points
 
 ### 8.5 SlideLocomotion
 
@@ -431,12 +431,6 @@ Owns:
 ## 9. Events
 
 `NavMotorEvents` exposes hooks for external systems and gameplay reactions.
-
-Movement-output events:
-
-- `OnAddVelocityDelta`
-- `OnAddPositionDelta`
-- `OnAddRotationDelta`
 
 Jump and water events:
 
@@ -468,21 +462,20 @@ navigator.Simulate();
 navigator.SetTrekCondition(
     medium: TraversalMedium.Ground,
     surfaceLevel: Fixed64.Zero,
-    surfaceCondition: GroundCondition.CreateEmpty(),
+    surfaceCondition: new GroundCondition(),
     updateMotorState: true);
 
 navigator.CommitFrameMotion();
 ```
 
-With a lower-level `IMotor` implementation, the equivalent pattern is:
+With a lower-level host implementation, the equivalent pattern is:
 
 ```csharp
-motor.Traverse(host);
+MotorOutput output = motor.Traverse(frameRequest);
 
-// Host applies the deltas and refreshes FrameCondition here.
-host.CheckTrekCondition();
+// Host applies the deltas and refreshes TrekCondition here.
 
-motor.FinalizeTraversal(host);
+motor.FinalizeTraversal(newPosition, lastPosition, newRotation, refreshedCondition, newFootPosition);
 ```
 
 The essential rule is:

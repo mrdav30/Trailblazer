@@ -17,11 +17,6 @@ namespace Trailblazer.Navigation.Motor
         #region Fields & Properties
 
         /// <summary>
-        /// Enables debug output for state logging.
-        /// </summary>
-        public bool DebugMode;
-
-        /// <summary>
         /// Manages locomotion states and behaviors.
         /// </summary>
         public LocomotionHandler Locomotions = new();
@@ -105,20 +100,10 @@ namespace Trailblazer.Navigation.Motor
             || IsInAir && !Locomotions.Jump.IsJumping && !Locomotions.Fall.IsFalling;
 
         /// <summary>
-        /// Indicates whether the navigator is currently standing on a platform.
-        /// </summary>
-        public bool IsOnPlatform => Locomotions.Platform.IsEnabled && Locomotions.Platform.ActivePlatform != null;
-
-        /// <summary>
         /// Indicates whether platform inertia (initial velocity transfer) has been applied.
         /// </summary>
         public bool IsPlatformInteriaApplied => Locomotions.Platform.IsEnabled
             && (Locomotions.Platform.MovementTransfer == MotionTransfer.InitTransfer || Locomotions.Platform.MovementTransfer == MotionTransfer.PermaTransfer);
-
-        /// <summary>
-        /// Indicates whether the navigator is locked to a platform and will move with it.
-        /// </summary>
-        public bool IsMovingWithPlatform => IsOnPlatform && (IsGrounded || Locomotions.Platform.MovementTransfer == MotionTransfer.PermaLocked);
 
         #endregion
 
@@ -133,26 +118,23 @@ namespace Trailblazer.Navigation.Motor
         /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
         public static NavMotor CreateNew(TrekCondition initialCondition) => new(initialCondition);
 
-        /// <summary>
-        /// Initializes a new, empty instance of the <see cref="NavMotor"/> class.
-        /// </summary>
-        public NavMotor() { }
+        private NavMotor() { }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="NavMotor"/> class.
         /// </summary>
-        /// <param name="initialCondition">The initial traversal condition of the navigator</param>
-        public NavMotor(TrekCondition initialCondition) => OnInitialize(initialCondition);
+        /// <param name="condition">The initial traversal condition of the navigator</param>
+        public NavMotor(TrekCondition condition) => OnInitialize(condition);
 
         /// <summary>
         /// Prepares the controller by linking it to the given navigator and setting initial state values.
         /// </summary>
-        /// <param name="initialCondition">The initial traversal condition of the navigator</param>
-        public void OnInitialize(TrekCondition initialCondition)
+        /// <param name="condition">The initial traversal condition of the navigator</param>
+        public void OnInitialize(TrekCondition condition)
         {
-            CurrentState = new TransitState(initialCondition);
+            CurrentState = new TransitState(condition);
             if (CurrentState.GroundState.HasValue)
-                HandlePlatformChange(); // set the initial platform
+                Locomotions.Platform.HandlePlatformChange(CurrentState.GroundState); // set the initial platform
 
             IsInitialized = true;
         }
@@ -168,30 +150,33 @@ namespace Trailblazer.Navigation.Motor
         /// This method locks the controller for the current frame to prevent duplicate force accumulation.  
         /// Movement forces such as gravity, jump, and platform adjustments are applied.
         /// </remarks>
-        /// <param name="navigator">The navigator this controller manages</param>
-        public void Traverse(IMotor navigator)
+        /// <param name="request">The movement request containing desired movement parameters</param>
+        // TODO: instead of feeding in navigator, output the forces and let the navigator apply them. 
+        // This would allow for better separation of concerns and make it easier to test the motor logic in isolation.
+        public MotorOutput Traverse(TrekRequest request)
         {
-            if (!IsInitialized) return;
+            if (!IsInitialized) return default;
 
             if (IsFrameLocked)
-                return;
+                return default;
 
             IsFrameLocked = true;
 
-            if (DebugMode)
-                Debug.WriteLine($"AgentMotor State: " +
-                    $"Grounded={IsGrounded}, " +
-                    $"InAir={IsInAir}, " +
-                    $"Velocity={Locomotions.Move.FrameVelocity}");
+#if DEBUG
+            Debug.WriteLine($"NavMotor State: " +
+                $"Grounded={IsGrounded}, " +
+                $"InAir={IsInAir}, " +
+                $"Velocity={Locomotions.Move.FrameVelocity}");
+#endif
 
-            var frameRequest = navigator.FrameRequest.Clone();
-            FrameSlopeAngle = CurrentState.GetSignedSlopeAngle(frameRequest.Direction);
+            // Calculate the slope angle for the current frame based on the movement direction and surface normal.
+            FrameSlopeAngle = CurrentState.GetSignedSlopeAngle(request.Direction);
 
             // Store the current velocity for manipulation
             _forceOutput = Locomotions.Move.FrameVelocity;
 
             // Update platform velocity prior to applying jump force
-            UpdatePlatformVelocity();
+            Locomotions.Platform.UpdatePlatformVelocity();
 
             // In limbo, prevent any further processing until control is given back
             if (InLimbo)
@@ -200,51 +185,34 @@ namespace Trailblazer.Navigation.Motor
             if (Locomotions.Jump.IsCoolingDown)
                 Locomotions.Jump.UpdateCooldown();
 
-            ComputeMovementForces(frameRequest);
+            ComputeMovementForces(request);
 
             // Reset this before applying gravity
-            if (!frameRequest.IsRequestingJump || !Locomotions.Jump.CanJump)
+            if (!request.IsRequestingJump || !Locomotions.Jump.CanJump)
                 Locomotions.Jump.IsHoldingJump = false;
 
             // Apply external forces such as gravity, water drag, and friction.
             ApplyEnvironmentalForces();
 
-            ApplyJumpForce(frameRequest.IsRequestingJump);
-
-            ApplyPlatformMovement(navigator);
+            ApplyJumpForce(request.IsRequestingJump);
 
             // Apply the computed force
-            if (_forceOutput != Vector3d.Zero)
-            {
-                Vector3d velDelta = _forceOutput * TrailblazerManager.DeltaTime;
-                Events.OnAddVelocityDelta?.Invoke(velDelta);
-                navigator.AddVelocityDelta(velDelta);
-            }
-        }
+            Vector3d velocityDelta = _forceOutput != Vector3d.Zero
+                ? _forceOutput * TrailblazerManager.DeltaTime
+                : Vector3d.Zero;
 
-        /// <summary>
-        /// Updates the platform velocity based on movement from the last frame.
-        /// </summary>
-        private void UpdatePlatformVelocity()
-        {
-            if (!Locomotions.Platform.IsEnabled) return;
+            Vector3d positionDelta = Vector3d.Zero;
+            FixedQuaternion rotationDelta = FixedQuaternion.Identity;
 
-            if (Locomotions.Platform.ActivePlatform != null)
-            {
-                if (!Locomotions.Platform.IsNewPlatform)
-                {
-                    Vector3d currentPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
-                    Vector3d previousPoint = Locomotions.Platform.LastTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
+            //  Do NOT apply movement if we just jumped — velocity was already injected
+            bool isMovingWithPlatform = Locomotions.Platform.IsActive && (IsGrounded || Locomotions.Platform.IsLockedToPlatform);
+            if (isMovingWithPlatform && !Locomotions.Jump.IsJumping)
+                Locomotions.Platform.GetPlatformInfluence(request.FootPosition ?? request.Origin,
+                    request.Rotation,
+                    out positionDelta,
+                    out rotationDelta);
 
-                    // Store platform velocity to use as a canceling force
-                    Locomotions.Platform.PlatformVelocity = (currentPoint - previousPoint) * TrailblazerManager.InvDeltaTime;
-                }
-
-                Locomotions.Platform.LastTransform = Locomotions.Platform.ActiveTransform;
-                Locomotions.Platform.IsNewPlatform = false;
-            }
-            else
-                Locomotions.Platform.PlatformVelocity = Vector3d.Zero;
+            return new MotorOutput(velocityDelta, positionDelta, rotationDelta);
         }
 
         /// <summary>
@@ -510,8 +478,7 @@ namespace Trailblazer.Navigation.Motor
             _forceOutput.y = Locomotions.Move.FrameVelocity.y - gravityStep;
 
             // Ensure velocity does not exceed terminal fall speed
-            Fixed64 terminalFallSpeed = Locomotions.Move.FrameVelocity.y
-                + (_forceOutput.y * TrailblazerManager.DeltaTime);
+            Fixed64 terminalFallSpeed = Locomotions.Move.FrameVelocity.y + (_forceOutput.y * TrailblazerManager.DeltaTime);
             if (terminalFallSpeed < -Locomotions.Move.TerminalVelocity)
                 _forceOutput.y = -Locomotions.Move.TerminalVelocity - Locomotions.Move.FrameVelocity.y;
 
@@ -591,38 +558,6 @@ namespace Trailblazer.Navigation.Motor
             _forceOutput += jumpForce;
         }
 
-        /// <summary>
-        /// Applies movement adjustments due to platform motion, ensuring the navigator inherits platform movement correctly.
-        /// </summary>
-        /// <remarks>
-        /// This method updates the navigator’s position and rotation based on the platform’s transform,
-        /// preventing unwanted movement shifts when transitioning between platforms.
-        /// </remarks>
-        private void ApplyPlatformMovement(IMotor navigator)
-        {
-            if (!IsMovingWithPlatform) return;
-
-            //  Do NOT apply movement if we just jumped — velocity was already injected
-            if (Locomotions.Jump.IsJumping) return;
-
-            // Apply platform rotation first THEN apply platform movement
-            FixedQuaternion targetRotation = Locomotions.Platform.ActiveTransform.Rotation * Locomotions.Platform.ScoutLocalRotation;
-            if (targetRotation != FixedQuaternion.Identity)
-            {
-                FixedQuaternion rotDelta = targetRotation * Locomotions.Platform.ScoutGlobalRotation.Inverse();
-                Events.OnAddRotationDelta?.Invoke(rotDelta);
-                navigator.AddRotationDelta(rotDelta);
-            }
-
-            Vector3d newGlobalPoint = Locomotions.Platform.ActiveTransform.TransformPoint(Locomotions.Platform.ScoutLocalPoint);
-            Vector3d posDelta = newGlobalPoint - Locomotions.Platform.ScoutGlobalPoint;
-            if (posDelta != Vector3d.Zero)
-            {
-                Events.OnAddPositionDelta?.Invoke(posDelta);
-                navigator.AddPositionDelta(posDelta);
-            }
-        }
-
         #endregion
 
         #region Phase 2 - Finalize 
@@ -631,31 +566,55 @@ namespace Trailblazer.Navigation.Motor
         /// Finalizes traversal state updates and prepares the navigator for the next simulation frame.
         /// </summary>
         /// <remarks>
-        /// This method updates the navigator's velocity, applies necessary adjustments based on traversal state changes,
+        /// This method updates the frame velocity, applies necessary adjustments based on traversal state changes,
         /// and processes platform movement or environmental effects as needed.
         /// </remarks>
-        public void FinalizeTraversal(IMotor navigator)
+        public void FinalizeTraversal(
+            Vector3d newPosition,
+            Vector3d lastPosition,
+            FixedQuaternion newRotation,
+            TrekCondition conditonRefresh,
+            Vector3d? newFootPosition = null)
         {
             if (!IsInitialized || !IsFrameLocked) return;
 
-            Locomotions.Move.FrameVelocity = (navigator.Position - navigator.LastPosition)
-                * TrailblazerManager.InvDeltaTime;
+            Locomotions.Move.FrameVelocity = (newPosition - lastPosition) * TrailblazerManager.InvDeltaTime;
 
-            CurrentState.Update(navigator.FrameCondition, CurrentState.ToTrekCondition());
+            CurrentState.Update(conditonRefresh, CurrentState.ToTrekCondition());
 
-            CheckJumpStatus(navigator.Position);
+            CheckJumpStatus(newPosition);
 
-            HandlePlatformChange();
+            Locomotions.Platform.HandlePlatformChange(CurrentState.GroundState);
 
             HandlePlatformTransitions();
 
-            HandleMovementTransitions();
+            // Trasitioning to either ground or water
+            if (WasInAir && !IsInAir)
+            {
+                if (Locomotions.Jump.IsJumping)
+                {
+                    // Reset cooldown on landing
+                    Locomotions.Jump.ResetJumpCounter();
 
-            HandleSwimState(navigator.Position);
+                    if (IsInWater)
+                        Events.OnStopWaterBreach?.Invoke();
+                    else
+                        Events.OnStopJump?.Invoke();
+                }
+                else if (!IsInWater)
+                    Events.OnLandedFall?.Invoke();
+            }
 
-            HandleFallState(navigator.Position);
+            // Transitioning out of water
+            if (Locomotions.Swim.IsEnabled && !IsInWater && WasInWater)
+                Locomotions.ClearState<SwimLocomotion>();
 
-            HandlePlatformMovement(navigator.GetFootPosition(), navigator.Rotation);
+            HandleSwimState(newPosition);
+
+            HandleFallState(newPosition);
+
+            if (Locomotions.Platform.IsActive && (IsGrounded || Locomotions.Platform.IsLockedToPlatform))
+                Locomotions.Platform.HandlePlatformMovement(newFootPosition ?? newPosition, newRotation);
 
             IsFrameLocked = false;
         }
@@ -663,59 +622,17 @@ namespace Trailblazer.Navigation.Motor
         private void CheckJumpStatus(Vector3d position)
         {
             // Make sure we aren't hitting the ceiling
-            if (Locomotions.Move.FrameVelocity.y > Fixed64.Zero
-                && CurrentState.CeilingLevel != Fixed64.MAX_VALUE)
-            {
-                if (position.y > CurrentState.CeilingLevel)
-                {
-                    Locomotions.Move.FrameVelocity = new(
-                        Locomotions.Move.FrameVelocity.x,
-                        Fixed64.Zero,
-                        Locomotions.Move.FrameVelocity.z);
-                    Locomotions.Jump.IsJumping = false;
-                    Locomotions.Jump.IsHoldingJump = false;
-                }
-            }
-        }
-
-        private void HandlePlatformChange()
-        {
-            // If we hit a new platform, reset platform state
-            if (!Locomotions.Platform.IsEnabled)
+            if (Locomotions.Move.FrameVelocity.y <= Fixed64.Zero || CurrentState.CeilingLevel == Fixed64.MAX_VALUE)
                 return;
 
-            // Clear it to avoid double-applying next frame
-            Locomotions.Platform.FramePlatformVelocity = Vector3d.Zero;
-            Locomotions.Platform.MovementTransfer = CurrentState.GroundState?.MotionTransferState ?? MotionTransfer.None;
+            if (position.y <= CurrentState.CeilingLevel) return;
 
-            if (!DidPlatformChange(CurrentState.GroundState))
-                return;
-
-            Fixed4x4 newPlatformMatrix = CurrentState.GroundState?.GroundMatrix ?? Fixed4x4.Identity;
-
-            Locomotions.Platform.LastTransform = Locomotions.Platform.ActivePlatform == null
-                ? newPlatformMatrix
-                : Locomotions.Platform.ActiveTransform;
-            Locomotions.Platform.ActiveTransform = newPlatformMatrix;
-            Locomotions.Platform.ActivePlatform = CurrentState.GroundState?.BaseObject ?? null;
-
-            Locomotions.Platform.IsNewPlatform = true;
-        }
-
-        /// <summary>
-        /// Determines if the navigator has transitioned onto a different platform.
-        /// </summary>
-        /// <param name="surfaceCondition">The current ground state of the navigator.</param>
-        /// <returns>True if the navigator is on a new platform; otherwise, false.</returns>
-        private bool DidPlatformChange(GroundCondition? surfaceCondition)
-        {
-            if (Locomotions.Platform.ActivePlatform == surfaceCondition?.BaseObject)
-                return false;
-
-            if (Locomotions.Platform.ActivePlatform == null || Locomotions.Platform.ActivePlatform != surfaceCondition?.BaseObject)
-                return true;
-
-            return false;
+            Locomotions.Move.FrameVelocity = new(
+                Locomotions.Move.FrameVelocity.x,
+                Fixed64.Zero,
+                Locomotions.Move.FrameVelocity.z);
+            Locomotions.Jump.IsJumping = false;
+            Locomotions.Jump.IsHoldingJump = false;
         }
 
         /// <summary>
@@ -732,7 +649,7 @@ namespace Trailblazer.Navigation.Motor
 
             bool isReleasing = false;
             if (Locomotions.Platform.IsHoldingPlatform)
-                isReleasing = Locomotions.Platform.CanReleaseHoldOnPlatform();
+                isReleasing = Locomotions.Platform.TickHoldOnPlatform();
 
             if (isReleasing)
             {
@@ -761,39 +678,6 @@ namespace Trailblazer.Navigation.Motor
                     // and subtract platform velocity to prevent doubling the effect.
                     Locomotions.Move.FrameVelocity -= Locomotions.Platform.PlatformVelocity;
             }
-        }
-
-        /// <summary>
-        /// Handles movement state transitions, including landing after a fall, jumping, or entering/exiting water.
-        /// </summary>
-        /// <remarks>
-        /// This method ensures proper event notifications for transitions such as falling, landing, and jump termination.
-        /// </remarks>
-        private void HandleMovementTransitions()
-        {
-            // Trasitioning to either ground or water
-            if (WasInAir && !IsInAir)
-            {
-                if (Locomotions.Jump.IsJumping)
-                {
-                    // Reset cooldown on landing
-                    Locomotions.Jump.ResetJumpCounter();
-
-                    if (IsInWater)
-                        Events.OnStopWaterBreach?.Invoke();
-                    else
-                        Events.OnStopJump?.Invoke();
-
-                    return;
-                }
-
-                if (!IsInWater)
-                    Events.OnLandedFall?.Invoke();
-            }
-
-            // Transitioning out of water
-            if (Locomotions.Swim.IsEnabled && !IsInWater && WasInWater)
-                Locomotions.ClearState<SwimLocomotion>();
         }
 
         /// <summary>
@@ -890,26 +774,6 @@ namespace Trailblazer.Navigation.Motor
 
                 Events?.OnStartFall?.Invoke();
             }
-        }
-
-        /// <summary>
-        /// Updates platform movement by synchronizing the navigator's position and rotation with the platform it is standing on.
-        /// </summary>
-        /// <remarks>
-        /// This method prevents unwanted movement shifts when transitioning between platforms, ensuring smooth locomotion.
-        /// </remarks>
-        private void HandlePlatformMovement(Vector3d footPosition, FixedQuaternion rotation)
-        {
-            if (!IsMovingWithPlatform) return;
-
-            footPosition.y += Locomotions.Platform.HeightAdjust;
-            Locomotions.Platform.ScoutGlobalPoint = footPosition;
-            Locomotions.Platform.ScoutLocalPoint = Fixed4x4.InverseTransformPoint(
-                Locomotions.Platform.ActiveTransform,
-                Locomotions.Platform.ScoutGlobalPoint);
-
-            Locomotions.Platform.ScoutGlobalRotation = rotation;
-            Locomotions.Platform.ScoutLocalRotation = Locomotions.Platform.ActiveTransform.Rotation.Inverse() * Locomotions.Platform.ScoutGlobalRotation;
         }
 
         #endregion

@@ -61,14 +61,14 @@ and drives them through a two-step lifecycle:
 `Navigator` implements `INavigate`, which is a composition of:
 
 - `ISteer`
-- `IMotor`
 - `ITurn`
 
 That makes `Navigator` the single object passed to:
 
 - steering as an `ISteer`
-- motor as an `IMotor`
 - turning as an `ITurn`
+
+At the same time, `INavigate` exposes `FrameCondition`, `FrameRequest`, and `CheckTrekCondition()` so the host can coordinate traversal refresh and the motor can consume frame snapshots without a separate `IMotor` interface.
 
 This is the main reason `Navigator` exists as an orchestration object instead of a thinner data carrier.
 
@@ -486,7 +486,7 @@ navigator.Setup(
 navigator.Initialize(new TrekCondition(
     medium: TraversalMedium.Ground,
     surfaceLevel: Fixed64.Zero,
-    surfaceCondition: GroundCondition.CreateEmpty()));
+    surfaceCondition: new GroundCondition()));
 
 navigator.GuidedPathMode = GuidedPathMode.AStar;
 navigator.ApplyGuidedTrekRequest(new Vector3d(5, 0, 5), rate: TrekRate.Moderate);
@@ -498,7 +498,7 @@ navigator.Simulate();
 navigator.SetTrekCondition(
     medium: TraversalMedium.Ground,
     surfaceLevel: Fixed64.Zero,
-    surfaceCondition: GroundCondition.CreateEmpty(),
+    surfaceCondition: new GroundCondition(),
     updateMotorState: true);
 
 navigator.CommitFrameMotion();

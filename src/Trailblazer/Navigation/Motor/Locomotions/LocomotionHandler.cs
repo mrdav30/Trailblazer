@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using MemoryPack;
 
 #if NET8_0_OR_GREATER
 using System.Text.Json.Serialization;
 #endif
 #if !NET8_0_OR_GREATER
 using System.Text.Json.Serialization.Shim;
-using MemoryPack;
 #endif
 
 namespace Trailblazer.Navigation.Motor;

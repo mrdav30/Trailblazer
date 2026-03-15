@@ -20,7 +20,7 @@ public class SlideLocomotionTests : IDisposable
     public void Given_ScoutOnSteepSlope_When_Moving_Then_ShouldSlideDown()
     {
         // Arrange
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             startPosition: Vector3d.Zero,
             platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Right * Fixed64.Half, (Fixed64)0.85)
         );
@@ -30,7 +30,7 @@ public class SlideLocomotionTests : IDisposable
             platformMatrix: platform
         );
 
-        scout.FrameRequest = new()
+        TrekRequest frameRequest = new()
         {
             Origin = scout.Position,
             Rotation = scout.Rotation,
@@ -39,8 +39,8 @@ public class SlideLocomotionTests : IDisposable
         };
 
         // Act
-        scout.Motor.Traverse(scout);
-        scout.Motor.FinalizeTraversal(scout);
+        scout.Motor.Traverse(frameRequest);
+        scout.Motor.FinalizeTraversal(scout.Position, scout.LastPosition, scout.Rotation, scout.FrameCondition, scout.GetFootPosition());
 
         // Assert
         scout.Motor.Locomotions.Slide.IsSliding.Should().BeTrue();
@@ -50,7 +50,7 @@ public class SlideLocomotionTests : IDisposable
     public void Given_ShallowSlope_When_ScoutMovesOntoIt_Then_ShouldNotSlide()
     {
         // Arrange
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             startPosition: Vector3d.Zero,
             platformRotation: FixedQuaternion.FromAxisAngle(Vector3d.Forward, FixedMath.Atan(Fixed64.FromRaw(0x08000000L)))
         );
@@ -60,7 +60,7 @@ public class SlideLocomotionTests : IDisposable
             platformMatrix: platform
         );
 
-        scout.FrameRequest = new()
+        TrekRequest frameRequest = new()
         {
             Origin = scout.Position,
             Rotation = scout.Rotation,
@@ -69,7 +69,7 @@ public class SlideLocomotionTests : IDisposable
         };
 
         // Act
-        scout.Motor.Traverse(scout);
+        scout.Motor.Traverse(frameRequest);
 
         // Assert
         scout.Motor.Locomotions.Slide.IsSliding.Should().BeFalse();
@@ -80,7 +80,7 @@ public class SlideLocomotionTests : IDisposable
     public void Given_ScoutOnSteepSlope_When_NoInput_Then_ShouldStillSlide()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)60);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );
 
@@ -101,7 +101,7 @@ public class SlideLocomotionTests : IDisposable
     public void Given_ScoutSliding_When_FrictionIsHigh_Then_ShouldReduceSpeed()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)60);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );
 
@@ -119,9 +119,8 @@ public class SlideLocomotionTests : IDisposable
         for (int i = 0; i < 3; i++)
         {
             TrailblazerManager.Simulate();
-            scout.FrameRequest = request;
-            scout.Motor.Traverse(scout);
-            scout.Motor.FinalizeTraversal(scout);
+            scout.Motor.Traverse(request);
+            scout.Motor.FinalizeTraversal(scout.Position, scout.LastPosition, scout.Rotation, scout.FrameCondition, Vector3d.Zero);
 
             request.Origin = scout.Position;
             request.Rotation = scout.Rotation;
@@ -135,7 +134,7 @@ public class SlideLocomotionTests : IDisposable
     public void Given_ScoutOnHighFrictionDownSlope_When_Sliding_Then_ShouldSlideSlowerThanLowFriction()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)50);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
         var lowFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.Zero);
         var highFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.One);
@@ -164,7 +163,7 @@ public class SlideLocomotionTests : IDisposable
         var shallowSlope = FixedMath.DegToRad((Fixed64)10);
 
         // Start on steep slope
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles(steepSlope, Fixed64.Zero, Fixed64.Zero)
         );
 
@@ -182,9 +181,10 @@ public class SlideLocomotionTests : IDisposable
 
         GroundCondition shallowSlopeSurface = new()
         {
-            BaseObject = new object(), // Separate from platform
-            GroundMatrix = Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero))
+            Platform = new PlatformHandle(1, Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero)))
         };
+
+        Guid test = new Guid();
 
         // Flatten slope
         scout.FrameCondition.Medium = TraversalMedium.Ground;
@@ -203,7 +203,7 @@ public class SlideLocomotionTests : IDisposable
     public void Given_ScoutSliding_When_SidewaysInput_Then_ShouldInfluenceDirection()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)60);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );
 
@@ -230,7 +230,7 @@ public class SlideLocomotionTests : IDisposable
     public void Given_ScoutFallsOntoSteepSlope_When_Lands_Then_ShouldStartSliding()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)60);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles(
                 slopeAngle,
                 Fixed64.Zero,
@@ -262,7 +262,7 @@ public class SlideLocomotionTests : IDisposable
     public void Given_SlideLocomotionDisabled_When_OnSteepSlope_Then_ShouldNotSlide()
     {
         var slopeAngle = FixedMath.DegToRad((Fixed64)60);
-        var platform = MockMotorAgentTestFactory.CreatePlatform(
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero)
         );
 

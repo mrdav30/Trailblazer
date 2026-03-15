@@ -24,6 +24,8 @@ namespace Trailblazer.Navigation.Motor;
 [MemoryPackable]
 public partial class PlatformLocomotion : ITransientLocomotion
 {
+    private bool _preservePreviousTransformForAttachment;
+
     #region Constants
 
     /// <summary>
@@ -68,7 +70,10 @@ public partial class PlatformLocomotion : ITransientLocomotion
         {
             _isEnabled = value;
             if (!_isEnabled)
+            {
+                _preservePreviousTransformForAttachment = false;
                 ((ITransient)this).ClearTransientState();
+            }
         }
     }
 
@@ -80,6 +85,15 @@ public partial class PlatformLocomotion : ITransientLocomotion
     [MemoryPackInclude]
     public bool IsNewPlatform { get; set; }
 
+    [Transient]
+    public PlatformHandle? ActivePlatform { get; set; }
+
+    [Transient]
+    public PlatformHandle? PreviousPlatform { get; set; }
+
+    [Transient]
+    public PlatformHandle? HoldPlatform { get; set; }
+
     /// <summary>
     /// Defines how movement is transferred from the platform to the scout.
     /// </summary>
@@ -87,30 +101,6 @@ public partial class PlatformLocomotion : ITransientLocomotion
     [JsonInclude]
     [MemoryPackInclude]
     public MotionTransfer MovementTransfer { get; set; }
-
-    /// <summary>
-    /// The platform object the scout is currently standing on.
-    /// </summary>
-    [Transient]
-    [JsonIgnore]
-    [MemoryPackIgnore]
-    public object ActivePlatform { get; set; }
-
-    /// <summary>
-    /// The transformation matrix of the active platform.
-    /// </summary>
-    [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
-    public Fixed4x4 ActiveTransform { get; set; } = Fixed4x4.Identity;
-
-    /// <summary>
-    /// The transformation matrix of the last known platform.
-    /// </summary>
-    [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
-    public Fixed4x4 LastTransform { get; set; } = Fixed4x4.Identity;
 
     /// <summary>
     /// The local position of the scout relative to the platform.
@@ -145,23 +135,6 @@ public partial class PlatformLocomotion : ITransientLocomotion
     public Vector3d FramePlatformVelocity { get; set; }
 
     /// <summary>
-    /// Indicates whether the scout is currently holding onto a platform.
-    /// </summary>
-    [Transient]
-
-    [JsonInclude]
-    [MemoryPackInclude]
-    public bool IsHoldingPlatform { get; private set; }
-
-    /// <summary>
-    /// The last known platform the scout was attached to.
-    /// </summary>
-    [Transient]
-    [JsonIgnore]
-    [MemoryPackIgnore]
-    public object HoldPlatform { get; private set; }
-
-    /// <summary>
     /// The number of frames the scout has been holding onto a platform.
     /// </summary>
     [Transient]
@@ -169,24 +142,91 @@ public partial class PlatformLocomotion : ITransientLocomotion
     [MemoryPackInclude]
     public int HoldPlatformFrames { get; private set; }
 
+    [JsonIgnore]
+    [MemoryPackIgnore]
+    public bool IsActive => IsEnabled && ActivePlatform?.Active == true;
+
+    [JsonIgnore]
+    [MemoryPackIgnore]
+    public bool IsLockedToPlatform => MovementTransfer == MotionTransfer.PermaLocked;
+
+    public bool IsHoldingPlatform => IsEnabled && HoldPlatform?.Active == true;
+
     #endregion
+
+    #region Methods
+
+    /// <summary>
+    /// Updates the platform velocity based on movement from the last frame.
+    /// </summary>
+    public void UpdatePlatformVelocity()
+    {
+        if (!IsEnabled) return;
+
+        if (ActivePlatform?.Active != true)
+        {
+            PlatformVelocity = Vector3d.Zero;
+            _preservePreviousTransformForAttachment = false;
+            return;
+        }
+
+        if (!IsNewPlatform)
+        {
+            Vector3d currentPoint = ActivePlatform?.Transform.TransformPoint(ScoutLocalPoint) ?? Vector3d.Zero;
+            Vector3d previousPoint = PreviousPlatform?.Transform.TransformPoint(ScoutLocalPoint) ?? Vector3d.Zero;
+
+            // Store platform velocity to use as a canceling force
+            PlatformVelocity = (currentPoint - previousPoint) * TrailblazerManager.InvDeltaTime;
+        }
+
+        PreviousPlatform = ActivePlatform;
+        IsNewPlatform = false;
+        _preservePreviousTransformForAttachment = false;
+    }
+
+    /// <summary>
+    /// Applies movement adjustments due to platform motion, ensuring the navigator inherits platform movement correctly.
+    /// </summary>
+    /// <remarks>
+    /// This method updates the navigator’s position and rotation based on the platform’s transform,
+    /// preventing unwanted movement shifts when transitioning between platforms.
+    /// </remarks>
+    public void GetPlatformInfluence(
+        Vector3d position,
+        FixedQuaternion rotation,
+        out Vector3d positionDelta,
+        out FixedQuaternion rotationDelta)
+    {
+        // Apply platform rotation first THEN apply platform movement
+        FixedQuaternion targetRotation = ActivePlatform?.Transform.Rotation * ScoutLocalRotation ?? FixedQuaternion.Identity;
+        if (targetRotation != FixedQuaternion.Identity)
+        {
+            FixedQuaternion rotDelta = targetRotation * rotation.Inverse();
+            rotationDelta = rotDelta;
+        }
+        else
+            rotationDelta = FixedQuaternion.Identity;
+
+        Vector3d newGlobalPoint = ActivePlatform?.Transform.TransformPoint(ScoutLocalPoint) ?? Vector3d.Zero;
+        position.y += HeightAdjust;
+        positionDelta = newGlobalPoint - position;
+    }
 
     /// <summary>
     /// Assigns the scout to a platform, initiating a hold state.
     /// </summary>
     /// <param name="platform">The platform object to attach to.</param>
-    public void SetHoldPlatform(object platform)
+    public void SetHoldPlatform(PlatformHandle? platform)
     {
         HoldPlatform = platform;
         HoldPlatformFrames = 0;
-        IsHoldingPlatform = true;
     }
 
     /// <summary>
     /// Updates the platform hold state, releasing the hold if the hold duration expires.
     /// </summary>
     /// <returns>True if the scout should detach from the platform; otherwise, false.</returns>
-    public bool CanReleaseHoldOnPlatform()
+    public bool TickHoldOnPlatform()
     {
         if (!IsHoldingPlatform)
             return false;
@@ -201,4 +241,77 @@ public partial class PlatformLocomotion : ITransientLocomotion
 
         return false;
     }
+
+
+    public void HandlePlatformChange(GroundCondition? condition)
+    {
+        // If we hit a new platform, reset platform state
+        if (!IsEnabled)
+            return;
+
+        // Clear it to avoid double-applying next frame
+        FramePlatformVelocity = Vector3d.Zero;
+        MovementTransfer = condition?.MotionTransferState ?? MotionTransfer.None;
+
+        PlatformHandle? refreshedPlatform = condition?.Platform;
+        if (refreshedPlatform?.Active != true)
+            refreshedPlatform = null;
+
+        if (!DidPlatformChange(refreshedPlatform))
+        {
+            bool hasTransformRefresh = ActivePlatform?.Active == true
+                && refreshedPlatform?.Active == true
+                && !ActivePlatform.Value.Transform.Equals(refreshedPlatform.Value.Transform);
+
+            if (hasTransformRefresh)
+                PreviousPlatform = ActivePlatform;
+
+            // Same platform id, newer transform: refresh the snapshot without marking a platform swap.
+            ActivePlatform = refreshedPlatform;
+            _preservePreviousTransformForAttachment = hasTransformRefresh;
+            return;
+        }
+
+        PreviousPlatform = ActivePlatform?.Active != true
+            ? refreshedPlatform
+            : ActivePlatform;
+        ActivePlatform = refreshedPlatform;
+
+        IsNewPlatform = refreshedPlatform?.Active == true;
+        _preservePreviousTransformForAttachment = false;
+    }
+
+    /// <summary>
+    /// Determines if the navigator has transitioned onto a different platform.
+    /// </summary>
+    /// <param name="newPlatform"></param>
+    /// <returns>True if the navigator is on a new platform; otherwise, false.</returns>
+    private bool DidPlatformChange(PlatformHandle? newPlatform) => ActivePlatform != newPlatform;
+
+    /// <summary>
+    /// Updates platform movement by synchronizing the navigator's position and rotation with the platform it is standing on.
+    /// </summary>
+    /// <remarks>
+    /// This method prevents unwanted movement shifts when transitioning between platforms, ensuring smooth locomotion.
+    /// </remarks>
+    public void HandlePlatformMovement(Vector3d position, FixedQuaternion rotation)
+    {
+        position.y += HeightAdjust;
+        Fixed4x4 attachmentTransform = GetAttachmentTransform();
+        ScoutLocalPoint = Fixed4x4.InverseTransformPoint(
+            attachmentTransform,
+            position);
+
+        ScoutLocalRotation = attachmentTransform.Rotation.Inverse() * rotation;
+    }
+
+    private Fixed4x4 GetAttachmentTransform()
+    {
+        if (_preservePreviousTransformForAttachment && PreviousPlatform?.Active == true)
+            return PreviousPlatform.Value.Transform;
+
+        return ActivePlatform?.Transform ?? Fixed4x4.Identity;
+    }
+
+    #endregion
 }

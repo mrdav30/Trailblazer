@@ -205,10 +205,12 @@ public class JumpLocomotionTests : IDisposable
 
         scout.Motor.Locomotions.Jump.IsJumping.Should().BeTrue();
 
-        scout.FrameCondition = new(
-            TraversalMedium.Air,
-            surfaceLevel: Fixed64.FromRaw(5 << 16),
-            ceilingLevel: Fixed64.FromRaw(6 << 16)); // Simulate a ceiling
+        scout.FrameCondition = new()
+        {
+            Medium = TraversalMedium.Air,
+            SurfaceLevel = Fixed64.FromRaw(5 << 16),
+            CeilingLevel = Fixed64.FromRaw(6 << 16)
+        };
 
         scout.Simulate();
 

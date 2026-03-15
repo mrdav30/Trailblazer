@@ -5,6 +5,7 @@ using GridForge.Spatial;
 using SwiftCollections;
 using System;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.Animation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
@@ -96,11 +97,11 @@ public abstract class Navigator : INavigate
     /// <summary>
     /// Indicates whether the current traversal session is guided via a TrailGuide path (e.g., A* or flow field).
     /// </summary>
-    public bool IsGuideded => FrameRequest.TargetPosition == null;
+    public bool IsGuideded => FrameRequest?.TargetPosition != null;
 
-    public TrekCondition FrameCondition { get; protected set; } = TrekCondition.CreateEmpty();
+    public TrekCondition FrameCondition { get; protected set; } = new();
 
-    public TrekRequest FrameRequest { get; protected set; } = TrekRequest.CreateEmpty();
+    public TrekRequest FrameRequest { get; protected set; } = new();
 
     #endregion
 
@@ -337,13 +338,14 @@ public abstract class Navigator : INavigate
             throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
         FrameRequest.Origin = Position;
+        FrameRequest.FootPosition = GetFootPosition();
         FrameRequest.Rotation = Rotation;
 
-        if (!IsGuideded)
+        if (IsGuideded)
             FrameRequest.Direction = Steering.GetHeading(this);
 
         Turning.RequestTurnDirection(Forward, FrameRequest.Direction);
-        Motor.Traverse(this);
+        ConsumeMotorOutput(Motor.Traverse(FrameRequest));
         Turning.SimulateTurn(this);
 
         if (AnimationHandler is null) return;
@@ -401,7 +403,7 @@ public abstract class Navigator : INavigate
         _positionDelta = Vector3d.Zero;
         _velocityDelta = Vector3d.Zero;
 
-        Motor.FinalizeTraversal(this);
+        Motor.FinalizeTraversal(Position, LastPosition, Rotation, FrameCondition, newFootPosition: GetFootPosition());
 
         // Reset travel request for next frame
         FrameRequest.Reset();
@@ -447,6 +449,17 @@ public abstract class Navigator : INavigate
 
     #region Deltas - Position / Velocity / Rotation
 
+    private void ConsumeMotorOutput(MotorOutput output)
+    {
+        if (output.VelocityDelta != Vector3d.Zero)
+            AddVelocityDelta(output.VelocityDelta);
+        if (output.PositionDelta != Vector3d.Zero)
+            AddPositionDelta(output.PositionDelta);
+        if (output.RotationDelta != FixedQuaternion.Identity)
+            AddRotationDelta(output.RotationDelta);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddPositionDelta(Vector3d delta)
     {
         _positionDelta += delta;
@@ -454,28 +467,33 @@ public abstract class Navigator : INavigate
         LastPosition += delta;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddRotationDelta(FixedQuaternion delta)
     {
         _rotationDelta *= delta;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddVelocityDelta(Vector3d delta)
     {
         // assume a mass of 1...for now
         _velocityDelta += delta;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void ApplyRotation(FixedQuaternion rotation) => Rotation = rotation;
 
     #endregion
 
     #region Utilities
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual Vector3d GetFootPosition()
     {
         return Position + Vector3d.Down * FootPositionAdjust;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected virtual Guid GenerateGUID() => Guid.NewGuid();
 
     #endregion

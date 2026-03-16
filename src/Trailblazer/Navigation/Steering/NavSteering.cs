@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
+using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Steering;
 
@@ -15,7 +16,7 @@ namespace Trailblazer.Navigation.Steering;
 /// and group behaviors within a lockstep simulation. Supports both direct line-of-sight travel 
 /// and guided path traversal using IGuide implementations like AStar or FlowField.
 /// </summary>
-public class NavSteering
+public class NavSteering : IRecordable
 {
     #region Constants & Defaults
 
@@ -375,9 +376,7 @@ public class NavSteering
     /// </summary>
     public virtual void OnInitialize(Fixed64 radius)
     {
-        // Fatter objects can afford to land imprecisely
-        _agentRadius = radius;
-        _closingDistance = FixedMath.Round(radius + GlobalGridManager.VoxelSize);
+        UpdateOwnerRadius(radius);
 
         LeaveMovementGroup();
 
@@ -401,6 +400,13 @@ public class NavSteering
         _requestedDestination = Vector3d.Zero;
         _movementGroupSession.Reset();
         _movementGroupMode = MovementGroupTravelMode.None;
+    }
+
+    internal virtual void UpdateOwnerRadius(Fixed64 radius)
+    {
+        // Fatter objects can afford to land imprecisely
+        _agentRadius = radius;
+        _closingDistance = FixedMath.Round(radius + GlobalGridManager.VoxelSize);
     }
 
     /// <summary>
@@ -690,10 +696,7 @@ public class NavSteering
     {
         StopMove();
 
-        if (_trailGuide != null)
-            PathGuideFactory.ReturnGuide(_trailGuide);
-
-        _trailGuide = null;
+        ReleaseTrailGuide();
         _currentRequest = null;
         _requestedDestination = Vector3d.Zero;
         _distanceToTarget = Fixed64.Zero;
@@ -886,4 +889,154 @@ public class NavSteering
         => MovementGroupCoordinator.IsNeighbor(_movementGroupSession, otherId, _requestedDestination, currentFrame);
 
     #endregion
+
+    /// <inheritdoc />
+    public virtual void RecordData(IChronicler chronicler)
+    {
+        bool canPathfind = CanPathfind;
+        Vector3d destination = Destination;
+        Vector3d requestedDestination = _requestedDestination;
+        Fixed64 lastUnitSize = _lastUnitSize;
+        int pathRecheckCooldownFrames = PathRecheckCooldownFrames;
+        Vector3d targetDirection = TargetDirection;
+        Vector3d lastTargetDirection = LastTargetDirection;
+        bool shouldMove = ShouldMove;
+        bool isStuck = IsStuck;
+        bool hasLineOfSightPath = HasLineOfSightPath;
+        bool shouldRequestPathThisFrame = _shouldRequestPathThisFrame;
+        int pathCheckCooldown = _pathCheckCooldown;
+        Fixed64 distanceToTarget = _distanceToTarget;
+        bool isAtDestination = IsAtDestination;
+        bool canMove = CanMove;
+        int stoppedFrameCount = StoppedFrameCount;
+        int autoStopFrameCount = _autoStopFrameCount;
+        int repathTries = _repathTries;
+        int stuckFrameCount = _stuckFrameCount;
+        Fixed64 stopMultiplier = StopMultiplier;
+        Fixed64 groupFactor = GroupFactor;
+        Fixed64 avoidFactor = AvoidFactor;
+        GroupBehaviorWeights behaviorWeights = BehaviorWeights;
+        Fixed64 brakingPower = BrakingPower;
+        int movementGroupId = MovementGroupID;
+        MovementGroupTravelMode movementGroupMode = _movementGroupMode;
+        var requestRecord = new NavSteeringPathRequestRecord();
+
+        if (chronicler.Mode == SerializationMode.Saving)
+            requestRecord.Capture(_currentRequest, _trailGuide);
+
+        RecordValues.Look(chronicler, ref canPathfind, "canPathfind", canPathfind);
+        RecordValues.Look(chronicler, ref destination, "destination", destination);
+        RecordValues.Look(chronicler, ref requestedDestination, "requestedDestination", requestedDestination);
+        RecordValues.Look(chronicler, ref lastUnitSize, "lastUnitSize", lastUnitSize);
+        RecordValues.Look(chronicler, ref pathRecheckCooldownFrames, "pathRecheckCooldownFrames", pathRecheckCooldownFrames);
+        RecordValues.Look(chronicler, ref targetDirection, "targetDirection", targetDirection);
+        RecordValues.Look(chronicler, ref lastTargetDirection, "lastTargetDirection", lastTargetDirection);
+        RecordValues.Look(chronicler, ref shouldMove, "shouldMove", shouldMove);
+        RecordValues.Look(chronicler, ref isStuck, "isStuck", isStuck);
+        RecordValues.Look(chronicler, ref hasLineOfSightPath, "hasLineOfSightPath", hasLineOfSightPath);
+        RecordValues.Look(chronicler, ref shouldRequestPathThisFrame, "shouldRequestPathThisFrame", shouldRequestPathThisFrame);
+        RecordValues.Look(chronicler, ref pathCheckCooldown, "pathCheckCooldown", pathCheckCooldown);
+        RecordValues.Look(chronicler, ref distanceToTarget, "distanceToTarget", distanceToTarget);
+        RecordValues.Look(chronicler, ref isAtDestination, "isAtDestination", isAtDestination);
+        RecordValues.Look(chronicler, ref canMove, "canMove", canMove);
+        RecordValues.Look(chronicler, ref stoppedFrameCount, "stoppedFrameCount", stoppedFrameCount);
+        RecordValues.Look(chronicler, ref autoStopFrameCount, "autoStopFrameCount", autoStopFrameCount);
+        RecordValues.Look(chronicler, ref repathTries, "repathTries", repathTries);
+        RecordValues.Look(chronicler, ref stuckFrameCount, "stuckFrameCount", stuckFrameCount);
+        RecordValues.Look(chronicler, ref stopMultiplier, "stopMultiplier", stopMultiplier);
+        RecordValues.Look(chronicler, ref groupFactor, "groupFactor", groupFactor);
+        RecordValues.Look(chronicler, ref avoidFactor, "avoidFactor", avoidFactor);
+        RecordValues.Look(chronicler, ref behaviorWeights, "behaviorWeights", behaviorWeights);
+        RecordValues.Look(chronicler, ref brakingPower, "brakingPower", brakingPower);
+        RecordValues.Look(chronicler, ref movementGroupId, "movementGroupId", movementGroupId);
+        RecordValues.Look(chronicler, ref movementGroupMode, "movementGroupMode", movementGroupMode);
+        RecordDeep.Look(chronicler, ref requestRecord, "pathRequest");
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            ReleaseTrailGuide();
+            ResetMovementGroupSession();
+
+            CanPathfind = canPathfind;
+            Destination = destination;
+            _requestedDestination = requestedDestination;
+            _lastUnitSize = lastUnitSize;
+            PathRecheckCooldownFrames = pathRecheckCooldownFrames;
+            TargetDirection = targetDirection;
+            LastTargetDirection = lastTargetDirection;
+            ShouldMove = shouldMove;
+            IsStuck = isStuck;
+            HasLineOfSightPath = hasLineOfSightPath;
+            _shouldRequestPathThisFrame = shouldRequestPathThisFrame;
+            _pathCheckCooldown = pathCheckCooldown;
+            _distanceToTarget = distanceToTarget;
+            IsAtDestination = isAtDestination;
+            CanMove = canMove;
+            StoppedFrameCount = stoppedFrameCount;
+            _autoStopFrameCount = autoStopFrameCount;
+            _repathTries = repathTries;
+            _stuckFrameCount = stuckFrameCount;
+            StopMultiplier = stopMultiplier;
+            GroupFactor = groupFactor;
+            AvoidFactor = avoidFactor;
+            BehaviorWeights = behaviorWeights;
+            BrakingPower = brakingPower;
+            _movementGroupMode = movementGroupMode;
+
+            _currentRequest = null;
+            if (!requestRecord.TryCreateRequest(out IPathRequest request))
+            {
+                ShouldMove = false;
+                IsStuck = false;
+                HasLineOfSightPath = false;
+                _shouldRequestPathThisFrame = false;
+                Destination = Vector3d.Zero;
+                _requestedDestination = Vector3d.Zero;
+                TargetDirection = Vector3d.Zero;
+                LastTargetDirection = Vector3d.Zero;
+                _distanceToTarget = Fixed64.Zero;
+                _movementGroupMode = MovementGroupTravelMode.None;
+            }
+            else
+            {
+                _currentRequest = request;
+            }
+
+            MovementGroupID = movementGroupId;
+            GroupIndex = -1;
+            if (movementGroupId < 0)
+                _movementGroupMode = MovementGroupTravelMode.None;
+
+            if (_currentRequest != null
+                && ShouldMove
+                && requestRecord.HasGuide
+                && !_shouldRequestPathThisFrame
+                && !HasLineOfSightPath)
+            {
+                if (!requestRecord.TryCreateGuide(_currentRequest, out _trailGuide))
+                    _shouldRequestPathThisFrame = ShouldMove;
+            }
+            else if (_currentRequest != null
+                && ShouldMove
+                && !HasLineOfSightPath)
+            {
+                _shouldRequestPathThisFrame = true;
+            }
+        }
+    }
+
+    private void ReleaseTrailGuide(bool dispose = false)
+    {
+        if (_trailGuide == null)
+            return;
+
+        PathGuideFactory.ReturnGuide(_trailGuide, dispose);
+        _trailGuide = null;
+    }
+
+    private void ResetMovementGroupSession()
+    {
+        MovementGroupCoordinator.Remove(_movementGroupSession);
+        _movementGroupSession.Reset();
+    }
 }

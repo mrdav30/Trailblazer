@@ -562,7 +562,11 @@ public abstract class Navigator : INavigate, IRecordable
         byte occupantGroupId = OccupantGroupId;
         bool isLockedOn = IsLockedOn;
         Fixed64 animDampTime = AnimDampTime;
+        Fixed64 stuckThresholdSpeed = StuckThresholdSpeed;
+        bool isGuideded = IsGuideded;
         TrekCondition frameCondition = _frameCondition;
+        TrekRequest frameRequest = _frameRequest;
+        NavSteering steering = Steering;
         NavMotor motor = Motor;
 
         RecordValues.Look(chronicler, ref position, "position", position);
@@ -582,7 +586,11 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref occupantGroupId, "occupantGroupId", occupantGroupId);
         RecordValues.Look(chronicler, ref isLockedOn, "isLockedOn", isLockedOn);
         RecordValues.Look(chronicler, ref animDampTime, "animDampTime", animDampTime);
+        RecordValues.Look(chronicler, ref stuckThresholdSpeed, "stuckThresholdSpeed", stuckThresholdSpeed);
+        RecordValues.Look(chronicler, ref isGuideded, "isGuideded", isGuideded);
         RecordValues.Look(chronicler, ref frameCondition, "frameCondition", frameCondition);
+        RecordValues.Look(chronicler, ref frameRequest, "frameRequest", frameRequest);
+        RecordDeep.Look(chronicler, ref steering, "steering");
         RecordDeep.Look(chronicler, ref motor, "motor");
 
         if (chronicler.Mode == SerializationMode.Loading)
@@ -604,7 +612,11 @@ public abstract class Navigator : INavigate, IRecordable
             OccupantGroupId = occupantGroupId;
             IsLockedOn = isLockedOn;
             AnimDampTime = animDampTime;
+            StuckThresholdSpeed = stuckThresholdSpeed;
+            IsGuideded = isGuideded;
             _frameCondition = frameCondition.Clone();
+            _frameRequest = frameRequest.Clone();
+            Steering = steering;
             Motor = motor;
 
             Forward = Rotation != FixedQuaternion.Identity
@@ -614,17 +626,11 @@ public abstract class Navigator : INavigate, IRecordable
             _positionDelta = Vector3d.Zero;
             _velocityDelta = Vector3d.Zero;
             _rotationDelta = FixedQuaternion.Identity;
-            StuckThresholdSpeed = Fixed64.Zero;
-            IsGuideded = false;
-            _frameRequest.Reset();
             _isSet = true;
             _isInitialized = Motor != null;
 
             if (Steering != null)
-            {
-                Steering.SetTrailGuide(null);
-                Steering.StopMove();
-            }
+                Steering.UpdateOwnerRadius(Radius);
 
             if (Turning != null)
                 Turning.OnInitialize(Radius);

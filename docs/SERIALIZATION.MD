@@ -92,6 +92,7 @@ RecordDeep.Look(chronicler, ref nestedObject, "name");
 This MVP is intentionally limited to:
 
 - `Navigator`
+- `NavSteering`
 - `NavMotor`
 - `LocomotionHandler`
 - `MoveLocomotion`
@@ -104,10 +105,11 @@ This MVP is intentionally limited to:
 In practice that means the first pass covers:
 
 - navigator transform and motion state
+- navigator steering session state
 - navigator motor-owned traversal state
 - locomotion configuration
 - locomotion resumable runtime state
-- moving-platform attachment state inside the motor branch
+- moving-platform attachment state inside the motor branch and guided steering branch
 
 ## 5. Current Load Model
 
@@ -119,7 +121,7 @@ The current load path assumes:
 
 1. the host has already created the runtime object
 2. the runtime object has already been initialized enough to own its nested controllers
-3. `JsonRecordSerializer.Populate(...)` then overwrites supported state
+3. a Chronicler transport such as `JsonRecordSerializer.Populate(...)` or `MemoryPackRecordSerializer.Populate(...)` then overwrites supported state
 
 This means the current system is designed for:
 
@@ -152,20 +154,53 @@ It is not yet designed for:
 - `OccupantGroupId`
 - `IsLockedOn`
 - `AnimDampTime`
+- `StuckThresholdSpeed`
+- `IsGuideded`
 - `_frameCondition`
+- `_frameRequest`
+- `Steering`
 - `Motor`
 
 On load it also:
 
 - rebuilds `Forward` from `Rotation`
 - clears frame deltas
-- clears the current frame request
-- forces guided runtime state off for now
+- refreshes steering radius-derived tolerances from the loaded navigator size
 - clears and recomputes occupancy
 - reinitializes `Turning` if present
-- clears active steering runtime state if `Steering` is present
 
-### 6.2 NavMotor
+### 6.2 NavSteering
+
+`NavSteering.RecordData(...)` currently persists:
+
+- movement-session flags such as `ShouldMove`, `IsStuck`, `IsAtDestination`, and `HasLineOfSightPath`
+- destination, requested destination, target direction, and distance-to-target state
+- steering tuning such as stop multiplier, group/avoid factors, behavior weights, and braking power
+- cooldowns, stuck counters, repath counters, and auto-stop state
+- movement-group id and current travel mode
+- the active request shape through a serializable request record
+
+The request record currently captures:
+
+- request type (`AStar` or `FlowField`)
+- origin
+- target position
+- unit size
+- walkability override
+- max search range
+- request-type-specific settings such as heuristic, max climb height, or extra flood range
+- whether an active guide existed
+- current A* waypoint index when the guide is waypoint-based
+
+On load it also:
+
+- rebuilds the active `IPathRequest` from the recorded request data
+- reacquires a guide from `PathGuideFactory` when the session was actively guide-driven
+- restores A* waypoint progress when the guide is waypoint-based
+- clears any stale guide or movement-group session state already attached to the existing runtime shell
+- falls back to a new path request on the next steering tick if a guide could not be reacquired immediately
+
+### 6.3 NavMotor
 
 `NavMotor.RecordData(...)` currently persists:
 
@@ -181,14 +216,14 @@ On load it also:
 - clears frame-local cached output such as `_forceOutput`
 - resets `FrameSlopeAngle`
 
-### 6.3 LocomotionHandler
+### 6.4 LocomotionHandler
 
 `LocomotionHandler.RecordData(...)` currently persists:
 
 - `IsInControl`
 - all six locomotion instances through `RecordDeep`
 
-### 6.4 Individual Locomotions
+### 6.5 Individual Locomotions
 
 Each locomotion persists its configuration plus its resumable runtime state.
 
@@ -207,10 +242,9 @@ The current MVP intentionally does not serialize the full live navigation stack.
 
 Out of scope today:
 
-- `NavSteering`
 - `NavTurning`
-- path requests and active guide ownership
-- movement-group runtime state
+- inline serialization of live `IGuide` instances
+- movement-group coordinator caches and memberships
 - animation handler references
 - chart registrations, path caches, or global pathing state
 - full voxel occupancy maps
@@ -230,14 +264,14 @@ The current MVP boundary is:
 - JSON and MemoryPack backends
 - explicit type-owned save/load behavior
 - load-into-existing-instance semantics
-- motor branch only
+- navigator, steering, and motor branches
 
 This gives Trailblazer a workable starting point without overcommitting to a full save-game architecture too early.
 
 Tradeoffs of this MVP:
 
 - it is safe and explicit, but not yet turnkey for whole-world persistence
-- it avoids serializing path/guide runtime ownership prematurely
+- it rebuilds live guides from recorded requests instead of serializing guide instances directly
 - it keeps deterministic state local to the types that understand it
 - it still needs broader coverage before it becomes a complete framework-level persistence solution
 
@@ -265,11 +299,14 @@ This is especially important in Trailblazer because pathing and navigation are s
 Focused round-trip coverage was added for:
 
 - `NavMotor`
-- `Navigator` plus its motor branch
+- `Navigator` plus its steering and motor branches
 
 The current tests verify that:
 
 - supported state round-trips through the JSON and MemoryPack chroniclers
+- guided A* and flow-field steering sessions survive round-trip
+- path-request configuration and A* waypoint progress survive round-trip
+- guides are reacquired after load instead of being serialized inline
 - moving-platform state survives round-trip
 - locomotion runtime state survives round-trip
 - a restored navigator remains usable for later simulation
@@ -278,12 +315,11 @@ The current tests verify that:
 
 The next best steps after this MVP are:
 
-1. Expand coverage into `NavSteering`.
-2. Decide how path requests, guide ownership, and cached guide reacquisition should load.
-3. Decide whether `NavTurning` should serialize buffered turn state or be rebuilt on load.
-4. Define a stable reference strategy for external/runtime-owned objects that should not be serialized inline.
-5. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
-6. Add more targeted tests around partial loads, disabled locomotions, and backward-compatible defaults.
+1. Decide whether `NavTurning` should serialize buffered turn state or be rebuilt on load.
+2. Define a stable reference strategy for external/runtime-owned objects that should not be serialized inline.
+3. Decide whether movement-group coordinator state should be rebuilt globally or whether steering sessions should always rejoin lazily after load.
+4. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
+5. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, and failed request rehydration.
 
 ## 12. Extension Guidance
 

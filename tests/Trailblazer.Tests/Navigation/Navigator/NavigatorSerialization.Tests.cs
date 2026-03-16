@@ -6,9 +6,11 @@ using GridForge.Grids;
 using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
+using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
 using Xunit;
+using Trailblazer.Tests;
 using Trailblazer.Tests.Navigation.Motor;
 
 namespace Trailblazer.Tests.Navigation;
@@ -141,14 +143,68 @@ public class NavigatorSerializationTests : IDisposable
         target.Motor.IsInitialized.Should().BeTrue();
     }
 
-    private static TestNavigator CreateNavigator(Vector3d position)
+    [Fact]
+    public void JsonRoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedAStarTraversal()
+    {
+        RegisterGuidedPathChart("NavigatorSerializationJsonAStar");
+
+        var source = CreateConfiguredGuidedNavigator(GuidedPathMode.AStar);
+        source.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
+
+        string json = JsonRecordSerializer.Serialize(source, writeIndented: true);
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        JsonRecordSerializer.Populate(target, json);
+
+        target.IsGuideded.Should().BeTrue();
+        target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
+        target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
+        target.Size.Should().Be(source.Size);
+
+        AssertSteeringStateMatches(source.Steering, target.Steering);
+
+        TrailblazerManager.Simulate();
+        target.Simulate();
+
+        target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
+        target.Steering.ShouldMove.Should().BeTrue();
+    }
+
+    [Fact]
+    public void MemoryPackRoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedFlowFieldTraversal()
+    {
+        RegisterGuidedPathChart("NavigatorSerializationMemoryPackFlowField");
+
+        var source = CreateConfiguredGuidedNavigator(GuidedPathMode.FlowField);
+        source.Steering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
+
+        byte[] data = MemoryPackRecordSerializer.Serialize(source);
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        MemoryPackRecordSerializer.Populate(target, data);
+
+        target.IsGuideded.Should().BeTrue();
+        target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
+        target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
+        target.Size.Should().Be(source.Size);
+
+        AssertSteeringStateMatches(source.Steering, target.Steering);
+
+        TrailblazerManager.Simulate();
+        target.Simulate();
+
+        target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
+        target.Steering.ShouldMove.Should().BeTrue();
+    }
+
+    private static TestNavigator CreateNavigator(Vector3d position, Fixed64? size = null)
     {
         var navigator = new TestNavigator();
         navigator.Setup(
             position,
             rotation: FixedQuaternion.FromAxisAngle(Vector3d.Up, (Fixed64)0.25f),
             velocity: new Vector3d(1, 0, 1),
-            size: (Fixed64)2);
+            size: size ?? (Fixed64)2);
         navigator.Initialize(new TrekCondition()
         {
             Medium = TraversalMedium.Ground,
@@ -233,6 +289,65 @@ public class NavigatorSerializationTests : IDisposable
         return source;
     }
 
+    private static TestNavigator CreateConfiguredGuidedNavigator(GuidedPathMode pathMode)
+    {
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        source.GuidedPathMode = pathMode;
+        source.GuidedAllowUnwalkable = true;
+        source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
+        source.GuidedAStarMaxClimbHeight = (Fixed64)2;
+        source.GuidedFlowFieldExtraFloodRange = 24;
+
+        source.Steering.PathRecheckCooldownFrames = 9;
+        source.Steering.StopMultiplier = (Fixed64)0.75f;
+        source.Steering.GroupFactor = (Fixed64)12;
+        source.Steering.AvoidFactor = (Fixed64)4;
+        source.Steering.BehaviorWeights = new GroupBehaviorWeights()
+        {
+            Separation = (Fixed64)3,
+            Alignment = (Fixed64)0.75f,
+            Cohesion = (Fixed64)0.4f,
+            Avoidance = (Fixed64)1.25f
+        };
+        source.Steering.BrakingPower = (Fixed64)0.2f;
+
+        source.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: pathMode,
+            rate: TrekRate.Fast,
+            isRequestingJump: true,
+            groupId: 7);
+
+        TrailblazerManager.Simulate();
+        source.Steering.GetHeading(source);
+        source.Steering.PauseAutoStop();
+
+        if (source.Steering.TrailGuide is AStarGuide aStarGuide)
+        {
+            aStarGuide.AdvanceWaypoint();
+            TrailblazerManager.Simulate();
+            source.Steering.GetHeading(source);
+        }
+
+        return source;
+    }
+
+    private static void RegisterGuidedPathChart(string chartKey)
+    {
+        bool[,,] data = new bool[1, 5, 3]
+        {
+            {
+                { true, true, true },
+                { true, true, true },
+                { false, true, false },
+                { true, true, true },
+                { true, true, true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData(chartKey, data, Vector3d.Zero);
+    }
+
     private static void AssertMotorStateMatches(NavMotor expected, NavMotor actual)
     {
         actual.IsInitialized.Should().Be(expected.IsInitialized);
@@ -280,5 +395,75 @@ public class NavigatorSerializationTests : IDisposable
         actual.Handler.Platform.PreviousPlatform?.Transform.Should().Be(expected.Handler.Platform.PreviousPlatform?.Transform);
         actual.Handler.Platform.HoldPlatform?.Id.Should().Be(expected.Handler.Platform.HoldPlatform?.Id);
         actual.Handler.Platform.HoldPlatform?.Transform.Should().Be(expected.Handler.Platform.HoldPlatform?.Transform);
+    }
+
+    private static void AssertSteeringStateMatches(NavSteering expected, NavSteering actual)
+    {
+        actual.CanPathfind.Should().Be(expected.CanPathfind);
+        actual.Destination.Should().Be(expected.Destination);
+        actual.PathRecheckCooldownFrames.Should().Be(expected.PathRecheckCooldownFrames);
+        actual.TargetDirection.Should().Be(expected.TargetDirection);
+        actual.LastTargetDirection.Should().Be(expected.LastTargetDirection);
+        actual.ShouldMove.Should().Be(expected.ShouldMove);
+        actual.IsStuck.Should().Be(expected.IsStuck);
+        actual.HasLineOfSightPath.Should().Be(expected.HasLineOfSightPath);
+        actual.DistanceToTarget.Should().Be(expected.DistanceToTarget);
+        actual.IsAtDestination.Should().Be(expected.IsAtDestination);
+        actual.CanMove.Should().Be(expected.CanMove);
+        actual.StoppedFrameCount.Should().Be(expected.StoppedFrameCount);
+        actual.CanAutoStop.Should().Be(expected.CanAutoStop);
+        actual.StopMultiplier.Should().Be(expected.StopMultiplier);
+        actual.GroupFactor.Should().Be(expected.GroupFactor);
+        actual.AvoidFactor.Should().Be(expected.AvoidFactor);
+        actual.BehaviorWeights.Separation.Should().Be(expected.BehaviorWeights.Separation);
+        actual.BehaviorWeights.Alignment.Should().Be(expected.BehaviorWeights.Alignment);
+        actual.BehaviorWeights.Cohesion.Should().Be(expected.BehaviorWeights.Cohesion);
+        actual.BehaviorWeights.Avoidance.Should().Be(expected.BehaviorWeights.Avoidance);
+        actual.BrakingPower.Should().Be(expected.BrakingPower);
+        actual.MovementGroupID.Should().Be(expected.MovementGroupID);
+
+        if (expected.CurrentRequest == null)
+        {
+            actual.CurrentRequest.Should().BeNull();
+        }
+        else
+        {
+            actual.CurrentRequest.Should().NotBeNull();
+            actual.CurrentRequest.GetType().Should().Be(expected.CurrentRequest.GetType());
+            actual.CurrentRequest.Origin.Should().Be(expected.CurrentRequest.Origin);
+            actual.CurrentRequest.TargetPosition.Should().Be(expected.CurrentRequest.TargetPosition);
+            actual.CurrentRequest.UnitSize.Should().Be(expected.CurrentRequest.UnitSize);
+            actual.CurrentRequest.AllowUnwalkable.Should().Be(expected.CurrentRequest.AllowUnwalkable);
+            actual.CurrentRequest.MaxPathSearchRange.Should().Be(expected.CurrentRequest.MaxPathSearchRange);
+
+            if (expected.CurrentRequest is AStarPathRequest expectedAStar
+                && actual.CurrentRequest is AStarPathRequest actualAStar)
+            {
+                actualAStar.Heuristic.Should().Be(expectedAStar.Heuristic);
+                actualAStar.MaxClimbHeight.Should().Be(expectedAStar.MaxClimbHeight);
+            }
+
+            if (expected.CurrentRequest is FlowFieldPathRequest expectedFlowField
+                && actual.CurrentRequest is FlowFieldPathRequest actualFlowField)
+            {
+                actualFlowField.ExtraFloodRange.Should().Be(expectedFlowField.ExtraFloodRange);
+            }
+        }
+
+        if (expected.TrailGuide == null)
+        {
+            actual.TrailGuide.Should().BeNull();
+        }
+        else
+        {
+            actual.TrailGuide.Should().NotBeNull();
+            actual.TrailGuide.GetType().Should().Be(expected.TrailGuide.GetType());
+
+            if (expected.TrailGuide is AStarGuide expectedAStarGuide
+                && actual.TrailGuide is AStarGuide actualAStarGuide)
+            {
+                actualAStarGuide.CurrentWaypointIndex.Should().Be(expectedAStarGuide.CurrentWaypointIndex);
+            }
+        }
     }
 }

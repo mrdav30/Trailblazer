@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using MemoryPack;
+using Trailblazer.Serialization;
 
 #if NET8_0_OR_GREATER
 using System.Text.Json.Serialization;
@@ -21,7 +22,7 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 [Serializable]
 [MemoryPackable]
-public partial class LocomotionHandler
+public partial class LocomotionHandler : IRecordable
 {
     /// <summary>
     /// Determines whether the scout has control over movement input.
@@ -160,5 +161,35 @@ public partial class LocomotionHandler
     public ITransientLocomotion GetLocomotion(Type type)
     {
         return GetLocomotions().FirstOrDefault(l => l.GetType() == type);
+    }
+
+    /// <inheritdoc />
+    public void RecordData(IChronicler chronicler)
+    {
+        RecordValues.Look(chronicler, ref IsInControl, "isInControl", IsInControl);
+
+        MoveLocomotion move = Move;
+        PlatformLocomotion platform = Platform;
+        JumpLocomotion jump = Jump;
+        FallLocomotion fall = Fall;
+        SlideLocomotion slide = Slide;
+        SwimLocomotion swim = Swim;
+
+        RecordDeep.Look(chronicler, ref move, "move");
+        RecordDeep.Look(chronicler, ref platform, "platform");
+        RecordDeep.Look(chronicler, ref jump, "jump");
+        RecordDeep.Look(chronicler, ref fall, "fall");
+        RecordDeep.Look(chronicler, ref slide, "slide");
+        RecordDeep.Look(chronicler, ref swim, "swim");
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            Move = move;
+            Platform = platform;
+            Jump = jump;
+            Fall = fall;
+            Slide = slide;
+            Swim = swim;
+        }
     }
 }

@@ -2,6 +2,7 @@
 using MemoryPack;
 using System;
 using Trailblazer.Support;
+using Trailblazer.Serialization;
 
 #if NET8_0_OR_GREATER
 using System.Text.Json.Serialization;
@@ -17,7 +18,7 @@ namespace Trailblazer.Navigation.Motor;
 /// </summary>
 [Serializable]
 [MemoryPackable]
-public partial class FallLocomotion : ITransientLocomotion
+public partial class FallLocomotion : ITransientLocomotion, IRecordable
 {
     #region Constants
 
@@ -109,4 +110,30 @@ public partial class FallLocomotion : ITransientLocomotion
     public Fixed64 FallHeight => FallStart - FallEnd;
 
     #endregion
+
+    /// <inheritdoc />
+    public void RecordData(IChronicler chronicler)
+    {
+        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", _isEnabled);
+        RecordValues.Look(chronicler, ref MaxFallHeight, "maxFallHeight", MaxFallHeight);
+        RecordValues.Look(chronicler, ref FallControlMultiplier, "fallControlMultiplier", FallControlMultiplier);
+
+        bool isFalling = IsFalling;
+        Fixed64 fallStart = FallStart;
+        Fixed64 fallEnd = FallEnd;
+
+        RecordValues.Look(chronicler, ref isFalling, "isFalling", isFalling);
+        RecordValues.Look(chronicler, ref fallStart, "fallStart", fallStart);
+        RecordValues.Look(chronicler, ref fallEnd, "fallEnd", fallEnd);
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            IsFalling = isFalling;
+            FallStart = fallStart;
+            FallEnd = fallEnd;
+
+            if (!_isEnabled)
+                ((ITransientLocomotion)this).ClearTransientState();
+        }
+    }
 }

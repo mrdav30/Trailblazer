@@ -2,6 +2,7 @@
 using System;
 using Trailblazer.Support;
 using MemoryPack;
+using Trailblazer.Serialization;
 
 
 #if NET8_0_OR_GREATER
@@ -22,7 +23,7 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 [Serializable]
 [MemoryPackable]
-public partial class PlatformLocomotion : ITransientLocomotion
+public partial class PlatformLocomotion : ITransientLocomotion, IRecordable
 {
     private bool _preservePreviousTransformForAttachment;
 
@@ -330,4 +331,51 @@ public partial class PlatformLocomotion : ITransientLocomotion
     }
 
     #endregion
+
+    /// <inheritdoc />
+    public void RecordData(IChronicler chronicler)
+    {
+        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", _isEnabled);
+        RecordValues.Look(chronicler, ref HeightAdjust, "heightAdjust", HeightAdjust);
+
+        bool isNewPlatform = IsNewPlatform;
+        PlatformHandle? activePlatform = ActivePlatform;
+        PlatformHandle? previousPlatform = PreviousPlatform;
+        PlatformHandle? holdPlatform = HoldPlatform;
+        MotionTransfer movementTransfer = MovementTransfer;
+        Vector3d scoutLocalPoint = ScoutLocalPoint;
+        FixedQuaternion scoutLocalRotation = ScoutLocalRotation;
+        Vector3d platformVelocity = PlatformVelocity;
+        Vector3d framePlatformVelocity = FramePlatformVelocity;
+        int holdPlatformFrames = HoldPlatformFrames;
+
+        RecordValues.Look(chronicler, ref isNewPlatform, "isNewPlatform", isNewPlatform);
+        RecordValues.Look(chronicler, ref activePlatform, "activePlatform", activePlatform);
+        RecordValues.Look(chronicler, ref previousPlatform, "previousPlatform", previousPlatform);
+        RecordValues.Look(chronicler, ref holdPlatform, "holdPlatform", holdPlatform);
+        RecordValues.Look(chronicler, ref movementTransfer, "movementTransfer", movementTransfer);
+        RecordValues.Look(chronicler, ref scoutLocalPoint, "scoutLocalPoint", scoutLocalPoint);
+        RecordValues.Look(chronicler, ref scoutLocalRotation, "scoutLocalRotation", scoutLocalRotation);
+        RecordValues.Look(chronicler, ref platformVelocity, "platformVelocity", platformVelocity);
+        RecordValues.Look(chronicler, ref framePlatformVelocity, "framePlatformVelocity", framePlatformVelocity);
+        RecordValues.Look(chronicler, ref holdPlatformFrames, "holdPlatformFrames", holdPlatformFrames);
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            IsNewPlatform = isNewPlatform;
+            ActivePlatform = activePlatform;
+            PreviousPlatform = previousPlatform;
+            HoldPlatform = holdPlatform;
+            MovementTransfer = movementTransfer;
+            ScoutLocalPoint = scoutLocalPoint;
+            ScoutLocalRotation = scoutLocalRotation;
+            PlatformVelocity = platformVelocity;
+            FramePlatformVelocity = framePlatformVelocity;
+            HoldPlatformFrames = holdPlatformFrames;
+            _preservePreviousTransformForAttachment = false;
+
+            if (!_isEnabled)
+                ((ITransient)this).ClearTransientState();
+        }
+    }
 }

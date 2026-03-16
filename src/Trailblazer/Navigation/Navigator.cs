@@ -11,6 +11,7 @@ using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
+using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation;
 
@@ -22,7 +23,7 @@ namespace Trailblazer.Navigation;
 /// It defines common traversal behaviors and lifecycle methods that can be extended by concrete implementations.
 /// </remarks>
 [Serializable]
-public abstract class Navigator : INavigate
+public abstract class Navigator : INavigate, IRecordable
 {
     #region Constants
 
@@ -539,6 +540,98 @@ public abstract class Navigator : INavigate
     {
         if (!IsActive) return;
         OccupyingIndexMap.Remove(index);
+    }
+
+    /// <inheritdoc />
+    public virtual void RecordData(IChronicler chronicler)
+    {
+        Vector3d position = Position;
+        Vector3d lastPosition = LastPosition;
+        FixedQuaternion rotation = Rotation;
+        Vector3d velocity = Velocity;
+        Fixed64 speed = Speed;
+        Vector3d acceleration = Acceleration;
+        Fixed64 size = Size;
+        Fixed64 footPositionAdjust = FootPositionAdjust;
+        GuidedPathMode guidedPathMode = GuidedPathMode;
+        bool guidedAllowUnwalkable = GuidedAllowUnwalkable;
+        HeuristicMethod guidedAStarHeuristic = GuidedAStarHeuristic;
+        Fixed64 guidedAStarMaxClimbHeight = GuidedAStarMaxClimbHeight;
+        int guidedFlowFieldExtraFloodRange = GuidedFlowFieldExtraFloodRange;
+        Guid globalId = GlobalId;
+        byte occupantGroupId = OccupantGroupId;
+        bool isLockedOn = IsLockedOn;
+        Fixed64 animDampTime = AnimDampTime;
+        TrekCondition frameCondition = _frameCondition;
+        NavMotor motor = Motor;
+
+        RecordValues.Look(chronicler, ref position, "position", position);
+        RecordValues.Look(chronicler, ref lastPosition, "lastPosition", lastPosition);
+        RecordValues.Look(chronicler, ref rotation, "rotation", rotation);
+        RecordValues.Look(chronicler, ref velocity, "velocity", velocity);
+        RecordValues.Look(chronicler, ref speed, "speed", speed);
+        RecordValues.Look(chronicler, ref acceleration, "acceleration", acceleration);
+        RecordValues.Look(chronicler, ref size, "size", size);
+        RecordValues.Look(chronicler, ref footPositionAdjust, "footPositionAdjust", footPositionAdjust);
+        RecordValues.Look(chronicler, ref guidedPathMode, "guidedPathMode", guidedPathMode);
+        RecordValues.Look(chronicler, ref guidedAllowUnwalkable, "guidedAllowUnwalkable", guidedAllowUnwalkable);
+        RecordValues.Look(chronicler, ref guidedAStarHeuristic, "guidedAStarHeuristic", guidedAStarHeuristic);
+        RecordValues.Look(chronicler, ref guidedAStarMaxClimbHeight, "guidedAStarMaxClimbHeight", guidedAStarMaxClimbHeight);
+        RecordValues.Look(chronicler, ref guidedFlowFieldExtraFloodRange, "guidedFlowFieldExtraFloodRange", guidedFlowFieldExtraFloodRange);
+        RecordValues.Look(chronicler, ref globalId, "globalId", globalId);
+        RecordValues.Look(chronicler, ref occupantGroupId, "occupantGroupId", occupantGroupId);
+        RecordValues.Look(chronicler, ref isLockedOn, "isLockedOn", isLockedOn);
+        RecordValues.Look(chronicler, ref animDampTime, "animDampTime", animDampTime);
+        RecordValues.Look(chronicler, ref frameCondition, "frameCondition", frameCondition);
+        RecordDeep.Look(chronicler, ref motor, "motor");
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            Position = position;
+            LastPosition = lastPosition;
+            Rotation = rotation;
+            Velocity = velocity;
+            Speed = speed;
+            Acceleration = acceleration;
+            Size = size;
+            FootPositionAdjust = footPositionAdjust;
+            GuidedPathMode = guidedPathMode;
+            GuidedAllowUnwalkable = guidedAllowUnwalkable;
+            GuidedAStarHeuristic = guidedAStarHeuristic;
+            GuidedAStarMaxClimbHeight = guidedAStarMaxClimbHeight;
+            GuidedFlowFieldExtraFloodRange = guidedFlowFieldExtraFloodRange;
+            GlobalId = globalId;
+            OccupantGroupId = occupantGroupId;
+            IsLockedOn = isLockedOn;
+            AnimDampTime = animDampTime;
+            _frameCondition = frameCondition.Clone();
+            Motor = motor;
+
+            Forward = Rotation != FixedQuaternion.Identity
+                ? Rotation.Rotate(Vector3d.Forward)
+                : Vector3d.Forward;
+
+            _positionDelta = Vector3d.Zero;
+            _velocityDelta = Vector3d.Zero;
+            _rotationDelta = FixedQuaternion.Identity;
+            StuckThresholdSpeed = Fixed64.Zero;
+            IsGuideded = false;
+            _frameRequest.Reset();
+            _isSet = true;
+            _isInitialized = Motor != null;
+
+            if (Steering != null)
+            {
+                Steering.SetTrailGuide(null);
+                Steering.StopMove();
+            }
+
+            if (Turning != null)
+                Turning.OnInitialize(Radius);
+
+            OccupyingIndexMap.Clear();
+            CheckVoxelOccupancy(true);
+        }
     }
 
     #endregion

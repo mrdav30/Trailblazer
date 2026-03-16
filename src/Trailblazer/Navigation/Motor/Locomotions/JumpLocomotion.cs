@@ -2,6 +2,7 @@
 using System;
 using Trailblazer.Support;
 using MemoryPack;
+using Trailblazer.Serialization;
 
 #if NET8_0_OR_GREATER
 using System.Text.Json.Serialization;
@@ -21,7 +22,7 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 [Serializable]
 [MemoryPackable]
-public partial class JumpLocomotion : ITransientLocomotion
+public partial class JumpLocomotion : ITransientLocomotion, IRecordable
 {
     #region Constants
 
@@ -269,4 +270,48 @@ public partial class JumpLocomotion : ITransientLocomotion
     }
 
     #endregion
+
+    /// <inheritdoc />
+    public void RecordData(IChronicler chronicler)
+    {
+        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", _isEnabled);
+        RecordValues.Look(chronicler, ref MaxJumpCount, "maxJumpCount", MaxJumpCount);
+        RecordValues.Look(chronicler, ref CooldownTime, "cooldownTime", CooldownTime);
+        RecordValues.Look(chronicler, ref AvoidGroundingTimer, "avoidGroundingTimer", AvoidGroundingTimer);
+        RecordValues.Look(chronicler, ref BaseJumpHeight, "baseJumpHeight", BaseJumpHeight);
+        RecordValues.Look(chronicler, ref ExtraJumpHeight, "extraJumpHeight", ExtraJumpHeight);
+        RecordValues.Look(chronicler, ref JumpControlMultiplier, "jumpControlMultiplier", JumpControlMultiplier);
+        RecordValues.Look(chronicler, ref PerpendicularJumpAmount, "perpendicularJumpAmount", PerpendicularJumpAmount);
+        RecordValues.Look(chronicler, ref SteepPerpendicularJumpAmount, "steepPerpendicularJumpAmount", SteepPerpendicularJumpAmount);
+
+        bool isJumping = IsJumping;
+        bool isHoldingJump = IsHoldingJump;
+        Fixed64 jumpStartTime = JumpStartTime;
+        Vector3d frameJumpDirection = FrameJumpDirection;
+        Fixed64 cooldownTimer = CooldownTimer;
+        bool isCoolingDown = IsCoolingDown;
+        int jumpCount = JumpCount;
+
+        RecordValues.Look(chronicler, ref isJumping, "isJumping", isJumping);
+        RecordValues.Look(chronicler, ref isHoldingJump, "isHoldingJump", isHoldingJump);
+        RecordValues.Look(chronicler, ref jumpStartTime, "jumpStartTime", jumpStartTime);
+        RecordValues.Look(chronicler, ref frameJumpDirection, "frameJumpDirection", frameJumpDirection);
+        RecordValues.Look(chronicler, ref cooldownTimer, "cooldownTimer", cooldownTimer);
+        RecordValues.Look(chronicler, ref isCoolingDown, "isCoolingDown", isCoolingDown);
+        RecordValues.Look(chronicler, ref jumpCount, "jumpCount", jumpCount);
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            IsJumping = isJumping;
+            IsHoldingJump = isHoldingJump;
+            JumpStartTime = jumpStartTime;
+            FrameJumpDirection = frameJumpDirection;
+            CooldownTimer = cooldownTimer;
+            IsCoolingDown = isCoolingDown;
+            JumpCount = jumpCount;
+
+            if (!_isEnabled)
+                ((ITransient)this).ClearTransientState();
+        }
+    }
 }

@@ -79,6 +79,7 @@
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>
+		<PackageReference Include="System.Text.Json" Version="8.0.5" />
 	</ItemGroup>
 	  <!-- Ensure LICENSE, README, & icon files are included in the NuGet package -->
 	<ItemGroup>

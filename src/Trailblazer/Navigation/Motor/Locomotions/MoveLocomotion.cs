@@ -1,6 +1,7 @@
 ﻿using FixedMathSharp;
 using MemoryPack;
 using System;
+using Trailblazer.Serialization;
 using Trailblazer.Support;
 
 #if NET8_0_OR_GREATER
@@ -21,7 +22,7 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 [Serializable]
 [MemoryPackable]
-public partial class MoveLocomotion : ITransientLocomotion
+public partial class MoveLocomotion : ITransientLocomotion, IRecordable
 {
     #region Constants
 
@@ -222,4 +223,33 @@ public partial class MoveLocomotion : ITransientLocomotion
     public Vector3d FrameVelocity { get; set; }
 
     #endregion
+
+    /// <inheritdoc />
+    public void RecordData(IChronicler chronicler)
+    {
+        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", _isEnabled);
+        RecordValues.Look(chronicler, ref MaxSlowSpeed, "maxSlowSpeed", MaxSlowSpeed);
+        RecordValues.Look(chronicler, ref MaxModerateSpeed, "maxModerateSpeed", MaxModerateSpeed);
+        RecordValues.Look(chronicler, ref MaxFastSpeed, "maxFastSpeed", MaxFastSpeed);
+        RecordValues.Look(chronicler, ref MaxSidewaysSpeed, "maxSidewaysSpeed", MaxSidewaysSpeed);
+        RecordValues.Look(chronicler, ref MaxBackwardsSpeed, "maxBackwardsSpeed", MaxBackwardsSpeed);
+        RecordValues.Look(chronicler, ref MaxGroundAcceleration, "maxGroundAcceleration", MaxGroundAcceleration);
+        RecordValues.Look(chronicler, ref MaxAirAcceleration, "maxAirAcceleration", MaxAirAcceleration);
+        RecordValues.Look(chronicler, ref MoveSpeedMultiplier, "moveSpeedMultiplier", MoveSpeedMultiplier);
+        RecordValues.Look(chronicler, ref ModifySpeedOnSlope, "modifySpeedOnSlope", ModifySpeedOnSlope);
+        RecordValues.Look(chronicler, ref SlopeSpeedMultiplier, "slopeSpeedMultiplier", SlopeSpeedMultiplier);
+        RecordValues.Look(chronicler, ref GravityForce, "gravityForce", GravityForce);
+        RecordValues.Look(chronicler, ref TerminalVelocity, "terminalVelocity", TerminalVelocity);
+
+        Vector3d frameVelocity = FrameVelocity;
+        RecordValues.Look(chronicler, ref frameVelocity, "frameVelocity", frameVelocity);
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            FrameVelocity = frameVelocity;
+
+            if (!_isEnabled)
+                ((ITransient)this).ClearTransientState();
+        }
+    }
 }

@@ -2,6 +2,7 @@
 using System;
 using Trailblazer.Support;
 using MemoryPack;
+using Trailblazer.Serialization;
 
 
 #if NET8_0_OR_GREATER
@@ -22,7 +23,7 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 [Serializable]
 [MemoryPackable]
-public partial class SwimLocomotion : ITransientLocomotion
+public partial class SwimLocomotion : ITransientLocomotion, IRecordable
 {
     #region Constants
 
@@ -253,5 +254,41 @@ public partial class SwimLocomotion : ITransientLocomotion
         UnderwaterTimer -= time;
         if (UnderwaterTimer < Fixed64.Zero)
             UnderwaterTimer = Fixed64.Zero;
+    }
+
+    /// <inheritdoc />
+    public void RecordData(IChronicler chronicler)
+    {
+        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", _isEnabled);
+        RecordValues.Look(chronicler, ref CanSwim, "canSwim", CanSwim);
+        RecordValues.Look(chronicler, ref CanBreachWater, "canBreachWater", CanBreachWater);
+        RecordValues.Look(chronicler, ref CanDrown, "canDrown", CanDrown);
+        RecordValues.Look(chronicler, ref MaxSwimSpeed, "maxSwimSpeed", MaxSwimSpeed);
+        RecordValues.Look(chronicler, ref MaxSwimSidewaysSpeed, "maxSwimSidewaysSpeed", MaxSwimSidewaysSpeed);
+        RecordValues.Look(chronicler, ref MaxWaterAcceleration, "maxWaterAcceleration", MaxWaterAcceleration);
+        RecordValues.Look(chronicler, ref SwimAccelerationModifier, "swimAccelerationModifier", SwimAccelerationModifier);
+        RecordValues.Look(chronicler, ref BuoyancyFactor, "buoyancyFactor", BuoyancyFactor);
+        RecordValues.Look(chronicler, ref WaterDragFactor, "waterDragFactor", WaterDragFactor);
+        RecordValues.Look(chronicler, ref BreachJumpMultiplier, "breachJumpMultiplier", BreachJumpMultiplier);
+        RecordValues.Look(chronicler, ref HoldBreathTime, "holdBreathTime", HoldBreathTime);
+        RecordValues.Look(chronicler, ref BreathRegenerateIncrement, "breathRegenerateIncrement", BreathRegenerateIncrement);
+
+        bool isSwimming = IsSwimming;
+        bool isDiving = IsDiving;
+        Fixed64 underwaterTimer = UnderwaterTimer;
+
+        RecordValues.Look(chronicler, ref isSwimming, "isSwimming", isSwimming);
+        RecordValues.Look(chronicler, ref isDiving, "isDiving", isDiving);
+        RecordValues.Look(chronicler, ref underwaterTimer, "underwaterTimer", underwaterTimer);
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            IsSwimming = isSwimming;
+            IsDiving = isDiving;
+            UnderwaterTimer = underwaterTimer;
+
+            if (!_isEnabled)
+                ((ITransient)this).ClearTransientState();
+        }
     }
 }

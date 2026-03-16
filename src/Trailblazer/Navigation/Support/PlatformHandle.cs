@@ -1,6 +1,13 @@
 ﻿using FixedMathSharp;
 using System;
 
+#if NET8_0_OR_GREATER
+using System.Text.Json.Serialization;
+#endif
+#if !NET8_0_OR_GREATER
+using System.Text.Json.Serialization.Shim;
+#endif
+
 namespace Trailblazer.Navigation;
 
 public struct PlatformHandle : IEquatable<PlatformHandle>
@@ -11,6 +18,7 @@ public struct PlatformHandle : IEquatable<PlatformHandle>
 
     public readonly bool Active => Id != 0;
 
+    [JsonConstructor]
     public PlatformHandle(int id, Fixed4x4 transform)
     {
         Id = id;

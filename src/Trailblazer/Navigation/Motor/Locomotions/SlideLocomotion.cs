@@ -2,6 +2,7 @@
 using MemoryPack;
 using System;
 using Trailblazer.Support;
+using Trailblazer.Serialization;
 
 #if NET8_0_OR_GREATER
 using System.Text.Json.Serialization;
@@ -21,7 +22,7 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 [Serializable]
 [MemoryPackable]
-public partial class SlideLocomotion : ITransientLocomotion
+public partial class SlideLocomotion : ITransientLocomotion, IRecordable
 {
     #region Constants
 
@@ -120,4 +121,25 @@ public partial class SlideLocomotion : ITransientLocomotion
     public bool IsSliding { get; set; }
 
     #endregion
+
+    /// <inheritdoc />
+    public void RecordData(IChronicler chronicler)
+    {
+        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", _isEnabled);
+        RecordValues.Look(chronicler, ref SlopeLimit, "slopeLimit", SlopeLimit);
+        RecordValues.Look(chronicler, ref SlidingSpeed, "slidingSpeed", SlidingSpeed);
+        RecordValues.Look(chronicler, ref SidewaysControl, "sidewaysControl", SidewaysControl);
+        RecordValues.Look(chronicler, ref SpeedControl, "speedControl", SpeedControl);
+
+        bool isSliding = IsSliding;
+        RecordValues.Look(chronicler, ref isSliding, "isSliding", isSliding);
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            IsSliding = isSliding;
+
+            if (!_isEnabled)
+                ((ITransient)this).ClearTransientState();
+        }
+    }
 }

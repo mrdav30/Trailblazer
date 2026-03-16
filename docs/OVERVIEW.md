@@ -7,6 +7,10 @@ Trailblazer is a deterministic navigation library for lockstep simulations and g
 
 This document is the high-level architecture guide for the current codebase.
 
+See also:
+
+- `SERIALIZATION.MD` for the current Scribe-style serialization MVP
+
 ## 1. Core Model
 
 Trailblazer assumes:

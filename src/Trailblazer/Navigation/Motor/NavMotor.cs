@@ -1,6 +1,7 @@
 ﻿using FixedMathSharp;
 using System;
 using System.Diagnostics;
+using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Motor
 {
@@ -12,7 +13,7 @@ namespace Trailblazer.Navigation.Motor
     /// and finalizes traversal states for consistent movement across frames.
     /// </remarks>
     [Serializable]
-    public class NavMotor
+    public class NavMotor : IRecordable
     {
         #region Fields & Properties
 
@@ -832,6 +833,33 @@ namespace Trailblazer.Navigation.Motor
 
             TrekCondition previousCondition = CurrentState.ToTrekCondition();
             CurrentState.Update(newCondition, previousCondition);
+        }
+
+        /// <inheritdoc />
+        public void RecordData(IChronicler chronicler)
+        {
+            LocomotionHandler handler = Handler;
+            TrekCondition currentCondition = CurrentState?.ToTrekCondition() ?? new TrekCondition();
+            TrekCondition? previousCondition = CurrentState?.PreviousState;
+            bool isInitialized = IsInitialized;
+
+            RecordDeep.Look(chronicler, ref handler, "handler");
+            RecordValues.Look(chronicler, ref currentCondition, "currentCondition", currentCondition);
+            RecordValues.Look(chronicler, ref previousCondition, "previousCondition", previousCondition);
+            RecordValues.Look(chronicler, ref isInitialized, "isInitialized", isInitialized);
+
+            if (chronicler.Mode == SerializationMode.Loading)
+            {
+                Handler = handler;
+                CurrentState = CurrentState == null
+                    ? new TransitState(currentCondition, previousCondition)
+                    : CurrentState;
+                CurrentState.Update(currentCondition, previousCondition);
+                IsInitialized = isInitialized;
+                IsFrameLocked = false;
+                FrameSlopeAngle = Fixed64.Zero;
+                _forceOutput = Vector3d.Zero;
+            }
         }
 
         #endregion

@@ -22,34 +22,40 @@ Trailblazer includes an explicit serialization layer built around the Chronicler
 The core idea is:
 
 - serializable types implement `IRecordable`
-- those types write and read their own state through `ExposeData(IChronicler chronicler)`
+- those types write and read their own state through `RecordData(IChronicler chronicler)`
 - `RecordValues` handles value data
 - `RecordDeep` handles nested `IRecordable` objects
 
 This is intentionally different from relying on serializer attributes alone.
 
-The explicit expose pass makes it easier to:
+The explicit record pass makes it easier to:
 
 - separate durable state from frame-local or derived state
 - keep deterministic runtime types in control of their own save/load behavior
 - support multiple transports later without rewriting each runtime type
 - reuse the same pattern in other libraries in the same stack
 
-## 2. Current Transport
+## 2. Current Transports
 
-The first pass uses a JSON-backed chronicler implementation:
+The current chronicler backends are:
 
 - `JsonRecordSerializer.Serialize(IRecordable target, bool writeIndented = false)`
 - `JsonRecordSerializer.Populate(IRecordable target, string json)`
+- `MemoryPackRecordSerializer.Serialize(IRecordable target)`
+- `MemoryPackRecordSerializer.Populate(IRecordable target, byte[] data)`
 
-This transport is implemented in `src/Trailblazer/Serialization/JsonRecordSerializer.cs`.
+These transports are implemented in:
+
+- `src/Trailblazer/Serialization/JsonRecordSerializer.cs`
+- `src/Trailblazer/Serialization/MemoryPackRecordSerializer.cs`
 
 Important details:
 
 - the Chronicler contract is serializer-agnostic
-- JSON is only the first backend
-- `System.Text.Json` is referenced explicitly so this works on both `netstandard2.1` and `net8.0`
+- JSON and MemoryPack now share the same chronicler contract
+- `System.Text.Json` and `MemoryPack` are referenced explicitly so this works on both `netstandard2.1` and `net8.0`
 - downstream libraries such as `FixedMathSharp` and `SwiftCollections` already support `System.Text.Json` and `MemoryPack`, which is why this layer stays transport-neutral
+- types serialized through `RecordData(...)` generally do not need transport-specific attributes; reserve those for leaf values that are still serialized directly by a transport
 
 ## 3. Core API
 
@@ -58,7 +64,7 @@ The current API surface is:
 ```csharp
 public interface IRecordable
 {
-    void ExposeData(IChronicler chronicler);
+    void RecordData(IChronicler chronicler);
 }
 
 public interface IChronicler
@@ -131,7 +137,7 @@ It is not yet designed for:
 
 ### 6.1 Navigator
 
-`Navigator.ExposeData(...)` currently persists:
+`Navigator.RecordData(...)` currently persists:
 
 - `Position`
 - `LastPosition`
@@ -161,7 +167,7 @@ On load it also:
 
 ### 6.2 NavMotor
 
-`NavMotor.ExposeData(...)` currently persists:
+`NavMotor.RecordData(...)` currently persists:
 
 - `Handler`
 - current `TrekCondition`
@@ -177,7 +183,7 @@ On load it also:
 
 ### 6.3 LocomotionHandler
 
-`LocomotionHandler.ExposeData(...)` currently persists:
+`LocomotionHandler.RecordData(...)` currently persists:
 
 - `IsInControl`
 - all six locomotion instances through `RecordDeep`
@@ -221,7 +227,7 @@ Some state is also intentionally rebuilt instead of persisted directly:
 The current MVP boundary is:
 
 - transport-neutral Chronicler API
-- JSON backend only
+- JSON and MemoryPack backends
 - explicit type-owned save/load behavior
 - load-into-existing-instance semantics
 - motor branch only
@@ -239,7 +245,7 @@ Tradeoffs of this MVP:
 
 When extending this system, keep these rules in mind:
 
-- prefer explicit expose code over implicit serializer behavior for runtime systems
+- prefer explicit record code over implicit serializer behavior for runtime systems
 - serialize authoritative state, not convenience caches
 - rebuild derived values on load where practical
 - avoid serializing live references when a stable identifier or reconstructed state is safer
@@ -263,7 +269,7 @@ Focused round-trip coverage was added for:
 
 The current tests verify that:
 
-- supported state round-trips through the JSON chronicler
+- supported state round-trips through the JSON and MemoryPack chroniclers
 - moving-platform state survives round-trip
 - locomotion runtime state survives round-trip
 - a restored navigator remains usable for later simulation
@@ -272,17 +278,16 @@ The current tests verify that:
 
 The next best steps after this MVP are:
 
-1. Add a `MemoryPack` backend on top of the same `IChronicler` contract.
-2. Expand coverage into `NavSteering`.
-3. Decide how path requests, guide ownership, and cached guide reacquisition should load.
-4. Decide whether `NavTurning` should serialize buffered turn state or be rebuilt on load.
-5. Define a stable reference strategy for external/runtime-owned objects that should not be serialized inline.
-6. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
-7. Add more targeted tests around partial loads, disabled locomotions, and backward-compatible defaults.
+1. Expand coverage into `NavSteering`.
+2. Decide how path requests, guide ownership, and cached guide reacquisition should load.
+3. Decide whether `NavTurning` should serialize buffered turn state or be rebuilt on load.
+4. Define a stable reference strategy for external/runtime-owned objects that should not be serialized inline.
+5. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
+6. Add more targeted tests around partial loads, disabled locomotions, and backward-compatible defaults.
 
 ## 12. Extension Guidance
 
-When adding `ExposeData(...)` to more types:
+When adding `RecordData(...)` to more types:
 
 1. Start with the authoritative state.
 2. Skip or rebuild frame-local caches unless they are truly required for restore correctness.

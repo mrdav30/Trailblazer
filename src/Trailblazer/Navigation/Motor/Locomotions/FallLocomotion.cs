@@ -1,24 +1,13 @@
 ﻿using FixedMathSharp;
-using MemoryPack;
-using System;
 using Trailblazer.Support;
 using Trailblazer.Serialization;
-
-#if NET8_0_OR_GREATER
-using System.Text.Json.Serialization;
-#endif
-#if !NET8_0_OR_GREATER
-using System.Text.Json.Serialization.Shim;
-#endif
 
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
 /// Handles the scout’s behavior when falling, including tracking fall distance and applying movement constraints.
 /// </summary>
-[Serializable]
-[MemoryPackable]
-public partial class FallLocomotion : ITransientLocomotion, IRecordable
+public class FallLocomotion : ITransientLocomotion, IRecordable
 {
     #region Constants
 
@@ -41,23 +30,17 @@ public partial class FallLocomotion : ITransientLocomotion, IRecordable
     /// Determines whether falling mechanics are enabled.
     /// If disabled, the scout will not experience fall behavior.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     private bool _isEnabled = true;
 
     /// <summary>
     /// The maximum allowable fall height before the scout reaches a critical threshold (e.g., death or heavy impact).
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 MaxFallHeight = DefaultMaxFallHeight;
 
     /// <summary>
     /// A multiplier controlling how much movement input affects the scout while falling.
     /// Lower values reduce movement responsiveness.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 FallControlMultiplier = DefaultFallControlMultiplier;
 
     #endregion
@@ -65,8 +48,6 @@ public partial class FallLocomotion : ITransientLocomotion, IRecordable
     #region Transient State
 
     /// <inheritdoc cref="ILocomotion.IsEnabled"/>
-    [JsonIgnore]
-    [MemoryPackIgnore]
     public bool IsEnabled
     {
         get => _isEnabled;
@@ -82,31 +63,23 @@ public partial class FallLocomotion : ITransientLocomotion, IRecordable
     /// Indicates whether the scout is currently falling.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public bool IsFalling { get; set; }
 
     /// <summary>
     /// The vertical position where the scout started falling.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 FallStart { get; set; }
 
     /// <summary>
     /// The vertical position where the scout landed.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 FallEnd { get; set; }
 
     /// <summary>
     /// The total distance fallen, calculated as the difference between <see cref="FallStart"/> and <see cref="FallEnd"/>.
     /// </summary>
-    [JsonIgnore]
-    [MemoryPackIgnore]
     public Fixed64 FallHeight => FallStart - FallEnd;
 
     #endregion

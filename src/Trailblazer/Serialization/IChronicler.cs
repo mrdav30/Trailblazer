@@ -16,7 +16,7 @@ public interface IChronicler
     void LookValue<T>(ref T value, string name, T defaultValue = default);
 
     /// <summary>
-    /// Reads or writes a nested exposable instance by name.
+    /// Reads or writes a nested recordable instance by name.
     /// </summary>
     void LookDeep<T>(ref T value, string name) where T : class, IRecordable;
 }

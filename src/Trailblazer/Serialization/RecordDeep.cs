@@ -1,7 +1,7 @@
 namespace Trailblazer.Serialization;
 
 /// <summary>
-/// Helper for reading and writing nested exposable objects during an expose pass.
+/// Helper for reading and writing nested recordable objects during a chronicler pass.
 /// </summary>
 public static class RecordDeep
 {

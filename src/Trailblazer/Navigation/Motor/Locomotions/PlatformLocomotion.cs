@@ -1,16 +1,6 @@
 ﻿using FixedMathSharp;
-using System;
 using Trailblazer.Support;
-using MemoryPack;
 using Trailblazer.Serialization;
-
-
-#if NET8_0_OR_GREATER
-using System.Text.Json.Serialization;
-#endif
-#if !NET8_0_OR_GREATER
-using System.Text.Json.Serialization.Shim;
-#endif
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -21,9 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// This locomotion system tracks platform velocity, rotation, and movement transfer behavior.
 /// It allows the scout to inherit motion from platforms and supports different transfer states.
 /// </remarks>
-[Serializable]
-[MemoryPackable]
-public partial class PlatformLocomotion : ITransientLocomotion, IRecordable
+public class PlatformLocomotion : ITransientLocomotion, IRecordable
 {
     private bool _preservePreviousTransformForAttachment;
 
@@ -46,15 +34,11 @@ public partial class PlatformLocomotion : ITransientLocomotion, IRecordable
     /// <summary>
     /// Determines whether platform locomotion is enabled.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     private bool _isEnabled = true;
 
     /// <summary>
     /// The height offset applied when interacting with moving platforms.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 HeightAdjust = DefaultHeightAdjust;
 
     #endregion
@@ -62,8 +46,6 @@ public partial class PlatformLocomotion : ITransientLocomotion, IRecordable
     #region Transient State
 
     /// <inheritdoc cref="ILocomotion.IsEnabled"/>
-    [JsonIgnore]
-    [MemoryPackIgnore]
     public bool IsEnabled
     {
         get => _isEnabled;
@@ -82,90 +64,62 @@ public partial class PlatformLocomotion : ITransientLocomotion, IRecordable
     /// Indicates whether the scout has just landed on a new platform.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public bool IsNewPlatform { get; set; }
 
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public PlatformHandle? ActivePlatform { get; set; }
 
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public PlatformHandle? PreviousPlatform { get; set; }
 
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public PlatformHandle? HoldPlatform { get; set; }
 
     /// <summary>
     /// Defines how movement is transferred from the platform to the scout.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public MotionTransfer MovementTransfer { get; set; }
 
     /// <summary>
     /// The local position of the scout relative to the platform.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public Vector3d ScoutLocalPoint { get; set; }
 
     /// <summary>
     /// The local rotation of the scout relative to the platform.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public FixedQuaternion ScoutLocalRotation { get; set; } = FixedQuaternion.Identity;
 
     /// <summary>
     /// The velocity of the platform.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public Vector3d PlatformVelocity { get; set; }
 
     /// <summary>
     /// The last known platform velocity when the scout is airborne.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public Vector3d FramePlatformVelocity { get; set; }
 
     /// <summary>
     /// The number of frames the scout has been holding onto a platform.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public int HoldPlatformFrames { get; private set; }
 
-    [JsonIgnore]
-    [MemoryPackIgnore]
     public bool IsActive => IsEnabled && ActivePlatform?.Active == true;
 
-    [JsonIgnore]
-    [MemoryPackIgnore]
     public bool IsLockedToPlatform => MovementTransfer == MotionTransfer.PermaLocked;
 
-    [JsonIgnore]
-    [MemoryPackIgnore]
     public bool IsHoldingPlatform => IsEnabled && HoldPlatform?.Active == true;
 
     /// <summary>
     /// Indicates whether platform inertia (initial velocity transfer) has been applied.
     /// </summary>
-    [JsonIgnore]
-    [MemoryPackIgnore]
     public bool InteriaApplied => IsEnabled
         && (MovementTransfer == MotionTransfer.InitTransfer || MovementTransfer == MotionTransfer.PermaTransfer);
 

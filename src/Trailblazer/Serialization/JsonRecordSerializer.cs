@@ -14,7 +14,7 @@ public static class JsonRecordSerializer
     private static readonly JsonSerializerOptions _defaultOptions = CreateDefaultOptions();
 
     /// <summary>
-    /// Serializes the current state of an exposable instance into JSON.
+    /// Serializes the current state of a recordable instance into JSON.
     /// </summary>
     public static string Serialize(IRecordable target, bool writeIndented = false)
     {
@@ -31,7 +31,7 @@ public static class JsonRecordSerializer
     }
 
     /// <summary>
-    /// Loads JSON state into an existing exposable instance.
+    /// Loads JSON state into an existing recordable instance.
     /// </summary>
     public static void Populate(IRecordable target, string json)
     {

@@ -1,15 +1,6 @@
 ﻿using FixedMathSharp;
-using MemoryPack;
-using System;
 using Trailblazer.Serialization;
 using Trailblazer.Support;
-
-#if NET8_0_OR_GREATER
-using System.Text.Json.Serialization;
-#endif
-#if !NET8_0_OR_GREATER
-using System.Text.Json.Serialization.Shim;
-#endif
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -20,9 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// This locomotion module governs how the scout accelerates, decelerates, and interacts with terrain slopes.
 /// It tracks position changes and velocity updates for consistent movement behavior.
 /// </remarks>
-[Serializable]
-[MemoryPackable]
-public partial class MoveLocomotion : ITransientLocomotion, IRecordable
+public class MoveLocomotion : ITransientLocomotion, IRecordable
 {
     #region Constants
 
@@ -111,89 +100,63 @@ public partial class MoveLocomotion : ITransientLocomotion, IRecordable
     /// <summary>
     /// Determines whether movement mechanics are enabled.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     private bool _isEnabled = true;
 
     /// <summary>
     /// The maximum speed when walking.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 MaxSlowSpeed = DefaultMaxSlowSpeed;
 
     /// <summary>
     /// The maximum speed when jogging.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 MaxModerateSpeed = DefaultMaxModerateSpeed;
 
     /// <summary>
     /// The maximum speed when sprinting.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 MaxFastSpeed = DefaultMaxFastSpeed;
 
     /// <summary>
     /// The maximum speed when moving sideways.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 MaxSidewaysSpeed = DefaultMaxSidewaysSpeed;
 
     /// <summary>
     /// The maximum speed when moving backward.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 MaxBackwardsSpeed = DefaultMaxBackwardsSpeed;
 
     /// <summary>
     /// The maximum acceleration when moving on the ground.
     /// Higher values result in quicker acceleration.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 MaxGroundAcceleration = DefaultMaxGroundAcceleration;
 
     /// <summary>
     /// The maximum acceleration when moving in the air.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 MaxAirAcceleration = DefaultMaxAirAcceleration;
 
     /// <summary>
     /// A global multiplier applied to movement speed.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 MoveSpeedMultiplier = Fixed64.One;
 
     /// <summary>
     /// Determines whether movement speed is adjusted based on the slope of the terrain.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public bool ModifySpeedOnSlope = true;
 
     /// <summary>
     /// A curve controlling how speed is affected by terrain slope.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public FixedCurve SlopeSpeedMultiplier = DefaultSlopeSpeedModifier;
 
     /// <inheritdoc cref="DefaultGravityForce"/>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 GravityForce = DefaultGravityForce;
 
     /// <inheritdoc cref="DefaultTerminalVelocity"/>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 TerminalVelocity = DefaultTerminalVelocity;
 
     #endregion
@@ -201,8 +164,6 @@ public partial class MoveLocomotion : ITransientLocomotion, IRecordable
     #region Transient State
 
     /// <inheritdoc cref="ILocomotion.IsEnabled"/>
-    [JsonIgnore]
-    [MemoryPackIgnore]
     public bool IsEnabled
     {
         get => _isEnabled;
@@ -218,8 +179,6 @@ public partial class MoveLocomotion : ITransientLocomotion, IRecordable
     /// The scout’s current velocity in world space.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public Vector3d FrameVelocity { get; set; }
 
     #endregion

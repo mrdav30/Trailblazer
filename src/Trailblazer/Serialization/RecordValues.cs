@@ -1,7 +1,7 @@
 namespace Trailblazer.Serialization;
 
 /// <summary>
-/// Helper for reading and writing leaf values during an expose pass.
+/// Helper for reading and writing leaf values during a chronicler pass.
 /// </summary>
 public static class RecordValues
 {

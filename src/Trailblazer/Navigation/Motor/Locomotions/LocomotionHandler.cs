@@ -2,15 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using MemoryPack;
 using Trailblazer.Serialization;
-
-#if NET8_0_OR_GREATER
-using System.Text.Json.Serialization;
-#endif
-#if !NET8_0_OR_GREATER
-using System.Text.Json.Serialization.Shim;
-#endif
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -20,15 +12,11 @@ namespace Trailblazer.Navigation.Motor;
 /// <remarks>
 /// This class coordinates multiple locomotion types, ensuring that movement states are properly managed.
 /// </remarks>
-[Serializable]
-[MemoryPackable]
-public partial class LocomotionHandler : IRecordable
+public class LocomotionHandler : IRecordable
 {
     /// <summary>
     /// Determines whether the scout has control over movement input.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public bool IsInControl = true;
 
     #region Locomotions
@@ -36,8 +24,6 @@ public partial class LocomotionHandler : IRecordable
     /// <summary>
     /// Handles general movement, including speed limits, acceleration, and velocity calculations.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public MoveLocomotion Move { get; private set; } = new();
 
     /// <summary>
@@ -46,8 +32,6 @@ public partial class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion maintains platform velocity tracking and movement transfer states.
     /// </remarks>
-    [JsonInclude]
-    [MemoryPackInclude]
     public PlatformLocomotion Platform { get; private set; } = new();
 
     /// <summary>
@@ -56,8 +40,6 @@ public partial class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion governs jump height, cooldown timing, and jump force calculations.
     /// </remarks>
-    [JsonInclude]
-    [MemoryPackInclude]
     public JumpLocomotion Jump { get; private set; } = new();
 
     /// <summary>
@@ -66,8 +48,6 @@ public partial class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion tracks fall distance, applies landing impact logic, and determines if a scout is free-falling.
     /// </remarks>
-    [JsonInclude]
-    [MemoryPackInclude]
     public FallLocomotion Fall { get; private set; } = new();
 
     /// <summary>
@@ -76,8 +56,6 @@ public partial class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion determines when the scout should slide and how much control it has over movement during the slide.
     /// </remarks>
-    [JsonInclude]
-    [MemoryPackInclude]
     public SlideLocomotion Slide { get; private set; } = new();
 
     /// <summary>
@@ -86,8 +64,6 @@ public partial class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion tracks swim speed, dive time, and breath management.
     /// </remarks>
-    [JsonInclude]
-    [MemoryPackInclude]
     public SwimLocomotion Swim { get; private set; } = new();
 
     #endregion

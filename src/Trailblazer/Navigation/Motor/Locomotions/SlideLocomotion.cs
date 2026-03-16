@@ -1,15 +1,6 @@
 ﻿using FixedMathSharp;
-using MemoryPack;
-using System;
 using Trailblazer.Support;
 using Trailblazer.Serialization;
-
-#if NET8_0_OR_GREATER
-using System.Text.Json.Serialization;
-#endif
-#if !NET8_0_OR_GREATER
-using System.Text.Json.Serialization.Shim;
-#endif
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -20,9 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// This locomotion module determines when the scout should slide based on terrain steepness
 /// and controls how much influence the scout has over the slide direction and speed.
 /// </remarks>
-[Serializable]
-[MemoryPackable]
-public partial class SlideLocomotion : ITransientLocomotion, IRecordable
+public class SlideLocomotion : ITransientLocomotion, IRecordable
 {
     #region Constants
 
@@ -59,22 +48,16 @@ public partial class SlideLocomotion : ITransientLocomotion, IRecordable
     /// <summary>
     /// Determines whether sliding mechanics are enabled.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     private bool _isEnabled = true;
 
     /// <summary>
     /// The slope angle threshold at which sliding begins.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 SlopeLimit = DefaultSlopeLimit;
 
     /// <summary>
     /// The speed at which the scout slides when on a steep surface.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 SlidingSpeed = DefaultSlidingSpeed;
 
     /// <summary>
@@ -83,15 +66,11 @@ public partial class SlideLocomotion : ITransientLocomotion, IRecordable
     /// <remarks>
     /// A higher value increases lateral movement freedom during a slide.
     /// </remarks>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 SidewaysControl = DefaultSidewaysControl;
 
     /// <summary>
     /// Determines how much the scout can influence sliding speed.
     /// </summary>
-    [JsonInclude]
-    [MemoryPackInclude]
     public Fixed64 SpeedControl = DefaultSpeedControl;
 
     #endregion
@@ -99,8 +78,6 @@ public partial class SlideLocomotion : ITransientLocomotion, IRecordable
     #region Transient State
 
     /// <inheritdoc cref="ILocomotion.IsEnabled"/>
-    [JsonIgnore]
-    [MemoryPackIgnore]
     public bool IsEnabled
     {
         get => _isEnabled;
@@ -116,8 +93,6 @@ public partial class SlideLocomotion : ITransientLocomotion, IRecordable
     /// Indicates whether the scout is currently sliding.
     /// </summary>
     [Transient]
-    [JsonInclude]
-    [MemoryPackInclude]
     public bool IsSliding { get; set; }
 
     #endregion

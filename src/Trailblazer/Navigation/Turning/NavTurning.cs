@@ -1,13 +1,14 @@
 ﻿using FixedMathSharp;
 using System;
 using System.Runtime.CompilerServices;
+using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Turning;
 
 /// <summary>
 /// The Turn class manages the character's rotation and turning functionality.
 /// </summary>
-public class NavTurning
+public class NavTurning : IRecordable
 {
     #region Constants
 
@@ -113,6 +114,8 @@ public class NavTurning
         TargetRotation = FixedQuaternion.Identity;
 
         _pendingTarget = null;
+        _pendingInterpolation = Fixed64.Zero;
+        _isColliding = false;
     }
 
     /// <summary>
@@ -250,5 +253,21 @@ public class NavTurning
     public void NotifyCollision()
     {
         _isColliding = true;
+    }
+
+    /// <inheritdoc />
+    public void RecordData(IChronicler chronicler)
+    {
+        bool canTurn = CanTurn;
+        Fixed64 turnRate = TurnRate;
+
+        RecordValues.Look(chronicler, ref canTurn, "canTurn", canTurn);
+        RecordValues.Look(chronicler, ref turnRate, "turnRate", turnRate);
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            CanTurn = canTurn;
+            TurnRate = turnRate;
+        }
     }
 }

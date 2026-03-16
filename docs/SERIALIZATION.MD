@@ -12,6 +12,8 @@ The code referenced here lives primarily in:
 
 - `src/Trailblazer/Serialization/*`
 - `src/Trailblazer/Navigation/Navigator.cs`
+- `src/Trailblazer/Navigation/Steering/NavSteering.cs`
+- `src/Trailblazer/Navigation/Turning/NavTurning.cs`
 - `src/Trailblazer/Navigation/Motor/NavMotor.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotions/*`
 
@@ -93,6 +95,7 @@ This MVP is intentionally limited to:
 
 - `Navigator`
 - `NavSteering`
+- `NavTurning`
 - `NavMotor`
 - `LocomotionHandler`
 - `MoveLocomotion`
@@ -106,6 +109,7 @@ In practice that means the first pass covers:
 
 - navigator transform and motion state
 - navigator steering session state
+- navigator turning configuration
 - navigator motor-owned traversal state
 - locomotion configuration
 - locomotion resumable runtime state
@@ -159,6 +163,7 @@ It is not yet designed for:
 - `_frameCondition`
 - `_frameRequest`
 - `Steering`
+- `Turning`
 - `Motor`
 
 On load it also:
@@ -200,7 +205,25 @@ On load it also:
 - clears any stale guide or movement-group session state already attached to the existing runtime shell
 - falls back to a new path request on the next steering tick if a guide could not be reacquired immediately
 
-### 6.3 NavMotor
+### 6.3 NavTurning
+
+`NavTurning.RecordData(...)` currently persists:
+
+- `CanTurn`
+- `TurnRate`
+
+On load it intentionally rebuilds buffered runtime state instead of restoring it directly.
+
+That means load resets:
+
+- the current turn target
+- any pending buffered turn request
+- one-shot interpolation overrides
+- collision-triggered auto-turn buffering
+
+This keeps turn configuration durable while treating active turn execution as frame-local runtime state that is safer to rebuild.
+
+### 6.4 NavMotor
 
 `NavMotor.RecordData(...)` currently persists:
 
@@ -216,14 +239,14 @@ On load it also:
 - clears frame-local cached output such as `_forceOutput`
 - resets `FrameSlopeAngle`
 
-### 6.4 LocomotionHandler
+### 6.5 LocomotionHandler
 
 `LocomotionHandler.RecordData(...)` currently persists:
 
 - `IsInControl`
 - all six locomotion instances through `RecordDeep`
 
-### 6.5 Individual Locomotions
+### 6.6 Individual Locomotions
 
 Each locomotion persists its configuration plus its resumable runtime state.
 
@@ -242,7 +265,6 @@ The current MVP intentionally does not serialize the full live navigation stack.
 
 Out of scope today:
 
-- `NavTurning`
 - inline serialization of live `IGuide` instances
 - movement-group coordinator caches and memberships
 - animation handler references
@@ -252,6 +274,7 @@ Out of scope today:
 Some state is also intentionally rebuilt instead of persisted directly:
 
 - `Navigator.Forward`
+- `NavTurning` buffered turn state
 - `NavMotor.CurrentState`
 - frame-local delta accumulators
 - temporary traversal caches such as `FrameSlopeAngle`
@@ -264,7 +287,7 @@ The current MVP boundary is:
 - JSON and MemoryPack backends
 - explicit type-owned save/load behavior
 - load-into-existing-instance semantics
-- navigator, steering, and motor branches
+- navigator, steering, turning, and motor branches
 
 This gives Trailblazer a workable starting point without overcommitting to a full save-game architecture too early.
 
@@ -298,8 +321,9 @@ This is especially important in Trailblazer because pathing and navigation are s
 
 Focused round-trip coverage was added for:
 
+- `NavTurning`
 - `NavMotor`
-- `Navigator` plus its steering and motor branches
+- `Navigator` plus its steering, turning, and motor branches
 
 The current tests verify that:
 
@@ -307,6 +331,7 @@ The current tests verify that:
 - guided A* and flow-field steering sessions survive round-trip
 - path-request configuration and A* waypoint progress survive round-trip
 - guides are reacquired after load instead of being serialized inline
+- turning configuration survives round-trip while active turn runtime state is rebuilt on load
 - moving-platform state survives round-trip
 - locomotion runtime state survives round-trip
 - a restored navigator remains usable for later simulation
@@ -315,11 +340,10 @@ The current tests verify that:
 
 The next best steps after this MVP are:
 
-1. Decide whether `NavTurning` should serialize buffered turn state or be rebuilt on load.
-2. Define a stable reference strategy for external/runtime-owned objects that should not be serialized inline.
-3. Decide whether movement-group coordinator state should be rebuilt globally or whether steering sessions should always rejoin lazily after load.
-4. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
-5. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, and failed request rehydration.
+1. Define a stable reference strategy for external/runtime-owned objects that should not be serialized inline.
+2. Decide whether movement-group coordinator state should be rebuilt globally or whether steering sessions should always rejoin lazily after load.
+3. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
+4. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, failed request rehydration, and transport-parity rebuild behavior.
 
 ## 12. Extension Guidance
 

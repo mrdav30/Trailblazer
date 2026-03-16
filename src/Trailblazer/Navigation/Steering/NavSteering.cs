@@ -919,7 +919,7 @@ public class NavSteering : IRecordable
         Fixed64 brakingPower = BrakingPower;
         int movementGroupId = MovementGroupID;
         MovementGroupTravelMode movementGroupMode = _movementGroupMode;
-        var requestRecord = new NavSteeringPathRequestRecord();
+        var requestRecord = new PathRequestRecord();
 
         if (chronicler.Mode == SerializationMode.Saving)
             requestRecord.Capture(_currentRequest, _trailGuide);

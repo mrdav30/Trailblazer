@@ -7,6 +7,7 @@ using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
+using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
 using Xunit;
@@ -81,6 +82,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsGuideded.Should().BeFalse();
 
         AssertMotorStateMatches(source.Motor, target.Motor);
+        AssertTurningStateMatches(source.Turning, target.Turning);
 
         TrailblazerManager.Simulate();
         target.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Slow, isRequestingJump: false);
@@ -134,6 +136,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsGuideded.Should().BeFalse();
 
         AssertMotorStateMatches(source.Motor, target.Motor);
+        AssertTurningStateMatches(source.Turning, target.Turning);
 
         TrailblazerManager.Simulate();
         target.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Slow, isRequestingJump: false);
@@ -168,6 +171,33 @@ public class NavigatorSerializationTests : IDisposable
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
         target.Steering.ShouldMove.Should().BeTrue();
+    }
+
+    [Fact]
+    public void JsonRoundTrip_ShouldRebuildTurningRuntimeState_OnLoad()
+    {
+        var source = CreateNavigator(new Vector3d(2, 0, 2));
+        source.Turning.TurnRate = (Fixed64)0.35f;
+        source.Turning.RequestTurnDirection(source.Forward, Vector3d.Right, interpolation: Fixed64.Half);
+        source.Turning.TrySimulateTurn(
+            source.Position,
+            source.LastPosition,
+            source.Forward,
+            source.Rotation,
+            out _).Should().BeTrue();
+
+        source.Turning.TargetReached.Should().BeFalse();
+        source.Turning.TargetRotation.Should().NotBe(FixedQuaternion.Identity);
+
+        string json = JsonRecordSerializer.Serialize(source, writeIndented: true);
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        JsonRecordSerializer.Populate(target, json);
+
+        target.Turning.CanTurn.Should().Be(source.Turning.CanTurn);
+        target.Turning.TurnRate.Should().Be(source.Turning.TurnRate);
+        target.Turning.TargetReached.Should().BeTrue();
+        target.Turning.TargetRotation.Should().Be(FixedQuaternion.Identity);
     }
 
     [Fact]
@@ -285,6 +315,8 @@ public class NavigatorSerializationTests : IDisposable
         source.Motor.Handler.Jump.FrameJumpDirection = Vector3d.Up;
         source.Motor.Handler.Fall.IsFalling = true;
         source.Motor.Handler.Fall.FallStart = (Fixed64)10;
+        source.Turning.CanTurn = false;
+        source.Turning.TurnRate = (Fixed64)0.35f;
 
         return source;
     }
@@ -465,5 +497,13 @@ public class NavigatorSerializationTests : IDisposable
                 actualAStarGuide.CurrentWaypointIndex.Should().Be(expectedAStarGuide.CurrentWaypointIndex);
             }
         }
+    }
+
+    private static void AssertTurningStateMatches(NavTurning expected, NavTurning actual)
+    {
+        actual.CanTurn.Should().Be(expected.CanTurn);
+        actual.TurnRate.Should().Be(expected.TurnRate);
+        actual.TargetReached.Should().BeTrue();
+        actual.TargetRotation.Should().Be(FixedQuaternion.Identity);
     }
 }

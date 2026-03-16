@@ -567,6 +567,7 @@ public abstract class Navigator : INavigate, IRecordable
         TrekCondition frameCondition = _frameCondition;
         TrekRequest frameRequest = _frameRequest;
         NavSteering steering = Steering;
+        NavTurning turning = Turning;
         NavMotor motor = Motor;
 
         RecordValues.Look(chronicler, ref position, "position", position);
@@ -591,6 +592,7 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref frameCondition, "frameCondition", frameCondition);
         RecordValues.Look(chronicler, ref frameRequest, "frameRequest", frameRequest);
         RecordDeep.Look(chronicler, ref steering, "steering");
+        RecordDeep.Look(chronicler, ref turning, "turning");
         RecordDeep.Look(chronicler, ref motor, "motor");
 
         if (chronicler.Mode == SerializationMode.Loading)
@@ -617,6 +619,7 @@ public abstract class Navigator : INavigate, IRecordable
             _frameCondition = frameCondition.Clone();
             _frameRequest = frameRequest.Clone();
             Steering = steering;
+            Turning = turning;
             Motor = motor;
 
             Forward = Rotation != FixedQuaternion.Identity

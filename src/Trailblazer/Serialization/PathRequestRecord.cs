@@ -12,9 +12,9 @@ internal enum PathRequestRecordKind
 }
 
 /// <summary>
-/// Stores the active path-request shape for a steering session and rebuilds it on load.
+/// Stores a serializable path-request shape and rebuilds it on load.
 /// </summary>
-internal sealed class NavSteeringPathRequestRecord : IRecordable
+internal sealed class PathRequestRecord : IRecordable
 {
     private const int NoWaypointIndex = -1;
 

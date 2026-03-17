@@ -27,7 +27,7 @@ public class PlatformLocomotionTests : IDisposable
         TrailblazerManager.Simulate();
         scout.Simulate();
 
-        PlatformHandle platformHandle = scout.Motor.Handler.Platform.ActivePlatform ?? default;
+        PlatformSnapshot platformHandle = scout.Motor.Handler.Platform.ActivePlatform ?? default;
         Vector3d newPlatformPoint = new(2, 0, 0);
         platformHandle.Transform.SetTranslation(newPlatformPoint);
         scout.Motor.Handler.Platform.ActivePlatform = platformHandle;
@@ -65,7 +65,7 @@ public class PlatformLocomotionTests : IDisposable
             SurfaceLevel = Fixed64.Zero,
             GroundState = new GroundCondition
             {
-                Platform = new PlatformHandle(1, movedTransform)
+                Platform = new PlatformSnapshot(1, movedTransform)
             },
             CeilingLevel = Fixed64.MAX_VALUE
         };
@@ -241,7 +241,7 @@ public class PlatformLocomotionTests : IDisposable
         var platform = scout.Motor.Handler.Platform.ActivePlatform;
 
         var newMatrix = MockMotorAgentTestFactory.CreatePlatformTransform();
-        var platformHandle = new PlatformHandle(2, newMatrix);
+        var platformHandle = new PlatformSnapshot(2, newMatrix);
 
         scout.Motor.Handler.Platform.SetHoldPlatform(platformHandle);
 

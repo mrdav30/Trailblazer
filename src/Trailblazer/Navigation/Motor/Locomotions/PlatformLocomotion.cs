@@ -67,13 +67,13 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
     public bool IsNewPlatform { get; set; }
 
     [Transient]
-    public PlatformHandle? ActivePlatform { get; set; }
+    public PlatformSnapshot? ActivePlatform { get; set; }
 
     [Transient]
-    public PlatformHandle? PreviousPlatform { get; set; }
+    public PlatformSnapshot? PreviousPlatform { get; set; }
 
     [Transient]
-    public PlatformHandle? HoldPlatform { get; set; }
+    public PlatformSnapshot? HoldPlatform { get; set; }
 
     /// <summary>
     /// Defines how movement is transferred from the platform to the scout.
@@ -184,10 +184,10 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
     }
 
     /// <summary>
-    /// Assigns the scout to a platform, initiating a hold state.
+    /// Assigns the scout to a sampled platform state, initiating a hold state.
     /// </summary>
-    /// <param name="platform">The platform object to attach to.</param>
-    public void SetHoldPlatform(PlatformHandle? platform)
+    /// <param name="platform">The sampled platform snapshot to attach to.</param>
+    public void SetHoldPlatform(PlatformSnapshot? platform)
     {
         HoldPlatform = platform;
         HoldPlatformFrames = 0;
@@ -224,7 +224,7 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
         FramePlatformVelocity = Vector3d.Zero;
         MovementTransfer = condition?.MotionTransferState ?? MotionTransfer.None;
 
-        PlatformHandle? refreshedPlatform = condition?.Platform;
+        PlatformSnapshot? refreshedPlatform = condition?.Platform;
         if (refreshedPlatform?.Active != true)
             refreshedPlatform = null;
 
@@ -257,7 +257,7 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
     /// </summary>
     /// <param name="newPlatform"></param>
     /// <returns>True if the navigator is on a new platform; otherwise, false.</returns>
-    private bool DidPlatformChange(PlatformHandle? newPlatform) => ActivePlatform != newPlatform;
+    private bool DidPlatformChange(PlatformSnapshot? newPlatform) => ActivePlatform != newPlatform;
 
     /// <summary>
     /// Updates platform movement by synchronizing the navigator's position and rotation with the platform it is standing on.
@@ -293,9 +293,9 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
         RecordValues.Look(chronicler, ref HeightAdjust, "heightAdjust", HeightAdjust);
 
         bool isNewPlatform = IsNewPlatform;
-        PlatformHandle? activePlatform = ActivePlatform;
-        PlatformHandle? previousPlatform = PreviousPlatform;
-        PlatformHandle? holdPlatform = HoldPlatform;
+        PlatformSnapshot? activePlatform = ActivePlatform;
+        PlatformSnapshot? previousPlatform = PreviousPlatform;
+        PlatformSnapshot? holdPlatform = HoldPlatform;
         MotionTransfer movementTransfer = MovementTransfer;
         Vector3d scoutLocalPoint = ScoutLocalPoint;
         FixedQuaternion scoutLocalRotation = ScoutLocalRotation;

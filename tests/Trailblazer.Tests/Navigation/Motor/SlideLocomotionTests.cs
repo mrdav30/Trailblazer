@@ -181,7 +181,7 @@ public class SlideLocomotionTests : IDisposable
 
         GroundCondition shallowSlopeSurface = new()
         {
-            Platform = new PlatformHandle(1, Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero)))
+            Platform = new PlatformSnapshot(1, Fixed4x4.CreateRotation(FixedQuaternion.FromEulerAngles(shallowSlope, Fixed64.Zero, Fixed64.Zero)))
         };
 
         // Flatten slope

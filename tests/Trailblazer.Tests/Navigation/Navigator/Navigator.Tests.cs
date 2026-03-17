@@ -4,6 +4,7 @@ using GridForge.Configuration;
 using GridForge.Grids;
 using System;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Animation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
 using Xunit;
@@ -179,6 +180,127 @@ public class NavigatorTests : IDisposable
         PathManager.UnloadChart("NavigatorGuidedHeading");
     }
 
+    [Fact]
+    public void BindAnimationHandler_ShouldForwardAnimationUpdatesDuringSimulate()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        var handler = new TestAnimationHandler();
+        navigator.BindAnimationHandler(handler);
+
+        navigator.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Fast, isRequestingJump: false);
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        handler.LastForward.Should().Be(Fixed64.One);
+        handler.LastSideways.Should().Be(Fixed64.Zero);
+        handler.LastDampTime.Should().Be(navigator.AnimDampTime);
+        handler.LastIsSprinting.Should().BeTrue();
+        handler.UpdateCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void UnbindAnimationHandler_ShouldStopForwardingAnimationUpdates()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        var handler = new TestAnimationHandler();
+        navigator.BindAnimationHandler(handler);
+
+        navigator.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Moderate, isRequestingJump: false);
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.UnbindAnimationHandler();
+
+        navigator.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Fast, isRequestingJump: false);
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        handler.UpdateCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void SetGroundContact_ShouldPopulateGroundStateAndUpdateMotorWhenRequested()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        var snapshot = new PlatformSnapshot(
+            7,
+            Fixed4x4.CreateTransform(new Vector3d(3, 1, 2), FixedQuaternion.Identity, Vector3d.One));
+
+        navigator.SetGroundContact(
+            surfaceLevel: (Fixed64)3,
+            platform: snapshot,
+            surfaceFriction: (Fixed64)0.2f,
+            motionTransfer: MotionTransfer.PermaLocked,
+            updateMotorState: true);
+
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Ground);
+        navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)3);
+        navigator.FrameCondition.GroundState.Should().NotBeNull();
+        navigator.FrameCondition.GroundState.Value.Platform.Should().Be(snapshot);
+        navigator.FrameCondition.GroundState.Value.Platform.Transform.Translation.Should().Be(snapshot.Transform.Translation);
+        navigator.FrameCondition.GroundState.Value.SurfaceFriction.Should().Be((Fixed64)0.2f);
+        navigator.FrameCondition.GroundState.Value.MotionTransferState.Should().Be(MotionTransfer.PermaLocked);
+
+        TrekCondition motorCondition = navigator.Motor.CurrentState.ToTrekCondition();
+        motorCondition.Medium.Should().Be(TraversalMedium.Ground);
+        motorCondition.SurfaceLevel.Should().Be((Fixed64)3);
+        motorCondition.GroundState.Should().NotBeNull();
+        motorCondition.GroundState.Value.Platform.Should().Be(snapshot);
+        motorCondition.GroundState.Value.Platform.Transform.Translation.Should().Be(snapshot.Transform.Translation);
+    }
+
+    [Fact]
+    public void SetAirborne_ShouldPreserveGroundStateByDefault()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        var snapshot = new PlatformSnapshot(
+            5,
+            Fixed4x4.CreateTransform(new Vector3d(1, 0, 1), FixedQuaternion.Identity, Vector3d.One));
+
+        navigator.SetGroundContact(
+            surfaceLevel: Fixed64.Zero,
+            platform: snapshot,
+            motionTransfer: MotionTransfer.InitTransfer,
+            updateMotorState: true);
+
+        navigator.SetAirborne(surfaceLevel: (Fixed64)4, updateMotorState: true);
+
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Air);
+        navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)4);
+        navigator.FrameCondition.GroundState.Should().NotBeNull();
+        navigator.FrameCondition.GroundState.Value.Platform.Should().Be(snapshot);
+
+        TrekCondition motorCondition = navigator.Motor.CurrentState.ToTrekCondition();
+        motorCondition.Medium.Should().Be(TraversalMedium.Air);
+        motorCondition.GroundState.Should().NotBeNull();
+        motorCondition.GroundState.Value.Platform.Should().Be(snapshot);
+    }
+
+    [Fact]
+    public void SetWaterContact_ShouldClearGroundState()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        var snapshot = new PlatformSnapshot(
+            5,
+            Fixed4x4.CreateTransform(new Vector3d(1, 0, 1), FixedQuaternion.Identity, Vector3d.One));
+
+        navigator.SetGroundContact(
+            surfaceLevel: Fixed64.Zero,
+            platform: snapshot,
+            motionTransfer: MotionTransfer.InitTransfer,
+            updateMotorState: true);
+
+        navigator.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
+
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Water);
+        navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)2);
+        navigator.FrameCondition.GroundState.Should().BeNull();
+
+        TrekCondition motorCondition = navigator.Motor.CurrentState.ToTrekCondition();
+        motorCondition.Medium.Should().Be(TraversalMedium.Water);
+        motorCondition.GroundState.Should().BeNull();
+    }
+
     private static TestNavigator CreateNavigator(Vector3d position)
     {
         var navigator = new TestNavigator();
@@ -190,5 +312,35 @@ public class NavigatorTests : IDisposable
             GroundState = new GroundCondition()
         });
         return navigator;
+    }
+
+    private sealed class TestAnimationHandler : INavAnimationHandler
+    {
+        public Fixed64 LastForward { get; private set; }
+
+        public Fixed64 LastSideways { get; private set; }
+
+        public Fixed64 LastDampTime { get; private set; }
+
+        public bool LastIsSprinting { get; private set; }
+
+        public int UpdateCount { get; private set; }
+
+        public void SetDirectionalInput(Fixed64 forward, Fixed64 sideways, Fixed64 dampTime)
+        {
+            LastForward = forward;
+            LastSideways = sideways;
+            LastDampTime = dampTime;
+            UpdateCount++;
+        }
+
+        public void SetIsSprinting(bool isSprinting)
+        {
+            LastIsSprinting = isSprinting;
+        }
+
+        public void ApplyRootMotion(Vector3d deltaPosition, Fixed64 forceMultiplier)
+        {
+        }
     }
 }

@@ -156,7 +156,7 @@ public abstract class Navigator : INavigate, IRecordable
 
     #region Animation
 
-    public INavAnimationHandler AnimationHandler { get; set; }
+    private INavAnimationHandler _animationHandler;
 
     public bool IsLockedOn { get; set; }
 
@@ -231,6 +231,26 @@ public abstract class Navigator : INavigate, IRecordable
 
         _isSet = false;
         _isInitialized = false;
+    }
+
+    #endregion
+
+    #region Host Bindings
+
+    /// <summary>
+    /// Binds a host-owned animation handler to this navigator.
+    /// </summary>
+    public virtual void BindAnimationHandler(INavAnimationHandler handler)
+    {
+        _animationHandler = handler ?? throw new ArgumentNullException(nameof(handler));
+    }
+
+    /// <summary>
+    /// Unbinds any previously attached animation handler.
+    /// </summary>
+    public virtual void UnbindAnimationHandler()
+    {
+        _animationHandler = null;
     }
 
     #endregion
@@ -352,10 +372,10 @@ public abstract class Navigator : INavigate, IRecordable
         if (Turning.TrySimulateTurn(Position, LastPosition, Forward, Rotation, out FixedQuaternion appliedRotation))
             Rotation = appliedRotation;
 
-        if (AnimationHandler is null) return;
+        if (_animationHandler is null) return;
 
         NavAnimationUpdater.UpdateAnimationParameters(
-            AnimationHandler,
+            _animationHandler,
             _frameRequest.Direction,
             IsLockedOn,
             _frameRequest.Rate == TrekRate.Fast,
@@ -418,6 +438,82 @@ public abstract class Navigator : INavigate, IRecordable
     #region Traversal Condition Management
 
     /// <summary>
+    /// Updates the navigator to a grounded state using a sampled surface snapshot.
+    /// </summary>
+    public virtual void SetGroundContact(
+        Fixed64 surfaceLevel,
+        GroundCondition surfaceCondition,
+        Fixed64? ceilingLevel = null,
+        bool updateMotorState = false)
+    {
+        ApplyTrekCondition(
+            medium: TraversalMedium.Ground,
+            surfaceLevel: surfaceLevel,
+            surfaceCondition: surfaceCondition,
+            replaceSurfaceCondition: true,
+            ceilingLevel: ceilingLevel,
+            updateMotorState: updateMotorState);
+    }
+
+    /// <summary>
+    /// Updates the navigator to a grounded state using a host-provided platform snapshot plus surface settings.
+    /// </summary>
+    public virtual void SetGroundContact(
+        Fixed64 surfaceLevel,
+        PlatformSnapshot platform = default,
+        Fixed64? surfaceFriction = null,
+        MotionTransfer motionTransfer = MotionTransfer.None,
+        Fixed64? ceilingLevel = null,
+        bool updateMotorState = false)
+    {
+        SetGroundContact(
+            surfaceLevel,
+            new GroundCondition()
+            {
+                Platform = platform,
+                SurfaceFriction = surfaceFriction ?? Fixed64.Zero,
+                MotionTransferState = motionTransfer
+            },
+            ceilingLevel,
+            updateMotorState);
+    }
+
+    /// <summary>
+    /// Updates the navigator to an airborne state while preserving the last known ground condition unless an override is provided.
+    /// </summary>
+    public virtual void SetAirborne(
+        Fixed64? surfaceLevel = null,
+        GroundCondition? launchCondition = null,
+        Fixed64? ceilingLevel = null,
+        bool updateMotorState = false)
+    {
+        ApplyTrekCondition(
+            medium: TraversalMedium.Air,
+            surfaceLevel: surfaceLevel,
+            surfaceCondition: launchCondition,
+            replaceSurfaceCondition: launchCondition.HasValue,
+            ceilingLevel: ceilingLevel,
+            updateMotorState: updateMotorState);
+    }
+
+    /// <summary>
+    /// Updates the navigator to a water-contact state and clears any grounded platform contact.
+    /// </summary>
+    public virtual void SetWaterContact(
+        Fixed64 surfaceLevel,
+        Fixed64? ceilingLevel = null,
+        bool updateMotorState = false)
+    {
+        ApplyTrekCondition(
+            medium: TraversalMedium.Water,
+            surfaceLevel: surfaceLevel,
+            surfaceCondition: null,
+            replaceSurfaceCondition: true,
+            ceilingLevel: ceilingLevel,
+            updateMotorState: updateMotorState);
+    }
+
+    /// <summary>
     /// Updates the scout’s traversal state, including its current medium and surface information.
     /// </summary>
     /// <remarks>
@@ -436,24 +532,52 @@ public abstract class Navigator : INavigate, IRecordable
         Fixed64? ceilingLevel = null,
         bool updateMotorState = false)
     {
-        if (!IsActive) return;
+        ApplyTrekCondition(
+            medium: medium,
+            surfaceLevel: surfaceLevel,
+            surfaceCondition: surfaceCondition,
+            replaceSurfaceCondition: surfaceCondition.HasValue,
+            ceilingLevel: ceilingLevel,
+            updateMotorState: updateMotorState);
+    }
+
+    /// <summary>
+    /// Replaces the current traversal state with the given one.
+    /// </summary>
+    /// <param name="state">The new traversal condition to apply.</param>
+    /// <param name="updateMotorState">Flags whether or not to update the motor's internal surface state.  Otherwise, it should be updated at the end of the frame.</param>
+    public virtual void ReplaceTrekCondition(TrekCondition state, bool updateMotorState)
+    {
+        _frameCondition = state.Clone();
+        if (updateMotorState)
+            Motor.UpdateTraversal(_frameCondition);
+    } 
+
+    /// <summary>
+    /// Checks and updates the current traversal condition.
+    /// </summary>
+    public abstract void CheckTrekCondition();
+
+    private void ApplyTrekCondition(
+        TraversalMedium? medium,
+        Fixed64? surfaceLevel,
+        GroundCondition? surfaceCondition,
+        bool replaceSurfaceCondition,
+        Fixed64? ceilingLevel,
+        bool updateMotorState)
+    {
+        if (!IsActive)
+            return;
 
         _frameCondition.Medium = medium ?? _frameCondition.Medium;
         _frameCondition.SurfaceLevel = surfaceLevel ?? _frameCondition.SurfaceLevel;
-        _frameCondition.GroundState = surfaceCondition ?? _frameCondition.GroundState;
+        if (replaceSurfaceCondition)
+            _frameCondition.GroundState = surfaceCondition;
         _frameCondition.CeilingLevel = ceilingLevel ?? _frameCondition.CeilingLevel;
 
         if (updateMotorState)
             Motor.UpdateTraversal(_frameCondition);
     }
-
-        /// <summary>
-    /// Replaces the current traversal state with the given one.
-    /// </summary>
-    /// <param name="state">The new traversal condition to apply.</param>
-    public virtual void ReplaceTrekCondition(TrekCondition state) => _frameCondition = state.Clone();
-
-    public abstract void CheckTrekCondition();
 
     #endregion
 

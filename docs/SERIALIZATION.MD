@@ -1,8 +1,9 @@
 # Serialization Reference
 
-This document is the current reference for Trailblazer's Chronicler-style serialization MVP.
+This document is the Trailblazer-specific reference for how the runtime currently uses the Chronicler serialization layer.
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
+If you need the reusable Chronicler API details, transport behavior, or stable-link design, read [`../src/Trailblazer/Serialization/README.md`](../src/Trailblazer/Serialization/README.md).
 If you need the runtime systems currently covered by this MVP, read:
 
 - `NAVIGATOR.MD`
@@ -10,134 +11,13 @@ If you need the runtime systems currently covered by this MVP, read:
 
 The code referenced here lives primarily in:
 
-- `src/Trailblazer/Serialization/*`
 - `src/Trailblazer/Navigation/Navigator.cs`
 - `src/Trailblazer/Navigation/Steering/NavSteering.cs`
 - `src/Trailblazer/Navigation/Turning/NavTurning.cs`
 - `src/Trailblazer/Navigation/Motor/NavMotor.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotions/*`
 
-## 1. What This System Is
-
-Trailblazer includes an explicit serialization layer built around the Chronicler API.
-
-The core idea is:
-
-- serializable types implement `IRecordable`
-- those types write and read their own state through `RecordData(IChronicler chronicler)`
-- `RecordValues` handles value data
-- `RecordDeep` handles nested `IRecordable` objects
-- `RecordLinks` handles stable references to external or runtime-owned objects through a session-scoped registry
-
-This is intentionally different from relying on serializer attributes alone.
-
-The explicit record pass makes it easier to:
-
-- separate durable state from frame-local or derived state
-- keep deterministic runtime types in control of their own save/load behavior
-- support multiple transports later without rewriting each runtime type
-- reuse the same pattern in other libraries in the same stack
-
-## 2. Current Transports
-
-The current chronicler backends are:
-
-- `JsonRecordSerializer.Serialize(IRecordable target, bool writeIndented = false)`
-- `JsonRecordSerializer.Serialize(IRecordable target, ChronicleContext context, bool writeIndented = false)`
-- `JsonRecordSerializer.Populate(IRecordable target, string json)`
-- `JsonRecordSerializer.Populate(IRecordable target, string json, ChronicleContext context)`
-- `MemoryPackRecordSerializer.Serialize(IRecordable target)`
-- `MemoryPackRecordSerializer.Serialize(IRecordable target, ChronicleContext context)`
-- `MemoryPackRecordSerializer.Populate(IRecordable target, byte[] data)`
-- `MemoryPackRecordSerializer.Populate(IRecordable target, byte[] data, ChronicleContext context)`
-
-These transports are implemented in:
-
-- `src/Trailblazer/Serialization/JsonRecordSerializer.cs`
-- `src/Trailblazer/Serialization/MemoryPackRecordSerializer.cs`
-
-Important details:
-
-- the Chronicler contract is serializer-agnostic
-- JSON and MemoryPack now share the same chronicler contract
-- `System.Text.Json` and `MemoryPack` are referenced explicitly so this works on both `netstandard2.1` and `net8.0`
-- downstream libraries such as `FixedMathSharp` and `SwiftCollections` already support `System.Text.Json` and `MemoryPack`, which is why this layer stays transport-neutral
-- types serialized through `RecordData(...)` generally do not need transport-specific attributes; reserve those for leaf values that are still serialized directly by a transport
-
-## 3. Core API
-
-The current API surface is:
-
-```csharp
-public interface IRecordable
-{
-    void RecordData(IChronicler chronicler);
-}
-
-public interface IChronicler
-{
-    ChronicleContext Context { get; }
-    SerializationMode Mode { get; }
-    void LookValue<T>(ref T value, string name, T defaultValue = default);
-    void LookDeep<T>(ref T value, string name) where T : class, IRecordable;
-    void LookLink<T>(
-        ref T value,
-        string name,
-        string slot = null,
-        RecordLinkResolveMode resolveMode = RecordLinkResolveMode.Immediate,
-        Action<T> assignLoadedValue = null);
-}
-```
-
-Helpers:
-
-```csharp
-RecordValues.Look(chronicler, ref value, "name", defaultValue);
-RecordDeep.Look(chronicler, ref nestedObject, "name");
-RecordLinks.Look(chronicler, ref externalRef, "name");
-RecordLinks.LookDeferred(
-    chronicler,
-    externalRef,
-    "name",
-    resolved => Owner.ExternalRef = resolved);
-```
-
-`SerializationMode` currently has:
-
-- `Saving`
-- `Loading`
-
-`RecordLinkResolveMode` currently has:
-
-- `Immediate`
-- `Deferred`
-
-## 4. Stable Links and Context
-
-The chronicler core now includes a built-in stable-link system for references that should not be serialized inline.
-
-The core pieces are:
-
-- `ChronicleContext`
-- `ChronicleContext.Links`
-- `IRecordLinkResolver<T>`
-- `RecordLinks`
-
-Important design rules:
-
-- the link registry is built into the serialization layer, but it is session-scoped rather than a hidden global singleton
-- link lookup is type-based by default, with an optional slot override for cases where one type needs multiple resolution strategies
-- immediate links resolve during the current `RecordData(...)` call
-- deferred links resolve after the full load graph has finished its `RecordData(...)` pass
-- the registry can be backed either by custom resolvers or by directly registered runtime instances
-
-This gives the chronicler three distinct lanes:
-
-- `RecordValues` for pure data
-- `RecordDeep` for owned nested objects
-- `RecordLinks` for external or runtime-owned objects
-
-## 5. Current MVP Coverage
+## 1. Trailblazer Coverage
 
 This MVP is intentionally limited to:
 
@@ -163,7 +43,7 @@ In practice that means the first pass covers:
 - locomotion resumable runtime state
 - moving-platform attachment state inside the motor branch and guided steering branch
 
-## 6. Current Load Model
+## 2. Trailblazer Load Model
 
 The MVP loads into existing initialized instances.
 
@@ -187,9 +67,9 @@ It is not yet designed for:
 - polymorphic navigator creation
 - full save-game bootstrap of the entire framework
 
-## 7. What Is Serialized Today
+## 3. What Is Serialized Today
 
-### 7.1 Navigator
+### 3.1 Navigator
 
 `Navigator.RecordData(...)` currently persists:
 
@@ -222,7 +102,7 @@ On load it also:
 - clears and recomputes occupancy
 - reinitializes `Turning` if present
 
-### 7.2 NavSteering
+### 3.2 NavSteering
 
 `NavSteering.RecordData(...)` currently persists:
 
@@ -253,7 +133,7 @@ On load it also:
 - clears any stale guide or movement-group session state already attached to the existing runtime shell
 - falls back to a new path request on the next steering tick if a guide could not be reacquired immediately
 
-### 7.3 NavTurning
+### 3.3 NavTurning
 
 `NavTurning.RecordData(...)` currently persists:
 
@@ -271,7 +151,7 @@ That means load resets:
 
 This keeps turn configuration durable while treating active turn execution as frame-local runtime state that is safer to rebuild.
 
-### 7.4 NavMotor
+### 3.4 NavMotor
 
 `NavMotor.RecordData(...)` currently persists:
 
@@ -287,14 +167,14 @@ On load it also:
 - clears frame-local cached output such as `_forceOutput`
 - resets `FrameSlopeAngle`
 
-### 7.5 LocomotionHandler
+### 3.5 LocomotionHandler
 
 `LocomotionHandler.RecordData(...)` currently persists:
 
 - `IsInControl`
 - all six locomotion instances through `RecordDeep`
 
-### 7.6 Individual Locomotions
+### 3.6 Individual Locomotions
 
 Each locomotion persists its configuration plus its resumable runtime state.
 
@@ -307,7 +187,7 @@ Examples:
 - `SwimLocomotion`: swim configuration plus swim/dive/underwater timers
 - `PlatformLocomotion`: platform configuration plus active/previous/hold platform state, movement-transfer state, local attachment state, and tracked platform velocities
 
-## 8. What Is Not Serialized Yet
+## 4. What Is Not Serialized Yet
 
 The current MVP intentionally does not serialize the full live navigation stack.
 
@@ -327,16 +207,14 @@ Some state is also intentionally rebuilt instead of persisted directly:
 - frame-local delta accumulators
 - temporary traversal caches such as `FrameSlopeAngle`
 
-The core now also supports stable external links through `ChronicleContext` and `RecordLinks`, but the current navigation branch still relies mostly on explicit value/deep recording plus rebuild-on-load patterns.
+The core now also supports immediate and deferred stable external links through `ChronicleContext` and `RecordLinks`, but the current Trailblazer runtime does not need direct `RecordLinks` usage in its core navigation branch at this time.
 
-## 9. Current Boundary and Tradeoffs
+## 5. Current Boundary and Tradeoffs
 
-The current MVP boundary is:
+Trailblazer's current serialization boundary is:
 
-- transport-neutral Chronicler API
-- session-scoped stable-link registry
-- JSON and MemoryPack backends
-- explicit type-owned save/load behavior
+- JSON and MemoryPack Chronicler backends
+- explicit type-owned `RecordData(...)` behavior
 - load-into-existing-instance semantics
 - navigator, steering, turning, and motor branches
 
@@ -346,11 +224,10 @@ Tradeoffs of this MVP:
 
 - it is safe and explicit, but not yet turnkey for whole-world persistence
 - it rebuilds live guides from recorded requests instead of serializing guide instances directly
-- it now supports immediate and deferred stable links, but Trailblazer has only started using that infrastructure
 - it keeps deterministic state local to the types that understand it
 - it still needs broader coverage before it becomes a complete framework-level persistence solution
 
-## 10. Serialization Semantics to Preserve
+## 6. Trailblazer Semantics to Preserve
 
 When extending this system, keep these rules in mind:
 
@@ -369,20 +246,17 @@ This is especially important in Trailblazer because pathing and navigation are s
 - cache invalidation
 - frame-local intermediate values
 
-## 11. Verification Added With This MVP
+## 7. Verification Added With This MVP
 
 Focused round-trip coverage was added for:
 
-- stable-link registry flows
 - `NavTurning`
 - `NavMotor`
 - `Navigator` plus its steering, turning, and motor branches
 
-The current tests verify that:
+The current Trailblazer-focused tests verify that:
 
-- supported state round-trips through the JSON and MemoryPack chroniclers
-- stable links resolve through type-based registries, including explicit slot overrides
-- deferred links can resolve after the full load graph has been recorded
+- supported navigator state round-trips through the JSON and MemoryPack chroniclers
 - guided A* and flow-field steering sessions survive round-trip
 - path-request configuration and A* waypoint progress survive round-trip
 - guides are reacquired after load instead of being serialized inline
@@ -391,16 +265,15 @@ The current tests verify that:
 - locomotion runtime state survives round-trip
 - a restored navigator remains usable for later simulation
 
-## 12. Next Best Steps
+## 8. Next Best Steps
 
 The next best steps after this MVP are:
 
 1. Decide whether movement-group coordinator state should be rebuilt globally or whether steering sessions should always rejoin lazily after load.
 2. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
-3. Decide where Trailblazer should start using `RecordLinks` directly instead of ad-hoc or placeholder reference patterns.
-4. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, failed request rehydration, unresolved deferred links, and transport-parity rebuild behavior.
+3. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, failed request rehydration, unresolved deferred links, and transport-parity rebuild behavior.
 
-## 13. Extension Guidance
+## 9. Trailblazer Extension Guidance
 
 When adding `RecordData(...)` to more types:
 

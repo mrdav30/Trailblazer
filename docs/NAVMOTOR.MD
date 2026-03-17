@@ -97,7 +97,7 @@ This is the expected contract around the two phases:
 4. Re-evaluate the environment and refresh `TrekCondition`.
 5. Call `FinalizeTraversal(...)` with the updated state snapshot.
 
-If the host needs to push a new traversal state into the motor before `FinalizeTraversal(...)`, it can call `UpdateTraversal(...)` directly. This is what `Navigator.SetTrekCondition(updateMotorState: true)` is for.
+If the host needs to push a new traversal state into the motor before `FinalizeTraversal(...)`, it can call `UpdateTraversal(...)` directly. This is what helpers like `Navigator.SetGroundContact(..., updateMotorState: true)` or the lower-level `Navigator.SetTrekCondition(updateMotorState: true)` are for.
 
 ## 5. Initialization and State Ownership
 

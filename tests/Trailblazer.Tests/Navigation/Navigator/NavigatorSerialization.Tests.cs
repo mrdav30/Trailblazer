@@ -270,9 +270,9 @@ public class NavigatorSerializationTests : IDisposable
         source.Motor.Handler.Swim.IsDiving = true;
         source.Motor.Handler.Swim.UnderwaterTimer = (Fixed64)7;
 
-        var holdPlatform = new PlatformHandle(9, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(6, 0, 6)));
+        var holdPlatform = new PlatformSnapshot(9, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(6, 0, 6)));
         source.Motor.Handler.Platform.IsNewPlatform = true;
-        source.Motor.Handler.Platform.PreviousPlatform = new PlatformHandle(8, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(3, 0, 3)));
+        source.Motor.Handler.Platform.PreviousPlatform = new PlatformSnapshot(8, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(3, 0, 3)));
         source.Motor.Handler.Platform.SetHoldPlatform(holdPlatform);
         source.Motor.Handler.Platform.TickHoldOnPlatform();
         source.Motor.Handler.Platform.ScoutLocalPoint = new Vector3d(1, 0, 1);
@@ -287,15 +287,11 @@ public class NavigatorSerializationTests : IDisposable
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
         source.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Moderate, isRequestingJump: true);
-        source.SetTrekCondition(
-            medium: TraversalMedium.Ground,
+        source.SetGroundContact(
             surfaceLevel: Fixed64.Zero,
-            surfaceCondition: new GroundCondition
-            {
-                Platform = new PlatformHandle(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1))),
-                SurfaceFriction = (Fixed64)0.15f,
-                MotionTransferState = MotionTransfer.PermaLocked
-            },
+            platform: new PlatformSnapshot(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1))),
+            surfaceFriction: (Fixed64)0.15f,
+            motionTransfer: MotionTransfer.PermaLocked,
             updateMotorState: true);
 
         source.GuidedPathMode = GuidedPathMode.FlowField;
@@ -307,7 +303,7 @@ public class NavigatorSerializationTests : IDisposable
         source.IsLockedOn = true;
         source.AnimDampTime = (Fixed64)0.25f;
         source.Motor.Handler.Move.FrameVelocity = new Vector3d(1, 0, 2);
-        source.Motor.Handler.Platform.ActivePlatform = new PlatformHandle(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1)));
+        source.Motor.Handler.Platform.ActivePlatform = new PlatformSnapshot(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1)));
         source.Motor.Handler.Platform.MovementTransfer = MotionTransfer.PermaLocked;
         source.Motor.Handler.Platform.ScoutLocalPoint = new Vector3d(0, 0, 1);
         source.Motor.Handler.Platform.ScoutLocalRotation = FixedQuaternion.FromAxisAngle(Vector3d.Up, (Fixed64)0.5f);

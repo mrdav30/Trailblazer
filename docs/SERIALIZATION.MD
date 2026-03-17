@@ -264,17 +264,23 @@ The current Trailblazer-focused tests verify that:
 - guided A* and flow-field steering sessions survive round-trip
 - path-request configuration and A* waypoint progress survive round-trip
 - guides are reacquired after load instead of being serialized inline
+- partial payload loads preserve omitted branches on existing initialized runtime shells
+- older payloads missing newer fields fall back to current runtime defaults
+- invalid request payloads fail closed and clear active steering sessions instead of leaving broken live state
+- disabled locomotions clear transient runtime state on load even when serialized payloads still carry stale transient values
+- unresolved deferred links throw explicit load errors for both transports
 - turning configuration survives round-trip while active turn runtime state is rebuilt on load
 - moving-platform state survives round-trip
 - locomotion runtime state survives round-trip
 - grouped steering can be explicitly prewarmed after load while lazy rejoin remains available as a fallback
+- rebuild-oriented load behavior matches across the JSON and MemoryPack transports
 - a restored navigator remains usable for later simulation
 
 ## 8. Next Best Steps
 
-The next best steps after this MVP are:
+There are no additional Trailblazer-specific serialization next steps tracked here right now.
 
-1. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, failed request rehydration, unresolved deferred links, and transport-parity rebuild behavior.
+Future work can expand Chronicler coverage into other Trailblazer branches as those runtime surfaces are stabilized.
 
 ## 9. Trailblazer Extension Guidance
 

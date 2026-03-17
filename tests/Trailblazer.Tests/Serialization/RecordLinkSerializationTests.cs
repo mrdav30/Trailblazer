@@ -1,6 +1,7 @@
 using FluentAssertions;
 using System;
 using System.Collections.Generic;
+using Trailblazer.Tests;
 using Trailblazer.Serialization;
 using Xunit;
 
@@ -128,6 +129,42 @@ public class RecordLinkSerializationTests
         target.Provider.Id.Should().Be("shared-link");
         target.Consumer.Resource.Should().BeSameAs(target.Provider.Resource);
         target.Consumer.Resource.Name.Should().Be("loaded-shared-link");
+    }
+
+    [Fact]
+    public void JsonRoundTrip_ShouldThrow_WhenDeferredLinksRemainUnresolved()
+    {
+        var source = CreateDeferredGraph("shared-link");
+
+        var saveContext = new ChronicleContext();
+        saveContext.Links.RegisterInstance("shared-link", source.Provider.Resource, slot: "provider");
+
+        string json = JsonRecordSerializer.Serialize(source, saveContext, writeIndented: true);
+        json = SerializationPayloadEditor.RemoveJsonProperty(json, "provider");
+
+        var target = new DeferredLinkGraph();
+        Action act = () => JsonRecordSerializer.Populate(target, json, new ChronicleContext());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*resource:ExternalResource:shared-link@provider*");
+    }
+
+    [Fact]
+    public void MemoryPackRoundTrip_ShouldThrow_WhenDeferredLinksRemainUnresolved()
+    {
+        var source = CreateDeferredGraph("shared-link");
+
+        var saveContext = new ChronicleContext();
+        saveContext.Links.RegisterInstance("shared-link", source.Provider.Resource, slot: "provider");
+
+        byte[] data = MemoryPackRecordSerializer.Serialize(source, saveContext);
+        data = SerializationPayloadEditor.RemoveMemoryPackEntry(data, "provider");
+
+        var target = new DeferredLinkGraph();
+        Action act = () => MemoryPackRecordSerializer.Populate(target, data, new ChronicleContext());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*resource:ExternalResource:shared-link@provider*");
     }
 
     private static DeferredLinkGraph CreateDeferredGraph(string id)

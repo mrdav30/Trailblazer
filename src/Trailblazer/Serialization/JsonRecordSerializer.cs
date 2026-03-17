@@ -17,15 +17,23 @@ public static class JsonRecordSerializer
     /// Serializes the current state of a recordable instance into JSON.
     /// </summary>
     public static string Serialize(IRecordable target, bool writeIndented = false)
+        => Serialize(target, context: null, writeIndented);
+
+    /// <summary>
+    /// Serializes the current state of a recordable instance into JSON.
+    /// </summary>
+    public static string Serialize(IRecordable target, ChronicleContext context, bool writeIndented = false)
     {
         if (target == null)
             throw new ArgumentNullException(nameof(target));
+
+        context ??= new ChronicleContext();
 
         JsonSerializerOptions options = writeIndented
             ? CreateIndentedOptions()
             : _defaultOptions;
 
-        var chronicler = new JsonRecordWriter(options);
+        var chronicler = new JsonRecordWriter(options, context);
         target.RecordData(chronicler);
         return chronicler.ToJson();
     }
@@ -34,14 +42,23 @@ public static class JsonRecordSerializer
     /// Loads JSON state into an existing recordable instance.
     /// </summary>
     public static void Populate(IRecordable target, string json)
+        => Populate(target, json, context: null);
+
+    /// <summary>
+    /// Loads JSON state into an existing recordable instance.
+    /// </summary>
+    public static void Populate(IRecordable target, string json, ChronicleContext context)
     {
         if (target == null)
             throw new ArgumentNullException(nameof(target));
         if (string.IsNullOrWhiteSpace(json))
             throw new ArgumentException("Serialized JSON must not be null or empty.", nameof(json));
 
-        using var chronicler = new JsonRecordReader(json, _defaultOptions);
+        context ??= new ChronicleContext();
+
+        using var chronicler = new JsonRecordReader(json, _defaultOptions, context);
         target.RecordData(chronicler);
+        context.ResolveDeferredLinks();
     }
 
     private static JsonSerializerOptions CreateDefaultOptions()
@@ -65,10 +82,13 @@ public static class JsonRecordSerializer
         private readonly Dictionary<string, string> _entries = new(StringComparer.Ordinal);
         private readonly JsonSerializerOptions _options;
 
-        public JsonRecordWriter(JsonSerializerOptions options)
+        public JsonRecordWriter(JsonSerializerOptions options, ChronicleContext context)
         {
             _options = options;
+            Context = context ?? throw new ArgumentNullException(nameof(context));
         }
+
+        public ChronicleContext Context { get; }
 
         public SerializationMode Mode => SerializationMode.Saving;
 
@@ -85,9 +105,27 @@ public static class JsonRecordSerializer
                 return;
             }
 
-            var nested = new JsonRecordWriter(_options);
+            var nested = new JsonRecordWriter(_options, Context);
             value.RecordData(nested);
             _entries[name] = nested.ToJson();
+        }
+
+        public void LookLink<T>(
+            ref T value,
+            string name,
+            string slot = null,
+            RecordLinkResolveMode resolveMode = RecordLinkResolveMode.Immediate,
+            Action<T> assignLoadedValue = null)
+        {
+            string id = null;
+            if (value is not null
+                && !Context.Links.TryGetReferenceId(value, out id, slot))
+            {
+                throw new InvalidOperationException(
+                    $"Unable to save link '{name}' of type {typeof(T).Name} because no stable id could be produced{FormatSlot(slot)}.");
+            }
+
+            _entries[name] = JsonSerializer.Serialize(id, _options);
         }
 
         public string ToJson()
@@ -117,12 +155,15 @@ public static class JsonRecordSerializer
         private readonly JsonElement _root;
         private readonly JsonSerializerOptions _options;
 
-        public JsonRecordReader(string json, JsonSerializerOptions options)
+        public JsonRecordReader(string json, JsonSerializerOptions options, ChronicleContext context)
         {
             _document = JsonDocument.Parse(json);
             _root = _document.RootElement;
             _options = options;
+            Context = context ?? throw new ArgumentNullException(nameof(context));
         }
+
+        public ChronicleContext Context { get; }
 
         public SerializationMode Mode => SerializationMode.Loading;
 
@@ -154,13 +195,69 @@ public static class JsonRecordSerializer
                 throw new InvalidOperationException(
                     $"Unable to load '{name}' because {typeof(T).Name} must already be instantiated for a deep chronicler load.");
 
-            using var nested = new JsonRecordReader(entry.GetRawText(), _options);
+            using var nested = new JsonRecordReader(entry.GetRawText(), _options, Context);
             value.RecordData(nested);
+        }
+
+        public void LookLink<T>(
+            ref T value,
+            string name,
+            string slot = null,
+            RecordLinkResolveMode resolveMode = RecordLinkResolveMode.Immediate,
+            Action<T> assignLoadedValue = null)
+        {
+            if (!_root.TryGetProperty(name, out JsonElement entry)
+                || entry.ValueKind == JsonValueKind.Null)
+            {
+                value = default;
+                return;
+            }
+
+            string id = JsonSerializer.Deserialize<string>(entry.GetRawText(), _options);
+            if (id == null)
+            {
+                value = default;
+                return;
+            }
+
+            if (resolveMode == RecordLinkResolveMode.Deferred)
+            {
+                if (assignLoadedValue == null)
+                    throw new InvalidOperationException(
+                        $"Deferred link '{name}' of type {typeof(T).Name} requires an assignment callback.");
+
+                if (Context.Links.TryResolve(id, out T deferredValue, slot))
+                {
+                    value = deferredValue;
+                    assignLoadedValue(deferredValue);
+                    return;
+                }
+
+                Context.QueueDeferredLink(name, id, slot, assignLoadedValue);
+                value = default;
+                return;
+            }
+
+            if (!Context.Links.TryResolve(id, out T resolvedValue, slot))
+            {
+                throw new InvalidOperationException(
+                    $"Unable to load link '{name}' of type {typeof(T).Name} with id '{id}'{FormatSlot(slot)}.");
+            }
+
+            value = resolvedValue;
+            assignLoadedValue?.Invoke(resolvedValue);
         }
 
         public void Dispose()
         {
             _document.Dispose();
         }
+    }
+
+    private static string FormatSlot(string slot)
+    {
+        return string.IsNullOrEmpty(slot)
+            ? string.Empty
+            : $" in slot '{slot}'";
     }
 }

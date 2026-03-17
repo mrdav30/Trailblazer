@@ -13,11 +13,19 @@ public static class MemoryPackRecordSerializer
     /// Serializes the current state of a recordable instance into MemoryPack bytes.
     /// </summary>
     public static byte[] Serialize(IRecordable target)
+        => Serialize(target, context: null);
+
+    /// <summary>
+    /// Serializes the current state of a recordable instance into MemoryPack bytes.
+    /// </summary>
+    public static byte[] Serialize(IRecordable target, ChronicleContext context)
     {
         if (target == null)
             throw new ArgumentNullException(nameof(target));
 
-        var chronicler = new MemoryPackRecordWriter();
+        context ??= new ChronicleContext();
+
+        var chronicler = new MemoryPackRecordWriter(context);
         target.RecordData(chronicler);
         return chronicler.ToArray();
     }
@@ -26,30 +34,52 @@ public static class MemoryPackRecordSerializer
     /// Loads MemoryPack state into an existing recordable instance.
     /// </summary>
     public static void Populate(IRecordable target, byte[] data)
+        => Populate(target, data, context: null);
+
+    /// <summary>
+    /// Loads MemoryPack state into an existing recordable instance.
+    /// </summary>
+    public static void Populate(IRecordable target, byte[] data, ChronicleContext context)
     {
         if (data == null)
             throw new ArgumentNullException(nameof(data));
 
-        Populate(target, data.AsSpan());
+        Populate(target, data.AsSpan(), context);
     }
 
     /// <summary>
     /// Loads MemoryPack state into an existing recordable instance.
     /// </summary>
     public static void Populate(IRecordable target, ReadOnlySpan<byte> data)
+        => Populate(target, data, context: null);
+
+    /// <summary>
+    /// Loads MemoryPack state into an existing recordable instance.
+    /// </summary>
+    public static void Populate(IRecordable target, ReadOnlySpan<byte> data, ChronicleContext context)
     {
         if (target == null)
             throw new ArgumentNullException(nameof(target));
         if (data.IsEmpty)
             throw new ArgumentException("Serialized bytes must not be empty.", nameof(data));
 
-        var chronicler = new MemoryPackRecordReader(data);
+        context ??= new ChronicleContext();
+
+        var chronicler = new MemoryPackRecordReader(data, context);
         target.RecordData(chronicler);
+        context.ResolveDeferredLinks();
     }
 
     private sealed class MemoryPackRecordWriter : IChronicler
     {
         private readonly Dictionary<string, byte[]> _entries = new(StringComparer.Ordinal);
+
+        public MemoryPackRecordWriter(ChronicleContext context)
+        {
+            Context = context ?? throw new ArgumentNullException(nameof(context));
+        }
+
+        public ChronicleContext Context { get; }
 
         public SerializationMode Mode => SerializationMode.Saving;
 
@@ -66,9 +96,27 @@ public static class MemoryPackRecordSerializer
                 return;
             }
 
-            var nested = new MemoryPackRecordWriter();
+            var nested = new MemoryPackRecordWriter(Context);
             value.RecordData(nested);
             _entries[name] = nested.ToArray();
+        }
+
+        public void LookLink<T>(
+            ref T value,
+            string name,
+            string slot = null,
+            RecordLinkResolveMode resolveMode = RecordLinkResolveMode.Immediate,
+            Action<T> assignLoadedValue = null)
+        {
+            string id = null;
+            if (value is not null
+                && !Context.Links.TryGetReferenceId(value, out id, slot))
+            {
+                throw new InvalidOperationException(
+                    $"Unable to save link '{name}' of type {typeof(T).Name} because no stable id could be produced{FormatSlot(slot)}.");
+            }
+
+            _entries[name] = MemoryPackSerializer.Serialize(id);
         }
 
         public byte[] ToArray()
@@ -84,11 +132,14 @@ public static class MemoryPackRecordSerializer
     {
         private readonly Dictionary<string, byte[]> _entries;
 
-        public MemoryPackRecordReader(ReadOnlySpan<byte> data)
+        public MemoryPackRecordReader(ReadOnlySpan<byte> data, ChronicleContext context)
         {
             MemoryPackRecordEnvelope envelope = MemoryPackSerializer.Deserialize<MemoryPackRecordEnvelope>(data);
             _entries = envelope?.Entries ?? new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            Context = context ?? throw new ArgumentNullException(nameof(context));
         }
+
+        public ChronicleContext Context { get; }
 
         public SerializationMode Mode => SerializationMode.Loading;
 
@@ -115,8 +166,64 @@ public static class MemoryPackRecordSerializer
                 throw new InvalidOperationException(
                     $"Unable to load '{name}' because {typeof(T).Name} must already be instantiated for a deep chronicler load.");
 
-            var nested = new MemoryPackRecordReader(entry);
+            var nested = new MemoryPackRecordReader(entry, Context);
             value.RecordData(nested);
         }
+
+        public void LookLink<T>(
+            ref T value,
+            string name,
+            string slot = null,
+            RecordLinkResolveMode resolveMode = RecordLinkResolveMode.Immediate,
+            Action<T> assignLoadedValue = null)
+        {
+            if (!_entries.TryGetValue(name, out byte[] entry)
+                || entry == null)
+            {
+                value = default;
+                return;
+            }
+
+            string id = MemoryPackSerializer.Deserialize<string>(entry);
+            if (id == null)
+            {
+                value = default;
+                return;
+            }
+
+            if (resolveMode == RecordLinkResolveMode.Deferred)
+            {
+                if (assignLoadedValue == null)
+                    throw new InvalidOperationException(
+                        $"Deferred link '{name}' of type {typeof(T).Name} requires an assignment callback.");
+
+                if (Context.Links.TryResolve(id, out T deferredValue, slot))
+                {
+                    value = deferredValue;
+                    assignLoadedValue(deferredValue);
+                    return;
+                }
+
+                Context.QueueDeferredLink(name, id, slot, assignLoadedValue);
+                value = default;
+                return;
+            }
+
+            if (!Context.Links.TryResolve(id, out T resolvedValue, slot))
+            {
+                throw new InvalidOperationException(
+                    $"Unable to load link '{name}' of type {typeof(T).Name} with id '{id}'{FormatSlot(slot)}.");
+            }
+
+            value = resolvedValue;
+            assignLoadedValue?.Invoke(resolvedValue);
+        }
+    }
+
+    private static string FormatSlot(string slot)
+    {
+        return string.IsNullOrEmpty(slot)
+            ? string.Empty
+            : $" in slot '{slot}'";
     }
 }

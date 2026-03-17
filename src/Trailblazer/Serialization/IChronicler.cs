@@ -1,3 +1,5 @@
+using System;
+
 namespace Trailblazer.Serialization;
 
 /// <summary>
@@ -5,6 +7,11 @@ namespace Trailblazer.Serialization;
 /// </summary>
 public interface IChronicler
 {
+    /// <summary>
+    /// Gets the session context for the current chronicler pass.
+    /// </summary>
+    ChronicleContext Context { get; }
+
     /// <summary>
     /// Gets the active serialization mode.
     /// </summary>
@@ -19,4 +26,14 @@ public interface IChronicler
     /// Reads or writes a nested recordable instance by name.
     /// </summary>
     void LookDeep<T>(ref T value, string name) where T : class, IRecordable;
+
+    /// <summary>
+    /// Reads or writes a stable link to an external or runtime-owned value by name.
+    /// </summary>
+    void LookLink<T>(
+        ref T value,
+        string name,
+        string slot = null,
+        RecordLinkResolveMode resolveMode = RecordLinkResolveMode.Immediate,
+        Action<T> assignLoadedValue = null);
 }

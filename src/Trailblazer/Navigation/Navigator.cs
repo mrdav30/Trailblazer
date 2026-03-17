@@ -212,12 +212,6 @@ public abstract class Navigator : INavigate, IRecordable
         _isInitialized = true;
     }
 
-    /// <summary>
-    /// Replaces the current traversal state with the given one.
-    /// </summary>
-    /// <param name="state">The new traversal condition to apply.</param>
-    public virtual void ReplaceTrekCondition(TrekCondition state) => _frameCondition = state.Clone();
-
     public virtual void Reset()
     {
         _frameCondition.Reset();
@@ -452,6 +446,12 @@ public abstract class Navigator : INavigate, IRecordable
         if (updateMotorState)
             Motor.UpdateTraversal(_frameCondition);
     }
+
+        /// <summary>
+    /// Replaces the current traversal state with the given one.
+    /// </summary>
+    /// <param name="state">The new traversal condition to apply.</param>
+    public virtual void ReplaceTrekCondition(TrekCondition state) => _frameCondition = state.Clone();
 
     public abstract void CheckTrekCondition();
 

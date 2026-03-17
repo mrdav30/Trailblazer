@@ -132,7 +132,11 @@ Today this is designed for:
 - deterministic snapshot/restore experiments
 - proving the shape of the shared API before broadening scope
 
-It is not yet designed for:
+Chronicler intentionally stays focused on transporting state into an existing runtime shell.
+
+Constructing runtime objects, choosing concrete types, and orchestrating framework bootstrap are expected to live in host code or in a separate opt-in factory layer rather than in the base Chronicler contract.
+
+So the current core is not designed for:
 
 - constructing arbitrary object graphs from serialized data alone
 - polymorphic root construction

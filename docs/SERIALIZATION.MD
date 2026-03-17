@@ -61,7 +61,9 @@ This means the current system is designed for:
 - deterministic snapshot/restore experiments
 - proving the shape of the API before broadening scope
 
-It is not yet designed for:
+Trailblazer intentionally does not treat Chronicler as a construct-from-data runtime factory.
+
+That means this runtime is not designed for:
 
 - constructing arbitrary controller graphs from serialized data alone
 - polymorphic navigator creation
@@ -272,8 +274,7 @@ The current Trailblazer-focused tests verify that:
 
 The next best steps after this MVP are:
 
-1. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
-2. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, failed request rehydration, unresolved deferred links, and transport-parity rebuild behavior.
+1. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, failed request rehydration, unresolved deferred links, and transport-parity rebuild behavior.
 
 ## 9. Trailblazer Extension Guidance
 

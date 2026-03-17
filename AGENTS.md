@@ -30,16 +30,18 @@ Keep these aligned whenever behavior or public API changes:
 
 - [`README.md`](README.md)
 - [`docs/OVERVIEW.md`](docs/OVERVIEW.md)
+- [`docs/SERIALIZATION.MD`](docs/SERIALIZATION.MD) and [`src/Trailblazer/Serialization/README.md`](src/Trailblazer/Serialization/README.md) when serialization behavior or Chronicler guidance changes
 - the relevant source and test files under [`src/Trailblazer`](src/Trailblazer) and [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)
 
 ## Repository Map
 
 | Path | Purpose | Notes |
 | --- | --- | --- |
-| [`docs`](docs) | Design notes and high-level explanations | Start with `docs/OVERVIEW.md`; `PATHMANAGER.MD`, `NAVIGATOR.MD`, `NAVSTEERING.MD`, `NAVTURNING.MD`, `NAVMOTOR.MD`, and `GRAVITY.MD` are subsystem references. |
+| [`docs`](docs) | Design notes and high-level explanations | Start with `docs/OVERVIEW.md`; `SERIALIZATION.MD`, `PATHMANAGER.MD`, `NAVIGATOR.MD`, `NAVSTEERING.MD`, `NAVTURNING.MD`, `NAVMOTOR.MD`, and `GRAVITY.MD` are subsystem references. |
 | [`src/Trailblazer`](src/Trailblazer) | Main library project | Multi-targets `netstandard2.1` and `net8.0`. |
 | [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Chart management, A*, flow field, guide caching, voxel lookup | Most performance-sensitive and correctness-sensitive area. |
 | [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Runtime navigation stack | `Navigator`, `NavSteering`, `NavTurning`, `NavMotor`, locomotions, animation hooks. |
+| [`src/Trailblazer/Serialization`](src/Trailblazer/Serialization) | Chronicler serialization layer | Contains `IRecordable`, `IChronicler`, JSON/MemoryPack transports, stable-link support, and the shared `README.md` API reference. |
 | [`src/Trailblazer/Support`](src/Trailblazer/Support) | Shared helper abstractions | Small but still part of public surface area. |
 | [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests) | xUnit v3 test project | Uses FluentAssertions, Moq, FixedMathSharp, GridForge. |
 | [`tests/Trailblazer.Tests/Pathing`](tests/Trailblazer.Tests/Pathing) | Pathing-focused tests | A*, flow field, chart behavior, heap behavior. |
@@ -75,6 +77,25 @@ Representative entry points:
 - [`src/Trailblazer/Navigation/Steering/NavSteering.cs`](src/Trailblazer/Navigation/Steering/NavSteering.cs)
 - [`src/Trailblazer/Navigation/Motor/NavMotor.cs`](src/Trailblazer/Navigation/Motor/NavMotor.cs)
 - [`src/Trailblazer/Navigation/Turning/NavTurning.cs`](src/Trailblazer/Navigation/Turning/NavTurning.cs)
+
+## Serialization Status
+
+Trailblazer currently uses the Chronicler serialization layer under [`src/Trailblazer/Serialization`](src/Trailblazer/Serialization).
+
+Important current rules:
+
+- Trailblazer serializes through explicit `IRecordable.RecordData(...)` implementations rather than relying on serializer attributes for runtime graphs.
+- The active transports are `JsonRecordSerializer` and `MemoryPackRecordSerializer`.
+- The current Trailblazer coverage is the navigation branch: `Navigator`, `NavSteering`, `NavTurning`, `NavMotor`, `LocomotionHandler`, and the locomotion types.
+- The load model is populate-existing-instance only. Hosts create and initialize runtime shells first, then Chronicler populates supported state.
+- Trailblazer intentionally does not use Chronicler as a construct-from-data object factory.
+- Host bindings such as animation handlers are not serialized.
+- Movement-group coordinator state is rebuild-only runtime state. Group intent is serialized per steering session, and hosts may call `PrewarmMovementGroup()` after load to seed the coordinator before the next frame.
+
+If you touch serialization work, read both:
+
+- [`docs/SERIALIZATION.MD`](docs/SERIALIZATION.MD) for Trailblazer-specific coverage and runtime behavior
+- [`src/Trailblazer/Serialization/README.md`](src/Trailblazer/Serialization/README.md) for the reusable Chronicler API surface
 
 ## External Dependencies
 
@@ -230,6 +251,7 @@ For both humans and AI agents, use this order:
 7. Run focused tests.
 8. Run the full `Release` suite before closing the work.
 9. Update `README.md` or `docs/*` if public behavior or developer workflow changed.
+10. If serialization behavior or load semantics changed, update both serialization docs in the same pass.
 
 ## Guidance for AI Agents
 
@@ -239,6 +261,7 @@ If you are an automated coding agent working in this repository:
 - Do not broaden scope from one subsystem into another unless the change truly requires it.
 - Call out any build or test failures explicitly, with exact file references.
 - Treat cache invalidation, chart ownership, partition reuse, and static manager state as high-risk areas.
+- Treat serialization boundaries and load semantics as high-risk areas. Avoid silently broadening from populate-existing-instance loads into construct-from-data behavior.
 - Prefer focused edits plus verification over sweeping cleanup.
 - If you change a public API or behavior, update both tests and docs in the same pass.
 - If you add comments, comment the invariant or the reason, not the syntax.

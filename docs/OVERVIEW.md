@@ -11,6 +11,7 @@ See also:
 
 - `SERIALIZATION.MD` for Trailblazer's current serialization coverage and runtime behavior
 - `../src/Trailblazer/Serialization/README.md` for the reusable Chronicler API reference
+- `../src/Trailblazer/Serialization/MIGRATION.MD` for the planned extraction strategy for moving Chronicler into its own project
 
 ## 1. Core Model
 

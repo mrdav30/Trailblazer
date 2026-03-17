@@ -4,7 +4,7 @@ This document is the Trailblazer-specific reference for how the runtime currentl
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
 If you need the reusable Chronicler API details, transport behavior, or stable-link design, read [`../src/Trailblazer/Serialization/README.md`](../src/Trailblazer/Serialization/README.md).
-If you need the runtime systems currently covered by this MVP, read:
+If you need the runtime systems currently covered by this Trailblazer implementation, read:
 
 - `NAVIGATOR.MD`
 - `NAVMOTOR.MD`
@@ -19,7 +19,7 @@ The code referenced here lives primarily in:
 
 ## 1. Trailblazer Coverage
 
-This MVP is intentionally limited to:
+The current Trailblazer serialization coverage is intentionally limited to:
 
 - `Navigator`
 - `NavSteering`
@@ -33,7 +33,7 @@ This MVP is intentionally limited to:
 - `SlideLocomotion`
 - `SwimLocomotion`
 
-In practice that means the first pass covers:
+In practice that means the current covered branch handles:
 
 - navigator transform and motion state
 - navigator steering session state
@@ -45,7 +45,7 @@ In practice that means the first pass covers:
 
 ## 2. Trailblazer Load Model
 
-The MVP loads into existing initialized instances.
+The current implementation loads into existing initialized instances.
 
 This is a deliberate constraint.
 
@@ -193,7 +193,7 @@ Examples:
 
 ## 4. What Is Not Serialized Yet
 
-The current MVP intentionally does not serialize the full live navigation stack.
+The current Trailblazer serialization branch intentionally does not serialize the full live navigation stack.
 
 Out of scope today:
 
@@ -224,7 +224,7 @@ Trailblazer's current serialization boundary is:
 
 This gives Trailblazer a workable starting point without overcommitting to a full save-game architecture too early.
 
-Tradeoffs of this MVP:
+Current tradeoffs of this boundary:
 
 - it is safe and explicit, but not yet turnkey for whole-world persistence
 - it rebuilds live guides from recorded requests instead of serializing guide instances directly
@@ -250,7 +250,7 @@ This is especially important in Trailblazer because pathing and navigation are s
 - cache invalidation
 - frame-local intermediate values
 
-## 7. Verification Added With This MVP
+## 7. Verification Added So Far
 
 Focused round-trip coverage was added for:
 
@@ -278,9 +278,11 @@ The current Trailblazer-focused tests verify that:
 
 ## 8. Next Best Steps
 
-There are no additional Trailblazer-specific serialization next steps tracked here right now.
+The Trailblazer-specific branch is in solid shape now, but a few non-blocking follow-ups are still valuable:
 
-Future work can expand Chronicler coverage into other Trailblazer branches as those runtime surfaces are stabilized.
+1. Add an end-to-end host workflow guide or sample that shows batch save/load for multiple navigators, including chart prerequisites, restore ordering, and optional `PrewarmMovementGroup()` calls.
+2. Decide whether any additional Trailblazer-owned global state should ever expose optional snapshot surfaces, or whether pathing/global managers remain rebuild-only by design.
+3. Expand `RecordData(...)` coverage into other Trailblazer branches only as those runtime surfaces stabilize and prove they contain authoritative state worth persisting.
 
 ## 9. Trailblazer Extension Guidance
 
@@ -294,4 +296,4 @@ When adding `RecordData(...)` to more types:
 6. Add a focused round-trip test in the same change.
 7. Verify the type still behaves correctly after load, not just that the raw values match.
 
-That approach is what this MVP follows for the `Navigator -> NavMotor -> LocomotionHandler -> Locomotions` branch.
+That approach is what the current `Navigator -> NavMotor -> LocomotionHandler -> Locomotions` branch follows.

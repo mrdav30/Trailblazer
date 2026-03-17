@@ -31,6 +31,7 @@ Keep these aligned whenever behavior or public API changes:
 - [`README.md`](README.md)
 - [`docs/OVERVIEW.md`](docs/OVERVIEW.md)
 - [`docs/SERIALIZATION.MD`](docs/SERIALIZATION.MD) and [`src/Trailblazer/Serialization/README.md`](src/Trailblazer/Serialization/README.md) when serialization behavior or Chronicler guidance changes
+- [`src/Trailblazer/Serialization/MIGRATION.MD`](src/Trailblazer/Serialization/MIGRATION.MD) when the extraction plan for the standalone Chronicler project changes
 - the relevant source and test files under [`src/Trailblazer`](src/Trailblazer) and [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)
 
 ## Repository Map
@@ -96,6 +97,10 @@ If you touch serialization work, read both:
 
 - [`docs/SERIALIZATION.MD`](docs/SERIALIZATION.MD) for Trailblazer-specific coverage and runtime behavior
 - [`src/Trailblazer/Serialization/README.md`](src/Trailblazer/Serialization/README.md) for the reusable Chronicler API surface
+
+If the work affects extraction planning, also read:
+
+- [`src/Trailblazer/Serialization/MIGRATION.MD`](src/Trailblazer/Serialization/MIGRATION.MD)
 
 ## External Dependencies
 

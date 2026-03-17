@@ -3,6 +3,7 @@
 This document describes the reusable Chronicler serialization layer that Trailblazer currently ships inside the main library and intends to extract into its own shared project later.
 
 If you need Trailblazer-specific coverage and runtime behavior, read [`../../../docs/SERIALIZATION.MD`](../../../docs/SERIALIZATION.MD).
+If you need the planned extraction strategy for moving Chronicler into its own project, read [`MIGRATION.MD`](MIGRATION.MD).
 
 The code referenced here lives in:
 
@@ -153,3 +154,12 @@ When adding Chronicler support to a new type:
 5. Use value fields for small deterministic structs and enums.
 6. Add a focused round-trip test in the same change.
 7. Verify the type still behaves correctly after load, not just that raw values match.
+
+## 7. Next Best Steps
+
+The highest-value Chronicler-specific follow-ups are:
+
+1. Extract the generic Chronicler files into their own project and package so Trailblazer consumes them as a normal dependency instead of hosting the code in-tree.
+2. Decide the package layout for transports: keep JSON and MemoryPack in one package, or split them into optional transport packages layered on top of the core abstractions.
+3. Add package-level compatibility guidance for schema evolution and transport parity so Chronicler has its own guarantees independent of Trailblazer.
+4. Replace or relocate the JSON attribute shim strategy so downstream consumers do not depend on Trailblazer-specific source layout during the extraction.

@@ -42,6 +42,20 @@ internal static class MovementGroupCoordinator
         session.HasOwnerId = true;
     }
 
+    internal static void Prewarm(
+        MovementGroupSession session,
+        Guid ownerId,
+        Vector3d requestedDestination,
+        Vector3d position,
+        Fixed64 radius)
+    {
+        if (session.GroupId < 0)
+            return;
+
+        CacheOwner(session, ownerId);
+        UpdateTarget(session, requestedDestination, position, radius);
+    }
+
     internal static MovementGroupTarget UpdateTarget(
         MovementGroupSession session,
         Vector3d requestedDestination,

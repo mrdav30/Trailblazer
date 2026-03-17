@@ -253,6 +253,22 @@ public abstract class Navigator : INavigate, IRecordable
         _animationHandler = null;
     }
 
+    /// <summary>
+    /// Prewarms the steering movement-group coordinator from this navigator's currently loaded state.
+    /// </summary>
+    /// <remarks>
+    /// This is primarily useful after loading several grouped navigators through Chronicler. Call it once
+    /// for each loaded navigator before the next simulation frame if you want movement-group formation state
+    /// available immediately. If it is skipped, grouped steering will still rejoin lazily on the next update.
+    /// </remarks>
+    public virtual void PrewarmMovementGroup()
+    {
+        if (!IsActive)
+            throw new InvalidOperationException("Navigator must be Setup and Initialized before prewarming movement groups.");
+
+        Steering.PrewarmMovementGroup(this);
+    }
+
     #endregion
 
     #region Input / Travel Requests

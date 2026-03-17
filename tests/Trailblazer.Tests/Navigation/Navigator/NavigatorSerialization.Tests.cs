@@ -227,6 +227,54 @@ public class NavigatorSerializationTests : IDisposable
         target.Steering.ShouldMove.Should().BeTrue();
     }
 
+    [Fact]
+    public void JsonRoundTrip_ShouldAllowMovementGroupsToBePrewarmed_AfterLoad()
+    {
+        RegisterMovementGroupFormationChart("NavigatorSerializationMovementGroupPrewarm");
+
+        Vector3d sharedDestination = new(4, 0, 0);
+
+        var sourceFirst = CreateNavigator(new Vector3d(1, 0, 0), size: Fixed64.One);
+        var sourceSecond = CreateNavigator(new Vector3d(2, 0, 0), size: Fixed64.One);
+
+        sourceFirst.ApplyGuidedTrekRequest(sharedDestination, pathMode: GuidedPathMode.AStar, groupId: 5);
+        sourceSecond.ApplyGuidedTrekRequest(sharedDestination, pathMode: GuidedPathMode.AStar, groupId: 5);
+
+        string firstJson = JsonRecordSerializer.Serialize(sourceFirst, writeIndented: true);
+        string secondJson = JsonRecordSerializer.Serialize(sourceSecond, writeIndented: true);
+
+        TrailblazerManager.Reset();
+
+        var lazyFirst = CreateNavigator(new Vector3d(-3, 0, 0), size: Fixed64.One);
+        var lazySecond = CreateNavigator(new Vector3d(-2, 0, 0), size: Fixed64.One);
+        JsonRecordSerializer.Populate(lazyFirst, firstJson);
+        JsonRecordSerializer.Populate(lazySecond, secondJson);
+
+        lazyFirst.Steering.GetHeading(lazyFirst);
+        lazySecond.Steering.GetHeading(lazySecond);
+
+        lazyFirst.Steering.Destination.Should().Be(sharedDestination);
+        lazySecond.Steering.Destination.Should().Be(new Vector3d((Fixed64)4.5f, Fixed64.Zero, Fixed64.Zero));
+
+        TrailblazerManager.Reset();
+
+        var prewarmedFirst = CreateNavigator(new Vector3d(-3, 0, 0), size: Fixed64.One);
+        var prewarmedSecond = CreateNavigator(new Vector3d(-2, 0, 0), size: Fixed64.One);
+        JsonRecordSerializer.Populate(prewarmedFirst, firstJson);
+        JsonRecordSerializer.Populate(prewarmedSecond, secondJson);
+
+        prewarmedFirst.PrewarmMovementGroup();
+        prewarmedSecond.PrewarmMovementGroup();
+
+        prewarmedFirst.Steering.GetHeading(prewarmedFirst);
+        prewarmedSecond.Steering.GetHeading(prewarmedSecond);
+
+        prewarmedFirst.Steering.Destination.Should().Be(new Vector3d((Fixed64)3.5f, Fixed64.Zero, Fixed64.Zero));
+        prewarmedSecond.Steering.Destination.Should().Be(new Vector3d((Fixed64)4.5f, Fixed64.Zero, Fixed64.Zero));
+
+        PathManager.UnloadChart("NavigatorSerializationMovementGroupPrewarm");
+    }
+
     private static TestNavigator CreateNavigator(Vector3d position, Fixed64? size = null)
     {
         var navigator = new TestNavigator();
@@ -370,6 +418,24 @@ public class NavigatorSerializationTests : IDisposable
                 { false, true, false },
                 { true, true, true },
                 { true, true, true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData(chartKey, data, Vector3d.Zero);
+    }
+
+    private static void RegisterMovementGroupFormationChart(string chartKey)
+    {
+        bool[,,] data = new bool[1, 7, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
             }
         };
 

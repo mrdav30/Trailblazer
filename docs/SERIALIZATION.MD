@@ -131,6 +131,8 @@ On load it also:
 - reacquires a guide from `PathGuideFactory` when the session was actively guide-driven
 - restores A* waypoint progress when the guide is waypoint-based
 - clears any stale guide or movement-group session state already attached to the existing runtime shell
+- preserves per-session movement-group intent while treating the shared coordinator as rebuild-only runtime state
+- allows hosts to prewarm grouped sessions explicitly through `Navigator.PrewarmMovementGroup()` or `NavSteering.PrewarmMovementGroup(...)`
 - falls back to a new path request on the next steering tick if a guide could not be reacquired immediately
 
 ### 3.3 NavTurning
@@ -263,15 +265,15 @@ The current Trailblazer-focused tests verify that:
 - turning configuration survives round-trip while active turn runtime state is rebuilt on load
 - moving-platform state survives round-trip
 - locomotion runtime state survives round-trip
+- grouped steering can be explicitly prewarmed after load while lazy rejoin remains available as a fallback
 - a restored navigator remains usable for later simulation
 
 ## 8. Next Best Steps
 
 The next best steps after this MVP are:
 
-1. Decide whether movement-group coordinator state should be rebuilt globally or whether steering sessions should always rejoin lazily after load.
-2. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
-3. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, failed request rehydration, unresolved deferred links, and transport-parity rebuild behavior.
+1. Decide whether the framework should support construct-from-data loading in addition to populate-existing-instance loading.
+2. Add more targeted tests around partial loads, disabled locomotions, backward-compatible defaults, failed request rehydration, unresolved deferred links, and transport-parity rebuild behavior.
 
 ## 9. Trailblazer Extension Guidance
 

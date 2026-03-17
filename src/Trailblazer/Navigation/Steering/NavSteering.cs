@@ -367,6 +367,31 @@ public class NavSteering : IRecordable
         Destination = _requestedDestination;
     }
 
+    /// <summary>
+    /// Rebuilds this steering session's shared movement-group membership from the current runtime owner state.
+    /// </summary>
+    /// <remarks>
+    /// Call this after loading multiple grouped steering sessions when you want the coordinator warmed
+    /// before the next simulation frame. If it is skipped, grouped steering will still recover lazily
+    /// during <see cref="GetHeading(ISteer)"/>.
+    /// </remarks>
+    /// <param name="navigator">The current steering owner whose position, radius, and stable id should seed the coordinator.</param>
+    public void PrewarmMovementGroup(ISteer navigator)
+    {
+        if (navigator == null)
+            throw new ArgumentNullException(nameof(navigator));
+
+        if (!ShouldMove || !IsInGroup || _currentRequest == null)
+            return;
+
+        MovementGroupCoordinator.Prewarm(
+            _movementGroupSession,
+            navigator.GlobalId,
+            _requestedDestination,
+            navigator.Position,
+            _agentRadius);
+    }
+
     #endregion
 
     #region Simulation Lifecycle

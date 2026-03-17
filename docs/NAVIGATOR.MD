@@ -519,6 +519,8 @@ navigator.CommitFrameMotion();
 
 If several navigators should move as one group, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
 
+If grouped navigators are restored through Chronicler and you want formation behavior available on the very next frame, call `PrewarmMovementGroup()` once per loaded navigator before the next `TrailblazerManager.Simulate()` step. If you skip it, grouped steering still re-joins lazily during the next steering update.
+
 ## 15. Common Gotchas
 
 ### Calling Simulate() or CommitFrameMotion() before activation

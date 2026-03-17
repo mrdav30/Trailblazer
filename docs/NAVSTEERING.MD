@@ -65,6 +65,7 @@ The main entry points are:
 - `PauseAutoStop()`
 - `SetTrailGuide(IGuide guide)`
 - `AddToMovementGroup(int groupId)`
+- `PrewarmMovementGroup(ISteer navigator)`
 - `LeaveMovementGroup()`
 - `Arrive()`
 - `StopMove()`
@@ -563,6 +564,8 @@ There is already a test note in `NavSteering.Tests` calling this out.
 ### Expecting movement groups to be fully implemented
 
 They are steering-owned behavior. Hosts only pass `groupId` through the steering API; an internal coordinator tracks shared membership while agents with the same `groupId` and exact destination preserve formation offsets when compact, then fall back to the shared destination when the group spreads out or reaches the end of the move.
+
+When grouped sessions are restored from serialized state, call `PrewarmMovementGroup(ISteer navigator)` after load if you want the coordinator seeded before the next steering tick. If you do nothing, the same sessions will still rejoin lazily during `GetHeading(...)`.
 
 ### Reusing a `groupId` for different destinations
 

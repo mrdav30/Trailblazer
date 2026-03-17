@@ -10,9 +10,9 @@ namespace Trailblazer.Navigation.Motor;
 public struct GroundCondition
 {
     /// <summary>
-    /// The object the scout is currently standing on.
+    /// The host-provided sampled platform state the scout is currently standing on.
     /// </summary>
-    public PlatformHandle Platform;
+    public PlatformSnapshot Platform;
 
     /// <summary>
     /// The current surface friction applied to movement.
@@ -24,6 +24,9 @@ public struct GroundCondition
     /// </summary>
     public MotionTransfer MotionTransferState;
 
+    /// <summary>
+    /// Convenience normal derived from the sampled platform transform.
+    /// </summary>
     public readonly Vector3d GroundNormal => Platform.Active ? Platform.Transform.Up : Vector3d.Zero;
 
     public GroundCondition Clone() => new()

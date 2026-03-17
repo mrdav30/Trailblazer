@@ -7,6 +7,8 @@ internal sealed class TestNavigator : Navigator
 {
     public TrekRequest FrameRequest => _frameRequest;
 
+    public TrekCondition FrameCondition => _frameCondition;
+
     public override void CheckTrekCondition()
     {
     }

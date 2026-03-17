@@ -9,7 +9,8 @@ This document is the high-level architecture guide for the current codebase.
 
 See also:
 
-- `SERIALIZATION.MD` for the current Scribe-style serialization MVP
+- `SERIALIZATION.MD` for Trailblazer's current serialization coverage and runtime behavior
+- `../src/Trailblazer/Serialization/README.md` for the reusable Chronicler API reference
 
 ## 1. Core Model
 
@@ -241,7 +242,7 @@ What each stage does:
 
 1. `TrailblazerManager.Simulate()` advances frame counters and then runs ordered internal simulate hooks such as `PathManager.Tick()`.
 2. `Navigator.Simulate()` resolves heading, runs the motor, and updates turning.
-3. Host code refreshes surface and medium data through the concrete navigator's `CheckTrekCondition()` implementation, typically by calling `SetTrekCondition(...)` from inside that override before commit.
+3. Host code refreshes surface and medium data through the concrete navigator's `CheckTrekCondition()` implementation, typically by calling helpers such as `SetGroundContact(...)`, `SetAirborne(...)`, or `SetWaterContact(...)` from inside that override before commit.
 4. `Navigator.CommitFrameMotion()` finalizes deltas, updates velocity and acceleration, and finalizes motor state.
 5. `TrailblazerManager.LateSimulate()` marks the visual accumulation boundary.
 

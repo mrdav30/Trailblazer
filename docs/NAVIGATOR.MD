@@ -75,6 +75,8 @@ The main entry points are:
 
 - `Setup(...)`
 - `Initialize(TrekCondition condition)`
+- `BindAnimationHandler(...)`
+- `UnbindAnimationHandler()`
 - `ReplaceTrekCondition(TrekCondition state)`
 - `Reset()`
 - `ApplyInputTrekRequest(...)`
@@ -83,6 +85,9 @@ The main entry points are:
 - `SetTraversalSpeed(TrekRate rate)`
 - `Simulate()`
 - `CommitFrameMotion()`
+- `SetGroundContact(...)`
+- `SetAirborne(...)`
+- `SetWaterContact(...)`
 - `SetTrekCondition(...)`
 - `CheckTrekCondition()`
 - `AddPositionDelta(...)`
@@ -118,7 +123,6 @@ Important public state includes:
 - `GlobalId`
 - `OccupantGroupId`
 - `OccupyingIndexMap`
-- `AnimationHandler`
 - `IsLockedOn`
 - `AnimDampTime`
 
@@ -190,6 +194,12 @@ These are created in `Initialize(...)`.
 - `OccupyingIndexMap`
 
 This is what makes the navigator visible to scan-based steering and voxel-occupancy systems.
+
+### 5.6 Host Bindings
+
+`Navigator` can also bind optional host integrations such as animation handlers.
+
+Those bindings are not treated as navigator-owned simulation state.
 
 ## 6. Lifecycle
 
@@ -355,9 +365,22 @@ This is one of the most important architectural rules in Trailblazer's navigatio
 
 This state is consumed by `NavMotor`.
 
-### 9.2 SetTrekCondition(...)
+### 9.2 SetGroundContact(...), SetAirborne(...), and SetWaterContact(...)
 
-`SetTrekCondition(...)` is the public helper for updating `_frameCondition`.
+These are the preferred high-level helpers for concrete navigator integrations.
+
+Use them when host code has already determined:
+
+- whether the navigator is grounded, airborne, or in water
+- the current sampled platform snapshot, if any
+- the current surface level
+- the current ceiling level
+
+`SetGroundContact(...)` is especially important for moving-platform integration because it makes the host provide a sampled `PlatformSnapshot` rather than treating Trailblazer as if it owned the platform object itself.
+
+### 9.3 SetTrekCondition(...)
+
+`SetTrekCondition(...)` is the low-level partial-update helper for `_frameCondition`.
 
 It:
 
@@ -366,8 +389,9 @@ It:
 - optionally pushes the updated condition immediately into the motor
 
 Use `updateMotorState: true` when the motor needs to see the new traversal state before the next `CommitFrameMotion()`.
+Prefer `SetGroundContact(...)`, `SetAirborne(...)`, or `SetWaterContact(...)` when the host is writing a fresh environment contact result.
 
-### 9.3 CheckTrekCondition()
+### 9.4 CheckTrekCondition()
 
 `CheckTrekCondition()` is abstract.
 
@@ -375,11 +399,11 @@ Concrete navigator types implement it to:
 
 - probe the world
 - determine ground, air, or water medium
-- update surface normals and platform data
+- update surface normals and sampled platform data
 - set ceiling constraints
 - write the result into `_frameCondition`
 
-### 9.4 ReplaceTrekCondition(...)
+### 9.5 ReplaceTrekCondition(...)
 
 `ReplaceTrekCondition(...)` swaps `_frameCondition` wholesale.
 
@@ -432,7 +456,7 @@ This is important because grid occupancy is global or static infrastructure.
 
 ## 12. Animation Integration
 
-If `AnimationHandler` is assigned, `Simulate()` calls:
+If a host binds an animation handler through `BindAnimationHandler(...)`, `Simulate()` calls:
 
 - `NavAnimationUpdater.UpdateAnimationParameters(...)`
 
@@ -443,7 +467,7 @@ The animation update uses:
 - sprinting state
 - damping time
 
-Animation integration is optional. If `AnimationHandler` is `null`, the simulation still runs normally.
+Animation integration is optional. If no handler is bound, the simulation still runs normally.
 
 ## 13. Utility Methods and Extension Points
 

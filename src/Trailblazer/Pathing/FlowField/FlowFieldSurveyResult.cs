@@ -1,19 +1,19 @@
-﻿using SwiftCollections;
+﻿using GridForge.Spatial;
+using SwiftCollections;
 using System;
 
 namespace Trailblazer.Pathing;
 
 public class FlowFieldSurveyResult : SurveyResult
 {
-    // key = voxel spawn token, value = vector flow field
-    public SwiftDictionary<int, FlowField> Fields { get; private set; }
+    public SwiftDictionary<GlobalVoxelIndex, FlowField> Fields { get; private set; }
 
     public override bool HasPath => IsValid && Fields != null && Fields.Count > 0;
 
     public static readonly FlowFieldSurveyResult Empty = new();
 
     public static FlowFieldSurveyResult Create(
-        SwiftDictionary<int, FlowField> fields,
+        SwiftDictionary<GlobalVoxelIndex, FlowField> fields,
         string[] chartsUtilized,
         int key)
     {

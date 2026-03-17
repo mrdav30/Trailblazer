@@ -371,7 +371,7 @@ public static class PathManager
             return false;
         }
 
-        maxSearchSize = startGrid.SpawnToken == endGrid.SpawnToken ? startGrid.Size : startGrid.Size + endGrid.Size;
+        maxSearchSize = startGrid == endGrid ? startGrid.Size : startGrid.Size + endGrid.Size;
         return true;
     }
 

@@ -69,7 +69,7 @@ public class FlowFieldSurveyor
                 return FlowFieldSurveyResult.Empty;
             }
 
-            SwiftDictionary<int, FlowField> flowFields = GenerateFlowFields();
+            SwiftDictionary<GlobalVoxelIndex, FlowField> flowFields = GenerateFlowFields();
             string[] chartsUsed = _chartKeys.ToArray();
             return FlowFieldSurveyResult.Create(flowFields, chartsUsed, request.RequestCacheKey);
         }
@@ -94,7 +94,7 @@ public class FlowFieldSurveyor
             // Check if we found our way to the start voxel
             if (!targetReached)
             {
-                if (current.VoxelToken == _request.StartNode.SpawnToken)
+                if (current.Voxel == _request.StartNode)
                 {
                     maxFloodRange = current.PathCost + _request.ExtraFloodRange;
                     targetReached = true;
@@ -178,9 +178,9 @@ public class FlowFieldSurveyor
     /// Each partition is assigned a direction vector blending shortest path and direct-to-goal direction.
     /// </summary>
     /// <returns>A dictionary of directional flow field data indexed by voxel spawn tokens.</returns>
-    private SwiftDictionary<int, FlowField> GenerateFlowFields()
+    private SwiftDictionary<GlobalVoxelIndex, FlowField> GenerateFlowFields()
     {
-        SwiftDictionary<int, FlowField> result = new(_heap.ClosedCount);
+        SwiftDictionary<GlobalVoxelIndex, FlowField> result = new(_heap.ClosedCount);
         // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
 
         foreach (PathPartition current in _heap.EnumerateClosed())
@@ -191,11 +191,11 @@ public class FlowFieldSurveyor
                 PathCost = current.PathCostTotal
             };
 
-            if (current.VoxelToken == _request.EndNode.SpawnToken)
+            if (current.Voxel == _request.EndNode)
             {
                 // Ensure end voxel is include, it shouldn't point anywhere
                 currentFlow.IsGoal = true;
-                result.Add(current.VoxelToken, currentFlow);
+                result.Add(current.GlobalIndex, currentFlow);
                 continue;
             }
 
@@ -231,7 +231,7 @@ public class FlowFieldSurveyor
                     currentFlow.Direction = raw.Normalize();
             }
 
-            result.Add(current.VoxelToken, currentFlow);
+            result.Add(current.GlobalIndex, currentFlow);
             _chartKeys.AddRange(current.ChartOwners);
         }
 
@@ -248,7 +248,7 @@ public class FlowFieldSurveyor
     /// <param name="worldPosition">The world-space position to sample from.</param>
     /// <param name="fields">A dictionary of flow field data.</param>
     /// <returns>An interpolated directional vector.</returns>
-    public static Vector3d SampleFlowVector(Vector3d worldPosition, SwiftDictionary<int, FlowField> fields)
+    public static Vector3d SampleFlowVector(Vector3d worldPosition, SwiftDictionary<GlobalVoxelIndex, FlowField> fields)
     {
         if (fields == null || fields.Count == 0)
             return Vector3d.Zero;
@@ -296,7 +296,7 @@ public class FlowFieldSurveyor
     /// <returns><c>true</c> if a nearby flow field anchor is found; otherwise <c>false</c>.</returns>
     public static bool TryGetNearestFlowAnchor(
         Vector3d origin,
-        SwiftDictionary<int, FlowField> fields,
+        SwiftDictionary<GlobalVoxelIndex, FlowField> fields,
         Fixed64 range,
         out Voxel result)
     {
@@ -328,23 +328,23 @@ public class FlowFieldSurveyor
     /// Retrieves the raw directional flow vector at the given world-space position, if available.
     /// </summary>
     /// <param name="position">The position to query within the flow field.</param>
-    /// <param name="fields">Flow field data indexed by spawn token.</param>
+    /// <param name="fields">Flow field data indexed by voxel index.</param>
     /// <returns>The direction vector, or <c>Vector3d.Zero</c> if no field exists.</returns>
-    public static Vector3d GetFlowDirection(Vector3d position, SwiftDictionary<int, FlowField> fields)
+    public static Vector3d GetFlowDirection(Vector3d position, SwiftDictionary<GlobalVoxelIndex, FlowField> fields)
     {
         if (GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
         {
-            if (fields.TryGetValue(voxel.SpawnToken, out FlowField field))
+            if (fields.TryGetValue(voxel.GlobalIndex, out FlowField field))
                 return field.Direction;
         }
         return Vector3d.Zero;
     }
 
-    public static FlowField GetFlowField(Vector3d position, SwiftDictionary<int, FlowField> fields)
+    public static FlowField GetFlowField(Vector3d position, SwiftDictionary<GlobalVoxelIndex, FlowField> fields)
     {
         if (GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
         {
-            if (fields.TryGetValue(voxel.SpawnToken, out FlowField field))
+            if (fields.TryGetValue(voxel.GlobalIndex, out FlowField field))
                 return field;
         }
         return default;

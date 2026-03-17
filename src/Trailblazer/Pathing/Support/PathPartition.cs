@@ -35,10 +35,15 @@ public class PathPartition : IVoxelPartition
     /// </summary>
     public GlobalVoxelIndex GlobalIndex { get; private set; }
 
-    /// <summary>
-    /// The spawn token that uniquely identifies this voxel.
-    /// </summary>
-    public int VoxelToken { get; private set; }
+    public Voxel Voxel
+    {
+        get
+        {
+            if (GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out var voxel))
+                return voxel;
+            throw new InvalidOperationException($"Partition at {GlobalIndex} is not attached to a valid voxel!");
+        }
+    }
 
     /// <summary>
     /// The world-space position of the voxel.
@@ -119,7 +124,6 @@ public class PathPartition : IVoxelPartition
         voxel.OnObstacleChange += HandleChange;
 
         GlobalIndex = voxel.GlobalIndex;
-        VoxelToken = voxel.SpawnToken;
         VoxelPosition = voxel.WorldPosition;
 
         IsWalkable = !voxel.IsBlocked;
@@ -150,7 +154,6 @@ public class PathPartition : IVoxelPartition
     internal void Reset()
     {
         GlobalIndex = default;
-        VoxelToken = 0;
 
         _isClearanceValid = false;
 
@@ -325,5 +328,5 @@ public class PathPartition : IVoxelPartition
 
     #endregion
 
-    public override int GetHashCode() => VoxelToken;
+    public override int GetHashCode() => Voxel.GetHashCode();
 }

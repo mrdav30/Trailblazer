@@ -41,7 +41,7 @@ public class FlowFieldGuide : IGuide
     {
         if (!FlowMap.HasPath
             || !GlobalGridManager.TryGetVoxel(origin, out Voxel currentVoxel)
-            || !FlowMap.Fields.ContainsKey(currentVoxel.SpawnToken))
+            || !FlowMap.Fields.ContainsKey(currentVoxel.GlobalIndex))
         {
             return false;
         }
@@ -54,7 +54,7 @@ public class FlowFieldGuide : IGuide
         fallbackDirection = Vector3d.Zero;
         if (!FlowMap.HasPath
             || !GlobalGridManager.TryGetVoxel(origin, out Voxel currentVoxel)
-            || !FlowMap.Fields.ContainsKey(currentVoxel.SpawnToken))
+            || !FlowMap.Fields.ContainsKey(currentVoxel.GlobalIndex))
         {
             return false;
         }

@@ -29,7 +29,7 @@ public abstract class PathRequest : IPathRequest
 
     public bool HasZeroDisplacement =>
         !IsValid
-        || StartNode.SpawnToken == EndNode.SpawnToken;
+        || StartNode == EndNode;
 
     public int RequestCacheKey => GetHashCode();
 
@@ -79,7 +79,7 @@ public abstract class PathRequest : IPathRequest
         if (StartNode != null)
         {
             // nothing to do here then
-            if (newVoxel.SpawnToken == StartNode.SpawnToken)
+            if (newVoxel == StartNode)
                 return true;
 
             // force reset if grid changed
@@ -117,7 +117,7 @@ public abstract class PathRequest : IPathRequest
         if (EndNode != null)
         {
             // nothing to do here then
-            if (newVoxel.SpawnToken == EndNode.SpawnToken)
+            if (newVoxel == EndNode)
                 return true;
 
             // force reset if grid changed

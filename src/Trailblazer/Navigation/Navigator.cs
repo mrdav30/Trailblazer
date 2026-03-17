@@ -664,7 +664,7 @@ public abstract class Navigator : INavigate, IRecordable
             out Voxel lastVoxel);
 
         // check if position is still within the same voxel
-        if (!lastVoxelFound || curVoxel.SpawnToken == lastVoxel.SpawnToken)
+        if (!lastVoxelFound || curVoxel == lastVoxel)
             return;
 
         lastGrid.TryRemoveVoxelOccupant(lastVoxel, this);

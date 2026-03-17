@@ -59,7 +59,7 @@ public class AStarSurveyor
 
     private readonly PathHeap _heap = new();
 
-    private readonly SwiftDictionary<int, AStarVoxelMeta> _meta = new();
+    private readonly SwiftDictionary<Voxel, AStarVoxelMeta> _meta = new();
 
     private readonly SwiftList<PathPartition> _rawPath = new();
 
@@ -102,7 +102,7 @@ public class AStarSurveyor
             _chartKeys.Clear();
 
             // Trace path from the start to the end
-            _meta.Add(_request.StartNode.SpawnToken, new());
+            _meta.Add(_request.StartNode, new());
             startPartition.PathCost = 0;
             _heap.Add(startPartition);
 
@@ -135,7 +135,7 @@ public class AStarSurveyor
         while (_heap.RemoveFirst(out PathPartition currentPartition)
             && iterations++ < searchSize)
         {
-            if (currentPartition.VoxelToken == _request.EndNode.SpawnToken)
+            if (currentPartition.Voxel == _request.EndNode)
                 return true;
 
             if (ProcessNeighbors(currentPartition))
@@ -153,7 +153,7 @@ public class AStarSurveyor
     /// <returns>True if any neighbor is the target destination.</returns>
     private bool ProcessNeighbors(PathPartition current)
     {
-        if (!_meta.TryGetValue(current.VoxelToken, out AStarVoxelMeta data))
+        if (!_meta.TryGetValue(current.Voxel, out AStarVoxelMeta data))
             return false;
 
         if (TryProcessDirection(current, SpatialAwareness.PerpendicularDirections, data.MovementCost + StraightCost))
@@ -223,7 +223,7 @@ public class AStarSurveyor
             return false;
         }
 
-        if (neighbor.VoxelToken == _request.EndNode.SpawnToken)
+        if (neighbor.Voxel == _request.EndNode)
         {
             SetPathPartitionData(neighbor, current.GlobalIndex, cost);
             return true;
@@ -234,7 +234,7 @@ public class AStarSurveyor
             SetPathPartitionData(neighbor, current.GlobalIndex, cost);
             _heap.Add(neighbor);
         }
-        else if (_meta.TryGetValue(neighbor.VoxelToken, out AStarVoxelMeta neighborData)
+        else if (_meta.TryGetValue(neighbor.Voxel, out AStarVoxelMeta neighborData)
             && neighborData.MovementCost > cost)
         {
             SetPathPartitionData(neighbor, current.GlobalIndex, cost);
@@ -255,7 +255,7 @@ public class AStarSurveyor
         GlobalVoxelIndex nextTrailCoordinates,
         int movementCost)
     {
-        _meta.Add(partition.VoxelToken, new AStarVoxelMeta
+        _meta.Add(partition.Voxel, new AStarVoxelMeta
         {
             MovementCost = movementCost,
             NextTrailIndex = nextTrailCoordinates
@@ -278,12 +278,12 @@ public class AStarSurveyor
     private void BuildRawPath()
     {
         Voxel current = _request.EndNode;
-        while (current.SpawnToken != _request.StartNode.SpawnToken)
+        while (current != _request.StartNode)
         {
             PathPartition currentPartition = current.GetPartitionOrDefault<PathPartition>();
             _rawPath.Insert(0, currentPartition);
 
-            if (!_meta.TryGetValue(current.SpawnToken, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
+            if (!_meta.TryGetValue(current, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
                 break; // break in the trail!
 
             if (!GlobalGridManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
@@ -304,7 +304,7 @@ public class AStarSurveyor
     private void BuildWaypoints()
     {
         // return early if the start is the same as the end
-        if (_rawPath.Count == 0 || _rawPath[0].VoxelToken == _rawPath.FromEnd(1).VoxelToken)
+        if (_rawPath.Count == 0 || _rawPath[0].Voxel == _rawPath.FromEnd(1).Voxel)
             return;
 
         _waypoints.EnsureCapacity(_rawPath.Count);

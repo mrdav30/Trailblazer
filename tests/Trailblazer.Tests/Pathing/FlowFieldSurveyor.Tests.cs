@@ -2,6 +2,7 @@
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Spatial;
 using System;
 using System.Linq;
 using Trailblazer.Pathing;
@@ -385,7 +386,7 @@ public class FlowFieldSurveyorTests : IDisposable
 
         foreach (var pair in result.Fields)
         {
-            int index = pair.Key;
+            GlobalVoxelIndex index = pair.Key;
             FlowField field = pair.Value;
     
             if (field.IsGoal || field.Direction == Vector3d.Zero)
@@ -401,7 +402,7 @@ public class FlowFieldSurveyorTests : IDisposable
             if (!GlobalGridManager.TryGetGridAndVoxel(neighborPosition, out _, out Voxel neighbor))
                 continue;
 
-            if (!result.Fields.TryGetValue(neighbor.SpawnToken, out FlowField neighborField))
+            if (!result.Fields.TryGetValue(neighbor.GlobalIndex, out FlowField neighborField))
                 continue;
 
             neighborField.PathCost.Should()

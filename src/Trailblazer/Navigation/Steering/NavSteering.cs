@@ -915,6 +915,8 @@ public class NavSteering : IRecordable
 
     #endregion
 
+    #region Serialization
+
     /// <inheritdoc />
     public virtual void RecordData(IChronicler chronicler)
     {
@@ -1064,4 +1066,6 @@ public class NavSteering : IRecordable
         MovementGroupCoordinator.Remove(_movementGroupSession);
         _movementGroupSession.Reset();
     }
+
+    #endregion
 }

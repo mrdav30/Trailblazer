@@ -115,8 +115,9 @@ public static class PathGuideFactory
             out FlowFieldSurveyResult result);
 
         // Make sure the start voxel is within the current fields collection
-        // Note: for flow fields, the SpawnToken of the Start voxel is not included
-        if (!pathFound || !result.Fields.ContainsKey(request.StartNode.SpawnToken))
+        // Note: for flow fields, the GlobalIndex of the Start voxel is used as the key to check for path validity, 
+        // since the flow field is generated around the start position and may not cover the entire map.
+        if (!pathFound || !result.Fields.ContainsKey(request.StartNode.GlobalIndex))
             return null;
 
 

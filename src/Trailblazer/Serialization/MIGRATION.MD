@@ -65,15 +65,11 @@ These supporting docs should move or be rewritten in the new project:
 - `src/Trailblazer/Serialization/README.md`
 - `src/Trailblazer/Serialization/MIGRATION.MD`
 
-This file needs an explicit decision during extraction:
+Current note:
 
-- `src/Trailblazer/Serialization/SerializationAttributes.Shim.cs`
-
-Recommendation:
-
-- do not let the shim stay Trailblazer-only if other consumers will need it
-- but also do not move it blindly
-- first decide whether Chronicler should own a compatibility shim at all, or whether downstream projects should use the real `System.Text.Json.Serialization` attributes directly
+- the old `SerializationAttributes.Shim.cs` file has already been removed from Trailblazer
+- keep it that way unless the extracted package later proves it needs a real compatibility layer for non-`net8.0` consumers
+- do not reintroduce a package-local shim without a concrete portability reason
 
 ## 4. Files That Should Stay In Trailblazer
 
@@ -172,8 +168,7 @@ Suggested extraction order:
 3. Add a generic Chronicler test project and migrate the existing generic serialization tests.
 4. Point Trailblazer at the new project reference.
 5. Verify Trailblazer integration tests still pass.
-6. Decide whether the JSON attribute shim should move, be replaced, or be deleted.
-7. Only after the extraction is stable, decide whether to rename namespaces and whether to split transports into separate packages.
+6. Only after the extraction is stable, decide whether to rename namespaces and whether to split transports into separate packages.
 
 ## 10. Success Criteria
 

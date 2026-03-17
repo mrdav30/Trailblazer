@@ -162,4 +162,4 @@ The highest-value Chronicler-specific follow-ups are:
 1. Extract the generic Chronicler files into their own project and package so Trailblazer consumes them as a normal dependency instead of hosting the code in-tree.
 2. Decide the package layout for transports: keep JSON and MemoryPack in one package, or split them into optional transport packages layered on top of the core abstractions.
 3. Add package-level compatibility guidance for schema evolution and transport parity so Chronicler has its own guarantees independent of Trailblazer.
-4. Replace or relocate the JSON attribute shim strategy so downstream consumers do not depend on Trailblazer-specific source layout during the extraction.
+4. Keep the extracted package free of Trailblazer-specific JSON compatibility baggage unless a real downstream portability need appears.

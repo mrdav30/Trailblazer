@@ -57,7 +57,7 @@ public class LifecycleHookHandler
             snapshot[i].Callback();
     }
 
-    private Comparer<OrderedLifecycleHook> CompareHook()
+    private static Comparer<OrderedLifecycleHook> CompareHook()
     {
         return Comparer<OrderedLifecycleHook>.Create((left, right) =>
         {

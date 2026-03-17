@@ -230,9 +230,13 @@ See also:
 
 ## 7. Deterministic Frame Flow
 
+Call `TrailblazerManager.Initialize()` once during application startup before entering the fixed-step loop.
+
 The fixed-step flow is usually:
 
 ```csharp
+// Once during startup.
+TrailblazerManager.Initialize();
 TrailblazerManager.Simulate();
 navigator.Simulate();
 navigator.CommitFrameMotion();
@@ -252,6 +256,7 @@ What each stage does:
 Important maintenance rule:
 
 - when a subsystem needs frame-step, reset, or frame-rate-change maintenance, register an ordered internal `TrailblazerManager` lifecycle hook instead of hard-wiring that subsystem into the manager
+- hosts should prefer explicit `TrailblazerManager.Initialize()` during startup rather than relying on lazy first-use initialization
 - if a value depends on `TrailblazerManager.FrameRate`, do not freeze it in a one-time snapshot unless the code also refreshes it from the frame-rate-change hook; prefer reading the manager live or recomputing from stored inputs
 
 ## 8. Direct Pathing Without Navigator

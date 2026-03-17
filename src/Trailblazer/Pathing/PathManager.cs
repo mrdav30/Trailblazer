@@ -7,7 +7,6 @@ using SwiftCollections;
 using SwiftCollections.Pool;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -20,11 +19,9 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public static class PathManager
 {
-    [ModuleInitializer]
-    [SuppressMessage("Usage", "CA2255:Do not use 'ModuleInitializer'", Justification = "Subsystem lifecycle hooks must self-register before TrailblazerManager methods run.")]
     internal static void RegisterTrailblazerLifecycleHooks()
     {
-        TrailblazerManager.RegisterOnSimulate(
+        TrailblazerManager.RegisterOnSimulateCore(
             owner: "PathManager.Tick",
             order: TrailblazerLifecycleOrder.PathingMaintenance,
             callback: Tick);

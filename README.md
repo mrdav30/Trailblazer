@@ -148,6 +148,9 @@ using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
 
+// Once during startup.
+TrailblazerManager.Initialize();
+
 var navigator = new MyNavigator();
 navigator.Setup(new Vector3d(0, 0, 0), size: Fixed64.One);
 navigator.Initialize(new TrekCondition
@@ -170,6 +173,8 @@ navigator.Simulate();
 navigator.CommitFrameMotion();
 TrailblazerManager.LateSimulate();
 ```
+
+Call `TrailblazerManager.Initialize()` once during application startup before entering the fixed-step loop. Trailblazer will lazily initialize as a safety net if needed, but explicit bootstrap is the intended host flow.
 
 If several navigators should move as one formation, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
 

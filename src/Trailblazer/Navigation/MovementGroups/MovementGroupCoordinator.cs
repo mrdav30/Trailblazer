@@ -2,7 +2,6 @@ using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Navigation.MovementGroups;
@@ -20,11 +19,9 @@ internal static class MovementGroupCoordinator
 
     private static readonly SwiftDictionary<Guid, MovementGroupMembership> _movementGroupMemberships = new();
 
-    [ModuleInitializer]
-    [SuppressMessage("Usage", "CA2255:Do not use 'ModuleInitializer'", Justification = "Movement-group reset hooks must self-register before TrailblazerManager methods run.")]
     internal static void RegisterTrailblazerLifecycleHooks()
     {
-        TrailblazerManager.RegisterOnReset(
+        TrailblazerManager.RegisterOnResetCore(
             owner: "MovementGroupCoordinator.Reset",
             order: TrailblazerLifecycleOrder.NavigationReset,
             callback: Reset);

@@ -60,6 +60,8 @@ Ignore generated output when reviewing structure:
 
 The main flow is:
 
+Hosts should call `TrailblazerManager.Initialize()` once during application startup before the first fixed-step frame. The manager keeps a lazy first-use fallback, but explicit bootstrap is the intended integration path.
+
 1. `TrailblazerManager` advances simulation time and ticks guide-cache cleanup.
 2. `PathManager` owns chart registration, chart initialization/unloading, partition pooling, and walkability/neighbor queries.
 3. `AStarSurveyor` and `FlowFieldSurveyor` compute reusable survey results.

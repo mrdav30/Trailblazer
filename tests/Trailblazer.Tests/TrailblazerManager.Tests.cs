@@ -2,6 +2,7 @@
 using FluentAssertions;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
 using Trailblazer.Tests.Navigation.Steering;
@@ -25,6 +26,8 @@ public class TrailblazerManagerTests : IDisposable
     [Fact]
     public void Simulate_Should_InvokeOrderedHooks_InAscendingOrder()
     {
+        TrailblazerManager.Initialize();
+
         var calls = new List<string>();
         using var late = TrailblazerManager.RegisterOnSimulate(
             owner: "TrailblazerManagerTests.Simulate.Late",
@@ -38,6 +41,22 @@ public class TrailblazerManagerTests : IDisposable
         TrailblazerManager.Simulate();
 
         calls.Should().ContainInOrder("early", "late");
+    }
+
+    [Fact]
+    public void Initialize_Should_BeIdempotent_And_NotDuplicateInternalHooks()
+    {
+        TrailblazerManager.Initialize();
+
+        int simulateHookCount = GetLifecycleHookCount("_simulateHooks");
+        int resetHookCount = GetLifecycleHookCount("_resetHooks");
+
+        TrailblazerManager.Initialize();
+
+        GetLifecycleHookCount("_simulateHooks").Should().Be(simulateHookCount);
+        GetLifecycleHookCount("_resetHooks").Should().Be(resetHookCount);
+        simulateHookCount.Should().BeGreaterThanOrEqualTo(1);
+        resetHookCount.Should().BeGreaterThanOrEqualTo(1);
     }
 
     [Fact]
@@ -80,5 +99,18 @@ public class TrailblazerManagerTests : IDisposable
         turning.TrySimulateTurn(navigator.Position, navigator.LastPosition, navigator.Forward, navigator.Rotation, out _);
 
         turning.TargetReached.Should().BeFalse();
+    }
+
+    private static int GetLifecycleHookCount(string fieldName)
+    {
+        FieldInfo field = typeof(TrailblazerManager).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException($"Unable to find TrailblazerManager field '{fieldName}'.");
+        object hooks = field.GetValue(null)
+            ?? throw new InvalidOperationException($"TrailblazerManager field '{fieldName}' was null.");
+        PropertyInfo countProperty = hooks.GetType().GetProperty("Count")
+            ?? throw new InvalidOperationException($"Lifecycle hook collection '{fieldName}' does not expose a Count property.");
+
+        return (int)(countProperty.GetValue(hooks)
+            ?? throw new InvalidOperationException($"Lifecycle hook collection '{fieldName}' returned a null Count value."));
     }
 }

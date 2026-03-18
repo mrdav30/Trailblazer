@@ -5,10 +5,10 @@ This document explains how vertical motion is currently handled in Trailblazer's
 The source of truth for the behavior described here is the code in:
 
 - `src/Trailblazer/Navigation/Motor/NavMotor.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotions/MoveLocomotion.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotions/JumpLocomotion.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotions/FallLocomotion.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotions/SwimLocomotion.cs`
+- `src/Trailblazer/Navigation/Motor/Locomotion/MoveLocomotion.cs`
+- `src/Trailblazer/Navigation/Motor/Locomotion/JumpLocomotion.cs`
+- `src/Trailblazer/Navigation/Motor/Locomotion/FallLocomotion.cs`
+- `src/Trailblazer/Navigation/Motor/Locomotion/SwimLocomotion.cs`
 
 ## 1. Where Gravity Lives
 

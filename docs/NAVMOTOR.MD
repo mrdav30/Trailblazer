@@ -8,7 +8,7 @@ If you need the vertical-force model specifically, read `GRAVITY.MD`.
 The code referenced here lives primarily in:
 
 - `src/Trailblazer/Navigation/Motor/NavMotor.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotions/*`
+- `src/Trailblazer/Navigation/Motor/Locomotion/*`
 - `src/Trailblazer/Navigation/Motor/Support/*`
 
 ## 1. What NavMotor Is

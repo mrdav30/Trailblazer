@@ -15,7 +15,7 @@ The code referenced here lives primarily in:
 - `src/Trailblazer/Navigation/Steering/NavSteering.cs`
 - `src/Trailblazer/Navigation/Turning/NavTurning.cs`
 - `src/Trailblazer/Navigation/Motor/NavMotor.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotions/*`
+- `src/Trailblazer/Navigation/Motor/Locomotion/*`
 
 ## 1. Trailblazer Coverage
 

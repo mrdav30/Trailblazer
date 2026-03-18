@@ -849,9 +849,9 @@ namespace Trailblazer.Navigation.Motor
             bool isInitialized = IsInitialized;
 
             RecordDeep.Look(chronicler, ref handler, "handler");
-            RecordValues.Look(chronicler, ref currentCondition, "currentCondition", currentCondition);
-            RecordValues.Look(chronicler, ref previousCondition, "previousCondition", previousCondition);
-            RecordValues.Look(chronicler, ref isInitialized, "isInitialized", isInitialized);
+            RecordValues.Look(chronicler, ref currentCondition, "currentCondition");
+            RecordValues.Look(chronicler, ref previousCondition, "previousCondition");
+            RecordValues.Look(chronicler, ref isInitialized, "isInitialized", false);
 
             if (chronicler.Mode == SerializationMode.Loading)
             {

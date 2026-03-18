@@ -1,18 +1,21 @@
 ﻿using FixedMathSharp;
 using System;
 using System.Text.Json.Serialization;
+using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
 /// Represents a host-provided snapshot of a contacted surface's stable identity and transform for the current frame.
 /// </summary>
-public struct PlatformSnapshot : IEquatable<PlatformSnapshot>
+public struct PlatformSnapshot : IEquatable<PlatformSnapshot>, IRecordable
 {
     /// <summary>
     /// Stable identifier used to determine whether two surface snapshots refer to the same platform.
     /// </summary>
-    public readonly int Id;
+    private int _id;
+
+    public readonly int Id => _id;
 
     /// <summary>
     /// World-space transform sampled from the host for this frame.
@@ -22,7 +25,7 @@ public struct PlatformSnapshot : IEquatable<PlatformSnapshot>
     /// <summary>
     /// Indicates that the sampled surface should not act as a kinematic carrier for platform locomotion.
     /// </summary>
-    public readonly bool Inert;
+    public bool Inert;
 
     /// <summary>
     /// Whether this snapshot represents an active platform sample.
@@ -37,7 +40,7 @@ public struct PlatformSnapshot : IEquatable<PlatformSnapshot>
     [JsonConstructor]
     public PlatformSnapshot(int id, Fixed4x4 transform, bool inert = false)
     {
-        Id = id;
+        _id = id;
         Transform = transform;
         Inert = inert;
     }
@@ -58,4 +61,11 @@ public struct PlatformSnapshot : IEquatable<PlatformSnapshot>
     public readonly bool Equals(PlatformSnapshot other) => Id == other.Id;
     public override readonly bool Equals(object obj) => obj is PlatformSnapshot h && Equals(h);
     public override readonly int GetHashCode() => Id;
+
+    public void RecordData(IChronicler chronicler)
+    {
+        chronicler.LookValue(ref _id, nameof(Id), 0);
+        chronicler.LookValue(ref Transform, nameof(Transform), default);
+        chronicler.LookValue(ref Inert, nameof(Inert), false);
+    }
 }

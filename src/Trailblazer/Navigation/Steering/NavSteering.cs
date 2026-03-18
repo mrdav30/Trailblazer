@@ -951,32 +951,32 @@ public class NavSteering : IRecordable
         if (chronicler.Mode == SerializationMode.Saving)
             requestRecord.Capture(_currentRequest, _trailGuide);
 
-        RecordValues.Look(chronicler, ref canPathfind, "canPathfind", canPathfind);
-        RecordValues.Look(chronicler, ref destination, "destination", destination);
-        RecordValues.Look(chronicler, ref requestedDestination, "requestedDestination", requestedDestination);
-        RecordValues.Look(chronicler, ref lastUnitSize, "lastUnitSize", lastUnitSize);
-        RecordValues.Look(chronicler, ref pathRecheckCooldownFrames, "pathRecheckCooldownFrames", pathRecheckCooldownFrames);
-        RecordValues.Look(chronicler, ref targetDirection, "targetDirection", targetDirection);
-        RecordValues.Look(chronicler, ref lastTargetDirection, "lastTargetDirection", lastTargetDirection);
-        RecordValues.Look(chronicler, ref shouldMove, "shouldMove", shouldMove);
-        RecordValues.Look(chronicler, ref isStuck, "isStuck", isStuck);
-        RecordValues.Look(chronicler, ref hasLineOfSightPath, "hasLineOfSightPath", hasLineOfSightPath);
-        RecordValues.Look(chronicler, ref shouldRequestPathThisFrame, "shouldRequestPathThisFrame", shouldRequestPathThisFrame);
-        RecordValues.Look(chronicler, ref pathCheckCooldown, "pathCheckCooldown", pathCheckCooldown);
-        RecordValues.Look(chronicler, ref distanceToTarget, "distanceToTarget", distanceToTarget);
-        RecordValues.Look(chronicler, ref isAtDestination, "isAtDestination", isAtDestination);
-        RecordValues.Look(chronicler, ref canMove, "canMove", canMove);
-        RecordValues.Look(chronicler, ref stoppedFrameCount, "stoppedFrameCount", stoppedFrameCount);
-        RecordValues.Look(chronicler, ref autoStopFrameCount, "autoStopFrameCount", autoStopFrameCount);
-        RecordValues.Look(chronicler, ref repathTries, "repathTries", repathTries);
-        RecordValues.Look(chronicler, ref stuckFrameCount, "stuckFrameCount", stuckFrameCount);
-        RecordValues.Look(chronicler, ref stopMultiplier, "stopMultiplier", stopMultiplier);
-        RecordValues.Look(chronicler, ref groupFactor, "groupFactor", groupFactor);
-        RecordValues.Look(chronicler, ref avoidFactor, "avoidFactor", avoidFactor);
-        RecordValues.Look(chronicler, ref behaviorWeights, "behaviorWeights", behaviorWeights);
-        RecordValues.Look(chronicler, ref brakingPower, "brakingPower", brakingPower);
-        RecordValues.Look(chronicler, ref movementGroupId, "movementGroupId", movementGroupId);
-        RecordValues.Look(chronicler, ref movementGroupMode, "movementGroupMode", movementGroupMode);
+        RecordValues.Look(chronicler, ref canPathfind, "canPathfind", true);
+        RecordValues.Look(chronicler, ref destination, "destination", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref requestedDestination, "requestedDestination", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref lastUnitSize, "lastUnitSize", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref pathRecheckCooldownFrames, "pathRecheckCooldownFrames", DefaultPathRecheckCooldown);
+        RecordValues.Look(chronicler, ref targetDirection, "targetDirection", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref lastTargetDirection, "lastTargetDirection", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref shouldMove, "shouldMove", false);
+        RecordValues.Look(chronicler, ref isStuck, "isStuck", false);
+        RecordValues.Look(chronicler, ref hasLineOfSightPath, "hasLineOfSightPath", false);
+        RecordValues.Look(chronicler, ref shouldRequestPathThisFrame, "shouldRequestPathThisFrame", false);
+        RecordValues.Look(chronicler, ref pathCheckCooldown, "pathCheckCooldown", 0);
+        RecordValues.Look(chronicler, ref distanceToTarget, "distanceToTarget", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref isAtDestination, "isAtDestination", false);
+        RecordValues.Look(chronicler, ref canMove, "canMove", false);
+        RecordValues.Look(chronicler, ref stoppedFrameCount, "stoppedFrameCount", 0);
+        RecordValues.Look(chronicler, ref autoStopFrameCount, "autoStopFrameCount", 0);
+        RecordValues.Look(chronicler, ref repathTries, "repathTries", 0);
+        RecordValues.Look(chronicler, ref stuckFrameCount, "stuckFrameCount", 0);
+        RecordValues.Look(chronicler, ref stopMultiplier, "stopMultiplier", DefaultDirectStop);
+        RecordValues.Look(chronicler, ref groupFactor, "groupFactor", DefaultGroupFactor);
+        RecordValues.Look(chronicler, ref avoidFactor, "avoidFactor", DefaultAvoidFactor);
+        RecordValues.Look(chronicler, ref behaviorWeights, "behaviorWeights", DefaultBehaviorWeights);
+        RecordValues.Look(chronicler, ref brakingPower, "brakingPower", DefaultBrakingPower);
+        RecordValues.Look(chronicler, ref movementGroupId, "movementGroupId", 0);
+        RecordValues.Look(chronicler, ref movementGroupMode, "movementGroupMode", MovementGroupTravelMode.None);
         RecordDeep.Look(chronicler, ref requestRecord, "pathRequest");
 
         if (chronicler.Mode == SerializationMode.Loading)

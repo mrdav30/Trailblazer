@@ -25,7 +25,7 @@ public interface IChronicler
     /// <summary>
     /// Reads or writes a nested recordable instance by name.
     /// </summary>
-    void LookDeep<T>(ref T value, string name) where T : class, IRecordable;
+    void LookDeep<T>(ref T value, string name) where T : IRecordable;
 
     /// <summary>
     /// Reads or writes a stable link to an external or runtime-owned value by name.

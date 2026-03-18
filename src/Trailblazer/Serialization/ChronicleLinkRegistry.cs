@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SwiftCollections;
 
 namespace Trailblazer.Serialization;
 
@@ -8,18 +9,15 @@ namespace Trailblazer.Serialization;
 /// </summary>
 public sealed class ChronicleLinkRegistry
 {
-    private readonly Dictionary<ChronicleLinkKey, object> _resolvers = new();
-    private readonly Dictionary<ChronicleLinkKey, object> _registeredInstances = new();
+    private readonly SwiftDictionary<ChronicleLinkKey, object> _resolvers = new();
+    private readonly SwiftDictionary<ChronicleLinkKey, object> _registeredInstances = new();
 
     /// <summary>
     /// Registers a custom link resolver for the given type and optional slot.
     /// </summary>
     public void RegisterResolver<T>(IRecordLinkResolver<T> resolver, string slot = null)
     {
-        if (resolver == null)
-            throw new ArgumentNullException(nameof(resolver));
-
-        _resolvers[new ChronicleLinkKey(typeof(T), slot)] = resolver;
+        _resolvers[new ChronicleLinkKey(typeof(T), slot)] = resolver ?? throw new ArgumentNullException(nameof(resolver));
     }
 
     /// <summary>
@@ -134,7 +132,7 @@ public sealed class ChronicleLinkRegistry
 
     private sealed class RegisteredLinkTable<T>
     {
-        private readonly Dictionary<string, T> _byId = new(StringComparer.Ordinal);
+        private readonly SwiftDictionary<string, T> _byId = new(8, StringComparer.Ordinal);
 
         public void Register(string id, T value)
         {

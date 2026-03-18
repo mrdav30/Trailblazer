@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
 using System;
+using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -7,7 +8,7 @@ namespace Trailblazer.Navigation.Motor;
 /// Represents the state of the surface the scout is interacting with, including surface movement and normal data.
 /// </summary>
 [Serializable]
-public struct GroundCondition
+public struct GroundCondition : IRecordable
 {
     /// <summary>
     /// The host-provided sampled platform state the scout is currently standing on.
@@ -35,4 +36,11 @@ public struct GroundCondition
         SurfaceFriction = SurfaceFriction,
         MotionTransferState = MotionTransferState
     };
+
+    public void RecordData(IChronicler chronicler)
+    {
+        chronicler.LookDeep(ref Platform, nameof(Platform));
+        chronicler.LookValue(ref SurfaceFriction, nameof(SurfaceFriction), Fixed64.Zero);
+        chronicler.LookValue(ref MotionTransferState, nameof(MotionTransferState), MotionTransfer.None);
+    }
 }

@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Generic;
 using MemoryPack;
+using SwiftCollections;
 
 namespace Trailblazer.Serialization;
 
@@ -72,7 +72,7 @@ public static class MemoryPackRecordSerializer
 
     private sealed class MemoryPackRecordWriter : IChronicler
     {
-        private readonly Dictionary<string, byte[]> _entries = new(StringComparer.Ordinal);
+        private readonly SwiftDictionary<string, byte[]> _entries = new(8, StringComparer.Ordinal);
 
         public MemoryPackRecordWriter(ChronicleContext context)
         {
@@ -85,10 +85,12 @@ public static class MemoryPackRecordSerializer
 
         public void LookValue<T>(ref T value, string name, T defaultValue = default)
         {
+            if (value == null || value.Equals(defaultValue))
+                return;
             _entries[name] = MemoryPackSerializer.Serialize(value);
         }
 
-        public void LookDeep<T>(ref T value, string name) where T : class, IRecordable
+        public void LookDeep<T>(ref T value, string name) where T : IRecordable
         {
             if (value == null)
             {
@@ -130,12 +132,12 @@ public static class MemoryPackRecordSerializer
 
     private sealed class MemoryPackRecordReader : IChronicler
     {
-        private readonly Dictionary<string, byte[]> _entries;
+        private readonly SwiftDictionary<string, byte[]> _entries;
 
         public MemoryPackRecordReader(ReadOnlySpan<byte> data, ChronicleContext context)
         {
             MemoryPackRecordEnvelope envelope = MemoryPackSerializer.Deserialize<MemoryPackRecordEnvelope>(data);
-            _entries = envelope?.Entries ?? new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            _entries = envelope?.Entries ?? new SwiftDictionary<string, byte[]>(8, StringComparer.Ordinal);
             Context = context ?? throw new ArgumentNullException(nameof(context));
         }
 
@@ -156,7 +158,7 @@ public static class MemoryPackRecordSerializer
             value = loadedValue == null ? defaultValue : loadedValue;
         }
 
-        public void LookDeep<T>(ref T value, string name) where T : class, IRecordable
+        public void LookDeep<T>(ref T value, string name) where T : IRecordable
         {
             if (!_entries.TryGetValue(name, out byte[] entry)
                 || entry == null)

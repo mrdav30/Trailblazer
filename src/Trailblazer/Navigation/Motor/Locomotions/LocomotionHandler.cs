@@ -142,7 +142,7 @@ public class LocomotionHandler : IRecordable
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref IsInControl, "isInControl", IsInControl);
+        RecordValues.Look(chronicler, ref IsInControl, "isInControl", true);
 
         MoveLocomotion move = Move;
         PlatformLocomotion platform = Platform;

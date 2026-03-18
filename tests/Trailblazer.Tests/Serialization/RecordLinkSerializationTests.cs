@@ -214,7 +214,7 @@ public class RecordLinkSerializationTests
             IExternalResource? primary = Primary;
             IExternalResource? secondary = Secondary;
 
-            RecordValues.Look(chronicler, ref name, "name", name);
+            RecordValues.Look(chronicler, ref name, "name", string.Empty);
             RecordLinks.Look(chronicler, ref primary, "primary");
             RecordLinks.Look(chronicler, ref secondary, "secondary", slot: "secondary");
 
@@ -260,7 +260,7 @@ public class RecordLinkSerializationTests
             string label = Label;
             ExternalResource? resource = Resource;
 
-            RecordValues.Look(chronicler, ref label, "label", label);
+            RecordValues.Look(chronicler, ref label, "label", string.Empty);
             RecordLinks.LookDeferred(
                 chronicler,
                 resource,
@@ -285,7 +285,7 @@ public class RecordLinkSerializationTests
         {
             string id = Id;
 
-            RecordValues.Look(chronicler, ref id, "id", id);
+            RecordValues.Look(chronicler, ref id, "id", string.Empty);
 
             if (chronicler.Mode == SerializationMode.Loading)
             {

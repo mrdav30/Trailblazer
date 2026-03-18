@@ -227,15 +227,15 @@ public class JumpLocomotion : ITransientLocomotion, IRecordable
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", _isEnabled);
-        RecordValues.Look(chronicler, ref MaxJumpCount, "maxJumpCount", MaxJumpCount);
-        RecordValues.Look(chronicler, ref CooldownTime, "cooldownTime", CooldownTime);
-        RecordValues.Look(chronicler, ref AvoidGroundingTimer, "avoidGroundingTimer", AvoidGroundingTimer);
-        RecordValues.Look(chronicler, ref BaseJumpHeight, "baseJumpHeight", BaseJumpHeight);
-        RecordValues.Look(chronicler, ref ExtraJumpHeight, "extraJumpHeight", ExtraJumpHeight);
-        RecordValues.Look(chronicler, ref JumpControlMultiplier, "jumpControlMultiplier", JumpControlMultiplier);
-        RecordValues.Look(chronicler, ref PerpendicularJumpAmount, "perpendicularJumpAmount", PerpendicularJumpAmount);
-        RecordValues.Look(chronicler, ref SteepPerpendicularJumpAmount, "steepPerpendicularJumpAmount", SteepPerpendicularJumpAmount);
+        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
+        RecordValues.Look(chronicler, ref MaxJumpCount, "maxJumpCount", 1);
+        RecordValues.Look(chronicler, ref CooldownTime, "cooldownTime", DefaultCooldownTime);
+        RecordValues.Look(chronicler, ref AvoidGroundingTimer, "avoidGroundingTimer", DefaultAvoidGroundingTimer);
+        RecordValues.Look(chronicler, ref BaseJumpHeight, "baseJumpHeight", DefaultBaseJumpHeight);
+        RecordValues.Look(chronicler, ref ExtraJumpHeight, "extraJumpHeight", DefaultExtraJumpHeight);
+        RecordValues.Look(chronicler, ref JumpControlMultiplier, "jumpControlMultiplier", DefaultJumpControlMultiplier);
+        RecordValues.Look(chronicler, ref PerpendicularJumpAmount, "perpendicularJumpAmount", DefaultPerpendicularJumpAmount);
+        RecordValues.Look(chronicler, ref SteepPerpendicularJumpAmount, "steepPerpendicularJumpAmount", DefaultSteepPerpendicularJumpAmount);
 
         bool isJumping = IsJumping;
         bool isHoldingJump = IsHoldingJump;
@@ -245,13 +245,13 @@ public class JumpLocomotion : ITransientLocomotion, IRecordable
         bool isCoolingDown = IsCoolingDown;
         int jumpCount = JumpCount;
 
-        RecordValues.Look(chronicler, ref isJumping, "isJumping", isJumping);
-        RecordValues.Look(chronicler, ref isHoldingJump, "isHoldingJump", isHoldingJump);
-        RecordValues.Look(chronicler, ref jumpStartTime, "jumpStartTime", jumpStartTime);
-        RecordValues.Look(chronicler, ref frameJumpDirection, "frameJumpDirection", frameJumpDirection);
-        RecordValues.Look(chronicler, ref cooldownTimer, "cooldownTimer", cooldownTimer);
-        RecordValues.Look(chronicler, ref isCoolingDown, "isCoolingDown", isCoolingDown);
-        RecordValues.Look(chronicler, ref jumpCount, "jumpCount", jumpCount);
+        RecordValues.Look(chronicler, ref isJumping, "isJumping", false);
+        RecordValues.Look(chronicler, ref isHoldingJump, "isHoldingJump", false);
+        RecordValues.Look(chronicler, ref jumpStartTime, "jumpStartTime", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref frameJumpDirection, "frameJumpDirection", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref cooldownTimer, "cooldownTimer", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref isCoolingDown, "isCoolingDown", false);
+        RecordValues.Look(chronicler, ref jumpCount, "jumpCount", 0);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

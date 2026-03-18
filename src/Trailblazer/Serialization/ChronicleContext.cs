@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Text;
+using SwiftCollections;
 
 namespace Trailblazer.Serialization;
 
@@ -9,7 +9,7 @@ namespace Trailblazer.Serialization;
 /// </summary>
 public sealed class ChronicleContext
 {
-    private readonly List<IDeferredRecordLink> _deferredLinks = new();
+    private readonly SwiftList<IDeferredRecordLink> _deferredLinks = new();
 
     /// <summary>
     /// Creates a new context with an empty link registry.

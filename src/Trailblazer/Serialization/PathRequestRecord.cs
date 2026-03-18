@@ -166,16 +166,16 @@ internal sealed class PathRequestRecord : IRecordable
         bool hasGuide = HasGuide;
         int waypointIndex = WaypointIndex;
 
-        RecordValues.Look(chronicler, ref kind, "kind", kind);
-        RecordValues.Look(chronicler, ref origin, "origin", origin);
-        RecordValues.Look(chronicler, ref targetPosition, "targetPosition", targetPosition);
-        RecordValues.Look(chronicler, ref unitSize, "unitSize", unitSize);
-        RecordValues.Look(chronicler, ref allowUnwalkable, "allowUnwalkable", allowUnwalkable);
-        RecordValues.Look(chronicler, ref maxPathSearchRange, "maxPathSearchRange", maxPathSearchRange);
-        RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", aStarHeuristic);
-        RecordValues.Look(chronicler, ref aStarMaxClimbHeight, "aStarMaxClimbHeight", aStarMaxClimbHeight);
-        RecordValues.Look(chronicler, ref flowFieldExtraFloodRange, "flowFieldExtraFloodRange", flowFieldExtraFloodRange);
-        RecordValues.Look(chronicler, ref hasGuide, "hasGuide", hasGuide);
+        RecordValues.Look(chronicler, ref kind, "kind", PathRequestRecordKind.None);
+        RecordValues.Look(chronicler, ref origin, "origin", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref targetPosition, "targetPosition", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref unitSize, "unitSize", Fixed64.One);
+        RecordValues.Look(chronicler, ref allowUnwalkable, "allowUnwalkable", false);
+        RecordValues.Look(chronicler, ref maxPathSearchRange, "maxPathSearchRange", 0);
+        RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
+        RecordValues.Look(chronicler, ref aStarMaxClimbHeight, "aStarMaxClimbHeight", Fixed64.One);
+        RecordValues.Look(chronicler, ref flowFieldExtraFloodRange, "flowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
+        RecordValues.Look(chronicler, ref hasGuide, "hasGuide", false);
         RecordValues.Look(chronicler, ref waypointIndex, "waypointIndex", NoWaypointIndex);
 
         if (chronicler.Mode == SerializationMode.Loading)

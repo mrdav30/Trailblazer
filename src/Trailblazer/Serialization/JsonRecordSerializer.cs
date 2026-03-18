@@ -1,8 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using SwiftCollections;
 
 namespace Trailblazer.Serialization;
 
@@ -79,7 +79,7 @@ public static class JsonRecordSerializer
 
     private sealed class JsonRecordWriter : IChronicler
     {
-        private readonly Dictionary<string, string> _entries = new(StringComparer.Ordinal);
+        private readonly SwiftDictionary<string, string> _entries = new(8, StringComparer.Ordinal);
         private readonly JsonSerializerOptions _options;
 
         public JsonRecordWriter(JsonSerializerOptions options, ChronicleContext context)
@@ -94,10 +94,12 @@ public static class JsonRecordSerializer
 
         public void LookValue<T>(ref T value, string name, T defaultValue = default)
         {
+            if(value == null || value.Equals(defaultValue))
+                return;
             _entries[name] = JsonSerializer.Serialize(value, _options);
         }
 
-        public void LookDeep<T>(ref T value, string name) where T : class, IRecordable
+        public void LookDeep<T>(ref T value, string name) where T : IRecordable
         {
             if (value == null)
             {
@@ -185,10 +187,9 @@ public static class JsonRecordSerializer
             value = loadedValue == null ? defaultValue : loadedValue;
         }
 
-        public void LookDeep<T>(ref T value, string name) where T : class, IRecordable
+        public void LookDeep<T>(ref T value, string name) where T : IRecordable
         {
-            if (!_root.TryGetProperty(name, out JsonElement entry)
-                || entry.ValueKind == JsonValueKind.Null)
+            if (!_root.TryGetProperty(name, out JsonElement entry) || entry.ValueKind == JsonValueKind.Null)
                 return;
 
             if (value == null)

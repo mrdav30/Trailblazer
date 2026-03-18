@@ -1,5 +1,6 @@
-using System.Collections.Generic;
+using System;
 using MemoryPack;
+using SwiftCollections;
 
 namespace Trailblazer.Serialization;
 
@@ -12,5 +13,5 @@ internal sealed partial class MemoryPackRecordEnvelope
     /// <summary>
     /// Serialized payloads keyed by record name.
     /// </summary>
-    public Dictionary<string, byte[]> Entries { get; set; } = new();
+    public SwiftDictionary<string, byte[]> Entries { get; set; } = new(8, StringComparer.Ordinal);
 }

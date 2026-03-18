@@ -581,7 +581,7 @@ public abstract class Navigator : INavigate, IRecordable
         _frameCondition = state.Clone();
         if (updateMotorState)
             Motor.UpdateTraversal(_frameCondition);
-    } 
+    }
 
     /// <summary>
     /// Checks and updates the current traversal condition.
@@ -696,6 +696,11 @@ public abstract class Navigator : INavigate, IRecordable
         OccupyingIndexMap.Remove(index);
     }
 
+    #endregion
+
+    #region Serialization
+
+
     /// <inheritdoc />
     public virtual void RecordData(IChronicler chronicler)
     {
@@ -724,27 +729,27 @@ public abstract class Navigator : INavigate, IRecordable
         NavTurning turning = Turning;
         NavMotor motor = Motor;
 
-        RecordValues.Look(chronicler, ref position, "position", position);
-        RecordValues.Look(chronicler, ref lastPosition, "lastPosition", lastPosition);
-        RecordValues.Look(chronicler, ref rotation, "rotation", rotation);
-        RecordValues.Look(chronicler, ref velocity, "velocity", velocity);
-        RecordValues.Look(chronicler, ref speed, "speed", speed);
-        RecordValues.Look(chronicler, ref acceleration, "acceleration", acceleration);
-        RecordValues.Look(chronicler, ref size, "size", size);
-        RecordValues.Look(chronicler, ref footPositionAdjust, "footPositionAdjust", footPositionAdjust);
-        RecordValues.Look(chronicler, ref guidedPathMode, "guidedPathMode", guidedPathMode);
-        RecordValues.Look(chronicler, ref guidedAllowUnwalkable, "guidedAllowUnwalkable", guidedAllowUnwalkable);
-        RecordValues.Look(chronicler, ref guidedAStarHeuristic, "guidedAStarHeuristic", guidedAStarHeuristic);
-        RecordValues.Look(chronicler, ref guidedAStarMaxClimbHeight, "guidedAStarMaxClimbHeight", guidedAStarMaxClimbHeight);
-        RecordValues.Look(chronicler, ref guidedFlowFieldExtraFloodRange, "guidedFlowFieldExtraFloodRange", guidedFlowFieldExtraFloodRange);
-        RecordValues.Look(chronicler, ref globalId, "globalId", globalId);
-        RecordValues.Look(chronicler, ref occupantGroupId, "occupantGroupId", occupantGroupId);
-        RecordValues.Look(chronicler, ref isLockedOn, "isLockedOn", isLockedOn);
-        RecordValues.Look(chronicler, ref animDampTime, "animDampTime", animDampTime);
-        RecordValues.Look(chronicler, ref stuckThresholdSpeed, "stuckThresholdSpeed", stuckThresholdSpeed);
-        RecordValues.Look(chronicler, ref isGuideded, "isGuideded", isGuideded);
-        RecordValues.Look(chronicler, ref frameCondition, "frameCondition", frameCondition);
-        RecordValues.Look(chronicler, ref frameRequest, "frameRequest", frameRequest);
+        RecordValues.Look(chronicler, ref position, "position", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref lastPosition, "lastPosition", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref rotation, "rotation", FixedQuaternion.Identity);
+        RecordValues.Look(chronicler, ref velocity, "velocity", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref speed, "speed", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref acceleration, "acceleration", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref size, "size", Fixed64.One);
+        RecordValues.Look(chronicler, ref footPositionAdjust, "footPositionAdjust", DefaultFootPositionAdjust);
+        RecordValues.Look(chronicler, ref guidedPathMode, "guidedPathMode", GuidedPathMode.AStar);
+        RecordValues.Look(chronicler, ref guidedAllowUnwalkable, "guidedAllowUnwalkable", false);
+        RecordValues.Look(chronicler, ref guidedAStarHeuristic, "guidedAStarHeuristic", HeuristicMethod.Manhattan);
+        RecordValues.Look(chronicler, ref guidedAStarMaxClimbHeight, "guidedAStarMaxClimbHeight", Fixed64.One);
+        RecordValues.Look(chronicler, ref guidedFlowFieldExtraFloodRange, "guidedFlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
+        RecordValues.Look(chronicler, ref globalId, "globalId", Guid.Empty);
+        RecordValues.Look(chronicler, ref occupantGroupId, "occupantGroupId", (byte)1);
+        RecordValues.Look(chronicler, ref isLockedOn, "isLockedOn", false);
+        RecordValues.Look(chronicler, ref animDampTime, "animDampTime", (Fixed64)0.1f);
+        RecordValues.Look(chronicler, ref stuckThresholdSpeed, "stuckThresholdSpeed", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref isGuideded, "isGuideded", false);
+        RecordDeep.Look(chronicler, ref frameCondition, "frameCondition");
+        RecordDeep.Look(chronicler, ref frameRequest, "frameRequest");
         RecordDeep.Look(chronicler, ref steering, "steering");
         RecordDeep.Look(chronicler, ref turning, "turning");
         RecordDeep.Look(chronicler, ref motor, "motor");
@@ -786,11 +791,9 @@ public abstract class Navigator : INavigate, IRecordable
             _isSet = true;
             _isInitialized = Motor != null;
 
-            if (Steering != null)
-                Steering.UpdateOwnerRadius(Radius);
+            Steering?.UpdateOwnerRadius(Radius);
 
-            if (Turning != null)
-                Turning.OnInitialize(Radius);
+            Turning?.OnInitialize(Radius);
 
             OccupyingIndexMap.Clear();
             CheckVoxelOccupancy(true);

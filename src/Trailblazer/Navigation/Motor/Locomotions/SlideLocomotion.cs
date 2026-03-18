@@ -100,14 +100,14 @@ public class SlideLocomotion : ITransientLocomotion, IRecordable
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", _isEnabled);
-        RecordValues.Look(chronicler, ref SlopeLimit, "slopeLimit", SlopeLimit);
-        RecordValues.Look(chronicler, ref SlidingSpeed, "slidingSpeed", SlidingSpeed);
-        RecordValues.Look(chronicler, ref SidewaysControl, "sidewaysControl", SidewaysControl);
-        RecordValues.Look(chronicler, ref SpeedControl, "speedControl", SpeedControl);
+        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
+        RecordValues.Look(chronicler, ref SlopeLimit, "slopeLimit", DefaultSlopeLimit);
+        RecordValues.Look(chronicler, ref SlidingSpeed, "slidingSpeed", DefaultSlidingSpeed);
+        RecordValues.Look(chronicler, ref SidewaysControl, "sidewaysControl", DefaultSidewaysControl);
+        RecordValues.Look(chronicler, ref SpeedControl, "speedControl", DefaultSpeedControl);
 
         bool isSliding = IsSliding;
-        RecordValues.Look(chronicler, ref isSliding, "isSliding", isSliding);
+        RecordValues.Look(chronicler, ref isSliding, "isSliding", false);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

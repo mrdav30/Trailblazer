@@ -233,6 +233,7 @@ public class NavigatorSerializationTests : IDisposable
     public void RoundTrip_ShouldSupportPartialNavigatorPayloads_AndPreserveOmittedBranches(bool useMemoryPack)
     {
         var source = CreateConfiguredNavigator();
+        source.OccupantGroupId = 9;
         object payload = SerializeRecord(source, useMemoryPack);
 
         payload = RemovePayloadEntry(payload, useMemoryPack, "occupantGroupId");
@@ -249,7 +250,9 @@ public class NavigatorSerializationTests : IDisposable
         PopulateRecord(target, payload, useMemoryPack);
 
         target.Position.Should().Be(source.Position);
-        target.OccupantGroupId.Should().Be(9);
+        // since we removed the occupantGroupId entry, it should fall back to the default value of 1
+        // regardless of the source and target values before population
+        target.OccupantGroupId.Should().Be(1);
         target.Steering.StopMultiplier.Should().Be((Fixed64)0.33f);
         target.Turning.TurnRate.Should().Be((Fixed64)0.72f);
         target.Motor.Handler.Move.MaxFastSpeed.Should().Be((Fixed64)8);

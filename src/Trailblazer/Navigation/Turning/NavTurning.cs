@@ -24,6 +24,8 @@ public class NavTurning : IRecordable
     private static readonly Fixed64 _arriveThresholdAngle =
         Fixed64.FromRaw(0x68DB9L); // 0.0001M;
 
+    public static readonly Fixed64 DefaultTurnRate = Fixed64.One / 8;
+
     #endregion
 
     #region Fields
@@ -36,7 +38,7 @@ public class NavTurning : IRecordable
     /// <summary>
     /// The base turn rate, controlling how much rotation is applied per simulation step.
     /// </summary>
-    public Fixed64 TurnRate = Fixed64.One / 8;
+    public Fixed64 TurnRate = DefaultTurnRate;
 
     /// <summary>
     /// Buffered target rotation quaternion to apply on the next simulation frame.
@@ -261,8 +263,8 @@ public class NavTurning : IRecordable
         bool canTurn = CanTurn;
         Fixed64 turnRate = TurnRate;
 
-        RecordValues.Look(chronicler, ref canTurn, "canTurn", canTurn);
-        RecordValues.Look(chronicler, ref turnRate, "turnRate", turnRate);
+        RecordValues.Look(chronicler, ref canTurn, "canTurn", true);
+        RecordValues.Look(chronicler, ref turnRate, "turnRate", DefaultTurnRate);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

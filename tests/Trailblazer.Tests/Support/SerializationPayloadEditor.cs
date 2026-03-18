@@ -4,6 +4,8 @@ using System.Text.Json.Nodes;
 using MemoryPack;
 using Trailblazer.Serialization;
 
+// TODO: these could be made to support more than just tests, consider moving to Trailblazer.Serialization if so
+
 namespace Trailblazer.Tests;
 
 internal static class SerializationPayloadEditor

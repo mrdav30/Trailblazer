@@ -13,8 +13,6 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 public class PlatformLocomotion : ITransientLocomotion, IRecordable
 {
-    private bool _preservePreviousTransformForAttachment;
-
     #region Constants
 
     /// <summary>
@@ -66,12 +64,29 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
     [Transient]
     public bool IsNewPlatform { get; set; }
 
+    /// <summary>
+    /// The currently active platform the scout is standing on, if any.
+    /// </summary>
     [Transient]
     public PlatformSnapshot? ActivePlatform { get; set; }
 
+    /// <summary>
+    /// The previously active platform, used for calculating platform velocity and movement transfer.
+    /// This is cleared when the scout is not on a platform or when platform locomotion is disabled.
+    ///
+    /// </summary>
     [Transient]
     public PlatformSnapshot? PreviousPlatform { get; set; }
 
+    /// <summary>
+    /// A flag to preserve the previous platform's transform for attachment calculations, 
+    /// used when refreshing the same platform with a new transform.
+    /// </summary>
+    private bool _preservePreviousTransformForAttachment;
+
+    /// <summary>
+    /// The platform snapshot that the scout is currently holding onto, if any.
+    /// </summary>
     [Transient]
     public PlatformSnapshot? HoldPlatform { get; set; }
 
@@ -301,8 +316,8 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", _isEnabled);
-        RecordValues.Look(chronicler, ref HeightAdjust, "heightAdjust", HeightAdjust);
+        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
+        RecordValues.Look(chronicler, ref HeightAdjust, "heightAdjust", DefaultHeightAdjust);
 
         bool isNewPlatform = IsNewPlatform;
         PlatformSnapshot? activePlatform = ActivePlatform;
@@ -315,16 +330,16 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
         Vector3d framePlatformVelocity = FramePlatformVelocity;
         int holdPlatformFrames = HoldPlatformFrames;
 
-        RecordValues.Look(chronicler, ref isNewPlatform, "isNewPlatform", isNewPlatform);
-        RecordValues.Look(chronicler, ref activePlatform, "activePlatform", activePlatform);
-        RecordValues.Look(chronicler, ref previousPlatform, "previousPlatform", previousPlatform);
-        RecordValues.Look(chronicler, ref holdPlatform, "holdPlatform", holdPlatform);
-        RecordValues.Look(chronicler, ref movementTransfer, "movementTransfer", movementTransfer);
-        RecordValues.Look(chronicler, ref scoutLocalPoint, "scoutLocalPoint", scoutLocalPoint);
-        RecordValues.Look(chronicler, ref scoutLocalRotation, "scoutLocalRotation", scoutLocalRotation);
-        RecordValues.Look(chronicler, ref platformVelocity, "platformVelocity", platformVelocity);
-        RecordValues.Look(chronicler, ref framePlatformVelocity, "framePlatformVelocity", framePlatformVelocity);
-        RecordValues.Look(chronicler, ref holdPlatformFrames, "holdPlatformFrames", holdPlatformFrames);
+        RecordValues.Look(chronicler, ref isNewPlatform, "isNewPlatform", false);
+        RecordValues.Look(chronicler, ref activePlatform, "activePlatform", null);
+        RecordValues.Look(chronicler, ref previousPlatform, "previousPlatform", null);
+        RecordValues.Look(chronicler, ref holdPlatform, "holdPlatform", null);
+        RecordValues.Look(chronicler, ref movementTransfer, "movementTransfer", MotionTransfer.None);
+        RecordValues.Look(chronicler, ref scoutLocalPoint, "scoutLocalPoint", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref scoutLocalRotation, "scoutLocalRotation", FixedQuaternion.Identity);
+        RecordValues.Look(chronicler, ref platformVelocity, "platformVelocity", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref framePlatformVelocity, "framePlatformVelocity", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref holdPlatformFrames, "holdPlatformFrames", 0);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

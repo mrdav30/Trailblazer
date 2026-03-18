@@ -1,12 +1,15 @@
 ﻿using FixedMathSharp;
+using System;
 using System.Runtime.CompilerServices;
+using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
 /// Represents the traversal state of a scout, including its movement medium and surface interactions.
 /// </summary>
-public struct TrekCondition
+[Serializable]
+public struct TrekCondition : IRecordable
 {
     /// <summary>
     /// Defines the medium in which the scout is currently moving.
@@ -52,5 +55,18 @@ public struct TrekCondition
         SurfaceLevel = Fixed64.Zero;
         GroundState = null;
         CeilingLevel = Fixed64.MAX_VALUE;
+    }
+
+    public void RecordData(IChronicler chronicler)
+    {
+        chronicler.LookValue(ref Medium, nameof(Medium), TraversalMedium.Unknown);
+        chronicler.LookValue(ref SurfaceLevel, nameof(SurfaceLevel), Fixed64.Zero);
+        chronicler.LookValue(ref CeilingLevel, nameof(CeilingLevel), Fixed64.MAX_VALUE);
+        if(GroundState.HasValue)
+        {
+            var groundState = GroundState.Value;
+            chronicler.LookDeep(ref groundState, nameof(GroundState));
+            GroundState = groundState;
+        }
     }
 }

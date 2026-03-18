@@ -33,7 +33,8 @@ public class MockMotorAgent
         Vector3d position,
         TrekCondition condition,
         FixedQuaternion? rotation = null,
-        Vector3d? velocity = null)
+        Vector3d? velocity = null,
+        LocomotionProfile? profile = null)
     {
         LastPosition = Position = position;
 
@@ -43,7 +44,7 @@ public class MockMotorAgent
         Rotation = rotation ?? FixedQuaternion.Identity;
         Velocity = velocity ?? Vector3d.Zero;
 
-        Motor = NavMotor.CreateNew(FrameCondition);
+        Motor = NavMotor.CreateNew(FrameCondition, profile);
         Motor.SetVelocity(Velocity);
 
         Motor.Events.CanAffordJump = () => true;

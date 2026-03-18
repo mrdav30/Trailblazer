@@ -51,11 +51,6 @@ public class SwimLocomotion : ITransientLocomotion, IRecordable
     public static readonly Fixed64 DefaultBouyancyFactor = Fixed64.One;
 
     /// <summary>
-    /// The default water drag factor, reducing movement speed in water.
-    /// </summary>
-    public static readonly Fixed64 DefaultWaterDragFactor = Fixed64.FromRaw(0x10000000L); // ~0.0625
-
-    /// <summary>
     /// Default multiplier applied to jump force when breaching from water into air.
     /// </summary>
     public static readonly Fixed64 DefaultBreachJumpMultiplier = (Fixed64)0.75d;
@@ -108,11 +103,6 @@ public class SwimLocomotion : ITransientLocomotion, IRecordable
     /// The buoyancy factor determining how strongly the scout floats in water.
     /// </summary>
     public Fixed64 BuoyancyFactor = DefaultBouyancyFactor;
-
-    /// <summary>
-    /// The water drag factor, slowing movement in water.
-    /// </summary>
-    public Fixed64 WaterDragFactor = DefaultWaterDragFactor; // ~0.0625
 
     /// <summary>
     /// Multiplier applied to the jump velocity when the scout breaches water.
@@ -218,7 +208,6 @@ public class SwimLocomotion : ITransientLocomotion, IRecordable
         RecordValues.Look(chronicler, ref MaxWaterAcceleration, "maxWaterAcceleration", DefaultMaxSwimAcceleration);
         RecordValues.Look(chronicler, ref SwimAccelerationModifier, "swimAccelerationModifier", DefaultSwimAccelerationModifier);
         RecordValues.Look(chronicler, ref BuoyancyFactor, "buoyancyFactor", DefaultBouyancyFactor);
-        RecordValues.Look(chronicler, ref WaterDragFactor, "waterDragFactor", DefaultWaterDragFactor);
         RecordValues.Look(chronicler, ref BreachJumpMultiplier, "breachJumpMultiplier", DefaultBreachJumpMultiplier);
         RecordValues.Look(chronicler, ref HoldBreathTime, "holdBreathTime", DefaultHoldBreathTime);
         RecordValues.Look(chronicler, ref BreathRegenerateIncrement, "breathRegenerateIncrement", DefaultBreathRegenerateIncrement);

@@ -168,7 +168,7 @@ public class SlideLocomotionTests : IDisposable
         );
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
-        scout.Motor.Handler.Slide.SlopeLimit = (Fixed64)45;
+        scout.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
 
         // Simulate sliding for a few frames
         for (int i = 0; i < 3; i++)
@@ -207,7 +207,7 @@ public class SlideLocomotionTests : IDisposable
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
 
-        scout.Motor.Handler.Slide.SlopeLimit = (Fixed64)45;
+        scout.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
         scout.Motor.Handler.Slide.SidewaysControl = (Fixed64)1;
 
         for (int i = 0; i < 3; i++)

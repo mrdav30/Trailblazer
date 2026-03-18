@@ -44,7 +44,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 - `Navigator` as the host-facing simulation coordinator
 - `NavSteering` for headings, direct-path checks, guide following, and repathing
 - `NavTurning` for deterministic facing updates
-- `NavMotor` and locomotion handlers for movement state transitions, gravity, jumps, slopes, swimming, sliding, and moving platforms
+- `NavMotor` and locomotion handlers for movement state transitions, gravity, jumps, slopes, swimming, sliding, moving platforms, and per-navigator locomotion profiles
 
 ### Host Responsibilities
 
@@ -179,6 +179,8 @@ Call `TrailblazerManager.Initialize()` once during application startup before en
 If several navigators should move as one formation, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
 
 Concrete navigator types should implement `CheckTrekCondition()` to populate ground, water, ceiling, and platform state during `CommitFrameMotion()`.
+
+If a navigator should use a smaller locomotion set, override `CreateLocomotionProfile()` and return a custom profile such as `LocomotionProfile.CreateMoveAndFallOnly()`.
 
 ## Choosing Between A* and Flow Fields
 

@@ -16,11 +16,6 @@ public class SlideLocomotion : ITransientLocomotion, IRecordable
     #region Constants
 
     /// <summary>
-    /// The default maximum slope angle (in degrees) before sliding begins.
-    /// </summary>
-    public static readonly Fixed64 DefaultSlopeLimit = Fixed64.FromRaw(0x2D00000000L); // 45f;
-
-    /// <summary>
     /// The default speed at which the scout slides down steep surfaces.
     /// </summary>
     public static readonly Fixed64 DefaultSlidingSpeed = (Fixed64)30;
@@ -49,11 +44,6 @@ public class SlideLocomotion : ITransientLocomotion, IRecordable
     /// Determines whether sliding mechanics are enabled.
     /// </summary>
     private bool _isEnabled = true;
-
-    /// <summary>
-    /// The slope angle threshold at which sliding begins.
-    /// </summary>
-    public Fixed64 SlopeLimit = DefaultSlopeLimit;
 
     /// <summary>
     /// The speed at which the scout slides when on a steep surface.
@@ -101,7 +91,6 @@ public class SlideLocomotion : ITransientLocomotion, IRecordable
     public void RecordData(IChronicler chronicler)
     {
         RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
-        RecordValues.Look(chronicler, ref SlopeLimit, "slopeLimit", DefaultSlopeLimit);
         RecordValues.Look(chronicler, ref SlidingSpeed, "slidingSpeed", DefaultSlidingSpeed);
         RecordValues.Look(chronicler, ref SidewaysControl, "sidewaysControl", DefaultSidewaysControl);
         RecordValues.Look(chronicler, ref SpeedControl, "speedControl", DefaultSpeedControl);

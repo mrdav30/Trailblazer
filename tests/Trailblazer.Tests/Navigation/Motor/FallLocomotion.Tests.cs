@@ -177,7 +177,7 @@ public class FallLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
-        agent.Motor.Handler.Slide.SlopeLimit = (Fixed64)45;
+        agent.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
 
         TrailblazerManager.Simulate();
         agent.Simulate();
@@ -195,7 +195,7 @@ public class FallLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: new Vector3d(0, 0, 0), platformMatrix: platform);
 
-        agent.Motor.Handler.Slide.SlopeLimit = (Fixed64)45;
+        agent.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
 
         for (int i = 0; i < 2; i++)
         {

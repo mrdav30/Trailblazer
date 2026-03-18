@@ -12,7 +12,8 @@ public static class MockMotorAgentTestFactory
         Vector3d? startPosition = null,
         Vector3d? startVelocity = null,
         TraversalMedium startingMedium = TraversalMedium.Unknown,
-        Fixed64? surfaceLevel = null)
+        Fixed64? surfaceLevel = null,
+        LocomotionProfile? profile = null)
     {
         TrekCondition condition = new();
         switch (startingMedium)
@@ -43,7 +44,8 @@ public static class MockMotorAgentTestFactory
             startPosition ?? Vector3d.Zero,
             condition,
             null,
-            startVelocity ?? Vector3d.Zero
+            startVelocity ?? Vector3d.Zero,
+            profile
         );
 
         return agent;
@@ -56,7 +58,8 @@ public static class MockMotorAgentTestFactory
         Vector3d? startPosition = null,
         Vector3d? startVelocity = null,
         Fixed64? surfaceLevel = null,
-        Fixed4x4? platformMatrix = null)
+        Fixed4x4? platformMatrix = null,
+        LocomotionProfile? profile = null)
     {
         TrekCondition condition = new()
         {
@@ -78,7 +81,8 @@ public static class MockMotorAgentTestFactory
             startPosition ?? Vector3d.Zero,
             condition,
             null,
-            startVelocity ?? Vector3d.Down
+            startVelocity ?? Vector3d.Down,
+            profile
         );
 
         agent.Motor.Handler.Fall.IsFalling = true;
@@ -94,7 +98,8 @@ public static class MockMotorAgentTestFactory
         Fixed4x4? platformMatrix = null,
         Fixed64? surfaceFriction = null,
         MotionTransfer motionTransfer = MotionTransfer.None,
-        bool platformInert = false)
+        bool platformInert = false,
+        LocomotionProfile? profile = null)
     {
         TrekCondition condition = new()
         {
@@ -110,7 +115,10 @@ public static class MockMotorAgentTestFactory
 
         MockMotorAgent agent = new(
             startPosition ?? Vector3d.Zero,
-            condition
+            condition,
+            null,
+            null,
+            profile
         );
 
         return agent;
@@ -118,7 +126,10 @@ public static class MockMotorAgentTestFactory
 
     }
 
-    public static MockMotorAgent CreateWaterAgent(Vector3d? startPosition = null, Fixed64? surfaceLevel = null)
+    public static MockMotorAgent CreateWaterAgent(
+        Vector3d? startPosition = null,
+        Fixed64? surfaceLevel = null,
+        LocomotionProfile? profile = null)
     {
         TrekCondition condition = new()
         {
@@ -129,13 +140,18 @@ public static class MockMotorAgentTestFactory
 
         MockMotorAgent agent = new(
             startPosition ?? Vector3d.Zero,
-            condition
+            condition,
+            null,
+            null,
+            profile
         );
 
         return agent;
     }
 
-    public static MockMotorAgent CreateJumpReadyAgent(Vector3d? startPosition = null)
+    public static MockMotorAgent CreateJumpReadyAgent(
+        Vector3d? startPosition = null,
+        LocomotionProfile? profile = null)
     {
         TrekCondition condition = new()
         {
@@ -149,7 +165,10 @@ public static class MockMotorAgentTestFactory
 
         MockMotorAgent agent = new(
             startPosition ?? Vector3d.Zero,
-            condition
+            condition,
+            null,
+            null,
+            profile
         );
 
         return agent;

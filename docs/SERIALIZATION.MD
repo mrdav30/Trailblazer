@@ -187,7 +187,9 @@ On load it also:
 `LocomotionHandler.RecordData(...)` currently persists:
 
 - `IsInControl`
-- all six locomotion instances through `RecordDeep`
+- `installedKinds` for the currently installed built-in locomotion set
+- the required `Move` and `Fall` locomotions through `RecordDeep`
+- optional built-in locomotions through named `RecordDeep` slots when installed
 
 ### 3.6 Individual Locomotions
 
@@ -195,10 +197,10 @@ Each locomotion persists its configuration plus its resumable runtime state.
 
 Examples:
 
-- `MoveLocomotion`: speed/acceleration/gravity configuration plus `FrameVelocity`
+- `MoveLocomotion`: speed/acceleration/gravity configuration, core slope limit, passive water drag, plus `FrameVelocity`
 - `JumpLocomotion`: jump configuration plus jump/cooldown state
 - `FallLocomotion`: fall configuration plus fall start/end state
-- `SlideLocomotion`: slide configuration plus `IsSliding`
+- `SlideLocomotion`: slide-specific configuration plus `IsSliding`
 - `SwimLocomotion`: swim configuration plus swim/dive/underwater timers
 - `PlatformLocomotion`: platform configuration plus active/previous/hold platform state, movement-transfer state, local attachment state, and tracked platform velocities
 

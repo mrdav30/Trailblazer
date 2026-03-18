@@ -23,7 +23,7 @@ Relevant defaults:
 - `JumpLocomotion.DefaultBaseJumpHeight = 1`
 - `JumpLocomotion.DefaultExtraJumpHeight = 2`
 - `SwimLocomotion.DefaultBouyancyFactor = 1`
-- `SwimLocomotion.DefaultWaterDragFactor = 0.0625`
+- `MoveLocomotion.DefaultWaterDragFactor = 0.0625`
 
 `TrailblazerManager` provides the fixed simulation timing through:
 
@@ -287,7 +287,7 @@ Higher values:
 ### More floating or more sinking in water
 
 - `SwimLocomotion.BuoyancyFactor`
-- `SwimLocomotion.WaterDragFactor`
+- `MoveLocomotion.WaterDragFactor`
 - `SwimLocomotion.BreachJumpMultiplier`
 
 ## 11. Common Misconceptions

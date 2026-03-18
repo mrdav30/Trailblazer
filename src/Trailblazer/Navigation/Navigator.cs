@@ -215,7 +215,7 @@ public abstract class Navigator : INavigate, IRecordable
 
         Steering = NavSteering.CreateNew(Radius);
 
-        Motor = NavMotor.CreateNew(_frameCondition);
+        Motor = NavMotor.CreateNew(_frameCondition, CreateLocomotionProfile());
         Motor.SetVelocity(Velocity);
 
         Turning = NavTurning.CreateNew(Radius);
@@ -223,6 +223,18 @@ public abstract class Navigator : INavigate, IRecordable
         CheckVoxelOccupancy(true);
 
         _isInitialized = true;
+    }
+
+    /// <summary>
+    /// Creates the locomotion profile used when this navigator initializes its motor.
+    /// </summary>
+    /// <remarks>
+    /// Override this to install a smaller or custom locomotion set per navigator type while preserving
+    /// the default profile for callers that do not opt in.
+    /// </remarks>
+    protected virtual LocomotionProfile CreateLocomotionProfile()
+    {
+        return LocomotionProfile.CreateDefault();
     }
 
     public virtual void Reset()

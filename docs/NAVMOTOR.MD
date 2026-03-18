@@ -104,7 +104,7 @@ If the host needs to push a new traversal state into the motor before `FinalizeT
 
 `NavMotor` owns runtime locomotion state through `LocomotionHandler`.
 
-That handler contains:
+By default the handler installs the built-in set:
 
 - `Move`
 - `Platform`
@@ -113,7 +113,9 @@ That handler contains:
 - `Slide`
 - `Swim`
 
-These locomotion objects are per-motor, not global. That means different navigators can run different movement parameters at the same time.
+`Move` and `Fall` are the required core locomotions. `Platform`, `Jump`, `Slide`, and `Swim` are optional and can be installed or removed through a locomotion profile.
+
+These locomotion objects are per-motor, not global. That means different navigators can run different movement parameters at the same time, and different navigator types can use different locomotion compositions entirely.
 
 Examples:
 
@@ -121,6 +123,7 @@ Examples:
 - different jump heights
 - different platform-transfer rules
 - different buoyancy or swim drag
+- different installed locomotion sets such as a humanoid versus a move-and-fall-only boulder
 
 `CurrentState` is stored as a `TransitState`, which mirrors the current `TrekCondition` plus previous-state data used for transition logic.
 
@@ -364,8 +367,10 @@ Owns:
 
 - base movement speeds
 - ground and air acceleration
+- slope limit
 - slope speed scaling
 - gravity
+- passive water drag
 - terminal velocity
 - frame velocity storage
 
@@ -405,7 +410,6 @@ Owns:
 
 Owns:
 
-- slope limit
 - sliding speed
 - sideways control during slides
 - speed control during slides
@@ -416,7 +420,6 @@ Owns:
 Owns:
 
 - buoyancy
-- water drag
 - swim acceleration and speed
 - breach-jump multiplier
 - diving and underwater timers

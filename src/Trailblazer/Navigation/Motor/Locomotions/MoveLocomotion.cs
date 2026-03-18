@@ -93,6 +93,16 @@ public class MoveLocomotion : ITransientLocomotion, IRecordable
     /// </remarks>
     public static readonly Fixed64 DefaultTerminalVelocity = (Fixed64)53f;
 
+    /// <summary>
+    /// The default maximum slope angle before a surface is considered too steep for normal control.
+    /// </summary>
+    public static readonly Fixed64 DefaultSlopeLimit = Fixed64.FromRaw(0x2D00000000L); // 45f;
+
+    /// <summary>
+    /// The default passive drag factor applied while moving through water.
+    /// </summary>
+    public static readonly Fixed64 DefaultWaterDragFactor = Fixed64.FromRaw(0x10000000L); // ~0.0625
+
     #endregion
 
     #region Configuration State
@@ -159,6 +169,16 @@ public class MoveLocomotion : ITransientLocomotion, IRecordable
     /// <inheritdoc cref="DefaultTerminalVelocity"/>
     public Fixed64 TerminalVelocity = DefaultTerminalVelocity;
 
+    /// <summary>
+    /// The slope angle threshold at which a surface becomes too steep for normal movement control.
+    /// </summary>
+    public Fixed64 SlopeLimit = DefaultSlopeLimit;
+
+    /// <summary>
+    /// Passive drag applied whenever the motor is in water, even if active swim locomotion is absent.
+    /// </summary>
+    public Fixed64 WaterDragFactor = DefaultWaterDragFactor;
+
     #endregion
 
     #region Transient State
@@ -199,6 +219,8 @@ public class MoveLocomotion : ITransientLocomotion, IRecordable
         RecordValues.Look(chronicler, ref SlopeSpeedMultiplier, "slopeSpeedMultiplier", DefaultSlopeSpeedModifier);
         RecordValues.Look(chronicler, ref GravityForce, "gravityForce", DefaultGravityForce);
         RecordValues.Look(chronicler, ref TerminalVelocity, "terminalVelocity", DefaultTerminalVelocity);
+        RecordValues.Look(chronicler, ref SlopeLimit, "slopeLimit", DefaultSlopeLimit);
+        RecordValues.Look(chronicler, ref WaterDragFactor, "waterDragFactor", DefaultWaterDragFactor);
 
         Vector3d frameVelocity = FrameVelocity;
         RecordValues.Look(chronicler, ref frameVelocity, "frameVelocity", Vector3d.Zero);

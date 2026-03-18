@@ -257,6 +257,7 @@ public class NavigatorTests : IDisposable
         navigator.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Moderate, isRequestingJump: false);
         TrailblazerManager.Simulate();
         navigator.Simulate();
+        navigator.CommitFrameMotion();
 
         navigator.UnbindAnimationHandler();
 

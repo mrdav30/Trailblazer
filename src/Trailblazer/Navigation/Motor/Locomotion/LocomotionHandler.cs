@@ -325,7 +325,7 @@ public class LocomotionHandler : IRecordable
 
     private static void ClearReplacedLocomotion(ILocomotion current, ILocomotion next)
     {
-        if (ReferenceEquals(current, next))
+        if (current == null || ReferenceEquals(current, next))
             return;
 
         current.ClearTransientState();

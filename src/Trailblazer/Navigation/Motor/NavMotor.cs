@@ -36,9 +36,9 @@ public class NavMotor : IRecordable
     public TransitState CurrentState { get; private set; }
 
     /// <summary>
-    /// Indicates whether the controller is locked for the current frame to prevent multiple force applications.
+    /// Indicates whether a traversal has started for the current frame and still requires finalization or abort.
     /// </summary>
-    public bool IsFrameLocked { get; private set; }
+    public bool TraversalInProgress { get; private set; }
 
     public bool IsInitialized { get; private set; }
 
@@ -61,6 +61,11 @@ public class NavMotor : IRecordable
     /// Accumulates forces applied during the traversal phase before they are committed.
     /// </summary>
     private Vector3d _forceOutput;
+
+    /// <summary>
+    /// Records the simulation frame that opened the current traversal so stale traversal usage can be detected.
+    /// </summary>
+    private int _pendingTraversalFrame = -1;
 
     #endregion
 
@@ -156,7 +161,7 @@ public class NavMotor : IRecordable
         if (profile == null)
             ThrowHelper.ThrowArgumentNullException(nameof(profile));
 
-        if (IsFrameLocked)
+        if (TraversalInProgress)
             ThrowHelper.ThrowInvalidOperationException("Cannot change locomotion composition while a traversal frame is in progress.");
 
         Handler.ApplyProfile(profile);
@@ -186,7 +191,8 @@ public class NavMotor : IRecordable
     /// Processes a movement request and applies necessary forces.
     /// </summary>
     /// <remarks>
-    /// This method locks the controller for the current frame to prevent duplicate force accumulation.  
+    /// This method opens a traversal phase for the current frame so duplicate force accumulation is rejected
+    /// until the host calls <see cref="FinalizeTraversal"/> or <see cref="AbortTraversalFrame"/>.
     /// Movement forces such as gravity, jump, and platform adjustments are applied.
     /// </remarks>
     /// <param name="request">The movement request containing desired movement parameters</param>
@@ -207,10 +213,19 @@ public class NavMotor : IRecordable
 
         if (!IsInitialized) return false;
 
-        if (IsFrameLocked)
-            return false;
+        if (TraversalInProgress)
+        {
+            if (TrailblazerManager.FrameCount != _pendingTraversalFrame)
+            {
+                ThrowHelper.ThrowInvalidOperationException(
+                    $"NavMotor traversal from frame {_pendingTraversalFrame} was never finalized or aborted before frame {TrailblazerManager.FrameCount}. Call FinalizeTraversal(...) or AbortTraversalFrame() in the same frame that opened traversal.");
+            }
 
-        IsFrameLocked = true;
+            return false;
+        }
+
+        TraversalInProgress = true;
+        _pendingTraversalFrame = TrailblazerManager.FrameCount;
 
 #if DEBUG
         Debug.WriteLine($"NavMotor State: " +
@@ -639,7 +654,13 @@ public class NavMotor : IRecordable
         TrekCondition conditonRefresh,
         Vector3d? newFootPosition = null)
     {
-        if (!IsInitialized || !IsFrameLocked) return;
+        if (!IsInitialized || !TraversalInProgress) return;
+
+        if (TrailblazerManager.FrameCount != _pendingTraversalFrame)
+        {
+            ThrowHelper.ThrowInvalidOperationException(
+                $"NavMotor traversal opened on frame {_pendingTraversalFrame} cannot be finalized on frame {TrailblazerManager.FrameCount}. Call AbortTraversalFrame() to discard stale traversal state before starting a new frame.");
+        }
 
         Handler.Move.FrameVelocity = (newPosition - lastPosition) * TrailblazerManager.InvDeltaTime;
 
@@ -683,7 +704,7 @@ public class NavMotor : IRecordable
         if (PlatformModule?.IsActive == true && (IsGrounded || PlatformModule.IsLockedToPlatform))
             PlatformModule.HandlePlatformMovement(newFootPosition ?? newPosition, newRotation);
 
-        IsFrameLocked = false;
+        AbortTraversalFrame();
     }
 
     // TODO: make sure we can't ever go past ceiling level by any means, including external forces or platform movement
@@ -905,6 +926,21 @@ public class NavMotor : IRecordable
         CurrentState.Update(newCondition, previousCondition);
     }
 
+    /// <summary>
+    /// Clears the current traversal-finalization requirement without reconciling frame results.
+    /// </summary>
+    /// <remarks>
+    /// This is an explicit recovery escape hatch for hosts that must discard an in-progress traversal.
+    /// It clears traversal bookkeeping only and does not roll back locomotion state changes that already occurred.
+    /// </remarks>
+    public void AbortTraversalFrame()
+    {
+        TraversalInProgress = false;
+        _pendingTraversalFrame = -1;
+        FrameSlopeAngle = Fixed64.Zero;
+        _forceOutput = Vector3d.Zero;
+    }
+
     #endregion
 
     #region Serialization
@@ -928,9 +964,7 @@ public class NavMotor : IRecordable
             CurrentState ??= new(currentCondition, previousCondition);
             CurrentState.Update(currentCondition, previousCondition);
             IsInitialized = isInitialized;
-            IsFrameLocked = false;
-            FrameSlopeAngle = Fixed64.Zero;
-            _forceOutput = Vector3d.Zero;
+            AbortTraversalFrame();
         }
     }
 

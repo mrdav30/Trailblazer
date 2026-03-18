@@ -96,6 +96,120 @@ public class MoveLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void Given_TraversalStarted_When_TryTraversalCalledAgainInSameFrame_Then_ShouldRemainPendingAndReturnFalse()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        TrekRequest frameRequest = new()
+        {
+            Origin = agent.Position,
+            FootPosition = agent.GetFootPosition(),
+            Rotation = agent.Rotation,
+            Direction = Vector3d.Forward,
+            Rate = TrekRate.Slow
+        };
+
+        bool first = agent.Motor.TryTraversal(frameRequest, out _, out _, out _);
+        bool second = agent.Motor.TryTraversal(frameRequest, out _, out _, out _);
+
+        first.Should().BeTrue();
+        second.Should().BeFalse();
+        agent.Motor.TraversalInProgress.Should().BeTrue();
+
+        agent.Motor.AbortTraversalFrame();
+        agent.Motor.TraversalInProgress.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Given_TraversalStarted_When_NextFrameStartsWithoutFinalize_Then_ShouldThrowExplicitError()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        TrekRequest frameRequest = new()
+        {
+            Origin = agent.Position,
+            FootPosition = agent.GetFootPosition(),
+            Rotation = agent.Rotation,
+            Direction = Vector3d.Forward,
+            Rate = TrekRate.Slow
+        };
+
+        agent.Motor.TryTraversal(frameRequest, out _, out _, out _).Should().BeTrue();
+
+        TrailblazerManager.Simulate();
+
+        Action act = () => agent.Motor.TryTraversal(frameRequest, out _, out _, out _);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*never finalized or aborted before frame*");
+        agent.Motor.TraversalInProgress.Should().BeTrue();
+
+        agent.Motor.AbortTraversalFrame();
+        agent.Motor.TraversalInProgress.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Given_TraversalStarted_When_FinalizedOnLaterFrame_Then_ShouldThrowExplicitError()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        TrekRequest frameRequest = new()
+        {
+            Origin = agent.Position,
+            FootPosition = agent.GetFootPosition(),
+            Rotation = agent.Rotation,
+            Direction = Vector3d.Forward,
+            Rate = TrekRate.Slow
+        };
+
+        agent.Motor.TryTraversal(frameRequest, out _, out _, out _).Should().BeTrue();
+
+        TrailblazerManager.Simulate();
+
+        Action act = () => agent.Motor.FinalizeTraversal(
+            agent.Position,
+            agent.LastPosition,
+            agent.Rotation,
+            agent.FrameCondition,
+            agent.GetFootPosition());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*cannot be finalized on frame*");
+        agent.Motor.TraversalInProgress.Should().BeTrue();
+
+        agent.Motor.AbortTraversalFrame();
+    }
+
+    [Fact]
+    public void Given_StaleTraversal_When_AbortTraversalFrameCalled_Then_NextTraversalCanProceed()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        TrekRequest frameRequest = new()
+        {
+            Origin = agent.Position,
+            FootPosition = agent.GetFootPosition(),
+            Rotation = agent.Rotation,
+            Direction = Vector3d.Forward,
+            Rate = TrekRate.Slow
+        };
+
+        agent.Motor.TryTraversal(frameRequest, out _, out _, out _).Should().BeTrue();
+
+        TrailblazerManager.Simulate();
+        agent.Motor.AbortTraversalFrame();
+
+        agent.Motor.TraversalInProgress.Should().BeFalse();
+        agent.Motor.TryTraversal(frameRequest, out _, out _, out _).Should().BeTrue();
+        agent.Motor.TraversalInProgress.Should().BeTrue();
+
+        agent.Motor.FinalizeTraversal(
+            agent.Position,
+            agent.LastPosition,
+            agent.Rotation,
+            agent.FrameCondition,
+            agent.GetFootPosition());
+
+        agent.Motor.TraversalInProgress.Should().BeFalse();
+    }
+
+    [Fact]
     public void Given_AgentWhenNoInput_Then_VelocityShouldDecayToZero()
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: new Vector3d(5, 0, 0), startingMedium: TraversalMedium.Ground);

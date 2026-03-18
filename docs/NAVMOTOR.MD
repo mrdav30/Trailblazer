@@ -55,6 +55,7 @@ The main entry points are:
 - `OnInitialize(TrekCondition condition)`
 - `TryTraversal(TrekRequest request, out Vector3d velocityDelta, out Vector3d positionDelta, out FixedQuaternion rotationDelta)`
 - `FinalizeTraversal(Vector3d newPosition, Vector3d lastPosition, FixedQuaternion newRotation, TrekCondition conditionRefresh, Vector3d? newFootPosition = null)`
+- `AbortTraversalFrame()`
 - `UpdateTraversal(TrekCondition newCondition, bool isInitializing = false)`
 - `SetVelocity(Vector3d velocity)`
 - `GetVerticalJumpSpeed()`
@@ -67,7 +68,7 @@ Important public state includes:
 - `Events`
 - `CurrentState`
 - `FrameSlopeAngle`
-- `IsFrameLocked`
+- `TraversalInProgress`
 - `IsInitialized`
 - `IsGrounded`
 - `WasGrounded`
@@ -136,9 +137,10 @@ Examples:
 `TryTraversal(...)` returns `false` if:
 
 - the motor is not initialized
-- the frame is already locked
+- traversal has already started earlier in the same frame
 
-This frame lock is intentional. The motor is designed to process movement exactly once per simulation frame.
+This pending-finalization guard is intentional. The motor is designed to process movement exactly once per simulation frame.
+If a previous frame is still pending when a new frame starts, the motor throws an explicit error instead of silently continuing.
 
 ### 6.2 Frame Setup
 
@@ -353,9 +355,9 @@ Those cached values are used on the next frame to:
 - reconstruct local or platform-relative movement
 - keep the navigator attached consistently to a moving transform
 
-### 7.10 Unlock
+### 7.10 Close Traversal
 
-At the end of finalization, `IsFrameLocked` is cleared so the next simulation step can run.
+At the end of finalization, `TraversalInProgress` is cleared so the next simulation step can run.
 
 ## 8. Locomotion Responsibilities
 
@@ -474,16 +476,23 @@ The essential rule is:
 
 - `TryTraversal(...)` consumes the current state
 - `FinalizeTraversal(...)` accepts the updated state for next frame
+- `AbortTraversalFrame()` is the explicit escape hatch when the host must discard a started traversal
 
 ## 11. Common Gotchas
 
 ### Calling TryTraversal(...) twice in one frame
 
-The second call will do nothing because `IsFrameLocked` is still true.
+The second call will do nothing because `TraversalInProgress` is still true for the current frame.
 
 ### Forgetting FinalizeTraversal(...)
 
-The motor will keep stale movement and traversal state, and the frame lock will not be cleared.
+If the next frame starts while traversal is still pending, the motor will throw an explicit error.
+Use `AbortTraversalFrame()` only when you intentionally need to discard an opened traversal.
+
+### Finalizing on a later frame
+
+`FinalizeTraversal(...)` must run in the same simulation frame that opened traversal.
+If it runs on a later frame, the motor throws and requires `AbortTraversalFrame()` before traversal can resume.
 
 ### Treating traversal refresh as optional
 

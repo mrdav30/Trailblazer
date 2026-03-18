@@ -178,7 +178,7 @@ This keeps turn configuration durable while treating active turn execution as fr
 On load it also:
 
 - rebuilds `CurrentState`
-- clears frame lock state
+- clears pending traversal-finalization state
 - clears frame-local cached output such as `_forceOutput`
 - resets `FrameSlopeAngle`
 

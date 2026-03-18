@@ -59,14 +59,9 @@ public struct TrekCondition : IRecordable
 
     public void RecordData(IChronicler chronicler)
     {
-        chronicler.LookValue(ref Medium, nameof(Medium), TraversalMedium.Unknown);
-        chronicler.LookValue(ref SurfaceLevel, nameof(SurfaceLevel), Fixed64.Zero);
-        chronicler.LookValue(ref CeilingLevel, nameof(CeilingLevel), Fixed64.MAX_VALUE);
-        if(GroundState.HasValue)
-        {
-            var groundState = GroundState.Value;
-            chronicler.LookDeep(ref groundState, nameof(GroundState));
-            GroundState = groundState;
-        }
+        RecordValues.Look(chronicler, ref Medium, nameof(Medium), TraversalMedium.Unknown);
+        RecordValues.Look(chronicler, ref SurfaceLevel, nameof(SurfaceLevel), Fixed64.Zero);
+        RecordValues.Look(chronicler, ref CeilingLevel, nameof(CeilingLevel), Fixed64.MAX_VALUE);
+        RecordNullableDeep.Look(chronicler, ref GroundState, nameof(GroundState));
     }
 }

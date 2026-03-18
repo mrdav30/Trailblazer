@@ -99,7 +99,7 @@ public static class JsonRecordSerializer
             _entries[name] = JsonSerializer.Serialize(value, _options);
         }
 
-        public void LookDeep<T>(ref T value, string name) where T : IRecordable
+        public void LookDeep<T>(ref T value, string name) where T : class, IRecordable
         {
             if (value == null)
             {
@@ -109,6 +109,24 @@ public static class JsonRecordSerializer
 
             var nested = new JsonRecordWriter(_options, Context);
             value.RecordData(nested);
+            _entries[name] = nested.ToJson();
+        }
+
+        public void LookDeepStruct<T>(ref T value, string name) where T : struct, IRecordable
+        {
+            var nested = new JsonRecordWriter(_options, Context);
+            value.RecordData(nested);
+            _entries[name] = nested.ToJson();
+        }
+
+        public void LookNullableDeep<T>(ref T? value, string name) where T : struct, IRecordable
+        {
+            if (!value.HasValue)
+                return;
+
+            T nestedValue = value.Value;
+            var nested = new JsonRecordWriter(_options, Context);
+            nestedValue.RecordData(nested);
             _entries[name] = nested.ToJson();
         }
 
@@ -187,7 +205,7 @@ public static class JsonRecordSerializer
             value = loadedValue == null ? defaultValue : loadedValue;
         }
 
-        public void LookDeep<T>(ref T value, string name) where T : IRecordable
+        public void LookDeep<T>(ref T value, string name) where T : class, IRecordable
         {
             if (!_root.TryGetProperty(name, out JsonElement entry) || entry.ValueKind == JsonValueKind.Null)
                 return;
@@ -198,6 +216,31 @@ public static class JsonRecordSerializer
 
             using var nested = new JsonRecordReader(entry.GetRawText(), _options, Context);
             value.RecordData(nested);
+        }
+
+        public void LookDeepStruct<T>(ref T value, string name) where T : struct, IRecordable
+        {
+            value = CreateDefaultDeepStruct<T>();
+
+            if (!_root.TryGetProperty(name, out JsonElement entry) || entry.ValueKind == JsonValueKind.Null)
+                return;
+
+            using var nested = new JsonRecordReader(entry.GetRawText(), _options, Context);
+            value.RecordData(nested);
+        }
+
+        public void LookNullableDeep<T>(ref T? value, string name) where T : struct, IRecordable
+        {
+            if (!_root.TryGetProperty(name, out JsonElement entry) || entry.ValueKind == JsonValueKind.Null)
+            {
+                value = null;
+                return;
+            }
+
+            T nestedValue = CreateDefaultDeepStruct<T>();
+            using var nested = new JsonRecordReader(entry.GetRawText(), _options, Context);
+            nestedValue.RecordData(nested);
+            value = nestedValue;
         }
 
         public void LookLink<T>(
@@ -252,6 +295,14 @@ public static class JsonRecordSerializer
         public void Dispose()
         {
             _document.Dispose();
+        }
+
+        private T CreateDefaultDeepStruct<T>() where T : struct, IRecordable
+        {
+            T defaultValue = new();
+            using var nested = new JsonRecordReader("{}", _options, Context);
+            defaultValue.RecordData(nested);
+            return defaultValue;
         }
     }
 

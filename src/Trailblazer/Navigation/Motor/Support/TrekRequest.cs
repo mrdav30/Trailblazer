@@ -73,11 +73,11 @@ public struct TrekRequest : IRecordable
 
     public void RecordData(IChronicler chronicler)
     {
-        chronicler.LookValue(ref Origin, nameof(Origin), Vector3d.Zero);
-        chronicler.LookValue(ref FootPosition, nameof(FootPosition), Vector3d.Zero);
-        chronicler.LookValue(ref Rotation, nameof(Rotation), FixedQuaternion.Identity);
-        chronicler.LookValue(ref Direction, nameof(Direction), Vector3d.Zero);
-        chronicler.LookValue(ref Rate, nameof(Rate), TrekRate.Stationary);
-        chronicler.LookValue(ref IsRequestingJump, nameof(IsRequestingJump), false);
+        RecordValues.Look(chronicler, ref Origin, nameof(Origin), Vector3d.Zero);
+        RecordValues.Look(chronicler, ref FootPosition, nameof(FootPosition), null);
+        RecordValues.Look(chronicler, ref Rotation, nameof(Rotation), FixedQuaternion.Identity);
+        RecordValues.Look(chronicler, ref Direction, nameof(Direction), Vector3d.Zero);
+        RecordValues.Look(chronicler, ref Rate, nameof(Rate), TrekRate.Stationary);
+        RecordValues.Look(chronicler, ref IsRequestingJump, nameof(IsRequestingJump), false);
     }
 }

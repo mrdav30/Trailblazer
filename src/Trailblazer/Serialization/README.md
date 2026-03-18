@@ -47,6 +47,8 @@ public interface IChronicler
     SerializationMode Mode { get; }
     void LookValue<T>(ref T value, string name, T defaultValue = default);
     void LookDeep<T>(ref T value, string name) where T : class, IRecordable;
+    void LookDeepStruct<T>(ref T value, string name) where T : struct, IRecordable;
+    void LookNullableDeep<T>(ref T? value, string name) where T : struct, IRecordable;
     void LookLink<T>(
         ref T value,
         string name,
@@ -61,6 +63,8 @@ Helper entry points:
 ```csharp
 RecordValues.Look(chronicler, ref value, "name", defaultValue);
 RecordDeep.Look(chronicler, ref nestedObject, "name");
+RecordDeepStruct.Look(chronicler, ref nestedStruct, "name");
+RecordNullableDeep.Look(chronicler, ref optionalNestedStruct, "name");
 RecordLinks.Look(chronicler, ref externalRef, "name");
 RecordLinks.LookDeferred(
     chronicler,
@@ -73,6 +77,19 @@ Current mode enums:
 
 - `SerializationMode`: `Saving`, `Loading`
 - `RecordLinkResolveMode`: `Immediate`, `Deferred`
+
+Important `LookValue(...)` rule:
+
+- the `defaultValue` argument is a schema-level canonical default for that field
+- save omits entries whose current value equals that declared default
+- load assigns the declared default when the entry is missing or explicitly null
+- callers should not pass the instance's current runtime value as the default, because that turns omission into "preserve ambient state" instead of deterministic fallback
+
+Deep-record rule of thumb:
+
+- use `RecordDeep` / `LookDeep(...)` for owned nested reference types that already exist in the runtime shell
+- use `RecordDeepStruct` / `LookDeepStruct(...)` for non-nullable nested recordable structs
+- use `RecordNullableDeep` / `LookNullableDeep(...)` for optional nested recordable structs
 
 ## 3. Transports
 
@@ -151,9 +168,10 @@ When adding Chronicler support to a new type:
 2. Skip or rebuild frame-local caches unless they are truly required for restore correctness.
 3. Prefer `RecordDeep` for owned nested runtime objects.
 4. Use `RecordLinks` for stable references to external or runtime-owned objects.
-5. Use value fields for small deterministic structs and enums.
-6. Add a focused round-trip test in the same change.
-7. Verify the type still behaves correctly after load, not just that raw values match.
+5. Use canonical declared defaults for every `RecordValues.Look(...)` call rather than passing the current live value.
+6. Use value fields for small deterministic structs and enums.
+7. Add a focused round-trip test in the same change.
+8. Verify the type still behaves correctly after load, not just that raw values match.
 
 ## 7. Next Best Steps
 

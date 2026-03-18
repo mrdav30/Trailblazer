@@ -63,6 +63,17 @@ This means the current system is designed for:
 
 Trailblazer intentionally does not treat Chronicler as a construct-from-data runtime factory.
 
+Another important rule applies across the Trailblazer `RecordData(...)` implementations:
+
+- `RecordValues.Look(...)` defaults must be canonical defaults for that field, not the instance's current runtime value
+- value entries equal to their declared default are omitted during save
+- missing value entries restore to the declared default during load
+- deep record paths are split intentionally: reference-owned nested objects use `RecordDeep`, non-nullable structs use `RecordDeepStruct`, and optional structs use `RecordNullableDeep`
+
+This keeps payloads smaller and makes partial or older payloads deterministic.
+
+It also means omitted entries do not preserve whatever value happened to already be present in the target runtime shell. If a field is absent from the payload, load assigns that field's declared default.
+
 That means this runtime is not designed for:
 
 - constructing arbitrary controller graphs from serialized data alone
@@ -239,6 +250,8 @@ When extending this system, keep these rules in mind:
 - serialize authoritative state, not convenience caches
 - rebuild derived values on load where practical
 - avoid serializing live references when a stable identifier or reconstructed state is safer
+- use canonical declared defaults in `RecordValues.Look(...)`, never the current live field value
+- treat omitted payload entries as "load the declared default," not "keep the current in-memory value"
 - keep deterministic ordering and fixed-point state intact
 - keep load behavior obvious and testable
 

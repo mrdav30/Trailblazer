@@ -748,8 +748,8 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref animDampTime, "animDampTime", (Fixed64)0.1f);
         RecordValues.Look(chronicler, ref stuckThresholdSpeed, "stuckThresholdSpeed", Fixed64.Zero);
         RecordValues.Look(chronicler, ref isGuideded, "isGuideded", false);
-        RecordDeep.Look(chronicler, ref frameCondition, "frameCondition");
-        RecordDeep.Look(chronicler, ref frameRequest, "frameRequest");
+        RecordDeepStruct.Look(chronicler, ref frameCondition, "frameCondition");
+        RecordDeepStruct.Look(chronicler, ref frameRequest, "frameRequest");
         RecordDeep.Look(chronicler, ref steering, "steering");
         RecordDeep.Look(chronicler, ref turning, "turning");
         RecordDeep.Look(chronicler, ref motor, "motor");

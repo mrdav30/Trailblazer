@@ -162,6 +162,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
+        target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
         target.Size.Should().Be(source.Size);
 
         AssertSteeringStateMatches(source.Steering, target.Steering);
@@ -216,6 +217,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
+        target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
         target.Size.Should().Be(source.Size);
 
         AssertSteeringStateMatches(source.Steering, target.Steering);
@@ -481,6 +483,10 @@ public class NavigatorSerializationTests : IDisposable
         source.Motor.Handler.Swim.IsDiving = true;
         source.Motor.Handler.Swim.UnderwaterTimer = (Fixed64)7;
 
+        source.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)2.5f;
+        source.Motor.Handler.Fly.GravityCompensation = (Fixed64)0.75f;
+        source.Motor.Handler.Fly.IsFlying = true;
+
         var holdPlatform = new PlatformSnapshot(9, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(6, 0, 6)));
         source.Motor.Handler.Platform.IsNewPlatform = true;
         source.Motor.Handler.Platform.PreviousPlatform = new PlatformSnapshot(8, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(3, 0, 3)));
@@ -497,7 +503,7 @@ public class NavigatorSerializationTests : IDisposable
     private static TestNavigator CreateConfiguredNavigator()
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
-        source.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Moderate, isRequestingJump: true);
+        source.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Moderate, isRequestingJump: true, isRequestingFlight: true);
         source.SetGroundContact(
             surfaceLevel: Fixed64.Zero,
             platform: new PlatformSnapshot(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1))),
@@ -522,6 +528,8 @@ public class NavigatorSerializationTests : IDisposable
         source.Motor.Handler.Jump.FrameJumpDirection = Vector3d.Up;
         source.Motor.Handler.Fall.IsFalling = true;
         source.Motor.Handler.Fall.FallStart = (Fixed64)10;
+        source.Motor.Handler.Fly.GravityCompensation = (Fixed64)0.8f;
+        source.Motor.Handler.Fly.IsFlying = true;
         source.Turning.CanTurn = false;
         source.Turning.TurnRate = (Fixed64)0.35f;
 
@@ -666,6 +674,11 @@ public class NavigatorSerializationTests : IDisposable
         actual.Handler.Swim.IsSwimming.Should().Be(expected.Handler.Swim.IsSwimming);
         actual.Handler.Swim.IsDiving.Should().Be(expected.Handler.Swim.IsDiving);
         actual.Handler.Swim.UnderwaterTimer.Should().Be(expected.Handler.Swim.UnderwaterTimer);
+
+        actual.Handler.Fly.IsEnabled.Should().Be(expected.Handler.Fly.IsEnabled);
+        actual.Handler.Fly.MaxFlySpeed.Should().Be(expected.Handler.Fly.MaxFlySpeed);
+        actual.Handler.Fly.GravityCompensation.Should().Be(expected.Handler.Fly.GravityCompensation);
+        actual.Handler.Fly.IsFlying.Should().Be(expected.Handler.Fly.IsFlying);
 
         actual.Handler.Platform.IsNewPlatform.Should().Be(expected.Handler.Platform.IsNewPlatform);
         actual.Handler.Platform.MovementTransfer.Should().Be(expected.Handler.Platform.MovementTransfer);

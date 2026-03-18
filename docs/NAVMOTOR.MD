@@ -18,7 +18,7 @@ The code referenced here lives primarily in:
 It is responsible for:
 
 - turning a frame's movement request into deterministic motion deltas
-- applying locomotion rules for ground, air, water, slopes, slides, jumps, and moving platforms
+- applying locomotion rules for ground, air, water, slopes, slides, jumps, controlled flight, and moving platforms
 - tracking traversal-state transitions between frames
 - producing deterministic movement output using fixed-point math and a fixed simulation timestep
 
@@ -113,8 +113,9 @@ By default the handler installs the built-in set:
 - `Fall`
 - `Slide`
 - `Swim`
+- `Fly`
 
-`Move` and `Fall` are the required core locomotions. `Platform`, `Jump`, `Slide`, and `Swim` are optional and can be installed or removed through a locomotion profile.
+`Move` and `Fall` are the required core locomotions. `Platform`, `Jump`, `Slide`, `Swim`, and `Fly` are optional and can be installed or removed through a locomotion profile.
 
 These locomotion objects are per-motor, not global. That means different navigators can run different movement parameters at the same time, and different navigator types can use different locomotion compositions entirely.
 
@@ -170,6 +171,7 @@ Responsibilities:
 
 - decide whether the navigator currently has control
 - detect steep-slope sliding
+- activate controlled air flight when the frame request asks for it and the installed profile supports it
 - clear or preserve vertical output depending on grounded or airborne state
 - compute desired velocity
 - apply friction in grounded idle cases
@@ -179,6 +181,7 @@ Key behaviors:
 
 - grounded steep slopes can force `Handler.Slide.IsSliding = true`
 - air control is reduced or disabled depending on locomotion state
+- controlled flight can own airborne movement without classifying intentional descent as a fall
 - grounded movement can be projected along the surface normal
 - slope speed multipliers can modify horizontal speed
 
@@ -195,6 +198,7 @@ This phase applies vertical environmental behavior:
 
 - grounded downward stick
 - airborne gravity
+- flight gravity compensation
 - terminal-velocity clamping
 - water buoyancy
 - held-jump gravity offset

@@ -32,6 +32,7 @@ The current Trailblazer serialization coverage is intentionally limited to:
 - `FallLocomotion`
 - `SlideLocomotion`
 - `SwimLocomotion`
+- `FlyLocomotion`
 
 In practice that means the current covered branch handles:
 
@@ -202,6 +203,7 @@ Examples:
 - `FallLocomotion`: fall configuration plus fall start/end state
 - `SlideLocomotion`: slide-specific configuration plus `IsSliding`
 - `SwimLocomotion`: swim configuration plus swim/dive/underwater timers
+- `FlyLocomotion`: flight speed/acceleration/gravity-compensation configuration plus `IsFlying`
 - `PlatformLocomotion`: platform configuration plus active/previous/hold platform state, movement-transfer state, local attachment state, and tracked platform velocities
 
 ## 4. What Is Not Serialized Yet

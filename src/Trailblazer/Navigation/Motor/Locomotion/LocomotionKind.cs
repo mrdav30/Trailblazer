@@ -44,6 +44,11 @@ public enum LocomotionKind
     Swim = 1 << 5,
 
     /// <summary>
+    /// Controlled airborne flight behavior.
+    /// </summary>
+    Fly = 1 << 6,
+
+    /// <summary>
     /// The required locomotion set used by all motors.
     /// </summary>
     Core = Move | Fall,
@@ -51,7 +56,7 @@ public enum LocomotionKind
     /// <summary>
     /// The optional locomotion set used by the built-in presets.
     /// </summary>
-    Optional = Platform | Jump | Slide | Swim,
+    Optional = Platform | Jump | Slide | Swim | Fly,
 
     /// <summary>
     /// The built-in locomotion set containing every shipped module.

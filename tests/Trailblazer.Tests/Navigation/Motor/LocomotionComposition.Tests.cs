@@ -31,6 +31,7 @@ public class LocomotionCompositionTests : IDisposable
         agent.Motor.Handler.Jump.Should().BeNull();
         agent.Motor.Handler.Slide.Should().BeNull();
         agent.Motor.Handler.Swim.Should().BeNull();
+        agent.Motor.Handler.Fly.Should().BeNull();
     }
 
     [Fact]
@@ -48,6 +49,7 @@ public class LocomotionCompositionTests : IDisposable
         navigator.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
         navigator.Motor.Handler.Jump.Should().BeNull();
         navigator.Motor.Handler.Swim.Should().BeNull();
+        navigator.Motor.Handler.Fly.Should().BeNull();
     }
 
     [Fact]
@@ -114,6 +116,7 @@ public class LocomotionCompositionTests : IDisposable
         agent.Motor.Handler.Platform.Should().BeNull();
         agent.Motor.Handler.Slide.Should().BeNull();
         agent.Motor.Handler.Swim.Should().BeNull();
+        agent.Motor.Handler.Fly.Should().BeNull();
     }
 
     [Theory]
@@ -138,6 +141,7 @@ public class LocomotionCompositionTests : IDisposable
         target.Motor.Handler.Platform.Should().BeNull();
         target.Motor.Handler.Slide.Should().BeNull();
         target.Motor.Handler.Swim.Should().BeNull();
+        target.Motor.Handler.Fly.Should().BeNull();
     }
 
     [Theory]
@@ -157,6 +161,7 @@ public class LocomotionCompositionTests : IDisposable
         target.Motor.Handler.Platform.Should().NotBeNull();
         target.Motor.Handler.Slide.Should().NotBeNull();
         target.Motor.Handler.Swim.Should().NotBeNull();
+        target.Motor.Handler.Fly.Should().NotBeNull();
     }
 
     private static object SerializeRecord(IRecordable record, bool useMemoryPack)

@@ -221,7 +221,7 @@ See also:
 
 ### 6.4 NavMotor
 
-`NavMotor` is the deterministic movement-execution layer. It consumes the current `TrekRequest`, applies locomotion rules for ground, air, water, slopes, jumps, slides, and platforms, and supports per-navigator locomotion profiles so different navigators can install different movement capabilities while sharing the same core motor pipeline. It then reconciles traversal-state transitions after the host updates environment data for the frame.
+`NavMotor` is the deterministic movement-execution layer. It consumes the current `TrekRequest`, applies locomotion rules for ground, air, water, slopes, jumps, controlled flight, slides, and platforms, and supports per-navigator locomotion profiles so different navigators can install different movement capabilities while sharing the same core motor pipeline. It then reconciles traversal-state transitions after the host updates environment data for the frame.
 
 See also:
 

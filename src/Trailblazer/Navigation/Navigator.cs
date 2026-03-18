@@ -304,10 +304,12 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="direction">Desired direction of travel.</param>
     /// <param name="rate">Rate of travel (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the agent is requesting a jump action.</param>
+    /// <param name="isRequestingFlight">Whether the agent is requesting controlled flight.</param>
     public virtual void ApplyInputTrekRequest(
         Vector3d? direction = null,
         TrekRate? rate = null,
-        bool? isRequestingJump = null)
+        bool? isRequestingJump = null,
+        bool? isRequestingFlight = null)
     {
         if (!IsActive) return;
 
@@ -315,6 +317,7 @@ public abstract class Navigator : INavigate, IRecordable
         _frameRequest.Direction = direction ?? Vector3d.Zero;
         _frameRequest.Rate = rate ?? TrekRate.Stationary;
         _frameRequest.IsRequestingJump = isRequestingJump ?? false;
+        _frameRequest.IsRequestingFlight = isRequestingFlight ?? false;
     }
 
     /// <summary>
@@ -346,6 +349,7 @@ public abstract class Navigator : INavigate, IRecordable
         _frameRequest.Direction = Vector3d.Zero;
         _frameRequest.Rate = rate ?? TrekRate.Stationary;
         _frameRequest.IsRequestingJump = isRequestingJump ?? false;
+        _frameRequest.IsRequestingFlight = false;
 
         Steering.ApplyPathRequest(pathRequest, groupId);
     }
@@ -375,6 +379,11 @@ public abstract class Navigator : INavigate, IRecordable
     /// Called to make the agent jump if allowed and in a valid state.
     /// </summary>
     public virtual void ToggleJumpStatus(bool status) => _frameRequest.IsRequestingJump = status;
+
+    /// <summary>
+    /// Called to toggle controlled flight if supported by the installed locomotion profile.
+    /// </summary>
+    public virtual void ToggleFlightStatus(bool status) => _frameRequest.IsRequestingFlight = status;
 
     /// <summary>
     /// Changes the speed at which the navigator is currently traveling without altering direction.

@@ -50,6 +50,8 @@ public class NavMotor : IRecordable
 
     private SwimLocomotion SwimModule => Handler.Swim;
 
+    private FlyLocomotion FlyModule => Handler.Fly;
+
     #region Cache
 
     /// <summary>
@@ -109,10 +111,15 @@ public class NavMotor : IRecordable
     public bool WasInWater => CurrentState.PreviousState?.Medium == TraversalMedium.Water;
 
     /// <summary>
-    /// Checks if the navigator is in a state where it is airborne but not actively jumping or falling.
+    /// Determines if the navigator is currently under active flight control.
+    /// </summary>
+    public bool IsFlying => FlyModule?.IsFlying == true;
+
+    /// <summary>
+    /// Checks if the navigator is in a state where it is airborne but not actively jumping, flying, or falling.
     /// </summary>
     public bool InLimbo => !IsGrounded && !IsInAir && !IsInWater
-        || IsInAir && !(JumpModule?.IsJumping ?? false) && !Handler.Fall.IsFalling;
+        || IsInAir && !IsFlying && !(JumpModule?.IsJumping ?? false) && !Handler.Fall.IsFalling;
 
     #endregion
 
@@ -232,6 +239,7 @@ public class NavMotor : IRecordable
             $"Grounded={IsGrounded}, " +
             $"InAir={IsInAir}, " +
             $"InWater={IsInWater}, " +
+            $"Flying={IsFlying}, " +
             $"InLimbo={InLimbo}, " +
             $"Velocity={Handler.Move.FrameVelocity}");
 #endif
@@ -252,6 +260,8 @@ public class NavMotor : IRecordable
         if (JumpModule?.IsCoolingDown == true)
             JumpModule.UpdateCooldown();
 
+        UpdateFlightState(request);
+
         ComputeMovementForces(request);
 
         // Reset this before applying gravity
@@ -268,8 +278,12 @@ public class NavMotor : IRecordable
             ? _forceOutput * TrailblazerManager.DeltaTime
             : Vector3d.Zero;
 
-        //  Do NOT apply movement if we just jumped — velocity was already injected
-        bool isMovingWithPlatform = PlatformModule?.IsActive == true && (IsGrounded || PlatformModule.IsLockedToPlatform);
+        //  Do NOT apply movement
+        //  - if we just jumped — velocity was already injected
+        //  - if we aren't grounded and not flying
+        bool isMovingWithPlatform = PlatformModule?.IsActive == true
+            && !IsFlying
+            && (IsGrounded || PlatformModule.IsLockedToPlatform);
         if (isMovingWithPlatform && !(JumpModule?.IsJumping ?? false))
             PlatformModule.GetPlatformInfluence(request.FootPosition ?? request.Origin,
                 request.Rotation,
@@ -291,28 +305,38 @@ public class NavMotor : IRecordable
         // Check if navigator is in control
         if (IsGrounded)
         {
-            bool isTooSteep = IsTooSteep(FrameSlopeAngle);
-            bool isSliding = SlideModule?.IsEnabled == true && isTooSteep;
+            if (IsFlying)
+            {
+                if (SlideModule != null)
+                    SlideModule.IsSliding = false;
 
-            if (SlideModule != null)
-                SlideModule.IsSliding = isSliding;
+                Handler.IsInControl = true;
+            }
+            else
+            {
+                bool isTooSteep = IsTooSteep(FrameSlopeAngle);
+                bool isSliding = SlideModule?.IsEnabled == true && isTooSteep;
 
-            Handler.IsInControl = !isTooSteep; // prevent control on surfaces that are too steep
+                if (SlideModule != null)
+                    SlideModule.IsSliding = isSliding;
+
+                Handler.IsInControl = !isTooSteep; // prevent control on surfaces that are too steep
+            }
         }
         else
-            Handler.IsInControl = !InLimbo;
+            Handler.IsInControl = IsFlying || !InLimbo;
 
         if (InLimbo)
             return;
 
         // remove any downward current downward momentum if we aren't grounded or just landed
-        if (!IsGrounded || IsGrounded && WasInAir)
+        if ((!IsGrounded || IsGrounded && WasInAir) && !IsFlying)
             _forceOutput.y = Fixed64.Zero;
 
         Vector3d desiredVelocity = GetDesiredVelocity(frameRequest);
 
         // Apply Friction (resistance to motion)
-        if (IsGrounded && frameRequest.Direction == Vector3d.Zero)
+        if (IsGrounded && !IsFlying && frameRequest.Direction == Vector3d.Zero)
         {
             Fixed64 friction = CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
             if (friction > Fixed64.Zero && _forceOutput != Vector3d.Zero)
@@ -339,7 +363,7 @@ public class NavMotor : IRecordable
         _forceOutput += velocityChange;
 
         // Uphill / Downhill velocity Y clamping
-        if (IsGrounded)
+        if (IsGrounded && !IsFlying)
             _forceOutput.y = FixedMath.Min(_forceOutput.y, Fixed64.Zero);
     }
 
@@ -350,6 +374,9 @@ public class NavMotor : IRecordable
     private Vector3d GetDesiredVelocity(TrekRequest frameRequest)
     {
         Vector3d result = Vector3d.Zero;
+        if (IsFlying)
+            return GetFlightVelocity(frameRequest);
+
         if (SlideModule?.IsSliding == true)
         {
             // The direction we're sliding in
@@ -410,6 +437,36 @@ public class NavMotor : IRecordable
     }
 
     /// <summary>
+    /// Computes the desired world-space velocity while controlled flight is active.
+    /// </summary>
+    private Vector3d GetFlightVelocity(TrekRequest frameRequest)
+    {
+        if (FlyModule?.IsEnabled != true || !FlyModule.CanFly || frameRequest.Rate == TrekRate.Stationary)
+            return Vector3d.Zero;
+
+        Fixed64 speedMultiplier = GetFlightSpeedMultiplier(frameRequest.Rate);
+        if (speedMultiplier <= Fixed64.Zero)
+            return Vector3d.Zero;
+
+        Fixed3x3 transposedMatrix = frameRequest.Rotation.ToMatrix3x3();
+        Vector3d desiredLocalDirection = Fixed3x3.InverseTransformDirection(transposedMatrix, frameRequest.Direction);
+        Vector3d desiredLocalVelocity = Vector3d.Zero;
+
+        Vector3d horizontalInput = new(desiredLocalDirection.x, Fixed64.Zero, desiredLocalDirection.z);
+        Fixed64 horizontalMagnitude = FixedMath.Clamp01(horizontalInput.Magnitude);
+        if (horizontalMagnitude > Fixed64.Zero)
+            desiredLocalVelocity += horizontalInput.Normal * (FlyModule.MaxFlySpeed * speedMultiplier * horizontalMagnitude);
+
+        Fixed64 verticalInput = FixedMath.Clamp(desiredLocalDirection.y, -Fixed64.One, Fixed64.One);
+        if (verticalInput > Fixed64.Zero)
+            desiredLocalVelocity.y = verticalInput * FlyModule.MaxAscendSpeed * speedMultiplier;
+        else if (verticalInput < Fixed64.Zero)
+            desiredLocalVelocity.y = verticalInput.Abs() * -FlyModule.MaxDescendSpeed * speedMultiplier;
+
+        return Fixed3x3.TransformDirection(transposedMatrix, desiredLocalVelocity);
+    }
+
+    /// <summary>
     /// Computes the horizontal velocity based on movement input and current facing direction.
     /// </summary>
     /// <returns>The target horizontal velocity.</returns>
@@ -438,6 +495,19 @@ public class NavMotor : IRecordable
     {
         if (desiredMovementDirection == Vector3d.Zero)
             return Fixed64.Zero;
+
+        if (IsFlying)
+        {
+            if (FlyModule?.IsEnabled != true || !FlyModule.CanFly)
+                return Fixed64.Zero;
+
+            Fixed64 horizontalMagnitude = FixedMath.Clamp01(new Vector3d(
+                desiredMovementDirection.x,
+                Fixed64.Zero,
+                desiredMovementDirection.z).Magnitude);
+
+            return horizontalMagnitude * FlyModule.MaxFlySpeed * GetFlightSpeedMultiplier(rate);
+        }
 
         Vector3d temp;
         Fixed64 zAxisEllipseMultiplier;
@@ -516,6 +586,11 @@ public class NavMotor : IRecordable
                 ? SwimModule.MaxSwimAcceleration
                 : Handler.Move.MaxAirAcceleration;
 
+        if (IsFlying)
+            return FlyModule?.IsEnabled == true && FlyModule.CanFly
+                ? FlyModule.MaxFlyAcceleration
+                : Handler.Move.MaxAirAcceleration;
+
         if (IsGrounded) return Handler.Move.MaxGroundAcceleration;
 
         if ((JumpModule?.IsJumping ?? false)
@@ -531,6 +606,16 @@ public class NavMotor : IRecordable
     private void ApplyEnvironmentalForces()
     {
         Fixed64 gravityStep = Handler.Move.GravityForce * TrailblazerManager.DeltaTime;
+
+        if (IsFlying)
+        {
+            Fixed64 gravityCompensation = FixedMath.Clamp(
+                FlyModule?.GravityCompensation ?? Fixed64.Zero,
+                Fixed64.Zero,
+                Fixed64.One);
+            _forceOutput.y -= gravityStep * (Fixed64.One - gravityCompensation);
+            return;
+        }
 
         if (IsGrounded)
         {
@@ -586,6 +671,9 @@ public class NavMotor : IRecordable
         if (!(JumpModule?.IsEnabled == true
             && Handler.IsInControl
             && requestJump)) return;
+
+        if (IsFlying)
+            return;
 
         // Prevent jumping while in active fall state (e.g., walking off a ledge)
         if (Handler.Fall.IsFalling)
@@ -699,6 +787,8 @@ public class NavMotor : IRecordable
 
         HandleSwimState(newPosition);
 
+        HandleFlightState();
+
         HandleFallState(newPosition);
 
         if (PlatformModule?.IsActive == true && (IsGrounded || PlatformModule.IsLockedToPlatform))
@@ -806,6 +896,26 @@ public class NavMotor : IRecordable
     }
 
     /// <summary>
+    /// Clears or preserves flight state based on the refreshed traversal medium.
+    /// </summary>
+    private void HandleFlightState()
+    {
+        if (FlyModule?.IsEnabled != true)
+            return;
+
+        if (!IsInAir)
+        {
+            if (FlyModule.IsFlying)
+                Handler.ClearTransientState<FlyLocomotion>();
+
+            return;
+        }
+
+        if (FlyModule.IsFlying && Handler.Fall.IsFalling)
+            Handler.ClearTransientState<FallLocomotion>();
+    }
+
+    /// <summary>
     /// Processes the navigator’s fall state, tracking fall height and triggering landing events when appropriate.
     /// </summary>
     /// <remarks>
@@ -816,6 +926,13 @@ public class NavMotor : IRecordable
         if (!Handler.Fall.IsEnabled) return;
 
         if (IsInWater)
+        {
+            if (Handler.Fall.IsFalling)
+                Handler.ClearTransientState<FallLocomotion>();
+            return;
+        }
+
+        if (IsFlying)
         {
             if (Handler.Fall.IsFalling)
                 Handler.ClearTransientState<FallLocomotion>();
@@ -866,6 +983,63 @@ public class NavMotor : IRecordable
 
             Events?.OnStartFall?.Invoke();
         }
+    }
+
+    /// <summary>
+    /// Updates the active flight state from the current frame request.
+    /// </summary>
+    private void UpdateFlightState(TrekRequest request)
+    {
+        if (FlyModule?.IsEnabled != true)
+            return;
+
+        bool shouldFly = request.IsRequestingFlight
+            && FlyModule.CanFly
+            && !IsInWater
+            && CurrentState.Medium != TraversalMedium.Unknown;
+
+        if (!shouldFly)
+        {
+            FlyModule.IsFlying = false;
+            return;
+        }
+
+        FlyModule.IsFlying = true;
+
+        if (Handler.Fall.IsFalling)
+            Handler.ClearTransientState<FallLocomotion>();
+
+        if (JumpModule != null)
+        {
+            JumpModule.IsJumping = false;
+            JumpModule.IsHoldingJump = false;
+        }
+
+        if (SlideModule != null)
+            SlideModule.IsSliding = false;
+    }
+
+    /// <summary>
+    /// Scales configured flight speeds by the requested traversal rate.
+    /// </summary>
+    private Fixed64 GetFlightSpeedMultiplier(TrekRate rate)
+    {
+        if (rate == TrekRate.Stationary)
+            return Fixed64.Zero;
+
+        Fixed64 maxFastSpeed = Handler.Move.MaxFastSpeed;
+        if (rate == TrekRate.Fast || maxFastSpeed <= Fixed64.Zero)
+            return Fixed64.One;
+
+        Fixed64 rawMultiplier = rate switch
+        {
+            TrekRate.Slow => Handler.Move.MaxSlowSpeed / maxFastSpeed,
+            TrekRate.Moderate => Handler.Move.MaxModerateSpeed / maxFastSpeed,
+            TrekRate.Fast => Fixed64.One,
+            _ => Fixed64.Zero
+        };
+
+        return FixedMath.Clamp(rawMultiplier, Fixed64.Zero, Fixed64.One);
     }
 
     #endregion

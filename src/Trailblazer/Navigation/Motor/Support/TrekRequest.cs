@@ -7,7 +7,7 @@ namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
 /// Represents a movement request for a navigator to pass to <see cref="NavMotor"/>,
-/// containing the current origin, foot position, rotation, direction, speed, and jump intent.
+/// containing the current origin, foot position, rotation, direction, speed, jump intent, and flight intent.
 /// </summary>
 [Serializable]
 public struct TrekRequest : IRecordable
@@ -42,6 +42,11 @@ public struct TrekRequest : IRecordable
     /// </summary>
     public bool IsRequestingJump;
 
+    /// <summary>
+    /// Indicates whether the scout is requesting controlled flight.
+    /// </summary>
+    public bool IsRequestingFlight;
+
     public TrekRequest() { }
 
     /// <summary>
@@ -55,6 +60,7 @@ public struct TrekRequest : IRecordable
         Direction = Direction,
         Rate = Rate,
         IsRequestingJump = IsRequestingJump,
+        IsRequestingFlight = IsRequestingFlight,
         FootPosition = FootPosition
     };
 
@@ -69,6 +75,7 @@ public struct TrekRequest : IRecordable
         Direction = Vector3d.Zero;
         Rate = TrekRate.Stationary;
         IsRequestingJump = false;
+        IsRequestingFlight = false;
     }
 
     public void RecordData(IChronicler chronicler)
@@ -79,5 +86,6 @@ public struct TrekRequest : IRecordable
         RecordValues.Look(chronicler, ref Direction, nameof(Direction), Vector3d.Zero);
         RecordValues.Look(chronicler, ref Rate, nameof(Rate), TrekRate.Stationary);
         RecordValues.Look(chronicler, ref IsRequestingJump, nameof(IsRequestingJump), false);
+        RecordValues.Look(chronicler, ref IsRequestingFlight, nameof(IsRequestingFlight), false);
     }
 }

@@ -25,6 +25,7 @@ public sealed class LocomotionProfileBuilder
             Jump = new JumpLocomotion();
             Slide = new SlideLocomotion();
             Swim = new SwimLocomotion();
+            Fly = new FlyLocomotion();
         }
     }
 
@@ -61,6 +62,11 @@ public sealed class LocomotionProfileBuilder
     /// The optional swim locomotion to install.
     /// </summary>
     public SwimLocomotion Swim { get; private set; }
+
+    /// <summary>
+    /// The optional fly locomotion to install.
+    /// </summary>
+    public FlyLocomotion Fly { get; private set; }
 
     #endregion
 
@@ -155,6 +161,24 @@ public sealed class LocomotionProfileBuilder
     }
 
     /// <summary>
+    /// Installs or replaces fly locomotion.
+    /// </summary>
+    public LocomotionProfileBuilder WithFly(FlyLocomotion fly = null)
+    {
+        Fly = fly ?? new FlyLocomotion();
+        return this;
+    }
+
+    /// <summary>
+    /// Removes fly locomotion.
+    /// </summary>
+    public LocomotionProfileBuilder WithoutFly()
+    {
+        Fly = null;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the composed locomotion profile.
     /// </summary>
     public LocomotionProfile Build()
@@ -165,7 +189,8 @@ public sealed class LocomotionProfileBuilder
             Platform,
             Jump,
             Slide,
-            Swim);
+            Swim,
+            Fly);
     }
 
     internal static LocomotionProfileBuilder FromHandler(LocomotionHandler handler)
@@ -179,7 +204,8 @@ public sealed class LocomotionProfileBuilder
             .SetPlatform(handler.Platform)
             .SetJump(handler.Jump)
             .SetSlide(handler.Slide)
-            .SetSwim(handler.Swim);
+            .SetSwim(handler.Swim)
+            .SetFly(handler.Fly);
     }
 
     private LocomotionProfileBuilder SetPlatform(PlatformLocomotion platform)
@@ -203,6 +229,12 @@ public sealed class LocomotionProfileBuilder
     private LocomotionProfileBuilder SetSwim(SwimLocomotion swim)
     {
         Swim = swim;
+        return this;
+    }
+
+    private LocomotionProfileBuilder SetFly(FlyLocomotion fly)
+    {
+        Fly = fly;
         return this;
     }
 }

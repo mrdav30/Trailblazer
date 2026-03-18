@@ -86,6 +86,11 @@ public class LocomotionHandler : IRecordable
     /// </remarks>
     public SwimLocomotion Swim { get; private set; }
 
+    /// <summary>
+    /// Handles controlled flight while the scout is airborne.
+    /// </summary>
+    public FlyLocomotion Fly { get; private set; }
+
     #endregion
 
     #region Composition
@@ -183,6 +188,7 @@ public class LocomotionHandler : IRecordable
         ClearReplacedLocomotion(Jump, profile.Jump);
         ClearReplacedLocomotion(Slide, profile.Slide);
         ClearReplacedLocomotion(Swim, profile.Swim);
+        ClearReplacedLocomotion(Fly, profile.Fly);
 
         Move = profile.Move ?? throw new InvalidOperationException("Move locomotion is required.");
         Fall = profile.Fall ?? throw new InvalidOperationException("Fall locomotion is required.");
@@ -190,6 +196,7 @@ public class LocomotionHandler : IRecordable
         Jump = profile.Jump;
         Slide = profile.Slide;
         Swim = profile.Swim;
+        Fly = profile.Fly;
 
         RefreshInstalledKinds();
     }
@@ -205,7 +212,8 @@ public class LocomotionHandler : IRecordable
             Platform,
             Jump,
             Slide,
-            Swim);
+            Swim,
+            Fly);
     }
 
     internal void ConfigureInstalledKinds(LocomotionKind kinds)
@@ -225,6 +233,9 @@ public class LocomotionHandler : IRecordable
         if ((normalizedKinds & LocomotionKind.Swim) != 0)
             builder.WithSwim();
 
+        if ((normalizedKinds & LocomotionKind.Fly) != 0)
+            builder.WithFly();
+
         ApplyProfile(builder.Build());
     }
 
@@ -243,6 +254,9 @@ public class LocomotionHandler : IRecordable
 
         if (Swim != null)
             InstalledKinds |= LocomotionKind.Swim;
+
+        if (Fly != null)
+            InstalledKinds |= LocomotionKind.Fly;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -256,6 +270,7 @@ public class LocomotionHandler : IRecordable
             nameof(FallLocomotion) => Fall,
             nameof(SlideLocomotion) => Slide,
             nameof(SwimLocomotion) => Swim,
+            nameof(FlyLocomotion) => Fly,
             _ => null,
         };
     }
@@ -277,6 +292,9 @@ public class LocomotionHandler : IRecordable
 
         if (Swim != null)
             yield return Swim;
+
+        if (Fly != null)
+            yield return Fly;
 
         if (Slide != null)
             yield return Slide;
@@ -316,6 +334,11 @@ public class LocomotionHandler : IRecordable
             case nameof(SwimLocomotion):
                 {
                     Swim = locomotion as SwimLocomotion;
+                    return;
+                }
+            case nameof(FlyLocomotion):
+                {
+                    Fly = locomotion as FlyLocomotion;
                     return;
                 }
             default:
@@ -402,6 +425,7 @@ public class LocomotionHandler : IRecordable
         FallLocomotion fall = Fall;
         SlideLocomotion slide = Slide;
         SwimLocomotion swim = Swim;
+        FlyLocomotion fly = Fly;
 
         RecordDeep.Look(chronicler, ref move, "move");
         RecordDeep.Look(chronicler, ref platform, "platform");
@@ -409,6 +433,7 @@ public class LocomotionHandler : IRecordable
         RecordDeep.Look(chronicler, ref fall, "fall");
         RecordDeep.Look(chronicler, ref slide, "slide");
         RecordDeep.Look(chronicler, ref swim, "swim");
+        RecordDeep.Look(chronicler, ref fly, "fly");
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
@@ -418,7 +443,8 @@ public class LocomotionHandler : IRecordable
                 platform,
                 jump,
                 slide,
-                swim));
+                swim,
+                fly));
         }
     }
 

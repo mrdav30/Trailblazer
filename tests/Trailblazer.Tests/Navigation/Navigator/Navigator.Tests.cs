@@ -269,6 +269,23 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void ApplyInputTrekRequest_ShouldCaptureFlightIntent()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Up,
+            TrekRate.Fast,
+            isRequestingJump: false,
+            isRequestingFlight: true);
+
+        navigator.FrameRequest.Direction.Should().Be(Vector3d.Up);
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
+        navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+    }
+
+    [Fact]
     public void SetGroundContact_ShouldPopulateGroundStateAndUpdateMotorWhenRequested()
     {
         var navigator = CreateNavigator(Vector3d.Zero);

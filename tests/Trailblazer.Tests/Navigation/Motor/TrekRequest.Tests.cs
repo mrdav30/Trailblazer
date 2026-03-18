@@ -17,7 +17,8 @@ public class TrekRequestTests
             Rotation = FixedQuaternion.FromAxisAngle(Vector3d.Up, Fixed64.FromRaw(0x10000000L)),
             Direction = Vector3d.Forward,
             Rate = TrekRate.Fast,
-            IsRequestingJump = true
+            IsRequestingJump = true,
+            IsRequestingFlight = true
         };
 
         TrekRequest clone = request.Clone();
@@ -29,6 +30,7 @@ public class TrekRequestTests
         clone.Direction.Should().Be(request.Direction);
         clone.Rate.Should().Be(request.Rate);
         clone.IsRequestingJump.Should().Be(request.IsRequestingJump);
+        clone.IsRequestingFlight.Should().Be(request.IsRequestingFlight);
     }
 
     [Fact]
@@ -41,6 +43,7 @@ public class TrekRequestTests
             Direction = Vector3d.Right,
             Rate = TrekRate.Moderate,
             IsRequestingJump = true,
+            IsRequestingFlight = true,
             FootPosition = new Vector3d(1, 1, 3)
         };
 
@@ -52,5 +55,6 @@ public class TrekRequestTests
         request.Direction.Should().Be(Vector3d.Zero);
         request.Rate.Should().Be(TrekRate.Stationary);
         request.IsRequestingJump.Should().BeFalse();
+        request.IsRequestingFlight.Should().BeFalse();
     }
 }

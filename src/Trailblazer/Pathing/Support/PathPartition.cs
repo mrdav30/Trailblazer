@@ -6,7 +6,7 @@ using SwiftCollections.Pool;
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using Trailblazer.Support;
+using System.Threading;
 
 namespace Trailblazer.Pathing;
 
@@ -62,11 +62,29 @@ public class PathPartition : IVoxelPartition
     /// </summary>
     public int PathCostModifier { get; set; }
 
+    private static int _currentPathCostVersion = 1;
+
+    private int _pathCost = int.MaxValue;
+
+    private int _pathCostVersion;
+
     /// <summary>
     /// The combined cost for use in pathfinding heap prioritization.
+    /// Values automatically expire when a new pathing survey begins.
     /// </summary>
-    [Transient]
-    internal int PathCost { get; set; } = int.MaxValue;
+    internal int PathCost
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _pathCostVersion == Volatile.Read(ref _currentPathCostVersion)
+            ? _pathCost
+            : int.MaxValue;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        set
+        {
+            _pathCost = value;
+            _pathCostVersion = Volatile.Read(ref _currentPathCostVersion);
+        }
+    }
 
     internal int PathCostTotal
     {
@@ -129,6 +147,7 @@ public class PathPartition : IVoxelPartition
         IsWalkable = !voxel.IsBlocked;
 
         _clearanceRadiusInVoxels = DefaultDegreeCap;
+        ResetPathCost();
 
         IsPartitioned = true;
     }
@@ -160,6 +179,7 @@ public class PathPartition : IVoxelPartition
         IsWalkable = false;
 
         PathCostModifier = 0;
+        ResetPathCost();
 
         Neighbors = null;
 
@@ -168,6 +188,21 @@ public class PathPartition : IVoxelPartition
         _chartOwners.Clear();
 
         IsPartitioned = false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void AdvancePathCostVersion()
+    {
+        int next = Interlocked.Increment(ref _currentPathCostVersion);
+        if (next == int.MaxValue)
+            Interlocked.Exchange(ref _currentPathCostVersion, 1);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void ResetPathCost()
+    {
+        _pathCost = int.MaxValue;
+        _pathCostVersion = 0;
     }
 
     /// <summary>

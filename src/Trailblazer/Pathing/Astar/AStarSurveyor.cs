@@ -100,6 +100,7 @@ public class AStarSurveyor
             _rawPath.FastClear();
             _waypoints.FastClear();
             _chartKeys.Clear();
+            PathPartition.AdvancePathCostVersion();
 
             // Trace path from the start to the end
             _meta.Add(_request.StartNode, new());
@@ -107,11 +108,7 @@ public class AStarSurveyor
             _heap.Add(startPartition);
 
             if (!TracePath())
-            {
-                foreach (PathPartition part in _heap.EnumerateClosed())
-                    part.PathCost = 0;
                 return AStarSurveyResult.Empty;
-            }
 
             BuildRawPath();
             BuildWaypoints();
@@ -315,7 +312,6 @@ public class AStarSurveyor
             PathCost = start.PathCost,
             GlobalIndex = start.GlobalIndex
         });
-        start.PathCost = int.MaxValue;
         _chartKeys.AddRange(start.ChartOwners);
 
         Vector3d lastDirection = Vector3d.Zero;
@@ -338,7 +334,6 @@ public class AStarSurveyor
             }
 
             lastDirection = direction;
-            _rawPath[i].PathCost = int.MaxValue;
             _chartKeys.AddRange(_rawPath[i].ChartOwners);
         }
 
@@ -350,7 +345,6 @@ public class AStarSurveyor
             GlobalIndex = end.GlobalIndex,
             IsGoal = true
         });
-        end.PathCost = int.MaxValue;
         _chartKeys.AddRange(end.ChartOwners);
     }
 

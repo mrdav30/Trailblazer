@@ -68,16 +68,31 @@ public class PathPartitionHeapTests : IDisposable
         Assert.Equal(a, first);
     }
 
+    [Fact]
+    public void PathCost_ShouldExpireWhenSurveyVersionAdvances()
+    {
+        PathPartition partition = CreateAttachedPartition(Vector3d.Zero, pathCost: 7);
+        partition.PathCostModifier = 3;
+
+        Assert.Equal(7, partition.PathCost);
+        Assert.Equal(10, partition.PathCostTotal);
+
+        PathPartition.AdvancePathCostVersion();
+
+        Assert.Equal(int.MaxValue, partition.PathCost);
+        Assert.Equal(int.MaxValue, partition.PathCostTotal);
+    }
+
     private static PathPartition CreateAttachedPartition(Vector3d position, int pathCost)
     {
         Assert.True(GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel));
 
         var partition = new PathPartition
         {
-            PathCost = pathCost
         };
 
         partition.OnAddToVoxel(voxel);
+        partition.PathCost = pathCost;
         return partition;
     }
 }

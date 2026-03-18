@@ -56,6 +56,7 @@ public class FlowFieldSurveyor
 
             _heap.FastClear();
             _chartKeys.Clear();
+            PathPartition.AdvancePathCostVersion();
 
             // Start from the end and move towards the start voxel
             targetPart.PathCost = 0;
@@ -63,11 +64,7 @@ public class FlowFieldSurveyor
             _chartKeys.AddRange(targetPart.ChartOwners);
 
             if (!FloodPath())
-            {
-                foreach (PathPartition part in _heap.EnumerateClosed())
-                    part.PathCost = 0;
                 return FlowFieldSurveyResult.Empty;
-            }
 
             SwiftDictionary<GlobalVoxelIndex, FlowField> flowFields = GenerateFlowFields();
             string[] chartsUsed = _chartKeys.ToArray();
@@ -234,9 +231,6 @@ public class FlowFieldSurveyor
             result.Add(current.GlobalIndex, currentFlow);
             _chartKeys.AddRange(current.ChartOwners);
         }
-
-        foreach (PathPartition part in _heap.EnumerateClosed())
-            part.PathCost = int.MaxValue;
 
         return result;
     }

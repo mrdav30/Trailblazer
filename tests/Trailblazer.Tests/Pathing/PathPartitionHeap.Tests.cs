@@ -1,19 +1,40 @@
-﻿using Trailblazer.Pathing;
+﻿using FixedMathSharp;
+using GridForge;
+using GridForge.Configuration;
+using GridForge.Grids;
+using System;
+using Trailblazer.Pathing;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing;
 
-public class PathPartitionHeapTests
+[Collection("PathingCollection")]
+public class PathPartitionHeapTests : IDisposable
 {
+    public PathPartitionHeapTests()
+    {
+        if (GlobalGridManager.IsActive)
+            GlobalGridManager.Reset();
+
+        GlobalGridManager.Setup();
+        var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
+        GlobalGridManager.TryAddGrid(config, out _);
+    }
+
+    public void Dispose()
+    {
+        PathManager.Reset();
+        GlobalGridManager.Reset();
+        TrailblazerManager.Reset();
+        GC.SuppressFinalize(this);
+    }
+
     [Fact]
     public void RemoveFirst_WhenCountIsOne_ShouldClearRootSafely()
     {
         var heap = new PathHeap();
 
-        var voxel = new PathPartition
-        {
-            PathCost = 1
-        };
+        PathPartition voxel = CreateAttachedPartition(Vector3d.Zero, pathCost: 1);
 
         heap.Add(voxel);
         Assert.Equal(1u, heap.HeapCount);
@@ -31,9 +52,9 @@ public class PathPartitionHeapTests
     {
         var heap = new PathHeap();
 
-        var a = new PathPartition { PathCost = 30 };
-        var b = new PathPartition { PathCost = 20 };
-        var c = new PathPartition { PathCost = 10 };
+        PathPartition a = CreateAttachedPartition(new Vector3d(0, 0, 0), pathCost: 30);
+        PathPartition b = CreateAttachedPartition(new Vector3d(1, 0, 0), pathCost: 20);
+        PathPartition c = CreateAttachedPartition(new Vector3d(2, 0, 0), pathCost: 10);
 
         heap.Add(a);
         heap.Add(b);
@@ -45,5 +66,18 @@ public class PathPartitionHeapTests
 
         heap.RemoveFirst(out var first);
         Assert.Equal(a, first);
+    }
+
+    private static PathPartition CreateAttachedPartition(Vector3d position, int pathCost)
+    {
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel));
+
+        var partition = new PathPartition
+        {
+            PathCost = pathCost
+        };
+
+        partition.OnAddToVoxel(voxel);
+        return partition;
     }
 }

@@ -2,6 +2,7 @@
 using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
+using Trailblazer.Navigation;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Support;
@@ -87,6 +88,7 @@ public static class TrailblazerManager
             if (_isInitialized)
                 return;
 
+            NavigatorGlobalIdAllocator.RegisterTrailblazerLifecycleHooks();
             PathManager.RegisterTrailblazerLifecycleHooks();
             MovementGroupCoordinator.RegisterTrailblazerLifecycleHooks();
             _isInitialized = true;

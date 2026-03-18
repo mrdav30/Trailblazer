@@ -209,7 +209,9 @@ Those bindings are not treated as navigator-owned simulation state.
 
 It:
 
-- assigns a fresh `GlobalId`
+- assigns `GlobalId`
+- uses a host-provided `globalId` when one is supplied
+- otherwise allocates a deterministic default id from navigator setup order
 - sets `Position` and `LastPosition`
 - sets `Rotation`
 - derives `Forward`
@@ -218,6 +220,8 @@ It:
 - marks `_isSet = true`
 
 It does not create the steering, turning, or motor controllers yet.
+
+If your broader simulation stack already owns stable agent ids, pass that id into `Setup(...)` so Trailblazer uses the same identity for occupancy and movement-group coordination.
 
 ### 6.2 Initialize(...)
 
@@ -483,7 +487,9 @@ This is used by platform and ground-contact logic.
 
 `GenerateGUID()` is virtual.
 
-That gives a subclass a way to control identity generation if needed for testing or determinism-related workflows.
+By default it delegates to Trailblazer's deterministic navigator-id allocator.
+
+That still gives a subclass a way to control identity generation if needed for testing, host integration, or stricter determinism workflows.
 
 ### 13.3 TryCreateGuidedPathRequest(...)
 

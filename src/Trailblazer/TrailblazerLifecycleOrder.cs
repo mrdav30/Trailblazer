@@ -7,5 +7,7 @@ internal static class TrailblazerLifecycleOrder
 {
     public const int PathingMaintenance = 100;
 
+    public const int NavigationIdentityReset = 150;
+
     public const int NavigationReset = 200;
 }

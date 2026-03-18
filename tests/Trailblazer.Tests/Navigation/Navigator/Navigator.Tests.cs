@@ -75,6 +75,55 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void Setup_ShouldHonorExplicitGlobalId()
+    {
+        Guid explicitId = new("11111111-2222-3333-4444-555555555555");
+        var navigator = new TestNavigator();
+
+        navigator.Setup(Vector3d.Zero, size: Fixed64.One, globalId: explicitId);
+
+        navigator.GlobalId.Should().Be(explicitId);
+    }
+
+    [Fact]
+    public void Setup_ShouldAssignDeterministicGlobalIds_AndReplayAfterReset()
+    {
+        var first = new TestNavigator();
+        var second = new TestNavigator();
+
+        first.Setup(Vector3d.Zero, size: Fixed64.One);
+        second.Setup(Vector3d.Right, size: Fixed64.One);
+
+        Guid firstId = first.GlobalId;
+        Guid secondId = second.GlobalId;
+
+        secondId.Should().NotBe(firstId);
+        firstId.Should().NotBe(Guid.Empty);
+
+        TrailblazerManager.Reset();
+
+        var replayFirst = new TestNavigator();
+        var replaySecond = new TestNavigator();
+
+        replayFirst.Setup(Vector3d.Zero, size: Fixed64.One);
+        replaySecond.Setup(Vector3d.Right, size: Fixed64.One);
+
+        replayFirst.GlobalId.Should().Be(firstId);
+        replaySecond.GlobalId.Should().Be(secondId);
+    }
+
+    [Fact]
+    public void Setup_ShouldRejectEmptyExplicitGlobalId()
+    {
+        var navigator = new TestNavigator();
+
+        Action act = () => navigator.Setup(Vector3d.Zero, size: Fixed64.One, globalId: Guid.Empty);
+
+        act.Should().Throw<ArgumentException>()
+            .WithParameterName("globalId");
+    }
+
+    [Fact]
     public void ApplyGuidedTrekRequest_Should_Allow_PerCallPathModeOverride()
     {
         var data = new bool[1, 6, 1]

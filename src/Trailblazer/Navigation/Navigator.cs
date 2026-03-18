@@ -146,6 +146,14 @@ public abstract class Navigator : INavigate, IRecordable
 
     #region Voxel Occupancy
 
+    /// <summary>
+    /// Stable runtime identity used for occupancy and steering coordination.
+    /// </summary>
+    /// <remarks>
+    /// By default this is allocated deterministically from navigator setup order.
+    /// Hosts can override it during <see cref="Setup(Vector3d, FixedQuaternion?, Vector3d?, Fixed64?, Guid?)"/>
+    /// when a broader simulation stack already owns stable agent ids.
+    /// </remarks>
     public Guid GlobalId { get; protected set; }
 
     public byte OccupantGroupId { get; set; } = 1;
@@ -167,19 +175,24 @@ public abstract class Navigator : INavigate, IRecordable
     #region Setup / Initialization
 
     /// <summary>
-    /// Sets the initial configuration of the navigator, including position, rotation, velocity, and size.
+    /// Sets the initial configuration of the navigator, including position, rotation, velocity, size, and optional stable identity.
     /// </summary>
     /// <param name="position">Initial world-space position.</param>
     /// <param name="rotation">Optional starting rotation.</param>
     /// <param name="velocity">Optional initial velocity.</param>
     /// <param name="size">Optional grid size (defaults to 1).</param>
+    /// <param name="globalId">Optional host-provided stable identity. When omitted, Trailblazer assigns one deterministically from setup order.</param>
     public virtual void Setup(
         Vector3d position,
         FixedQuaternion? rotation = null,
         Vector3d? velocity = null,
-        Fixed64? size = null)
+        Fixed64? size = null,
+        Guid? globalId = null)
     {
-        GlobalId = GenerateGUID();
+        if (globalId.HasValue && globalId.Value == Guid.Empty)
+            throw new ArgumentException("Navigator globalId cannot be Guid.Empty.", nameof(globalId));
+
+        GlobalId = globalId ?? GenerateGUID();
 
         LastPosition = Position = position;
         Rotation = rotation ?? FixedQuaternion.Identity;
@@ -637,7 +650,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    protected virtual Guid GenerateGUID() => Guid.NewGuid();
+    protected virtual Guid GenerateGUID() => NavigatorGlobalIdAllocator.Create();
 
     #endregion
 

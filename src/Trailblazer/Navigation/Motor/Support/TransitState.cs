@@ -3,10 +3,13 @@
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Represents the current traversal state and provides synchronization with <see cref="TrekCondition"/>.
+/// Represents the traversal state for a navigator while using a <see cref="NavMotor"/>
+///  and provides synchronization with <see cref="TrekCondition"/>.
 /// </summary>
 public class TransitState
 {
+    #region State Properties
+
     /// <summary>
     /// The current traversal medium.
     /// </summary>
@@ -39,6 +42,10 @@ public class TransitState
     /// </summary>
     public TrekCondition? PreviousState { get; private set; }
 
+    #endregion
+
+    #region Constructors
+
     public TransitState(TrekCondition condition)
     {
         Update(condition, null);
@@ -48,6 +55,10 @@ public class TransitState
     {
         Update(condition, previous);
     }
+
+    #endregion
+
+    #region State Update
 
     /// <summary>
     /// Updates the traversal state and retains the previous state for transition tracking.
@@ -72,6 +83,10 @@ public class TransitState
 
         CeilingLevel = condition.CeilingLevel;
     }
+
+    #endregion
+
+    #region Utility Methods
 
     public Fixed64 GetSignedSlopeAngle(Vector3d moveDirection)
     {
@@ -99,4 +114,6 @@ public class TransitState
             CeilingLevel = CeilingLevel
         };
     }
+
+    #endregion
 }

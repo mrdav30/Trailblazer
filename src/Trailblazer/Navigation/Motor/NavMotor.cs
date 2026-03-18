@@ -591,6 +591,8 @@ namespace Trailblazer.Navigation.Motor
 
             HandlePlatformTransitions();
 
+            #region Movement State Transitions
+
             // Trasitioning to either ground or water
             if (WasInAir && !IsInAir)
             {
@@ -612,6 +614,8 @@ namespace Trailblazer.Navigation.Motor
             if (Handler.Swim.IsEnabled && !IsInWater && WasInWater)
                 Handler.ClearState<SwimLocomotion>();
 
+            #endregion
+
             HandleSwimState(newPosition);
 
             HandleFallState(newPosition);
@@ -622,6 +626,7 @@ namespace Trailblazer.Navigation.Motor
             IsFrameLocked = false;
         }
 
+        // TODO: make sure we can't ever go past ceiling level by any means, including external forces or platform movement
         private void CheckJumpStatus(Vector3d position)
         {
             // Make sure we aren't hitting the ceiling
@@ -851,9 +856,7 @@ namespace Trailblazer.Navigation.Motor
             if (chronicler.Mode == SerializationMode.Loading)
             {
                 Handler = handler;
-                CurrentState = CurrentState == null
-                    ? new TransitState(currentCondition, previousCondition)
-                    : CurrentState;
+                CurrentState ??= new(currentCondition, previousCondition);
                 CurrentState.Update(currentCondition, previousCondition);
                 IsInitialized = isInitialized;
                 IsFrameLocked = false;

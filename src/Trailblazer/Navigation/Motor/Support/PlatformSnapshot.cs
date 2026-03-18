@@ -2,10 +2,10 @@
 using System;
 using System.Text.Json.Serialization;
 
-namespace Trailblazer.Navigation;
+namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Represents a host-provided snapshot of a platform's stable identity and transform for the current frame.
+/// Represents a host-provided snapshot of a contacted surface's stable identity and transform for the current frame.
 /// </summary>
 public struct PlatformSnapshot : IEquatable<PlatformSnapshot>
 {
@@ -20,15 +20,26 @@ public struct PlatformSnapshot : IEquatable<PlatformSnapshot>
     public Fixed4x4 Transform;
 
     /// <summary>
+    /// Indicates that the sampled surface should not act as a kinematic carrier for platform locomotion.
+    /// </summary>
+    public readonly bool Inert;
+
+    /// <summary>
     /// Whether this snapshot represents an active platform sample.
     /// </summary>
     public readonly bool Active => Id != 0;
 
+    /// <summary>
+    /// Whether this sampled surface should participate in moving-platform attachment and motion transfer logic.
+    /// </summary>
+    public readonly bool SupportsKinematicMotion => Active && !Inert;
+
     [JsonConstructor]
-    public PlatformSnapshot(int id, Fixed4x4 transform)
+    public PlatformSnapshot(int id, Fixed4x4 transform, bool inert = false)
     {
         Id = id;
         Transform = transform;
+        Inert = inert;
     }
 
     public static bool operator ==(PlatformSnapshot left, PlatformSnapshot right)

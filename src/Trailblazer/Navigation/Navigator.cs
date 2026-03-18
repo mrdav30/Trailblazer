@@ -486,6 +486,7 @@ public abstract class Navigator : INavigate, IRecordable
 
     /// <summary>
     /// Updates the navigator to a grounded state using a host-provided platform snapshot plus surface settings.
+    /// Inert snapshots still describe the contacted surface but opt out of moving-platform carry logic.
     /// </summary>
     public virtual void SetGroundContact(
         Fixed64 surfaceLevel,

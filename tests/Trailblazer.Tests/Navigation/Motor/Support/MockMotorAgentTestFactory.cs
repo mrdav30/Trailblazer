@@ -93,7 +93,8 @@ public static class MockMotorAgentTestFactory
         Vector3d? startPosition = null,
         Fixed4x4? platformMatrix = null,
         Fixed64? surfaceFriction = null,
-        MotionTransfer motionTransfer = MotionTransfer.None)
+        MotionTransfer motionTransfer = MotionTransfer.None,
+        bool platformInert = false)
     {
         TrekCondition condition = new()
         {
@@ -101,7 +102,7 @@ public static class MockMotorAgentTestFactory
             CeilingLevel = Fixed64.MAX_VALUE,
             GroundState = new GroundCondition
             {
-                Platform = new(1, platformMatrix ?? Fixed4x4.Identity),
+                Platform = new(1, platformMatrix ?? Fixed4x4.Identity, platformInert),
                 SurfaceFriction = surfaceFriction ?? Fixed64.Zero,
                 MotionTransferState = motionTransfer
             }

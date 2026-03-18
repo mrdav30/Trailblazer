@@ -76,6 +76,7 @@ Important public state includes:
 - `IsInWater`
 - `WasInWater`
 - `InLimbo`
+- `Handler.Platform.InteriaApplied`
 - `Handler.Platform.IsActive`
 - `Handler.Platform.IsLockedToPlatform`
 

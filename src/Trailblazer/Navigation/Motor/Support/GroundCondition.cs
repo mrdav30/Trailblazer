@@ -20,7 +20,7 @@ public struct GroundCondition
     public Fixed64 SurfaceFriction;
 
     /// <summary>
-    /// Determines how the scout inherits movement from the ground surface.
+    /// Determines how the scout inherits movement from the ground surface when the sampled platform is not inert.
     /// </summary>
     public MotionTransfer MotionTransferState;
 

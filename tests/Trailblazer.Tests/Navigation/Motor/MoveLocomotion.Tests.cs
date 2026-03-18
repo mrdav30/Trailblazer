@@ -323,6 +323,33 @@ public class MoveLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void Given_AgentWalkingOnInertHighFrictionGround_When_Moving_Then_ShouldStillMoveSlower()
+    {
+        var lowFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(surfaceFriction: Fixed64.Zero, platformInert: true);
+        var highFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(surfaceFriction: Fixed64.One, platformInert: true);
+
+        for (int i = 0; i < 5; i++)
+        {
+            TrailblazerManager.Simulate();
+
+            lowFrictionScout.FrameRequest.Direction = Vector3d.Forward;
+            lowFrictionScout.FrameRequest.Rate = TrekRate.Moderate;
+            lowFrictionScout.Simulate();
+
+            highFrictionScout.FrameRequest.Direction = Vector3d.Forward;
+            highFrictionScout.FrameRequest.Rate = TrekRate.Moderate;
+            highFrictionScout.Simulate();
+        }
+
+        var low = lowFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
+        var high = highFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
+
+        high.Should().BeLessThan(low);
+        lowFrictionScout.Motor.Handler.Platform.IsActive.Should().BeFalse();
+        highFrictionScout.Motor.Handler.Platform.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
     public void Given_AgentOnLowFrictionGround_When_StopsMoving_Then_ShouldSlideSlightly()
     {
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(

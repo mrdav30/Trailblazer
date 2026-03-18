@@ -111,11 +111,11 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
     [Transient]
     public int HoldPlatformFrames { get; private set; }
 
-    public bool IsActive => IsEnabled && ActivePlatform?.Active == true;
+    public bool IsActive => IsEnabled && ActivePlatform?.SupportsKinematicMotion == true;
 
     public bool IsLockedToPlatform => MovementTransfer == MotionTransfer.PermaLocked;
 
-    public bool IsHoldingPlatform => IsEnabled && HoldPlatform?.Active == true;
+    public bool IsHoldingPlatform => IsEnabled && HoldPlatform?.SupportsKinematicMotion == true;
 
     /// <summary>
     /// Indicates whether platform inertia (initial velocity transfer) has been applied.
@@ -134,7 +134,7 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
     {
         if (!IsEnabled) return;
 
-        if (ActivePlatform?.Active != true)
+        if (ActivePlatform?.SupportsKinematicMotion != true)
         {
             PlatformVelocity = Vector3d.Zero;
             _preservePreviousTransformForAttachment = false;
@@ -189,7 +189,7 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
     /// <param name="platform">The sampled platform snapshot to attach to.</param>
     public void SetHoldPlatform(PlatformSnapshot? platform)
     {
-        HoldPlatform = platform;
+        HoldPlatform = NormalizeKinematicPlatform(platform);
         HoldPlatformFrames = 0;
     }
 
@@ -222,16 +222,21 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
 
         // Clear it to avoid double-applying next frame
         FramePlatformVelocity = Vector3d.Zero;
-        MovementTransfer = condition?.MotionTransferState ?? MotionTransfer.None;
+        PlatformSnapshot? refreshedPlatform = NormalizeKinematicPlatform(condition?.Platform);
+        MovementTransfer = refreshedPlatform?.SupportsKinematicMotion == true
+            ? condition?.MotionTransferState ?? MotionTransfer.None
+            : MotionTransfer.None;
 
-        PlatformSnapshot? refreshedPlatform = condition?.Platform;
-        if (refreshedPlatform?.Active != true)
-            refreshedPlatform = null;
+        if (refreshedPlatform?.SupportsKinematicMotion != true)
+        {
+            HoldPlatform = null;
+            HoldPlatformFrames = 0;
+        }
 
         if (!DidPlatformChange(refreshedPlatform))
         {
-            bool hasTransformRefresh = ActivePlatform?.Active == true
-                && refreshedPlatform?.Active == true
+            bool hasTransformRefresh = ActivePlatform?.SupportsKinematicMotion == true
+                && refreshedPlatform?.SupportsKinematicMotion == true
                 && !ActivePlatform.Value.Transform.Equals(refreshedPlatform.Value.Transform);
 
             if (hasTransformRefresh)
@@ -243,12 +248,12 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
             return;
         }
 
-        PreviousPlatform = ActivePlatform?.Active != true
+        PreviousPlatform = ActivePlatform?.SupportsKinematicMotion != true
             ? refreshedPlatform
             : ActivePlatform;
         ActivePlatform = refreshedPlatform;
 
-        IsNewPlatform = refreshedPlatform?.Active == true;
+        IsNewPlatform = refreshedPlatform?.SupportsKinematicMotion == true;
         _preservePreviousTransformForAttachment = false;
     }
 
@@ -258,6 +263,13 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
     /// <param name="newPlatform"></param>
     /// <returns>True if the navigator is on a new platform; otherwise, false.</returns>
     private bool DidPlatformChange(PlatformSnapshot? newPlatform) => ActivePlatform != newPlatform;
+
+    private static PlatformSnapshot? NormalizeKinematicPlatform(PlatformSnapshot? platform)
+    {
+        return platform?.SupportsKinematicMotion == true
+            ? platform
+            : null;
+    }
 
     /// <summary>
     /// Updates platform movement by synchronizing the navigator's position and rotation with the platform it is standing on.
@@ -278,7 +290,7 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
 
     private Fixed4x4 GetAttachmentTransform()
     {
-        if (_preservePreviousTransformForAttachment && PreviousPlatform?.Active == true)
+        if (_preservePreviousTransformForAttachment && PreviousPlatform?.SupportsKinematicMotion == true)
             return PreviousPlatform.Value.Transform;
 
         return ActivePlatform?.Transform ?? Fixed4x4.Identity;
@@ -316,16 +328,24 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
-            IsNewPlatform = isNewPlatform;
-            ActivePlatform = activePlatform;
-            PreviousPlatform = previousPlatform;
-            HoldPlatform = holdPlatform;
-            MovementTransfer = movementTransfer;
+            ActivePlatform = NormalizeKinematicPlatform(activePlatform);
+            PreviousPlatform = NormalizeKinematicPlatform(previousPlatform);
+            HoldPlatform = NormalizeKinematicPlatform(holdPlatform);
+            IsNewPlatform = ActivePlatform?.SupportsKinematicMotion == true && isNewPlatform;
+            MovementTransfer = ActivePlatform?.SupportsKinematicMotion == true
+                ? movementTransfer
+                : MotionTransfer.None;
             ScoutLocalPoint = scoutLocalPoint;
             ScoutLocalRotation = scoutLocalRotation;
-            PlatformVelocity = platformVelocity;
-            FramePlatformVelocity = framePlatformVelocity;
-            HoldPlatformFrames = holdPlatformFrames;
+            PlatformVelocity = ActivePlatform?.SupportsKinematicMotion == true
+                ? platformVelocity
+                : Vector3d.Zero;
+            FramePlatformVelocity = ActivePlatform?.SupportsKinematicMotion == true
+                ? framePlatformVelocity
+                : Vector3d.Zero;
+            HoldPlatformFrames = HoldPlatform?.SupportsKinematicMotion == true
+                ? holdPlatformFrames
+                : 0;
             _preservePreviousTransformForAttachment = false;
 
             if (!_isEnabled)

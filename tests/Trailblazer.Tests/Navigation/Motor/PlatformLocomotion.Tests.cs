@@ -175,6 +175,66 @@ public class PlatformLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void Given_ScoutOnInertSurface_When_SurfaceMoves_Then_ShouldNotInheritPlatformMotion()
+    {
+        var platform = MockMotorAgentTestFactory.CreatePlatformTransform(startPosition: Vector3d.Zero);
+        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(
+            startPosition: Vector3d.Zero,
+            platformMatrix: platform,
+            motionTransfer: MotionTransfer.PermaLocked,
+            platformInert: true);
+
+        scout.Motor.Handler.Platform.IsActive.Should().BeFalse();
+        scout.Motor.Handler.Platform.MovementTransfer.Should().Be(MotionTransfer.None);
+
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        var movedTransform = MockMotorAgentTestFactory.CreatePlatformTransform(startPosition: new Vector3d(3, 0, 0));
+        scout.FrameCondition.GroundState = new GroundCondition
+        {
+            Platform = new PlatformSnapshot(1, movedTransform, inert: true),
+            MotionTransferState = MotionTransfer.PermaLocked
+        };
+
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        scout.Position.Should().Be(Vector3d.Zero);
+        scout.Rotation.Should().Be(FixedQuaternion.Identity);
+        scout.Motor.Handler.Platform.IsActive.Should().BeFalse();
+        scout.Motor.Handler.Platform.PlatformVelocity.Should().Be(Vector3d.Zero);
+        scout.Motor.Handler.Platform.MovementTransfer.Should().Be(MotionTransfer.None);
+    }
+
+    [Fact]
+    public void Given_MovingPlatformBecomesInert_When_TraversalFinalizes_Then_ShouldDetachAndClearTransferState()
+    {
+        var scout = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: MockMotorAgentTestFactory.CreatePlatformTransform(),
+            motionTransfer: MotionTransfer.PermaLocked);
+
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        scout.Motor.Handler.Platform.IsActive.Should().BeTrue();
+
+        scout.FrameCondition.GroundState = new GroundCondition
+        {
+            Platform = new PlatformSnapshot(1, MockMotorAgentTestFactory.CreatePlatformTransform(), inert: true),
+            MotionTransferState = MotionTransfer.PermaLocked
+        };
+
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        scout.Motor.Handler.Platform.ActivePlatform.Should().BeNull();
+        scout.Motor.Handler.Platform.IsActive.Should().BeFalse();
+        scout.Motor.Handler.Platform.MovementTransfer.Should().Be(MotionTransfer.None);
+        scout.Motor.Handler.Platform.PlatformVelocity.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
     public void Given_ScoutJumpsBeforePlatformMoves_When_Simulated_Then_ShouldNotInheritFutureVelocity()
     {
         // Arrange

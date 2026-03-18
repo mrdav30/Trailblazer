@@ -382,6 +382,8 @@ Use them when host code has already determined:
 
 `SetGroundContact(...)` is especially important for moving-platform integration because it makes the host provide a sampled `PlatformSnapshot` rather than treating Trailblazer as if it owned the platform object itself.
 
+If the sampled `PlatformSnapshot` is marked inert, Trailblazer still uses it as surface data for things like surface orientation and friction, but it skips kinematic platform carry, attachment, and movement-transfer behavior.
+
 ### 9.3 SetTrekCondition(...)
 
 `SetTrekCondition(...)` is the low-level partial-update helper for `_frameCondition`.

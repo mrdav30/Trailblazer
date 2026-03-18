@@ -1,4 +1,5 @@
 using System;
+using SwiftCollections;
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -7,6 +8,8 @@ namespace Trailblazer.Navigation.Motor;
 /// </summary>
 public sealed class LocomotionProfileBuilder
 {
+    #region Constructor 
+
     /// <summary>
     /// Initializes a new builder.
     /// </summary>
@@ -24,6 +27,10 @@ public sealed class LocomotionProfileBuilder
             Swim = new SwimLocomotion();
         }
     }
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// The move locomotion to install.
@@ -54,6 +61,8 @@ public sealed class LocomotionProfileBuilder
     /// The optional swim locomotion to install.
     /// </summary>
     public SwimLocomotion Swim { get; private set; }
+
+    #endregion
 
     /// <summary>
     /// Replaces the core move locomotion.
@@ -162,7 +171,7 @@ public sealed class LocomotionProfileBuilder
     internal static LocomotionProfileBuilder FromHandler(LocomotionHandler handler)
     {
         if (handler == null)
-            throw new ArgumentNullException(nameof(handler));
+            ThrowHelper.ThrowArgumentNullException(nameof(handler));
 
         return new LocomotionProfileBuilder(includeOptionalLocomotions: false)
             .WithMove(handler.Move)

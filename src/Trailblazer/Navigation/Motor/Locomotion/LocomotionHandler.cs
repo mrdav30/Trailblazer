@@ -162,8 +162,7 @@ public class LocomotionHandler : IRecordable
         if (locomotion == null)
             return false;
 
-        if (locomotion is ITransient transient)
-            transient.ClearTransientState();
+        locomotion.ClearTransientState();
 
         SetLocomotion(type, null);
         RefreshInstalledKinds();
@@ -246,6 +245,7 @@ public class LocomotionHandler : IRecordable
             InstalledKinds |= LocomotionKind.Swim;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ILocomotion GetLocomotion(Type type)
     {
         return type.Name switch
@@ -258,6 +258,28 @@ public class LocomotionHandler : IRecordable
             nameof(SwimLocomotion) => Swim,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Gets and enumerates all locomotion instances in the handler.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public IEnumerable<ILocomotion> GetLocomotions()
+    {
+        yield return Move;
+        if (Platform != null)
+            yield return Platform;
+
+        if (Jump != null)
+            yield return Jump;
+
+        yield return Fall;
+
+        if (Swim != null)
+            yield return Swim;
+
+        if (Slide != null)
+            yield return Slide;
     }
 
     private void SetLocomotion(Type type, ILocomotion locomotion)
@@ -303,10 +325,10 @@ public class LocomotionHandler : IRecordable
 
     private static void ClearReplacedLocomotion(ILocomotion current, ILocomotion next)
     {
-        if (ReferenceEquals(current, next) || current is not ITransient transient)
+        if (ReferenceEquals(current, next))
             return;
 
-        transient.ClearTransientState();
+        current.ClearTransientState();
     }
 
     #endregion
@@ -327,19 +349,19 @@ public class LocomotionHandler : IRecordable
 
         IsInControl = other.IsInControl;
 
-        foreach (var locomotion in GetTransientLocomotions())
+        foreach (var locomotion in GetLocomotions())
         {
             if (!locomotion.IsEnabled) continue;
-            ITransientLocomotion otherLocomotion = other.GetTransientLocomotion(locomotion.GetType());
+            ILocomotion otherLocomotion = other.GetLocomotion(locomotion.GetType());
             if (otherLocomotion == null) continue;
             locomotion.SyncTransientState(otherLocomotion);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void ClearTransientState<T>() where T : ITransientLocomotion
+    public void ClearTransientState<T>() where T : ILocomotion
     {
-        var locomotion = GetTransientLocomotion(typeof(T));
+        var locomotion = GetLocomotion(typeof(T));
         if (locomotion != null && locomotion.IsEnabled)
             locomotion.ClearTransientState();
     }
@@ -353,41 +375,11 @@ public class LocomotionHandler : IRecordable
     /// </remarks>
     public void ClearAllTransientState()
     {
-        foreach (var locomotion in GetTransientLocomotions())
+        foreach (var locomotion in GetLocomotions())
         {
             if (locomotion.IsEnabled)
                 locomotion.ClearTransientState();
         }
-    }
-
-    /// <summary>
-    /// Gets all locomotion instances in the handler.
-    /// </summary>
-    public IEnumerable<ITransientLocomotion> GetTransientLocomotions()
-    {
-        yield return Move;
-        if (Platform != null)
-            yield return Platform;
-
-        if (Jump != null)
-            yield return Jump;
-
-        yield return Fall;
-
-        if (Swim != null)
-            yield return Swim;
-
-        if (Slide != null)
-            yield return Slide;
-    }
-
-    /// <summary>
-    /// Retrieves a locomotion instance of a specific type from the handler.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ITransientLocomotion GetTransientLocomotion(Type type)
-    {
-        return GetLocomotion(type) as ITransientLocomotion;
     }
 
     #endregion

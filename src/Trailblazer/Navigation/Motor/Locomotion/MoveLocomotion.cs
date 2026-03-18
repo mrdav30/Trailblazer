@@ -11,7 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// This locomotion module governs how the scout accelerates, decelerates, and interacts with terrain slopes.
 /// It tracks position changes and velocity updates for consistent movement behavior.
 /// </remarks>
-public class MoveLocomotion : ITransientLocomotion, IRecordable
+public class MoveLocomotion : ILocomotion
 {
     #region Constants
 
@@ -191,7 +191,7 @@ public class MoveLocomotion : ITransientLocomotion, IRecordable
         {
             _isEnabled = value;
             if (!_isEnabled)
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 
@@ -230,7 +230,7 @@ public class MoveLocomotion : ITransientLocomotion, IRecordable
             FrameVelocity = frameVelocity;
 
             if (!_isEnabled)
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 }

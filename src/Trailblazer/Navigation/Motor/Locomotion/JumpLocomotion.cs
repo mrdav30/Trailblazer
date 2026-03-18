@@ -11,7 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// This locomotion component determines how high the scout can jump, how much control they retain mid-air,  
 /// and enforces a cooldown period between consecutive jumps.
 /// </remarks>
-public class JumpLocomotion : ITransientLocomotion, IRecordable
+public class JumpLocomotion : ILocomotion
 {
     #region Constants
 
@@ -115,7 +115,7 @@ public class JumpLocomotion : ITransientLocomotion, IRecordable
         {
             _isEnabled = value;
             if (!_isEnabled)
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 
@@ -264,7 +264,7 @@ public class JumpLocomotion : ITransientLocomotion, IRecordable
             JumpCount = jumpCount;
 
             if (!_isEnabled)
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 }

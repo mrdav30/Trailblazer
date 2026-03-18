@@ -11,7 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// This locomotion module determines when the scout should slide based on terrain steepness
 /// and controls how much influence the scout has over the slide direction and speed.
 /// </remarks>
-public class SlideLocomotion : ITransientLocomotion, IRecordable
+public class SlideLocomotion : ILocomotion
 {
     #region Constants
 
@@ -75,7 +75,7 @@ public class SlideLocomotion : ITransientLocomotion, IRecordable
         {
             _isEnabled = value;
             if (!_isEnabled)
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 
@@ -103,7 +103,7 @@ public class SlideLocomotion : ITransientLocomotion, IRecordable
             IsSliding = isSliding;
 
             if (!_isEnabled)
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 }

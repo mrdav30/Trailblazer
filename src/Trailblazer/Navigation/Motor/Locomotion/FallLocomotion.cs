@@ -7,7 +7,7 @@ namespace Trailblazer.Navigation.Motor;
 /// <summary>
 /// Handles the scout’s behavior when falling, including tracking fall distance and applying movement constraints.
 /// </summary>
-public class FallLocomotion : ITransientLocomotion, IRecordable
+public class FallLocomotion : ILocomotion
 {
     #region Constants
 
@@ -55,7 +55,7 @@ public class FallLocomotion : ITransientLocomotion, IRecordable
         {
             _isEnabled = value;
             if (!value)
-                ((ITransientLocomotion)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 
@@ -106,7 +106,7 @@ public class FallLocomotion : ITransientLocomotion, IRecordable
             FallEnd = fallEnd;
 
             if (!_isEnabled)
-                ((ITransientLocomotion)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 }

@@ -1,11 +1,13 @@
-﻿using Trailblazer.Support;
+﻿using Trailblazer.Serialization;
+using Trailblazer.Support;
 
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Defines the base interface for all locomotion modules that control specific movement behaviors.
+/// Defines the base interface for all locomotion modules that control specific movement behaviors
+/// with frame-local runtime state that can be synced or cleared.
 /// </summary>
-public interface ILocomotion
+public interface ILocomotion : ITransient, IRecordable
 {
     /// <summary>
     /// Indicates whether this locomotion behavior is enabled.
@@ -13,8 +15,3 @@ public interface ILocomotion
     /// </summary>
     bool IsEnabled { get; set; }
 }
-
-/// <summary>
-/// Defines a locomotion module with frame-local runtime state that can be synced or cleared.
-/// </summary>
-public interface ITransientLocomotion : ILocomotion, ITransient { }

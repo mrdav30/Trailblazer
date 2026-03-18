@@ -11,7 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// This locomotion module governs how the scout moves in water, applies drag and buoyancy forces,
 /// and tracks dive time for breath management.
 /// </remarks>
-public class SwimLocomotion : ITransientLocomotion, IRecordable
+public class SwimLocomotion : ILocomotion
 {
     #region Constants
 
@@ -135,7 +135,7 @@ public class SwimLocomotion : ITransientLocomotion, IRecordable
         {
             _isEnabled = value;
             if (!_isEnabled)
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 
@@ -227,7 +227,7 @@ public class SwimLocomotion : ITransientLocomotion, IRecordable
             UnderwaterTimer = underwaterTimer;
 
             if (!_isEnabled)
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 }

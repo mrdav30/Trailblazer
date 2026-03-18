@@ -11,7 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// This locomotion system tracks platform velocity, rotation, and movement transfer behavior.
 /// It allows the scout to inherit motion from platforms and supports different transfer states.
 /// </remarks>
-public class PlatformLocomotion : ITransientLocomotion, IRecordable
+public class PlatformLocomotion : ILocomotion
 {
     #region Constants
 
@@ -53,7 +53,7 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
             if (!_isEnabled)
             {
                 _preservePreviousTransformForAttachment = false;
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
             }
         }
     }
@@ -364,7 +364,7 @@ public class PlatformLocomotion : ITransientLocomotion, IRecordable
             _preservePreviousTransformForAttachment = false;
 
             if (!_isEnabled)
-                ((ITransient)this).ClearTransientState();
+                this.ClearTransientState();
         }
     }
 }

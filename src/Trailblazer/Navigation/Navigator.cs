@@ -376,6 +376,7 @@ public abstract class Navigator : INavigate, IRecordable
             aStarHeuristic: GuidedAStarHeuristic,
             aStarMaxClimbHeight: GuidedAStarMaxClimbHeight,
             flowFieldExtraFloodRange: GuidedFlowFieldExtraFloodRange,
+            traversalMedium: _frameCondition.Medium,
             out pathRequest);
     }
 

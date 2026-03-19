@@ -1,4 +1,5 @@
 using FixedMathSharp;
+using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
@@ -17,6 +18,7 @@ public static class NavigatorPathRequestFactory
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
+        TraversalMedium traversalMedium,
         out IPathRequest request)
     {
         switch (pathMode)
@@ -55,19 +57,43 @@ public static class NavigatorPathRequestFactory
                 return true;
 
             case GuidedPathMode.Aerial:
-                var aerial = AerialPathRequest.Create(
+                var volume = VolumePathRequest.Create(
                     origin,
                     targetPosition,
                     unitSize,
                     aStarHeuristic,
-                    allowUnwalkable);
-                if (aerial == null)
+                    allowUnwalkable,
+                    VolumeTraversalMode.Open);
+                if (volume == null)
                 {
                     request = null;
                     return false;
                 }
 
-                request = aerial;
+                request = volume;
+                return true;
+
+            case GuidedPathMode.Swim:
+                if (traversalMedium != TraversalMedium.Water)
+                {
+                    request = null;
+                    return false;
+                }
+
+                var swim = VolumePathRequest.Create(
+                    origin,
+                    targetPosition,
+                    unitSize,
+                    aStarHeuristic,
+                    allowUnwalkable,
+                    VolumeTraversalMode.Water);
+                if (swim == null)
+                {
+                    request = null;
+                    return false;
+                }
+
+                request = swim;
                 return true;
 
             default:

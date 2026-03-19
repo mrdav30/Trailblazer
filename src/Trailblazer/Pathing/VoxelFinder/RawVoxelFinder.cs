@@ -19,13 +19,21 @@ internal static class RawVoxelFinder
         out Voxel originVoxel,
         out Voxel targetVoxel,
         Fixed64 unitSize,
-        bool allowUnwalkable = false)
+        bool allowUnwalkable = false,
+        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
+        if (!VolumeTraversalRules.IsConfigured(traversalMode))
+        {
+            originVoxel = null;
+            targetVoxel = null;
+            return false;
+        }
+
         targetVoxel = null;
-        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkable, unitSize))
+        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkable, unitSize, traversalMode))
             return false;
 
-        if (!GetEndVoxel(origin, target, out targetVoxel, allowUnwalkable, unitSize))
+        if (!GetEndVoxel(origin, target, out targetVoxel, allowUnwalkable, unitSize, traversalMode))
             return false;
 
         return true;
@@ -36,14 +44,16 @@ internal static class RawVoxelFinder
         Vector3d target,
         out Voxel originVoxel,
         bool allowUnwalkable = false,
-        Fixed64? unitSize = null)
+        Fixed64? unitSize = null,
+        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
         return TryGetEndpointVoxel(
             origin,
             target,
             out originVoxel,
             allowUnwalkable,
-            unitSize ?? GlobalGridManager.VoxelSize);
+            unitSize ?? GlobalGridManager.VoxelSize,
+            traversalMode);
     }
 
     public static bool GetEndVoxel(
@@ -51,14 +61,16 @@ internal static class RawVoxelFinder
         Vector3d target,
         out Voxel targetVoxel,
         bool allowUnwalkable = false,
-        Fixed64? unitSize = null)
+        Fixed64? unitSize = null,
+        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
         return TryGetEndpointVoxel(
             target,
             origin,
             out targetVoxel,
             allowUnwalkable,
-            unitSize ?? GlobalGridManager.VoxelSize);
+            unitSize ?? GlobalGridManager.VoxelSize,
+            traversalMode);
     }
 
     public static bool IsDirectPathClear(
@@ -66,9 +78,13 @@ internal static class RawVoxelFinder
         Vector3d end,
         Fixed64 unitSize,
         bool allowUnwalkable,
+        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open,
         Voxel startNode = null,
         Voxel endNode = null)
     {
+        if (!VolumeTraversalRules.IsConfigured(traversalMode))
+            return false;
+
         bool foundAny = false;
 
         foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(start, end))
@@ -81,9 +97,14 @@ internal static class RawVoxelFinder
                     && ((startNode != null && voxel.GlobalIndex == startNode.GlobalIndex)
                     || (endNode != null && voxel.GlobalIndex == endNode.GlobalIndex));
                 if (isRelaxedEndpoint)
-                    continue;
+                {
+                    if (!PassesTraversalMode(voxel, traversalMode))
+                        return false;
 
-                if (!IsTraversable(voxel, unitSize))
+                    continue;
+                }
+
+                if (!IsTraversable(voxel, unitSize, traversalMode))
                     return false;
             }
         }
@@ -92,28 +113,27 @@ internal static class RawVoxelFinder
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsTraversable(Voxel voxel, Fixed64 unitSize)
+    public static bool IsTraversable(
+        Voxel voxel,
+        Fixed64 unitSize,
+        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
-        if (voxel == null || voxel.IsBlocked)
-            return false;
-
-        if (voxel.TryGetPartition(out PathPartition partition))
-            return !partition.IsImpassable(unitSize);
-
-        return HasClearance(voxel, unitSize);
+        return IsBaseTraversable(voxel, unitSize)
+            && PassesTraversalMode(voxel, traversalMode);
     }
 
     public static bool TryGetClosestTraversableVoxel(
         Voxel voxel,
         out Voxel closestNeighbor,
-        Fixed64 unitSize)
+        Fixed64 unitSize,
+        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
         closestNeighbor = null;
 
         foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
         {
             if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
-                || !IsTraversable(closestNeighbor, unitSize))
+                || !IsTraversable(closestNeighbor, unitSize, traversalMode))
             {
                 continue;
             }
@@ -124,7 +144,7 @@ internal static class RawVoxelFinder
         foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
         {
             if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
-                || !IsTraversable(closestNeighbor, unitSize))
+                || !IsTraversable(closestNeighbor, unitSize, traversalMode))
             {
                 continue;
             }
@@ -135,21 +155,43 @@ internal static class RawVoxelFinder
         return false;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsBaseTraversable(Voxel voxel, Fixed64 unitSize)
+    {
+        if (voxel == null || voxel.IsBlocked)
+            return false;
+
+        if (voxel.TryGetPartition(out PathPartition partition))
+            return !partition.IsImpassable(unitSize);
+
+        return HasClearance(voxel, unitSize);
+    }
+
     private static bool TryGetEndpointVoxel(
         Vector3d position,
         Vector3d traceToward,
         out Voxel voxel,
         bool allowUnwalkable,
-        Fixed64 unitSize)
+        Fixed64 unitSize,
+        VolumeTraversalMode traversalMode)
     {
+        if (!VolumeTraversalRules.IsConfigured(traversalMode))
+        {
+            voxel = null;
+            return false;
+        }
+
         voxel = null;
 
         if (GlobalGridManager.TryGetVoxel(position, out voxel))
         {
-            if (allowUnwalkable || IsTraversable(voxel, unitSize))
+            if (PassesTraversalMode(voxel, traversalMode)
+                && (allowUnwalkable || IsBaseTraversable(voxel, unitSize)))
+            {
                 return true;
+            }
 
-            if (TryGetClosestTraversableVoxel(voxel, out Voxel closestNeighbor, unitSize))
+            if (TryGetClosestTraversableVoxel(voxel, out Voxel closestNeighbor, unitSize, traversalMode))
             {
                 voxel = closestNeighbor;
                 return true;
@@ -160,7 +202,7 @@ internal static class RawVoxelFinder
         {
             foreach (Voxel current in gridVoxelSet.Voxels)
             {
-                if (!IsTraversable(current, unitSize))
+                if (!IsTraversable(current, unitSize, traversalMode))
                     continue;
 
                 voxel = current;
@@ -169,6 +211,12 @@ internal static class RawVoxelFinder
         }
 
         return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool PassesTraversalMode(Voxel voxel, VolumeTraversalMode traversalMode)
+    {
+        return VolumeTraversalRules.Matches(voxel, traversalMode);
     }
 
     private static bool HasClearance(Voxel origin, Fixed64 unitSize)

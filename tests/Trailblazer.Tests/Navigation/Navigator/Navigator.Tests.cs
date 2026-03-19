@@ -7,6 +7,7 @@ using Trailblazer.Navigation;
 using Trailblazer.Navigation.Animation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
+using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation;
@@ -23,6 +24,7 @@ public class NavigatorTests : IDisposable
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         GlobalGridManager.TryAddGrid(config, out _);
+        VolumeTraversalRules.SetWaterVoxelPartition<TestWaterPartition>();
     }
 
     public void Dispose()
@@ -172,11 +174,52 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
 
-        var request = navigator.Steering.CurrentRequest.Should().BeOfType<AerialPathRequest>().Subject;
+        var request = navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
         request.UnitSize.Should().Be(navigator.Size);
         request.Heuristic.Should().Be(navigator.GuidedAStarHeuristic);
+        request.TraversalMode.Should().Be(VolumeTraversalMode.Open);
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_Should_CreateSwimRequest_WithoutFlight_WhenInWater()
+    {
+        AddWater(Vector3d.Zero);
+        AddWater(new Vector3d(0, 0, 1));
+        AddWater(new Vector3d(0, 0, 2));
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
+
+        Vector3d target = new(0, 0, 2);
+        navigator.ApplyGuidedTrekRequest(target, pathMode: GuidedPathMode.Swim, rate: TrekRate.Fast);
+
+        navigator.IsGuideded.Should().BeTrue();
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
+        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+
+        var request = navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
+        request.Origin.Should().Be(navigator.Position);
+        request.TargetPosition.Should().Be(target);
+        request.TraversalMode.Should().Be(VolumeTraversalMode.Water);
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_Should_RejectSwimRequests_WhenNavigatorIsNotInWater()
+    {
+        AddWater(Vector3d.Zero);
+        AddWater(new Vector3d(0, 0, 1));
+        AddWater(new Vector3d(0, 0, 2));
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyGuidedTrekRequest(new Vector3d(0, 0, 2), pathMode: GuidedPathMode.Swim, rate: TrekRate.Fast);
+
+        navigator.IsGuideded.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.Steering.CurrentRequest.Should().BeNull();
+        navigator.Steering.ShouldMove.Should().BeFalse();
     }
 
     [Fact]
@@ -417,6 +460,12 @@ public class NavigatorTests : IDisposable
             GroundState = new GroundCondition()
         });
         return navigator;
+    }
+
+    private static void AddWater(Vector3d position)
+    {
+        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
+        voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
     }
 
     private sealed class TestAnimationHandler : INavAnimationHandler

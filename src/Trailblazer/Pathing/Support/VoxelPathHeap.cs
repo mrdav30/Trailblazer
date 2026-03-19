@@ -17,7 +17,7 @@ internal sealed class VoxelPathHeapMeta
 }
 
 /// <summary>
-/// Heap optimized for raw-voxel aerial A* expansion.
+/// Heap optimized for raw-volume voxel A* expansion.
 /// </summary>
 internal sealed class VoxelPathHeap
 {

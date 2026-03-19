@@ -3,19 +3,19 @@ using System;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Stores the reusable waypoint trail generated for an aerial request.
+/// Stores the reusable waypoint trail generated for a raw volume request.
 /// </summary>
-public sealed class AerialSurveyResult : SurveyResult
+public sealed class VolumeSurveyResult : SurveyResult
 {
     public AStarWaypoint[] Waypoints { get; private set; }
 
     public override bool HasPath => IsValid && Waypoints != null && Waypoints.Length > 0;
 
-    public static readonly AerialSurveyResult Empty = new();
+    public static readonly VolumeSurveyResult Empty = new();
 
-    public static AerialSurveyResult Create(AStarWaypoint[] waypoints, int key)
+    public static VolumeSurveyResult Create(AStarWaypoint[] waypoints, int key)
     {
-        return new AerialSurveyResult()
+        return new VolumeSurveyResult()
         {
             IsValid = true,
             IsInUse = false,

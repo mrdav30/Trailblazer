@@ -124,6 +124,7 @@ The built-in guided modes are:
 - `GuidedPathMode.AStar`
 - `GuidedPathMode.FlowField`
 - `GuidedPathMode.Aerial`
+- `GuidedPathMode.Swim`
 
 If you use `NavSteering` directly, the essential rule is:
 
@@ -159,9 +160,9 @@ It may be:
 - `null`, for direct travel or no active movement
 - an `AStarGuide`
 - a `FlowFieldGuide`
-- an `AerialGuide`
+- a `VolumeGuide`
 
-`GuidedPathMode.Aerial` is not forced into one mode. It stays guide-free while the direct 3D corridor is clear, then allocates an `AerialGuide` only when raw voxel blockers force a detour.
+`GuidedPathMode.Aerial` and `GuidedPathMode.Swim` both use the raw-volume path flow. They stay guide-free while the direct corridor is clear, then allocate a `VolumeGuide` only when raw voxel blockers force a detour. `Swim` additionally requires the host to define which voxels count as water through `VolumeTraversalRules`.
 
 Guide lifetime is owned by `NavSteering` while the movement session is active.
 
@@ -313,14 +314,14 @@ If direct travel is not valid, steering requests a guide:
 
 - `AStarGuide` for waypoint-driven motion
 - `FlowFieldGuide` for field sampling
-- `AerialGuide` for 3D voxel detours when an aerial request loses straight-line access
+- `VolumeGuide` for 3D voxel detours when a volume request loses straight-line access
 
 Guide creation and reuse are delegated to `PathGuideFactory`.
 
 For aerial requests, direct travel and guide-following are both valid runtime outcomes:
 
 - clear corridor: no guide allocation, steer directly at the 3D destination
-- blocked corridor: request an `AerialGuide` and follow waypoint detours through raw voxel space
+- blocked corridor: request a `VolumeGuide` and follow waypoint detours through raw voxel space
 
 ### 8.4 Guide Loss or Invalidity
 
@@ -574,7 +575,7 @@ There is already a test note in `NavSteering.Tests` calling this out.
 
 `HasLineOfSightPath = true` means there may be no active guide at all. Do not assume every movement session owns a `TrailGuide`.
 
-This includes aerial movement. Flight can legitimately bounce between direct travel and an `AerialGuide` over the life of one request.
+This includes aerial and swim movement. Either mode can legitimately bounce between direct travel and a `VolumeGuide` over the life of one request.
 
 ### Treating StopMove() as arrival
 

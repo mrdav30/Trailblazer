@@ -5,11 +5,10 @@ using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using Trailblazer.Navigation;
 
 namespace Trailblazer.Pathing;
 
-internal struct AerialVoxelMeta
+internal struct VolumeVoxelMeta
 {
     public int MovementCost;
 
@@ -17,31 +16,31 @@ internal struct AerialVoxelMeta
 }
 
 /// <summary>
-/// Executes chart-optional 3D A* pathfinding for aerial travel using raw voxel connectivity.
+/// Executes chart-optional A* pathfinding through raw voxel volume.
 /// </summary>
-public sealed class AerialSurveyor
+public sealed class VolumeSurveyor
 {
-    private static readonly Lazy<AerialSurveyor> _instance =
-        new(() => new AerialSurveyor(), LazyThreadSafetyMode.ExecutionAndPublication);
+    private static readonly Lazy<VolumeSurveyor> _instance =
+        new(() => new VolumeSurveyor(), LazyThreadSafetyMode.ExecutionAndPublication);
 
-    public static AerialSurveyor Shared => _instance.Value;
+    public static VolumeSurveyor Shared => _instance.Value;
 
     private readonly VoxelPathHeap _heap = new();
 
-    private readonly SwiftDictionary<Voxel, AerialVoxelMeta> _meta = new();
+    private readonly SwiftDictionary<Voxel, VolumeVoxelMeta> _meta = new();
 
     private readonly SwiftList<Voxel> _rawPath = new();
 
     private readonly SwiftList<AStarWaypoint> _waypoints = new();
 
-    private AerialPathRequest _request;
+    private VolumePathRequest _request;
 
-    public AerialSurveyResult FindPath(AerialPathRequest request)
+    public VolumeSurveyResult FindPath(VolumePathRequest request)
     {
         lock (SurveyorLock.GlobalLock)
         {
             if (request == null || request.HasZeroDisplacement || !request.HasValidEndpoints)
-                return AerialSurveyResult.Empty;
+                return VolumeSurveyResult.Empty;
 
             _request = request;
 
@@ -50,18 +49,18 @@ public sealed class AerialSurveyor
             _rawPath.FastClear();
             _waypoints.FastClear();
 
-            _meta[_request.StartNode] = new AerialVoxelMeta();
+            _meta[_request.StartNode] = new VolumeVoxelMeta();
             _heap.Add(_request.StartNode, 0);
 
             if (!TracePath())
-                return AerialSurveyResult.Empty;
+                return VolumeSurveyResult.Empty;
 
             BuildRawPath();
             BuildWaypoints();
 
             return _waypoints.Count > 0
-                ? AerialSurveyResult.Create(_waypoints.ToArray(), request.RequestCacheKey)
-                : AerialSurveyResult.Empty;
+                ? VolumeSurveyResult.Create(_waypoints.ToArray(), request.RequestCacheKey)
+                : VolumeSurveyResult.Empty;
         }
     }
 
@@ -86,7 +85,7 @@ public sealed class AerialSurveyor
 
     private bool ProcessNeighbors(Voxel current)
     {
-        if (!_meta.TryGetValue(current, out AerialVoxelMeta data))
+        if (!_meta.TryGetValue(current, out VolumeVoxelMeta data))
             return false;
 
         if (TryProcessDirections(
@@ -174,7 +173,7 @@ public sealed class AerialSurveyor
             SetVoxelData(neighbor, current.GlobalIndex, movementCost);
             _heap.Add(neighbor, pathCost);
         }
-        else if (_meta.TryGetValue(neighbor, out AerialVoxelMeta neighborData)
+        else if (_meta.TryGetValue(neighbor, out VolumeVoxelMeta neighborData)
             && neighborData.MovementCost > movementCost)
         {
             SetVoxelData(neighbor, current.GlobalIndex, movementCost);
@@ -190,7 +189,7 @@ public sealed class AerialSurveyor
         GlobalVoxelIndex nextTrailIndex,
         int movementCost)
     {
-        _meta[voxel] = new AerialVoxelMeta()
+        _meta[voxel] = new VolumeVoxelMeta()
         {
             MovementCost = movementCost,
             NextTrailIndex = nextTrailIndex
@@ -204,7 +203,7 @@ public sealed class AerialSurveyor
         {
             _rawPath.Insert(0, current);
 
-            if (!_meta.TryGetValue(current, out AerialVoxelMeta data)
+            if (!_meta.TryGetValue(current, out VolumeVoxelMeta data)
                 || !data.NextTrailIndex.HasValue)
             {
                 break;
@@ -277,15 +276,18 @@ public sealed class AerialSurveyor
             return true;
 
         if (voxel == _request.EndNode && _request.AllowUnwalkable)
-            return true;
+            return VolumeTraversalRules.Matches(voxel, _request.TraversalMode);
 
-        return RawVoxelFinder.IsTraversable(voxel, _request.UnitSize);
+        return RawVoxelFinder.IsTraversable(
+            voxel,
+            _request.UnitSize,
+            _request.TraversalMode);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int GetMovementCost(Voxel voxel)
     {
-        return _meta.TryGetValue(voxel, out AerialVoxelMeta data)
+        return _meta.TryGetValue(voxel, out VolumeVoxelMeta data)
             ? data.MovementCost
             : int.MaxValue;
     }

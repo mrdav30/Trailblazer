@@ -10,7 +10,7 @@ internal enum PathRequestRecordKind
     None,
     AStar,
     FlowField,
-    Aerial
+    Volume
 }
 
 /// <summary>
@@ -37,6 +37,8 @@ internal sealed class PathRequestRecord : IRecordable
     public Fixed64 AStarMaxClimbHeight = Fixed64.One;
 
     public int FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
+
+    public VolumeTraversalMode TraversalMode = VolumeTraversalMode.Open;
 
     public bool HasGuide;
 
@@ -68,9 +70,10 @@ internal sealed class PathRequestRecord : IRecordable
                 FlowFieldExtraFloodRange = flowField.ExtraFloodRange;
                 break;
 
-            case AerialPathRequest aerial:
-                Kind = PathRequestRecordKind.Aerial;
-                AStarHeuristic = aerial.Heuristic;
+            case VolumePathRequest volume:
+                Kind = PathRequestRecordKind.Volume;
+                AStarHeuristic = volume.Heuristic;
+                TraversalMode = volume.TraversalMode;
                 break;
 
             default:
@@ -124,20 +127,21 @@ internal sealed class PathRequestRecord : IRecordable
                 request = flowField;
                 return true;
 
-            case PathRequestRecordKind.Aerial:
-                AerialPathRequest aerial = AerialPathRequest.Create(
+            case PathRequestRecordKind.Volume:
+                VolumePathRequest volume = VolumePathRequest.Create(
                     Origin,
                     TargetPosition,
                     UnitSize,
                     AStarHeuristic,
-                    AllowUnwalkable);
-                if (aerial == null)
+                    AllowUnwalkable,
+                    TraversalMode);
+                if (volume == null)
                     return false;
 
                 if (MaxPathSearchRange > 0)
-                    aerial.MaxPathSearchRange = MaxPathSearchRange;
+                    volume.MaxPathSearchRange = MaxPathSearchRange;
 
-                request = aerial;
+                request = volume;
                 return true;
 
             default:
@@ -156,8 +160,8 @@ internal sealed class PathRequestRecord : IRecordable
 
         if (guide is AStarGuide aStarGuide)
             RestoreWaypointIndex(aStarGuide);
-        else if (guide is AerialGuide aerialGuide)
-            RestoreWaypointIndex(aerialGuide);
+        else if (guide is VolumeGuide volumeGuide)
+            RestoreWaypointIndex(volumeGuide);
 
         return true;
     }
@@ -173,6 +177,7 @@ internal sealed class PathRequestRecord : IRecordable
         AStarHeuristic = HeuristicMethod.Manhattan;
         AStarMaxClimbHeight = Fixed64.One;
         FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
+        TraversalMode = VolumeTraversalMode.Open;
         HasGuide = false;
         WaypointIndex = NoWaypointIndex;
     }
@@ -188,6 +193,7 @@ internal sealed class PathRequestRecord : IRecordable
         HeuristicMethod aStarHeuristic = AStarHeuristic;
         Fixed64 aStarMaxClimbHeight = AStarMaxClimbHeight;
         int flowFieldExtraFloodRange = FlowFieldExtraFloodRange;
+        VolumeTraversalMode traversalMode = TraversalMode;
         bool hasGuide = HasGuide;
         int waypointIndex = WaypointIndex;
 
@@ -200,6 +206,7 @@ internal sealed class PathRequestRecord : IRecordable
         RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
         RecordValues.Look(chronicler, ref aStarMaxClimbHeight, "aStarMaxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref flowFieldExtraFloodRange, "flowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
+        RecordValues.Look(chronicler, ref traversalMode, "volumeTraversalMode", VolumeTraversalMode.Open);
         RecordValues.Look(chronicler, ref hasGuide, "hasGuide", false);
         RecordValues.Look(chronicler, ref waypointIndex, "waypointIndex", NoWaypointIndex);
 
@@ -214,6 +221,7 @@ internal sealed class PathRequestRecord : IRecordable
             AStarHeuristic = aStarHeuristic;
             AStarMaxClimbHeight = aStarMaxClimbHeight;
             FlowFieldExtraFloodRange = flowFieldExtraFloodRange;
+            TraversalMode = traversalMode;
             HasGuide = hasGuide;
             WaypointIndex = waypointIndex;
         }
@@ -231,7 +239,7 @@ internal sealed class PathRequestRecord : IRecordable
         }
     }
 
-    private void RestoreWaypointIndex(AerialGuide guide)
+    private void RestoreWaypointIndex(VolumeGuide guide)
     {
         if (WaypointIndex <= 0)
             return;

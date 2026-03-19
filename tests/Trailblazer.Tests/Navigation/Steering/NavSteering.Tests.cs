@@ -8,6 +8,7 @@ using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
+using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Steering;
@@ -24,6 +25,7 @@ public class NavSteeringTests : IDisposable
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         GlobalGridManager.TryAddGrid(config, out _);
+        VolumeTraversalRules.SetWaterVoxelPartition<TestWaterPartition>();
     }
 
     public void Dispose()
@@ -110,11 +112,11 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(Vector3d.Zero);
         steer.OnInitialize(agent.Radius);
 
-        AerialPathRequest.TryCreate(
+        VolumePathRequest.TryCreate(
             agent.Position,
             new Vector3d(0, 3, 0),
             Fixed64.One,
-            out AerialPathRequest request).Should().BeTrue();
+            out VolumePathRequest request).Should().BeTrue();
 
         steer.ApplyPathRequest(request);
 
@@ -135,19 +137,51 @@ public class NavSteeringTests : IDisposable
         var agent = new MockSteerAgent(Vector3d.Zero);
         steer.OnInitialize(agent.Radius);
 
-        AerialPathRequest.TryCreate(
+        VolumePathRequest.TryCreate(
             agent.Position,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            out AerialPathRequest request).Should().BeTrue();
+            out VolumePathRequest request).Should().BeTrue();
 
         steer.ApplyPathRequest(request);
 
-        Vector3d heading = steer.GetHeading(agent);
+        steer.GetHeading(agent);
 
         steer.HasLineOfSightPath.Should().BeFalse();
-        steer.TrailGuide.Should().BeOfType<AerialGuide>();
-        heading.Should().NotBe(Vector3d.Zero);
+        var guide = steer.TrailGuide.Should().BeOfType<VolumeGuide>().Subject;
+        guide.TrailMap.HasPath.Should().BeTrue();
+        guide.CurrentWaypointIndex.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void NavSteering_Should_RequestVolumeGuide_WhenDirectSwimIsBlocked()
+    {
+        AddWater(new Vector3d(0, 0, 1));
+        AddWater(new Vector3d(0, 0, 0));
+        AddWater(new Vector3d(1, 0, 0));
+        AddWater(new Vector3d(2, 0, 0));
+        AddWater(new Vector3d(2, 0, 1));
+        AddObstacle(new Vector3d(1, 0, 1));
+
+        var steer = new NavSteering();
+        var agent = new MockSteerAgent(new Vector3d(0, 0, 1));
+        steer.OnInitialize(agent.Radius);
+
+        VolumePathRequest.TryCreate(
+            agent.Position,
+            new Vector3d(2, 0, 1),
+            Fixed64.One,
+            out VolumePathRequest request,
+            traversalMode: VolumeTraversalMode.Water).Should().BeTrue();
+
+        steer.ApplyPathRequest(request);
+
+        steer.GetHeading(agent);
+
+        steer.HasLineOfSightPath.Should().BeFalse();
+        var guide = steer.TrailGuide.Should().BeOfType<VolumeGuide>().Subject;
+        guide.TrailMap.HasPath.Should().BeTrue();
+        guide.CurrentWaypointIndex.Should().BeGreaterThan(0);
     }
 
     [Fact]
@@ -812,5 +846,11 @@ public class NavSteeringTests : IDisposable
         GridObstacleManager.TryAddObstacle(
             voxel.GlobalIndex,
             new BoundsKey(position, position)).Should().BeTrue();
+    }
+
+    private static void AddWater(Vector3d position)
+    {
+        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
+        voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
     }
 }

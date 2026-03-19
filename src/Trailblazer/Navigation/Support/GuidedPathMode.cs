@@ -7,5 +7,6 @@ public enum GuidedPathMode
 {
     AStar,
     FlowField,
-    Aerial
+    Aerial,
+    Swim
 }

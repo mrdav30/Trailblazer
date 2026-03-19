@@ -454,11 +454,11 @@ public class NavSteering : IRecordable
                 return TargetDirection;
             }
 
-            bool usesAerialGuidance = UsesAerialGuidance();
+            bool usesVolumeGuidance = UsesVolumeGuidance();
             UpdateMovementGroupState(navigator.Position);
 
             // check if agent has to pathfind, otherwise straight path to rely on destination
-            if (CanPathfind || usesAerialGuidance)
+            if (CanPathfind || usesVolumeGuidance)
             {
                 if (!ValidateMovementPath(navigator.Position))
                 {
@@ -473,13 +473,14 @@ public class NavSteering : IRecordable
 
             if (_pathCheckCooldown <= 0)
             {
-                if (usesAerialGuidance)
+                if (_currentRequest is VolumePathRequest volumeRequest)
                 {
-                    HasLineOfSightPath = IsAerialDestinationInSight(
+                    HasLineOfSightPath = IsVolumeDestinationInSight(
                         navigator.Position,
                         Destination,
                         _currentRequest.UnitSize,
                         _currentRequest.AllowUnwalkable,
+                        volumeRequest.TraversalMode,
                         _currentRequest.StartNode,
                         _currentRequest.EndNode);
 
@@ -498,12 +499,12 @@ public class NavSteering : IRecordable
                 _pathCheckCooldown = PathRecheckCooldownFrames;
             }
 
-            if (usesAerialGuidance && !HasLineOfSightPath && !HasTrailGuide)
+            if (usesVolumeGuidance && !HasLineOfSightPath && !HasTrailGuide)
             {
                 if (!ValidateMovementPath(navigator.Position))
                 {
 #if DEBUG
-                    Debug.WriteLine("Invalid aerial path detected!");
+                    Debug.WriteLine("Invalid volume path detected!");
 #endif
                     Events.OnInvalidPath?.Invoke();
                     Arrive();
@@ -596,13 +597,14 @@ public class NavSteering : IRecordable
         if (_currentRequest.HasZeroDisplacement)
             return _repathTries == 0;
 
-        if (UsesAerialGuidance())
+        if (_currentRequest is VolumePathRequest volumeRequest)
         {
-            HasLineOfSightPath = IsAerialDestinationInSight(
+            HasLineOfSightPath = IsVolumeDestinationInSight(
                 origin,
                 Destination,
                 _currentRequest.UnitSize,
                 _currentRequest.AllowUnwalkable,
+                volumeRequest.TraversalMode,
                 _currentRequest.StartNode,
                 _currentRequest.EndNode);
 
@@ -822,13 +824,14 @@ public class NavSteering : IRecordable
     }
 
     /// <summary>
-    /// Whether the destination is currently visible and reachable for raw-voxel aerial travel.
+    /// Whether the destination is currently visible and reachable for raw-volume travel.
     /// </summary>
-    public static bool IsAerialDestinationInSight(
+    public static bool IsVolumeDestinationInSight(
         Vector3d position,
         Vector3d destination,
         Fixed64 unitSize,
         bool allowUnwalkable,
+        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open,
         Voxel startNode = null,
         Voxel endNode = null)
     {
@@ -837,6 +840,7 @@ public class NavSteering : IRecordable
             destination,
             unitSize,
             allowUnwalkable,
+            traversalMode,
             startNode,
             endNode);
     }
@@ -985,7 +989,7 @@ public class NavSteering : IRecordable
         => MovementGroupCoordinator.IsNeighbor(_movementGroupSession, otherId, _requestedDestination, currentFrame);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool UsesAerialGuidance() => _currentRequest is AerialPathRequest;
+    private bool UsesVolumeGuidance() => _currentRequest is VolumePathRequest;
 
     #endregion
 

@@ -7,13 +7,13 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Represents a 3D guided travel request for aerial locomotion.
+/// Represents a chart-optional guided travel request through raw voxel volume.
 /// </summary>
 /// <remarks>
-/// Aerial requests resolve directly against raw voxels instead of chart partitions, which allows flight
-/// to path through grid volumes that do not have a navigation chart attached.
+/// Volume requests resolve directly against raw voxels instead of chart partitions. Hosts can constrain
+/// these requests to specialized voxel volumes, such as water, through <see cref="VolumeTraversalRules"/>.
 /// </remarks>
-public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathRequest>
+public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathRequest>
 {
     public Vector3d Origin { get; private set; }
 
@@ -31,6 +31,8 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
 
     public HeuristicMethod Heuristic { get; set; }
 
+    public VolumeTraversalMode TraversalMode { get; private set; }
+
     public bool HasOrigin => StartNode != null;
 
     public bool HasDestination => EndNode != null;
@@ -45,25 +47,36 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
 
     public int RequestCacheKey => GetHashCode();
 
-    private AerialPathRequest() { }
+    private VolumePathRequest() { }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryCreate(
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
-        out AerialPathRequest request)
+        out VolumePathRequest request,
+        HeuristicMethod heuristic = HeuristicMethod.Euclidean,
+        bool allowUnwalkable = false,
+        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
-        request = Create(origin, destination, unitSize);
+        request = Create(
+            origin,
+            destination,
+            unitSize,
+            heuristic,
+            allowUnwalkable,
+            traversalMode);
+
         return request != null;
     }
 
-    public static AerialPathRequest Create(
+    public static VolumePathRequest Create(
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
         HeuristicMethod heuristic = HeuristicMethod.Euclidean,
-        bool allowUnwalkable = false)
+        bool allowUnwalkable = false,
+        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
         if (!RawVoxelFinder.TryGetPathEdgeVoxels(
             origin,
@@ -71,12 +84,13 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
             out Voxel startNode,
             out Voxel endNode,
             unitSize,
-            allowUnwalkable))
+            allowUnwalkable,
+            traversalMode))
         {
             return null;
         }
 
-        var request = new AerialPathRequest
+        var request = new VolumePathRequest
         {
             Origin = origin,
             StartNode = startNode,
@@ -84,7 +98,8 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
             EndNode = endNode,
             UnitSize = unitSize,
             Heuristic = heuristic,
-            AllowUnwalkable = allowUnwalkable
+            AllowUnwalkable = allowUnwalkable,
+            TraversalMode = traversalMode
         };
 
         if (PathManager.TryGetMaxSearchSize(request.StartNode, request.EndNode, out int searchSize))
@@ -105,7 +120,8 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
             out Voxel startNode,
             out Voxel endNode,
             resolvedUnitSize,
-            AllowUnwalkable);
+            AllowUnwalkable,
+            TraversalMode);
 
         Origin = origin;
         TargetPosition = destination;
@@ -130,7 +146,8 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
             TargetPosition,
             out Voxel startNode,
             AllowUnwalkable,
-            UnitSize))
+            UnitSize,
+            TraversalMode))
         {
             return false;
         }
@@ -168,7 +185,8 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
             destination,
             out Voxel endNode,
             AllowUnwalkable,
-            UnitSize))
+            UnitSize,
+            TraversalMode))
         {
             return false;
         }
@@ -206,9 +224,9 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
     }
 
     public override bool Equals(object obj) =>
-        obj is AerialPathRequest other && Equals(other);
+        obj is VolumePathRequest other && Equals(other);
 
-    public bool Equals(AerialPathRequest other) =>
+    public bool Equals(VolumePathRequest other) =>
         other != null
         && RequestCacheKey == other.RequestCacheKey;
 
@@ -220,6 +238,7 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
             UnitSize,
             AllowUnwalkable,
             Heuristic,
+            TraversalMode,
             MaxPathSearchRange
         ).CombineHashCodes();
     }

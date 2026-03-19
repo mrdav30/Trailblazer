@@ -130,13 +130,13 @@ On load it also:
 
 The request record currently captures:
 
-- request type (`AStar`, `FlowField`, or `Aerial`)
+- request type (`AStar`, `FlowField`, or `Volume`)
 - origin
 - target position
 - unit size
 - walkability override
 - max search range
-- request-type-specific settings such as heuristic, max climb height, or extra flood range
+- request-type-specific settings such as heuristic, max climb height, extra flood range, or volume traversal mode
 - whether an active guide existed
 - current waypoint index when the guide is waypoint-based
 
@@ -144,7 +144,7 @@ On load it also:
 
 - rebuilds the active `IPathRequest` from the recorded request data
 - reacquires a guide from `PathGuideFactory` when the session was actively guide-driven
-- restores waypoint progress for both `AStarGuide` and `AerialGuide` when the guide is waypoint-based
+- restores waypoint progress for both `AStarGuide` and `VolumeGuide` when the guide is waypoint-based
 - clears any stale guide or movement-group session state already attached to the existing runtime shell
 - preserves per-session movement-group intent while treating the shared coordinator as rebuild-only runtime state
 - allows hosts to prewarm grouped sessions explicitly through `Navigator.PrewarmMovementGroup()` or `NavSteering.PrewarmMovementGroup(...)`

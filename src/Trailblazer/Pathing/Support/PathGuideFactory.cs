@@ -26,12 +26,12 @@ public static class PathGuideFactory
     /// </summary>
     public static int ActiveFlowGuideCount => _cachedFlowResults.Count;
 
-    private static readonly ReusableSurveyResultCache<AerialSurveyResult> _cachedAerialResults = new();
+    private static readonly ReusableSurveyResultCache<VolumeSurveyResult> _cachedVolumeResults = new();
 
     /// <summary>
-    /// Returns the number of active aerial guides currently tracked.
+    /// Returns the number of active raw-volume guides currently tracked.
     /// </summary>
-    public static int ActiveAerialGuideCount => _cachedAerialResults.Count;
+    public static int ActiveVolumeGuideCount => _cachedVolumeResults.Count;
 
     /// <summary>
     /// Indicates whether any pathing guides are currently pooled and available.
@@ -39,12 +39,12 @@ public static class PathGuideFactory
     public static bool IsPooling =>
         ActiveAStarGuideCount > 0
         || ActiveFlowGuideCount > 0
-        || ActiveAerialGuideCount > 0;
+        || ActiveVolumeGuideCount > 0;
 
     public static bool AnyInUse =>
         _cachedAStarResults.CountInUse > 0
         || _cachedFlowResults.CountInUse > 0
-        || _cachedAerialResults.CountInUse > 0;
+        || _cachedVolumeResults.CountInUse > 0;
 
     /// <summary>
     /// Attempts to remove guides from the pool that haven't been used for a configured number of frames.
@@ -56,7 +56,7 @@ public static class PathGuideFactory
 
         _cachedAStarResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
         _cachedFlowResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
-        _cachedAerialResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
+        _cachedVolumeResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
     }
 
     /// <summary>
@@ -94,7 +94,7 @@ public static class PathGuideFactory
         {
             AStarPathRequest a => RequestAStar(a),
             FlowFieldPathRequest f => RequestFlowField(f),
-            AerialPathRequest a => RequestAerial(a),
+            VolumePathRequest v => RequestVolume(v),
             _ => null,
         };
         return result != null;
@@ -143,18 +143,18 @@ public static class PathGuideFactory
     }
 
     /// <summary>
-    /// Retrieves an aerial guide from the pool or creates a new one based on the provided request.
+    /// Retrieves a raw-volume guide from the pool or creates a new one based on the provided request.
     /// </summary>
-    public static AerialGuide RequestAerial(AerialPathRequest request)
+    public static VolumeGuide RequestVolume(VolumePathRequest request)
     {
-        bool pathFound = _cachedAerialResults.TryGetOrCreate(request,
-            () => AerialSurveyor.Shared.FindPath(request),
-            out AerialSurveyResult result);
+        bool pathFound = _cachedVolumeResults.TryGetOrCreate(request,
+            () => VolumeSurveyor.Shared.FindPath(request),
+            out VolumeSurveyResult result);
 
         if (!pathFound)
             return null;
 
-        AerialGuide guide = new();
+        VolumeGuide guide = new();
         guide.Initialize(result);
         return guide;
     }
@@ -176,8 +176,8 @@ public static class PathGuideFactory
             case FlowFieldGuide f:
                 _cachedFlowResults.Return(f.FlowMap, dispose);
                 break;
-            case AerialGuide a:
-                _cachedAerialResults.Return(a.TrailMap, dispose);
+            case VolumeGuide v:
+                _cachedVolumeResults.Return(v.TrailMap, dispose);
                 break;
         }
     }
@@ -214,6 +214,6 @@ public static class PathGuideFactory
         if (!force && AnyInUse) return;
         _cachedAStarResults.InvalidateAll();
         _cachedFlowResults.InvalidateAll();
-        _cachedAerialResults.InvalidateAll();
+        _cachedVolumeResults.InvalidateAll();
     }
 }

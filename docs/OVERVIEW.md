@@ -111,21 +111,22 @@ One important difference from A*:
 - the flow-field cache key is based on destination and configuration, not the specific start voxel
 - a single field can be reused by multiple agents as long as their current voxel exists in the generated field set
 
-### 3.3 AerialPathRequest
+### 3.3 VolumePathRequest
 
-Use `AerialPathRequest` when a navigator should travel through 3D grid volume that may not have a navigation chart.
+Use `VolumePathRequest` when a navigator should travel through 3D grid volume that may not have a navigation chart.
 
 Key traits:
 
 - it resolves against raw `GridForge.Voxel` connectivity instead of `PathPartition` ownership
 - it can stay in direct 3D travel when the corridor is clear
-- it can fall back to a cached aerial waypoint guide when blockers force a detour
-- it is intended for guided flight and other fully 3D movement modes
+- it can fall back to a cached volume waypoint guide when blockers force a detour
+- it supports both unrestricted open-volume travel and host-defined constrained volumes such as water
+- Trailblazer does not assign water voxels itself; hosts configure that through `VolumeTraversalRules`
 
 Factory helpers:
 
 ```csharp
-AerialPathRequest.TryCreate(origin, destination, Fixed64.One, out var request);
+VolumePathRequest.TryCreate(origin, destination, Fixed64.One, out var request);
 ```
 
 ## 4. Surveyors and Guides
@@ -138,13 +139,13 @@ Surveyors build reusable results:
 
 - `AStarSurveyor` expands `PathPartition` nodes and produces waypoint trails
 - `FlowFieldSurveyor` performs a reverse flood and produces directional field data
-- `AerialSurveyor` expands raw voxel neighbors and produces 3D waypoint trails for chart-optional flight
+- `VolumeSurveyor` expands raw voxel neighbors and produces 3D waypoint trails for chart-optional volume travel
 
 Both surveyors return concrete `SurveyResult` types:
 
 - `AStarSurveyResult`
 - `FlowFieldSurveyResult`
-- `AerialSurveyResult`
+- `VolumeSurveyResult`
 
 These results are what the cache stores and reuses.
 
@@ -164,7 +165,7 @@ Concrete guide types:
 
 - `AStarGuide` implements `IWaypointGuide`
 - `FlowFieldGuide` implements `IGuide`
-- `AerialGuide` implements `IWaypointGuide`
+- `VolumeGuide` implements `IWaypointGuide`
 
 `IWaypointGuide` adds waypoint-specific operations:
 
@@ -193,7 +194,7 @@ Supported operations:
 - `RequestGuide<T>(IPathRequest request, out T result)`
 - `RequestAStar(AStarPathRequest request)`
 - `RequestFlowField(FlowFieldPathRequest request)`
-- `RequestAerial(AerialPathRequest request)`
+- `RequestVolume(VolumePathRequest request)`
 - `ReturnGuide(IGuide guide, bool dispose = false)`
 - `InvalidateCacheFor(string chartKey)`
 - `CullExpiredGuides(int currentFrame)`

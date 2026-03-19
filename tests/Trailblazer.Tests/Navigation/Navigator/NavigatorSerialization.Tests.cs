@@ -28,6 +28,7 @@ public class NavigatorSerializationTests : IDisposable
 
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
         GlobalGridManager.TryAddGrid(config, out _);
+        VolumeTraversalRules.SetWaterVoxelPartition<TestWaterPartition>();
     }
 
     public void Dispose()
@@ -235,7 +236,7 @@ public class NavigatorSerializationTests : IDisposable
     public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedAerialTraversal(bool useMemoryPack)
     {
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.Aerial);
-        source.Steering.CurrentRequest.Should().BeOfType<AerialPathRequest>();
+        source.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
         source.Steering.TrailGuide.Should().BeNull();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
@@ -278,21 +279,57 @@ public class NavigatorSerializationTests : IDisposable
         TrailblazerManager.Simulate();
         source.Steering.GetHeading(source);
 
-        AerialGuide sourceGuide = source.Steering.TrailGuide.Should().BeOfType<AerialGuide>().Subject;
+        VolumeGuide sourceGuide = source.Steering.TrailGuide.Should().BeOfType<VolumeGuide>().Subject;
         if (sourceGuide.TryGetWaypointAt(sourceGuide.CurrentWaypointIndex + 1, out _))
             sourceGuide.AdvanceWaypoint();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
 
-        target.Steering.TrailGuide.Should().BeOfType<AerialGuide>();
-        ((AerialGuide)target.Steering.TrailGuide).CurrentWaypointIndex.Should().Be(sourceGuide.CurrentWaypointIndex);
+        target.Steering.TrailGuide.Should().BeOfType<VolumeGuide>();
+        ((VolumeGuide)target.Steering.TrailGuide).CurrentWaypointIndex.Should().Be(sourceGuide.CurrentWaypointIndex);
 
         TrailblazerManager.Simulate();
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
         target.FrameRequest.IsRequestingFlight.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedSwimTraversal(bool useMemoryPack)
+    {
+        AddWater(Vector3d.Zero);
+        AddWater(new Vector3d(0, 0, 1));
+        AddWater(new Vector3d(0, 0, 2));
+
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        source.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
+        source.GuidedPathMode = GuidedPathMode.Swim;
+        source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
+        source.ApplyGuidedTrekRequest(
+            new Vector3d(0, 0, 2),
+            pathMode: GuidedPathMode.Swim,
+            rate: TrekRate.Fast,
+            isRequestingJump: false,
+            groupId: 3);
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        target.IsGuideded.Should().BeTrue();
+        target.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        target.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
+        ((VolumePathRequest)target.Steering.CurrentRequest).TraversalMode.Should().Be(VolumeTraversalMode.Water);
+
+        TrailblazerManager.Simulate();
+        target.Simulate();
+
+        target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
+        target.FrameRequest.Direction.z.Should().BeGreaterThan(Fixed64.Zero);
+        target.FrameRequest.IsRequestingFlight.Should().BeFalse();
     }
 
     [Theory]
@@ -821,10 +858,11 @@ public class NavigatorSerializationTests : IDisposable
                 actualFlowField.ExtraFloodRange.Should().Be(expectedFlowField.ExtraFloodRange);
             }
 
-            if (expected.CurrentRequest is AerialPathRequest expectedAerial
-                && actual.CurrentRequest is AerialPathRequest actualAerial)
+            if (expected.CurrentRequest is VolumePathRequest expectedVolume
+                && actual.CurrentRequest is VolumePathRequest actualVolume)
             {
-                actualAerial.Heuristic.Should().Be(expectedAerial.Heuristic);
+                actualVolume.Heuristic.Should().Be(expectedVolume.Heuristic);
+                actualVolume.TraversalMode.Should().Be(expectedVolume.TraversalMode);
             }
         }
 
@@ -843,10 +881,10 @@ public class NavigatorSerializationTests : IDisposable
                 actualAStarGuide.CurrentWaypointIndex.Should().Be(expectedAStarGuide.CurrentWaypointIndex);
             }
 
-            if (expected.TrailGuide is AerialGuide expectedAerialGuide
-                && actual.TrailGuide is AerialGuide actualAerialGuide)
+            if (expected.TrailGuide is VolumeGuide expectedVolumeGuide
+                && actual.TrailGuide is VolumeGuide actualVolumeGuide)
             {
-                actualAerialGuide.CurrentWaypointIndex.Should().Be(expectedAerialGuide.CurrentWaypointIndex);
+                actualVolumeGuide.CurrentWaypointIndex.Should().Be(expectedVolumeGuide.CurrentWaypointIndex);
             }
         }
     }
@@ -857,6 +895,12 @@ public class NavigatorSerializationTests : IDisposable
         GridObstacleManager.TryAddObstacle(
             voxel.GlobalIndex,
             new BoundsKey(position, position)).Should().BeTrue();
+    }
+
+    private static void AddWater(Vector3d position)
+    {
+        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
+        voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
     }
 
     private static void AssertTurningStateMatches(NavTurning expected, NavTurning actual)

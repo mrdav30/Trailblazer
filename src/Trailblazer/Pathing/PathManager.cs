@@ -231,6 +231,8 @@ public static class PathManager
     /// </summary>
     public static void Reset()
     {
+        VolumeTraversalRules.Reset();
+
         var allCharts = AllCharts;
 
         // remove all partitions from voxels and clear navigation map references

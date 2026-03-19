@@ -3,11 +3,11 @@ using FixedMathSharp;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Waypoint guide used for 3D aerial detours.
+/// Waypoint guide used for raw voxel volume detours.
 /// </summary>
-public sealed class AerialGuide : IWaypointGuide
+public sealed class VolumeGuide : IWaypointGuide
 {
-    public AerialSurveyResult TrailMap { get; private set; }
+    public VolumeSurveyResult TrailMap { get; private set; }
 
     public int CurrentWaypointIndex { get; private set; }
 
@@ -15,7 +15,7 @@ public sealed class AerialGuide : IWaypointGuide
 
     public AStarWaypoint[] ActiveWaypoints => TrailMap.Waypoints;
 
-    public bool Initialize(AerialSurveyResult surveyResult)
+    public bool Initialize(VolumeSurveyResult surveyResult)
     {
         if (!surveyResult.HasPath)
             return false;

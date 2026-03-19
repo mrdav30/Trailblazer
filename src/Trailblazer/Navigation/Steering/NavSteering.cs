@@ -471,18 +471,45 @@ public class NavSteering : IRecordable
                 }
             }
 
-            if (!usesAerialGuidance && _pathCheckCooldown <= 0)
+            if (_pathCheckCooldown <= 0)
             {
-                HasLineOfSightPath = IsDestinationInSight(
-                    navigator.Position,
-                    Destination,
-                    _currentRequest.UnitSize,
-                    _currentRequest.AllowUnwalkable);
+                if (usesAerialGuidance)
+                {
+                    HasLineOfSightPath = IsAerialDestinationInSight(
+                        navigator.Position,
+                        Destination,
+                        _currentRequest.UnitSize,
+                        _currentRequest.AllowUnwalkable,
+                        _currentRequest.StartNode,
+                        _currentRequest.EndNode);
+
+                    if (HasLineOfSightPath)
+                        ReleaseTrailGuide();
+                }
+                else
+                {
+                    HasLineOfSightPath = IsDestinationInSight(
+                        navigator.Position,
+                        Destination,
+                        _currentRequest.UnitSize,
+                        _currentRequest.AllowUnwalkable);
+                }
 
                 _pathCheckCooldown = PathRecheckCooldownFrames;
             }
-            else if (usesAerialGuidance)
-                HasLineOfSightPath = true;
+
+            if (usesAerialGuidance && !HasLineOfSightPath && !HasTrailGuide)
+            {
+                if (!ValidateMovementPath(navigator.Position))
+                {
+#if DEBUG
+                    Debug.WriteLine("Invalid aerial path detected!");
+#endif
+                    Events.OnInvalidPath?.Invoke();
+                    Arrive();
+                    return Vector3d.Zero;
+                }
+            }
 
             LastTargetDirection = TargetDirection;
             TargetDirection = FindTargetDirection(navigator.Position);
@@ -571,21 +598,34 @@ public class NavSteering : IRecordable
 
         if (UsesAerialGuidance())
         {
-            ReleaseTrailGuide();
-            HasLineOfSightPath = true;
-            _pathCheckCooldown = 0;
-            return true;
+            HasLineOfSightPath = IsAerialDestinationInSight(
+                origin,
+                Destination,
+                _currentRequest.UnitSize,
+                _currentRequest.AllowUnwalkable,
+                _currentRequest.StartNode,
+                _currentRequest.EndNode);
+
+            _pathCheckCooldown = PathRecheckCooldownFrames;
+            if (HasLineOfSightPath)
+            {
+                ReleaseTrailGuide();
+                return true;
+            }
+        }
+        else
+        {
+            HasLineOfSightPath = IsDestinationInSight(
+                origin,
+                Destination,
+                _currentRequest.UnitSize,
+                _currentRequest.AllowUnwalkable);
+            if (HasLineOfSightPath)
+                return true;  // no path required
         }
 
-        HasLineOfSightPath = IsDestinationInSight(
-            origin,
-            Destination,
-            _currentRequest.UnitSize,
-            _currentRequest.AllowUnwalkable);
-        if (HasLineOfSightPath)
-            return true;  // no path required
-
         // request guide
+        ReleaseTrailGuide();
         _pathCheckCooldown = PathRecheckCooldownFrames;
         if (!_currentRequest.IsValid || !PathGuideFactory.RequestGuide(_currentRequest, out _trailGuide))
         {
@@ -649,8 +689,6 @@ public class NavSteering : IRecordable
         if (!CanAutoStop)
             return true;
 
-        bool usesAerialGuidance = UsesAerialGuidance();
-
         // If unit has not moved stuckThreshold in a frame, it's stuck
         if (stuckThreshold > Fixed64.Zero && speed < stuckThreshold)
         {
@@ -658,13 +696,6 @@ public class NavSteering : IRecordable
 
             if (_stuckFrameCount > StuckFrameThreshold)
             {
-                if (usesAerialGuidance)
-                {
-                    IsStuck = true;
-                    Events.OnIsStuck?.Invoke();
-                    return false;
-                }
-
                 if (_repathTries < StuckRepathTries)
                 {
                     HasLineOfSightPath = false;
@@ -790,6 +821,26 @@ public class NavSteering : IRecordable
         return result;
     }
 
+    /// <summary>
+    /// Whether the destination is currently visible and reachable for raw-voxel aerial travel.
+    /// </summary>
+    public static bool IsAerialDestinationInSight(
+        Vector3d position,
+        Vector3d destination,
+        Fixed64 unitSize,
+        bool allowUnwalkable,
+        Voxel startNode = null,
+        Voxel endNode = null)
+    {
+        return AerialVoxelFinder.IsDirectPathClear(
+            position,
+            destination,
+            unitSize,
+            allowUnwalkable,
+            startNode,
+            endNode);
+    }
+
     #endregion
 
     #region Steering Behaviors (Group & Avoidance)
@@ -900,10 +951,8 @@ public class NavSteering : IRecordable
 
     #region Movement Groups
 
-    private void CacheOwner(ISteer navigator)
-    {
+    private void CacheOwner(ISteer navigator) => 
         MovementGroupCoordinator.CacheOwner(_movementGroupSession, navigator.GlobalId);
-    }
 
     private void UpdateMovementGroupState(Vector3d position, bool resetFormationOffset = false)
     {

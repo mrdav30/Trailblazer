@@ -59,6 +59,7 @@ internal static class NavigatorPathRequestFactory
                     origin,
                     targetPosition,
                     unitSize,
+                    aStarHeuristic,
                     allowUnwalkable);
                 if (aerial == null)
                 {

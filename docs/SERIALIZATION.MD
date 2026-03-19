@@ -138,13 +138,13 @@ The request record currently captures:
 - max search range
 - request-type-specific settings such as heuristic, max climb height, or extra flood range
 - whether an active guide existed
-- current A* waypoint index when the guide is waypoint-based
+- current waypoint index when the guide is waypoint-based
 
 On load it also:
 
 - rebuilds the active `IPathRequest` from the recorded request data
 - reacquires a guide from `PathGuideFactory` when the session was actively guide-driven
-- restores A* waypoint progress when the guide is waypoint-based
+- restores waypoint progress for both `AStarGuide` and `AerialGuide` when the guide is waypoint-based
 - clears any stale guide or movement-group session state already attached to the existing runtime shell
 - preserves per-session movement-group intent while treating the shared coordinator as rebuild-only runtime state
 - allows hosts to prewarm grouped sessions explicitly through `Navigator.PrewarmMovementGroup()` or `NavSteering.PrewarmMovementGroup(...)`

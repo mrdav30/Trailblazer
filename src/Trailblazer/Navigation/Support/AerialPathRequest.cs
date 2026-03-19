@@ -8,16 +8,14 @@ using Trailblazer.Pathing;
 namespace Trailblazer.Navigation;
 
 /// <summary>
-/// Represents a direct 3D guided travel request for aerial locomotion.
+/// Represents a 3D guided travel request for aerial locomotion.
 /// </summary>
 /// <remarks>
-/// This request does not build or cache a voxel path. It only validates that the origin and target
-/// remain inside registered grids so steering can guide the navigator directly through world space.
+/// Aerial requests resolve directly against raw voxels instead of chart partitions, which allows flight
+/// to path through grid volumes that do not have a navigation chart attached.
 /// </remarks>
 public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathRequest>
 {
-    private const int DirectTravelSearchRange = 1;
-
     public Vector3d Origin { get; private set; }
 
     public Voxel StartNode { get; private set; }
@@ -32,6 +30,8 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
 
     public int MaxPathSearchRange { get; set; }
 
+    public HeuristicMethod Heuristic { get; set; }
+
     public bool HasOrigin => StartNode != null;
 
     public bool HasDestination => EndNode != null;
@@ -42,7 +42,7 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
 
     public bool HasZeroDisplacement =>
         !IsValid
-        || (TargetPosition - Origin).SqrMagnitude <= Fixed64.Epsilon;
+        || StartNode == EndNode;
 
     public int RequestCacheKey => GetHashCode();
 
@@ -63,15 +63,33 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
+        HeuristicMethod heuristic = HeuristicMethod.Euclidean,
         bool allowUnwalkable = false)
     {
+        if (!AerialVoxelFinder.TryGetPathEdgeVoxels(
+            origin,
+            destination,
+            out Voxel startNode,
+            out Voxel endNode,
+            unitSize,
+            allowUnwalkable))
+        {
+            return null;
+        }
+
         var request = new AerialPathRequest
         {
+            Origin = origin,
+            StartNode = startNode,
+            TargetPosition = destination,
+            EndNode = endNode,
+            UnitSize = unitSize,
+            Heuristic = heuristic,
             AllowUnwalkable = allowUnwalkable
         };
 
-        if (!request.UpdateRequest(origin, destination, unitSize))
-            return null;
+        if (PathManager.TryGetMaxSearchSize(request.StartNode, request.EndNode, out int searchSize))
+            request.MaxPathSearchRange = searchSize;
 
         return request;
     }
@@ -81,49 +99,100 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
         Vector3d destination,
         Fixed64? unitSize)
     {
-        bool hasOrigin = TryResolveVoxel(origin, out Voxel startNode);
-        bool hasDestination = TryResolveVoxel(destination, out Voxel endNode);
+        Fixed64 resolvedUnitSize = unitSize ?? GlobalGridManager.VoxelSize;
+        bool hasEndpoints = AerialVoxelFinder.TryGetPathEdgeVoxels(
+            origin,
+            destination,
+            out Voxel startNode,
+            out Voxel endNode,
+            resolvedUnitSize,
+            AllowUnwalkable);
 
         Origin = origin;
         TargetPosition = destination;
-        StartNode = hasOrigin ? startNode : null;
-        EndNode = hasDestination ? endNode : null;
-        UnitSize = unitSize ?? GlobalGridManager.VoxelSize;
-        MaxPathSearchRange = hasOrigin && hasDestination
-            ? DirectTravelSearchRange
-            : 0;
+        StartNode = hasEndpoints ? startNode : null;
+        EndNode = hasEndpoints ? endNode : null;
+        UnitSize = resolvedUnitSize;
+        MaxPathSearchRange = 0;
+
+        if (hasEndpoints && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+            MaxPathSearchRange = searchSize;
 
         return HasValidEndpoints;
     }
 
     public bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false)
     {
-        if (!TryResolveVoxel(origin, out Voxel startNode))
+        if (EndNode == null)
             return false;
 
+        if (!AerialVoxelFinder.GetStartVoxel(
+            origin,
+            TargetPosition,
+            out Voxel startNode,
+            AllowUnwalkable,
+            UnitSize))
+        {
+            return false;
+        }
+
         Origin = origin;
+
+        if (StartNode != null)
+        {
+            if (startNode == StartNode)
+                return true;
+
+            if (startNode.GridIndex != StartNode.GridIndex)
+                resetSearchRange = true;
+        }
+
         StartNode = startNode;
 
-        if (resetSearchRange || MaxPathSearchRange <= 0)
-            MaxPathSearchRange = HasDestination
-                ? DirectTravelSearchRange
-                : 0;
+        if (resetSearchRange)
+        {
+            MaxPathSearchRange = 0;
+            if (HasDestination && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+                MaxPathSearchRange = searchSize;
+        }
 
         return true;
     }
 
     public bool TrySetDestination(Vector3d destination, bool resetSearchRange = false)
     {
-        if (!TryResolveVoxel(destination, out Voxel endNode))
+        if (StartNode == null)
             return false;
 
+        if (!AerialVoxelFinder.GetEndVoxel(
+            Origin,
+            destination,
+            out Voxel endNode,
+            AllowUnwalkable,
+            UnitSize))
+        {
+            return false;
+        }
+
         TargetPosition = destination;
+
+        if (EndNode != null)
+        {
+            if (endNode == EndNode)
+                return true;
+
+            if (endNode.GridIndex != EndNode.GridIndex)
+                resetSearchRange = true;
+        }
+
         EndNode = endNode;
 
-        if (resetSearchRange || MaxPathSearchRange <= 0)
-            MaxPathSearchRange = HasOrigin
-                ? DirectTravelSearchRange
-                : 0;
+        if (resetSearchRange)
+        {
+            MaxPathSearchRange = 0;
+            if (HasOrigin && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+                MaxPathSearchRange = searchSize;
+        }
 
         return true;
     }
@@ -142,24 +211,17 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
 
     public bool Equals(AerialPathRequest other) =>
         other != null
-        && Origin == other.Origin
-        && TargetPosition == other.TargetPosition
-        && UnitSize == other.UnitSize
-        && AllowUnwalkable == other.AllowUnwalkable;
+        && RequestCacheKey == other.RequestCacheKey;
 
     public override int GetHashCode()
     {
         return (
-            Origin,
-            TargetPosition,
+            StartNode?.SpawnToken ?? 0,
+            EndNode?.SpawnToken ?? 0,
             UnitSize,
-            AllowUnwalkable
+            AllowUnwalkable,
+            Heuristic,
+            MaxPathSearchRange
         ).CombineHashCodes();
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool TryResolveVoxel(Vector3d position, out Voxel voxel)
-    {
-        return GlobalGridManager.TryGetGridAndVoxel(position, out _, out voxel);
     }
 }

@@ -113,13 +113,14 @@ One important difference from A*:
 
 ### 3.3 AerialPathRequest
 
-Use `AerialPathRequest` when a navigator should steer directly toward a 3D destination without generating a voxel guide.
+Use `AerialPathRequest` when a navigator should travel through 3D grid volume that may not have a navigation chart.
 
 Key traits:
 
-- it validates that the origin and target remain inside registered grid space
-- it does not request an `AStarGuide` or `FlowFieldGuide`
-- it is intended for guided flight and other direct aerial movement modes
+- it resolves against raw `GridForge.Voxel` connectivity instead of `PathPartition` ownership
+- it can stay in direct 3D travel when the corridor is clear
+- it can fall back to a cached aerial waypoint guide when blockers force a detour
+- it is intended for guided flight and other fully 3D movement modes
 
 Factory helpers:
 
@@ -137,11 +138,13 @@ Surveyors build reusable results:
 
 - `AStarSurveyor` expands `PathPartition` nodes and produces waypoint trails
 - `FlowFieldSurveyor` performs a reverse flood and produces directional field data
+- `AerialSurveyor` expands raw voxel neighbors and produces 3D waypoint trails for chart-optional flight
 
 Both surveyors return concrete `SurveyResult` types:
 
 - `AStarSurveyResult`
 - `FlowFieldSurveyResult`
+- `AerialSurveyResult`
 
 These results are what the cache stores and reuses.
 
@@ -161,6 +164,7 @@ Concrete guide types:
 
 - `AStarGuide` implements `IWaypointGuide`
 - `FlowFieldGuide` implements `IGuide`
+- `AerialGuide` implements `IWaypointGuide`
 
 `IWaypointGuide` adds waypoint-specific operations:
 
@@ -189,6 +193,7 @@ Supported operations:
 - `RequestGuide<T>(IPathRequest request, out T result)`
 - `RequestAStar(AStarPathRequest request)`
 - `RequestFlowField(FlowFieldPathRequest request)`
+- `RequestAerial(AerialPathRequest request)`
 - `ReturnGuide(IGuide guide, bool dispose = false)`
 - `InvalidateCacheFor(string chartKey)`
 - `CullExpiredGuides(int currentFrame)`

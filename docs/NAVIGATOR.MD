@@ -77,12 +77,14 @@ The main entry points are:
 - `Initialize(TrekCondition condition)`
 - `BindAnimationHandler(...)`
 - `UnbindAnimationHandler()`
+- `PrewarmMovementGroup()`
 - `ReplaceTrekCondition(TrekCondition state)`
 - `Reset()`
 - `ApplyInputTrekRequest(...)`
 - `ApplyGuidedTrekRequest(...)`
-- `ToggleJumpStatus(bool status)`
-- `SetTraversalSpeed(TrekRate rate)`
+- `ToggleGuidedJump(bool status)`
+- `ToggleGuidedFlight(bool status)`
+- `SetGuidedTrekRate(TrekRate rate)`
 - `Simulate()`
 - `CommitFrameMotion()`
 - `SetGroundContact(...)`
@@ -170,7 +172,14 @@ Subsystems do not mutate committed transform state through a shared host interfa
 - `IsGuideded`
 
 `_frameCondition` is the current traversal snapshot the motor will finalize against.
-`_frameRequest` is the current frame's travel intent.
+`_frameRequest` is semi-transient travel state.
+
+In practice that means:
+
+- `Origin`, `FootPosition`, and `Rotation` are refreshed every `Simulate()`
+- `Direction` is overwritten by steering while guided, or preserved from manual input for the current frame
+- `Rate` and `IsRequestingFlight` can persist across guided frames
+- `IsRequestingJump` is frame-scoped and is cleared after commit
 
 `IsGuideded` is explicit navigator state.
 It is turned on by `ApplyGuidedTrekRequest(...)` and turned off by `ApplyInputTrekRequest(...)` or `Reset()`.
@@ -247,6 +256,7 @@ It:
 
 - resets `_frameCondition`
 - resets `_frameRequest`
+- sets `IsGuideded = false`
 - removes the navigator from occupied voxels
 - clears `OccupyingIndexMap`
 - marks the navigator inactive
@@ -268,6 +278,8 @@ After `Reset()`, the instance must go through `Setup(...)` and `Initialize(...)`
 
 and marks the navigator as not guided.
 
+Manual input is frame-local. After `CommitFrameMotion()`, a non-guided navigator fully resets `_frameRequest`, so manual callers should reissue input each fixed step.
+
 ### 7.2 Guided Travel
 
 `ApplyGuidedTrekRequest(...)` switches the navigator into guided mode.
@@ -276,13 +288,19 @@ It:
 
 - sets `IsGuideded = true`
 - clears the current manual direction
-- stores the guided movement rate and action intent so they can be reapplied every simulation tick
+- stores guided request state in `_frameRequest`
 - builds a concrete `IPathRequest` from the target position, the navigator's current state, and guided-path defaults
 - optionally overrides the navigator's default `GuidedPathMode` for a single request
 - optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`
 
-When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically.
+While guided movement remains active:
+
+- `Rate` persists until changed or replaced by a different request
+- `IsRequestingFlight` persists until changed or replaced by a different request
+- `IsRequestingJump` is still frame-scoped unless the host reissues it
+
+When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically. Steering may then travel directly through open air volume or acquire an aerial guide if blockers force a detour.
 
 Passing the same non-negative `groupId` to multiple navigators lets `NavSteering` preserve relative formation offsets while the group stays compact.
 
@@ -298,11 +316,11 @@ If a project needs a different request shape, override `TryCreateGuidedPathReque
 
 `Navigator` also exposes:
 
-- `ToggleJumpStatus(bool status)`
-- `ToggleFlightStatus(bool status)`
-- `SetTraversalSpeed(TrekRate rate)`
+- `ToggleGuidedJump(bool status)`
+- `ToggleGuidedFlight(bool status)`
+- `SetGuidedTrekRate(TrekRate rate)`
 
-These let the host modify the current frame request without rebuilding the whole movement session. While guided movement is active, the updated values persist across subsequent simulation ticks.
+These let the host modify the frame request for a guided movement session without rebuilding the whole movement session. While guided movement is active, the `ToggleGuidedFlight(bool status)` and `SetGuidedTrekRate(TrekRate rate)` values persist across subsequent simulation ticks. Note that `ToggleGuidedJump(...)` only updates the current frame request, and is not intended for toggling jump outside of a guided movement session.
 
 ## 8. Simulation Lifecycle
 
@@ -316,16 +334,19 @@ It first verifies that the navigator is active. If not, it throws.
 
 Then it:
 
-1. writes `_frameRequest.Origin = Position`
-2. writes `_frameRequest.FootPosition = GetFootPosition()`
-3. writes `_frameRequest.Rotation = Rotation`
-4. asks steering for a heading if the navigator is guided
-5. buffers turning toward the current movement direction
-6. runs `Motor.TryTraversal(...)`
-7. accumulates any returned deltas
-8. runs `Turning.TrySimulateTurn(...)`
-9. if a rotation was returned, stores it in `Rotation`
-10. optionally updates animation parameters
+1. writes transient request state through `_frameRequest.SetTransientState(...)`
+2. asks steering for a heading if the navigator is guided
+3. buffers turning toward the current movement direction
+4. runs `Motor.TryTraversal(...)`
+5. accumulates any returned deltas
+6. runs `Turning.TrySimulateTurn(...)`
+7. if a rotation was returned, stores it in `Rotation`
+8. optionally updates animation parameters
+
+Important detail:
+
+- guided movement overwrites `_frameRequest.Direction` from `Steering.GetHeading(this)`
+- non-guided movement preserves whatever manual direction was last written into `_frameRequest`
 
 This means `Simulate()` is where the controller stack is executed, but not where final position and velocity are committed.
 
@@ -348,6 +369,13 @@ Then it:
 9. clears frame deltas
 10. calls `Motor.FinalizeTraversal(...)`
 11. resets `_frameRequest`
+
+That last step is conditional:
+
+- non-guided movement calls `_frameRequest.Reset()`
+- guided movement calls `_frameRequest.ResetTransient()`
+
+So guided sessions preserve their semi-persistent request values between frames, while manual input does not.
 
 This is where the navigator becomes internally consistent for the next simulation frame.
 

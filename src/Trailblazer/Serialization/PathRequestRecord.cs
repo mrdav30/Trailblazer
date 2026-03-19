@@ -68,8 +68,9 @@ internal sealed class PathRequestRecord : IRecordable
                 FlowFieldExtraFloodRange = flowField.ExtraFloodRange;
                 break;
 
-            case AerialPathRequest:
+            case AerialPathRequest aerial:
                 Kind = PathRequestRecordKind.Aerial;
+                AStarHeuristic = aerial.Heuristic;
                 break;
 
             default:
@@ -77,8 +78,8 @@ internal sealed class PathRequestRecord : IRecordable
                     $"Unable to record steering path request type '{request.GetType().Name}'.");
         }
 
-        if (guide is AStarGuide aStarGuide)
-            WaypointIndex = aStarGuide.CurrentWaypointIndex;
+        if (guide is IWaypointGuide waypointGuide)
+            WaypointIndex = waypointGuide.CurrentWaypointIndex;
     }
 
     public bool TryCreateRequest(out IPathRequest request)
@@ -128,6 +129,7 @@ internal sealed class PathRequestRecord : IRecordable
                     Origin,
                     TargetPosition,
                     UnitSize,
+                    AStarHeuristic,
                     AllowUnwalkable);
                 if (aerial == null)
                     return false;
@@ -154,6 +156,8 @@ internal sealed class PathRequestRecord : IRecordable
 
         if (guide is AStarGuide aStarGuide)
             RestoreWaypointIndex(aStarGuide);
+        else if (guide is AerialGuide aerialGuide)
+            RestoreWaypointIndex(aerialGuide);
 
         return true;
     }
@@ -216,6 +220,18 @@ internal sealed class PathRequestRecord : IRecordable
     }
 
     private void RestoreWaypointIndex(AStarGuide guide)
+    {
+        if (WaypointIndex <= 0)
+            return;
+
+        while (guide.CurrentWaypointIndex < WaypointIndex
+            && guide.TryGetWaypointAt(guide.CurrentWaypointIndex + 1, out _))
+        {
+            guide.AdvanceWaypoint();
+        }
+    }
+
+    private void RestoreWaypointIndex(AerialGuide guide)
     {
         if (WaypointIndex <= 0)
             return;

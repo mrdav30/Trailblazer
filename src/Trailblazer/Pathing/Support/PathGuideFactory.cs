@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using Trailblazer.Navigation;
 
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Provides access to pooled and reusable IGuide instances for both A* and FlowField pathing strategies.
+/// Provides access to pooled and reusable IGuide instances for the built-in pathing strategies.
 /// Handles guide request routing, instantiation, and lifecycle management.
 /// </summary>
 public static class PathGuideFactory
@@ -25,12 +26,25 @@ public static class PathGuideFactory
     /// </summary>
     public static int ActiveFlowGuideCount => _cachedFlowResults.Count;
 
+    private static readonly ReusableSurveyResultCache<AerialSurveyResult> _cachedAerialResults = new();
+
+    /// <summary>
+    /// Returns the number of active aerial guides currently tracked.
+    /// </summary>
+    public static int ActiveAerialGuideCount => _cachedAerialResults.Count;
+
     /// <summary>
     /// Indicates whether any pathing guides are currently pooled and available.
     /// </summary>
-    public static bool IsPooling => ActiveAStarGuideCount > 0 || ActiveFlowGuideCount > 0;
+    public static bool IsPooling =>
+        ActiveAStarGuideCount > 0
+        || ActiveFlowGuideCount > 0
+        || ActiveAerialGuideCount > 0;
 
-    public static bool AnyInUse => _cachedAStarResults.CountInUse > 0 || _cachedFlowResults.CountInUse > 0;
+    public static bool AnyInUse =>
+        _cachedAStarResults.CountInUse > 0
+        || _cachedFlowResults.CountInUse > 0
+        || _cachedAerialResults.CountInUse > 0;
 
     /// <summary>
     /// Attempts to remove guides from the pool that haven't been used for a configured number of frames.
@@ -42,6 +56,7 @@ public static class PathGuideFactory
 
         _cachedAStarResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
         _cachedFlowResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
+        _cachedAerialResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
     }
 
     /// <summary>
@@ -63,7 +78,7 @@ public static class PathGuideFactory
     /// <summary>
     /// Routes the path request to the appropriate guide implementation based on type.
     /// </summary>
-    /// <param name="request">The polymorphic request to resolve (AStar or FlowField).</param>
+    /// <param name="request">The polymorphic request to resolve.</param>
     /// <param name="result">The resolved guide or null if the request was invalid.</param>
     /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
     public static bool RequestGuide(IPathRequest request, out IGuide result)
@@ -79,6 +94,7 @@ public static class PathGuideFactory
         {
             AStarPathRequest a => RequestAStar(a),
             FlowFieldPathRequest f => RequestFlowField(f),
+            AerialPathRequest a => RequestAerial(a),
             _ => null,
         };
         return result != null;
@@ -127,6 +143,23 @@ public static class PathGuideFactory
     }
 
     /// <summary>
+    /// Retrieves an aerial guide from the pool or creates a new one based on the provided request.
+    /// </summary>
+    public static AerialGuide RequestAerial(AerialPathRequest request)
+    {
+        bool pathFound = _cachedAerialResults.TryGetOrCreate(request,
+            () => AerialSurveyor.Shared.FindPath(request),
+            out AerialSurveyResult result);
+
+        if (!pathFound)
+            return null;
+
+        AerialGuide guide = new();
+        guide.Initialize(result);
+        return guide;
+    }
+
+    /// <summary>
     /// Returns the guide back to its associated pool, optionally disposing it completely.
     /// </summary>
     /// <param name="guide">The guide to return to the cache.</param>
@@ -142,6 +175,9 @@ public static class PathGuideFactory
                 break;
             case FlowFieldGuide f:
                 _cachedFlowResults.Return(f.FlowMap, dispose);
+                break;
+            case AerialGuide a:
+                _cachedAerialResults.Return(a.TrailMap, dispose);
                 break;
         }
     }
@@ -178,5 +214,6 @@ public static class PathGuideFactory
         if (!force && AnyInUse) return;
         _cachedAStarResults.InvalidateAll();
         _cachedFlowResults.InvalidateAll();
+        _cachedAerialResults.InvalidateAll();
     }
 }

@@ -176,6 +176,7 @@ public class NavigatorTests : IDisposable
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
         request.UnitSize.Should().Be(navigator.Size);
+        request.Heuristic.Should().Be(navigator.GuidedAStarHeuristic);
     }
 
     [Fact]

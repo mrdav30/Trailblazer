@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
 using FluentAssertions;
+using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
 using Moq;
@@ -123,6 +124,30 @@ public class NavSteeringTests : IDisposable
         steer.HasLineOfSightPath.Should().BeTrue();
         steer.TrailGuide.Should().BeNull();
         steer.IsAtDestination.Should().BeFalse();
+    }
+
+    [Fact]
+    public void NavSteering_Should_RequestAerialGuide_WhenDirectFlightIsBlocked()
+    {
+        AddObstacle(new Vector3d(1, 0, 0));
+
+        var steer = new NavSteering();
+        var agent = new MockSteerAgent(Vector3d.Zero);
+        steer.OnInitialize(agent.Radius);
+
+        AerialPathRequest.TryCreate(
+            agent.Position,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            out AerialPathRequest request).Should().BeTrue();
+
+        steer.ApplyPathRequest(request);
+
+        Vector3d heading = steer.GetHeading(agent);
+
+        steer.HasLineOfSightPath.Should().BeFalse();
+        steer.TrailGuide.Should().BeOfType<AerialGuide>();
+        heading.Should().NotBe(Vector3d.Zero);
     }
 
     [Fact]
@@ -779,5 +804,13 @@ public class NavSteeringTests : IDisposable
 
         grid.TryRemoveVoxelOccupant(neighbor);
         PathManager.UnloadChart("MovementGroupReset");
+    }
+
+    private static void AddObstacle(Vector3d position)
+    {
+        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
+        GridObstacleManager.TryAddObstacle(
+            voxel.GlobalIndex,
+            new BoundsKey(position, position)).Should().BeTrue();
     }
 }

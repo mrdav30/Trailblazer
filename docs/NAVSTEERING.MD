@@ -159,8 +159,9 @@ It may be:
 - `null`, for direct travel or no active movement
 - an `AStarGuide`
 - a `FlowFieldGuide`
+- an `AerialGuide`
 
-`GuidedPathMode.Aerial` keeps `_trailGuide` at `null` on purpose. It uses direct 3D destination steering rather than guide allocation.
+`GuidedPathMode.Aerial` is not forced into one mode. It stays guide-free while the direct 3D corridor is clear, then allocates an `AerialGuide` only when raw voxel blockers force a detour.
 
 Guide lifetime is owned by `NavSteering` while the movement session is active.
 
@@ -220,7 +221,7 @@ If movement is active, `GetHeading(...)` starts by making sure the current path 
 
 If `CanPathfind` is true, it calls `ValidateMovementPath(navigator.Position)`.
 
-The built-in aerial request mode still validates its live origin/destination even when no voxel guide is needed, so direct guided flight keeps its request state current without entering the guide cache.
+The built-in aerial request mode always validates its live origin/destination, because it may switch between direct 3D travel and a cached aerial guide as blockers appear or disappear.
 
 If that validation fails:
 
@@ -312,10 +313,14 @@ If direct travel is not valid, steering requests a guide:
 
 - `AStarGuide` for waypoint-driven motion
 - `FlowFieldGuide` for field sampling
+- `AerialGuide` for 3D voxel detours when an aerial request loses straight-line access
 
 Guide creation and reuse are delegated to `PathGuideFactory`.
 
-`GuidedPathMode.Aerial` is the other built-in branch: it skips guide creation entirely and steers straight toward the requested 3D destination.
+For aerial requests, direct travel and guide-following are both valid runtime outcomes:
+
+- clear corridor: no guide allocation, steer directly at the 3D destination
+- blocked corridor: request an `AerialGuide` and follow waypoint detours through raw voxel space
 
 ### 8.4 Guide Loss or Invalidity
 
@@ -568,6 +573,8 @@ There is already a test note in `NavSteering.Tests` calling this out.
 ### Forgetting that direct travel skips guide allocation
 
 `HasLineOfSightPath = true` means there may be no active guide at all. Do not assume every movement session owns a `TrailGuide`.
+
+This includes aerial movement. Flight can legitimately bounce between direct travel and an `AerialGuide` over the life of one request.
 
 ### Treating StopMove() as arrival
 

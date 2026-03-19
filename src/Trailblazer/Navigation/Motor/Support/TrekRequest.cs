@@ -11,7 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// containing the current origin, foot position, rotation, direction, speed, jump intent, and flight intent.
 /// </summary>
 [Serializable]
-public struct TrekRequest : ITransient, IRecordable
+public struct TrekRequest : IRecordable
 {
     /// <summary>
     /// The world position from which the scout is requesting movement. 

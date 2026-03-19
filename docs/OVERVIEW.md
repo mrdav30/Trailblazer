@@ -36,9 +36,10 @@ At a high level, the runtime loop is:
 
 ### 2.1 NavigationChart
 
-`NavigationChart` is the pathable description of your world. It stores a 3D walkability map and exposes:
+`NavigationChart` is the pathable surface description of your world. It stores authored chart-cell data and exposes:
 
-- `NavigationChart.From3D(...)` to build a chart from `bool[,,]` voxel data
+- `NavigationChart.From3D(...)` to build a chart from `bool[,,]` or `NavigationChartCell[,,]` voxel data
+- `TryGetCell(...)` to inspect the authored cell payload at a world position
 - `TryWorldToIndex(...)` to map world positions into chart coordinates
 - `IsWalkable(...)` to query a world-space position
 - `GetWalkablePositions()` to enumerate every walkable voxel origin in world space
@@ -46,7 +47,8 @@ At a high level, the runtime loop is:
 Important details:
 
 - the chart itself is data only; it does not become queryable by pathfinding until it is registered and initialized
-- the chart uses a flattened internal map, but the public constructor/factory still works in 3D terms
+- the chart uses flattened internal storage, but the public constructor/factory still works in 3D terms
+- charts remain surface-first; open air and broad water traversal still use `VolumePathRequest`
 - world bounds are derived from `MinBounds`, `Interval`, and the source array size
 
 ### 2.2 PathManager

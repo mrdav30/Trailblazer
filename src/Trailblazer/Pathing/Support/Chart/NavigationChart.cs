@@ -1,4 +1,5 @@
 ﻿using FixedMathSharp;
+using SwiftCollections;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -9,8 +10,8 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Represents a 3D navigable grid used for pathfinding. Provides utility methods for querying walkability 
-/// and converting world positions into discrete grid indices.
+/// Represents authored chart-backed surface traversal data.
+/// Provides utility methods for querying traversable cells and converting world positions into discrete grid indices.
 /// </summary>
 [Serializable]
 public class NavigationChart
@@ -52,10 +53,9 @@ public class NavigationChart
     public readonly int SizeZ;
 
     /// <summary>
-    /// A flattened 3D boolean map representing walkable (true) or unwalkable (false) cells.
-    /// The array is indexed using a custom row-major layout across Y, X, then Z.
+    /// A flattened 3D map of authored chart cells indexed in row-major order across Y, X, then Z.
     /// </summary>
-    private readonly bool[] _map;
+    private readonly NavigationChartCell[] _cells;
 
     /// <summary>
     /// Indicates whether this chart has been fully initialized and is ready for queries.
@@ -82,15 +82,50 @@ public class NavigationChart
         Vector3d minBounds,
         Vector3d maxBounds,
         Fixed64 interval)
+        : this(
+            name,
+            CreateCells(map),
+            sizeX,
+            sizeY,
+            sizeZ,
+            minBounds,
+            maxBounds,
+            interval)
+    { }
+
+    /// <summary>
+    /// Creates a new navigation chart using a pre-flattened cell array and spatial parameters.
+    /// </summary>
+    /// <param name="name">The chart's unique identifier.</param>
+    /// <param name="cells">A flattened array representing authored chart cell payloads.</param>
+    /// <param name="sizeX">Number of cells along the X axis.</param>
+    /// <param name="sizeY">Number of cells along the Y axis.</param>
+    /// <param name="sizeZ">Number of cells along the Z axis.</param>
+    /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
+    /// <param name="maxBounds">The maximum world-space bounds of the grid.</param>
+    /// <param name="interval">Distance between adjacent grid points.</param>
+    public NavigationChart(
+        string name,
+        NavigationChartCell[] cells,
+        int sizeX,
+        int sizeY,
+        int sizeZ,
+        Vector3d minBounds,
+        Vector3d maxBounds,
+        Fixed64 interval)
     {
         Name = name;
-        _map = map;
+        _cells = cells ?? throw new ArgumentNullException(nameof(cells));
         SizeX = sizeX;
         SizeY = sizeY;
         SizeZ = sizeZ;
         MinBounds = minBounds;
         MaxBounds = maxBounds;
         Interval = interval;
+
+        int expectedCellCount = sizeX * sizeY * sizeZ;
+        if (_cells.Length != expectedCellCount)
+            throw new ArgumentException($"Expected {expectedCellCount} chart cells but received {_cells.Length}.", nameof(cells));
     }
 
     /// <summary>
@@ -131,35 +166,64 @@ public class NavigationChart
     }
 
     /// <summary>
-    /// Checks if the given world-space position corresponds to a walkable cell.
+    /// Checks if the given world-space position corresponds to a traversable chart cell.
     /// </summary>
     /// <param name="worldPos">The position to query.</param>
-    /// <returns>True if walkable; otherwise, false.</returns>
+    /// <returns>True if traversable; otherwise, false.</returns>
     public bool IsWalkable(Vector3d worldPos)
     {
-        if (!TryWorldToIndex(worldPos, out int x, out int y, out int z))
+        if (!TryGetCell(worldPos, out NavigationChartCell cell))
             return false;
 
-        return _map[ToIndex(x, y, z)];
+        return cell.IsTraversable;
     }
 
     /// <summary>
-    /// Returns all walkable world positions within the chart.
+    /// Attempts to retrieve the authored chart cell at the provided world-space position.
     /// </summary>
-    /// <returns>A collection of walkable Vector3d positions.</returns>
+    /// <param name="worldPos">The world-space position to query.</param>
+    /// <param name="cell">The authored chart cell payload.</param>
+    /// <returns>True if the position resolves inside this chart; otherwise, false.</returns>
+    public bool TryGetCell(Vector3d worldPos, out NavigationChartCell cell)
+    {
+        if (!TryWorldToIndex(worldPos, out int x, out int y, out int z))
+        {
+            cell = default;
+            return false;
+        }
+
+        cell = GetCell(x, y, z);
+        return true;
+    }
+
+    /// <summary>
+    /// Returns all traversable world positions within the chart.
+    /// </summary>
+    /// <returns>A collection of traversable surface positions.</returns>
     public IEnumerable<Vector3d> GetWalkablePositions()
+    {
+        foreach ((Vector3d position, _) in GetTraversableCells())
+            yield return position;
+    }
+
+    /// <summary>
+    /// Returns each traversable world position together with its authored cell payload.
+    /// </summary>
+    internal IEnumerable<(Vector3d Position, NavigationChartCell Cell)> GetTraversableCells()
     {
         for (int y = 0; y < SizeY; y++)
             for (int x = 0; x < SizeX; x++)
                 for (int z = 0; z < SizeZ; z++)
                 {
-                    if (_map[ToIndex(x, y, z)])
+                    NavigationChartCell cell = GetCell(x, y, z);
+                    if (cell.IsTraversable)
                     {
-                        yield return new Vector3d(
-                            MinBounds.x + x * Interval,
-                            MinBounds.y + y * Interval,
-                            MinBounds.z + z * Interval
-                        );
+                        yield return (
+                            new Vector3d(
+                                MinBounds.x + x * Interval,
+                                MinBounds.y + y * Interval,
+                                MinBounds.z + z * Interval),
+                            cell);
                     }
                 }
     }
@@ -194,6 +258,70 @@ public class NavigationChart
                 for (int z = 0; z < sizeZ; z++)
                     flat[(y * sizeX * sizeZ) + (x * sizeZ) + z] = sourceMap[y, x, z];
 
-        return new NavigationChart(name, flat, sizeX, sizeY, sizeZ, minBounds, maxBounds, interval);
+        return new(
+            name, 
+            CreateCells(flat), 
+            sizeX, 
+            sizeY, 
+            sizeZ, 
+            minBounds, 
+            maxBounds, 
+            interval);
+    }
+
+    /// <summary>
+    /// Creates a navigation chart from a 3D array of authored chart cell payloads.
+    /// </summary>
+    /// <param name="name">Name identifier for the chart.</param>
+    /// <param name="sourceMap">3D map of authored chart cells.</param>
+    /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
+    /// <param name="interval">The spacing between each grid point.</param>
+    /// <returns>A constructed NavigationChart instance.</returns>
+    public static NavigationChart From3D(
+        string name,
+        NavigationChartCell[,,] sourceMap,
+        Vector3d minBounds,
+        Fixed64 interval)
+    {
+        int sizeY = sourceMap.GetLength(0);
+        int sizeX = sourceMap.GetLength(1);
+        int sizeZ = sourceMap.GetLength(2);
+
+        Vector3d maxBounds = minBounds + new Vector3d(
+            sizeX * interval,
+            sizeY * interval,
+            sizeZ * interval
+        );
+
+        var flat = new NavigationChartCell[sizeX * sizeY * sizeZ];
+        for (int y = 0; y < sizeY; y++)
+            for (int x = 0; x < sizeX; x++)
+                for (int z = 0; z < sizeZ; z++)
+                    flat[(y * sizeX * sizeZ) + (x * sizeZ) + z] = sourceMap[y, x, z];
+
+        return new(
+            name, 
+            flat, 
+            sizeX, 
+            sizeY, 
+            sizeZ, 
+            minBounds, 
+            maxBounds, 
+            interval);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private NavigationChartCell GetCell(int x, int y, int z) => _cells[ToIndex(x, y, z)];
+
+    private static NavigationChartCell[] CreateCells(bool[] map)
+    {
+        if (map == null)
+            ThrowHelper.ThrowArgumentNullException(nameof(map));
+
+        var cells = new NavigationChartCell[map.Length];
+        for (int i = 0; i < map.Length; i++)
+            cells[i] = map[i] ? NavigationChartCell.Walkable : NavigationChartCell.Blocked;
+
+        return cells;
     }
 }

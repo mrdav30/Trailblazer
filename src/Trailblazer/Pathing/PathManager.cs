@@ -141,7 +141,7 @@ public static class PathManager
 
         SwiftHashSet<PathPartition> allChartPartitions = PartitionSetPool.Rent();
         SwiftQueue<string> existingChartKeys = new(); // TODO: pool
-        foreach (Vector3d pos in chart.GetWalkablePositions())
+        foreach ((Vector3d pos, NavigationChartCell cell) in chart.GetTraversableCells())
         {
             if (!GlobalGridManager.TryGetVoxel(pos, out Voxel voxel))
                 continue;
@@ -155,7 +155,7 @@ public static class PathManager
             if (part.HasAnyOwners)
                 existingChartKeys.EnqueueRange(part.ChartOwners);
 
-            part.AddOwner(chart.Name);
+            part.AddOwner(chart.Name, cell);
             allChartPartitions.Add(part);
         }
 

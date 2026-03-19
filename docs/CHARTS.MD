@@ -2,6 +2,9 @@
 
 This document is a deep dive into `NavigationChart`, the chart lifecycle managed by `PathManager`, and the role charts play in Trailblazer's world model.
 
+In this document, charts refer to chart-backed surface traversal.
+Raw air and broad water movement remain volume-traversal concerns handled through `VolumePathRequest` and `VolumeTraversalRules`.
+
 If you only need the high-level architecture, start with `OVERVIEW.md`.
 If you need the registry and lifecycle details, read `PATHMANAGER.MD` alongside this file.
 
@@ -36,7 +39,13 @@ At the data level, a `NavigationChart` is:
 - a named grid-aligned walkability map
 - a world-space bounds definition
 - a fixed interval between cells
-- a flattened boolean array where `true` means "this chart says this cell is walkable"
+- a flattened authored cell payload where the default case is still a simple walkable or blocked flag
+
+Structured cell payloads can optionally carry:
+
+- traversable state
+- path cost modifier
+- future-facing transition hint flags
 
 The chart itself is data-only. It does not pathfind, steer, or mutate live voxel connectivity on its own.
 
@@ -58,6 +67,8 @@ NavigationChart chart = NavigationChart.From3D(
     minBounds: new Vector3d(0, 0, 0),
     interval: Fixed64.One);
 ```
+
+When you need authored per-cell metadata instead of only walkable or blocked state, use the `NavigationChartCell[,,]` overload of `NavigationChart.From3D(...)`.
 
 ## 3. What Charts Are For
 

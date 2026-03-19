@@ -32,7 +32,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 
 ### Pathing Layer
 
-- `NavigationChart` for defining walkable space
+- `NavigationChart` and `NavigationChartCell` for defining chart-backed surface space with optional per-cell cost and hint metadata
 - `PathManager` for chart registration, initialization, unloading, and path utilities
 - `AStarPathRequest` and `FlowFieldPathRequest` for request configuration
 - `AStarSurveyor` and `FlowFieldSurveyor` for raw path generation
@@ -112,6 +112,8 @@ var chart = NavigationChart.From3D(
 PathManager.Register(chart);
 PathManager.InitializeChart(chart.Name);
 ```
+
+`NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell cost modifiers or transition hints. Air and broad water traversal remain volume-based through `VolumePathRequest`.
 
 ### 2. Request a Guide Directly
 

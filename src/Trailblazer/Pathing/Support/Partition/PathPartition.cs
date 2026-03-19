@@ -58,11 +58,23 @@ public class PathPartition : IVoxelPartition
     public bool IsPartitioned { get; set; }
 
     /// <summary>
-    /// An optional cost bias for this partition. Positive values make the partition less desirable.
+    /// A cost bias for this partition. Positive values make the partition less desirable.
+    /// The public setter preserves caller-controlled adjustments, 
+    /// while chart-authored modifiers are aggregated separately.
     /// </summary>
-    public int PathCostModifier { get; set; }
+    public int PathCostModifier
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _manualPathCostModifier + _chartPathCostModifier;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        set => _manualPathCostModifier = value;
+    }
 
     private static int _currentPathCostVersion = 1;
+
+    private int _manualPathCostModifier;
+
+    private int _chartPathCostModifier;
 
     private int _pathCost = int.MaxValue;
 
@@ -120,8 +132,15 @@ public class PathPartition : IVoxelPartition
     /// </summary>
     private readonly SwiftHashSet<string> _chartOwners = new();
 
+    private readonly SwiftDictionary<string, NavigationChartCell> _chartCells = new(4, StringComparer.Ordinal);
+
     ///<inheritdoc cref="_chartOwners"/>
     public SwiftHashSet<string> ChartOwners => _chartOwners;
+
+    /// <summary>
+    /// The combined authored chart flags currently applied to this live partition.
+    /// </summary>
+    public NavigationChartCellFlags ChartFlags { get; private set; }
 
     /// <summary>
     /// Returns true if any map currently references this partition.
@@ -179,6 +198,8 @@ public class PathPartition : IVoxelPartition
         IsWalkable = false;
 
         PathCostModifier = 0;
+        _chartPathCostModifier = 0;
+        ChartFlags = NavigationChartCellFlags.None;
         ResetPathCost();
 
         Neighbors = null;
@@ -186,6 +207,7 @@ public class PathPartition : IVoxelPartition
         _clearanceRadiusInVoxels = DefaultDegreeCap;
 
         _chartOwners.Clear();
+        _chartCells.Clear();
 
         IsPartitioned = false;
     }
@@ -341,25 +363,52 @@ public class PathPartition : IVoxelPartition
         PathManager.PartitionSetPool.Release(visited);
     }
 
-    #region TraversableNavMap Management
+    #region NavigationChart Management
 
     /// <summary>
-    /// Registers the map name as one that owns this partition.
+    /// Registers the chart name as one that owns this partition.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void AddOwner(string mapName) => _chartOwners.Add(mapName);
+    public void AddOwner(string mapName) => AddOwner(mapName, NavigationChartCell.Walkable);
 
     /// <summary>
-    /// Removes the map name from those that reference this partition.
+    /// Registers the chart name as one that owns this partition together with its authored cell metadata.
+    /// Overlapping chart modifiers currently combine by summing path cost contributions and OR-ing flags.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void RemoveOwner(string mapName) => _chartOwners.Remove(mapName);
+    public void AddOwner(string mapName, NavigationChartCell cell)
+    {
+        _chartOwners.Add(mapName);
+        _chartCells[mapName] = cell;
+        RefreshChartMetadata();
+    }
+
+    /// <summary>
+    /// Removes the chart name from those that reference this partition.
+    /// </summary>
+    public void RemoveOwner(string mapName)
+    {
+        _chartOwners.Remove(mapName);
+        _chartCells.Remove(mapName);
+        RefreshChartMetadata();
+    }
 
     /// <summary>
     /// Returns true if the partition is claimed by the given map name.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool BelongsTo(string mapName) => _chartOwners.Contains(mapName);
+
+    private void RefreshChartMetadata()
+    {
+        _chartPathCostModifier = 0;
+        ChartFlags = NavigationChartCellFlags.None;
+
+        foreach (NavigationChartCell cell in _chartCells.Values)
+        {
+            _chartPathCostModifier += cell.PathCostModifier;
+            ChartFlags |= cell.Flags;
+        }
+    }
 
     #endregion
 

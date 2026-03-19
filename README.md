@@ -33,6 +33,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 ### Pathing Layer
 
 - `NavigationChart` and `NavigationChartCell` for defining chart-backed surface space with optional per-cell cost and hint metadata
+- `TraversalTransition` and `TraversalTransitionRegistry` for explicit chart-to-chart and chart-to-volume handoff data
 - `PathManager` for chart registration, initialization, unloading, and path utilities
 - `AStarPathRequest` and `FlowFieldPathRequest` for request configuration
 - `AStarSurveyor` and `FlowFieldSurveyor` for raw path generation

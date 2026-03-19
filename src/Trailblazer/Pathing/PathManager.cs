@@ -232,6 +232,7 @@ public static class PathManager
     public static void Reset()
     {
         VolumeTraversalRules.Reset();
+        TraversalTransitionRegistry.Reset();
 
         var allCharts = AllCharts;
 

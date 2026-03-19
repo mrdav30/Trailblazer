@@ -27,6 +27,7 @@ It is responsible for:
 - computing search-size hints for path requests
 - maintaining pooled `PathPartition` instances
 - triggering guide-cache cleanup through `Tick(...)`
+- clearing global transition and volume-rule state during `Reset()`
 
 It is not responsible for:
 
@@ -105,6 +106,7 @@ That means:
 - the manager is process-global for the current simulation
 - tests and teardown must clean it explicitly
 - chart lifecycle mistakes can leak pathing state into later frames or tests
+- transition registry state also resets through `PathManager.Reset()`
 
 ## 5. Chart Registration Lifecycle
 

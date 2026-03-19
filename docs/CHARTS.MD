@@ -97,6 +97,7 @@ Those are better handled by other systems:
 - raw-volume traversal for chart-optional 3D movement
 - `GridForge.Voxel` blocked state / occupant state
 - host-defined volume rules such as water partitions
+- explicit handoff registration through `TraversalTransitionRegistry` when chart-backed traversal needs a later jump, swim, or flight transition
 
 In other words, charts define navigable structure, not every transient rule in the world.
 

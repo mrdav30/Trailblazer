@@ -55,6 +55,8 @@ Important details:
 
 `PathManager` is the global chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, manages chart ownership and unload behavior, exposes neighbor and direct-travel utilities, and participates in guide-cache maintenance.
 
+Explicit handoff data between chart-backed traversal and raw-volume traversal is registered separately through `TraversalTransitionRegistry`.
+
 See also:
 
 - [`CHARTS.MD`](CHARTS.MD)
@@ -126,6 +128,10 @@ Key traits:
 - it can fall back to a cached volume waypoint guide when blockers force a detour
 - it supports both unrestricted open-volume travel and host-defined constrained volumes such as water
 - Trailblazer does not assign water voxels itself; hosts configure that through `VolumeTraversalRules`
+
+Related support type:
+
+- `TraversalTransitionRegistry` stores authored handoff points between chart-backed traversal and raw-volume traversal for later hybrid-routing work
 
 Factory helpers:
 

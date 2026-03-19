@@ -5,6 +5,7 @@ using GridForge.Spatial;
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Trailblazer.Navigation;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
@@ -81,7 +82,7 @@ public class NavSteering : IRecordable
     #region Runtime State - Pathfinding
 
     /// <summary>
-    /// Disable if unit doesn't need to find path, i.e. flying
+    /// Disable if a unit never needs voxel-guide validation or repathing.
     /// </summary>
     public bool CanPathfind = true;
 
@@ -284,7 +285,7 @@ public class NavSteering : IRecordable
     /// <summary>
     /// Starts or replaces the active steering request.
     /// </summary>
-    /// <param name="pathRequest">The path request that defines the traversable start and end voxels.</param>
+    /// <param name="pathRequest">The movement request that defines the desired origin and destination.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between nearby members.</param>
     public virtual void ApplyPathRequest(IPathRequest pathRequest, int groupId = -1)
     {
@@ -308,6 +309,7 @@ public class NavSteering : IRecordable
         _requestedDestination = pathRequest.TargetPosition;
         Destination = _requestedDestination;
 
+        ReleaseTrailGuide();
         _currentRequest = pathRequest;
         _lastUnitSize = pathRequest.UnitSize;
 
@@ -315,7 +317,7 @@ public class NavSteering : IRecordable
         _shouldRequestPathThisFrame = true;
 
         AddToMovementGroup(groupId);
-        UpdateMovementGroupState(pathRequest.StartNode.WorldPosition, true);
+        UpdateMovementGroupState(pathRequest.Origin, true);
 
         Events.OnMoveRequestApplied?.Invoke();
     }
@@ -452,10 +454,11 @@ public class NavSteering : IRecordable
                 return TargetDirection;
             }
 
+            bool usesAerialGuidance = UsesAerialGuidance();
             UpdateMovementGroupState(navigator.Position);
 
             // check if agent has to pathfind, otherwise straight path to rely on destination
-            if (CanPathfind)
+            if (CanPathfind || usesAerialGuidance)
             {
                 if (!ValidateMovementPath(navigator.Position))
                 {
@@ -468,7 +471,7 @@ public class NavSteering : IRecordable
                 }
             }
 
-            if (_pathCheckCooldown <= 0)
+            if (!usesAerialGuidance && _pathCheckCooldown <= 0)
             {
                 HasLineOfSightPath = IsDestinationInSight(
                     navigator.Position,
@@ -478,6 +481,8 @@ public class NavSteering : IRecordable
 
                 _pathCheckCooldown = PathRecheckCooldownFrames;
             }
+            else if (usesAerialGuidance)
+                HasLineOfSightPath = true;
 
             LastTargetDirection = TargetDirection;
             TargetDirection = FindTargetDirection(navigator.Position);
@@ -491,7 +496,7 @@ public class NavSteering : IRecordable
                 navigator.GlobalId);
 
             // Check if we're close enough to stop moving
-            Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.x.Abs() + TargetDirection.z.Abs());
+            Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.Magnitude);
             bool reachedTarget = _distanceToTarget < _closingDistance * GetActiveStopMultiplier();
             bool noInput = moveAmount == Fixed64.Zero;
             if (!HasTrailGuide && (reachedTarget || (!IsStuck && noInput)))
@@ -563,6 +568,14 @@ public class NavSteering : IRecordable
         // shortcut if no path needed
         if (_currentRequest.HasZeroDisplacement)
             return _repathTries == 0;
+
+        if (UsesAerialGuidance())
+        {
+            ReleaseTrailGuide();
+            HasLineOfSightPath = true;
+            _pathCheckCooldown = 0;
+            return true;
+        }
 
         HasLineOfSightPath = IsDestinationInSight(
             origin,
@@ -636,6 +649,8 @@ public class NavSteering : IRecordable
         if (!CanAutoStop)
             return true;
 
+        bool usesAerialGuidance = UsesAerialGuidance();
+
         // If unit has not moved stuckThreshold in a frame, it's stuck
         if (stuckThreshold > Fixed64.Zero && speed < stuckThreshold)
         {
@@ -643,6 +658,13 @@ public class NavSteering : IRecordable
 
             if (_stuckFrameCount > StuckFrameThreshold)
             {
+                if (usesAerialGuidance)
+                {
+                    IsStuck = true;
+                    Events.OnIsStuck?.Invoke();
+                    return false;
+                }
+
                 if (_repathTries < StuckRepathTries)
                 {
                     HasLineOfSightPath = false;
@@ -912,6 +934,9 @@ public class NavSteering : IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsGroupNeighbor(Guid otherId, int currentFrame)
         => MovementGroupCoordinator.IsNeighbor(_movementGroupSession, otherId, _requestedDestination, currentFrame);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool UsesAerialGuidance() => _currentRequest is AerialPathRequest;
 
     #endregion
 

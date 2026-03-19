@@ -6,5 +6,6 @@ namespace Trailblazer.Navigation;
 public enum GuidedPathMode
 {
     AStar,
-    FlowField
+    FlowField,
+    Aerial
 }

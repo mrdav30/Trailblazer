@@ -264,6 +264,7 @@ After `Reset()`, the instance must go through `Setup(...)` and `Initialize(...)`
 - `Direction`
 - `Rate`
 - `IsRequestingJump`
+- `IsRequestingFlight`
 
 and marks the navigator as not guided.
 
@@ -275,11 +276,13 @@ It:
 
 - sets `IsGuideded = true`
 - clears the current manual direction
-- sets movement rate and jump request
+- stores the guided movement rate and action intent so they can be reapplied every simulation tick
 - builds a concrete `IPathRequest` from the target position, the navigator's current state, and guided-path defaults
 - optionally overrides the navigator's default `GuidedPathMode` for a single request
 - optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`
+
+When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically.
 
 Passing the same non-negative `groupId` to multiple navigators lets `NavSteering` preserve relative formation offsets while the group stays compact.
 
@@ -287,6 +290,7 @@ The built-in request factory currently supports:
 
 - `GuidedPathMode.AStar`
 - `GuidedPathMode.FlowField`
+- `GuidedPathMode.Aerial`
 
 If a project needs a different request shape, override `TryCreateGuidedPathRequest(...)`.
 
@@ -295,9 +299,10 @@ If a project needs a different request shape, override `TryCreateGuidedPathReque
 `Navigator` also exposes:
 
 - `ToggleJumpStatus(bool status)`
+- `ToggleFlightStatus(bool status)`
 - `SetTraversalSpeed(TrekRate rate)`
 
-These let the host modify the current frame request without rebuilding the whole movement session.
+These let the host modify the current frame request without rebuilding the whole movement session. While guided movement is active, the updated values persist across subsequent simulation ticks.
 
 ## 8. Simulation Lifecycle
 

@@ -232,6 +232,35 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedAerialTraversal(bool useMemoryPack)
+    {
+        var source = CreateConfiguredGuidedNavigator(GuidedPathMode.Aerial);
+        source.Steering.CurrentRequest.Should().BeOfType<AerialPathRequest>();
+        source.Steering.TrailGuide.Should().BeNull();
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        target.IsGuideded.Should().BeTrue();
+        target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
+        target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
+        target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
+        target.Size.Should().Be(source.Size);
+
+        AssertSteeringStateMatches(source.Steering, target.Steering);
+
+        TrailblazerManager.Simulate();
+        target.Simulate();
+
+        target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
+        target.FrameRequest.Direction.y.Should().BeGreaterThan(Fixed64.Zero);
+        target.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        target.Steering.ShouldMove.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RoundTrip_ShouldSupportPartialNavigatorPayloads_AndPreserveOmittedBranches(bool useMemoryPack)
     {
         var source = CreateConfiguredNavigator();
@@ -558,8 +587,12 @@ public class NavigatorSerializationTests : IDisposable
         };
         source.Steering.BrakingPower = (Fixed64)0.2f;
 
+        Vector3d targetPosition = pathMode == GuidedPathMode.Aerial
+            ? new Vector3d(4, 4, 0)
+            : new Vector3d(4, 0, 0);
+
         source.ApplyGuidedTrekRequest(
-            new Vector3d(4, 0, 0),
+            targetPosition,
             pathMode: pathMode,
             rate: TrekRate.Fast,
             isRequestingJump: true,

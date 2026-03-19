@@ -103,6 +103,29 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void NavSteering_Should_GuideAerialRequests_WithVerticalOnlyTargets()
+    {
+        var steer = new NavSteering();
+        var agent = new MockSteerAgent(Vector3d.Zero);
+        steer.OnInitialize(agent.Radius);
+
+        AerialPathRequest.TryCreate(
+            agent.Position,
+            new Vector3d(0, 3, 0),
+            Fixed64.One,
+            out AerialPathRequest request).Should().BeTrue();
+
+        steer.ApplyPathRequest(request);
+
+        Vector3d heading = steer.GetHeading(agent);
+
+        heading.Should().Be(Vector3d.Up);
+        steer.HasLineOfSightPath.Should().BeTrue();
+        steer.TrailGuide.Should().BeNull();
+        steer.IsAtDestination.Should().BeFalse();
+    }
+
+    [Fact]
     public void NavSteering_Should_Arrive_WhenCloseEnough()
     {
         var data = new bool[1, 1, 1] { { { true } } };

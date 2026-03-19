@@ -1,5 +1,6 @@
 using System;
 using FixedMathSharp;
+using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Serialization;
@@ -8,7 +9,8 @@ internal enum PathRequestRecordKind
 {
     None,
     AStar,
-    FlowField
+    FlowField,
+    Aerial
 }
 
 /// <summary>
@@ -66,6 +68,10 @@ internal sealed class PathRequestRecord : IRecordable
                 FlowFieldExtraFloodRange = flowField.ExtraFloodRange;
                 break;
 
+            case AerialPathRequest:
+                Kind = PathRequestRecordKind.Aerial;
+                break;
+
             default:
                 throw new NotSupportedException(
                     $"Unable to record steering path request type '{request.GetType().Name}'.");
@@ -115,6 +121,21 @@ internal sealed class PathRequestRecord : IRecordable
                     flowField.MaxPathSearchRange = MaxPathSearchRange;
 
                 request = flowField;
+                return true;
+
+            case PathRequestRecordKind.Aerial:
+                AerialPathRequest aerial = AerialPathRequest.Create(
+                    Origin,
+                    TargetPosition,
+                    UnitSize,
+                    AllowUnwalkable);
+                if (aerial == null)
+                    return false;
+
+                if (MaxPathSearchRange > 0)
+                    aerial.MaxPathSearchRange = MaxPathSearchRange;
+
+                request = aerial;
                 return true;
 
             default:

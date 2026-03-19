@@ -161,6 +161,24 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void ApplyGuidedTrekRequest_Should_CreateAerialRequest_AndEnableFlight()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        Vector3d target = new(0, 3, 0);
+
+        navigator.ApplyGuidedTrekRequest(target, pathMode: GuidedPathMode.Aerial, rate: TrekRate.Fast);
+
+        navigator.IsGuideded.Should().BeTrue();
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
+        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+
+        var request = navigator.Steering.CurrentRequest.Should().BeOfType<AerialPathRequest>().Subject;
+        request.Origin.Should().Be(navigator.Position);
+        request.TargetPosition.Should().Be(target);
+        request.UnitSize.Should().Be(navigator.Size);
+    }
+
+    [Fact]
     public void ApplyGuidedTrekRequest_Should_IgnoreInvalidTargets_WithoutEnteringGuidedMode()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -227,6 +245,25 @@ public class NavigatorTests : IDisposable
         Vector3d.Dot(navigator.FrameRequest.Direction, Vector3d.Right).Should().BeGreaterThan(Fixed64.Zero);
 
         PathManager.UnloadChart("NavigatorGuidedHeading");
+    }
+
+    [Fact]
+    public void Simulate_Should_PersistGuidedFlightIntent_BetweenFrames()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.ApplyGuidedTrekRequest(new Vector3d(0, 3, 0), pathMode: GuidedPathMode.Aerial, rate: TrekRate.Fast);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+        navigator.CommitFrameMotion();
+
+        navigator.ApplyGuidedTrekRequest(new Vector3d(0, 3, 0), pathMode: GuidedPathMode.Aerial, rate: TrekRate.Fast);
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
+        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        navigator.FrameRequest.Direction.y.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     [Fact]

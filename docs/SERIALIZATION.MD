@@ -104,6 +104,7 @@ That means this runtime is not designed for:
 - `IsGuideded`
 - `_frameCondition`
 - `_frameRequest`
+- guided traversal settings that must survive frame-request resets during active guided movement
 - `Steering`
 - `Turning`
 - `Motor`
@@ -129,7 +130,7 @@ On load it also:
 
 The request record currently captures:
 
-- request type (`AStar` or `FlowField`)
+- request type (`AStar`, `FlowField`, or `Aerial`)
 - origin
 - target position
 - unit size

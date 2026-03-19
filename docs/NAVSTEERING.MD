@@ -119,6 +119,12 @@ In normal `Navigator` usage, the steering integration looks like this:
 2. Each simulation tick, `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
 3. The resulting heading is passed to `NavTurning` and `NavMotor`.
 
+The built-in guided modes are:
+
+- `GuidedPathMode.AStar`
+- `GuidedPathMode.FlowField`
+- `GuidedPathMode.Aerial`
+
 If you use `NavSteering` directly, the essential rule is:
 
 - `ApplyPathRequest(...)` sets the steering session up
@@ -153,6 +159,8 @@ It may be:
 - `null`, for direct travel or no active movement
 - an `AStarGuide`
 - a `FlowFieldGuide`
+
+`GuidedPathMode.Aerial` keeps `_trailGuide` at `null` on purpose. It uses direct 3D destination steering rather than guide allocation.
 
 Guide lifetime is owned by `NavSteering` while the movement session is active.
 
@@ -211,6 +219,8 @@ The method returns `Vector3d.Zero` if:
 If movement is active, `GetHeading(...)` starts by making sure the current path context is still valid.
 
 If `CanPathfind` is true, it calls `ValidateMovementPath(navigator.Position)`.
+
+The built-in aerial request mode still validates its live origin/destination even when no voxel guide is needed, so direct guided flight keeps its request state current without entering the guide cache.
 
 If that validation fails:
 
@@ -304,6 +314,8 @@ If direct travel is not valid, steering requests a guide:
 - `FlowFieldGuide` for field sampling
 
 Guide creation and reuse are delegated to `PathGuideFactory`.
+
+`GuidedPathMode.Aerial` is the other built-in branch: it skips guide creation entirely and steers straight toward the requested 3D destination.
 
 ### 8.4 Guide Loss or Invalidity
 
@@ -577,7 +589,7 @@ It is not. It is a lightweight steering influence based on nearby occupants, not
 
 ### Forgetting that CanPathfind can be disabled
 
-If `CanPathfind` is false, steering will not run path validation logic. This is useful for non-pathing units such as flying actors, but it also means invalid path assumptions will not be corrected automatically.
+If `CanPathfind` is false, steering skips guide-based path validation and repathing. That is useful for simple direct movers, but it also means guide-backed requests will not correct invalid path assumptions automatically. The built-in aerial request still refreshes its endpoints because it does not rely on path generation.
 
 ## 17. Testing References
 

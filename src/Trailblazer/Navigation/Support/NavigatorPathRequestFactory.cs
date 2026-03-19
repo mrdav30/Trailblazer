@@ -54,6 +54,21 @@ internal static class NavigatorPathRequestFactory
                 request = flowField;
                 return true;
 
+            case GuidedPathMode.Aerial:
+                var aerial = AerialPathRequest.Create(
+                    origin,
+                    targetPosition,
+                    unitSize,
+                    allowUnwalkable);
+                if (aerial == null)
+                {
+                    request = null;
+                    return false;
+                }
+
+                request = aerial;
+                return true;
+
             default:
                 request = null;
                 return false;

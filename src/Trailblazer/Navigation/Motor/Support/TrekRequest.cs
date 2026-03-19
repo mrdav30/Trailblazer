@@ -2,6 +2,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using Trailblazer.Serialization;
+using Trailblazer.Support;
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -10,7 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// containing the current origin, foot position, rotation, direction, speed, jump intent, and flight intent.
 /// </summary>
 [Serializable]
-public struct TrekRequest : IRecordable
+public struct TrekRequest : ITransient, IRecordable
 {
     /// <summary>
     /// The world position from which the scout is requesting movement. 
@@ -49,6 +50,36 @@ public struct TrekRequest : IRecordable
 
     public TrekRequest() { }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SetRequest(
+        Vector3d direction, 
+        TrekRate rate, 
+        bool isRequestingJump, 
+        bool isRequestingFlight)
+    {
+        Direction = direction;
+        Rate = rate;
+        IsRequestingJump = isRequestingJump;
+        IsRequestingFlight = isRequestingFlight;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SetTransientState(
+        Vector3d origin, 
+        Vector3d? footPosition, 
+        FixedQuaternion rotation, 
+        Vector3d? direction)
+    {
+        Origin = origin;
+        FootPosition = footPosition;
+        Rotation = rotation;
+
+        // Only update direction if a new value is provided, 
+        // otherwise preserve the existing direction for this frame.
+        if (direction.HasValue)
+            Direction = direction.Value;
+    }
+
     /// <summary>
     /// Creates a deep copy of the current <see cref="TrekRequest"/> instance.
     /// </summary>
@@ -73,9 +104,22 @@ public struct TrekRequest : IRecordable
         FootPosition = null;
         Rotation = FixedQuaternion.Identity;
         Direction = Vector3d.Zero;
-        Rate = TrekRate.Stationary;
         IsRequestingJump = false;
+        Rate = TrekRate.Stationary;
         IsRequestingFlight = false;
+    }
+
+    /// <summary>
+    /// Resets only the transient movement data that should be cleared each frame, 
+    /// while preserving any persistent data that may be set externally.
+    /// </summary>
+    public void ResetTransient()
+    {
+        Origin = Vector3d.Zero;
+        FootPosition = null;
+        Rotation = FixedQuaternion.Identity;
+        Direction = Vector3d.Zero;
+        IsRequestingJump = false;
     }
 
     public void RecordData(IChronicler chronicler)

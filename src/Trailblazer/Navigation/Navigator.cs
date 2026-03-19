@@ -314,10 +314,12 @@ public abstract class Navigator : INavigate, IRecordable
         if (!IsActive) return;
 
         IsGuideded = false;
-        _frameRequest.Direction = direction ?? Vector3d.Zero;
-        _frameRequest.Rate = rate ?? TrekRate.Stationary;
-        _frameRequest.IsRequestingJump = isRequestingJump ?? false;
-        _frameRequest.IsRequestingFlight = isRequestingFlight ?? false;
+        _frameRequest.SetRequest(
+                direction: direction ?? Vector3d.Zero,
+                rate: rate ?? TrekRate.Stationary,
+                isRequestingJump: isRequestingJump ?? false,
+                isRequestingFlight: isRequestingFlight ?? false
+        );
     }
 
     /// <summary>
@@ -346,10 +348,12 @@ public abstract class Navigator : INavigate, IRecordable
         }
 
         IsGuideded = true;
-        _frameRequest.Direction = Vector3d.Zero;
-        _frameRequest.Rate = rate ?? TrekRate.Stationary;
-        _frameRequest.IsRequestingJump = isRequestingJump ?? false;
-        _frameRequest.IsRequestingFlight = false;
+        _frameRequest.SetRequest(
+                direction: Vector3d.Zero,
+                rate: rate ?? TrekRate.Stationary,
+                isRequestingJump: isRequestingJump ?? false,
+                isRequestingFlight: selectedPathMode == GuidedPathMode.Aerial
+        );
 
         Steering.ApplyPathRequest(pathRequest, groupId);
     }
@@ -378,18 +382,21 @@ public abstract class Navigator : INavigate, IRecordable
     /// <summary>
     /// Called to make the agent jump if allowed and in a valid state.
     /// </summary>
-    public virtual void ToggleJumpStatus(bool status) => _frameRequest.IsRequestingJump = status;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void ToggleGuidedJump(bool status) => _frameRequest.IsRequestingJump = status;
 
     /// <summary>
     /// Called to toggle controlled flight if supported by the installed locomotion profile.
     /// </summary>
-    public virtual void ToggleFlightStatus(bool status) => _frameRequest.IsRequestingFlight = status;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void ToggleGuidedFlight(bool status) => _frameRequest.IsRequestingFlight = status;
 
     /// <summary>
     /// Changes the speed at which the navigator is currently traveling without altering direction.
     /// </summary>
     /// <param name="rate">New traversal rate to apply (walk, run, etc.).</param>
-    public virtual void SetTraversalSpeed(TrekRate rate) => _frameRequest.Rate = rate;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void SetGuidedTrekRate(TrekRate rate) => _frameRequest.Rate = rate;
 
     #endregion
 
@@ -401,14 +408,14 @@ public abstract class Navigator : INavigate, IRecordable
     public virtual void Simulate()
     {
         if (!IsActive)
-            throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
+            ThrowHelper.ThrowInvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
-        _frameRequest.Origin = Position;
-        _frameRequest.FootPosition = GetFootPosition();
-        _frameRequest.Rotation = Rotation;
-
-        if (IsGuideded)
-            _frameRequest.Direction = Steering.GetHeading(this);
+        _frameRequest.SetTransientState(
+             origin: Position,
+             footPosition: GetFootPosition(),
+             rotation: Rotation,
+             direction: IsGuideded ? Steering.GetHeading(this) : null
+        );
 
         Turning.RequestTurnDirection(Forward, _frameRequest.Direction);
 
@@ -443,7 +450,7 @@ public abstract class Navigator : INavigate, IRecordable
     public virtual void CommitFrameMotion()
     {
         if (!IsActive)
-            throw new InvalidOperationException("Navigator must be Setup and Initialized before CommitFrameMotion().");
+            ThrowHelper.ThrowInvalidOperationException("Navigator must be Setup and Initialized before CommitFrameMotion().");
 
         LastPosition = Position;
         Position += _positionDelta + _velocityDelta;
@@ -479,8 +486,12 @@ public abstract class Navigator : INavigate, IRecordable
 
         Motor.FinalizeTraversal(Position, LastPosition, Rotation, _frameCondition, newFootPosition: GetFootPosition());
 
-        // Reset travel request for next frame
-        _frameRequest.Reset();
+        // If the navigator is currently following a guided path, 
+        // reset only the transient request state to preserve path-following values.
+        if(IsGuideded)
+            _frameRequest.ResetTransient();
+        else
+         _frameRequest.Reset();
     }
 
     #endregion
@@ -666,7 +677,7 @@ public abstract class Navigator : INavigate, IRecordable
     #region Utilities
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public virtual Vector3d GetFootPosition()
+    public virtual Vector3d? GetFootPosition()
     {
         return Position + Vector3d.Down * FootPositionAdjust;
     }

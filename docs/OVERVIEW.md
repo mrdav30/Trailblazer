@@ -111,6 +111,22 @@ One important difference from A*:
 - the flow-field cache key is based on destination and configuration, not the specific start voxel
 - a single field can be reused by multiple agents as long as their current voxel exists in the generated field set
 
+### 3.3 AerialPathRequest
+
+Use `AerialPathRequest` when a navigator should steer directly toward a 3D destination without generating a voxel guide.
+
+Key traits:
+
+- it validates that the origin and target remain inside registered grid space
+- it does not request an `AStarGuide` or `FlowFieldGuide`
+- it is intended for guided flight and other direct aerial movement modes
+
+Factory helpers:
+
+```csharp
+AerialPathRequest.TryCreate(origin, destination, Fixed64.One, out var request);
+```
+
 ## 4. Surveyors and Guides
 
 Trailblazer separates raw path computation from runtime movement consumption.

@@ -9,6 +9,7 @@ This document is the high-level architecture guide for the current codebase.
 
 See also:
 
+- `CHARTS.MD` for a deeper explanation of `NavigationChart` and the chart lifecycle
 - `SERIALIZATION.MD` for Trailblazer's current serialization coverage and runtime behavior
 - `../src/Trailblazer/Serialization/README.md` for the reusable Chronicler API reference
 - `../src/Trailblazer/Serialization/MIGRATION.MD` for the planned extraction strategy for moving Chronicler into its own project
@@ -54,6 +55,7 @@ Important details:
 
 See also:
 
+- [`CHARTS.MD`](CHARTS.MD)
 - [`PATHMANAGER.MD`](PATHMANAGER.MD)
 
 ## 3. Path Requests

@@ -3,6 +3,7 @@
 This document is the detailed reference for Trailblazer's global chart registry and pathing utility layer.
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
+If you need a deeper explanation of what charts are and why they exist, read `CHARTS.MD`.
 If you need guide caching and guide lifetime details, read the relevant pathing source alongside this file.
 
 The code referenced here lives primarily in:
@@ -10,7 +11,7 @@ The code referenced here lives primarily in:
 - `src/Trailblazer/Pathing/PathManager.cs`
 - `src/Trailblazer/Pathing/Support/PathPartition.cs`
 - `src/Trailblazer/Pathing/Support/TraversableVoxel.cs`
-- `src/Trailblazer/Pathing/NavigationChart.cs`
+- `src/Trailblazer/Pathing/Support/Chart/NavigationChart.cs`
 
 ## 1. What PathManager Is
 

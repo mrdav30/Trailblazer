@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
 
-internal sealed class AerialPathHeapMeta
+internal sealed class VoxelPathHeapMeta
 {
     public uint HeapIndex;
 
@@ -19,13 +19,13 @@ internal sealed class AerialPathHeapMeta
 /// <summary>
 /// Heap optimized for raw-voxel aerial A* expansion.
 /// </summary>
-internal sealed class AerialPathHeap
+internal sealed class VoxelPathHeap
 {
     public const int DefaultCapacity = 128;
 
     private Voxel[] _items;
 
-    private readonly SwiftDictionary<Voxel, AerialPathHeapMeta> _meta;
+    private readonly SwiftDictionary<Voxel, VoxelPathHeapMeta> _meta;
 
     public uint CurrentHeapVersion { get; private set; } = 1;
 
@@ -33,7 +33,7 @@ internal sealed class AerialPathHeap
 
     public int ClosedCount => _meta.Count;
 
-    public AerialPathHeap()
+    public VoxelPathHeap()
     {
         _items = new Voxel[DefaultCapacity];
         _meta = new(DefaultCapacity);
@@ -47,7 +47,7 @@ internal sealed class AerialPathHeap
         if (HeapCount + 1 > _items.Length)
             Resize(_items.Length * 2);
 
-        AerialPathHeapMeta meta = new()
+        VoxelPathHeapMeta meta = new()
         {
             HeapIndex = HeapCount,
             HeapVersion = CurrentHeapVersion,
@@ -62,7 +62,7 @@ internal sealed class AerialPathHeap
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetPathCost(Voxel item, out int pathCost)
     {
-        if (!_meta.TryGetValue(item, out AerialPathHeapMeta meta))
+        if (!_meta.TryGetValue(item, out VoxelPathHeapMeta meta))
         {
             pathCost = int.MaxValue;
             return false;
@@ -75,7 +75,7 @@ internal sealed class AerialPathHeap
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void UpdatePathCost(Voxel item, int pathCost)
     {
-        if (_meta.TryGetValue(item, out AerialPathHeapMeta meta))
+        if (_meta.TryGetValue(item, out VoxelPathHeapMeta meta))
             meta.PathCost = pathCost;
     }
 
@@ -88,7 +88,7 @@ internal sealed class AerialPathHeap
         }
 
         result = _items[0];
-        if (!_meta.TryGetValue(result, out AerialPathHeapMeta meta))
+        if (!_meta.TryGetValue(result, out VoxelPathHeapMeta meta))
             return false;
 
         HeapCount--;
@@ -98,7 +98,7 @@ internal sealed class AerialPathHeap
         else
         {
             Voxel temp = _items[HeapCount];
-            AerialPathHeapMeta tempMeta = _meta[temp];
+            VoxelPathHeapMeta tempMeta = _meta[temp];
             _items[0] = temp;
             tempMeta.HeapIndex = 0;
             _items[HeapCount] = null;
@@ -114,27 +114,27 @@ internal sealed class AerialPathHeap
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Contains(Voxel item)
     {
-        return _meta.TryGetValue(item, out AerialPathHeapMeta meta)
+        return _meta.TryGetValue(item, out VoxelPathHeapMeta meta)
             && meta.HeapVersion == CurrentHeapVersion;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetClosed(Voxel item)
     {
-        if (_meta.TryGetValue(item, out AerialPathHeapMeta meta))
+        if (_meta.TryGetValue(item, out VoxelPathHeapMeta meta))
             meta.ClosedHeapVersion = CurrentHeapVersion;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsClosed(Voxel item)
     {
-        return _meta.TryGetValue(item, out AerialPathHeapMeta meta)
+        return _meta.TryGetValue(item, out VoxelPathHeapMeta meta)
             && meta.ClosedHeapVersion == CurrentHeapVersion;
     }
 
     public void SortUp(Voxel item)
     {
-        AerialPathHeapMeta meta = _meta[item];
+        VoxelPathHeapMeta meta = _meta[item];
         uint index = meta.HeapIndex;
         while (index > 0 && index < HeapCount)
         {
@@ -151,7 +151,7 @@ internal sealed class AerialPathHeap
 
     public void SortDown(Voxel item)
     {
-        AerialPathHeapMeta meta = _meta[item];
+        VoxelPathHeapMeta meta = _meta[item];
         uint index = meta.HeapIndex;
 
         while (true)
@@ -210,8 +210,8 @@ internal sealed class AerialPathHeap
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Swap(Voxel itemA, Voxel itemB)
     {
-        AerialPathHeapMeta metaA = _meta[itemA];
-        AerialPathHeapMeta metaB = _meta[itemB];
+        VoxelPathHeapMeta metaA = _meta[itemA];
+        VoxelPathHeapMeta metaB = _meta[itemB];
 
         uint indexA = metaA.HeapIndex;
         uint indexB = metaB.HeapIndex;

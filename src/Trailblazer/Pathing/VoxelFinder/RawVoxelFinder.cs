@@ -8,9 +8,9 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Resolves and validates raw voxel flight volumes without requiring navigation chart partitions.
+/// Resolves and validates raw voxel volumes without requiring navigation chart partitions.
 /// </summary>
-internal static class AerialVoxelFinder
+internal static class RawVoxelFinder
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryGetPathEdgeVoxels(
@@ -100,7 +100,7 @@ internal static class AerialVoxelFinder
         if (voxel.TryGetPartition(out PathPartition partition))
             return !partition.IsImpassable(unitSize);
 
-        return HasAerialClearance(voxel, unitSize);
+        return HasClearance(voxel, unitSize);
     }
 
     public static bool TryGetClosestTraversableVoxel(
@@ -171,7 +171,7 @@ internal static class AerialVoxelFinder
         return false;
     }
 
-    private static bool HasAerialClearance(Voxel origin, Fixed64 unitSize)
+    private static bool HasClearance(Voxel origin, Fixed64 unitSize)
     {
         if (unitSize <= GlobalGridManager.VoxelSize)
             return true;

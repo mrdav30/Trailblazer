@@ -832,7 +832,7 @@ public class NavSteering : IRecordable
         Voxel startNode = null,
         Voxel endNode = null)
     {
-        return AerialVoxelFinder.IsDirectPathClear(
+        return RawVoxelFinder.IsDirectPathClear(
             position,
             destination,
             unitSize,

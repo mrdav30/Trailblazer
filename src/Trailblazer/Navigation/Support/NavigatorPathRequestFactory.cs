@@ -6,9 +6,9 @@ namespace Trailblazer.Navigation;
 /// <summary>
 /// Creates built-in path requests for navigators from host-facing guided travel commands.
 /// </summary>
-internal static class NavigatorPathRequestFactory
+public static class NavigatorPathRequestFactory
 {
-    internal static bool TryCreate(
+    public static bool TryCreate(
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,

@@ -7,6 +7,10 @@ using System;
 
 namespace Trailblazer.Pathing;
 
+/// <summary>
+/// Utility for resolving valid start and end voxels for pathfinding based on world positions, 
+/// with optional size consideration and walkability fallback.
+/// </summary>
 public static class VoxelFinder
 {
     // set to the highest height or width value of any game object

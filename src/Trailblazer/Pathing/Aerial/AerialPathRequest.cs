@@ -3,9 +3,8 @@ using GridForge.Grids;
 using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
-using Trailblazer.Pathing;
 
-namespace Trailblazer.Navigation;
+namespace Trailblazer.Pathing;
 
 /// <summary>
 /// Represents a 3D guided travel request for aerial locomotion.
@@ -66,7 +65,7 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
         HeuristicMethod heuristic = HeuristicMethod.Euclidean,
         bool allowUnwalkable = false)
     {
-        if (!AerialVoxelFinder.TryGetPathEdgeVoxels(
+        if (!RawVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
             out Voxel startNode,
@@ -100,7 +99,7 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
         Fixed64? unitSize)
     {
         Fixed64 resolvedUnitSize = unitSize ?? GlobalGridManager.VoxelSize;
-        bool hasEndpoints = AerialVoxelFinder.TryGetPathEdgeVoxels(
+        bool hasEndpoints = RawVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
             out Voxel startNode,
@@ -126,7 +125,7 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
         if (EndNode == null)
             return false;
 
-        if (!AerialVoxelFinder.GetStartVoxel(
+        if (!RawVoxelFinder.GetStartVoxel(
             origin,
             TargetPosition,
             out Voxel startNode,
@@ -164,7 +163,7 @@ public sealed class AerialPathRequest : IPathRequest, IEquatable<AerialPathReque
         if (StartNode == null)
             return false;
 
-        if (!AerialVoxelFinder.GetEndVoxel(
+        if (!RawVoxelFinder.GetEndVoxel(
             Origin,
             destination,
             out Voxel endNode,

@@ -26,7 +26,7 @@ public sealed class AerialSurveyor
 
     public static AerialSurveyor Shared => _instance.Value;
 
-    private readonly AerialPathHeap _heap = new();
+    private readonly VoxelPathHeap _heap = new();
 
     private readonly SwiftDictionary<Voxel, AerialVoxelMeta> _meta = new();
 
@@ -279,7 +279,7 @@ public sealed class AerialSurveyor
         if (voxel == _request.EndNode && _request.AllowUnwalkable)
             return true;
 
-        return AerialVoxelFinder.IsTraversable(voxel, _request.UnitSize);
+        return RawVoxelFinder.IsTraversable(voxel, _request.UnitSize);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

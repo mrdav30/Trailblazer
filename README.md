@@ -114,7 +114,7 @@ PathManager.Register(chart);
 PathManager.InitializeChart(chart.Name);
 ```
 
-`NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell cost modifiers or transition hints. Air and broad water traversal remain volume-based through `VolumePathRequest`, while chart-backed A* routing can opt into registered transition fallback through `AStarPathRequest.AllowTraversalTransitions`.
+`NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell cost modifiers or transition hints. Air and broad water traversal remain volume-based through `VolumePathRequest`, while chart-backed `AStarPathRequest` and `FlowFieldPathRequest` requests can opt into registered transition fallback through `AllowTraversalTransitions`.
 
 ### 2. Request a Guide Directly
 
@@ -200,6 +200,7 @@ Use `FlowFieldPathRequest` when:
 
 - many units can share the same destination
 - you want local vector sampling rather than waypoint following
+- you want optional transition-aware fallback while keeping a FlowField request surface
 - you want destination-centric caching and group-friendly movement; paired `groupId` values can preserve relative offsets while the group stays cohesive
 
 Use `VolumePathRequest` when:

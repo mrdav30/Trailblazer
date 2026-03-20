@@ -208,7 +208,7 @@ Use transition-aware chart routing when:
 
 - movement should stay chart-backed most of the time but must cross an authored jump, swim, or takeoff/landing handoff
 - explicit `TraversalTransition` anchors should stitch chart segments to each other or to raw volume travel
-- an `AStarPathRequest` should fall back through transitions instead of failing outright
+- an `AStarPathRequest` or `FlowFieldPathRequest` should fall back through transitions instead of failing outright
 
 Examples:
 

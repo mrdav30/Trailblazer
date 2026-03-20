@@ -146,7 +146,9 @@ Chart-backed requests are being hardened to use explicit transitions without for
 Current behavior:
 
 - `AStarPathRequest` can opt into transition-aware staged routing through `AllowTraversalTransitions`
+- `FlowFieldPathRequest` can opt into the same staged transition fallback while keeping flow-field chart execution
 - the request still represents "I want A*" from the caller's perspective
+- the public request story also stays centered on "I want FlowField" for group-friendly chart routing
 - the staged route is resolved internally from the request plus the live `TraversalTransitionRegistry`
 - surveyors stay single-mode; staged escalation happens above them
 
@@ -205,7 +207,7 @@ public interface IWaypointGuide : IGuide
 Guide behavior in practice:
 
 - `AStarGuide` follows discrete waypoints and optionally exposes spline-smoothed movement
-- `FlowFieldGuide` samples the local vector field and can recover by searching for a nearby flow anchor
+- `FlowFieldGuide` samples the local vector field, can recover by searching for a nearby flow anchor, and can internally execute staged transition-aware FlowField routes
 
 ## 5. Guide Caching and Lifetime
 

@@ -187,6 +187,33 @@ internal static class HybridRoutePlanner
         step = null;
         pathCost = 0;
 
+        return request.ChartRequestKind switch
+        {
+            HybridChartRequestKind.FlowField => TryCreateFlowFieldStep(
+                origin,
+                destination,
+                request,
+                out step,
+                out pathCost),
+            _ => TryCreateAStarStep(
+                origin,
+                destination,
+                request,
+                out step,
+                out pathCost),
+        };
+    }
+
+    private static bool TryCreateAStarStep(
+        Vector3d origin,
+        Vector3d destination,
+        HybridPathRequest request,
+        out HybridRouteStep step,
+        out int pathCost)
+    {
+        step = null;
+        pathCost = 0;
+
         AStarPathRequest chartRequest = AStarPathRequest.Create(
             origin,
             destination,
@@ -209,6 +236,44 @@ internal static class HybridRoutePlanner
             return false;
 
         pathCost = surveyResult.Waypoints[^1].PathCost;
+        step = HybridRouteStep.Segment(chartRequest);
+        return true;
+    }
+
+    private static bool TryCreateFlowFieldStep(
+        Vector3d origin,
+        Vector3d destination,
+        HybridPathRequest request,
+        out HybridRouteStep step,
+        out int pathCost)
+    {
+        step = null;
+        pathCost = 0;
+
+        FlowFieldPathRequest chartRequest = FlowFieldPathRequest.Create(
+            origin,
+            destination,
+            request.UnitSize,
+            request.AllowUnwalkable);
+        if (chartRequest == null)
+            return false;
+
+        chartRequest.ExtraFloodRange = request.ExtraFloodRange;
+
+        if (chartRequest.HasZeroDisplacement)
+        {
+            step = HybridRouteStep.Waypoint(destination);
+            return true;
+        }
+
+        FlowFieldSurveyResult surveyResult = FlowFieldSurveyor.Shared.FindPath(chartRequest);
+        if (!surveyResult.HasPath
+            || !surveyResult.Fields.TryGetValue(chartRequest.StartNode.GlobalIndex, out FlowField startField))
+        {
+            return false;
+        }
+
+        pathCost = startField.PathCost;
         step = HybridRouteStep.Segment(chartRequest);
         return true;
     }
@@ -281,6 +346,70 @@ internal static class HybridRoutePlanner
             }
         }
 
-        return directed.ToArray();
+        TraversalTransition[] ordered = directed.ToArray();
+        Array.Sort(ordered, CompareTransitions);
+        return ordered;
+    }
+
+    private static int CompareTransitions(TraversalTransition left, TraversalTransition right)
+    {
+        int idComparison = string.CompareOrdinal(left.Id, right.Id);
+        if (idComparison != 0)
+            return idComparison;
+
+        int typeComparison = left.Type.CompareTo(right.Type);
+        if (typeComparison != 0)
+            return typeComparison;
+
+        int sourceComparison = CompareAnchors(left.Source, right.Source);
+        if (sourceComparison != 0)
+            return sourceComparison;
+
+        int destinationComparison = CompareAnchors(left.Destination, right.Destination);
+        if (destinationComparison != 0)
+            return destinationComparison;
+
+        int costComparison = left.PathCostModifier.CompareTo(right.PathCostModifier);
+        if (costComparison != 0)
+            return costComparison;
+
+        return left.IsBidirectional.CompareTo(right.IsBidirectional);
+    }
+
+    private static int CompareAnchors(TraversalTransitionAnchor left, TraversalTransitionAnchor right)
+    {
+        int kindComparison = left.Kind.CompareTo(right.Kind);
+        if (kindComparison != 0)
+            return kindComparison;
+
+        int volumeComparison = left.VolumeMode.CompareTo(right.VolumeMode);
+        if (volumeComparison != 0)
+            return volumeComparison;
+
+        return ComparePositions(left.Position, right.Position);
+    }
+
+    private static int ComparePositions(Vector3d left, Vector3d right)
+    {
+        int xComparison = CompareFixed(left.x, right.x);
+        if (xComparison != 0)
+            return xComparison;
+
+        int yComparison = CompareFixed(left.y, right.y);
+        if (yComparison != 0)
+            return yComparison;
+
+        return CompareFixed(left.z, right.z);
+    }
+
+    private static int CompareFixed(Fixed64 left, Fixed64 right)
+    {
+        if (left < right)
+            return -1;
+
+        if (left > right)
+            return 1;
+
+        return 0;
     }
 }

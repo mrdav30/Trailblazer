@@ -2,15 +2,24 @@
 
 namespace Trailblazer.Pathing;
 
+/// <summary>
+/// Provides steering direction based on a sequence of waypoints generated from an A* pathfinding survey.
+/// Suitable for direct point-to-point navigation along a computed path.
+/// </summary>
 public class AStarGuide : IWaypointGuide
 {
+    /// <summary>
+    /// The result of the A* survey, containing the waypoints and path information needed to guide an agent along the path.
+    /// </summary>
     public AStarSurveyResult TrailMap { get; private set; }
 
+    /// <summary>
+    /// Cached smoothed waypoints generated from the original TrailMap waypoints. 
+    /// This allows for optional smoothing (e.g. Catmull-Rom interpolation) without modifying the original path data.
+    /// </summary>
     private AStarWaypoint[] _smoothedWaypoints;
 
-    /// <summary>
-    /// Index or key used to track the agent’s progress along the trail.
-    /// </summary>
+    /// <inheritdoc/>
     public int CurrentWaypointIndex { get; private set; }
 
     /// <summary>
@@ -18,8 +27,18 @@ public class AStarGuide : IWaypointGuide
     /// </summary>
     public bool UseSplineSmoothing { get; set; }
 
+    /// <summary>
+    /// Tracks the last waypoint index that was used to provide a fallback direction. 
+    /// This helps ensure that fallback directions are provided in a forward progression along the path, 
+    /// rather than repeatedly returning the same fallback when the agent is stuck.
+    /// </summary>
     private int _lastTriedIndex;
 
+    /// <summary>
+    /// Initializes the guide with the given A* survey result.
+    /// </summary>
+    /// <param name="surveyResult">The result of the A* survey containing the waypoints and path information.</param>
+    /// <returns>True if the guide is successfully initialized with a valid path; otherwise, false.</returns>
     public bool Initialize(AStarSurveyResult surveyResult)
     {
         if (!surveyResult.HasPath)
@@ -31,6 +50,9 @@ public class AStarGuide : IWaypointGuide
         return true;
     }
 
+    /// <summary>
+    /// Gets the active waypoints for this guide, applying optional smoothing if enabled.
+    /// </summary>
     public AStarWaypoint[] ActiveWaypoints
     {
         get
@@ -46,11 +68,16 @@ public class AStarGuide : IWaypointGuide
         }
     }
 
+    /// <summary>
+    /// Determines whether the guide has reached the final waypoint.
+    /// </summary>
+    /// <returns>True if the guide has arrived at the final waypoint; otherwise, false.</returns>
     public bool HasArrived()
     {
         return TrailMap.HasPath && CurrentWaypointIndex == ActiveWaypoints.Length - 1;
     }
 
+    /// <inheritdoc/>
     public int GetIndex(Vector3d from)
     {
         Fixed64 minDistSq = Fixed64.MAX_VALUE;
@@ -71,8 +98,10 @@ public class AStarGuide : IWaypointGuide
         return bestIndex;
     }
 
+    /// <inheritdoc/>
     public void AdvanceWaypoint() => CurrentWaypointIndex++;
 
+    /// <inheritdoc/>
     public bool TryGetMovementDirection(Vector3d origin, out Vector3d direction)
     {
         direction = Vector3d.Zero;
@@ -88,6 +117,7 @@ public class AStarGuide : IWaypointGuide
         return true;
     }
 
+    /// <inheritdoc/>
     public Vector3d GetMovementDirection(Vector3d origin)
     {
         if (!TrailMap.HasPath || CurrentWaypointIndex < 0 || CurrentWaypointIndex >= ActiveWaypoints.Length)
@@ -100,6 +130,7 @@ public class AStarGuide : IWaypointGuide
         return (movementDirection - origin).Normal;
     }
 
+    /// <inheritdoc/>
     public bool TryGetFallbackDirection(Vector3d from, out Vector3d fallbackDirection)
     {
         fallbackDirection = Vector3d.Zero;
@@ -133,6 +164,12 @@ public class AStarGuide : IWaypointGuide
         return false;
     }
 
+    /// <summary>
+    /// Attempts to get the waypoint at the specified index. 
+    /// </summary>
+    /// <param name="index">The index of the waypoint to retrieve.</param>
+    /// <param name="waypoint">The waypoint at the specified index, if found.</param>
+    /// <returns>True if the waypoint was successfully retrieved; otherwise, false.</returns>
     public bool TryGetWaypointAt(int index, out AStarWaypoint waypoint)
     {
         if (!TrailMap.HasPath || index < 0 || index >= ActiveWaypoints.Length)

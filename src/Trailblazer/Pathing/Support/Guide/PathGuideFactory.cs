@@ -153,15 +153,21 @@ public static class PathGuideFactory
             out FlowFieldSurveyResult result);
 
         // Make sure the start voxel is within the current fields collection
-        // Note: for flow fields, the GlobalIndex of the Start voxel is used as the key to check for path validity, 
+        // Note: for flow fields, the GlobalIndex of the Start voxel is used as the key to check for path validity,
         // since the flow field is generated around the start position and may not cover the entire map.
-        if (!pathFound || !result.Fields.ContainsKey(request.StartNode.GlobalIndex))
+        if (pathFound && result.Fields.ContainsKey(request.StartNode.GlobalIndex))
+        {
+            FlowFieldGuide guide = new();
+            guide.Initialize(result);
+            return guide;
+        }
+
+        if (!request.AllowTraversalTransitions)
             return null;
 
-
-        FlowFieldGuide guide = new();
-        guide.Initialize(result);
-        return guide;
+        return TryBuildTransitionFallbackFlowGuide(request, out FlowFieldGuide fallbackGuide)
+            ? fallbackGuide
+            : null;
     }
 
     /// <summary>
@@ -216,7 +222,9 @@ public static class PathGuideFactory
                 _cachedAStarResults.Return(a.TrailMap, dispose);
                 break;
             case FlowFieldGuide f:
-                _cachedFlowResults.Return(f.FlowMap, dispose);
+                f.ReleaseStagedResources(dispose);
+                if (f.FlowMap != null)
+                    _cachedFlowResults.Return(f.FlowMap, dispose);
                 break;
             case VolumeGuide v:
                 _cachedVolumeResults.Return(v.TrailMap, dispose);
@@ -293,6 +301,23 @@ public static class PathGuideFactory
 
         result = AStarSurveyResult.Create(flattenedWaypoints, chartKeys, request.RequestCacheKey);
         return true;
+    }
+
+    private static bool TryBuildTransitionFallbackFlowGuide(
+        FlowFieldPathRequest request,
+        out FlowFieldGuide guide)
+    {
+        guide = null;
+
+        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromFlowField(request);
+        if (hybridRequest?.RoutePlan == null
+            || hybridRequest.RoutePlan.DirectedTransitions.Length == 0)
+        {
+            return false;
+        }
+
+        guide = new FlowFieldGuide();
+        return guide.InitializeStaged(hybridRequest.RoutePlan);
     }
 
     private static bool TryBuildFlattenedHybridWaypoints(

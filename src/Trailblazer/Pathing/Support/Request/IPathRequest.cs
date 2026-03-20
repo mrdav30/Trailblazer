@@ -79,14 +79,14 @@ public interface IPathRequest
     /// </summary>
     public int RequestCacheKey { get; }
 
-/// <summary>
-/// Updates the request with new origin and destination positions, along with an optional unit size.
-/// Returns true if the update was successful and the request is now valid, or false if the new parameters resulted in an invalid request (e.g. no valid start/end voxels could be found
-/// </summary>
-/// <param name="origin"></param>
-/// <param name="destination"></param>
-/// <param name="unitSize"></param>
-/// <returns></returns>
+    /// <summary>
+    /// Updates the request with new origin and destination positions, along with an optional unit size.
+    /// Returns true if the update was successful and the request is now valid, or false if the new parameters resulted in an invalid request (e.g. no valid start/end voxels could be found
+    /// </summary>
+    /// <param name="origin"></param>
+    /// <param name="destination"></param>
+    /// <param name="unitSize"></param>
+    /// <returns></returns>
     bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize);
 
     /// <summary>

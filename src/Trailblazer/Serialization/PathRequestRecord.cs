@@ -31,6 +31,8 @@ internal sealed class PathRequestRecord : IRecordable
 
     public bool AllowUnwalkable;
 
+    public bool AllowTraversalTransitions;
+
     public int MaxPathSearchRange;
 
     public HeuristicMethod AStarHeuristic = HeuristicMethod.Manhattan;
@@ -62,12 +64,14 @@ internal sealed class PathRequestRecord : IRecordable
         {
             case AStarPathRequest aStar:
                 Kind = PathRequestRecordKind.AStar;
+                AllowTraversalTransitions = aStar.AllowTraversalTransitions;
                 AStarHeuristic = aStar.Heuristic;
                 AStarMaxClimbHeight = aStar.MaxClimbHeight;
                 break;
 
             case FlowFieldPathRequest flowField:
                 Kind = PathRequestRecordKind.FlowField;
+                AllowTraversalTransitions = flowField.AllowTraversalTransitions;
                 FlowFieldExtraFloodRange = flowField.ExtraFloodRange;
                 break;
 
@@ -107,7 +111,8 @@ internal sealed class PathRequestRecord : IRecordable
                     TargetPosition,
                     UnitSize,
                     AStarHeuristic,
-                    AllowUnwalkable);
+                    AllowUnwalkable,
+                    AllowTraversalTransitions);
                 if (aStar == null)
                     return false;
 
@@ -123,7 +128,8 @@ internal sealed class PathRequestRecord : IRecordable
                     Origin,
                     TargetPosition,
                     UnitSize,
-                    AllowUnwalkable);
+                    AllowUnwalkable,
+                    AllowTraversalTransitions);
                 if (flowField == null)
                     return false;
 
@@ -199,6 +205,7 @@ internal sealed class PathRequestRecord : IRecordable
         TargetPosition = Vector3d.Zero;
         UnitSize = Fixed64.One;
         AllowUnwalkable = false;
+        AllowTraversalTransitions = false;
         MaxPathSearchRange = 0;
         AStarHeuristic = HeuristicMethod.Manhattan;
         AStarMaxClimbHeight = Fixed64.One;
@@ -215,6 +222,7 @@ internal sealed class PathRequestRecord : IRecordable
         Vector3d targetPosition = TargetPosition;
         Fixed64 unitSize = UnitSize;
         bool allowUnwalkable = AllowUnwalkable;
+        bool allowTraversalTransitions = AllowTraversalTransitions;
         int maxPathSearchRange = MaxPathSearchRange;
         HeuristicMethod aStarHeuristic = AStarHeuristic;
         Fixed64 aStarMaxClimbHeight = AStarMaxClimbHeight;
@@ -228,6 +236,7 @@ internal sealed class PathRequestRecord : IRecordable
         RecordValues.Look(chronicler, ref targetPosition, "targetPosition", Vector3d.Zero);
         RecordValues.Look(chronicler, ref unitSize, "unitSize", Fixed64.One);
         RecordValues.Look(chronicler, ref allowUnwalkable, "allowUnwalkable", false);
+        RecordValues.Look(chronicler, ref allowTraversalTransitions, "allowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref maxPathSearchRange, "maxPathSearchRange", 0);
         RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
         RecordValues.Look(chronicler, ref aStarMaxClimbHeight, "aStarMaxClimbHeight", Fixed64.One);
@@ -243,6 +252,7 @@ internal sealed class PathRequestRecord : IRecordable
             TargetPosition = targetPosition;
             UnitSize = unitSize;
             AllowUnwalkable = allowUnwalkable;
+            AllowTraversalTransitions = allowTraversalTransitions;
             MaxPathSearchRange = maxPathSearchRange;
             AStarHeuristic = aStarHeuristic;
             AStarMaxClimbHeight = aStarMaxClimbHeight;

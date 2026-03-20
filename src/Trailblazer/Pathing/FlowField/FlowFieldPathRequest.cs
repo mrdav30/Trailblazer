@@ -39,7 +39,8 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
-        bool allowUnwalkable = false)
+        bool allowUnwalkable = false,
+        bool allowTraversalTransitions = false)
     {
         if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
             return null;
@@ -52,6 +53,7 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
             EndNode = endNode,
             UnitSize = unitSize,
             AllowUnwalkable = allowUnwalkable,
+            AllowTraversalTransitions = allowTraversalTransitions,
             ExtraFloodRange = DefaultExtraFloodRange
         };
 
@@ -73,8 +75,10 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
             EndNode?.SpawnToken ?? 0,
             UnitSize,
             AllowUnwalkable,
+            AllowTraversalTransitions,
             ExtraFloodRange,
-            MaxPathSearchRange
+            MaxPathSearchRange,
+            AllowTraversalTransitions ? TraversalTransitionRegistry.RegistryVersion : 0
         ).CombineHashCodes();
     }
 }

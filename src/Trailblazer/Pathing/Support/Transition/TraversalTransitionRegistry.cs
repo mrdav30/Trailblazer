@@ -41,6 +41,13 @@ public static class TraversalTransitionRegistry
 
     private static readonly ReaderWriterLockSlim _transitionLock = new();
 
+    private static int _registryVersion;
+
+    /// <summary>
+    /// Monotonic version used to invalidate cache keys when transition topology changes.
+    /// </summary>
+    public static int RegistryVersion => _registryVersion;
+
     /// <summary>
     /// Returns a snapshot of all currently registered transitions.
     /// </summary>
@@ -85,6 +92,7 @@ public static class TraversalTransitionRegistry
             _transitions.Add(
                 transition.Id,
                 new RegisteredTraversalTransition(transition, sourceVoxelIndex, destinationVoxelIndex));
+            Interlocked.Increment(ref _registryVersion);
             return true;
         }
         finally
@@ -160,7 +168,14 @@ public static class TraversalTransitionRegistry
     public static bool Unregister(string id)
     {
         _transitionLock.EnterWriteLock();
-        try { return _transitions.Remove(id); }
+        try
+        {
+            if (!_transitions.Remove(id))
+                return false;
+
+            Interlocked.Increment(ref _registryVersion);
+            return true;
+        }
         finally { _transitionLock.ExitWriteLock(); }
     }
 
@@ -201,7 +216,11 @@ public static class TraversalTransitionRegistry
     internal static void Reset()
     {
         _transitionLock.EnterWriteLock();
-        try { _transitions.Clear(); }
+        try
+        {
+            _transitions.Clear();
+            Interlocked.Increment(ref _registryVersion);
+        }
         finally { _transitionLock.ExitWriteLock(); }
     }
 

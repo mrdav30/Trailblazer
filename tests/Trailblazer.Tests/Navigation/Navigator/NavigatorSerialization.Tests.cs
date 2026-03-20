@@ -262,19 +262,19 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForHybridTraversal(bool useMemoryPack)
+    public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForAStarTransitionFallback(bool useMemoryPack)
     {
-        RegisterHybridTraversalScene();
+        RegisterTransitionFallbackAStarScene();
 
-        var source = CreateConfiguredHybridNavigator();
-        source.Steering.CurrentRequest.Should().BeOfType<HybridPathRequest>();
-        source.Steering.TrailGuide.Should().BeOfType<HybridGuide>();
+        var source = CreateConfiguredTransitionFallbackAStarNavigator();
+        source.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
+        source.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
 
-        target.Steering.CurrentRequest.Should().BeOfType<HybridPathRequest>();
-        target.Steering.TrailGuide.Should().BeOfType<HybridGuide>();
+        target.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
+        target.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
         AssertSteeringStateMatches(source.Steering, target.Steering);
     }
 
@@ -705,7 +705,7 @@ public class NavigatorSerializationTests : IDisposable
         return source;
     }
 
-    private static TestNavigator CreateConfiguredHybridNavigator()
+    private static TestNavigator CreateConfiguredTransitionFallbackAStarNavigator()
     {
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Fast, isRequestingJump: true);
@@ -723,15 +723,16 @@ public class NavigatorSerializationTests : IDisposable
         };
         source.Steering.BrakingPower = (Fixed64)0.3f;
 
-        HybridPathRequest request = HybridPathRequest.Create(
+        AStarPathRequest request = AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
-            maxClimbHeight: (Fixed64)2,
             allowUnwalkable: true);
 
         request.Should().NotBeNull();
+        request.MaxClimbHeight = (Fixed64)2;
+        request.AllowTraversalTransitions = true;
 
         source.Steering.ApplyPathRequest(request, groupId: 5);
 
@@ -739,7 +740,7 @@ public class NavigatorSerializationTests : IDisposable
         source.Steering.GetHeading(source);
         source.Steering.PauseAutoStop();
 
-        HybridGuide guide = source.Steering.TrailGuide.Should().BeOfType<HybridGuide>().Subject;
+        AStarGuide guide = source.Steering.TrailGuide.Should().BeOfType<AStarGuide>().Subject;
         if (guide.TryGetWaypointAt(guide.CurrentWaypointIndex + 1, out _))
         {
             guide.AdvanceWaypoint();
@@ -766,24 +767,24 @@ public class NavigatorSerializationTests : IDisposable
         PathTestFactory.RegisterFromData(chartKey, data, Vector3d.Zero);
     }
 
-    private static void RegisterHybridTraversalScene()
+    private static void RegisterTransitionFallbackAStarScene()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("HybridSceneStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("HybridSceneEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("TransitionFallbackStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("TransitionFallbackEnd", new Vector3d(4, 0, 0));
 
         AddWater(new Vector3d(1, 0, 0));
         AddWater(new Vector3d(2, 0, 0));
         AddWater(new Vector3d(3, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: "hybrid-entry",
+            id: "transition-fallback-entry",
             type: TraversalTransitionType.SwimEntry,
             source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
             destination: TraversalTransitionAnchor.Volume(new Vector3d(1, 0, 0), VolumeTraversalMode.Water),
             pathCostModifier: 2)).Should().BeTrue();
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
-            id: "hybrid-exit",
+            id: "transition-fallback-exit",
             type: TraversalTransitionType.SwimExit,
             source: TraversalTransitionAnchor.Volume(new Vector3d(3, 0, 0), VolumeTraversalMode.Water),
             destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
@@ -938,12 +939,14 @@ public class NavigatorSerializationTests : IDisposable
             {
                 actualAStar.Heuristic.Should().Be(expectedAStar.Heuristic);
                 actualAStar.MaxClimbHeight.Should().Be(expectedAStar.MaxClimbHeight);
+                actualAStar.AllowTraversalTransitions.Should().Be(expectedAStar.AllowTraversalTransitions);
             }
 
             if (expected.CurrentRequest is FlowFieldPathRequest expectedFlowField
                 && actual.CurrentRequest is FlowFieldPathRequest actualFlowField)
             {
                 actualFlowField.ExtraFloodRange.Should().Be(expectedFlowField.ExtraFloodRange);
+                actualFlowField.AllowTraversalTransitions.Should().Be(expectedFlowField.AllowTraversalTransitions);
             }
 
             if (expected.CurrentRequest is VolumePathRequest expectedVolume

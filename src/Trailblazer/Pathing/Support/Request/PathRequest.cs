@@ -17,6 +17,11 @@ public abstract class PathRequest : IPathRequest
 
     public bool AllowUnwalkable { get; set; }
 
+    /// <summary>
+    /// Whether chart-backed requests may fall back through authored traversal transitions when direct chart routing fails.
+    /// </summary>
+    public bool AllowTraversalTransitions { get; set; }
+
     public int MaxPathSearchRange { get; set; }
 
     public bool HasOrigin => StartNode != null;

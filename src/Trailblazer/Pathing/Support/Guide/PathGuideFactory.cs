@@ -11,8 +11,17 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public static class PathGuideFactory
 {
+    /// <summary>
+    /// The number of frames after which unused guides are considered stale and eligible for eviction from the pool.
+    /// This helps prevent memory bloat from guides that are rarely used but still occupy cache space.
+    /// Adjust this value based on typical pathfinding usage patterns and acceptable memory overhead in your application.
+    /// </summary>
     private const int MaxFramesUnused = 600;
 
+    /// <summary>
+    /// A shared cache for A* survey results, keyed by request parameters. 
+    /// This allows for efficient reuse of recently computed paths without needing to re-run the A* algorithm for identical requests.
+    /// </summary>
     private static readonly ReusableSurveyResultCache<AStarSurveyResult> _cachedAStarResults = new();
 
     /// <summary>
@@ -20,6 +29,10 @@ public static class PathGuideFactory
     /// </summary>
     public static int ActiveAStarGuideCount => _cachedAStarResults.Count;
 
+    /// <summary>
+    /// A shared cache for FlowField survey results, keyed by request parameters.
+    /// This allows for efficient reuse of recently computed flow fields without needing to re-run the flow field generation for identical requests.
+    /// </summary>
     private static readonly ReusableSurveyResultCache<FlowFieldSurveyResult> _cachedFlowResults = new();
 
     /// <summary>
@@ -27,6 +40,10 @@ public static class PathGuideFactory
     /// </summary>
     public static int ActiveFlowGuideCount => _cachedFlowResults.Count;
 
+    /// <summary>
+    /// A shared cache for raw-volume survey results, keyed by request parameters.
+    /// This allows for efficient reuse of recently computed raw-volume data without needing to re-run the volume generation for identical requests.
+    /// </summary>
     private static readonly ReusableSurveyResultCache<VolumeSurveyResult> _cachedVolumeResults = new();
 
     /// <summary>
@@ -42,6 +59,9 @@ public static class PathGuideFactory
         || ActiveFlowGuideCount > 0
         || ActiveVolumeGuideCount > 0;
 
+    /// <summary>
+    /// Indicates whether any guides are currently in use (checked out from the pool and not yet returned).
+    /// </summary>
     public static bool AnyInUse =>
         _cachedAStarResults.CountInUse > 0
         || _cachedFlowResults.CountInUse > 0
@@ -110,7 +130,7 @@ public static class PathGuideFactory
     public static AStarGuide RequestAStar(AStarPathRequest request)
     {
         bool pathFound = _cachedAStarResults.TryGetOrCreate(request,
-            () => AStarSurveyor.Shared.FindPath(request),
+            () => ResolveAStarResult(request),
             out AStarSurveyResult result);
 
         if (!pathFound)
@@ -164,55 +184,21 @@ public static class PathGuideFactory
     /// <summary>
     /// Builds a hybrid guide by composing cached chart and volume segment guides from a planned route request.
     /// </summary>
-    public static HybridGuide RequestHybrid(HybridPathRequest request)
+    private static HybridGuide RequestHybrid(HybridPathRequest request)
     {
         if (request?.RoutePlan == null)
             return null;
 
-        SwiftList<AStarWaypoint> waypoints = new();
-        SwiftList<IGuide> borrowedGuides = new();
-
-        try
+        if (!TryBuildFlattenedHybridWaypoints(
+            request.RoutePlan,
+            out AStarWaypoint[] flattened,
+            out _))
         {
-            for (int i = 0; i < request.RoutePlan.Steps.Length; i++)
-            {
-                HybridRouteStep step = request.RoutePlan.Steps[i];
-                switch (step.Kind)
-                {
-                    case HybridRouteStepKind.Waypoint:
-                        AppendWaypoint(
-                            waypoints,
-                            new AStarWaypoint
-                            {
-                                Position = step.WaypointPosition,
-                                PathCost = step.AdditionalCost
-                            });
-                        break;
-
-                    case HybridRouteStepKind.PathSegment:
-                        if (!TryAppendSegmentWaypoints(step.SegmentRequest, waypoints, borrowedGuides))
-                            return null;
-                        break;
-                }
-            }
-
-            if (waypoints.Count == 0)
-                return null;
-
-            AStarWaypoint[] flattened = waypoints.ToArray();
-            for (int i = 0; i < flattened.Length; i++)
-                flattened[i].IsGoal = false;
-
-            flattened[^1].IsGoal = true;
-
-            HybridGuide guide = new();
-            return guide.Initialize(flattened) ? guide : null;
+            return null;
         }
-        finally
-        {
-            for (int i = 0; i < borrowedGuides.Count; i++)
-                ReturnGuide(borrowedGuides[i]);
-        }
+
+        HybridGuide guide = new();
+        return guide.Initialize(flattened) ? guide : null;
     }
 
     /// <summary>
@@ -273,10 +259,113 @@ public static class PathGuideFactory
         _cachedVolumeResults.InvalidateAll();
     }
 
+    private static AStarSurveyResult ResolveAStarResult(AStarPathRequest request)
+    {
+        AStarSurveyResult directResult = AStarSurveyor.Shared.FindPath(request);
+        if (directResult.HasPath || !request.AllowTraversalTransitions)
+            return directResult;
+
+        return TryBuildTransitionFallbackAStarResult(request, out AStarSurveyResult fallbackResult)
+            ? fallbackResult
+            : directResult;
+    }
+
+    private static bool TryBuildTransitionFallbackAStarResult(
+        AStarPathRequest request,
+        out AStarSurveyResult result)
+    {
+        result = AStarSurveyResult.Empty;
+
+        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromAStar(request);
+        if (hybridRequest?.RoutePlan == null
+            || hybridRequest.RoutePlan.DirectedTransitions.Length == 0)
+        {
+            return false;
+        }
+
+        if (!TryBuildFlattenedHybridWaypoints(
+            hybridRequest.RoutePlan,
+            out AStarWaypoint[] flattenedWaypoints,
+            out string[] chartKeys))
+        {
+            return false;
+        }
+
+        result = AStarSurveyResult.Create(flattenedWaypoints, chartKeys, request.RequestCacheKey);
+        return true;
+    }
+
+    private static bool TryBuildFlattenedHybridWaypoints(
+        HybridRoutePlan routePlan,
+        out AStarWaypoint[] flattenedWaypoints,
+        out string[] chartKeys)
+    {
+        flattenedWaypoints = null;
+        chartKeys = Array.Empty<string>();
+        if (routePlan == null)
+            return false;
+
+        SwiftList<AStarWaypoint> waypoints = new();
+        SwiftList<IGuide> borrowedGuides = new();
+        SwiftList<string> utilizedCharts = new();
+        int pathCostOffset = 0;
+
+        try
+        {
+            for (int i = 0; i < routePlan.Steps.Length; i++)
+            {
+                HybridRouteStep step = routePlan.Steps[i];
+                switch (step.Kind)
+                {
+                    case HybridRouteStepKind.Waypoint:
+                        pathCostOffset += step.AdditionalCost;
+                        AppendWaypoint(
+                            waypoints,
+                            new AStarWaypoint
+                            {
+                                Position = step.WaypointPosition,
+                                PathCost = pathCostOffset
+                            });
+                        break;
+
+                    case HybridRouteStepKind.PathSegment:
+                        if (!TryAppendSegmentWaypoints(
+                            step.SegmentRequest,
+                            waypoints,
+                            borrowedGuides,
+                            utilizedCharts,
+                            ref pathCostOffset))
+                        {
+                            return false;
+                        }
+                        break;
+                }
+            }
+
+            if (waypoints.Count == 0)
+                return false;
+
+            flattenedWaypoints = waypoints.ToArray();
+            for (int i = 0; i < flattenedWaypoints.Length; i++)
+                flattenedWaypoints[i].IsGoal = false;
+
+            flattenedWaypoints[^1].IsGoal = true;
+            chartKeys = utilizedCharts.ToArray();
+            return true;
+        }
+        finally
+        {
+            for (int i = 0; i < borrowedGuides.Count; i++)
+                ReturnGuide(borrowedGuides[i]);
+        }
+    }
+
     private static bool TryAppendSegmentWaypoints(
         IPathRequest request,
         SwiftList<AStarWaypoint> destination,
-        SwiftList<IGuide> borrowedGuides)
+        SwiftList<IGuide> borrowedGuides,
+        SwiftList<string> utilizedCharts,
+        ref int pathCostOffset)
     {
         switch (request)
         {
@@ -286,7 +375,8 @@ public static class PathGuideFactory
                     return false;
 
                 borrowedGuides.Add(aStarGuide);
-                AppendWaypoints(destination, aStarGuide.ActiveWaypoints);
+                AddChartKeys(utilizedCharts, aStarGuide.TrailMap.ChartsUtilized);
+                AppendWaypoints(destination, aStarGuide.ActiveWaypoints, ref pathCostOffset);
                 return true;
 
             case VolumePathRequest volumeRequest:
@@ -295,7 +385,7 @@ public static class PathGuideFactory
                     return false;
 
                 borrowedGuides.Add(volumeGuide);
-                AppendWaypoints(destination, volumeGuide.ActiveWaypoints);
+                AppendWaypoints(destination, volumeGuide.ActiveWaypoints, ref pathCostOffset);
                 return true;
 
             default:
@@ -303,13 +393,37 @@ public static class PathGuideFactory
         }
     }
 
-    private static void AppendWaypoints(SwiftList<AStarWaypoint> destination, AStarWaypoint[] waypoints)
+    private static void AppendWaypoints(
+        SwiftList<AStarWaypoint> destination,
+        AStarWaypoint[] waypoints,
+        ref int pathCostOffset)
     {
         if (waypoints == null)
             return;
 
         for (int i = 0; i < waypoints.Length; i++)
-            AppendWaypoint(destination, waypoints[i]);
+        {
+            AStarWaypoint waypoint = waypoints[i];
+            waypoint.PathCost += pathCostOffset;
+            AppendWaypoint(destination, waypoint);
+        }
+
+        if (destination.Count > 0)
+            pathCostOffset = destination[destination.Count - 1].PathCost;
+    }
+
+    private static void AddChartKeys(SwiftList<string> destination, string[] charts)
+    {
+        if (charts == null)
+            return;
+
+        for (int i = 0; i < charts.Length; i++)
+        {
+            if (string.IsNullOrEmpty(charts[i]) || destination.Contains(charts[i]))
+                continue;
+
+            destination.Add(charts[i]);
+        }
     }
 
     private static void AppendWaypoint(SwiftList<AStarWaypoint> destination, AStarWaypoint waypoint)

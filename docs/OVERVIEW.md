@@ -139,27 +139,18 @@ Factory helpers:
 VolumePathRequest.TryCreate(origin, destination, Fixed64.One, out var request);
 ```
 
-### 3.4 HybridPathRequest
+### 3.4 Transition Fallback For Chart Requests
 
-Use `HybridPathRequest` when chart-backed traversal should bridge through explicit transitions instead of staying inside one chart or one raw-volume mode.
+Chart-backed requests are being hardened to use explicit transitions without forcing callers onto a separate public request family.
 
-Key traits:
+Current behavior:
 
-- it first attempts the normal chart-backed route shape
-- it can then fall back to a narrow authored transition route such as chart -> transition -> chart
-- it also supports a single chart -> volume -> chart bridge such as shoreline swim or takeoff/landing traversal
-- it intentionally does not hide that behavior inside `AStarPathRequest` or `FlowFieldPathRequest`
+- `AStarPathRequest` can opt into transition-aware staged routing through `AllowTraversalTransitions`
+- the request still represents "I want A*" from the caller's perspective
+- the staged route is resolved internally from the request plus the live `TraversalTransitionRegistry`
+- surveyors stay single-mode; staged escalation happens above them
 
-Related support types:
-
-- `TraversalTransition`
-- `TraversalTransitionRegistry`
-
-Factory helpers:
-
-```csharp
-HybridPathRequest.TryCreate(origin, destination, Fixed64.One, out var request);
-```
+This means the public API story stays centered on normal request types even when the resolved route temporarily switches through transition points or raw volume.
 
 ## 4. Surveyors and Guides
 
@@ -198,7 +189,6 @@ Concrete guide types:
 - `AStarGuide` implements `IWaypointGuide`
 - `FlowFieldGuide` implements `IGuide`
 - `VolumeGuide` implements `IWaypointGuide`
-- `HybridGuide` implements `IWaypointGuide`
 
 `IWaypointGuide` adds waypoint-specific operations:
 
@@ -228,7 +218,6 @@ Supported operations:
 - `RequestAStar(AStarPathRequest request)`
 - `RequestFlowField(FlowFieldPathRequest request)`
 - `RequestVolume(VolumePathRequest request)`
-- `RequestHybrid(HybridPathRequest request)`
 - `ReturnGuide(IGuide guide, bool dispose = false)`
 - `InvalidateCacheFor(string chartKey)`
 - `CullExpiredGuides(int currentFrame)`

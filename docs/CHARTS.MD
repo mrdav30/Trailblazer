@@ -204,10 +204,11 @@ Use `VolumePathRequest` when:
 - there may be no navigation chart for that space
 - traversal is based on raw voxel connectivity instead of chart ownership
 
-Use `HybridPathRequest` when:
+Use transition-aware chart routing when:
 
 - movement should stay chart-backed most of the time but must cross an authored jump, swim, or takeoff/landing handoff
 - explicit `TraversalTransition` anchors should stitch chart segments to each other or to raw volume travel
+- an `AStarPathRequest` should fall back through transitions instead of failing outright
 
 Examples:
 

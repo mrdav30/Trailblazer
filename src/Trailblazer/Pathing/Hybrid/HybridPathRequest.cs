@@ -57,7 +57,7 @@ internal sealed class HybridRoutePlan
 }
 
 /// <summary>
-/// Represents a narrow hybrid route request that may bridge chart-backed traversal through explicit transitions.
+/// Internal adapter request used to build staged transition-aware routes from normal chart-backed request intent.
 /// </summary>
 /// <remarks>
 /// The current implementation supports:
@@ -65,7 +65,7 @@ internal sealed class HybridRoutePlan
 /// chart -> transition -> chart,
 /// chart -> transition -> volume -> transition -> chart.
 /// </remarks>
-public sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathRequest>
+internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathRequest>
 {
     public Vector3d Origin { get; private set; }
 
@@ -144,6 +144,26 @@ public sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReque
             return null;
 
         return request;
+    }
+
+    internal static HybridPathRequest CreateFromAStar(AStarPathRequest request)
+    {
+        if (request == null || !request.HasValidEndpoints)
+            return null;
+
+        var hybridRequest = new HybridPathRequest
+        {
+            Origin = request.Origin,
+            StartNode = request.StartNode,
+            TargetPosition = request.TargetPosition,
+            EndNode = request.EndNode,
+            UnitSize = request.UnitSize,
+            Heuristic = request.Heuristic,
+            AllowUnwalkable = request.AllowUnwalkable,
+            MaxClimbHeight = request.MaxClimbHeight
+        };
+
+        return hybridRequest.RebuildPlan() ? hybridRequest : null;
     }
 
     public bool UpdateRequest(

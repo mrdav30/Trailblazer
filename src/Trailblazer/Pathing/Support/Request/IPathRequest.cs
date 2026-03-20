@@ -51,12 +51,27 @@ public interface IPathRequest
     /// </summary>
     int MaxPathSearchRange { get; set; }
 
+    /// <summary>
+    /// Whether the request has a valid start voxel. 
+    /// Requests with null start or end voxels are considered invalid.
+    /// </summary>
     bool HasOrigin { get; }
 
+    /// <summary>
+    /// Whether the request has a valid end voxel.
+    /// Requests with null start or end voxels are considered invalid.
+    /// </summary>
     bool HasDestination { get; }
 
+    /// <summary>
+    /// Whether the request has valid start and end voxels.
+    /// </summary>
     bool HasValidEndpoints { get; }
 
+    /// <summary>
+    /// Whether the request is valid and can be processed. 
+    /// Requests must have valid endpoints and a positive search range to be considered valid.
+    /// </summary>
     bool IsValid { get; }
 
     /// <summary>
@@ -64,11 +79,39 @@ public interface IPathRequest
     /// </summary>
     public int RequestCacheKey { get; }
 
+/// <summary>
+/// Updates the request with new origin and destination positions, along with an optional unit size.
+/// Returns true if the update was successful and the request is now valid, or false if the new parameters resulted in an invalid request (e.g. no valid start/end voxels could be found
+/// </summary>
+/// <param name="origin"></param>
+/// <param name="destination"></param>
+/// <param name="unitSize"></param>
+/// <returns></returns>
     bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize);
 
+    /// <summary>
+    /// Attempts to update the request's origin position and corresponding start voxel. 
+    /// Returns true if successful, or false if the new origin is invalid (e.g. no valid start voxel could be found).
+    /// </summary>
+    /// <param name="origin"></param>
+    /// <param name="resetSearchRange"></param>
+    /// <returns></returns>
     bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false);
 
+    /// <summary>
+    /// Attempts to update the request's destination position and corresponding end voxel.
+    /// Returns true if successful, or false if the new destination is invalid (e.g. no valid end voxel could be found).
+    /// </summary>
+    /// <param name="destination"></param>
+    /// <param name="resetSearchRange"></param>
+    /// <returns></returns>
     bool TrySetDestination(Vector3d destination, bool resetSearchRange = false);
 
+    /// <summary>
+    /// Attempts to update the request's unit size and corresponding start/end voxel validity.
+    /// Returns true if successful, or false if the new unit size is invalid (e.g. no valid start/end voxels could be found with the new size).
+    /// </summary>
+    /// <param name="unitSize"></param>
+    /// <returns></returns>
     bool TrySetUnitSize(Fixed64 unitSize);
 }

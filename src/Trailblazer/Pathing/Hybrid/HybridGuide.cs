@@ -3,9 +3,9 @@ using FixedMathSharp;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Waypoint guide produced from a planned hybrid route that may span chart and volume segments.
+/// Internal waypoint guide produced from a staged transition-aware route.
 /// </summary>
-public sealed class HybridGuide : IWaypointGuide
+internal sealed class HybridGuide : IWaypointGuide
 {
     public AStarWaypoint[] ActiveWaypoints { get; private set; }
 

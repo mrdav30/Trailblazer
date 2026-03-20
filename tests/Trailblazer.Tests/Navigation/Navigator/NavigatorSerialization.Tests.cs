@@ -262,6 +262,25 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForHybridTraversal(bool useMemoryPack)
+    {
+        RegisterHybridTraversalScene();
+
+        var source = CreateConfiguredHybridNavigator();
+        source.Steering.CurrentRequest.Should().BeOfType<HybridPathRequest>();
+        source.Steering.TrailGuide.Should().BeOfType<HybridGuide>();
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        target.Steering.CurrentRequest.Should().BeOfType<HybridPathRequest>();
+        target.Steering.TrailGuide.Should().BeOfType<HybridGuide>();
+        AssertSteeringStateMatches(source.Steering, target.Steering);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RoundTrip_ShouldRestoreBlockedAerialGuideProgress(bool useMemoryPack)
     {
         AddObstacle(new Vector3d(2, 0, 0));
@@ -686,6 +705,51 @@ public class NavigatorSerializationTests : IDisposable
         return source;
     }
 
+    private static TestNavigator CreateConfiguredHybridNavigator()
+    {
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        source.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Fast, isRequestingJump: true);
+
+        source.Steering.PathRecheckCooldownFrames = 11;
+        source.Steering.StopMultiplier = (Fixed64)0.8f;
+        source.Steering.GroupFactor = (Fixed64)10;
+        source.Steering.AvoidFactor = (Fixed64)3;
+        source.Steering.BehaviorWeights = new GroupBehaviorWeights()
+        {
+            Separation = (Fixed64)2.5f,
+            Alignment = (Fixed64)0.5f,
+            Cohesion = (Fixed64)0.35f,
+            Avoidance = (Fixed64)1.4f
+        };
+        source.Steering.BrakingPower = (Fixed64)0.3f;
+
+        HybridPathRequest request = HybridPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            HeuristicMethod.Euclidean,
+            maxClimbHeight: (Fixed64)2,
+            allowUnwalkable: true);
+
+        request.Should().NotBeNull();
+
+        source.Steering.ApplyPathRequest(request, groupId: 5);
+
+        TrailblazerManager.Simulate();
+        source.Steering.GetHeading(source);
+        source.Steering.PauseAutoStop();
+
+        HybridGuide guide = source.Steering.TrailGuide.Should().BeOfType<HybridGuide>().Subject;
+        if (guide.TryGetWaypointAt(guide.CurrentWaypointIndex + 1, out _))
+        {
+            guide.AdvanceWaypoint();
+            TrailblazerManager.Simulate();
+            source.Steering.GetHeading(source);
+        }
+
+        return source;
+    }
+
     private static void RegisterGuidedPathChart(string chartKey)
     {
         bool[,,] data = new bool[1, 5, 3]
@@ -700,6 +764,30 @@ public class NavigatorSerializationTests : IDisposable
         };
 
         PathTestFactory.RegisterFromData(chartKey, data, Vector3d.Zero);
+    }
+
+    private static void RegisterHybridTraversalScene()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("HybridSceneStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("HybridSceneEnd", new Vector3d(4, 0, 0));
+
+        AddWater(new Vector3d(1, 0, 0));
+        AddWater(new Vector3d(2, 0, 0));
+        AddWater(new Vector3d(3, 0, 0));
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "hybrid-entry",
+            type: TraversalTransitionType.SwimEntry,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Volume(new Vector3d(1, 0, 0), VolumeTraversalMode.Water),
+            pathCostModifier: 2)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "hybrid-exit",
+            type: TraversalTransitionType.SwimExit,
+            source: TraversalTransitionAnchor.Volume(new Vector3d(3, 0, 0), VolumeTraversalMode.Water),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
     }
 
     private static void RegisterMovementGroupFormationChart(string chartKey)
@@ -864,6 +952,13 @@ public class NavigatorSerializationTests : IDisposable
                 actualVolume.Heuristic.Should().Be(expectedVolume.Heuristic);
                 actualVolume.TraversalMode.Should().Be(expectedVolume.TraversalMode);
             }
+
+            if (expected.CurrentRequest is HybridPathRequest expectedHybrid
+                && actual.CurrentRequest is HybridPathRequest actualHybrid)
+            {
+                actualHybrid.Heuristic.Should().Be(expectedHybrid.Heuristic);
+                actualHybrid.MaxClimbHeight.Should().Be(expectedHybrid.MaxClimbHeight);
+            }
         }
 
         if (expected.TrailGuide == null)
@@ -885,6 +980,12 @@ public class NavigatorSerializationTests : IDisposable
                 && actual.TrailGuide is VolumeGuide actualVolumeGuide)
             {
                 actualVolumeGuide.CurrentWaypointIndex.Should().Be(expectedVolumeGuide.CurrentWaypointIndex);
+            }
+
+            if (expected.TrailGuide is HybridGuide expectedHybridGuide
+                && actual.TrailGuide is HybridGuide actualHybridGuide)
+            {
+                actualHybridGuide.CurrentWaypointIndex.Should().Be(expectedHybridGuide.CurrentWaypointIndex);
             }
         }
     }

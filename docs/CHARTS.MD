@@ -204,11 +204,17 @@ Use `VolumePathRequest` when:
 - there may be no navigation chart for that space
 - traversal is based on raw voxel connectivity instead of chart ownership
 
+Use `HybridPathRequest` when:
+
+- movement should stay chart-backed most of the time but must cross an authored jump, swim, or takeoff/landing handoff
+- explicit `TraversalTransition` anchors should stitch chart segments to each other or to raw volume travel
+
 Examples:
 
 - walking on terrain: chart-backed pathing
 - flying through open air: volume pathing
 - swimming through host-marked water voxels: constrained volume pathing
+- walking to a shoreline, swimming across, then exiting onto another chart: hybrid pathing
 
 This split is a big part of what keeps Trailblazer flexible without forcing one world model onto every traversal medium.
 

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using SwiftCollections;
 using Trailblazer.Navigation;
 
 namespace Trailblazer.Pathing;
@@ -95,6 +96,7 @@ public static class PathGuideFactory
             AStarPathRequest a => RequestAStar(a),
             FlowFieldPathRequest f => RequestFlowField(f),
             VolumePathRequest v => RequestVolume(v),
+            HybridPathRequest h => RequestHybrid(h),
             _ => null,
         };
         return result != null;
@@ -160,6 +162,60 @@ public static class PathGuideFactory
     }
 
     /// <summary>
+    /// Builds a hybrid guide by composing cached chart and volume segment guides from a planned route request.
+    /// </summary>
+    public static HybridGuide RequestHybrid(HybridPathRequest request)
+    {
+        if (request?.RoutePlan == null)
+            return null;
+
+        SwiftList<AStarWaypoint> waypoints = new();
+        SwiftList<IGuide> borrowedGuides = new();
+
+        try
+        {
+            for (int i = 0; i < request.RoutePlan.Steps.Length; i++)
+            {
+                HybridRouteStep step = request.RoutePlan.Steps[i];
+                switch (step.Kind)
+                {
+                    case HybridRouteStepKind.Waypoint:
+                        AppendWaypoint(
+                            waypoints,
+                            new AStarWaypoint
+                            {
+                                Position = step.WaypointPosition,
+                                PathCost = step.AdditionalCost
+                            });
+                        break;
+
+                    case HybridRouteStepKind.PathSegment:
+                        if (!TryAppendSegmentWaypoints(step.SegmentRequest, waypoints, borrowedGuides))
+                            return null;
+                        break;
+                }
+            }
+
+            if (waypoints.Count == 0)
+                return null;
+
+            AStarWaypoint[] flattened = waypoints.ToArray();
+            for (int i = 0; i < flattened.Length; i++)
+                flattened[i].IsGoal = false;
+
+            flattened[^1].IsGoal = true;
+
+            HybridGuide guide = new();
+            return guide.Initialize(flattened) ? guide : null;
+        }
+        finally
+        {
+            for (int i = 0; i < borrowedGuides.Count; i++)
+                ReturnGuide(borrowedGuides[i]);
+        }
+    }
+
+    /// <summary>
     /// Returns the guide back to its associated pool, optionally disposing it completely.
     /// </summary>
     /// <param name="guide">The guide to return to the cache.</param>
@@ -215,5 +271,64 @@ public static class PathGuideFactory
         _cachedAStarResults.InvalidateAll();
         _cachedFlowResults.InvalidateAll();
         _cachedVolumeResults.InvalidateAll();
+    }
+
+    private static bool TryAppendSegmentWaypoints(
+        IPathRequest request,
+        SwiftList<AStarWaypoint> destination,
+        SwiftList<IGuide> borrowedGuides)
+    {
+        switch (request)
+        {
+            case AStarPathRequest aStarRequest:
+                AStarGuide aStarGuide = RequestAStar(aStarRequest);
+                if (aStarGuide == null)
+                    return false;
+
+                borrowedGuides.Add(aStarGuide);
+                AppendWaypoints(destination, aStarGuide.ActiveWaypoints);
+                return true;
+
+            case VolumePathRequest volumeRequest:
+                VolumeGuide volumeGuide = RequestVolume(volumeRequest);
+                if (volumeGuide == null)
+                    return false;
+
+                borrowedGuides.Add(volumeGuide);
+                AppendWaypoints(destination, volumeGuide.ActiveWaypoints);
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private static void AppendWaypoints(SwiftList<AStarWaypoint> destination, AStarWaypoint[] waypoints)
+    {
+        if (waypoints == null)
+            return;
+
+        for (int i = 0; i < waypoints.Length; i++)
+            AppendWaypoint(destination, waypoints[i]);
+    }
+
+    private static void AppendWaypoint(SwiftList<AStarWaypoint> destination, AStarWaypoint waypoint)
+    {
+        if (destination.Count > 0)
+        {
+            AStarWaypoint last = destination[destination.Count - 1];
+            if (last.GlobalIndex.HasValue
+                && waypoint.GlobalIndex.HasValue
+                && last.GlobalIndex.Value.Equals(waypoint.GlobalIndex.Value))
+            {
+                return;
+            }
+
+            if (last.Position == waypoint.Position)
+                return;
+        }
+
+        waypoint.IsGoal = false;
+        destination.Add(waypoint);
     }
 }

@@ -131,12 +131,34 @@ Key traits:
 
 Related support type:
 
-- `TraversalTransitionRegistry` stores authored handoff points between chart-backed traversal and raw-volume traversal for later hybrid-routing work
+- `TraversalTransitionRegistry` stores authored handoff points between chart-backed traversal and raw-volume traversal for hybrid routing
 
 Factory helpers:
 
 ```csharp
 VolumePathRequest.TryCreate(origin, destination, Fixed64.One, out var request);
+```
+
+### 3.4 HybridPathRequest
+
+Use `HybridPathRequest` when chart-backed traversal should bridge through explicit transitions instead of staying inside one chart or one raw-volume mode.
+
+Key traits:
+
+- it first attempts the normal chart-backed route shape
+- it can then fall back to a narrow authored transition route such as chart -> transition -> chart
+- it also supports a single chart -> volume -> chart bridge such as shoreline swim or takeoff/landing traversal
+- it intentionally does not hide that behavior inside `AStarPathRequest` or `FlowFieldPathRequest`
+
+Related support types:
+
+- `TraversalTransition`
+- `TraversalTransitionRegistry`
+
+Factory helpers:
+
+```csharp
+HybridPathRequest.TryCreate(origin, destination, Fixed64.One, out var request);
 ```
 
 ## 4. Surveyors and Guides
@@ -176,6 +198,7 @@ Concrete guide types:
 - `AStarGuide` implements `IWaypointGuide`
 - `FlowFieldGuide` implements `IGuide`
 - `VolumeGuide` implements `IWaypointGuide`
+- `HybridGuide` implements `IWaypointGuide`
 
 `IWaypointGuide` adds waypoint-specific operations:
 
@@ -205,6 +228,7 @@ Supported operations:
 - `RequestAStar(AStarPathRequest request)`
 - `RequestFlowField(FlowFieldPathRequest request)`
 - `RequestVolume(VolumePathRequest request)`
+- `RequestHybrid(HybridPathRequest request)`
 - `ReturnGuide(IGuide guide, bool dispose = false)`
 - `InvalidateCacheFor(string chartKey)`
 - `CullExpiredGuides(int currentFrame)`

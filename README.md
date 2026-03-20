@@ -35,10 +35,10 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 - `NavigationChart` and `NavigationChartCell` for defining chart-backed surface space with optional per-cell cost and hint metadata
 - `TraversalTransition` and `TraversalTransitionRegistry` for explicit chart-to-chart and chart-to-volume handoff data
 - `PathManager` for chart registration, initialization, unloading, and path utilities
-- `AStarPathRequest` and `FlowFieldPathRequest` for request configuration
+- `AStarPathRequest`, `FlowFieldPathRequest`, `VolumePathRequest`, and `HybridPathRequest` for request configuration
 - `AStarSurveyor` and `FlowFieldSurveyor` for raw path generation
 - `PathGuideFactory` and `ReusableSurveyResultCache<T>` for guide reuse
-- `AStarGuide` and `FlowFieldGuide` for runtime direction queries
+- `AStarGuide`, `FlowFieldGuide`, `VolumeGuide`, and `HybridGuide` for runtime direction queries
 
 ### Navigation Layer
 
@@ -114,7 +114,7 @@ PathManager.Register(chart);
 PathManager.InitializeChart(chart.Name);
 ```
 
-`NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell cost modifiers or transition hints. Air and broad water traversal remain volume-based through `VolumePathRequest`.
+`NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell cost modifiers or transition hints. Air and broad water traversal remain volume-based through `VolumePathRequest`, while explicit chart-to-volume handoffs can be composed through `HybridPathRequest` plus registered `TraversalTransition` data.
 
 ### 2. Request a Guide Directly
 
@@ -185,7 +185,7 @@ Concrete navigator types should implement `CheckTrekCondition()` to populate gro
 
 If a navigator should use a smaller locomotion set, override `CreateLocomotionProfile()` and return a custom profile such as `LocomotionProfile.CreateMoveAndFallOnly()`.
 
-## Choosing Between A* and Flow Fields
+## Choosing A Request Type
 
 When you use `Navigator.ApplyGuidedTrekRequest(...)`, the navigator creates the concrete request internally based on `GuidedPathMode` and its guided-path defaults.
 
@@ -200,6 +200,17 @@ Use `FlowFieldPathRequest` when:
 - many units can share the same destination
 - you want local vector sampling rather than waypoint following
 - you want destination-centric caching and group-friendly movement; paired `groupId` values can preserve relative offsets while the group stays cohesive
+
+Use `VolumePathRequest` when:
+
+- traversal should stay in raw voxel volume instead of chart-backed surface space
+- movement needs open-air or host-marked water routing without authored chart structure
+
+Use `HybridPathRequest` when:
+
+- chart-backed traversal should bridge through explicit `TraversalTransition` handoffs
+- you want a narrow multi-stage route such as chart -> jump -> chart or chart -> water volume -> chart
+- you are composing the request manually rather than through the current built-in navigator guided modes
 
 ## Project Layout
 

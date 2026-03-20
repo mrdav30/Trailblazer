@@ -10,7 +10,8 @@ internal enum PathRequestRecordKind
     None,
     AStar,
     FlowField,
-    Volume
+    Volume,
+    Hybrid
 }
 
 /// <summary>
@@ -74,6 +75,12 @@ internal sealed class PathRequestRecord : IRecordable
                 Kind = PathRequestRecordKind.Volume;
                 AStarHeuristic = volume.Heuristic;
                 TraversalMode = volume.TraversalMode;
+                break;
+
+            case HybridPathRequest hybrid:
+                Kind = PathRequestRecordKind.Hybrid;
+                AStarHeuristic = hybrid.Heuristic;
+                AStarMaxClimbHeight = hybrid.MaxClimbHeight;
                 break;
 
             default:
@@ -144,6 +151,23 @@ internal sealed class PathRequestRecord : IRecordable
                 request = volume;
                 return true;
 
+            case PathRequestRecordKind.Hybrid:
+                HybridPathRequest hybrid = HybridPathRequest.Create(
+                    Origin,
+                    TargetPosition,
+                    UnitSize,
+                    AStarHeuristic,
+                    AStarMaxClimbHeight,
+                    AllowUnwalkable);
+                if (hybrid == null)
+                    return false;
+
+                if (MaxPathSearchRange > 0)
+                    hybrid.MaxPathSearchRange = MaxPathSearchRange;
+
+                request = hybrid;
+                return true;
+
             default:
                 return false;
         }
@@ -162,6 +186,8 @@ internal sealed class PathRequestRecord : IRecordable
             RestoreWaypointIndex(aStarGuide);
         else if (guide is VolumeGuide volumeGuide)
             RestoreWaypointIndex(volumeGuide);
+        else if (guide is HybridGuide hybridGuide)
+            RestoreWaypointIndex(hybridGuide);
 
         return true;
     }
@@ -240,6 +266,18 @@ internal sealed class PathRequestRecord : IRecordable
     }
 
     private void RestoreWaypointIndex(VolumeGuide guide)
+    {
+        if (WaypointIndex <= 0)
+            return;
+
+        while (guide.CurrentWaypointIndex < WaypointIndex
+            && guide.TryGetWaypointAt(guide.CurrentWaypointIndex + 1, out _))
+        {
+            guide.AdvanceWaypoint();
+        }
+    }
+
+    private void RestoreWaypointIndex(HybridGuide guide)
     {
         if (WaypointIndex <= 0)
             return;

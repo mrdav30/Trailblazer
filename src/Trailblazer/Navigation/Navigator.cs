@@ -128,6 +128,11 @@ public abstract class Navigator : INavigate, IRecordable
     public bool GuidedAllowUnwalkable { get; set; }
 
     /// <summary>
+    /// Whether navigator-built chart-backed guided requests may fall back through authored traversal transitions.
+    /// </summary>
+    public bool GuidedAllowTraversalTransitions { get; set; }
+
+    /// <summary>
     /// Default heuristic used when the navigator builds A* requests.
     /// </summary>
     public HeuristicMethod GuidedAStarHeuristic { get; set; } = HeuristicMethod.Manhattan;
@@ -373,6 +378,7 @@ public abstract class Navigator : INavigate, IRecordable
             unitSize: Size,
             pathMode: pathMode,
             allowUnwalkable: GuidedAllowUnwalkable,
+            allowTraversalTransitions: GuidedAllowTraversalTransitions,
             aStarHeuristic: GuidedAStarHeuristic,
             aStarMaxClimbHeight: GuidedAStarMaxClimbHeight,
             flowFieldExtraFloodRange: GuidedFlowFieldExtraFloodRange,
@@ -747,6 +753,7 @@ public abstract class Navigator : INavigate, IRecordable
         Fixed64 footPositionAdjust = FootPositionAdjust;
         GuidedPathMode guidedPathMode = GuidedPathMode;
         bool guidedAllowUnwalkable = GuidedAllowUnwalkable;
+        bool guidedAllowTraversalTransitions = GuidedAllowTraversalTransitions;
         HeuristicMethod guidedAStarHeuristic = GuidedAStarHeuristic;
         Fixed64 guidedAStarMaxClimbHeight = GuidedAStarMaxClimbHeight;
         int guidedFlowFieldExtraFloodRange = GuidedFlowFieldExtraFloodRange;
@@ -772,6 +779,7 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref footPositionAdjust, "footPositionAdjust", DefaultFootPositionAdjust);
         RecordValues.Look(chronicler, ref guidedPathMode, "guidedPathMode", GuidedPathMode.AStar);
         RecordValues.Look(chronicler, ref guidedAllowUnwalkable, "guidedAllowUnwalkable", false);
+        RecordValues.Look(chronicler, ref guidedAllowTraversalTransitions, "guidedAllowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref guidedAStarHeuristic, "guidedAStarHeuristic", HeuristicMethod.Manhattan);
         RecordValues.Look(chronicler, ref guidedAStarMaxClimbHeight, "guidedAStarMaxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref guidedFlowFieldExtraFloodRange, "guidedFlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
@@ -799,6 +807,7 @@ public abstract class Navigator : INavigate, IRecordable
             FootPositionAdjust = footPositionAdjust;
             GuidedPathMode = guidedPathMode;
             GuidedAllowUnwalkable = guidedAllowUnwalkable;
+            GuidedAllowTraversalTransitions = guidedAllowTraversalTransitions;
             GuidedAStarHeuristic = guidedAStarHeuristic;
             GuidedAStarMaxClimbHeight = guidedAStarMaxClimbHeight;
             GuidedFlowFieldExtraFloodRange = guidedFlowFieldExtraFloodRange;

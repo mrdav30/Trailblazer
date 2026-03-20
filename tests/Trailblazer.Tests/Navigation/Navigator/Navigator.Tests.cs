@@ -54,6 +54,7 @@ public class NavigatorTests : IDisposable
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.GuidedPathMode = GuidedPathMode.AStar;
         navigator.GuidedAllowUnwalkable = true;
+        navigator.GuidedAllowTraversalTransitions = true;
         navigator.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         navigator.GuidedAStarMaxClimbHeight = (Fixed64)2;
 
@@ -70,6 +71,7 @@ public class NavigatorTests : IDisposable
         request.TargetPosition.Should().Be(target);
         request.UnitSize.Should().Be(navigator.Size);
         request.AllowUnwalkable.Should().BeTrue();
+        request.AllowTraversalTransitions.Should().BeTrue();
         request.Heuristic.Should().Be(HeuristicMethod.Euclidean);
         request.MaxClimbHeight.Should().Be((Fixed64)2);
 
@@ -144,6 +146,7 @@ public class NavigatorTests : IDisposable
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.GuidedPathMode = GuidedPathMode.AStar;
         navigator.GuidedAllowUnwalkable = true;
+        navigator.GuidedAllowTraversalTransitions = true;
         navigator.GuidedFlowFieldExtraFloodRange = 24;
 
         Vector3d target = new(4, 0, 0);
@@ -157,6 +160,7 @@ public class NavigatorTests : IDisposable
         request.TargetPosition.Should().Be(target);
         request.UnitSize.Should().Be(navigator.Size);
         request.AllowUnwalkable.Should().BeTrue();
+        request.AllowTraversalTransitions.Should().BeTrue();
         request.ExtraFloodRange.Should().Be(24);
 
         PathManager.UnloadChart("NavigatorFlowField");
@@ -166,6 +170,7 @@ public class NavigatorTests : IDisposable
     public void ApplyGuidedTrekRequest_Should_CreateAerialRequest_AndEnableFlight()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.GuidedAllowTraversalTransitions = true;
         Vector3d target = new(0, 3, 0);
 
         navigator.ApplyGuidedTrekRequest(target, pathMode: GuidedPathMode.Aerial, rate: TrekRate.Fast);
@@ -180,6 +185,50 @@ public class NavigatorTests : IDisposable
         request.UnitSize.Should().Be(navigator.Size);
         request.Heuristic.Should().Be(navigator.GuidedAStarHeuristic);
         request.TraversalMode.Should().Be(VolumeTraversalMode.Open);
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_Should_CreateTransitionAwareAStarGuide_WhenNavigatorOptInIsEnabled()
+    {
+        RegisterTransitionFallbackScene();
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.GuidedPathMode = GuidedPathMode.AStar;
+        navigator.GuidedAllowTraversalTransitions = true;
+        navigator.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
+
+        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
+
+        navigator.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>()
+            .Which.AllowTraversalTransitions.Should().BeTrue();
+
+        TrailblazerManager.Simulate();
+        navigator.Steering.GetHeading(navigator);
+
+        navigator.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
+        navigator.Steering.ShouldMove.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_Should_CreateTransitionAwareFlowFieldGuide_WhenNavigatorOptInIsEnabled()
+    {
+        RegisterTransitionFallbackScene();
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.GuidedPathMode = GuidedPathMode.FlowField;
+        navigator.GuidedAllowTraversalTransitions = true;
+        navigator.GuidedFlowFieldExtraFloodRange = 8;
+
+        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
+
+        navigator.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>()
+            .Which.AllowTraversalTransitions.Should().BeTrue();
+
+        TrailblazerManager.Simulate();
+        navigator.Steering.GetHeading(navigator);
+
+        navigator.Steering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
+        navigator.Steering.ShouldMove.Should().BeTrue();
     }
 
     [Fact]
@@ -466,6 +515,30 @@ public class NavigatorTests : IDisposable
     {
         GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
         voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
+    }
+
+    private static void RegisterTransitionFallbackScene()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("NavigatorTransitionFallbackStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("NavigatorTransitionFallbackEnd", new Vector3d(4, 0, 0));
+
+        AddWater(new Vector3d(1, 0, 0));
+        AddWater(new Vector3d(2, 0, 0));
+        AddWater(new Vector3d(3, 0, 0));
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "navigator-transition-fallback-entry",
+            type: TraversalTransitionType.SwimEntry,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Volume(new Vector3d(1, 0, 0), VolumeTraversalMode.Water),
+            pathCostModifier: 2)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "navigator-transition-fallback-exit",
+            type: TraversalTransitionType.SwimExit,
+            source: TraversalTransitionAnchor.Volume(new Vector3d(3, 0, 0), VolumeTraversalMode.Water),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
     }
 
     private sealed class TestAnimationHandler : INavAnimationHandler

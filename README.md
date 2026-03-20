@@ -165,6 +165,7 @@ navigator.Initialize(new TrekCondition
 
 Vector3d target = new(10, 0, 10);
 navigator.GuidedPathMode = GuidedPathMode.FlowField;
+navigator.GuidedAllowTraversalTransitions = true;
 navigator.GuidedFlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
 navigator.ApplyGuidedTrekRequest(
@@ -182,6 +183,8 @@ Call `TrailblazerManager.Initialize()` once during application startup before en
 If several navigators should move as one formation, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
 
 Concrete navigator types should implement `CheckTrekCondition()` to populate ground, water, ceiling, and platform state during `CommitFrameMotion()`.
+
+Set `navigator.GuidedAllowTraversalTransitions = true;` when built-in `AStar` or `FlowField` guided travel should fall back through registered `TraversalTransition` handoffs instead of failing at chart boundaries.
 
 If a navigator should use a smaller locomotion set, override `CreateLocomotionProfile()` and return a custom profile such as `LocomotionProfile.CreateMoveAndFallOnly()`.
 

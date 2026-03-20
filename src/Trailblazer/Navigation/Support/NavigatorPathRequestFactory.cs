@@ -15,6 +15,7 @@ public static class NavigatorPathRequestFactory
         Fixed64 unitSize,
         GuidedPathMode pathMode,
         bool allowUnwalkable,
+        bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
@@ -29,7 +30,8 @@ public static class NavigatorPathRequestFactory
                     targetPosition,
                     unitSize,
                     aStarHeuristic,
-                    allowUnwalkable);
+                    allowUnwalkable,
+                    allowTraversalTransitions);
                 if (aStar == null)
                 {
                     request = null;
@@ -45,7 +47,8 @@ public static class NavigatorPathRequestFactory
                     origin,
                     targetPosition,
                     unitSize,
-                    allowUnwalkable);
+                    allowUnwalkable,
+                    allowTraversalTransitions);
                 if (flowField == null)
                 {
                     request = null;

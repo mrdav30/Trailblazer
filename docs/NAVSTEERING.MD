@@ -115,7 +115,7 @@ Important public state includes:
 
 In normal `Navigator` usage, the steering integration looks like this:
 
-1. `ApplyGuidedTrekRequest(...)` builds an internal `IPathRequest` from the target position plus navigator-owned defaults, then forwards it to `Steering.ApplyPathRequest(...)`.
+1. `ApplyGuidedTrekRequest(...)` builds an internal `IPathRequest` from the target position plus navigator-owned defaults, including `GuidedAllowTraversalTransitions` for chart-backed modes, then forwards it to `Steering.ApplyPathRequest(...)`.
 2. Each simulation tick, `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
 3. The resulting heading is passed to `NavTurning` and `NavMotor`.
 
@@ -161,6 +161,8 @@ It may be:
 - an `AStarGuide`
 - a `FlowFieldGuide`
 - a `VolumeGuide`
+
+When transition-aware guided fallback is enabled, `AStarGuide` and `FlowFieldGuide` still remain the public guide shapes. The staged transition behavior stays internal to the request-resolution and guide layers.
 
 `GuidedPathMode.Aerial` and `GuidedPathMode.Swim` both use the raw-volume path flow. They stay guide-free while the direct corridor is clear, then allocate a `VolumeGuide` only when raw voxel blockers force a detour. `Swim` additionally requires the host to define which voxels count as water through `VolumeTraversalRules`.
 

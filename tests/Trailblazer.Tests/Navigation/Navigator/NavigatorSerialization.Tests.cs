@@ -73,6 +73,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FootPositionAdjust.Should().Be(source.FootPositionAdjust);
         target.GuidedPathMode.Should().Be(source.GuidedPathMode);
         target.GuidedAllowUnwalkable.Should().Be(source.GuidedAllowUnwalkable);
+        target.GuidedAllowTraversalTransitions.Should().Be(source.GuidedAllowTraversalTransitions);
         target.GuidedAStarHeuristic.Should().Be(source.GuidedAStarHeuristic);
         target.GuidedAStarMaxClimbHeight.Should().Be(source.GuidedAStarMaxClimbHeight);
         target.GuidedFlowFieldExtraFloodRange.Should().Be(source.GuidedFlowFieldExtraFloodRange);
@@ -127,6 +128,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FootPositionAdjust.Should().Be(source.FootPositionAdjust);
         target.GuidedPathMode.Should().Be(source.GuidedPathMode);
         target.GuidedAllowUnwalkable.Should().Be(source.GuidedAllowUnwalkable);
+        target.GuidedAllowTraversalTransitions.Should().Be(source.GuidedAllowTraversalTransitions);
         target.GuidedAStarHeuristic.Should().Be(source.GuidedAStarHeuristic);
         target.GuidedAStarMaxClimbHeight.Should().Be(source.GuidedAStarMaxClimbHeight);
         target.GuidedFlowFieldExtraFloodRange.Should().Be(source.GuidedFlowFieldExtraFloodRange);
@@ -393,6 +395,7 @@ public class NavigatorSerializationTests : IDisposable
         object payload = SerializeRecord(source, useMemoryPack);
 
         payload = RemovePayloadEntry(payload, useMemoryPack, "guidedAllowUnwalkable");
+        payload = RemovePayloadEntry(payload, useMemoryPack, "guidedAllowTraversalTransitions");
         payload = RemovePayloadEntry(payload, useMemoryPack, "guidedFlowFieldExtraFloodRange");
         payload = RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRecheckCooldownFrames");
         payload = RemovePayloadEntry(payload, useMemoryPack, "steering", "stopMultiplier");
@@ -401,6 +404,7 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         bool expectedAllowUnwalkable = target.GuidedAllowUnwalkable;
+        bool expectedAllowTraversalTransitions = target.GuidedAllowTraversalTransitions;
         int expectedRootExtraFloodRange = target.GuidedFlowFieldExtraFloodRange;
         int expectedPathRecheckCooldown = target.Steering.PathRecheckCooldownFrames;
         Fixed64 expectedStopMultiplier = target.Steering.StopMultiplier;
@@ -410,6 +414,7 @@ public class NavigatorSerializationTests : IDisposable
 
         target.IsGuideded.Should().BeTrue();
         target.GuidedAllowUnwalkable.Should().Be(expectedAllowUnwalkable);
+        target.GuidedAllowTraversalTransitions.Should().Be(expectedAllowTraversalTransitions);
         target.GuidedFlowFieldExtraFloodRange.Should().Be(expectedRootExtraFloodRange);
         target.Steering.PathRecheckCooldownFrames.Should().Be(expectedPathRecheckCooldown);
         target.Steering.StopMultiplier.Should().Be(expectedStopMultiplier);
@@ -635,6 +640,7 @@ public class NavigatorSerializationTests : IDisposable
 
         source.GuidedPathMode = GuidedPathMode.FlowField;
         source.GuidedAllowUnwalkable = true;
+        source.GuidedAllowTraversalTransitions = true;
         source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         source.GuidedAStarMaxClimbHeight = (Fixed64)4;
         source.GuidedFlowFieldExtraFloodRange = 32;
@@ -663,6 +669,7 @@ public class NavigatorSerializationTests : IDisposable
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.GuidedPathMode = pathMode;
         source.GuidedAllowUnwalkable = true;
+        source.GuidedAllowTraversalTransitions = true;
         source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         source.GuidedAStarMaxClimbHeight = (Fixed64)2;
         source.GuidedFlowFieldExtraFloodRange = 24;

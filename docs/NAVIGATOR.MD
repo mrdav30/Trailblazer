@@ -119,6 +119,7 @@ Important public state includes:
 - `FootPositionAdjust`
 - `GuidedPathMode`
 - `GuidedAllowUnwalkable`
+- `GuidedAllowTraversalTransitions`
 - `GuidedAStarHeuristic`
 - `GuidedAStarMaxClimbHeight`
 - `GuidedFlowFieldExtraFloodRange`
@@ -294,6 +295,8 @@ It:
 - optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`
 
+`GuidedAllowTraversalTransitions` controls whether the built-in chart-backed guided modes (`AStar` and `FlowField`) may fall back through authored `TraversalTransition` handoffs. This keeps the public navigator surface on the existing guided modes instead of adding a separate hybrid mode.
+
 While guided movement remains active:
 
 - `Rate` persists until changed or replaced by a different request
@@ -303,6 +306,8 @@ While guided movement remains active:
 When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically. Steering may then travel directly through open volume or acquire a volume guide if blockers force a detour.
 
 When the selected path mode is `GuidedPathMode.Swim`, guided travel does not toggle a swim state. Swim remains medium-driven through `TrekCondition.Medium == TraversalMedium.Water`. The request simply uses the raw-volume pathing stack with the host's configured water-voxel rule.
+
+`GuidedPathMode.Aerial` and `GuidedPathMode.Swim` remain volume-first. `GuidedAllowTraversalTransitions` does not reinterpret those modes as a new hybrid navigator flow.
 
 Passing the same non-negative `groupId` to multiple navigators lets `NavSteering` preserve relative formation offsets while the group stays compact.
 

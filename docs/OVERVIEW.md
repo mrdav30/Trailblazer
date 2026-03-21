@@ -148,6 +148,7 @@ Current behavior:
 - `AStarPathRequest` can opt into transition-aware staged routing through `AllowTraversalTransitions`
 - `FlowFieldPathRequest` can opt into the same staged transition fallback while keeping flow-field chart execution
 - `Navigator` can populate the same policy on built-in guided chart requests through `GuidedAllowTraversalTransitions`
+- the same navigator opt-in also allows bounded swim-exit handoffs from water volume into a follow-up chart request
 - the request still represents "I want A*" from the caller's perspective
 - the public request story also stays centered on "I want FlowField" for group-friendly chart routing
 - the staged route is resolved internally from the request plus the live `TraversalTransitionRegistry`

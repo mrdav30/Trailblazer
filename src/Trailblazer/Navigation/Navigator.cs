@@ -104,6 +104,8 @@ public abstract class Navigator : INavigate, IRecordable
 
     protected TrekRequest _frameRequest = new();
 
+    private GuidedVolumeExitHandoff _pendingGuidedVolumeExitHandoff;
+
     #endregion
 
     #region Settings
@@ -128,7 +130,7 @@ public abstract class Navigator : INavigate, IRecordable
     public bool GuidedAllowUnwalkable { get; set; }
 
     /// <summary>
-    /// Whether navigator-built chart-backed guided requests may fall back through authored traversal transitions.
+    /// Whether navigator-built guided requests may use authored traversal transitions for chart fallback or bounded constrained-volume exit handoffs.
     /// </summary>
     public bool GuidedAllowTraversalTransitions { get; set; }
 
@@ -247,6 +249,7 @@ public abstract class Navigator : INavigate, IRecordable
         _frameCondition.Reset();
         _frameRequest.Reset();
         IsGuideded = false;
+        _pendingGuidedVolumeExitHandoff = null;
 
         // store copy since this will mutate the collection
         foreach (var idx in OccupyingIndexMap.Keys.ToArray())
@@ -319,6 +322,7 @@ public abstract class Navigator : INavigate, IRecordable
         if (!IsActive) return;
 
         IsGuideded = false;
+        _pendingGuidedVolumeExitHandoff = null;
         _frameRequest.SetRequest(
                 direction: direction ?? Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
@@ -352,6 +356,9 @@ public abstract class Navigator : INavigate, IRecordable
             return;
         }
 
+        if (_pendingGuidedVolumeExitHandoff != null)
+            _pendingGuidedVolumeExitHandoff.MovementGroupId = groupId;
+
         IsGuideded = true;
         _frameRequest.SetRequest(
                 direction: Vector3d.Zero,
@@ -372,18 +379,26 @@ public abstract class Navigator : INavigate, IRecordable
         GuidedPathMode pathMode,
         out IPathRequest pathRequest)
     {
-        return NavigatorPathRequestFactory.TryCreate(
+        _pendingGuidedVolumeExitHandoff = null;
+
+        bool success = NavigatorPathRequestFactory.TryCreate(
             origin: Position,
             targetPosition: targetPosition,
             unitSize: Size,
             pathMode: pathMode,
+            fallbackChartPathMode: GuidedPathMode,
             allowUnwalkable: GuidedAllowUnwalkable,
             allowTraversalTransitions: GuidedAllowTraversalTransitions,
             aStarHeuristic: GuidedAStarHeuristic,
             aStarMaxClimbHeight: GuidedAStarMaxClimbHeight,
             flowFieldExtraFloodRange: GuidedFlowFieldExtraFloodRange,
             traversalMedium: _frameCondition.Medium,
-            out pathRequest);
+            out pathRequest,
+            out GuidedVolumeExitHandoff handoff);
+        if (success)
+            _pendingGuidedVolumeExitHandoff = handoff;
+
+        return success;
     }
 
     /// <summary>
@@ -416,6 +431,8 @@ public abstract class Navigator : INavigate, IRecordable
     {
         if (!IsActive)
             ThrowHelper.ThrowInvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
+
+        TryActivatePendingGuidedVolumeExitHandoff();
 
         _frameRequest.SetTransientState(
              origin: Position,
@@ -495,10 +512,10 @@ public abstract class Navigator : INavigate, IRecordable
 
         // If the navigator is currently following a guided path, 
         // reset only the transient request state to preserve path-following values.
-        if(IsGuideded)
+        if (IsGuideded)
             _frameRequest.ResetTransient();
         else
-         _frameRequest.Reset();
+            _frameRequest.Reset();
     }
 
     #endregion
@@ -692,6 +709,30 @@ public abstract class Navigator : INavigate, IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected virtual Guid GenerateGUID() => NavigatorGlobalIdAllocator.Create();
 
+    private void TryActivatePendingGuidedVolumeExitHandoff()
+    {
+        if (!IsGuideded
+            || _pendingGuidedVolumeExitHandoff == null
+            || Steering == null
+            || Steering.ShouldMove
+            || Steering.CurrentRequest != null)
+        {
+            return;
+        }
+
+        if (!_pendingGuidedVolumeExitHandoff.TryCreateFollowupRequest(Position, Size, out IPathRequest followupRequest)
+            || followupRequest == null)
+        {
+            return;
+        }
+
+        GuidedVolumeExitHandoff handoff = _pendingGuidedVolumeExitHandoff;
+        _pendingGuidedVolumeExitHandoff = null;
+
+        Steering.ApplyPathRequest(followupRequest, handoff.MovementGroupId);
+        _frameRequest.IsRequestingFlight = false;
+    }
+
     #endregion
 
     #region Occupancy Mangement
@@ -739,7 +780,6 @@ public abstract class Navigator : INavigate, IRecordable
 
     #region Serialization
 
-
     /// <inheritdoc />
     public virtual void RecordData(IChronicler chronicler)
     {
@@ -765,6 +805,9 @@ public abstract class Navigator : INavigate, IRecordable
         bool isGuideded = IsGuideded;
         TrekCondition frameCondition = _frameCondition;
         TrekRequest frameRequest = _frameRequest;
+        GuidedVolumeExitHandoff pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
+        if (chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
+            pendingGuidedVolumeExitHandoff = new GuidedVolumeExitHandoff();
         NavSteering steering = Steering;
         NavTurning turning = Turning;
         NavMotor motor = Motor;
@@ -791,6 +834,7 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref isGuideded, "isGuideded", false);
         RecordDeepStruct.Look(chronicler, ref frameCondition, "frameCondition");
         RecordDeepStruct.Look(chronicler, ref frameRequest, "frameRequest");
+        RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff, "pendingGuidedVolumeExitHandoff");
         RecordDeep.Look(chronicler, ref steering, "steering");
         RecordDeep.Look(chronicler, ref turning, "turning");
         RecordDeep.Look(chronicler, ref motor, "motor");
@@ -819,6 +863,9 @@ public abstract class Navigator : INavigate, IRecordable
             IsGuideded = isGuideded;
             _frameCondition = frameCondition.Clone();
             _frameRequest = frameRequest.Clone();
+            _pendingGuidedVolumeExitHandoff = pendingGuidedVolumeExitHandoff?.IsValid == true
+                ? pendingGuidedVolumeExitHandoff
+                : null;
             Steering = steering;
             Turning = turning;
             Motor = motor;

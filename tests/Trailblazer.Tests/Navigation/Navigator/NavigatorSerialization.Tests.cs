@@ -356,6 +356,50 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RoundTrip_ShouldRestorePendingSwimExitHandoff_AndActivateChartFollowup(bool useMemoryPack)
+    {
+        RegisterVolumeExitHandoffScene("NavigatorSerializationSwimExitHandoff");
+
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        source.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        source.GuidedPathMode = GuidedPathMode.FlowField;
+        source.GuidedAllowTraversalTransitions = true;
+        source.GuidedFlowFieldExtraFloodRange = 12;
+        source.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: GuidedPathMode.Swim,
+            rate: TrekRate.Fast,
+            isRequestingJump: false,
+            groupId: 5);
+
+        VolumePathRequest sourceRequest = source.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
+        sourceRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        target.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
+            .Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+
+        target.SetTestPosition(new Vector3d(2, 0, 0));
+        target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        target.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        target.Simulate();
+
+        FlowFieldPathRequest followupRequest = target.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
+        followupRequest.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
+        target.Steering.MovementGroupID.Should().Be(5);
+        target.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        target.FrameRequest.Direction.x.Should().BeGreaterThan(Fixed64.Zero);
+
+        PathManager.UnloadChart("NavigatorSerializationSwimExitHandoff");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RoundTrip_ShouldSupportPartialNavigatorPayloads_AndPreserveOmittedBranches(bool useMemoryPack)
     {
         var source = CreateConfiguredNavigator();
@@ -795,6 +839,31 @@ public class NavigatorSerializationTests : IDisposable
             type: TraversalTransitionType.SwimExit,
             source: TraversalTransitionAnchor.Volume(new Vector3d(3, 0, 0), VolumeTraversalMode.Water),
             destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
+    }
+
+    private static void RegisterVolumeExitHandoffScene(string chartKey)
+    {
+        bool[,,] data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData(chartKey, data, new Vector3d(2, 0, 0));
+
+        AddWater(Vector3d.Zero);
+        AddWater(new Vector3d(1, 0, 0));
+        AddWater(new Vector3d(2, 0, 0));
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{chartKey}-exit",
+            type: TraversalTransitionType.SwimExit,
+            source: TraversalTransitionAnchor.Volume(new Vector3d(2, 0, 0), VolumeTraversalMode.Water),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
     }
 

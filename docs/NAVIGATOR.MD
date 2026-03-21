@@ -295,7 +295,7 @@ It:
 - optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`
 
-`GuidedAllowTraversalTransitions` controls whether the built-in chart-backed guided modes (`AStar` and `FlowField`) may fall back through authored `TraversalTransition` handoffs. This keeps the public navigator surface on the existing guided modes instead of adding a separate hybrid mode.
+`GuidedAllowTraversalTransitions` controls whether the built-in chart-backed guided modes (`AStar` and `FlowField`) may fall back through authored `TraversalTransition` handoffs. It also allows bounded swim-exit style handoffs from water volume into a follow-up chart request when the requested target is chart-backed outside the active water volume. This keeps the public navigator surface on the existing guided modes instead of adding a separate hybrid mode.
 
 While guided movement remains active:
 
@@ -307,7 +307,7 @@ When the selected path mode is `GuidedPathMode.Aerial`, guided travel also reque
 
 When the selected path mode is `GuidedPathMode.Swim`, guided travel does not toggle a swim state. Swim remains medium-driven through `TrekCondition.Medium == TraversalMedium.Water`. The request simply uses the raw-volume pathing stack with the host's configured water-voxel rule.
 
-`GuidedPathMode.Aerial` and `GuidedPathMode.Swim` remain volume-first. `GuidedAllowTraversalTransitions` does not reinterpret those modes as a new hybrid navigator flow.
+`GuidedPathMode.Aerial` and `GuidedPathMode.Swim` remain volume-first. `GuidedAllowTraversalTransitions` does not reinterpret those modes as a new hybrid navigator flow, although `Swim` can now use a bounded authored exit handoff into a normal chart-backed request.
 
 Passing the same non-negative `groupId` to multiple navigators lets `NavSteering` preserve relative formation offsets while the group stays compact.
 

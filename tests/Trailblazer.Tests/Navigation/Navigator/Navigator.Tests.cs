@@ -255,6 +255,65 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void ApplyGuidedTrekRequest_Should_CreateSwimExitHandoff_WhenTransitionOptInIsEnabled()
+    {
+        RegisterVolumeExitHandoffScene("NavigatorSwimExitHandoff");
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.GuidedPathMode = GuidedPathMode.FlowField;
+        navigator.GuidedAllowTraversalTransitions = true;
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: GuidedPathMode.Swim,
+            rate: TrekRate.Fast,
+            groupId: 7);
+
+        VolumePathRequest initialRequest = navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
+        initialRequest.TraversalMode.Should().Be(VolumeTraversalMode.Water);
+        initialRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+
+        navigator.SetTestPosition(new Vector3d(2, 0, 0));
+        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        FlowFieldPathRequest followupRequest = navigator.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
+        followupRequest.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
+        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.Steering.MovementGroupID.Should().Be(7);
+        navigator.Steering.ShouldMove.Should().BeTrue();
+        navigator.FrameRequest.Direction.x.Should().BeGreaterThan(Fixed64.Zero);
+
+        PathManager.UnloadChart("NavigatorSwimExitHandoff");
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_Should_KeepDirectSwimRequest_WhenTransitionOptInIsDisabled()
+    {
+        RegisterVolumeExitHandoffScene("NavigatorSwimExitDisabled");
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.GuidedPathMode = GuidedPathMode.FlowField;
+        navigator.GuidedAllowTraversalTransitions = false;
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: GuidedPathMode.Swim,
+            rate: TrekRate.Fast);
+
+        navigator.IsGuideded.Should().BeTrue();
+        navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
+            .Which.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
+
+        PathManager.UnloadChart("NavigatorSwimExitDisabled");
+    }
+
+    [Fact]
     public void ApplyGuidedTrekRequest_Should_RejectSwimRequests_WhenNavigatorIsNotInWater()
     {
         AddWater(Vector3d.Zero);
@@ -538,6 +597,31 @@ public class NavigatorTests : IDisposable
             type: TraversalTransitionType.SwimExit,
             source: TraversalTransitionAnchor.Volume(new Vector3d(3, 0, 0), VolumeTraversalMode.Water),
             destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
+    }
+
+    private static void RegisterVolumeExitHandoffScene(string chartKey)
+    {
+        bool[,,] data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData(chartKey, data, new Vector3d(2, 0, 0));
+
+        AddWater(Vector3d.Zero);
+        AddWater(new Vector3d(1, 0, 0));
+        AddWater(new Vector3d(2, 0, 0));
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{chartKey}-exit",
+            type: TraversalTransitionType.SwimExit,
+            source: TraversalTransitionAnchor.Volume(new Vector3d(2, 0, 0), VolumeTraversalMode.Water),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
     }
 

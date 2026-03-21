@@ -145,14 +145,13 @@ Chart-backed requests are being hardened to use explicit transitions without for
 
 Current behavior:
 
-- `AStarPathRequest` can opt into transition-aware staged routing through `AllowTraversalTransitions`
-- `FlowFieldPathRequest` can opt into the same staged transition fallback while keeping flow-field chart execution
-- `Navigator` can populate the same policy on built-in guided chart requests through `GuidedAllowTraversalTransitions`
-- the same navigator opt-in also allows bounded swim-exit handoffs from water volume into a follow-up chart request and bounded aerial landing handoffs into chart-backed follow-up travel
-- the request still represents "I want A*" from the caller's perspective
-- the public request story also stays centered on "I want FlowField" for group-friendly chart routing
-- the staged route is resolved internally from the request plus the live `TraversalTransitionRegistry`
-- surveyors stay single-mode; staged escalation happens above them
+- `AStarPathRequest` and `FlowFieldPathRequest` remain the public chart-backed request types.
+- Setting `AllowTraversalTransitions` lets either request use internal staged fallback through authored `TraversalTransition` handoffs when direct chart routing is not enough.
+- That fallback does not change the caller's intent: an `AStarPathRequest` still means "route this as A*," and a `FlowFieldPathRequest` still means "route this as FlowField."
+- `Navigator` exposes the same policy for built-in guided travel through `GuidedAllowTraversalTransitions`.
+- For navigator-owned volume-first travel, that same opt-in also enables bounded swim-exit handoffs from water volume into a follow-up chart request and bounded aerial landing handoffs into chart-backed follow-up travel.
+- The staged route is resolved internally from the request plus the live `TraversalTransitionRegistry`.
+- Surveyors stay single-mode; staged escalation happens above them.
 
 This means the public API story stays centered on normal request types even when the resolved route temporarily switches through transition points or raw volume.
 

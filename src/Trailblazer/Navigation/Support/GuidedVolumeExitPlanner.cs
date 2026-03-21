@@ -20,10 +20,12 @@ internal static class GuidedVolumeExitPlanner
         Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         out VolumePathRequest request,
-        out GuidedVolumeExitHandoff handoff)
+        out GuidedVolumeExitHandoff handoff,
+        out int totalPathCost)
     {
         request = null;
         handoff = null;
+        totalPathCost = 0;
 
         if (chartPathMode != GuidedPathMode.AStar
             && chartPathMode != GuidedPathMode.FlowField)
@@ -94,6 +96,7 @@ internal static class GuidedVolumeExitPlanner
             return false;
 
         request = bestRequest;
+        totalPathCost = bestTotalCost;
         handoff = new GuidedVolumeExitHandoff
         {
             TransitionId = bestTransition.Id,
@@ -139,10 +142,13 @@ internal static class GuidedVolumeExitPlanner
                 if (flowFieldRequest.HasZeroDisplacement)
                     return true;
 
-                FlowFieldSurveyResult flowFieldResult = FlowFieldSurveyor.Shared.FindPath(flowFieldRequest);
-                return flowFieldResult.HasPath
-                    && flowFieldResult.Fields.TryGetValue(flowFieldRequest.StartNode.GlobalIndex, out FlowField startField)
-                    && TryAssignChartCost(startField.PathCost, out chartCost);
+                if (TryGetDirectFlowFieldCost(flowFieldRequest, out chartCost))
+                    return true;
+
+                if (!allowTraversalTransitions)
+                    return false;
+
+                return TryGetTransitionAwareChartCost(flowFieldRequest, out chartCost);
 
             case GuidedPathMode.AStar:
             default:
@@ -160,10 +166,61 @@ internal static class GuidedVolumeExitPlanner
                 if (aStarRequest.HasZeroDisplacement)
                     return true;
 
-                AStarSurveyResult aStarResult = AStarSurveyor.Shared.FindPath(aStarRequest);
-                return aStarResult.HasPath
-                    && TryAssignChartCost(aStarResult.Waypoints[^1].PathCost, out chartCost);
+                if (TryGetDirectAStarCost(aStarRequest, out chartCost))
+                    return true;
+
+                if (!allowTraversalTransitions)
+                    return false;
+
+                return TryGetTransitionAwareChartCost(aStarRequest, out chartCost);
         }
+    }
+
+    private static bool TryGetDirectAStarCost(
+        AStarPathRequest request,
+        out int chartCost)
+    {
+        chartCost = 0;
+
+        AStarSurveyResult aStarResult = AStarSurveyor.Shared.FindPath(request);
+        return aStarResult.HasPath
+            && TryAssignChartCost(aStarResult.Waypoints[^1].PathCost, out chartCost);
+    }
+
+    private static bool TryGetDirectFlowFieldCost(
+        FlowFieldPathRequest request,
+        out int chartCost)
+    {
+        chartCost = 0;
+
+        FlowFieldSurveyResult flowFieldResult = FlowFieldSurveyor.Shared.FindPath(request);
+        return flowFieldResult.HasPath
+            && flowFieldResult.Fields.TryGetValue(request.StartNode.GlobalIndex, out FlowField startField)
+            && TryAssignChartCost(startField.PathCost, out chartCost);
+    }
+
+    private static bool TryGetTransitionAwareChartCost(
+        AStarPathRequest request,
+        out int chartCost)
+    {
+        chartCost = 0;
+
+        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromAStar(request);
+        return hybridRequest?.RoutePlan != null
+            && hybridRequest.RoutePlan.DirectedTransitions.Length > 0
+            && TryAssignChartCost(hybridRequest.RoutePlan.TotalPathCost, out chartCost);
+    }
+
+    private static bool TryGetTransitionAwareChartCost(
+        FlowFieldPathRequest request,
+        out int chartCost)
+    {
+        chartCost = 0;
+
+        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromFlowField(request);
+        return hybridRequest?.RoutePlan != null
+            && hybridRequest.RoutePlan.DirectedTransitions.Length > 0
+            && TryAssignChartCost(hybridRequest.RoutePlan.TotalPathCost, out chartCost);
     }
 
     private static bool TryAssignChartCost(int cost, out int chartCost)

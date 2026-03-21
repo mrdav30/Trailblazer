@@ -130,7 +130,8 @@ public abstract class Navigator : INavigate, IRecordable
     public bool GuidedAllowUnwalkable { get; set; }
 
     /// <summary>
-    /// Whether navigator-built guided requests may use authored traversal transitions for chart fallback or bounded constrained-volume exit handoffs.
+    /// Whether navigator-built guided requests may use authored traversal transitions for chart fallback,
+    /// bounded swim exits, or bounded aerial landing handoffs.
     /// </summary>
     public bool GuidedAllowTraversalTransitions { get; set; }
 

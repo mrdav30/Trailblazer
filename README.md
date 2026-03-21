@@ -184,7 +184,7 @@ If several navigators should move as one formation, pass the same optional `grou
 
 Concrete navigator types should implement `CheckTrekCondition()` to populate ground, water, ceiling, and platform state during `CommitFrameMotion()`.
 
-Set `navigator.GuidedAllowTraversalTransitions = true;` when built-in chart-guided travel should fall back through registered `TraversalTransition` handoffs instead of failing at chart boundaries. The same opt-in also allows bounded swim-exit style handoffs from water volume into a follow-up chart request when the requested target is chart-backed outside the active water volume.
+Set `navigator.GuidedAllowTraversalTransitions = true;` when built-in chart-guided travel should fall back through registered `TraversalTransition` handoffs instead of failing at chart boundaries. The same opt-in also allows bounded swim-exit style handoffs from water volume into a follow-up chart request when the requested target is chart-backed outside the active water volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route is a better fit than staying in open-volume travel.
 
 If a navigator should use a smaller locomotion set, override `CreateLocomotionProfile()` and return a custom profile such as `LocomotionProfile.CreateMoveAndFallOnly()`.
 
@@ -210,7 +210,7 @@ Use `VolumePathRequest` when:
 
 - traversal should stay in raw voxel volume instead of chart-backed surface space
 - movement needs open-air or host-marked water routing without authored chart structure
-- navigator-owned `Swim` guidance should stay volume-first but still be allowed to hand off into chart-backed traversal at authored exits when `GuidedAllowTraversalTransitions` is enabled
+- navigator-owned `Swim` and `Aerial` guidance should stay volume-first but still be allowed to hand off into chart-backed traversal at authored exits or landing zones when `GuidedAllowTraversalTransitions` is enabled
 
 ## Project Layout
 

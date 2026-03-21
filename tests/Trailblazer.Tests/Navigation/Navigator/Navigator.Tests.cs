@@ -1,5 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
+using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
@@ -185,6 +186,49 @@ public class NavigatorTests : IDisposable
         request.UnitSize.Should().Be(navigator.Size);
         request.Heuristic.Should().Be(navigator.GuidedAStarHeuristic);
         request.TraversalMode.Should().Be(VolumeTraversalMode.Open);
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_Should_CreateAerialLandingHandoff_WhenTransitionOptInIsEnabled()
+    {
+        const string sceneKey = "NavigatorAerialLandingHandoff";
+        RegisterAerialLandingHandoffScene(sceneKey);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.GuidedPathMode = GuidedPathMode.AStar;
+        navigator.GuidedAllowTraversalTransitions = true;
+        navigator.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: GuidedPathMode.Aerial,
+            rate: TrekRate.Fast,
+            groupId: 9);
+
+        VolumePathRequest initialRequest = navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
+        initialRequest.TraversalMode.Should().Be(VolumeTraversalMode.Open);
+        initialRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
+        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+
+        navigator.SetTestPosition(new Vector3d(1, 0, 0));
+        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        AStarPathRequest followupRequest = navigator.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
+        followupRequest.TargetPosition.x.Should().Be((Fixed64)4);
+        followupRequest.TargetPosition.y.Should().Be(Fixed64.Zero);
+        followupRequest.TargetPosition.z.Should().Be(Fixed64.Zero);
+        followupRequest.AllowTraversalTransitions.Should().BeTrue();
+        navigator.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
+        navigator.Steering.Destination.x.Should().Be((Fixed64)4);
+        navigator.Steering.MovementGroupID.Should().Be(9);
+        navigator.Steering.ShouldMove.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+
+        UnloadAerialLandingHandoffScene(sceneKey);
     }
 
     [Fact]
@@ -576,6 +620,23 @@ public class NavigatorTests : IDisposable
         voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
     }
 
+    private static void AddObstacle(Vector3d position)
+    {
+        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
+        GridObstacleManager.TryAddObstacle(
+            voxel.GlobalIndex,
+            new BoundsKey(position, position)).Should().BeTrue();
+    }
+
+    private static void AddObstaclePlaneAtX(int x)
+    {
+        for (int y = -4; y <= 4; y++)
+        {
+            for (int z = -4; z <= 4; z++)
+                AddObstacle(new Vector3d(x, y, z));
+        }
+    }
+
     private static void RegisterTransitionFallbackScene()
     {
         PathTestFactory.RegisterSingleWalkablePoint("NavigatorTransitionFallbackStart", Vector3d.Zero);
@@ -598,6 +659,34 @@ public class NavigatorTests : IDisposable
             source: TraversalTransitionAnchor.Volume(new Vector3d(3, 0, 0), VolumeTraversalMode.Water),
             destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
+    }
+
+    private static void RegisterAerialLandingHandoffScene(string sceneKey)
+    {
+        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Landing", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
+
+        AddObstaclePlaneAtX(2);
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{sceneKey}-landing",
+            type: TraversalTransitionType.Landing,
+            source: TraversalTransitionAnchor.Volume(new Vector3d(1, 0, 0), VolumeTraversalMode.Open),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{sceneKey}-chart-hop",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            pathCostModifier: 2)).Should().BeTrue();
+    }
+
+    private static void UnloadAerialLandingHandoffScene(string sceneKey)
+    {
+        PathManager.UnloadChart($"{sceneKey}-Landing");
+        PathManager.UnloadChart($"{sceneKey}-Target");
     }
 
     private static void RegisterVolumeExitHandoffScene(string chartKey)

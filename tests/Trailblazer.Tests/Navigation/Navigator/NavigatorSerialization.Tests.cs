@@ -400,6 +400,54 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RoundTrip_ShouldRestorePendingAerialLandingHandoff_AndActivateChartFollowup(bool useMemoryPack)
+    {
+        const string sceneKey = "NavigatorSerializationAerialLandingHandoff";
+        RegisterAerialLandingHandoffScene(sceneKey);
+
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        source.GuidedPathMode = GuidedPathMode.AStar;
+        source.GuidedAllowTraversalTransitions = true;
+        source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
+        source.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: GuidedPathMode.Aerial,
+            rate: TrekRate.Fast,
+            isRequestingJump: false,
+            groupId: 6);
+
+        VolumePathRequest sourceRequest = source.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
+        sourceRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        target.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
+            .Which.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
+        target.FrameRequest.IsRequestingFlight.Should().BeTrue();
+
+        target.SetTestPosition(new Vector3d(1, 0, 0));
+        target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        target.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        target.Simulate();
+
+        AStarPathRequest followupRequest = target.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
+        followupRequest.TargetPosition.x.Should().Be((Fixed64)4);
+        followupRequest.TargetPosition.y.Should().Be(Fixed64.Zero);
+        followupRequest.TargetPosition.z.Should().Be(Fixed64.Zero);
+        followupRequest.AllowTraversalTransitions.Should().BeTrue();
+        target.Steering.MovementGroupID.Should().Be(6);
+        target.Steering.Destination.x.Should().Be((Fixed64)4);
+        target.FrameRequest.IsRequestingFlight.Should().BeFalse();
+
+        UnloadAerialLandingHandoffScene(sceneKey);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RoundTrip_ShouldSupportPartialNavigatorPayloads_AndPreserveOmittedBranches(bool useMemoryPack)
     {
         var source = CreateConfiguredNavigator();
@@ -867,6 +915,34 @@ public class NavigatorSerializationTests : IDisposable
             pathCostModifier: 1)).Should().BeTrue();
     }
 
+    private static void RegisterAerialLandingHandoffScene(string sceneKey)
+    {
+        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Landing", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
+
+        AddObstaclePlaneAtX(2);
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{sceneKey}-landing",
+            type: TraversalTransitionType.Landing,
+            source: TraversalTransitionAnchor.Volume(new Vector3d(1, 0, 0), VolumeTraversalMode.Open),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{sceneKey}-chart-hop",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            pathCostModifier: 2)).Should().BeTrue();
+    }
+
+    private static void UnloadAerialLandingHandoffScene(string sceneKey)
+    {
+        PathManager.UnloadChart($"{sceneKey}-Landing");
+        PathManager.UnloadChart($"{sceneKey}-Target");
+    }
+
     private static void RegisterMovementGroupFormationChart(string chartKey)
     {
         bool[,,] data = new bool[1, 7, 1]
@@ -1075,6 +1151,15 @@ public class NavigatorSerializationTests : IDisposable
         GridObstacleManager.TryAddObstacle(
             voxel.GlobalIndex,
             new BoundsKey(position, position)).Should().BeTrue();
+    }
+
+    private static void AddObstaclePlaneAtX(int x)
+    {
+        for (int y = -4; y <= 4; y++)
+        {
+            for (int z = -4; z <= 4; z++)
+                AddObstacle(new Vector3d(x, y, z));
+        }
     }
 
     private static void AddWater(Vector3d position)

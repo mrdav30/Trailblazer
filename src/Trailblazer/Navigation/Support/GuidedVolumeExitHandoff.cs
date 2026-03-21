@@ -41,7 +41,6 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         request = null;
         if (!IsValid)
             return false;
-
         switch (ChartPathMode)
         {
             case GuidedPathMode.AStar:

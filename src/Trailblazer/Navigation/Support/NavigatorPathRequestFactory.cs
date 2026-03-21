@@ -257,8 +257,40 @@ public static class NavigatorPathRequestFactory
         out IPathRequest request,
         out GuidedVolumeExitHandoff handoff)
     {
+        return TryCreateVolumeExitHandoff(
+            origin,
+            targetPosition,
+            unitSize,
+            traversalMode,
+            fallbackChartPathMode,
+            allowUnwalkable,
+            allowTraversalTransitions,
+            aStarHeuristic,
+            aStarMaxClimbHeight,
+            flowFieldExtraFloodRange,
+            out request,
+            out handoff,
+            out _);
+    }
+
+    private static bool TryCreateVolumeExitHandoff(
+        Vector3d origin,
+        Vector3d targetPosition,
+        Fixed64 unitSize,
+        VolumeTraversalMode traversalMode,
+        GuidedPathMode fallbackChartPathMode,
+        bool allowUnwalkable,
+        bool allowTraversalTransitions,
+        HeuristicMethod aStarHeuristic,
+        Fixed64 aStarMaxClimbHeight,
+        int flowFieldExtraFloodRange,
+        out IPathRequest request,
+        out GuidedVolumeExitHandoff handoff,
+        out int totalPathCost)
+    {
         request = null;
         handoff = null;
+        totalPathCost = 0;
 
         if (!allowTraversalTransitions)
             return false;
@@ -279,7 +311,8 @@ public static class NavigatorPathRequestFactory
             aStarMaxClimbHeight,
             flowFieldExtraFloodRange,
             out VolumePathRequest volumeRequest,
-            out handoff)
+            out handoff,
+            out totalPathCost)
             && TryAssignPlannedRequest(volumeRequest, out request);
     }
 
@@ -301,16 +334,33 @@ public static class NavigatorPathRequestFactory
 
         if (directRequest == null
             || !allowTraversalTransitions
-            || !ShouldAttemptVolumeExitHandoff(targetPosition, traversalMode))
+            || !TryGetChartBackedTargetState(
+                targetPosition,
+                traversalMode,
+                out bool targetRequiresConstrainedExitHandoff))
         {
             return false;
         }
 
-        if (directRequest.EndNode != null
-            && directRequest.EndNode.WorldPosition == targetPosition)
+        if (!targetRequiresConstrainedExitHandoff
+            && !TryCreateOpenVolumeLandingHandoff(
+                directRequest,
+                targetPosition,
+                traversalMode,
+                fallbackChartPathMode,
+                allowUnwalkable,
+                allowTraversalTransitions,
+                aStarHeuristic,
+                aStarMaxClimbHeight,
+                flowFieldExtraFloodRange,
+                out request,
+                out handoff))
         {
             return false;
         }
+
+        if (request != null)
+            return true;
 
         return TryCreateVolumeExitHandoff(
             directRequest.Origin,
@@ -327,17 +377,101 @@ public static class NavigatorPathRequestFactory
             out handoff);
     }
 
-    private static bool ShouldAttemptVolumeExitHandoff(
+    private static bool TryGetChartBackedTargetState(
         Vector3d targetPosition,
-        VolumeTraversalMode traversalMode)
+        VolumeTraversalMode traversalMode,
+        out bool targetRequiresConstrainedExitHandoff)
     {
+        targetRequiresConstrainedExitHandoff = false;
+
         if (!GlobalGridManager.TryGetVoxel(targetPosition, out Voxel targetVoxel))
             return false;
 
         if (!targetVoxel.TryGetPartition(out PathPartition _))
             return false;
 
-        return !VolumeTraversalRules.Matches(targetVoxel, traversalMode);
+        targetRequiresConstrainedExitHandoff = !VolumeTraversalRules.Matches(targetVoxel, traversalMode);
+        return true;
+    }
+
+    private static bool TryCreateOpenVolumeLandingHandoff(
+        VolumePathRequest directRequest,
+        Vector3d targetPosition,
+        VolumeTraversalMode traversalMode,
+        GuidedPathMode fallbackChartPathMode,
+        bool allowUnwalkable,
+        bool allowTraversalTransitions,
+        HeuristicMethod aStarHeuristic,
+        Fixed64 aStarMaxClimbHeight,
+        int flowFieldExtraFloodRange,
+        out IPathRequest request,
+        out GuidedVolumeExitHandoff handoff)
+    {
+        request = null;
+        handoff = null;
+
+        if (traversalMode != VolumeTraversalMode.Open)
+            return false;
+
+        if (!TryCreateVolumeExitHandoff(
+            directRequest.Origin,
+            targetPosition,
+            directRequest.UnitSize,
+            traversalMode,
+            fallbackChartPathMode,
+            allowUnwalkable,
+            allowTraversalTransitions,
+            aStarHeuristic,
+            aStarMaxClimbHeight,
+            flowFieldExtraFloodRange,
+            out IPathRequest plannedRequest,
+            out GuidedVolumeExitHandoff plannedHandoff,
+            out int handoffPathCost))
+        {
+            return false;
+        }
+
+        if (directRequest.EndNode == null
+            || directRequest.EndNode.WorldPosition != targetPosition)
+        {
+            request = plannedRequest;
+            handoff = plannedHandoff;
+            return true;
+        }
+
+        if (!TryGetDirectVolumePathCost(directRequest, out int directPathCost)
+            || handoffPathCost < directPathCost)
+        {
+            request = plannedRequest;
+            handoff = plannedHandoff;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetDirectVolumePathCost(
+        VolumePathRequest request,
+        out int pathCost)
+    {
+        pathCost = 0;
+
+        if (request == null)
+            return false;
+
+        if (request.HasZeroDisplacement)
+            return true;
+
+        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        return result.HasPath
+            && result.Waypoints.Length > 0
+            && TryAssignPathCost(result.Waypoints[^1].PathCost, out pathCost);
+    }
+
+    private static bool TryAssignPathCost(int cost, out int pathCost)
+    {
+        pathCost = cost;
+        return true;
     }
 
     private static bool TryAssignPlannedRequest(

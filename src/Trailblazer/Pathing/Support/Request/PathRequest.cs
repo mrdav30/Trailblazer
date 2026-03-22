@@ -48,7 +48,8 @@ public abstract class PathRequest : IPathRequest
             destination,
             out Voxel startVoxel,
             out Voxel endVoxel,
-            unitSize);
+            unitSize,
+            AllowUnwalkable);
 
         // need to set these even if null incase the new size invalidates the request
         Origin = origin;

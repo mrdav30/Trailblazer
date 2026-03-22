@@ -357,7 +357,7 @@ public class PathPartition : IVoxelPartition
         }
 
         // clamp to cap so you never return > DefaultDegreeCap
-        _clearanceRadiusInVoxels = (byte)Math.Min(best, DefaultDegreeCap);
+        _clearanceRadiusInVoxels = Math.Min(best, DefaultDegreeCap);
 
         ClearanceQueuePool.Release(q);
         PathManager.PartitionSetPool.Release(visited);

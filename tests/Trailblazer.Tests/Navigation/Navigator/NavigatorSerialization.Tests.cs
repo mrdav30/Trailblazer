@@ -527,6 +527,8 @@ public class NavigatorSerializationTests : IDisposable
         RegisterGuidedPathChart("NavigatorSerializationInvalidRequest");
 
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.AStar);
+        source.GuidedAllowUnwalkable = false;
+        source.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject.AllowUnwalkable = false;
         object payload = SerializeRecord(source, useMemoryPack);
         payload = SetPayloadValue(
             payload,

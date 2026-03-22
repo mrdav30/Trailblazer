@@ -86,7 +86,7 @@ public class AStarSurveyor
     {
         lock (SurveyorLock.GlobalLock)
         {
-            if (request == null 
+            if (request == null
                 || request.HasZeroDisplacement
                 || !request.StartNode.TryGetPartition(out PathPartition startPartition))
             {
@@ -316,11 +316,14 @@ public class AStarSurveyor
 
         Vector3d lastDirection = Vector3d.Zero;
 
+        // add 1 to ensure we preserve unwalkable voxels that are close enough to matter for the unit size
+        byte scaledUnitSize = (byte)((_request.UnitSize / GlobalGridManager.VoxelSize).CeilToInt() + 1);
         for (int i = 1; i < _rawPath.Count - 1; i++)
         {
             Vector3d direction = (_rawPath[i + 1].VoxelPosition - _rawPath[i].VoxelPosition).Normalize();
 
-            bool preserveUnwalkable = _rawPath[i].GetNeighborClearance() <= (byte)_request.UnitSize + 1;
+
+            bool preserveUnwalkable = _rawPath[i].GetNeighborClearance() <= scaledUnitSize;
             bool directionChanged = !lastDirection.FuzzyEqual(direction);
 
             if (preserveUnwalkable || directionChanged)

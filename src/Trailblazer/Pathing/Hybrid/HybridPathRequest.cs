@@ -122,8 +122,16 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         Fixed64? maxClimbHeight = null,
         bool allowUnwalkable = false)
     {
-        if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
+        if (!VoxelFinder.TryGetPathEdgeVoxels(
+            origin,
+            destination,
+            out Voxel startNode,
+            out Voxel endNode,
+            unitSize,
+            allowUnwalkable))
+        {
             return null;
+        }
 
         var request = new HybridPathRequest
         {
@@ -213,7 +221,8 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             destination,
             out Voxel startVoxel,
             out Voxel endVoxel,
-            resolvedUnitSize);
+            resolvedUnitSize,
+            AllowUnwalkable);
 
         Origin = origin;
         TargetPosition = destination;

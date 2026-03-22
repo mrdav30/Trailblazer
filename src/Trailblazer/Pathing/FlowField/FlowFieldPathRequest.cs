@@ -42,8 +42,16 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
         bool allowUnwalkable = false,
         bool allowTraversalTransitions = false)
     {
-        if (!VoxelFinder.TryGetPathEdgeVoxels(origin, destination, out Voxel startNode, out Voxel endNode, unitSize))
+        if (!VoxelFinder.TryGetPathEdgeVoxels(
+            origin,
+            destination,
+            out Voxel startNode,
+            out Voxel endNode,
+            unitSize,
+            allowUnwalkable))
+        {
             return null;
+        }
 
         FlowFieldPathRequest request = new()
         {

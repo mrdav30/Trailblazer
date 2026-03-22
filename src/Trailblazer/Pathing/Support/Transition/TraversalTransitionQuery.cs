@@ -5,31 +5,166 @@ using SwiftCollections;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Provides deterministic transition snapshots for planners that need directed traversal edges.
+/// Provides deterministic directed transition snapshots for planners.
 /// </summary>
+/// <remarks>
+/// The query layer favors grid-scoped snapshots first, while still allowing callers to fall back
+/// to a full directed snapshot when they intentionally need world-wide transition discovery.
+/// </remarks>
 internal static class TraversalTransitionQuery
 {
+    private enum GridMatchAxis
+    {
+        Source,
+        Destination
+    }
+
+    private static readonly object _cacheLock = new();
+
+    private static int _cachedRegistryVersion = -1;
+
+    private static TraversalTransition[] _allDirectedTransitions = Array.Empty<TraversalTransition>();
+
+    private static bool _hasAllDirectedTransitions;
+
+    private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsFromSourceGrid = new();
+
+    private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsToDestinationGrid = new();
+
     public static TraversalTransition[] GetDirectedTransitions()
     {
-        TraversalTransition[] transitions = TraversalTransitionRegistry.AllTransitions;
+        lock (_cacheLock)
+        {
+            EnsureCacheVersion();
+            if (_hasAllDirectedTransitions)
+                return _allDirectedTransitions;
+
+            _allDirectedTransitions = BuildAllDirectedTransitions(TraversalTransitionRegistry.GetRegisteredTransitions());
+            _hasAllDirectedTransitions = true;
+            return _allDirectedTransitions;
+        }
+    }
+
+    public static TraversalTransition[] GetDirectedTransitionsFromSourceGrid(int sourceGridIndex)
+    {
+        lock (_cacheLock)
+        {
+            EnsureCacheVersion();
+            if (_directedTransitionsFromSourceGrid.TryGetValue(sourceGridIndex, out TraversalTransition[] cached))
+                return cached;
+
+            TraversalTransition[] directed = BuildDirectedTransitionsForGrid(
+                TraversalTransitionRegistry.GetRegisteredTransitionsTouchingGrid(sourceGridIndex),
+                sourceGridIndex,
+                GridMatchAxis.Source);
+            _directedTransitionsFromSourceGrid[sourceGridIndex] = directed;
+            return directed;
+        }
+    }
+
+    public static TraversalTransition[] GetDirectedTransitionsToDestinationGrid(int destinationGridIndex)
+    {
+        lock (_cacheLock)
+        {
+            EnsureCacheVersion();
+            if (_directedTransitionsToDestinationGrid.TryGetValue(destinationGridIndex, out TraversalTransition[] cached))
+                return cached;
+
+            TraversalTransition[] directed = BuildDirectedTransitionsForGrid(
+                TraversalTransitionRegistry.GetRegisteredTransitionsTouchingGrid(destinationGridIndex),
+                destinationGridIndex,
+                GridMatchAxis.Destination);
+            _directedTransitionsToDestinationGrid[destinationGridIndex] = directed;
+            return directed;
+        }
+    }
+
+    private static void EnsureCacheVersion()
+    {
+        int registryVersion = TraversalTransitionRegistry.RegistryVersion;
+        if (_cachedRegistryVersion == registryVersion)
+            return;
+
+        _allDirectedTransitions = Array.Empty<TraversalTransition>();
+        _hasAllDirectedTransitions = false;
+        _directedTransitionsFromSourceGrid.Clear();
+        _directedTransitionsToDestinationGrid.Clear();
+        _cachedRegistryVersion = registryVersion;
+    }
+
+    private static TraversalTransition[] BuildAllDirectedTransitions(
+        RegisteredTraversalTransition[] transitions)
+    {
+        SwiftList<TraversalTransition> directed = new(transitions.Length * 2);
+        for (int i = 0; i < transitions.Length; i++)
+            AddAllDirectedTransitions(directed, transitions[i]);
+
+        return SortTransitions(directed);
+    }
+
+    private static TraversalTransition[] BuildDirectedTransitionsForGrid(
+        RegisteredTraversalTransition[] transitions,
+        int gridIndex,
+        GridMatchAxis axis)
+    {
         SwiftList<TraversalTransition> directed = new(transitions.Length * 2);
 
         for (int i = 0; i < transitions.Length; i++)
         {
-            directed.Add(transitions[i]);
+            RegisteredTraversalTransition registered = transitions[i];
+            if (MatchesGrid(registered, gridIndex, axis))
+                directed.Add(registered.Transition);
 
-            if (transitions[i].IsBidirectional)
+            if (registered.Transition.IsBidirectional
+                && MatchesGrid(registered, gridIndex, GetOppositeAxis(axis)))
             {
-                directed.Add(new TraversalTransition(
-                    transitions[i].Id,
-                    transitions[i].Type,
-                    transitions[i].Destination,
-                    transitions[i].Source,
-                    transitions[i].PathCostModifier,
-                    transitions[i].IsBidirectional));
+                directed.Add(CreateReversedTransition(registered.Transition));
             }
         }
 
+        return SortTransitions(directed);
+    }
+
+    private static bool MatchesGrid(
+        RegisteredTraversalTransition registered,
+        int gridIndex,
+        GridMatchAxis axis)
+    {
+        return axis == GridMatchAxis.Source
+            ? registered.SourceVoxelIndex.GridIndex == gridIndex
+            : registered.DestinationVoxelIndex.GridIndex == gridIndex;
+    }
+
+    private static void AddAllDirectedTransitions(
+        SwiftList<TraversalTransition> directed,
+        RegisteredTraversalTransition registered)
+    {
+        directed.Add(registered.Transition);
+
+        if (registered.Transition.IsBidirectional)
+            directed.Add(CreateReversedTransition(registered.Transition));
+    }
+
+    private static GridMatchAxis GetOppositeAxis(GridMatchAxis axis)
+    {
+        return axis == GridMatchAxis.Source
+            ? GridMatchAxis.Destination
+            : GridMatchAxis.Source;
+    }
+
+    private static TraversalTransition CreateReversedTransition(TraversalTransition transition)
+    {
+        return new TraversalTransition(
+            transition.Id,
+            transition.Type,
+            transition.Destination,
+            transition.Source,
+            transition.PathCostModifier,
+            transition.IsBidirectional);
+    }
+
+    private static TraversalTransition[] SortTransitions(SwiftList<TraversalTransition> directed)
+    {
         TraversalTransition[] ordered = directed.ToArray();
         Array.Sort(ordered, CompareTransitions);
         return ordered;

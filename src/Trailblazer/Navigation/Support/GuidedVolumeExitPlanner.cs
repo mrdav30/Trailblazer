@@ -1,4 +1,6 @@
+using System;
 using FixedMathSharp;
+using GridForge.Grids;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
@@ -37,7 +39,91 @@ internal static class GuidedVolumeExitPlanner
         VolumePathRequest bestRequest = null;
         int bestTotalCost = int.MaxValue;
 
-        TraversalTransition[] transitions = TraversalTransitionQuery.GetDirectedTransitions();
+        TraversalTransition[] localTransitions = GetLocalDirectedTransitions(targetPosition);
+        if (TryPlanWithTransitions(
+            localTransitions,
+            origin,
+            targetPosition,
+            unitSize,
+            traversalMode,
+            chartPathMode,
+            allowUnwalkable,
+            allowTraversalTransitions,
+            aStarHeuristic,
+            aStarMaxClimbHeight,
+            flowFieldExtraFloodRange,
+            ref bestTransition,
+            ref bestRequest,
+            ref bestTotalCost))
+        {
+            request = bestRequest;
+            totalPathCost = bestTotalCost;
+            handoff = CreateHandoff(
+                bestTransition,
+                targetPosition,
+                chartPathMode,
+                allowUnwalkable,
+                allowTraversalTransitions,
+                aStarHeuristic,
+                aStarMaxClimbHeight,
+                flowFieldExtraFloodRange);
+            return true;
+        }
+
+        if (!TryPlanWithTransitions(
+            TraversalTransitionQuery.GetDirectedTransitions(),
+            origin,
+            targetPosition,
+            unitSize,
+            traversalMode,
+            chartPathMode,
+            allowUnwalkable,
+            allowTraversalTransitions,
+            aStarHeuristic,
+            aStarMaxClimbHeight,
+            flowFieldExtraFloodRange,
+            ref bestTransition,
+            ref bestRequest,
+            ref bestTotalCost))
+        {
+            return false;
+        }
+
+        request = bestRequest;
+        totalPathCost = bestTotalCost;
+        handoff = CreateHandoff(
+            bestTransition,
+            targetPosition,
+            chartPathMode,
+            allowUnwalkable,
+            allowTraversalTransitions,
+            aStarHeuristic,
+            aStarMaxClimbHeight,
+            flowFieldExtraFloodRange);
+        return true;
+    }
+
+    private static bool TryPlanWithTransitions(
+        TraversalTransition[] transitions,
+        Vector3d origin,
+        Vector3d targetPosition,
+        Fixed64 unitSize,
+        VolumeTraversalMode traversalMode,
+        GuidedPathMode chartPathMode,
+        bool allowUnwalkable,
+        bool allowTraversalTransitions,
+        HeuristicMethod aStarHeuristic,
+        Fixed64 aStarMaxClimbHeight,
+        int flowFieldExtraFloodRange,
+        ref TraversalTransition bestTransition,
+        ref VolumePathRequest bestRequest,
+        ref int bestTotalCost)
+    {
+        if (transitions == null || transitions.Length == 0)
+            return false;
+
+        bool foundPlan = false;
+
         for (int i = 0; i < transitions.Length; i++)
         {
             TraversalTransition transition = transitions[i];
@@ -90,17 +176,34 @@ internal static class GuidedVolumeExitPlanner
             bestTotalCost = totalCost;
             bestTransition = transition;
             bestRequest = volumeRequest;
+            foundPlan = true;
         }
 
-        if (bestRequest == null)
-            return false;
+        return foundPlan;
+    }
 
-        request = bestRequest;
-        totalPathCost = bestTotalCost;
-        handoff = new GuidedVolumeExitHandoff
+    private static TraversalTransition[] GetLocalDirectedTransitions(Vector3d targetPosition)
+    {
+        if (!GlobalGridManager.TryGetVoxel(targetPosition, out Voxel targetVoxel))
+            return Array.Empty<TraversalTransition>();
+
+        return TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(targetVoxel.GridIndex);
+    }
+
+    private static GuidedVolumeExitHandoff CreateHandoff(
+        TraversalTransition transition,
+        Vector3d targetPosition,
+        GuidedPathMode chartPathMode,
+        bool allowUnwalkable,
+        bool allowTraversalTransitions,
+        HeuristicMethod aStarHeuristic,
+        Fixed64 aStarMaxClimbHeight,
+        int flowFieldExtraFloodRange)
+    {
+        return new GuidedVolumeExitHandoff
         {
-            TransitionId = bestTransition.Id,
-            ChartOriginPosition = bestTransition.Destination.Position,
+            TransitionId = transition.Id,
+            ChartOriginPosition = transition.Destination.Position,
             TargetPosition = targetPosition,
             ChartPathMode = chartPathMode,
             AllowUnwalkable = allowUnwalkable,
@@ -109,7 +212,6 @@ internal static class GuidedVolumeExitPlanner
             AStarMaxClimbHeight = aStarMaxClimbHeight,
             FlowFieldExtraFloodRange = flowFieldExtraFloodRange
         };
-        return true;
     }
 
     private static bool TryGetChartLegCost(

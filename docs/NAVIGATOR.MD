@@ -273,11 +273,19 @@ After `Reset()`, the instance must go through `Setup(...)` and `Initialize(...)`
 `ApplyInputTrekRequest(...)` writes directly into `_frameRequest`:
 
 - `Direction`
+- optional `FacingDirection`
 - `Rate`
 - `IsRequestingJump`
 - `IsRequestingFlight`
 
 and marks the navigator as not guided.
+
+If `FacingDirection` is supplied, `Navigator` keeps using `Direction` for movement while turning toward `FacingDirection`. This is the intended way to support strafing, backpedaling, or turn-in-place requests without changing the motor contract.
+
+If `FacingDirection` is not supplied, manual input still follows the current lock-on rule:
+
+- when `IsLockedOn` is `true` and the request is not sprinting, manual input does not auto-turn toward movement
+- sprinting manual input still auto-turns toward movement
 
 Manual input is frame-local. After `CommitFrameMotion()`, a non-guided navigator fully resets `_frameRequest`, so manual callers should reissue input each fixed step.
 
@@ -344,7 +352,7 @@ Then it:
 
 1. writes transient request state through `_frameRequest.SetTransientState(...)`
 2. asks steering for a heading if the navigator is guided
-3. buffers turning toward the current movement direction
+3. buffers turning toward the explicit facing direction when one is present, otherwise toward the current movement direction unless manual lock-on is suppressing auto-turn for the frame
 4. runs `Motor.TryTraversal(...)`
 5. accumulates any returned deltas
 6. runs `Turning.TrySimulateTurn(...)`
@@ -355,6 +363,8 @@ Important detail:
 
 - guided movement overwrites `_frameRequest.Direction` from `Steering.GetHeading(this)`
 - non-guided movement preserves whatever manual direction was last written into `_frameRequest`
+- a non-null `FacingDirection` overrides the default "face movement" turn rule without changing the movement direction that the motor consumes
+- manual lock-on keeps the current facing for non-sprinting input unless the host supplies `FacingDirection`
 
 This means `Simulate()` is where the controller stack is executed, but not where final position and velocity are committed.
 
@@ -509,7 +519,7 @@ If a host binds an animation handler through `BindAnimationHandler(...)`, `Simul
 
 The animation update uses:
 
-- current movement direction
+- current movement direction relative to the frame rotation snapshot
 - lock-on state
 - sprinting state
 - damping time

@@ -184,6 +184,7 @@ Key behaviors:
 - controlled flight can own airborne movement without classifying intentional descent as a fall
 - grounded movement can be projected along the surface normal
 - slope speed multipliers can modify horizontal speed
+- horizontal speed selection is evaluated in the request's local frame, so negative local forward movement uses the configured backward-speed cap
 
 Supporting helpers involved here:
 

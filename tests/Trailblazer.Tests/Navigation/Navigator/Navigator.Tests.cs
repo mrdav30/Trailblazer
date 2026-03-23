@@ -539,6 +539,30 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void BindAnimationHandler_ShouldUseLocalMovementAxes_WhenLockedOnAndBackpedaling()
+    {
+        var navigator = CreateNavigator(
+            Vector3d.Zero,
+            rotation: FixedQuaternion.FromDirection(Vector3d.Right));
+        var handler = new TestAnimationHandler();
+        navigator.BindAnimationHandler(handler);
+        navigator.IsLockedOn = true;
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Left,
+            TrekRate.Moderate,
+            isRequestingJump: false,
+            isRequestingFlight: false,
+            facingDirection: Vector3d.Right);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        handler.LastForward.Should().Be(-Fixed64.One);
+        handler.LastSideways.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
     public void ApplyInputTrekRequest_ShouldCaptureFlightIntent()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -553,6 +577,128 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ApplyInputTrekRequest_ShouldCaptureFacingDirection()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Backward,
+            TrekRate.Moderate,
+            isRequestingJump: false,
+            isRequestingFlight: false,
+            facingDirection: Vector3d.Forward);
+
+        navigator.FrameRequest.Direction.Should().Be(Vector3d.Backward);
+        navigator.FrameRequest.FacingDirection.Should().Be(Vector3d.Forward);
+    }
+
+    [Fact]
+    public void Simulate_ShouldUseFacingDirectionForTurnSelection()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Backward,
+            TrekRate.Fast,
+            isRequestingJump: false,
+            isRequestingFlight: false,
+            facingDirection: Vector3d.Right);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.Turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
+    }
+
+    [Fact]
+    public void Simulate_ShouldNotAutoTurnToMovement_WhenLockedOnAndNotSprinting()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.IsLockedOn = true;
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Right,
+            TrekRate.Moderate,
+            isRequestingJump: false,
+            isRequestingFlight: false);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.Rotation.Should().Be(FixedQuaternion.Identity);
+        navigator.Turning.TargetReached.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Simulate_ShouldAutoTurnToMovement_WhenLockedOnAndSprinting()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.IsLockedOn = true;
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Right,
+            TrekRate.Fast,
+            isRequestingJump: false,
+            isRequestingFlight: false);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.Turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
+    }
+
+    [Fact]
+    public void Simulate_ShouldKeepGuidedTurnBehavior_WhenLockedOn()
+    {
+        var data = new bool[1, 6, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorGuidedTurnWhileLockedOn", data, Vector3d.Zero);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.IsLockedOn = true;
+        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
+        navigator.Turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(navigator.FrameRequest.Direction));
+
+        PathManager.UnloadChart("NavigatorGuidedTurnWhileLockedOn");
+    }
+
+    [Fact]
+    public void Simulate_ShouldAllowBackpedalWithoutChangingFacing_WhenFacingDirectionMatchesForward()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Backward,
+            TrekRate.Fast,
+            isRequestingJump: false,
+            isRequestingFlight: false,
+            facingDirection: Vector3d.Forward);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+        navigator.CommitFrameMotion();
+
+        navigator.Rotation.Should().Be(FixedQuaternion.Identity);
+        navigator.Forward.Should().Be(Vector3d.Forward);
+        navigator.Position.z.Should().BeLessThan(Fixed64.Zero);
+        navigator.Velocity.z.Should().BeLessThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -638,10 +784,10 @@ public class NavigatorTests : IDisposable
         motorCondition.GroundState.Should().BeNull();
     }
 
-    private static TestNavigator CreateNavigator(Vector3d position)
+    private static TestNavigator CreateNavigator(Vector3d position, FixedQuaternion? rotation = null)
     {
         var navigator = new TestNavigator();
-        navigator.Setup(position, size: Fixed64.One);
+        navigator.Setup(position, rotation: rotation, size: Fixed64.One);
         navigator.Initialize(new TrekCondition()
         {
             Medium = TraversalMedium.Ground,

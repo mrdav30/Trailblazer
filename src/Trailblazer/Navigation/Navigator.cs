@@ -314,11 +314,13 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="rate">Rate of travel (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the agent is requesting a jump action.</param>
     /// <param name="isRequestingFlight">Whether the agent is requesting controlled flight.</param>
+    /// <param name="facingDirection">Optional world-space facing direction to use instead of facing along the movement direction.</param>
     public virtual void ApplyInputTrekRequest(
         Vector3d? direction = null,
         TrekRate? rate = null,
         bool? isRequestingJump = null,
-        bool? isRequestingFlight = null)
+        bool? isRequestingFlight = null,
+        Vector3d? facingDirection = null)
     {
         if (!IsActive) return;
 
@@ -328,7 +330,8 @@ public abstract class Navigator : INavigate, IRecordable
                 direction: direction ?? Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
                 isRequestingJump: isRequestingJump ?? false,
-                isRequestingFlight: isRequestingFlight ?? false
+                isRequestingFlight: isRequestingFlight ?? false,
+                facingDirection: facingDirection
         );
     }
 
@@ -365,7 +368,8 @@ public abstract class Navigator : INavigate, IRecordable
                 direction: Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
                 isRequestingJump: isRequestingJump ?? false,
-                isRequestingFlight: selectedPathMode == GuidedPathMode.Aerial
+                isRequestingFlight: selectedPathMode == GuidedPathMode.Aerial,
+                facingDirection: null
         );
 
         Steering.ApplyPathRequest(pathRequest, groupId);
@@ -426,6 +430,32 @@ public abstract class Navigator : INavigate, IRecordable
     #region Simulation Lifecycle
 
     /// <summary>
+    /// Attempts to resolve the direction the navigator should try to face for the current frame.
+    /// </summary>
+    protected virtual bool TryGetTurnDirection(TrekRequest request, out Vector3d turnDirection)
+    {
+        if (request.FacingDirection.HasValue && request.FacingDirection.Value != Vector3d.Zero)
+        {
+            turnDirection = request.FacingDirection.Value;
+            return true;
+        }
+
+        // Match the legacy controlled-movement behavior: lock-on strafing/backpedaling
+        // keeps the current facing unless the host explicitly supplies a facing override
+        // or the request is treated as sprinting.
+        if (!IsGuideded
+            && IsLockedOn
+            && request.Rate != TrekRate.Fast)
+        {
+            turnDirection = Vector3d.Zero;
+            return false;
+        }
+
+        turnDirection = request.Direction;
+        return turnDirection != Vector3d.Zero;
+    }
+
+    /// <summary>
     /// Runs simulation logic for this navigator (input handling, steering, etc.).
     /// </summary>
     public virtual void Simulate()
@@ -442,7 +472,8 @@ public abstract class Navigator : INavigate, IRecordable
              direction: IsGuideded ? Steering.GetHeading(this) : null
         );
 
-        Turning.RequestTurnDirection(Forward, _frameRequest.Direction);
+        if (TryGetTurnDirection(_frameRequest, out Vector3d turnDirection))
+            Turning.RequestTurnDirection(Forward, turnDirection);
 
         if (Motor.TryTraversal(_frameRequest, out Vector3d vDelta, out Vector3d pDelta, out FixedQuaternion rDelta))
         {
@@ -459,6 +490,7 @@ public abstract class Navigator : INavigate, IRecordable
         NavAnimationUpdater.UpdateAnimationParameters(
             _animationHandler,
             _frameRequest.Direction,
+            _frameRequest.Rotation,
             IsLockedOn,
             _frameRequest.Rate == TrekRate.Fast,
             AnimDampTime

@@ -34,6 +34,11 @@ public struct TrekRequest : IRecordable
     public Vector3d Direction;
 
     /// <summary>
+    /// Optional world-space facing direction that overrides the default "face movement" behavior for this request.
+    /// </summary>
+    public Vector3d? FacingDirection;
+
+    /// <summary>
     /// The speed at which the scout wants to move.
     /// </summary>
     public TrekRate Rate;
@@ -55,9 +60,13 @@ public struct TrekRequest : IRecordable
         Vector3d direction, 
         TrekRate rate, 
         bool isRequestingJump, 
-        bool isRequestingFlight)
+        bool isRequestingFlight,
+        Vector3d? facingDirection = null)
     {
         Direction = direction;
+        FacingDirection = facingDirection.HasValue && facingDirection.Value != Vector3d.Zero
+            ? facingDirection
+            : null;
         Rate = rate;
         IsRequestingJump = isRequestingJump;
         IsRequestingFlight = isRequestingFlight;
@@ -89,6 +98,7 @@ public struct TrekRequest : IRecordable
         Origin = Origin,
         Rotation = Rotation,
         Direction = Direction,
+        FacingDirection = FacingDirection,
         Rate = Rate,
         IsRequestingJump = IsRequestingJump,
         IsRequestingFlight = IsRequestingFlight,
@@ -104,6 +114,7 @@ public struct TrekRequest : IRecordable
         FootPosition = null;
         Rotation = FixedQuaternion.Identity;
         Direction = Vector3d.Zero;
+        FacingDirection = null;
         IsRequestingJump = false;
         Rate = TrekRate.Stationary;
         IsRequestingFlight = false;
@@ -128,6 +139,7 @@ public struct TrekRequest : IRecordable
         RecordValues.Look(chronicler, ref FootPosition, nameof(FootPosition), null);
         RecordValues.Look(chronicler, ref Rotation, nameof(Rotation), FixedQuaternion.Identity);
         RecordValues.Look(chronicler, ref Direction, nameof(Direction), Vector3d.Zero);
+        RecordValues.Look(chronicler, ref FacingDirection, nameof(FacingDirection), null);
         RecordValues.Look(chronicler, ref Rate, nameof(Rate), TrekRate.Stationary);
         RecordValues.Look(chronicler, ref IsRequestingJump, nameof(IsRequestingJump), false);
         RecordValues.Look(chronicler, ref IsRequestingFlight, nameof(IsRequestingFlight), false);

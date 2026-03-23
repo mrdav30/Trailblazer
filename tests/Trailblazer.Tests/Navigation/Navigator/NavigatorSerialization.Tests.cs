@@ -81,6 +81,7 @@ public class NavigatorSerializationTests : IDisposable
         target.OccupantGroupId.Should().Be(source.OccupantGroupId);
         target.IsLockedOn.Should().Be(source.IsLockedOn);
         target.AnimDampTime.Should().Be(source.AnimDampTime);
+        target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
         target.IsGuideded.Should().BeFalse();
 
         AssertMotorStateMatches(source.Motor, target.Motor);
@@ -136,6 +137,7 @@ public class NavigatorSerializationTests : IDisposable
         target.OccupantGroupId.Should().Be(source.OccupantGroupId);
         target.IsLockedOn.Should().Be(source.IsLockedOn);
         target.AnimDampTime.Should().Be(source.AnimDampTime);
+        target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
         target.IsGuideded.Should().BeFalse();
 
         AssertMotorStateMatches(source.Motor, target.Motor);
@@ -522,6 +524,22 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RoundTrip_ShouldUseBackwardCompatibleDefaults_WhenPayloadOmitsFacingDirection(bool useMemoryPack)
+    {
+        var source = CreateConfiguredNavigator();
+        object payload = SerializeRecord(source, useMemoryPack);
+
+        payload = RemovePayloadEntry(payload, useMemoryPack, "frameRequest", "FacingDirection");
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        PopulateRecord(target, payload, useMemoryPack);
+
+        target.FrameRequest.FacingDirection.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RoundTrip_ShouldClearSteeringSession_WhenRequestRehydrationFails(bool useMemoryPack)
     {
         RegisterGuidedPathChart("NavigatorSerializationInvalidRequest");
@@ -724,7 +742,12 @@ public class NavigatorSerializationTests : IDisposable
     private static TestNavigator CreateConfiguredNavigator()
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
-        source.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Moderate, isRequestingJump: true, isRequestingFlight: true);
+        source.ApplyInputTrekRequest(
+            Vector3d.Right,
+            TrekRate.Moderate,
+            isRequestingJump: true,
+            isRequestingFlight: true,
+            facingDirection: Vector3d.Forward);
         source.SetGroundContact(
             surfaceLevel: Fixed64.Zero,
             platform: new PlatformSnapshot(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1))),

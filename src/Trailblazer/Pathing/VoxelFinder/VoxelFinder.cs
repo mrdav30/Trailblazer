@@ -46,10 +46,103 @@ public static class VoxelFinder
         return GetEndVoxel(origin, target, out targetVoxel, allowUnwalkable, resolvedUnitSize);
     }
 
-    public static bool TryGetClosestWalkableVoxel(
-        Voxel voxel,
-        out Voxel closestNeighbor,
+
+    /// <summary>
+    /// Finds closest valid end voxel, with optional fallback to nearest walkable neighbor if the direct voxel is blocked or too small for the unit.
+    /// </summary>
+    /// <param name="origin"></param>
+    /// <param name="target"></param>
+    /// <param name="targetVoxel"></param>
+    /// <param name="allowUnwalkable"></param>
+    /// <param name="unitSize"></param>
+    /// <returns></returns>
+    public static bool GetEndVoxel(
+        Vector3d origin,
+        Vector3d target,
+        out Voxel targetVoxel,
+        bool allowUnwalkable = false,
         Fixed64? unitSize = null)
+    {
+        return TryGetEndpointVoxel(
+            target,
+            origin,
+            out targetVoxel,
+            allowUnwalkable,
+            unitSize ?? GlobalGridManager.VoxelSize);
+    }
+
+    /// <summary>
+    /// Finds closest valid start voxel, with optional fallback to nearest walkable neighbor if the direct voxel is blocked or too small for the unit.
+    /// </summary>
+    /// <param name="origin"></param>
+    /// <param name="target"></param>
+    /// <param name="originVoxel"></param>
+    /// <param name="allowUnwalkable"></param>
+    /// <param name="unitSize"></param>
+    /// <returns></returns>
+    public static bool GetStartVoxel(
+        Vector3d origin,
+        Vector3d target,
+        out Voxel originVoxel,
+        bool allowUnwalkable = false,
+        Fixed64? unitSize = null)
+    {
+        return TryGetEndpointVoxel(
+            origin,
+            target,
+            out originVoxel,
+            allowUnwalkable,
+            unitSize ?? GlobalGridManager.VoxelSize);
+    }
+
+
+    /// <summary>
+    /// Performs a star-shaped radial search around the target position to find the closest valid voxel, prioritizing straight directions first.
+    /// </summary>
+    /// <param name="target"></param>
+    /// <param name="targetVoxel"></param>
+    /// <returns></returns>
+    public static bool StarCast(Vector3d target, out Voxel targetVoxel) =>
+        StarCast(target, out targetVoxel, GlobalGridManager.VoxelSize);
+
+    /// <summary>
+    /// Performs a radial search around the target position to find the closest valid voxel, prioritizing straight directions first.
+    /// </summary>
+    /// <param name="target"></param>
+    /// <param name="targetVoxel"></param>
+    /// <param name="unitSize"></param>
+    /// <returns></returns>
+    public static bool StarCast(Vector3d target, out Voxel targetVoxel, Fixed64 unitSize)
+    {
+        targetVoxel = null;
+        if (!GlobalGridManager.TryGetGrid(target, out VoxelGrid outGrid))
+            return false; // no grid found at this position!
+
+        AlternativeVoxelFinder.Instance.SetQuery(target, outGrid.BoundsMin, MaxTestDistance);
+
+        if (!AlternativeVoxelFinder.Instance.GetVoxel(out Voxel candidateVoxel))
+            return false;
+
+        if (IsChartTraversable(candidateVoxel, unitSize))
+        {
+            targetVoxel = candidateVoxel;
+            return true;
+        }
+
+        return TryGetClosestWalkableVoxel(candidateVoxel, out targetVoxel, unitSize);
+    }
+
+    /// <summary>
+    /// Checks the 8 neighboring voxels around the provided voxel for a walkable option, prioritizing straight directions first.
+    /// </summary>
+    /// <param name="voxel"></param>
+    /// <param name="closestNeighbor"></param>
+    /// <param name="unitSize"></param>
+    /// <returns></returns>
+    public static bool TryGetClosestWalkableVoxel(
+    Voxel voxel,
+    out Voxel closestNeighbor,
+    Fixed64? unitSize = null)
     {
         closestNeighbor = null;
         Fixed64 resolvedUnitSize = unitSize ?? GlobalGridManager.VoxelSize;
@@ -73,64 +166,14 @@ public static class VoxelFinder
     }
 
     /// <summary>
-    /// Finds closest next-best-voxel also when destination is off invalid
+    /// Finds closest valid end voxel, with optional fallback to nearest walkable neighbor if the direct voxel is blocked or too small for the unit.
     /// </summary>
-    public static bool GetEndVoxel(
-        Vector3d origin,
-        Vector3d target,
-        out Voxel targetVoxel,
-        bool allowUnwalkable = false,
-        Fixed64? unitSize = null)
-    {
-        return TryGetEndpointVoxel(
-            target,
-            origin,
-            out targetVoxel,
-            allowUnwalkable,
-            unitSize ?? GlobalGridManager.VoxelSize);
-    }
-
-    /// <summary>
-    /// Finds closest next-best-voxel
-    /// </summary>
-    public static bool GetStartVoxel(
-        Vector3d origin,
-        Vector3d target,
-        out Voxel originVoxel,
-        bool allowUnwalkable = false,
-        Fixed64? unitSize = null)
-    {
-        return TryGetEndpointVoxel(
-            origin,
-            target,
-            out originVoxel,
-            allowUnwalkable,
-            unitSize ?? GlobalGridManager.VoxelSize);
-    }
-
-    public static bool StarCast(Vector3d target, out Voxel targetVoxel) =>
-        StarCast(target, out targetVoxel, GlobalGridManager.VoxelSize);
-
-    private static bool StarCast(Vector3d target, out Voxel targetVoxel, Fixed64 unitSize)
-    {
-        targetVoxel = null;
-        if (!GlobalGridManager.TryGetGrid(target, out VoxelGrid outGrid))
-            return false; // no grid found at this position!
-
-        AlternativeVoxelFinder.Instance.SetQuery(target, outGrid.BoundsMin, MaxTestDistance);
-
-        if (!AlternativeVoxelFinder.Instance.GetVoxel(out Voxel candidateVoxel))
-            return false;
-
-        if (IsChartTraversable(candidateVoxel, unitSize))
-        {
-            targetVoxel = candidateVoxel;
-            return true;
-        }
-
-        return TryGetClosestWalkableVoxel(candidateVoxel, out targetVoxel, unitSize);
-    }
-
+    /// <param name="origin"></param>
+    /// <param name="target"></param>
+    /// <param name="unitSize"></param>
+    /// <param name="targetVoxel"></param>
+    /// <param name="allowUnwalkable"></param>
+    /// <returns></returns>
     public static bool GetClosestVoxelForSize(
         Vector3d origin,
         Vector3d target,

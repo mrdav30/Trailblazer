@@ -17,7 +17,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
 
     public GuidedPathMode ChartPathMode = GuidedPathMode.AStar;
 
-    public bool AllowUnwalkable;
+    public bool AllowUnwalkableEndNode;
 
     public bool AllowTraversalTransitions;
 
@@ -49,7 +49,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
                     TargetPosition,
                     unitSize,
                     AStarHeuristic,
-                    AllowUnwalkable,
+                    AllowUnwalkableEndNode,
                     AllowTraversalTransitions);
                 if (aStar == null || !aStar.TrySetOrigin(currentPosition))
                     return false;
@@ -63,7 +63,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
                     ChartOriginPosition,
                     TargetPosition,
                     unitSize,
-                    AllowUnwalkable,
+                    AllowUnwalkableEndNode,
                     AllowTraversalTransitions);
                 if (flowField == null || !flowField.TrySetOrigin(currentPosition))
                     return false;
@@ -83,7 +83,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         Vector3d chartOriginPosition = ChartOriginPosition;
         Vector3d targetPosition = TargetPosition;
         GuidedPathMode chartPathMode = ChartPathMode;
-        bool allowUnwalkable = AllowUnwalkable;
+        bool allowUnwalkableEndNode = AllowUnwalkableEndNode;
         bool allowTraversalTransitions = AllowTraversalTransitions;
         HeuristicMethod aStarHeuristic = AStarHeuristic;
         Fixed64 aStarMaxClimbHeight = AStarMaxClimbHeight;
@@ -94,7 +94,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         RecordValues.Look(chronicler, ref chartOriginPosition, "chartOriginPosition", Vector3d.Zero);
         RecordValues.Look(chronicler, ref targetPosition, "targetPosition", Vector3d.Zero);
         RecordValues.Look(chronicler, ref chartPathMode, "chartPathMode", GuidedPathMode.AStar);
-        RecordValues.Look(chronicler, ref allowUnwalkable, "allowUnwalkable", false);
+        RecordValues.Look(chronicler, ref allowUnwalkableEndNode, "allowUnwalkableEndNode", false);
         RecordValues.Look(chronicler, ref allowTraversalTransitions, "allowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
         RecordValues.Look(chronicler, ref aStarMaxClimbHeight, "aStarMaxClimbHeight", Fixed64.One);
@@ -107,7 +107,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
             ChartOriginPosition = chartOriginPosition;
             TargetPosition = targetPosition;
             ChartPathMode = chartPathMode;
-            AllowUnwalkable = allowUnwalkable;
+            AllowUnwalkableEndNode = allowUnwalkableEndNode;
             AllowTraversalTransitions = allowTraversalTransitions;
             AStarHeuristic = aStarHeuristic;
             AStarMaxClimbHeight = aStarMaxClimbHeight;

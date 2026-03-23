@@ -76,7 +76,7 @@ Shared state:
 - `StartNode`: resolved voxel used as the current origin node
 - `EndNode`: resolved voxel used as the destination node
 - `UnitSize`: clearance size used during endpoint and traversal validation
-- `AllowUnwalkable`: endpoint-relaxation policy
+- `AllowUnwalkableEndNode`: endpoint-relaxation policy
 - `MaxPathSearchRange`: grid-size-derived search cap used to mark the request valid
 
 Shared validation flags:
@@ -115,10 +115,10 @@ It provides:
 The chart-backed endpoint rules are:
 
 - direct endpoints must resolve to voxels that belong to a live `PathPartition`
-- `allowUnwalkable: true` lets blocked or non-chart endpoints relax to a nearby chart-traversable voxel
-- larger `UnitSize` values can also trigger endpoint relaxation even when `AllowUnwalkable` is false
+- `AllowUnwalkableEndNode: true` lets blocked or non-chart endpoints relax to a nearby chart-traversable voxel
+- larger `UnitSize` values can also trigger endpoint relaxation even when `AllowUnwalkableEndNode` is false
 
-That last rule matters. `AllowUnwalkable` is not the only reason endpoints can snap. Size validation can also move the request onto a nearby valid voxel.
+That last rule matters. `AllowUnwalkableEndNode` is not the only reason endpoints can snap. Size validation can also move the request onto a nearby valid voxel.
 
 ## 5. Request Families
 
@@ -130,7 +130,7 @@ Key configuration:
 
 - `Heuristic`
 - `MaxClimbHeight`
-- `AllowUnwalkable`
+- `AllowUnwalkableEndNode`
 - `AllowTraversalTransitions`
 
 Use it when:
@@ -142,7 +142,7 @@ Use it when:
 Cache-key behavior:
 
 - includes both `StartNode` and `EndNode`
-- includes `UnitSize`, `AllowUnwalkable`, `AllowTraversalTransitions`, `Heuristic`, `MaxClimbHeight`, and `MaxPathSearchRange`
+- includes `UnitSize`, `AllowUnwalkableEndNode`, `AllowTraversalTransitions`, `Heuristic`, `MaxClimbHeight`, and `MaxPathSearchRange`
 - also includes `TraversalTransitionRegistry.RegistryVersion` when transition fallback is enabled
 
 Example:
@@ -163,7 +163,7 @@ Use `FlowFieldPathRequest` when multiple agents can share one destination-center
 Key configuration:
 
 - `ExtraFloodRange`
-- `AllowUnwalkable`
+- `AllowUnwalkableEndNode`
 - `AllowTraversalTransitions`
 
 Use it when:
@@ -174,7 +174,7 @@ Use it when:
 Cache-key behavior:
 
 - ignores the start voxel on purpose
-- includes `EndNode`, `UnitSize`, `AllowUnwalkable`, `AllowTraversalTransitions`, `ExtraFloodRange`, and `MaxPathSearchRange`
+- includes `EndNode`, `UnitSize`, `AllowUnwalkableEndNode`, `AllowTraversalTransitions`, `ExtraFloodRange`, and `MaxPathSearchRange`
 - includes `TraversalTransitionRegistry.RegistryVersion` when transition fallback is enabled
 
 Important nuance:
@@ -191,7 +191,7 @@ For the dedicated raw-volume rules reference, read [`VOLUMETRAVERSAL.MD`](VOLUME
 Key configuration:
 
 - `Heuristic`
-- `AllowUnwalkable`
+- `AllowUnwalkableEndNode`
 - `TraversalMode`
 
 Current traversal modes:
@@ -275,8 +275,8 @@ Volume requests use `RawVoxelFinder`:
 Practical consequences:
 
 - requests can snap endpoints to nearby valid voxels
-- `AllowUnwalkable` relaxes endpoint resolution only; it does not make the full route ignore walkability
-- `AllowUnwalkable` also does not imply transition fallback
+- `AllowUnwalkableEndNode` relaxes endpoint resolution only; it does not make the full route ignore walkability
+- `AllowUnwalkableEndNode` also does not imply transition fallback
 - exact target points inside the destination voxel are preserved in `TargetPosition`
 
 The tests in `tests/Trailblazer.Tests/Pathing/VoxelFinder.Tests.cs` are the best executable reference for these rules.
@@ -295,7 +295,7 @@ That opt-in means:
 
 Important distinctions:
 
-- `AllowUnwalkable` is not transition fallback
+- `AllowUnwalkableEndNode` is not transition fallback
 - transition fallback is chart-request-only
 - transition topology changes invalidate cache keys through `TraversalTransitionRegistry.RegistryVersion`
 
@@ -414,8 +414,8 @@ In this mode, transitions are still data owned by `TraversalTransitionRegistry`,
 
 - `PathManager.Register(...)` does not make a chart pathable. You must initialize it.
 - `IsValid` depends on resolved endpoints and a positive `MaxPathSearchRange`.
-- `AllowUnwalkable` relaxes endpoint resolution. It does not guarantee the full route can ignore blocked space.
-- `AllowTraversalTransitions` is a separate opt-in from `AllowUnwalkable`.
+- `AllowUnwalkableEndNode` relaxes endpoint resolution. It does not guarantee the full route can ignore blocked space.
+- `AllowTraversalTransitions` is a separate opt-in from `AllowUnwalkableEndNode`.
 - `FlowFieldPathRequest` caches by destination-style identity, not unique start-to-end identity.
 - `VolumeTraversalMode.Water` fails until `VolumeTraversalRules` has a water rule.
 - `PathManager.Reset()` also clears transition registry state and volume traversal rules.

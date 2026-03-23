@@ -204,7 +204,7 @@ public class FlowFieldGuide : IGuide
                     return false;
 
                 if (activeGuide is IWaypointGuide waypointGuide)
-                    direction = waypointGuide.GetMovementDirection(origin);
+                    direction = waypointGuide.GetCurrentWaypointDirection(origin);
                 else
                     activeGuide.TryGetMovementDirection(origin, out direction);
 

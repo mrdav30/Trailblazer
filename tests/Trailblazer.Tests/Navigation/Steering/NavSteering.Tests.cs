@@ -409,7 +409,7 @@ public class NavSteeringTests : IDisposable
         PathTestFactory.RegisterFromData("AdvanceWaypoint", data, Vector3d.Zero);
 
         var waypointGuide = new Mock<IWaypointGuide>();
-        waypointGuide.Setup(x => x.GetMovementDirection(It.IsAny<Vector3d>())).Returns(new Vector3d(1, 0, 0));
+        waypointGuide.Setup(x => x.GetCurrentWaypointDirection(It.IsAny<Vector3d>())).Returns(new Vector3d(1, 0, 0));
         var dir = new Vector3d(1, 0, 0);
         waypointGuide.Setup(x => x.TryGetMovementDirection(It.IsAny<Vector3d>(), out dir))
                      .Returns(true);

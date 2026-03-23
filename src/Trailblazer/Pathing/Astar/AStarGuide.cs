@@ -118,7 +118,7 @@ public class AStarGuide : IWaypointGuide
     }
 
     /// <inheritdoc/>
-    public Vector3d GetMovementDirection(Vector3d origin)
+    public Vector3d GetCurrentWaypointDirection(Vector3d origin)
     {
         if (!TrailMap.HasPath || CurrentWaypointIndex < 0 || CurrentWaypointIndex >= ActiveWaypoints.Length)
             return Vector3d.Zero;

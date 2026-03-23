@@ -479,7 +479,7 @@ public class NavSteering : IRecordable
                         navigator.Position,
                         Destination,
                         _currentRequest.UnitSize,
-                        _currentRequest.AllowUnwalkable,
+                        _currentRequest.AllowUnwalkableEndNode,
                         volumeRequest.TraversalMode,
                         _currentRequest.StartNode,
                         _currentRequest.EndNode);
@@ -493,7 +493,7 @@ public class NavSteering : IRecordable
                         navigator.Position,
                         Destination,
                         _currentRequest.UnitSize,
-                        _currentRequest.AllowUnwalkable);
+                        _currentRequest.AllowUnwalkableEndNode);
                 }
 
                 _pathCheckCooldown = PathRecheckCooldownFrames;
@@ -603,7 +603,7 @@ public class NavSteering : IRecordable
                 origin,
                 Destination,
                 _currentRequest.UnitSize,
-                _currentRequest.AllowUnwalkable,
+                _currentRequest.AllowUnwalkableEndNode,
                 volumeRequest.TraversalMode,
                 _currentRequest.StartNode,
                 _currentRequest.EndNode);
@@ -621,7 +621,7 @@ public class NavSteering : IRecordable
                 origin,
                 Destination,
                 _currentRequest.UnitSize,
-                _currentRequest.AllowUnwalkable);
+                _currentRequest.AllowUnwalkableEndNode);
             if (HasLineOfSightPath)
                 return true;  // no path required
         }
@@ -651,7 +651,7 @@ public class NavSteering : IRecordable
         else if (HasTrailGuide)
         {
             if (_trailGuide is IWaypointGuide waypointGuide)
-                targetDirection = waypointGuide.GetMovementDirection(position);
+                targetDirection = waypointGuide.GetCurrentWaypointDirection(position);
             else
                 _trailGuide.TryGetMovementDirection(position, out targetDirection);
         }
@@ -814,10 +814,10 @@ public class NavSteering : IRecordable
     /// <summary>
     /// Whether the destination is currently visible and reachable from the agent's position.
     /// </summary>
-    public static bool IsDestinationInSight(Vector3d position, Vector3d destination, Fixed64 unitSize, bool allowUnwalkable)
+    public static bool IsDestinationInSight(Vector3d position, Vector3d destination, Fixed64 unitSize, bool allowUnwalkableEndNode)
     {
         bool result = false;
-        if (!PathManager.NeedsPath(position, destination, unitSize, allowUnwalkable))
+        if (!PathManager.NeedsPath(position, destination, unitSize, allowUnwalkableEndNode))
             result = true;
 
         return result;
@@ -830,7 +830,7 @@ public class NavSteering : IRecordable
         Vector3d position,
         Vector3d destination,
         Fixed64 unitSize,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         VolumeTraversalMode traversalMode = VolumeTraversalMode.Open,
         Voxel startNode = null,
         Voxel endNode = null)
@@ -839,7 +839,7 @@ public class NavSteering : IRecordable
             position,
             destination,
             unitSize,
-            allowUnwalkable,
+            allowUnwalkableEndNode,
             traversalMode,
             startNode,
             endNode);

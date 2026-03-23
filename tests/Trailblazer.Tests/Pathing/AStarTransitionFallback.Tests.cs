@@ -121,7 +121,7 @@ public class AStarTransitionFallbackTests : IDisposable
             new Vector3d(2, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
-            allowUnwalkable: true);
+            allowUnwalkableEndNode: true);
         request.Should().NotBeNull();
         request.AllowTraversalTransitions.Should().BeFalse();
 

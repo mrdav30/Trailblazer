@@ -63,7 +63,7 @@ public sealed class VolumeGuide : IWaypointGuide
         return true;
     }
 
-    public Vector3d GetMovementDirection(Vector3d origin)
+    public Vector3d GetCurrentWaypointDirection(Vector3d origin)
     {
         if (!TrailMap.HasPath
             || CurrentWaypointIndex < 0

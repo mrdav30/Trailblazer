@@ -120,7 +120,7 @@ Important public state includes:
 - `Radius`
 - `FootPositionAdjust`
 - `GuidedPathMode`
-- `GuidedAllowUnwalkable`
+- `GuidedAllowUnwalkableEndNode`
 - `GuidedAllowTraversalTransitions`
 - `GuidedAStarHeuristic`
 - `GuidedAStarMaxClimbHeight`

@@ -19,7 +19,7 @@ internal static class RawVoxelFinder
         out Voxel originVoxel,
         out Voxel targetVoxel,
         Fixed64 unitSize,
-        bool allowUnwalkable = false,
+        bool allowUnwalkableEndNode = false,
         VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
         if (!VolumeTraversalRules.IsConfigured(traversalMode))
@@ -30,10 +30,10 @@ internal static class RawVoxelFinder
         }
 
         targetVoxel = null;
-        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkable, unitSize, traversalMode))
+        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkableEndNode, unitSize, traversalMode))
             return false;
 
-        if (!GetEndVoxel(origin, target, out targetVoxel, allowUnwalkable, unitSize, traversalMode))
+        if (!GetEndVoxel(origin, target, out targetVoxel, allowUnwalkableEndNode, unitSize, traversalMode))
             return false;
 
         return true;
@@ -43,7 +43,7 @@ internal static class RawVoxelFinder
         Vector3d origin,
         Vector3d target,
         out Voxel originVoxel,
-        bool allowUnwalkable = false,
+        bool allowUnwalkableEndNode = false,
         Fixed64? unitSize = null,
         VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
@@ -51,7 +51,7 @@ internal static class RawVoxelFinder
             origin,
             target,
             out originVoxel,
-            allowUnwalkable,
+            allowUnwalkableEndNode,
             unitSize ?? GlobalGridManager.VoxelSize,
             traversalMode);
     }
@@ -60,7 +60,7 @@ internal static class RawVoxelFinder
         Vector3d origin,
         Vector3d target,
         out Voxel targetVoxel,
-        bool allowUnwalkable = false,
+        bool allowUnwalkableEndNode = false,
         Fixed64? unitSize = null,
         VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
     {
@@ -68,7 +68,7 @@ internal static class RawVoxelFinder
             target,
             origin,
             out targetVoxel,
-            allowUnwalkable,
+            allowUnwalkableEndNode,
             unitSize ?? GlobalGridManager.VoxelSize,
             traversalMode);
     }
@@ -77,7 +77,7 @@ internal static class RawVoxelFinder
         Vector3d start,
         Vector3d end,
         Fixed64 unitSize,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         VolumeTraversalMode traversalMode = VolumeTraversalMode.Open,
         Voxel startNode = null,
         Voxel endNode = null)
@@ -93,7 +93,7 @@ internal static class RawVoxelFinder
             {
                 foundAny = true;
 
-                bool isRelaxedEndpoint = allowUnwalkable
+                bool isRelaxedEndpoint = allowUnwalkableEndNode
                     && ((startNode != null && voxel.GlobalIndex == startNode.GlobalIndex)
                     || (endNode != null && voxel.GlobalIndex == endNode.GlobalIndex));
                 if (isRelaxedEndpoint)
@@ -171,7 +171,7 @@ internal static class RawVoxelFinder
         Vector3d position,
         Vector3d traceToward,
         out Voxel voxel,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         Fixed64 unitSize,
         VolumeTraversalMode traversalMode)
     {
@@ -186,7 +186,7 @@ internal static class RawVoxelFinder
         if (GlobalGridManager.TryGetVoxel(position, out voxel))
         {
             if (PassesTraversalMode(voxel, traversalMode)
-                && (allowUnwalkable || IsBaseTraversable(voxel, unitSize)))
+                && (allowUnwalkableEndNode || IsBaseTraversable(voxel, unitSize)))
             {
                 return true;
             }

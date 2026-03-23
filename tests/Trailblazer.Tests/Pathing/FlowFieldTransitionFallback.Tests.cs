@@ -134,7 +134,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            allowUnwalkable: true);
+            allowUnwalkableEndNode: true);
         request.Should().NotBeNull();
         request.AllowTraversalTransitions.Should().BeFalse();
 

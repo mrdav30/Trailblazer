@@ -73,7 +73,7 @@ All guide requests implement `IPathRequest`. Shared request state includes:
 - `StartNode`
 - `EndNode`
 - `UnitSize`
-- `AllowUnwalkable`
+- `AllowUnwalkableEndNode`
 - `MaxPathSearchRange`
 - `HasValidEndpoints`
 - `IsValid`
@@ -94,7 +94,6 @@ Additional configuration includes:
 
 - `Heuristic` with `Manhattan`, `Octile`, or `Euclidean`
 - `MaxClimbHeight` for vertical step restrictions
-- `AllowUnwalkable` for target-edge cases
 
 Factory helpers:
 
@@ -207,7 +206,7 @@ public interface IWaypointGuide : IGuide
     int CurrentWaypointIndex { get; }
     int GetIndex(Vector3d from);
     void AdvanceWaypoint();
-    Vector3d GetMovementDirection(Vector3d from);
+    Vector3d GetCurrentWaypointDirection(Vector3d from);
 }
 ```
 

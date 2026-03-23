@@ -99,20 +99,20 @@ It adds:
 - `CurrentWaypointIndex`
 - `GetIndex(Vector3d from)`
 - `AdvanceWaypoint()`
-- `GetMovementDirection(Vector3d from)`
+- `GetCurrentWaypointDirection(Vector3d from)`
 
 Use it when the caller wants to own waypoint progression explicitly.
 
 Important nuance:
 
-- `GetMovementDirection(...)` uses `CurrentWaypointIndex`
+- `GetCurrentWaypointDirection(...)` uses `CurrentWaypointIndex`
 - `TryGetMovementDirection(...)` on the concrete waypoint guides instead finds the nearest useful waypoint from the provided position
 
 Those two paths are related but not equivalent.
 
 For direct guide consumption:
 
-- use `GetMovementDirection(...)` if you are actively maintaining waypoint progress
+- use `GetCurrentWaypointDirection(...)` if you are actively maintaining waypoint progress
 - use `TryGetMovementDirection(...)` if you want a best-effort direction query without first managing the index yourself
 
 Another important nuance:
@@ -142,7 +142,7 @@ Key behavior:
 - `ActiveWaypoints` normally returns `TrailMap.Waypoints`
 - when `UseSplineSmoothing` is enabled and there are at least four waypoints, `ActiveWaypoints` lazily switches to `AStarSurveyor.CatmullSmooth(...)`
 - `TryGetMovementDirection(...)` uses the nearest active waypoint from the current position
-- `GetMovementDirection(...)` uses `CurrentWaypointIndex`
+- `GetCurrentWaypointDirection(...)` uses `CurrentWaypointIndex`
 - `TryGetFallbackDirection(...)` searches forward from the last fallback index
 
 Other useful members:
@@ -153,7 +153,7 @@ Other useful members:
 Important nuance:
 
 - `Initialize(...)` sets `CurrentWaypointIndex` to `0`
-- that means consumers using `GetMovementDirection(...)` directly should expect to manage the first progression step themselves
+- that means consumers using `GetCurrentWaypointDirection(...)` directly should expect to manage the first progression step themselves
 
 ### 4.2 `FlowFieldGuide`
 
@@ -203,7 +203,7 @@ Key behavior:
 - `Initialize(...)` requires a valid volume survey result
 - `ActiveWaypoints` exposes the raw volume waypoints
 - `TryGetMovementDirection(...)` uses the nearest active waypoint from the current position
-- `GetMovementDirection(...)` uses `CurrentWaypointIndex`
+- `GetCurrentWaypointDirection(...)` uses `CurrentWaypointIndex`
 - `TryGetFallbackDirection(...)` searches forward from the last fallback index
 
 Important nuance:
@@ -410,7 +410,7 @@ if (PathGuideFactory.RequestGuide(request, out IGuide guide))
 {
     if (guide is IWaypointGuide waypointGuide)
     {
-        Vector3d heading = waypointGuide.GetMovementDirection(origin);
+        Vector3d heading = waypointGuide.GetCurrentWaypointDirection(origin);
     }
     else
     {
@@ -425,7 +425,7 @@ if (PathGuideFactory.RequestGuide(request, out IGuide guide))
 
 When consuming a waypoint guide directly, the normal pattern is:
 
-1. get indexed movement from `GetMovementDirection(...)`
+1. get indexed movement from `GetCurrentWaypointDirection(...)`
 2. decide when the current waypoint counts as reached
 3. call `AdvanceWaypoint()`
 
@@ -434,7 +434,7 @@ This is what `NavSteering` does for `IWaypointGuide`.
 ## 9. Common Gotchas
 
 - A guide is not the cached object. The cached object is the underlying survey result.
-- `TryGetMovementDirection(...)` and `GetMovementDirection(...)` can produce different behavior on waypoint guides.
+- `TryGetMovementDirection(...)` and `GetCurrentWaypointDirection(...)` can produce different behavior on waypoint guides.
 - `AdvanceWaypoint()` does not bounds-check.
 - `AStarGuide` starts indexed progression at waypoint `0`.
 - `VolumeGuide` and `HybridGuide` start indexed progression at waypoint `1` when possible.

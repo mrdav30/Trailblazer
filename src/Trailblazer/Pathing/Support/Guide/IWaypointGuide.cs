@@ -26,5 +26,5 @@ public interface IWaypointGuide : IGuide
     /// </summary>
     /// <param name="from">The current position of the agent.</param>
     /// <returns>A normalized direction vector toward the next target.</returns>
-    Vector3d GetMovementDirection(Vector3d from);
+    Vector3d GetCurrentWaypointDirection(Vector3d from);
 }

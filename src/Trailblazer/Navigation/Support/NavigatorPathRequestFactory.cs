@@ -16,7 +16,7 @@ public static class NavigatorPathRequestFactory
         Vector3d targetPosition,
         Fixed64 unitSize,
         GuidedPathMode pathMode,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -32,7 +32,7 @@ public static class NavigatorPathRequestFactory
                     targetPosition,
                     unitSize,
                     aStarHeuristic,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     allowTraversalTransitions);
                 if (aStar == null)
                 {
@@ -49,7 +49,7 @@ public static class NavigatorPathRequestFactory
                     origin,
                     targetPosition,
                     unitSize,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     allowTraversalTransitions);
                 if (flowField == null)
                 {
@@ -67,7 +67,7 @@ public static class NavigatorPathRequestFactory
                     targetPosition,
                     unitSize,
                     aStarHeuristic,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     VolumeTraversalMode.Open);
                 return request != null;
 
@@ -83,7 +83,7 @@ public static class NavigatorPathRequestFactory
                     targetPosition,
                     unitSize,
                     aStarHeuristic,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     VolumeTraversalMode.Water);
                 return request != null;
 
@@ -99,7 +99,7 @@ public static class NavigatorPathRequestFactory
         Fixed64 unitSize,
         GuidedPathMode pathMode,
         GuidedPathMode fallbackChartPathMode,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -118,7 +118,7 @@ public static class NavigatorPathRequestFactory
                     targetPosition,
                     unitSize,
                     aStarHeuristic,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     allowTraversalTransitions);
                 if (aStar == null)
                 {
@@ -135,7 +135,7 @@ public static class NavigatorPathRequestFactory
                     origin,
                     targetPosition,
                     unitSize,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     allowTraversalTransitions);
                 if (flowField == null)
                 {
@@ -153,7 +153,7 @@ public static class NavigatorPathRequestFactory
                     targetPosition,
                     unitSize,
                     aStarHeuristic,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     VolumeTraversalMode.Open);
                 if (volume == null)
                     return TryCreateVolumeExitHandoff(
@@ -162,7 +162,7 @@ public static class NavigatorPathRequestFactory
                         unitSize,
                         VolumeTraversalMode.Open,
                         fallbackChartPathMode,
-                        allowUnwalkable,
+                        allowUnwalkableEndNode,
                         allowTraversalTransitions,
                         aStarHeuristic,
                         aStarMaxClimbHeight,
@@ -175,7 +175,7 @@ public static class NavigatorPathRequestFactory
                     VolumeTraversalMode.Open,
                     volume,
                     fallbackChartPathMode,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     allowTraversalTransitions,
                     aStarHeuristic,
                     aStarMaxClimbHeight,
@@ -201,7 +201,7 @@ public static class NavigatorPathRequestFactory
                     targetPosition,
                     unitSize,
                     aStarHeuristic,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     VolumeTraversalMode.Water);
                 if (swim == null)
                     return TryCreateVolumeExitHandoff(
@@ -210,7 +210,7 @@ public static class NavigatorPathRequestFactory
                         unitSize,
                         VolumeTraversalMode.Water,
                         fallbackChartPathMode,
-                        allowUnwalkable,
+                        allowUnwalkableEndNode,
                         allowTraversalTransitions,
                         aStarHeuristic,
                         aStarMaxClimbHeight,
@@ -223,7 +223,7 @@ public static class NavigatorPathRequestFactory
                     VolumeTraversalMode.Water,
                     swim,
                     fallbackChartPathMode,
-                    allowUnwalkable,
+                    allowUnwalkableEndNode,
                     allowTraversalTransitions,
                     aStarHeuristic,
                     aStarMaxClimbHeight,
@@ -249,7 +249,7 @@ public static class NavigatorPathRequestFactory
         Fixed64 unitSize,
         VolumeTraversalMode traversalMode,
         GuidedPathMode fallbackChartPathMode,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -263,7 +263,7 @@ public static class NavigatorPathRequestFactory
             unitSize,
             traversalMode,
             fallbackChartPathMode,
-            allowUnwalkable,
+            allowUnwalkableEndNode,
             allowTraversalTransitions,
             aStarHeuristic,
             aStarMaxClimbHeight,
@@ -279,7 +279,7 @@ public static class NavigatorPathRequestFactory
         Fixed64 unitSize,
         VolumeTraversalMode traversalMode,
         GuidedPathMode fallbackChartPathMode,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -305,7 +305,7 @@ public static class NavigatorPathRequestFactory
             unitSize,
             traversalMode,
             chartPathMode,
-            allowUnwalkable,
+            allowUnwalkableEndNode,
             allowTraversalTransitions,
             aStarHeuristic,
             aStarMaxClimbHeight,
@@ -321,7 +321,7 @@ public static class NavigatorPathRequestFactory
         VolumeTraversalMode traversalMode,
         VolumePathRequest directRequest,
         GuidedPathMode fallbackChartPathMode,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -348,7 +348,7 @@ public static class NavigatorPathRequestFactory
                 targetPosition,
                 traversalMode,
                 fallbackChartPathMode,
-                allowUnwalkable,
+                allowUnwalkableEndNode,
                 allowTraversalTransitions,
                 aStarHeuristic,
                 aStarMaxClimbHeight,
@@ -368,7 +368,7 @@ public static class NavigatorPathRequestFactory
             directRequest.UnitSize,
             traversalMode,
             fallbackChartPathMode,
-            allowUnwalkable,
+            allowUnwalkableEndNode,
             allowTraversalTransitions,
             aStarHeuristic,
             aStarMaxClimbHeight,
@@ -399,7 +399,7 @@ public static class NavigatorPathRequestFactory
         Vector3d targetPosition,
         VolumeTraversalMode traversalMode,
         GuidedPathMode fallbackChartPathMode,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -419,7 +419,7 @@ public static class NavigatorPathRequestFactory
             directRequest.UnitSize,
             traversalMode,
             fallbackChartPathMode,
-            allowUnwalkable,
+            allowUnwalkableEndNode,
             allowTraversalTransitions,
             aStarHeuristic,
             aStarMaxClimbHeight,

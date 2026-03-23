@@ -54,7 +54,7 @@ public class NavigatorTests : IDisposable
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.GuidedPathMode = GuidedPathMode.AStar;
-        navigator.GuidedAllowUnwalkable = true;
+        navigator.GuidedAllowUnwalkableEndNode = true;
         navigator.GuidedAllowTraversalTransitions = true;
         navigator.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         navigator.GuidedAStarMaxClimbHeight = (Fixed64)2;
@@ -71,7 +71,7 @@ public class NavigatorTests : IDisposable
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
         request.UnitSize.Should().Be(navigator.Size);
-        request.AllowUnwalkable.Should().BeTrue();
+        request.AllowUnwalkableEndNode.Should().BeTrue();
         request.AllowTraversalTransitions.Should().BeTrue();
         request.Heuristic.Should().Be(HeuristicMethod.Euclidean);
         request.MaxClimbHeight.Should().Be((Fixed64)2);
@@ -146,7 +146,7 @@ public class NavigatorTests : IDisposable
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.GuidedPathMode = GuidedPathMode.AStar;
-        navigator.GuidedAllowUnwalkable = true;
+        navigator.GuidedAllowUnwalkableEndNode = true;
         navigator.GuidedAllowTraversalTransitions = true;
         navigator.GuidedFlowFieldExtraFloodRange = 24;
 
@@ -160,7 +160,7 @@ public class NavigatorTests : IDisposable
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
         request.UnitSize.Should().Be(navigator.Size);
-        request.AllowUnwalkable.Should().BeTrue();
+        request.AllowUnwalkableEndNode.Should().BeTrue();
         request.AllowTraversalTransitions.Should().BeTrue();
         request.ExtraFloodRange.Should().Be(24);
 

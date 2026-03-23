@@ -292,7 +292,7 @@ internal static class HybridRoutePlanner
             destination,
             request.UnitSize,
             request.Heuristic,
-            request.AllowUnwalkable);
+            request.AllowUnwalkableEndNode);
         if (chartRequest == null)
             return false;
 
@@ -327,7 +327,7 @@ internal static class HybridRoutePlanner
             origin,
             destination,
             request.UnitSize,
-            request.AllowUnwalkable);
+            request.AllowUnwalkableEndNode);
         if (chartRequest == null)
             return false;
 
@@ -367,7 +367,7 @@ internal static class HybridRoutePlanner
             destination,
             request.UnitSize,
             request.Heuristic,
-            request.AllowUnwalkable,
+            request.AllowUnwalkableEndNode,
             traversalMode);
         if (volumeRequest == null)
             return false;

@@ -43,7 +43,7 @@ public interface IPathRequest
     /// <summary>
     /// Optional override to allow reaching unwalkable destinations (useful for edge cases).
     /// </summary>
-    bool AllowUnwalkable { get; }
+    bool AllowUnwalkableEndNode { get; }
 
     /// <summary>
     /// The max search limit used when generating the path.

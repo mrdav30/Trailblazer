@@ -25,7 +25,7 @@ public static class VoxelFinder
     /// <param name="originVoxel">Resolved start voxel.</param>
     /// <param name="targetVoxel">Resolved end voxel.</param>
     /// <param name="unitSize">The size of the unit in voxels</param>
-    /// <param name="allowUnwalkable">
+    /// <param name="allowUnwalkableEndNode">
     /// Whether blocked or non-chart endpoints may relax to the nearest valid chart voxel.
     /// Size-based endpoint relaxation still applies regardless so larger units can snap to a nearby valid cell.
     /// </param>
@@ -36,14 +36,14 @@ public static class VoxelFinder
         out Voxel originVoxel,
         out Voxel targetVoxel,
         Fixed64? unitSize = null,
-        bool allowUnwalkable = false)
+        bool allowUnwalkableEndNode = false)
     {
         Fixed64 resolvedUnitSize = unitSize ?? GlobalGridManager.VoxelSize;
         targetVoxel = null;
-        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkable, resolvedUnitSize))
+        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkableEndNode, resolvedUnitSize))
             return false;
 
-        return GetEndVoxel(origin, target, out targetVoxel, allowUnwalkable, resolvedUnitSize);
+        return GetEndVoxel(origin, target, out targetVoxel, allowUnwalkableEndNode, resolvedUnitSize);
     }
 
 
@@ -53,21 +53,21 @@ public static class VoxelFinder
     /// <param name="origin"></param>
     /// <param name="target"></param>
     /// <param name="targetVoxel"></param>
-    /// <param name="allowUnwalkable"></param>
+    /// <param name="allowUnwalkableEndNode"></param>
     /// <param name="unitSize"></param>
     /// <returns></returns>
     public static bool GetEndVoxel(
         Vector3d origin,
         Vector3d target,
         out Voxel targetVoxel,
-        bool allowUnwalkable = false,
+        bool allowUnwalkableEndNode = false,
         Fixed64? unitSize = null)
     {
         return TryGetEndpointVoxel(
             target,
             origin,
             out targetVoxel,
-            allowUnwalkable,
+            allowUnwalkableEndNode,
             unitSize ?? GlobalGridManager.VoxelSize);
     }
 
@@ -77,21 +77,21 @@ public static class VoxelFinder
     /// <param name="origin"></param>
     /// <param name="target"></param>
     /// <param name="originVoxel"></param>
-    /// <param name="allowUnwalkable"></param>
+    /// <param name="allowUnwalkableEndNode"></param>
     /// <param name="unitSize"></param>
     /// <returns></returns>
     public static bool GetStartVoxel(
         Vector3d origin,
         Vector3d target,
         out Voxel originVoxel,
-        bool allowUnwalkable = false,
+        bool allowUnwalkableEndNode = false,
         Fixed64? unitSize = null)
     {
         return TryGetEndpointVoxel(
             origin,
             target,
             out originVoxel,
-            allowUnwalkable,
+            allowUnwalkableEndNode,
             unitSize ?? GlobalGridManager.VoxelSize);
     }
 
@@ -172,27 +172,27 @@ public static class VoxelFinder
     /// <param name="target"></param>
     /// <param name="unitSize"></param>
     /// <param name="targetVoxel"></param>
-    /// <param name="allowUnwalkable"></param>
+    /// <param name="allowUnwalkableEndNode"></param>
     /// <returns></returns>
     public static bool GetClosestVoxelForSize(
         Vector3d origin,
         Vector3d target,
         Fixed64 unitSize,
         out Voxel targetVoxel,
-        bool allowUnwalkable = false)
+        bool allowUnwalkableEndNode = false)
     {
-        return TryGetEndpointVoxel(origin, target, out targetVoxel, allowUnwalkable, unitSize);
+        return TryGetEndpointVoxel(origin, target, out targetVoxel, allowUnwalkableEndNode, unitSize);
     }
 
     private static bool TryGetEndpointVoxel(
         Vector3d position,
         Vector3d traceToward,
         out Voxel voxel,
-        bool allowUnwalkable,
+        bool allowUnwalkableEndNode,
         Fixed64 unitSize)
     {
         voxel = null;
-        bool shouldRelaxEndpoint = allowUnwalkable;
+        bool shouldRelaxEndpoint = allowUnwalkableEndNode;
 
         if (GlobalGridManager.TryGetVoxel(position, out Voxel directVoxel))
         {

@@ -159,9 +159,9 @@ Important nuance:
 
 - if the requested mode is not configured, endpoint resolution fails immediately
 
-### 4.2 `allowUnwalkable` In Volume Requests
+### 4.2 `allowUnwalkableEndNode` In Volume Requests
 
-`allowUnwalkable` in volume requests is still only an endpoint policy.
+`allowUnwalkableEndNode` in volume requests is still only an endpoint policy.
 
 It can relax start or end acceptance, but it does not make the entire corridor ignore blockers.
 
@@ -295,7 +295,7 @@ This is the pathing model used for aerial-style detours in the current codebase.
 - `VolumeTraversalRules` is global static state.
 - `PathManager.Reset()` clears the installed water rule.
 - Volume traversal does not require charts, but it still depends on real voxels existing.
-- `allowUnwalkable` only relaxes endpoints; it does not make the whole route ignore blocked voxels.
+- `allowUnwalkableEndNode` only relaxes endpoints; it does not make the whole route ignore blocked voxels.
 
 ## 11. AI And Contributor Notes
 

@@ -295,7 +295,7 @@ This is especially important in worlds with:
 
 ## 8. Common Gotchas
 
-- `AllowUnwalkable` is not the same as `AllowTraversalTransitions`.
+- `AllowUnwalkableEndNode` is not the same as `AllowTraversalTransitions`.
 - Registration only checks voxel existence and duplicate ids.
 - A registered transition can still be unusable if its surrounding chart or volume segments cannot be built.
 - Bidirectional behavior is query-time expansion, not two separate registry entries.

@@ -84,7 +84,7 @@ internal sealed class HybridGuide : IWaypointGuide
     }
 
     /// <inheritdoc/>
-    public Vector3d GetMovementDirection(Vector3d origin)
+    public Vector3d GetCurrentWaypointDirection(Vector3d origin)
     {
         if (ActiveWaypoints == null
             || CurrentWaypointIndex < 0

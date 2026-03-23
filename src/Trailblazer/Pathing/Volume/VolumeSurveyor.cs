@@ -275,7 +275,7 @@ public sealed class VolumeSurveyor
         if (voxel == _request.StartNode)
             return true;
 
-        if (voxel == _request.EndNode && _request.AllowUnwalkable)
+        if (voxel == _request.EndNode && _request.AllowUnwalkableEndNode)
             return VolumeTraversalRules.Matches(voxel, _request.TraversalMode);
 
         return RawVoxelFinder.IsTraversable(

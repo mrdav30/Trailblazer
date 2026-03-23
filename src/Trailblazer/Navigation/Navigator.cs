@@ -551,6 +551,16 @@ public abstract class Navigator : INavigate, IRecordable
             _frameRequest.Reset();
     }
 
+    /// <summary>
+    /// Notifies the navigator that a collision occurred so collision-driven subsystem responses can run on the next simulation step.
+    /// </summary>
+    public virtual void NotifyCollision()
+    {
+        if (!IsActive) return;
+
+        Turning.NotifyCollision();
+    }
+
     #endregion
 
     #region Traversal Condition Management

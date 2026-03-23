@@ -87,6 +87,7 @@ The main entry points are:
 - `SetGuidedTrekRate(TrekRate rate)`
 - `Simulate()`
 - `CommitFrameMotion()`
+- `NotifyCollision()`
 - `SetGroundContact(...)`
 - `SetAirborne(...)`
 - `SetWaterContact(...)`
@@ -406,6 +407,14 @@ The two-step structure matters because:
 - the motor gets finalized against the post-movement environment state
 
 This is one of the most important architectural rules in Trailblazer's navigation stack.
+
+### 8.4 NotifyCollision()
+
+`NotifyCollision()` is the host-facing collision hook on `Navigator`.
+
+It currently forwards collision notification into `NavTurning` so collision auto-turn can be evaluated on the next `Simulate()` tick without forcing callers to reach into `navigator.Turning` directly.
+
+Keeping this hook on `Navigator` leaves room for future collision-driven responses in other subsystems without changing the host integration point.
 
 ## 9. Traversal-State Ownership
 

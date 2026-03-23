@@ -241,6 +241,8 @@ Collision auto-turning is a separate pathway from normal steering-driven turns.
 
 It only sets an internal `_isColliding` flag so that the next idle `TrySimulateTurn(...)` can evaluate whether an auto-turn should happen.
 
+When you are driving turning through `Navigator`, prefer calling `navigator.NotifyCollision()` so collision handling stays centralized at the host-facing orchestration layer.
+
 ### 8.2 CheckAutoTurn(...)
 
 When the controller is idle and collision has been flagged, `CheckAutoTurn(...)`:
@@ -328,6 +330,14 @@ If you want a collision-driven auto-turn:
 turning.NotifyCollision();
 turning.TrySimulateTurn(position, lastPosition, forward, rotation, out _); // may only buffer
 turning.TrySimulateTurn(position, lastPosition, forward, rotation, out _); // may begin actual rotation
+```
+
+Or, with a `Navigator`:
+
+```csharp
+navigator.NotifyCollision();
+navigator.Simulate(); // may only buffer
+navigator.Simulate(); // may begin actual rotation
 ```
 
 ## 11. Common Gotchas

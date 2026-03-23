@@ -702,6 +702,25 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void NotifyCollision_ShouldForwardToTurningController()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetTestPosition(new Vector3d(1, 0, 0), syncLastPosition: false);
+
+        navigator.NotifyCollision();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+        navigator.Turning.TargetReached.Should().BeTrue();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.Turning.TargetReached.Should().BeFalse();
+        navigator.Turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
+    }
+
+    [Fact]
     public void SetGroundContact_ShouldPopulateGroundStateAndUpdateMotorWhenRequested()
     {
         var navigator = CreateNavigator(Vector3d.Zero);

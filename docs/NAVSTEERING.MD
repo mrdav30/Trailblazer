@@ -3,6 +3,8 @@
 This document is the detailed reference for Trailblazer's deterministic steering and guide-following layer.
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
+If you want the pathing-first request, guide, and transition model without `Navigator`, read `PATHING.MD`.
+If you specifically want `IGuide`, `IWaypointGuide`, and `PathGuideFactory`, read `PATHGUIDES.MD`.
 If you need the movement-execution side, read `NAVMOTOR.MD`.
 
 The code referenced here lives primarily in:

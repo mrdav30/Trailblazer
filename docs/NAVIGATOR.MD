@@ -3,6 +3,7 @@
 This document is the detailed reference for Trailblazer's `Navigator` class.
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
+If you only need the standalone pathing request and guide layer, read `PATHING.MD`.
 If you need the subsystem references behind `Navigator`, read:
 
 - `NAVSTEERING.MD`

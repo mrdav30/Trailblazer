@@ -6,6 +6,8 @@ In this document, charts refer to chart-backed surface traversal.
 Raw air and broad water movement remain volume-traversal concerns handled through `VolumePathRequest` and `VolumeTraversalRules`.
 
 If you only need the high-level architecture, start with `OVERVIEW.md`.
+If you are working from the standalone pathing API inward, read `PATHING.MD` before this file.
+If your chart world depends on jumps, water, or chart-to-volume handoffs, also read `TRANSITIONS.MD` and `VOLUMETRAVERSAL.MD`.
 If you need the registry and lifecycle details, read `PATHMANAGER.MD` alongside this file.
 
 Relevant code:

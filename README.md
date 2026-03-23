@@ -227,6 +227,10 @@ Use `VolumePathRequest` when:
 Start with:
 
 - [`docs/OVERVIEW.md`](docs/OVERVIEW.md)
+- [`docs/PATHING.MD`](docs/PATHING.MD)
+- [`docs/PATHGUIDES.MD`](docs/PATHGUIDES.MD)
+- [`docs/TRANSITIONS.MD`](docs/TRANSITIONS.MD)
+- [`docs/VOLUMETRAVERSAL.MD`](docs/VOLUMETRAVERSAL.MD)
 - [`docs/PATHMANAGER.MD`](docs/PATHMANAGER.MD)
 - [`docs/NAVIGATOR.MD`](docs/NAVIGATOR.MD)
 - [`docs/NAVSTEERING.MD`](docs/NAVSTEERING.MD)

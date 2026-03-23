@@ -9,6 +9,10 @@ This document is the high-level architecture guide for the current codebase.
 
 See also:
 
+- `PATHING.MD` for a standalone guide to the `Trailblazer.Pathing` namespace
+- `PATHGUIDES.MD` for the runtime guide and guide-factory layer
+- `TRANSITIONS.MD` for authored handoffs between charts and raw volume
+- `VOLUMETRAVERSAL.MD` for raw-volume traversal modes and host rules
 - `CHARTS.MD` for a deeper explanation of `NavigationChart` and the chart lifecycle
 - `SERIALIZATION.MD` for Trailblazer's current serialization coverage and runtime behavior
 - `../src/Trailblazer/Serialization/README.md` for the reusable Chronicler API reference
@@ -179,6 +183,8 @@ These results are what the cache stores and reuses.
 
 Guides expose movement directions to runtime systems through `IGuide`:
 
+For the dedicated guide-layer reference, read [`PATHGUIDES.MD`](PATHGUIDES.MD).
+
 ```csharp
 public interface IGuide
 {
@@ -311,6 +317,8 @@ Important maintenance rule:
 
 You can use the pathing layer without the full navigation stack:
 
+For a pathing-first guide that does not assume `Navigator`, read [`PATHING.MD`](PATHING.MD).
+
 ```csharp
 var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
 
@@ -356,6 +364,10 @@ Before runtime pathing works correctly:
 ## 11. Where to Read Next
 
 - [`../README.md`](../README.md) for package-level overview and quick-start examples
+- [`PATHING.MD`](PATHING.MD) for standalone pathing integration and request guidance
+- [`PATHGUIDES.MD`](PATHGUIDES.MD) for `IGuide`, `IWaypointGuide`, and `PathGuideFactory`
+- [`TRANSITIONS.MD`](TRANSITIONS.MD) for authored chart and volume handoffs
+- [`VOLUMETRAVERSAL.MD`](VOLUMETRAVERSAL.MD) for raw-volume traversal rules
 - [`NAVMOTOR.MD`](NAVMOTOR.MD) for motor phase ordering
 - [`GRAVITY.MD`](GRAVITY.MD) for the gravity model
 - `src/Trailblazer/Pathing` for core pathing logic

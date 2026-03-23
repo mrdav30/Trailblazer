@@ -712,12 +712,14 @@ public class NavigatorTests : IDisposable
         TrailblazerManager.Simulate();
         navigator.Simulate();
         navigator.Turning.TargetReached.Should().BeTrue();
+        navigator.CommitFrameMotion();
 
         TrailblazerManager.Simulate();
         navigator.Simulate();
 
         navigator.Turning.TargetReached.Should().BeFalse();
         navigator.Turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
+        navigator.CommitFrameMotion();
     }
 
     [Fact]

@@ -327,6 +327,7 @@ public class NavigatorTests : IDisposable
 
         FlowFieldPathRequest followupRequest = navigator.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
         followupRequest.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
         navigator.Steering.MovementGroupID.Should().Be(7);
         navigator.Steering.ShouldMove.Should().BeTrue();
@@ -460,6 +461,42 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
         navigator.FrameRequest.Direction.y.Should().BeGreaterThan(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void Simulate_Should_NotReuseGuidedDirection_AfterSteeringArrive()
+    {
+        var data = new bool[1, 6, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorArriveStopsHeading", data, Vector3d.Zero);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+        navigator.CommitFrameMotion();
+
+        navigator.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.Steering.ShouldMove.Should().BeFalse();
+        navigator.Steering.CurrentRequest.Should().BeNull();
+        navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
+
+        PathManager.UnloadChart("NavigatorArriveStopsHeading");
     }
 
     [Fact]

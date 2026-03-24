@@ -23,6 +23,12 @@ public readonly struct TraversalLegendEntry
     /// </summary>
     public TraversalTransitionAnchorSpace AnchorSpace { get; }
 
+    /// <summary>
+    /// Creates a new legend entry with the specified chart output and optional transition-anchor output.
+    /// </summary>
+    /// <param name="chartCell">The chart cell emitted for this token.</param>
+    /// <param name="anchorSpace">The transition-anchor space emitted when this token is marked.</param>
+    /// <param name="hasAnchorSpace">Whether this token may participate in generated transition anchors.</param>
     public TraversalLegendEntry(
         NavigationChartCell chartCell,
         TraversalTransitionAnchorSpace anchorSpace = TraversalTransitionAnchorSpace.Chart,
@@ -33,15 +39,27 @@ public readonly struct TraversalLegendEntry
         HasAnchorSpace = hasAnchorSpace;
     }
 
-    public static TraversalLegendEntry Blocked() =>
+    /// <summary>
+    /// Creates an entry that contributes no chart surface and no transition anchor.
+    /// </summary>
+    public static TraversalLegendEntry SkipCell() =>
         new(NavigationChartCell.Blocked);
 
+    /// <summary>
+    /// Creates an entry that emits a chart cell and may participate in generated chart anchors.
+    /// </summary>
     public static TraversalLegendEntry Chart(NavigationChartCell chartCell) =>
         new(chartCell, TraversalTransitionAnchorSpace.Chart, hasAnchorSpace: true);
 
+    /// <summary>
+    /// Creates an entry that emits an open-volume anchor when explicitly marked.
+    /// </summary>
     public static TraversalLegendEntry OpenVolume() =>
         new(NavigationChartCell.Blocked, TraversalTransitionAnchorSpace.OpenVolume, hasAnchorSpace: true);
 
+    /// <summary>
+    /// Creates an entry that emits a water-volume anchor when explicitly marked.
+    /// </summary>
     public static TraversalLegendEntry WaterVolume() =>
         new(NavigationChartCell.Blocked, TraversalTransitionAnchorSpace.WaterVolume, hasAnchorSpace: true);
 }

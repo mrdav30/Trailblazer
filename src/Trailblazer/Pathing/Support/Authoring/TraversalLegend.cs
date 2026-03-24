@@ -19,9 +19,10 @@ public sealed class TraversalLegend
     public static TraversalLegend CreateBuiltIn()
     {
         var legend = new TraversalLegend();
-        legend.Register(string.Empty, TraversalLegendEntry.Blocked());
-        legend.Register(".", TraversalLegendEntry.Blocked());
-        legend.Register("X", TraversalLegendEntry.Blocked());
+        // These tokens intentionally contribute no chart surface and no generated transition anchor.
+        legend.Register(string.Empty, TraversalLegendEntry.SkipCell());
+        legend.Register(".", TraversalLegendEntry.SkipCell());
+        legend.Register("X", TraversalLegendEntry.SkipCell());
         legend.Register("L", TraversalLegendEntry.Chart(NavigationChartCell.Walkable));
         legend.Register("O", TraversalLegendEntry.OpenVolume());
         legend.Register("W", TraversalLegendEntry.WaterVolume());

@@ -133,11 +133,11 @@ public class AStarSurveryorTests : IDisposable
         // Simple diagonal reachable path
         var map = NavigationChart.From3D("Diag", new bool[1, 3, 3]
         {
-    {
-        { true, true, true },
-        { false, true, false },
-        { true, true, true }
-    }
+            {
+                { true, true, true },
+                { false, true, false },
+                { true, true, true }
+            }
         }, start, Fixed64.One);
 
         PathManager.Register(map);

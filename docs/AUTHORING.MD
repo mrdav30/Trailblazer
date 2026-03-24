@@ -61,9 +61,9 @@ Registration is all-or-nothing. If any generated transition fails to register, t
 
 | Token | Meaning |
 | --- | --- |
-| empty string | blocked cell |
-| `.` | blocked cell |
-| `X` | blocked cell |
+| empty string | skip this cell |
+| `.` | skip this cell |
+| `X` | skip this cell |
 | `L` | traversable chart cell |
 | `O` | open-volume anchor candidate |
 | `W` | water-volume anchor candidate |
@@ -71,7 +71,8 @@ Registration is all-or-nothing. If any generated transition fails to register, t
 Important nuance:
 
 - `L` produces a traversable chart cell
-- `O` and `W` produce blocked chart cells because they are volume-side authoring tokens, not surface chart cells
+- empty / `.` / `X` contribute no chart surface and no transition anchor
+- `O` and `W` produce non-surface chart output because they are volume-side authoring tokens, not walkable chart cells
 
 ## 3. Transition Marker Rules
 

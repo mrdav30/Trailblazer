@@ -134,17 +134,6 @@ public readonly struct TraversalTransitionAnchor
         }
     }
 
-    /// <summary>
-    /// Converts this anchor's traversal space into a raw volume traversal mode.
-    /// </summary>
-    public VolumeTraversalMode GetRequiredVolumeTraversalMode()
-    {
-        if (TryGetVolumeTraversalMode(out VolumeTraversalMode volumeMode))
-            return volumeMode;
-
-        throw new InvalidOperationException("Chart anchors do not map to a raw volume traversal mode.");
-    }
-
     private TraversalTransitionAnchor(
         TraversalTransitionAnchorSpace space,
         GlobalVoxelIndex voxelIndex,

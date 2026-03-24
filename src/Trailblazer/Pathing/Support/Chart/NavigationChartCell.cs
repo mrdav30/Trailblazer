@@ -16,7 +16,7 @@ public readonly struct NavigationChartCell
     public static readonly NavigationChartCell Walkable = new(true);
 
     /// <summary>
-    /// A reusable blocked cell with no additional authored metadata.
+    /// A reusable blocked for chart traversal cell with no additional authored metadata.
     /// </summary>
     public static readonly NavigationChartCell Blocked = new(false);
 

@@ -90,8 +90,8 @@ public static class TraversalTransitionRegistry
     /// <returns>True when the transition is registered; false when the id already exists or either endpoint has no voxel.</returns>
     public static bool Register(TraversalTransition transition)
     {
-        if (!TryResolveVoxelIndex(transition.Source.Position, out GlobalVoxelIndex sourceVoxelIndex)
-            || !TryResolveVoxelIndex(transition.Destination.Position, out GlobalVoxelIndex destinationVoxelIndex))
+        if (!TryResolveAnchorVoxelIndex(transition.Source, out GlobalVoxelIndex sourceVoxelIndex)
+            || !TryResolveAnchorVoxelIndex(transition.Destination, out GlobalVoxelIndex destinationVoxelIndex))
         {
             return false;
         }
@@ -398,5 +398,19 @@ public static class TraversalTransitionRegistry
 
         voxelIndex = default;
         return false;
+    }
+
+    private static bool TryResolveAnchorVoxelIndex(
+        TraversalTransitionAnchor anchor,
+        out GlobalVoxelIndex voxelIndex)
+    {
+        if (!TryResolveVoxelIndex(anchor.VoxelPosition, out voxelIndex))
+            return false;
+
+        if (!anchor.HasPointOverride)
+            return true;
+
+        return TryResolveVoxelIndex(anchor.PointOverride, out GlobalVoxelIndex pointOverrideVoxelIndex)
+            && pointOverrideVoxelIndex == voxelIndex;
     }
 }

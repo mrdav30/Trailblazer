@@ -197,38 +197,31 @@ internal static class TraversalTransitionQuery
 
     private static int CompareAnchors(TraversalTransitionAnchor left, TraversalTransitionAnchor right)
     {
-        int kindComparison = left.Kind.CompareTo(right.Kind);
-        if (kindComparison != 0)
-            return kindComparison;
+        int spaceComparison = left.Space.CompareTo(right.Space);
+        if (spaceComparison != 0)
+            return spaceComparison;
 
-        int volumeComparison = left.VolumeMode.CompareTo(right.VolumeMode);
-        if (volumeComparison != 0)
-            return volumeComparison;
+        int voxelComparison = ComparePositions(left.VoxelPosition, right.VoxelPosition);
+        if (voxelComparison != 0)
+            return voxelComparison;
+
+        int overrideComparison = left.HasPointOverride.CompareTo(right.HasPointOverride);
+        if (overrideComparison != 0)
+            return overrideComparison;
 
         return ComparePositions(left.Position, right.Position);
     }
 
     private static int ComparePositions(Vector3d left, Vector3d right)
     {
-        int xComparison = CompareFixed(left.x, right.x);
+        int xComparison = left.x.CompareTo(right.x);
         if (xComparison != 0)
             return xComparison;
 
-        int yComparison = CompareFixed(left.y, right.y);
+        int yComparison = left.y.CompareTo(right.y);
         if (yComparison != 0)
             return yComparison;
 
-        return CompareFixed(left.z, right.z);
-    }
-
-    private static int CompareFixed(Fixed64 left, Fixed64 right)
-    {
-        if (left < right)
-            return -1;
-
-        if (left > right)
-            return 1;
-
-        return 0;
+        return left.z.CompareTo(right.z);
     }
 }

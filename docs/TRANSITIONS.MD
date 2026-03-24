@@ -80,8 +80,9 @@ Each transition endpoint is a `TraversalTransitionAnchor`.
 
 An anchor can be:
 
-- `Chart(position)`
-- `Volume(position, volumeMode)`
+- `Chart(voxelPosition)`
+- `OpenVolume(voxelPosition)`
+- `WaterVolume(voxelPosition)`
 
 This is what lets one transition system cover:
 
@@ -91,8 +92,10 @@ This is what lets one transition system cover:
 
 Important nuance:
 
-- volume anchors carry a `VolumeTraversalMode`
-- that mode must match the volume mode used by the paired route segment
+- anchors now identify their traversal space directly
+- chart anchors and volume anchors no longer share a single `Kind` plus always-present volume-mode split
+- volume route legs still use `VolumeTraversalMode`, but that is resolved from the anchor's traversal space only when a volume segment is actually planned
+- anchors may optionally keep a more precise world-space point override while still resolving through a canonical voxel position
 
 ## 3. `TraversalTransitionRegistry`
 
@@ -116,13 +119,14 @@ It is not responsible for:
 `Register(...)` succeeds only when:
 
 - the transition id is new
-- both authored anchor positions resolve to real voxels in the current grid setup
+- both authored anchor voxel positions resolve to real voxels in the current grid setup
 
 Important nuance:
 
-- registration resolves endpoint voxels immediately
+- registration resolves endpoint voxels immediately from the anchor voxel positions
+- if an anchor uses a point override, that override must still resolve inside the same voxel
 - it does not verify that a chart anchor actually belongs to a live chart path segment
-- it does not verify that a volume anchor's mode is currently configured in `VolumeTraversalRules`
+- it does not verify that a volume anchor's derived traversal mode is currently configured in `VolumeTraversalRules`
 
 That means registration is necessary, but not sufficient, for a handoff to be usable.
 

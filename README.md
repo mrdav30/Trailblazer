@@ -33,6 +33,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 ### Pathing Layer
 
 - `NavigationChart` and `NavigationChartCell` for defining chart-backed surface space with optional per-cell cost and hint metadata
+- `TraversalAuthoringMap` and `TraversalLegend` for tokenized `string[,,]` authoring that can build a chart plus generated transitions
 - `TraversalTransition` and `TraversalTransitionRegistry` for explicit chart-to-chart and chart-to-volume handoff data
 - `PathManager` for chart registration, initialization, unloading, and path utilities
 - `AStarPathRequest`, `FlowFieldPathRequest`, and `VolumePathRequest` for request configuration
@@ -115,6 +116,8 @@ PathManager.InitializeChart(chart.Name);
 ```
 
 `NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell cost modifiers or transition hints. Air and broad water traversal remain volume-based through `VolumePathRequest`, while chart-backed `AStarPathRequest` and `FlowFieldPathRequest` requests can opt into registered transition fallback through `AllowTraversalTransitions`.
+
+If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse `string[,,]` input such as `L`, `L!`, `W`, and `W!` into a `NavigationChart` plus generated explicit transitions for perpendicular marked neighbors.
 
 ### 2. Request a Guide Directly
 

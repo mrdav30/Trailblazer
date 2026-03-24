@@ -111,8 +111,8 @@ internal static class HybridRoutePlanner
         for (int i = 0; i < transitions.Length; i++)
         {
             TraversalTransition transition = transitions[i];
-            if (transition.Source.Kind != TraversalTransitionAnchorKind.Chart
-                || transition.Destination.Kind != TraversalTransitionAnchorKind.Chart)
+            if (transition.Source.Space != TraversalTransitionAnchorSpace.Chart
+                || transition.Destination.Space != TraversalTransitionAnchorSpace.Chart)
             {
                 continue;
             }
@@ -183,8 +183,8 @@ internal static class HybridRoutePlanner
         for (int i = 0; i < entries.Length; i++)
         {
             TraversalTransition entry = entries[i];
-            if (entry.Source.Kind != TraversalTransitionAnchorKind.Chart
-                || entry.Destination.Kind != TraversalTransitionAnchorKind.Volume)
+            if (entry.Source.Space != TraversalTransitionAnchorSpace.Chart
+                || !entry.Destination.TryGetVolumeTraversalMode(out VolumeTraversalMode entryTraversalMode))
             {
                 continue;
             }
@@ -202,9 +202,9 @@ internal static class HybridRoutePlanner
             for (int j = 0; j < exits.Length; j++)
             {
                 TraversalTransition exit = exits[j];
-                if (exit.Source.Kind != TraversalTransitionAnchorKind.Volume
-                    || exit.Destination.Kind != TraversalTransitionAnchorKind.Chart
-                    || entry.Destination.VolumeMode != exit.Source.VolumeMode)
+                if (!exit.Source.TryGetVolumeTraversalMode(out VolumeTraversalMode exitTraversalMode)
+                    || exit.Destination.Space != TraversalTransitionAnchorSpace.Chart
+                    || entryTraversalMode != exitTraversalMode)
                 {
                     continue;
                 }
@@ -213,7 +213,7 @@ internal static class HybridRoutePlanner
                     entry.Destination.Position,
                     exit.Source.Position,
                     request,
-                    entry.Destination.VolumeMode,
+                    entryTraversalMode,
                     out HybridRouteStep volumeStep,
                     out int volumeCost))
                 {

@@ -82,9 +82,48 @@ public class TraversalTransitionRegistryTests : IDisposable
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
         Assert.True(TraversalTransitionRegistry.TryGet("shoreline-entry", out TraversalTransition storedTransition));
-        Assert.Equal(TraversalTransitionAnchorKind.Chart, storedTransition.Source.Kind);
-        Assert.Equal(TraversalTransitionAnchorKind.Volume, storedTransition.Destination.Kind);
-        Assert.Equal(VolumeTraversalMode.Water, storedTransition.Destination.VolumeMode);
+        Assert.Equal(TraversalTransitionAnchorSpace.Chart, storedTransition.Source.Space);
+        Assert.Equal(TraversalTransitionAnchorSpace.WaterVolume, storedTransition.Destination.Space);
+        Assert.True(storedTransition.Destination.TryGetVolumeTraversalMode(out VolumeTraversalMode volumeMode));
+        Assert.Equal(VolumeTraversalMode.Water, volumeMode);
+    }
+
+    [Fact]
+    public void Register_ShouldSupportVoxelScopedAnchorsWithPointOverrides()
+    {
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel sourceVoxel));
+        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel destinationVoxel));
+
+        Vector3d pointOverride = sourceVoxel.WorldPosition + new Vector3d(
+            GlobalGridManager.VoxelSize / 4,
+            Fixed64.Zero,
+            Fixed64.Zero);
+        Assert.True(GlobalGridManager.TryGetVoxel(pointOverride, out Voxel overrideVoxel));
+        Assert.Equal(sourceVoxel.GlobalIndex, overrideVoxel.GlobalIndex);
+
+        var transition = new TraversalTransition(
+            id: "voxel-override",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(sourceVoxel.WorldPosition, pointOverride),
+            destination: TraversalTransitionAnchor.Chart(destinationVoxel.WorldPosition));
+
+        Assert.True(TraversalTransitionRegistry.Register(transition));
+        Assert.True(TraversalTransitionRegistry.TryGet("voxel-override", out TraversalTransition storedTransition));
+        Assert.True(storedTransition.Source.HasPointOverride);
+        Assert.Equal(sourceVoxel.WorldPosition, storedTransition.Source.VoxelPosition);
+        Assert.Equal(pointOverride, storedTransition.Source.Position);
+    }
+
+    [Fact]
+    public void Register_ShouldRejectPointOverridesOutsideTheAuthoredVoxel()
+    {
+        var transition = new TraversalTransition(
+            id: "bad-override",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero, new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)));
+
+        Assert.False(TraversalTransitionRegistry.Register(transition));
     }
 
     [Fact]

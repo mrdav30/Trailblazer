@@ -127,9 +127,9 @@ internal static class GuidedVolumeExitPlanner
         for (int i = 0; i < transitions.Length; i++)
         {
             TraversalTransition transition = transitions[i];
-            if (transition.Source.Kind != TraversalTransitionAnchorKind.Volume
-                || transition.Destination.Kind != TraversalTransitionAnchorKind.Chart
-                || transition.Source.VolumeMode != traversalMode)
+            if (!transition.Source.TryGetVolumeTraversalMode(out VolumeTraversalMode transitionTraversalMode)
+                || transition.Destination.Space != TraversalTransitionAnchorSpace.Chart
+                || transitionTraversalMode != traversalMode)
             {
                 continue;
             }

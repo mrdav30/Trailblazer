@@ -9,6 +9,7 @@ This document is the high-level architecture guide for the current codebase.
 
 See also:
 
+- `AUTHORING.MD` for tokenized chart plus transition authoring
 - `PATHING.MD` for a standalone guide to the `Trailblazer.Pathing` namespace
 - `PATHGUIDES.MD` for the runtime guide and guide-factory layer
 - `TRANSITIONS.MD` for authored handoffs between charts and raw volume
@@ -43,7 +44,7 @@ At a high level, the runtime loop is:
 `NavigationChart` is the pathable surface description of your world. It stores authored chart-cell data and exposes:
 
 - `NavigationChart.From3D(...)` to build a chart from `bool[,,]` or `NavigationChartCell[,,]` voxel data
-- `TraversalAuthoringMap.Build()` to build a chart plus generated transitions from tokenized `string[,,]` authoring input
+- `TraversalAuthoringMap.Build()` to build a `TraversalBuildResult` from tokenized `string[,,]` authoring input
 - `TryGetCell(...)` to inspect the authored cell payload at a world position
 - `TryWorldToIndex(...)` to map world positions into chart coordinates
 - `IsWalkable(...)` to query a world-space position
@@ -58,12 +59,13 @@ Important details:
 
 ### 2.2 PathManager
 
-`PathManager` is the global chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, manages chart ownership and unload behavior, exposes neighbor and direct-travel utilities, and participates in guide-cache maintenance.
+`PathManager` is the global chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes neighbor and direct-travel utilities, and participates in guide-cache maintenance.
 
 Explicit handoff data between chart-backed traversal and raw-volume traversal is registered separately through `TraversalTransitionRegistry`.
 
 See also:
 
+- [`AUTHORING.MD`](AUTHORING.MD)
 - [`CHARTS.MD`](CHARTS.MD)
 - [`PATHMANAGER.MD`](PATHMANAGER.MD)
 

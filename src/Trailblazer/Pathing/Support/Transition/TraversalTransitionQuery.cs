@@ -201,15 +201,15 @@ internal static class TraversalTransitionQuery
         if (spaceComparison != 0)
             return spaceComparison;
 
-        int voxelComparison = ComparePositions(left.VoxelPosition, right.VoxelPosition);
-        if (voxelComparison != 0)
-            return voxelComparison;
+        int gridComparison = left.VoxelIndex.GridIndex.CompareTo(right.VoxelIndex.GridIndex);
+        if (gridComparison != 0)
+            return gridComparison;
 
-        int overrideComparison = left.HasPointOverride.CompareTo(right.HasPointOverride);
-        if (overrideComparison != 0)
-            return overrideComparison;
+        int positionComparison = ComparePositions(left.Position, right.Position);
+        if (positionComparison != 0)
+            return positionComparison;
 
-        return ComparePositions(left.Position, right.Position);
+        return left.HasPointOverride.CompareTo(right.HasPointOverride);
     }
 
     private static int ComparePositions(Vector3d left, Vector3d right)

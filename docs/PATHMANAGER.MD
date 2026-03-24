@@ -5,6 +5,7 @@ This document is the detailed reference for Trailblazer's global chart registry 
 If you only need the high-level architecture, read `OVERVIEW.md`.
 If you want the pathing-first request and guide model, read `PATHING.MD`.
 If you need a deeper explanation of what charts are and why they exist, read `CHARTS.MD`.
+If you need the tokenized chart-plus-transition builder flow, read `AUTHORING.MD`.
 If you need guide caching and guide lifetime details, read the relevant pathing source alongside this file.
 
 The code referenced here lives primarily in:
@@ -65,6 +66,7 @@ That ownership model is why initialization and unload logic are more complex tha
 The main entry points are:
 
 - `Register(NavigationChart chart)`
+- `Register(TraversalBuildResult buildResult, bool initializeChart = true)`
 - `IsChartRegistered(string name)`
 - `TryGetNavigationChart(string name, out NavigationChart chart)`
 - `InitializeChart(string chartKey)`
@@ -113,7 +115,9 @@ That means:
 
 ### 5.1 Register(...)
 
-`Register(...)` adds a chart to the global registry by its `Name`.
+`PathManager` currently exposes two registration flows.
+
+`Register(NavigationChart chart)` adds a chart to the global registry by its `Name`.
 
 Behavior:
 
@@ -122,6 +126,15 @@ Behavior:
 - does not touch voxel state
 
 This is only the first step of making a chart available.
+
+`Register(TraversalBuildResult buildResult, bool initializeChart = true)` applies the output of `TraversalAuthoringMap.Build()`.
+
+Behavior:
+
+- returns `false` if chart registration fails
+- returns `false` if any generated transition fails to register
+- rolls back the chart and any transitions registered in that call when registration fails partway through
+- initializes the built chart by default after chart and transition registration succeed
 
 ### 5.2 IsChartRegistered(...) and TryGetNavigationChart(...)
 
@@ -235,8 +248,8 @@ The current implementation of `UnloadChart(...)` only unloads initialized charts
 
 That means:
 
-- a registered but never-initialized chart causes `UnloadChart(...)` to return early
-- if you need a total registry reset, use the normal teardown pattern described below
+- a registered but never-initialized chart can still be removed cleanly
+- unloading clears the chart's initialization flag so the same chart instance can be registered again later if needed
 
 ## 8. Clear and Teardown Behavior
 
@@ -246,6 +259,7 @@ That means:
 
 - clears the chart registry
 - flushes guide caches if pooling is active
+- clears chart initialization state on registered chart instances
 
 It will walk live voxels and remove partitions itself.
 
@@ -255,7 +269,7 @@ That means the accurate teardown pattern is:
 
 ### 8.2 Tick(...)
 
-`Tick(int currentFrame)` is an internal bridge from `TrailblazerManager` to guide-cache cleanup.
+`Tick()` is an internal bridge from `TrailblazerManager` to guide-cache cleanup.
 
 It currently forwards to:
 

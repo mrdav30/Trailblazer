@@ -413,6 +413,8 @@ In this mode, transitions are still data owned by `TraversalTransitionRegistry`,
 ## 11. Common Gotchas
 
 - `PathManager.Register(...)` does not make a chart pathable. You must initialize it.
+- `PathManager.Register(NavigationChart)` does not make a chart pathable. You must initialize it.
+- `PathManager.Register(TraversalBuildResult)` initializes the built chart by default after registering its generated transitions.
 - `IsValid` depends on resolved endpoints and a positive `MaxPathSearchRange`.
 - `AllowUnwalkableEndNode` relaxes endpoint resolution. It does not guarantee the full route can ignore blocked space.
 - `AllowTraversalTransitions` is a separate opt-in from `AllowUnwalkableEndNode`.

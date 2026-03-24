@@ -1,5 +1,7 @@
 using System;
 using FixedMathSharp;
+using GridForge.Grids;
+using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
 
@@ -15,9 +17,9 @@ public readonly struct TraversalTransitionAnchor
     public TraversalTransitionAnchorSpace Space { get; }
 
     /// <summary>
-    /// The canonical voxel position this anchor resolves through.
+    /// The canonical voxel identity this anchor resolves through.
     /// </summary>
-    public Vector3d VoxelPosition { get; }
+    public GlobalVoxelIndex VoxelIndex { get; }
 
     /// <summary>
     /// Indicates whether this anchor uses a world-space point override inside the resolved voxel.
@@ -34,58 +36,79 @@ public readonly struct TraversalTransitionAnchor
     /// </summary>
     public Vector3d Position => HasPointOverride
         ? PointOverride
-        : VoxelPosition;
+        : GetVoxelWorldPosition(VoxelIndex);
 
     /// <summary>
-    /// Creates a chart-backed anchor at the provided voxel position.
+    /// Creates a chart-backed anchor for the provided voxel index.
     /// </summary>
-    public static TraversalTransitionAnchor Chart(Vector3d voxelPosition) =>
-        new(TraversalTransitionAnchorSpace.Chart, voxelPosition);
+    public static TraversalTransitionAnchor Chart(GlobalVoxelIndex voxelIndex) =>
+        Create(TraversalTransitionAnchorSpace.Chart, voxelIndex);
+
+    /// <summary>
+    /// Creates a chart-backed anchor for the provided voxel index with an explicit world-space point override.
+    /// </summary>
+    public static TraversalTransitionAnchor Chart(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
+        Create(TraversalTransitionAnchorSpace.Chart, voxelIndex, pointOverride, hasPointOverride: true);
+
+    /// <summary>
+    /// Creates a chart-backed anchor at the provided world position.
+    /// </summary>
+    public static TraversalTransitionAnchor Chart(Vector3d position) =>
+        CreateFromPosition(TraversalTransitionAnchorSpace.Chart, position);
 
     /// <summary>
     /// Creates a chart-backed anchor with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor Chart(Vector3d voxelPosition, Vector3d pointOverride) =>
-        new(TraversalTransitionAnchorSpace.Chart, voxelPosition, pointOverride, hasPointOverride: true);
+    public static TraversalTransitionAnchor Chart(Vector3d position, Vector3d pointOverride) =>
+        CreateFromPosition(TraversalTransitionAnchorSpace.Chart, position, pointOverride, hasPointOverride: true);
 
     /// <summary>
-    /// Creates an open-volume anchor at the provided voxel position.
+    /// Creates an open-volume anchor for the provided voxel index.
     /// </summary>
-    public static TraversalTransitionAnchor OpenVolume(Vector3d voxelPosition) =>
-        new(TraversalTransitionAnchorSpace.OpenVolume, voxelPosition);
+    public static TraversalTransitionAnchor OpenVolume(GlobalVoxelIndex voxelIndex) =>
+        Create(TraversalTransitionAnchorSpace.OpenVolume, voxelIndex);
+
+    /// <summary>
+    /// Creates an open-volume anchor for the provided voxel index with an explicit world-space point override.
+    /// </summary>
+    public static TraversalTransitionAnchor OpenVolume(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
+        Create(TraversalTransitionAnchorSpace.OpenVolume, voxelIndex, pointOverride, hasPointOverride: true);
+
+    /// <summary>
+    /// Creates an open-volume anchor at the provided world position.
+    /// </summary>
+    public static TraversalTransitionAnchor OpenVolume(Vector3d position) =>
+        CreateFromPosition(TraversalTransitionAnchorSpace.OpenVolume, position);
 
     /// <summary>
     /// Creates an open-volume anchor with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor OpenVolume(Vector3d voxelPosition, Vector3d pointOverride) =>
-        new(TraversalTransitionAnchorSpace.OpenVolume, voxelPosition, pointOverride, hasPointOverride: true);
+    public static TraversalTransitionAnchor OpenVolume(Vector3d position, Vector3d pointOverride) =>
+        CreateFromPosition(TraversalTransitionAnchorSpace.OpenVolume, position, pointOverride, hasPointOverride: true);
 
     /// <summary>
-    /// Creates a water-volume anchor at the provided voxel position.
+    /// Creates a water-volume anchor for the provided voxel index.
     /// </summary>
-    public static TraversalTransitionAnchor WaterVolume(Vector3d voxelPosition) =>
-        new(TraversalTransitionAnchorSpace.WaterVolume, voxelPosition);
+    public static TraversalTransitionAnchor WaterVolume(GlobalVoxelIndex voxelIndex) =>
+        Create(TraversalTransitionAnchorSpace.WaterVolume, voxelIndex);
+
+    /// <summary>
+    /// Creates a water-volume anchor for the provided voxel index with an explicit world-space point override.
+    /// </summary>
+    public static TraversalTransitionAnchor WaterVolume(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
+        Create(TraversalTransitionAnchorSpace.WaterVolume, voxelIndex, pointOverride, hasPointOverride: true);
+
+    /// <summary>
+    /// Creates a water-volume anchor at the provided world position.
+    /// </summary>
+    public static TraversalTransitionAnchor WaterVolume(Vector3d position) =>
+        CreateFromPosition(TraversalTransitionAnchorSpace.WaterVolume, position);
 
     /// <summary>
     /// Creates a water-volume anchor with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor WaterVolume(Vector3d voxelPosition, Vector3d pointOverride) =>
-        new(TraversalTransitionAnchorSpace.WaterVolume, voxelPosition, pointOverride, hasPointOverride: true);
-
-    /// <summary>
-    /// Creates a raw-volume anchor at the provided voxel position.
-    /// </summary>
-    public static TraversalTransitionAnchor Volume(Vector3d voxelPosition, VolumeTraversalMode volumeMode) =>
-        new(ToAnchorSpace(volumeMode), voxelPosition);
-
-    /// <summary>
-    /// Creates a raw-volume anchor at the provided voxel position with an explicit point override.
-    /// </summary>
-    public static TraversalTransitionAnchor Volume(
-        Vector3d voxelPosition,
-        VolumeTraversalMode volumeMode,
-        Vector3d pointOverride) =>
-        new(ToAnchorSpace(volumeMode), voxelPosition, pointOverride, hasPointOverride: true);
+    public static TraversalTransitionAnchor WaterVolume(Vector3d position, Vector3d pointOverride) =>
+        CreateFromPosition(TraversalTransitionAnchorSpace.WaterVolume, position, pointOverride, hasPointOverride: true);
 
     /// <summary>
     /// Returns true when this anchor belongs to any raw-volume traversal space.
@@ -122,25 +145,74 @@ public readonly struct TraversalTransitionAnchor
         throw new InvalidOperationException("Chart anchors do not map to a raw volume traversal mode.");
     }
 
-    public TraversalTransitionAnchor(
+    private TraversalTransitionAnchor(
         TraversalTransitionAnchorSpace space,
-        Vector3d voxelPosition,
+        GlobalVoxelIndex voxelIndex,
         Vector3d pointOverride = default,
         bool hasPointOverride = false)
     {
         Space = space;
-        VoxelPosition = voxelPosition;
+        VoxelIndex = voxelIndex;
         HasPointOverride = hasPointOverride;
         PointOverride = pointOverride;
     }
 
-    private static TraversalTransitionAnchorSpace ToAnchorSpace(VolumeTraversalMode volumeMode)
+    internal static bool TryResolveVoxelIndex(Vector3d position, out GlobalVoxelIndex voxelIndex)
     {
-        return volumeMode switch
+        if (GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
         {
-            VolumeTraversalMode.Open => TraversalTransitionAnchorSpace.OpenVolume,
-            VolumeTraversalMode.Water => TraversalTransitionAnchorSpace.WaterVolume,
-            _ => throw new ArgumentOutOfRangeException(nameof(volumeMode), volumeMode, "Unsupported volume traversal mode.")
-        };
+            voxelIndex = voxel.GlobalIndex;
+            return true;
+        }
+
+        voxelIndex = default;
+        return false;
+    }
+
+    private static TraversalTransitionAnchor CreateFromPosition(
+        TraversalTransitionAnchorSpace space,
+        Vector3d position,
+        Vector3d pointOverride = default,
+        bool hasPointOverride = false)
+    {
+        if (!TryResolveVoxelIndex(position, out GlobalVoxelIndex voxelIndex))
+        {
+            throw new ArgumentException(
+                "Anchor position must resolve to a voxel in the active grid setup.",
+                nameof(position));
+        }
+
+        return Create(space, voxelIndex, pointOverride, hasPointOverride);
+    }
+
+    private static TraversalTransitionAnchor Create(
+        TraversalTransitionAnchorSpace space,
+        GlobalVoxelIndex voxelIndex,
+        Vector3d pointOverride = default,
+        bool hasPointOverride = false)
+    {
+        if (hasPointOverride && !PointOverrideMatchesVoxel(voxelIndex, pointOverride))
+        {
+            throw new ArgumentException(
+                "Point override must resolve to the same voxel as the anchor.",
+                nameof(pointOverride));
+        }
+
+        return new TraversalTransitionAnchor(space, voxelIndex, pointOverride, hasPointOverride);
+    }
+
+    private static bool PointOverrideMatchesVoxel(GlobalVoxelIndex voxelIndex, Vector3d pointOverride)
+    {
+        return TryResolveVoxelIndex(pointOverride, out GlobalVoxelIndex pointOverrideVoxelIndex)
+            && pointOverrideVoxelIndex == voxelIndex;
+    }
+
+    private static Vector3d GetVoxelWorldPosition(GlobalVoxelIndex voxelIndex)
+    {
+        if (GlobalGridManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel voxel))
+            return voxel.WorldPosition;
+
+        throw new InvalidOperationException(
+            $"Transition anchor voxel {voxelIndex} is not available in the current grid setup.");
     }
 }

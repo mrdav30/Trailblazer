@@ -213,7 +213,7 @@ public static class TraversalTransitionRegistry
     /// </summary>
     public static TraversalTransition[] GetOutgoingTransitions(Vector3d sourcePosition)
     {
-        if (!TryResolveVoxelIndex(sourcePosition, out GlobalVoxelIndex sourceVoxelIndex))
+        if (!TraversalTransitionAnchor.TryResolveVoxelIndex(sourcePosition, out GlobalVoxelIndex sourceVoxelIndex))
             return Array.Empty<TraversalTransition>();
 
         return GetOutgoingTransitions(sourceVoxelIndex);
@@ -224,7 +224,7 @@ public static class TraversalTransitionRegistry
     /// </summary>
     public static TraversalTransition[] GetIncomingTransitions(Vector3d destinationPosition)
     {
-        if (!TryResolveVoxelIndex(destinationPosition, out GlobalVoxelIndex destinationVoxelIndex))
+        if (!TraversalTransitionAnchor.TryResolveVoxelIndex(destinationPosition, out GlobalVoxelIndex destinationVoxelIndex))
             return Array.Empty<TraversalTransition>();
 
         return GetIncomingTransitions(destinationVoxelIndex);
@@ -388,29 +388,20 @@ public static class TraversalTransitionRegistry
         return snapshot.ToArray();
     }
 
-    private static bool TryResolveVoxelIndex(Vector3d position, out GlobalVoxelIndex voxelIndex)
-    {
-        if (GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
-        {
-            voxelIndex = voxel.GlobalIndex;
-            return true;
-        }
-
-        voxelIndex = default;
-        return false;
-    }
-
     private static bool TryResolveAnchorVoxelIndex(
         TraversalTransitionAnchor anchor,
         out GlobalVoxelIndex voxelIndex)
     {
-        if (!TryResolveVoxelIndex(anchor.VoxelPosition, out voxelIndex))
+        voxelIndex = anchor.VoxelIndex;
+        if (!GlobalGridManager.TryGetGridAndVoxel(voxelIndex, out _, out _))
             return false;
 
         if (!anchor.HasPointOverride)
             return true;
 
-        return TryResolveVoxelIndex(anchor.PointOverride, out GlobalVoxelIndex pointOverrideVoxelIndex)
+        return TraversalTransitionAnchor.TryResolveVoxelIndex(
+                anchor.PointOverride,
+                out GlobalVoxelIndex pointOverrideVoxelIndex)
             && pointOverrideVoxelIndex == voxelIndex;
     }
 }

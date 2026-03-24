@@ -97,7 +97,7 @@ public sealed class TraversalAuthoringMap
                 {
                     ParsedTraversalCell parsedCell = ParseCell(SourceMap[y, x, z], y, x, z);
                     parsedCells[y, x, z] = parsedCell;
-                    chartCells[y, x, z] = TraversalAuthoringMap.BuildChartCell(parsedCell);
+                    chartCells[y, x, z] = BuildChartCell(parsedCell);
                 }
 
         var chart = NavigationChart.From3D(ChartName, chartCells, MinBounds, Interval);
@@ -351,7 +351,7 @@ public sealed class TraversalAuthoringMap
                 }
 
                 hasTransitionMarker = true;
-                normalizedToken = normalizedToken.Substring(0, normalizedToken.Length - 1).TrimEnd();
+                normalizedToken = normalizedToken[..^1].TrimEnd();
                 if (string.IsNullOrEmpty(normalizedToken))
                 {
                     throw new ArgumentException(

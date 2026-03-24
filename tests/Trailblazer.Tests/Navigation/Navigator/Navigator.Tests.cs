@@ -854,13 +854,13 @@ public class NavigatorTests : IDisposable
             id: "navigator-transition-fallback-entry",
             type: TraversalTransitionType.SwimEntry,
             source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Volume(new Vector3d(1, 0, 0), VolumeTraversalMode.Water),
+            destination: TraversalTransitionAnchor.WaterVolume(new Vector3d(1, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "navigator-transition-fallback-exit",
             type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.Volume(new Vector3d(3, 0, 0), VolumeTraversalMode.Water),
+            source: TraversalTransitionAnchor.WaterVolume(new Vector3d(3, 0, 0)),
             destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
     }
@@ -875,7 +875,7 @@ public class NavigatorTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
             type: TraversalTransitionType.Landing,
-            source: TraversalTransitionAnchor.Volume(new Vector3d(1, 0, 0), VolumeTraversalMode.Open),
+            source: TraversalTransitionAnchor.OpenVolume(new Vector3d(1, 0, 0)),
             destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
@@ -913,7 +913,7 @@ public class NavigatorTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{chartKey}-exit",
             type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.Volume(new Vector3d(2, 0, 0), VolumeTraversalMode.Water),
+            source: TraversalTransitionAnchor.WaterVolume(new Vector3d(2, 0, 0)),
             destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
     }

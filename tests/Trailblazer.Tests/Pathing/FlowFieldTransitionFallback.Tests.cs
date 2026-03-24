@@ -80,13 +80,13 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             id: "water-entry",
             type: TraversalTransitionType.SwimEntry,
             source: TraversalTransitionAnchor.Chart(new Vector3d(-1, 0, 0)),
-            destination: TraversalTransitionAnchor.Volume(new Vector3d(0, 0, 0), VolumeTraversalMode.Water),
+            destination: TraversalTransitionAnchor.WaterVolume(new Vector3d(0, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "water-exit",
             type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.Volume(new Vector3d(2, 0, 0), VolumeTraversalMode.Water),
+            source: TraversalTransitionAnchor.WaterVolume(new Vector3d(2, 0, 0)),
             destination: TraversalTransitionAnchor.Chart(new Vector3d(3, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 

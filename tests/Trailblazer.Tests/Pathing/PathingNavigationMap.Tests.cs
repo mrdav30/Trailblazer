@@ -120,6 +120,29 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void UnloadChart_ShouldClearInitializationStateSoChartCanBeRegisteredAgain()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        var map = PathTestFactory.BuildSinglePointMap("ReloadableMap", new Vector3d(0, 0, 0));
+        PathManager.Register(map);
+        PathManager.InitializeChart(map.Name);
+
+        PathManager.UnloadChart(map);
+
+        Assert.False(map.IsInitialized);
+        Assert.True(PathManager.Register(map));
+
+        PathManager.InitializeChart(map.Name);
+
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
+        Assert.True(voxel.TryGetPartition<PathPartition>(out _));
+
+        PathManager.UnloadChart(map);
+    }
+
+    [Fact]
     public void TryGetCell_ShouldReturnDefaultMetadata_ForBooleanCharts()
     {
         bool[,,] data = new bool[1, 2, 1]
@@ -213,5 +236,70 @@ public class PathingNavigationMapTests : IDisposable
         Assert.Equal(NavigationChartCellFlags.TransitionDestinationHint, remainingPartition.ChartFlags);
 
         PathManager.UnloadChart("StructuredB");
+    }
+
+    [Fact]
+    public void RegisterTraversalBuildResult_ShouldRegisterTransitionsAndInitializeChart()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        string[,,] map =
+        {
+            {
+                { "L!" },
+                { "W!" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "AuthoredBuild",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(PathManager.Register(buildResult));
+        Assert.True(PathManager.TryGetNavigationChart(buildResult.Chart.Name, out NavigationChart chart));
+        Assert.Same(buildResult.Chart, chart);
+        Assert.True(chart.IsInitialized);
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(voxel.TryGetPartition<PathPartition>(out _));
+
+        foreach (TraversalTransition transition in buildResult.GeneratedTransitions)
+            Assert.True(TraversalTransitionRegistry.IsRegistered(transition.Id));
+
+        PathManager.UnloadChart(chart);
+    }
+
+    [Fact]
+    public void RegisterTraversalBuildResult_ShouldRollback_WhenGeneratedTransitionRegistrationFails()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        string[,,] map =
+        {
+            {
+                { "L!" },
+                { "W!" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "RollbackBuild",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        TraversalTransition preRegisteredTransition = buildResult.GeneratedTransitions[1];
+        Assert.True(TraversalTransitionRegistry.Register(preRegisteredTransition));
+
+        Assert.False(PathManager.Register(buildResult));
+        Assert.False(PathManager.IsChartRegistered(buildResult.Chart.Name));
+        Assert.False(buildResult.Chart.IsInitialized);
+        Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(preRegisteredTransition.Id));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.False(voxel.TryGetPartition<PathPartition>(out _));
     }
 }

@@ -78,11 +78,19 @@ Important nuance:
 
 Each transition endpoint is a `TraversalTransitionAnchor`.
 
-An anchor can be:
+An anchor is defined by:
 
-- `Chart(voxelPosition)`
-- `OpenVolume(voxelPosition)`
-- `WaterVolume(voxelPosition)`
+- a traversal space
+- a canonical `GlobalVoxelIndex`
+- an optional world-space point override inside that voxel
+
+You can create anchors from either a resolved voxel index or a world position that resolves to one.
+
+The built-in spaces are:
+
+- `Chart(...)`
+- `OpenVolume(...)`
+- `WaterVolume(...)`
 
 This is what lets one transition system cover:
 
@@ -92,10 +100,10 @@ This is what lets one transition system cover:
 
 Important nuance:
 
-- anchors now identify their traversal space directly
-- chart anchors and volume anchors no longer share a single `Kind` plus always-present volume-mode split
+- anchors identify their traversal space directly
+- world-position factory overloads resolve to a voxel index immediately
 - volume route legs still use `VolumeTraversalMode`, but that is resolved from the anchor's traversal space only when a volume segment is actually planned
-- anchors may optionally keep a more precise world-space point override while still resolving through a canonical voxel position
+- anchors may optionally keep a more precise world-space point override while still resolving through a canonical voxel index
 
 ## 3. `TraversalTransitionRegistry`
 
@@ -119,11 +127,12 @@ It is not responsible for:
 `Register(...)` succeeds only when:
 
 - the transition id is new
-- both authored anchor voxel positions resolve to real voxels in the current grid setup
+- both authored anchor voxel indices resolve to real voxels in the current grid setup
 
 Important nuance:
 
-- registration resolves endpoint voxels immediately from the anchor voxel positions
+- creating an anchor from world position resolves that position to a voxel index immediately
+- registration validates that the stored anchor voxel indices still exist in the active grid setup
 - if an anchor uses a point override, that override must still resolve inside the same voxel
 - it does not verify that a chart anchor actually belongs to a live chart path segment
 - it does not verify that a volume anchor's derived traversal mode is currently configured in `VolumeTraversalRules`
@@ -147,7 +156,7 @@ Useful mental model:
 
 - `AllTransitions` is the authored snapshot
 - outgoing and incoming queries are voxel-scoped views of that authored data
-- `TryGetResolvedEndpoints(...)` is the bridge from authored positions to actual voxel indices
+- `TryGetResolvedEndpoints(...)` is the bridge from authored anchors to actual voxel indices
 
 ### 3.3 Lifetime And Reset
 
@@ -262,18 +271,18 @@ TraversalTransitionRegistry.Register(new TraversalTransition(
     id: "shore-entry",
     type: TraversalTransitionType.SwimEntry,
     source: TraversalTransitionAnchor.Chart(new Vector3d(-1, 0, 0)),
-    destination: TraversalTransitionAnchor.Volume(new Vector3d(0, 0, 0), VolumeTraversalMode.Water)));
+    destination: TraversalTransitionAnchor.WaterVolume(new Vector3d(0, 0, 0))));
 
 TraversalTransitionRegistry.Register(new TraversalTransition(
     id: "shore-exit",
     type: TraversalTransitionType.SwimExit,
-    source: TraversalTransitionAnchor.Volume(new Vector3d(4, 0, 0), VolumeTraversalMode.Water),
+    source: TraversalTransitionAnchor.WaterVolume(new Vector3d(4, 0, 0)),
     destination: TraversalTransitionAnchor.Chart(new Vector3d(5, 0, 0))));
 ```
 
 ### 6.3 Takeoff And Landing
 
-Use volume anchors with `VolumeTraversalMode.Open` when authored air handoffs should be available between chart-backed traversal and open-volume travel.
+Use `OpenVolume(...)` anchors when authored air handoffs should be available between chart-backed traversal and open-volume travel.
 
 ## 7. Why Complex Worlds Depend On This
 
@@ -303,7 +312,7 @@ This is especially important in worlds with:
 - Registration only checks voxel existence and duplicate ids.
 - A registered transition can still be unusable if its surrounding chart or volume segments cannot be built.
 - Bidirectional behavior is query-time expansion, not two separate registry entries.
-- Volume anchors depend on `VolumeTraversalRules` and matching `VolumeTraversalMode`.
+- Volume anchors depend on `VolumeTraversalRules` and the raw `VolumeTraversalMode` implied by their anchor space.
 - `PathManager.Reset()` clears the registry.
 - If world topology changes after registration, rebuild your transitions.
 

@@ -91,6 +91,46 @@ public static class PathManager
     }
 
     /// <summary>
+    /// Attempts to register the chart and generated transitions produced by a traversal authoring build.
+    /// </summary>
+    /// <param name="buildResult">The build result to register.</param>
+    /// <param name="initializeChart">Whether to initialize the built chart after registration succeeds.</param>
+    /// <returns>True when the chart and all generated transitions are registered successfully; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="buildResult"/> is null.</exception>
+    public static bool Register(TraversalBuildResult buildResult, bool initializeChart = true)
+    {
+        if (buildResult == null)
+            ThrowHelper.ThrowArgumentNullException(nameof(buildResult));
+
+        if (!Register(buildResult.Chart))
+            return false;
+
+        TraversalTransition[] generatedTransitions = buildResult.GeneratedTransitions;
+        string[] registeredTransitionIds = new string[generatedTransitions.Length];
+        int registeredTransitionCount = 0;
+
+        for (int i = 0; i < generatedTransitions.Length; i++)
+        {
+            TraversalTransition transition = generatedTransitions[i];
+            if (!TraversalTransitionRegistry.Register(transition))
+            {
+                RollbackTraversalBuildRegistration(
+                    buildResult.Chart,
+                    registeredTransitionIds,
+                    registeredTransitionCount);
+                return false;
+            }
+
+            registeredTransitionIds[registeredTransitionCount++] = transition.Id;
+        }
+
+        if (initializeChart)
+            InitializeChart(buildResult.Chart.Name);
+
+        return true;
+    }
+
+    /// <summary>
     /// Checks if a navigation map is already registered under the specified name.
     /// </summary>
     /// <param name="name">The map name to check.</param>
@@ -186,11 +226,15 @@ public static class PathManager
     /// <param name="chart">The navigation chart to unload.</param>
     public static void UnloadChart(NavigationChart chart)
     {
-        // TODO: should we allow unloading of non-initialized charts? It would be simpler to just remove them from the map, 
-        // but it could lead to issues if something tries to initialize a chart after it's been unloaded, 
-        // since the chart object would still exist but be inaccessible through the manager.
-        if (chart == null || !chart.IsInitialized)
+        if (chart == null)
             return;
+
+        if (!chart.IsInitialized)
+        {
+            RemoveChartFromRegistry(chart.Name);
+            chart.IsInitialized = false;
+            return;
+        }
 
         // invalidate any survey results currently using this chart
         PathGuideFactory.InvalidateCacheFor(chart.Name);
@@ -221,9 +265,8 @@ public static class PathManager
 
         PartitionSetPool.Release(stillActivePartitions);
 
-        _navigationChartMapLock.EnterWriteLock();
-        try { _navigationChartMap.Remove(chart.Name); }
-        finally { _navigationChartMapLock.ExitWriteLock(); }
+        RemoveChartFromRegistry(chart.Name);
+        chart.IsInitialized = false;
     }
 
     /// <summary>
@@ -256,6 +299,8 @@ public static class PathManager
                     if (!part.HasAnyOwners)
                         voxel.TryRemovePartition<PathPartition>();
                 }
+
+                chart.IsInitialized = false;
             }
 
             _navigationChartMap.Clear();
@@ -270,6 +315,24 @@ public static class PathManager
     }
 
     #endregion
+
+    private static void RollbackTraversalBuildRegistration(
+        NavigationChart chart,
+        string[] registeredTransitionIds,
+        int registeredTransitionCount)
+    {
+        for (int i = 0; i < registeredTransitionCount; i++)
+            TraversalTransitionRegistry.Unregister(registeredTransitionIds[i]);
+
+        UnloadChart(chart);
+    }
+
+    private static void RemoveChartFromRegistry(string chartName)
+    {
+        _navigationChartMapLock.EnterWriteLock();
+        try { _navigationChartMap.Remove(chartName); }
+        finally { _navigationChartMapLock.ExitWriteLock(); }
+    }
 
     #region Neighbor Discovery
 

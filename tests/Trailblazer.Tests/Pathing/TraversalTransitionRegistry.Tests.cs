@@ -77,7 +77,7 @@ public class TraversalTransitionRegistryTests : IDisposable
             id: "shoreline-entry",
             type: TraversalTransitionType.SwimEntry,
             source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Volume(new Vector3d(0, 0, 1), VolumeTraversalMode.Water),
+            destination: TraversalTransitionAnchor.WaterVolume(new Vector3d(0, 0, 1)),
             pathCostModifier: 2);
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
@@ -110,24 +110,34 @@ public class TraversalTransitionRegistryTests : IDisposable
         Assert.True(TraversalTransitionRegistry.Register(transition));
         Assert.True(TraversalTransitionRegistry.TryGet("voxel-override", out TraversalTransition storedTransition));
         Assert.True(storedTransition.Source.HasPointOverride);
-        Assert.Equal(sourceVoxel.WorldPosition, storedTransition.Source.VoxelPosition);
+        Assert.Equal(sourceVoxel.GlobalIndex, storedTransition.Source.VoxelIndex);
         Assert.Equal(pointOverride, storedTransition.Source.Position);
+
+        Vector3d alternateQueryPoint = sourceVoxel.WorldPosition + new Vector3d(
+            Fixed64.Zero,
+            GlobalGridManager.VoxelSize / 4,
+            Fixed64.Zero);
+
+        TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(alternateQueryPoint);
+        Assert.Single(outgoing);
+        Assert.Equal("voxel-override", outgoing[0].Id);
     }
 
     [Fact]
-    public void Register_ShouldRejectPointOverridesOutsideTheAuthoredVoxel()
+    public void ChartAnchor_ShouldRejectPointOverridesOutsideTheResolvedVoxel()
     {
-        var transition = new TraversalTransition(
-            id: "bad-override",
-            type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero, new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)));
-
-        Assert.False(TraversalTransitionRegistry.Register(transition));
+        Assert.Throws<ArgumentException>(() =>
+            TraversalTransitionAnchor.Chart(Vector3d.Zero, new Vector3d(1, 0, 0)));
     }
 
     [Fact]
-    public void Register_ShouldRejectDuplicateIds_AndMissingVoxels()
+    public void ChartAnchor_ShouldRejectMissingVoxelPositions()
+    {
+        Assert.Throws<ArgumentException>(() => TraversalTransitionAnchor.Chart(new Vector3d(64, 0, 0)));
+    }
+
+    [Fact]
+    public void Register_ShouldRejectDuplicateIds()
     {
         var valid = new TraversalTransition(
             id: "duplicate-check",
@@ -135,15 +145,8 @@ public class TraversalTransitionRegistryTests : IDisposable
             source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
             destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)));
 
-        var missingVoxel = new TraversalTransition(
-            id: "missing-voxel",
-            type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(64, 0, 0)));
-
         Assert.True(TraversalTransitionRegistry.Register(valid));
         Assert.False(TraversalTransitionRegistry.Register(valid));
-        Assert.False(TraversalTransitionRegistry.Register(missingVoxel));
     }
 
     [Fact]
@@ -153,7 +156,7 @@ public class TraversalTransitionRegistryTests : IDisposable
             id: "reset-check",
             type: TraversalTransitionType.Takeoff,
             source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Volume(new Vector3d(0, 1, 0), VolumeTraversalMode.Open));
+            destination: TraversalTransitionAnchor.OpenVolume(new Vector3d(0, 1, 0)));
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
         Assert.NotEmpty(TraversalTransitionRegistry.AllTransitions);

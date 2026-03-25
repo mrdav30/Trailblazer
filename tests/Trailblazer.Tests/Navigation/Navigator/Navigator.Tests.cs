@@ -25,7 +25,6 @@ public class NavigatorTests : IDisposable
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         GlobalGridManager.TryAddGrid(config, out _);
-        VolumeTraversalRules.SetWaterVoxelPartition<TestWaterPartition>();
     }
 
     public void Dispose()
@@ -170,6 +169,11 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_Should_CreateAerialRequest_AndEnableFlight()
     {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(0, 1, 0));
+        AddOpen(new Vector3d(0, 2, 0));
+        AddOpen(new Vector3d(0, 3, 0));
+
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.GuidedAllowTraversalTransitions = true;
         Vector3d target = new(0, 3, 0);
@@ -447,6 +451,11 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void Simulate_Should_PersistGuidedFlightIntent_BetweenFrames()
     {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(0, 1, 0));
+        AddOpen(new Vector3d(0, 2, 0));
+        AddOpen(new Vector3d(0, 3, 0));
+
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.ApplyGuidedTrekRequest(new Vector3d(0, 3, 0), pathMode: GuidedPathMode.Aerial, rate: TrekRate.Fast);
 
@@ -820,8 +829,12 @@ public class NavigatorTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
+        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "NavigatorWater");
+    }
+
+    private static void AddOpen(Vector3d position)
+    {
+        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Open, "NavigatorOpen");
     }
 
     private static void AddObstacle(Vector3d position)
@@ -869,6 +882,8 @@ public class NavigatorTests : IDisposable
     {
         PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Landing", new Vector3d(1, 0, 0));
         PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(1, 0, 0));
 
         AddObstaclePlaneAtX(2);
 

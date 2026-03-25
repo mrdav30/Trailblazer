@@ -1,11 +1,15 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
+using System;
+using System.Threading;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Tests;
 
 public static class PathTestFactory
 {
+    private static int _generatedChartId;
+
     public static NavigationChart RegisterSingleWalkablePoint(string mapName, Vector3d pos)
     {
         Vector3d minBounds = pos - new Vector3d(1, 1, 1);
@@ -26,6 +30,32 @@ public static class PathTestFactory
         return map;
     }
 
+    public static NavigationChart RegisterSingleTraversalPoint(
+        string mapName,
+        Vector3d pos,
+        NavigationChartTraversalKinds traversalKinds)
+    {
+        Vector3d minBounds = pos - new Vector3d(1, 1, 1);
+        NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
+        data[1, 1, 1] = new NavigationChartCell(traversalKinds);
+
+        var map = NavigationChart.From3D(mapName, data, minBounds, Fixed64.One);
+        PathManager.Register(map);
+        PathManager.InitializeChart(mapName);
+        return map;
+    }
+
+    public static NavigationChart RegisterGeneratedVolumePoint(
+        Vector3d pos,
+        VolumeTraversalMode traversalMode,
+        string chartNamePrefix = "GeneratedVolume")
+    {
+        return RegisterSingleTraversalPoint(
+            mapName: $"{chartNamePrefix}-{Interlocked.Increment(ref _generatedChartId)}",
+            pos: pos,
+            traversalKinds: ToTraversalKinds(traversalMode));
+    }
+
     public static NavigationChart BuildSinglePointMap(string name, Vector3d worldPos)
     {
         // Convert a single world point into an aligned map
@@ -34,5 +64,15 @@ public static class PathTestFactory
         data[1, 1, 1] = true;
 
         return NavigationChart.From3D(name, data, minBounds, Fixed64.One);
+    }
+
+    private static NavigationChartTraversalKinds ToTraversalKinds(VolumeTraversalMode traversalMode)
+    {
+        return traversalMode switch
+        {
+            VolumeTraversalMode.Open => NavigationChartTraversalKinds.OpenVolume,
+            VolumeTraversalMode.Water => NavigationChartTraversalKinds.WaterVolume,
+            _ => throw new ArgumentOutOfRangeException(nameof(traversalMode))
+        };
     }
 }

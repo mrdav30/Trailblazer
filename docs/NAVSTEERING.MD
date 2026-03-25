@@ -226,7 +226,7 @@ If movement is active, `GetHeading(...)` starts by making sure the current path 
 
 If `CanPathfind` is true, it calls `ValidateMovementPath(navigator.Position)`.
 
-The built-in aerial request mode always validates its live origin/destination, because it may switch between direct 3D travel and a cached aerial guide as blockers appear or disappear.
+The built-in aerial request mode always validates its live origin/destination, because it may switch between direct 3D travel and a cached aerial guide as blockers appear or disappear inside authored or configured open volume.
 
 If that validation fails:
 
@@ -325,7 +325,7 @@ Guide creation and reuse are delegated to `PathGuideFactory`.
 For aerial requests, direct travel and guide-following are both valid runtime outcomes:
 
 - clear corridor: no guide allocation, steer directly at the 3D destination
-- blocked corridor: request a `VolumeGuide` and follow waypoint detours through raw voxel space
+- blocked corridor: request a `VolumeGuide` and follow waypoint detours through compatible raw-volume voxels
 
 ### 8.4 Guide Loss or Invalidity
 

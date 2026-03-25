@@ -167,7 +167,7 @@ internal static class RawVoxelFinder
         if (voxel.TryGetPartition(out PathPartition partition))
             return !partition.IsImpassable(unitSize);
 
-        return HasClearance(voxel, unitSize);
+        return false;
     }
 
     private static bool TryGetEndpointVoxel(

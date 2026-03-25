@@ -73,6 +73,7 @@ Important nuance:
 - `L` produces a surface cell that initializes a `PathPartition`
 - empty / `.` / `X` contribute no chart surface and no transition anchor
 - `O` and `W` produce authored volume cells that initialize `VolumePartition` state
+- `O` and `W` are the built-in way to author valid open-volume and water-volume space; Trailblazer does not treat generic empty voxels as implicit volume by default
 
 ## 3. Transition Marker Rules
 

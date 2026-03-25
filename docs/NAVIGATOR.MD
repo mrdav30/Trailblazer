@@ -313,7 +313,7 @@ While guided movement remains active:
 - `IsRequestingFlight` persists until changed or replaced by a different request
 - `IsRequestingJump` is still frame-scoped unless the host reissues it
 
-When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically. Steering may then travel directly through open volume, acquire a volume guide if blockers force a detour, or hand off into a chart-backed follow-up route through an authored landing transition when transition fallback is enabled and the landing route is preferable.
+When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically. Steering may then travel directly through authored or explicitly configured open volume, acquire a volume guide if blockers force a detour inside that space, or hand off into a chart-backed follow-up route through an authored landing transition when transition fallback is enabled and the landing route is preferable.
 
 When the selected path mode is `GuidedPathMode.Swim`, guided travel does not toggle a swim state. Swim remains medium-driven through `TrekCondition.Medium == TraversalMedium.Water`. The request simply uses the raw-volume pathing stack with authored water-volume cells, `VolumeTraversalRules`, or both providing the valid swim medium.
 

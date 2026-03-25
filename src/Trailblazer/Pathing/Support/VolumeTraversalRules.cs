@@ -11,16 +11,24 @@ namespace Trailblazer.Pathing;
 /// </summary>
 /// <remarks>
 /// Trailblazer can derive raw-volume membership from authored <see cref="VolumePartition"/> data
-/// created during chart initialization. Hosts can also install supplemental water rules for
-/// engine-specific partitioning or bespoke world logic.
+/// created during chart initialization. Hosts can also install supplemental open-volume and
+/// water-volume rules for engine-specific partitioning or bespoke world logic. Host rules are
+/// only evaluated for voxels that already belong to Trailblazer's runtime traversal world.
 /// </remarks>
 public static class VolumeTraversalRules
 {
     public delegate bool VoxelRule(Voxel voxel);
 
+    private static VoxelRule _openVoxelRule;
+
     private static VoxelRule _waterVoxelRule;
 
     private static int _registryVersion;
+
+    /// <summary>
+    /// Indicates whether an open-volume rule is currently configured.
+    /// </summary>
+    public static bool HasOpenVoxelRule => _openVoxelRule != null;
 
     /// <summary>
     /// Indicates whether a water-volume rule is currently configured.
@@ -30,15 +38,43 @@ public static class VolumeTraversalRules
     internal static int RegistryVersion => _registryVersion;
 
     /// <summary>
+    /// Uses a host-defined voxel partition type to identify open-volume voxels.
+    /// </summary>
+    public static void SetOpenVoxelPartition<TPartition>()
+        where TPartition : class, IVoxelPartition
+    {
+        SetOpenVoxelRule(static voxel =>
+            voxel != null
+            && voxel.HasPartition<TPartition>());
+    }
+
+    /// <summary>
+    /// Sets a host-defined open-volume voxel rule.
+    /// </summary>
+    public static void SetOpenVoxelRule(VoxelRule rule)
+    {
+        _openVoxelRule = rule;
+        InvalidateRuleConfiguration();
+    }
+
+    /// <summary>
+    /// Clears any previously configured open-volume voxel rule.
+    /// </summary>
+    public static void ClearOpenVoxelRule()
+    {
+        _openVoxelRule = null;
+        InvalidateRuleConfiguration();
+    }
+
+    /// <summary>
     /// Uses a host-defined voxel partition type to identify water voxels.
     /// </summary>
     public static void SetWaterVoxelPartition<TPartition>()
         where TPartition : class, IVoxelPartition
     {
-        _waterVoxelRule = static voxel =>
+        SetWaterVoxelRule(static voxel =>
             voxel != null
-            && voxel.HasPartition<TPartition>();
-        Interlocked.Increment(ref _registryVersion);
+            && voxel.HasPartition<TPartition>());
     }
 
     /// <summary>
@@ -47,7 +83,7 @@ public static class VolumeTraversalRules
     public static void SetWaterVoxelRule(VoxelRule rule)
     {
         _waterVoxelRule = rule;
-        Interlocked.Increment(ref _registryVersion);
+        InvalidateRuleConfiguration();
     }
 
     /// <summary>
@@ -56,17 +92,22 @@ public static class VolumeTraversalRules
     public static void ClearWaterVoxelRule()
     {
         _waterVoxelRule = null;
-        Interlocked.Increment(ref _registryVersion);
+        InvalidateRuleConfiguration();
     }
 
-    internal static void Reset() => ClearWaterVoxelRule();
+    internal static void Reset()
+    {
+        _openVoxelRule = null;
+        _waterVoxelRule = null;
+        InvalidateRuleConfiguration();
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool IsConfigured(VolumeTraversalMode traversalMode)
     {
         return traversalMode switch
         {
-            VolumeTraversalMode.Open => true,
+            VolumeTraversalMode.Open => _openVoxelRule != null || PathManager.HasAuthoredVolumeTraversal(VolumeTraversalMode.Open),
             VolumeTraversalMode.Water => _waterVoxelRule != null || PathManager.HasAuthoredVolumeTraversal(VolumeTraversalMode.Water),
             _ => false
         };
@@ -78,9 +119,14 @@ public static class VolumeTraversalRules
         if (voxel == null)
             return false;
 
-        // TODO: add _openVoxelRule for host-defined open traversal rules, if needed
-        bool hostWaterMatch = _waterVoxelRule?.Invoke(voxel) == true;
+        bool hasTrailblazerPartition = voxel.HasPartition<PathPartition>();
         bool hasAuthoredVolumePartition = voxel.TryGetPartition(out VolumePartition volumePartition);
+        hasTrailblazerPartition |= hasAuthoredVolumePartition;
+        if (!hasTrailblazerPartition)
+            return false;
+
+        bool hostOpenMatch = _openVoxelRule?.Invoke(voxel) == true;
+        bool hostWaterMatch = _waterVoxelRule?.Invoke(voxel) == true;
         bool authoredOpenMatch = hasAuthoredVolumePartition
             && volumePartition.SupportsTraversal(VolumeTraversalMode.Open);
         bool authoredWaterMatch = hasAuthoredVolumePartition
@@ -88,11 +134,15 @@ public static class VolumeTraversalRules
 
         return traversalMode switch
         {
-            VolumeTraversalMode.Open => hasAuthoredVolumePartition
-                ? authoredOpenMatch
-                : !PathManager.HasAuthoredVolumeTraversal(VolumeTraversalMode.Open),
+            VolumeTraversalMode.Open => authoredOpenMatch || hostOpenMatch,
             VolumeTraversalMode.Water => authoredWaterMatch || hostWaterMatch,
             _ => false
         };
+    }
+
+    private static void InvalidateRuleConfiguration()
+    {
+        Interlocked.Increment(ref _registryVersion);
+        PathGuideFactory.InvalidateVolumeCache();
     }
 }

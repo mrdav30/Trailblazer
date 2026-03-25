@@ -125,7 +125,7 @@ One important difference from A*:
 
 ### 3.3 VolumePathRequest
 
-Use `VolumePathRequest` when a navigator should travel through 3D grid volume that may not have a navigation chart.
+Use `VolumePathRequest` when a navigator should travel through authored or explicitly configured 3D grid volume that may not have a navigation chart route.
 
 Key traits:
 
@@ -134,6 +134,7 @@ Key traits:
 - it can fall back to a cached volume waypoint guide when blockers force a detour
 - it supports both authored open-volume travel and constrained volumes such as water
 - constrained volume membership can come from authored chart cells, `VolumeTraversalRules`, or both
+- open-volume requests fail until authored open volume or a host open rule is configured
 
 Related support type:
 

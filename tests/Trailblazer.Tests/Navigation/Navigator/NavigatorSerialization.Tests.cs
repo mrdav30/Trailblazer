@@ -28,7 +28,6 @@ public class NavigatorSerializationTests : IDisposable
 
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
         GlobalGridManager.TryAddGrid(config, out _);
-        VolumeTraversalRules.SetWaterVoxelPartition<TestWaterPartition>();
     }
 
     public void Dispose()
@@ -241,7 +240,7 @@ public class NavigatorSerializationTests : IDisposable
     {
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.Aerial);
         source.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
-        source.Steering.TrailGuide.Should().BeNull();
+        source.Steering.TrailGuide.Should().BeOfType<VolumeGuide>();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
@@ -287,6 +286,13 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(true)]
     public void RoundTrip_ShouldRestoreBlockedAerialGuideProgress(bool useMemoryPack)
     {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(1, 0, 0));
+        AddOpen(new Vector3d(1, 1, 0));
+        AddOpen(new Vector3d(2, 1, 0));
+        AddOpen(new Vector3d(3, 1, 0));
+        AddOpen(new Vector3d(4, 1, 0));
+        AddOpen(new Vector3d(4, 0, 0));
         AddObstacle(new Vector3d(2, 0, 0));
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
@@ -808,6 +814,19 @@ public class NavigatorSerializationTests : IDisposable
             ? new Vector3d(4, 4, 0)
             : new Vector3d(4, 0, 0);
 
+        if (pathMode == GuidedPathMode.Aerial)
+        {
+            AddOpen(Vector3d.Zero);
+            AddOpen(new Vector3d(0, 1, 0));
+            AddOpen(new Vector3d(0, 2, 0));
+            AddOpen(new Vector3d(0, 3, 0));
+            AddOpen(new Vector3d(0, 4, 0));
+            AddOpen(new Vector3d(1, 4, 0));
+            AddOpen(new Vector3d(2, 4, 0));
+            AddOpen(new Vector3d(3, 4, 0));
+            AddOpen(new Vector3d(4, 4, 0));
+        }
+
         source.ApplyGuidedTrekRequest(
             targetPosition,
             pathMode: pathMode,
@@ -944,6 +963,8 @@ public class NavigatorSerializationTests : IDisposable
     {
         PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Landing", new Vector3d(1, 0, 0));
         PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(1, 0, 0));
 
         AddObstaclePlaneAtX(2);
 
@@ -1189,8 +1210,12 @@ public class NavigatorSerializationTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
+        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "NavigatorSerializationWater");
+    }
+
+    private static void AddOpen(Vector3d position)
+    {
+        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Open, "NavigatorSerializationOpen");
     }
 
     private static void AssertTurningStateMatches(NavTurning expected, NavTurning actual)

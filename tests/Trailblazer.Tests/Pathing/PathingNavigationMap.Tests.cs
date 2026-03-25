@@ -344,7 +344,7 @@ public class PathingNavigationMapTests : IDisposable
         GlobalGridManager.TryAddGrid(config, out _);
 
         Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel unAuthoredVoxel));
-        Assert.True(RawVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.False(RawVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, VolumeTraversalMode.Open));
 
         string[,,] map =
         {
@@ -365,6 +365,50 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(RawVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, VolumeTraversalMode.Open));
 
         PathManager.UnloadChart(buildResult.Chart);
+    }
+
+    [Fact]
+    public void OpenVoxelRule_ShouldRequireTrailblazerPartitionPresence()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        VolumeTraversalRules.SetOpenVoxelRule(static voxel =>
+            voxel.WorldPosition == Vector3d.Zero
+            || voxel.WorldPosition == new Vector3d(1, 0, 0));
+
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel unpartitionedVoxel));
+        Assert.False(RawVoxelFinder.IsTraversable(unpartitionedVoxel, Fixed64.One, VolumeTraversalMode.Open));
+
+        PathTestFactory.RegisterSingleWalkablePoint("OpenRuleSurfaceA", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("OpenRuleSurfaceB", new Vector3d(1, 0, 0));
+
+        Assert.True(RawVoxelFinder.IsTraversable(unpartitionedVoxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.True(VolumePathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            out VolumePathRequest request,
+            traversalMode: VolumeTraversalMode.Open));
+        Assert.NotNull(request);
+
+        PathManager.UnloadChart("OpenRuleSurfaceA");
+        PathManager.UnloadChart("OpenRuleSurfaceB");
+    }
+
+    [Fact]
+    public void PathManagerReset_ShouldClearOpenAndWaterVoxelRules()
+    {
+        VolumeTraversalRules.SetOpenVoxelRule(static _ => true);
+        VolumeTraversalRules.SetWaterVoxelRule(static _ => true);
+
+        Assert.True(VolumeTraversalRules.HasOpenVoxelRule);
+        Assert.True(VolumeTraversalRules.HasWaterVoxelRule);
+
+        PathManager.Reset();
+
+        Assert.False(VolumeTraversalRules.HasOpenVoxelRule);
+        Assert.False(VolumeTraversalRules.HasWaterVoxelRule);
     }
 
     [Fact]

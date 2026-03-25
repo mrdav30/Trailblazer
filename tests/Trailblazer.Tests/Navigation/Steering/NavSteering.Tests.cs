@@ -25,7 +25,6 @@ public class NavSteeringTests : IDisposable
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         GlobalGridManager.TryAddGrid(config, out _);
-        VolumeTraversalRules.SetWaterVoxelPartition<TestWaterPartition>();
     }
 
     public void Dispose()
@@ -108,6 +107,11 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_Should_GuideAerialRequests_WithVerticalOnlyTargets()
     {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(0, 1, 0));
+        AddOpen(new Vector3d(0, 2, 0));
+        AddOpen(new Vector3d(0, 3, 0));
+
         var steer = new NavSteering();
         var agent = new MockSteerAgent(Vector3d.Zero);
         steer.OnInitialize(agent.Radius);
@@ -131,6 +135,11 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_Should_RequestAerialGuide_WhenDirectFlightIsBlocked()
     {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(0, 1, 0));
+        AddOpen(new Vector3d(1, 1, 0));
+        AddOpen(new Vector3d(2, 1, 0));
+        AddOpen(new Vector3d(2, 0, 0));
         AddObstacle(new Vector3d(1, 0, 0));
 
         var steer = new NavSteering();
@@ -850,7 +859,11 @@ public class NavSteeringTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
+        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "NavSteeringWater");
+    }
+
+    private static void AddOpen(Vector3d position)
+    {
+        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Open, "NavSteeringOpen");
     }
 }

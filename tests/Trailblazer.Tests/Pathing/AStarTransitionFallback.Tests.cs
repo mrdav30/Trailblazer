@@ -21,7 +21,6 @@ public class AStarTransitionFallbackTests : IDisposable
 
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
         GlobalGridManager.TryAddGrid(config, out _);
-        VolumeTraversalRules.SetWaterVoxelPartition<TestWaterPartition>();
     }
 
     public void Dispose()
@@ -131,7 +130,6 @@ public class AStarTransitionFallbackTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
+        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "AStarFallbackWater");
     }
 }

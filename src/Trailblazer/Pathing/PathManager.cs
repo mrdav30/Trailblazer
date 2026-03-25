@@ -7,7 +7,6 @@ using SwiftCollections;
 using SwiftCollections.Pool;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -50,7 +49,28 @@ public static class PathManager
         get
         {
             _navigationChartMapLock.EnterReadLock();
-            try { return _navigationChartMap.Values.ToArray(); }
+            try
+            {
+                if (_navigationChartMap.Count == 0)
+                    return Array.Empty<NavigationChart>();
+
+                NavigationChart[] charts = new NavigationChart[_navigationChartMap.Count];
+                int index = 0;
+                foreach (NavigationChart chart in _navigationChartMap.Values)
+                {
+                    if (index >= charts.Length)
+                        break;
+
+                    charts[index++] = chart;
+                }
+
+                if (index == charts.Length)
+                    return charts;
+
+                NavigationChart[] trimmed = new NavigationChart[index];
+                Array.Copy(charts, trimmed, index);
+                return trimmed;
+            }
             finally { _navigationChartMapLock.ExitReadLock(); }
         }
     }

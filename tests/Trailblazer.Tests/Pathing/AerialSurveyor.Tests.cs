@@ -23,7 +23,6 @@ public class AerialSurveyorTests : IDisposable
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         GlobalGridManager.TryAddGrid(config, out _);
-        VolumeTraversalRules.SetWaterVoxelPartition<TestWaterPartition>();
     }
 
     public void Dispose()
@@ -37,6 +36,11 @@ public class AerialSurveyorTests : IDisposable
     [Fact]
     public void AerialSurveyor_Should_FindChartlessDetour_AroundBlockedVoxel()
     {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(0, 1, 0));
+        AddOpen(new Vector3d(1, 1, 0));
+        AddOpen(new Vector3d(2, 1, 0));
+        AddOpen(new Vector3d(2, 0, 0));
         AddObstacle(new Vector3d(1, 0, 0));
         GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel blockedVoxel).Should().BeTrue();
 
@@ -57,6 +61,11 @@ public class AerialSurveyorTests : IDisposable
     [Fact]
     public void PathGuideFactory_Should_ReturnAerialGuide_ForBlockedAerialRequests()
     {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(0, 1, 0));
+        AddOpen(new Vector3d(1, 1, 0));
+        AddOpen(new Vector3d(2, 1, 0));
+        AddOpen(new Vector3d(2, 0, 0));
         AddObstacle(new Vector3d(1, 0, 0));
 
         VolumePathRequest request = VolumePathRequest.Create(
@@ -108,7 +117,11 @@ public class AerialSurveyorTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        voxel.TryAddPartition(new TestWaterPartition()).Should().BeTrue();
+        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "AerialWater");
+    }
+
+    private static void AddOpen(Vector3d position)
+    {
+        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Open, "AerialOpen");
     }
 }

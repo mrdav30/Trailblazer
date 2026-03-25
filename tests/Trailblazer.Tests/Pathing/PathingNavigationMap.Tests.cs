@@ -156,12 +156,16 @@ public class PathingNavigationMapTests : IDisposable
         var chart = NavigationChart.From3D("BoolPayload", data, Vector3d.Zero, Fixed64.One);
 
         Assert.True(chart.TryGetCell(Vector3d.Zero, out NavigationChartCell walkableCell));
-        Assert.True(walkableCell.IsTraversable);
+        Assert.True(walkableCell.HasTraversalData);
+        Assert.True(walkableCell.HasSurface);
+        Assert.False(walkableCell.HasVolume);
         Assert.Equal(0, walkableCell.PathCostModifier);
         Assert.Equal(NavigationChartCellFlags.None, walkableCell.Flags);
 
         Assert.True(chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell blockedCell));
-        Assert.False(blockedCell.IsTraversable);
+        Assert.False(blockedCell.HasTraversalData);
+        Assert.False(blockedCell.HasSurface);
+        Assert.False(blockedCell.HasVolume);
         Assert.Equal(0, blockedCell.PathCostModifier);
         Assert.Equal(NavigationChartCellFlags.None, blockedCell.Flags);
 
@@ -176,7 +180,7 @@ public class PathingNavigationMapTests : IDisposable
 
         NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
         data[1, 1, 1] = new NavigationChartCell(
-            isTraversable: true,
+            NavigationChartTraversalKinds.Surface,
             pathCostModifier: 7,
             flags: NavigationChartCellFlags.TransitionSourceHint);
 
@@ -204,13 +208,13 @@ public class PathingNavigationMapTests : IDisposable
 
         NavigationChartCell[,,] mapAData = new NavigationChartCell[3, 3, 3];
         mapAData[1, 1, 1] = new NavigationChartCell(
-            isTraversable: true,
+            NavigationChartTraversalKinds.Surface,
             pathCostModifier: 2,
             flags: NavigationChartCellFlags.TransitionSourceHint);
 
         NavigationChartCell[,,] mapBData = new NavigationChartCell[3, 3, 3];
         mapBData[1, 1, 1] = new NavigationChartCell(
-            isTraversable: true,
+            NavigationChartTraversalKinds.Surface,
             pathCostModifier: 5,
             flags: NavigationChartCellFlags.TransitionDestinationHint);
 
@@ -239,6 +243,32 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void InitializeChart_ShouldApplyStructuredVolumeMetadata_ToVolumePartitions()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
+        data[1, 1, 1] = new NavigationChartCell(
+            NavigationChartTraversalKinds.WaterVolume,
+            pathCostModifier: 9);
+
+        Vector3d targetPosition = Vector3d.Zero;
+        var chart = NavigationChart.From3D("StructuredVolume", data, new Vector3d(-1, -1, -1), Fixed64.One);
+        PathManager.Register(chart);
+        PathManager.InitializeChart(chart.Name);
+
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.False(voxel.TryGetPartition<PathPartition>(out _));
+        Assert.True(voxel.TryGetPartition(out VolumePartition volumePartition));
+        Assert.True(volumePartition.SupportsTraversal(VolumeTraversalMode.Water));
+        Assert.False(volumePartition.SupportsTraversal(VolumeTraversalMode.Open));
+        Assert.Equal(9, volumePartition.PathCostModifier);
+
+        PathManager.UnloadChart(chart.Name);
+    }
+
+    [Fact]
     public void RegisterTraversalBuildResult_ShouldRegisterTransitionsAndInitializeChart()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
@@ -264,11 +294,77 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(chart.IsInitialized);
         Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition<PathPartition>(out _));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel waterVoxel));
+        Assert.True(waterVoxel.TryGetPartition(out VolumePartition volumePartition));
+        Assert.True(volumePartition.SupportsTraversal(VolumeTraversalMode.Water));
 
         foreach (TraversalTransition transition in buildResult.GeneratedTransitions)
             Assert.True(TraversalTransitionRegistry.IsRegistered(transition.Id));
 
         PathManager.UnloadChart(chart);
+    }
+
+    [Fact]
+    public void RegisterTraversalBuildResult_ShouldInitializeBareWaterCells_WithoutHostRules()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        string[,,] map =
+        {
+            {
+                { "W" },
+                { "W" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "BareWaterBuild",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.Empty(buildResult.GeneratedTransitions);
+        Assert.True(PathManager.Register(buildResult));
+        Assert.True(VolumePathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            out VolumePathRequest request,
+            traversalMode: VolumeTraversalMode.Water));
+        Assert.NotNull(request);
+
+        PathManager.UnloadChart(buildResult.Chart);
+    }
+
+    [Fact]
+    public void AuthoredOpenVolume_ShouldRestrictOpenTraversalToAuthoredVoxels()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel unAuthoredVoxel));
+        Assert.True(RawVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, VolumeTraversalMode.Open));
+
+        string[,,] map =
+        {
+            {
+                { "O" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "AuthoredOpenOnly",
+            sourceMap: map,
+            minBounds: new Vector3d(1, 0, 0),
+            interval: Fixed64.One).Build();
+
+        Assert.True(PathManager.Register(buildResult));
+        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel authoredOpenVoxel));
+        Assert.True(RawVoxelFinder.IsTraversable(authoredOpenVoxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.False(RawVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, VolumeTraversalMode.Open));
+
+        PathManager.UnloadChart(buildResult.Chart);
     }
 
     [Fact]

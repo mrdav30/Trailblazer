@@ -10,8 +10,9 @@ namespace Trailblazer.Pathing;
 /// Represents a chart-optional guided travel request through raw voxel volume.
 /// </summary>
 /// <remarks>
-/// Volume requests resolve directly against raw voxels instead of chart partitions. Hosts can constrain
-/// these requests to specialized voxel volumes, such as water, through <see cref="VolumeTraversalRules"/>.
+/// Volume requests resolve directly against raw voxels instead of surface partitions. Traversal membership
+/// can come from authored <see cref="VolumePartition"/> data, host-configured <see cref="VolumeTraversalRules"/>,
+/// or both, depending on the requested <see cref="TraversalMode"/>.
 /// </remarks>
 public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathRequest>
 {
@@ -239,7 +240,9 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             AllowUnwalkableEndNode,
             Heuristic,
             TraversalMode,
-            MaxPathSearchRange
+            MaxPathSearchRange,
+            PathManager.VolumeTopologyVersion,
+            VolumeTraversalRules.RegistryVersion
         ).CombineHashCodes();
     }
 }

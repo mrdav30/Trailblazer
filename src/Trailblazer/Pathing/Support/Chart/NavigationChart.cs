@@ -10,8 +10,8 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Represents authored chart-backed surface traversal data.
-/// Provides utility methods for querying traversable cells and converting world positions into discrete grid indices.
+/// Represents dense authored traversal data across surface and volume spaces.
+/// Provides utility methods for querying authored cells and converting world positions into discrete grid indices.
 /// </summary>
 [Serializable]
 public class NavigationChart
@@ -66,7 +66,7 @@ public class NavigationChart
     /// Creates a new navigation chart using a pre-flattened map array and spatial parameters.
     /// </summary>
     /// <param name="name">The chart's unique identifier.</param>
-    /// <param name="map">A flattened boolean array representing walkable and non-walkable grid cells.</param>
+    /// <param name="map">A flattened boolean array representing authored surface cells and empty cells.</param>
     /// <param name="sizeX">Number of cells along the X axis.</param>
     /// <param name="sizeY">Number of cells along the Y axis.</param>
     /// <param name="sizeZ">Number of cells along the Z axis.</param>
@@ -166,7 +166,7 @@ public class NavigationChart
     }
 
     /// <summary>
-    /// Checks if the given world-space position corresponds to a traversable chart cell.
+    /// Checks if the given world-space position corresponds to an authored surface traversal cell.
     /// </summary>
     /// <param name="worldPos">The position to query.</param>
     /// <returns>True if traversable; otherwise, false.</returns>
@@ -175,7 +175,7 @@ public class NavigationChart
         if (!TryGetCell(worldPos, out NavigationChartCell cell))
             return false;
 
-        return cell.IsTraversable;
+        return cell.HasSurface;
     }
 
     /// <summary>
@@ -197,26 +197,26 @@ public class NavigationChart
     }
 
     /// <summary>
-    /// Returns all traversable world positions within the chart.
+    /// Returns all authored surface traversal positions within the chart.
     /// </summary>
     /// <returns>A collection of traversable surface positions.</returns>
     public IEnumerable<Vector3d> GetWalkablePositions()
     {
-        foreach ((Vector3d position, _) in GetTraversableCells())
+        foreach ((Vector3d position, _) in GetSurfaceCells())
             yield return position;
     }
 
     /// <summary>
-    /// Returns each traversable world position together with its authored cell payload.
+    /// Returns each authored surface traversal position together with its authored cell payload.
     /// </summary>
-    internal IEnumerable<(Vector3d Position, NavigationChartCell Cell)> GetTraversableCells()
+    internal IEnumerable<(Vector3d Position, NavigationChartCell Cell)> GetSurfaceCells()
     {
         for (int y = 0; y < SizeY; y++)
             for (int x = 0; x < SizeX; x++)
                 for (int z = 0; z < SizeZ; z++)
                 {
                     NavigationChartCell cell = GetCell(x, y, z);
-                    if (cell.IsTraversable)
+                    if (cell.HasSurface)
                     {
                         yield return (
                             new Vector3d(
@@ -225,6 +225,28 @@ public class NavigationChart
                                 MinBounds.z + z * Interval),
                             cell);
                     }
+                }
+    }
+
+    /// <summary>
+    /// Returns each authored traversal position together with its authored cell payload.
+    /// </summary>
+    internal IEnumerable<(Vector3d Position, NavigationChartCell Cell)> GetAuthoredCells()
+    {
+        for (int y = 0; y < SizeY; y++)
+            for (int x = 0; x < SizeX; x++)
+                for (int z = 0; z < SizeZ; z++)
+                {
+                    NavigationChartCell cell = GetCell(x, y, z);
+                    if (!cell.HasTraversalData)
+                        continue;
+
+                    yield return (
+                        new Vector3d(
+                            MinBounds.x + x * Interval,
+                            MinBounds.y + y * Interval,
+                            MinBounds.z + z * Interval),
+                        cell);
                 }
     }
 
@@ -320,7 +342,7 @@ public class NavigationChart
 
         var cells = new NavigationChartCell[map.Length];
         for (int i = 0; i < map.Length; i++)
-            cells[i] = map[i] ? NavigationChartCell.Walkable : NavigationChartCell.Blocked;
+            cells[i] = map[i] ? NavigationChartCell.Surface : NavigationChartCell.Empty;
 
         return cells;
     }

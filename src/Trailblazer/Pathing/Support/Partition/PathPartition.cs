@@ -369,7 +369,7 @@ public class PathPartition : IVoxelPartition
     /// Registers the chart name as one that owns this partition.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void AddOwner(string mapName) => AddOwner(mapName, NavigationChartCell.Walkable);
+    public void AddOwner(string mapName) => AddOwner(mapName, NavigationChartCell.Surface);
 
     /// <summary>
     /// Registers the chart name as one that owns this partition together with its authored cell metadata.

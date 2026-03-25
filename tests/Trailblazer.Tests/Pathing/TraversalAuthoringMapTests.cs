@@ -50,17 +50,25 @@ public class TraversalAuthoringMapTests : IDisposable
         TraversalBuildResult result = authoringMap.Build();
 
         Assert.True(result.Chart.TryGetCell(new Vector3d(0, 0, 0), out NavigationChartCell plainChartCell));
-        Assert.True(plainChartCell.IsTraversable);
+        Assert.True(plainChartCell.HasTraversalData);
+        Assert.True(plainChartCell.HasSurface);
+        Assert.False(plainChartCell.HasVolume);
         Assert.Equal(NavigationChartCellFlags.None, plainChartCell.Flags);
 
         Assert.True(result.Chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell markedChartCell));
-        Assert.True(markedChartCell.IsTraversable);
+        Assert.True(markedChartCell.HasTraversalData);
+        Assert.True(markedChartCell.HasSurface);
+        Assert.False(markedChartCell.HasVolume);
         Assert.Equal(
             NavigationChartCellFlags.TransitionSourceHint | NavigationChartCellFlags.TransitionDestinationHint,
             markedChartCell.Flags);
 
         Assert.True(result.Chart.TryGetCell(new Vector3d(2, 0, 0), out NavigationChartCell waterChartCell));
-        Assert.False(waterChartCell.IsTraversable);
+        Assert.True(waterChartCell.HasTraversalData);
+        Assert.False(waterChartCell.HasSurface);
+        Assert.True(waterChartCell.HasVolume);
+        Assert.True(waterChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Water));
+        Assert.False(waterChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Open));
 
         Assert.Equal(2, result.GeneratedTransitions.Length);
         Assert.Contains(result.GeneratedTransitions, t =>
@@ -91,6 +99,42 @@ public class TraversalAuthoringMapTests : IDisposable
             interval: Fixed64.One);
 
         TraversalBuildResult result = authoringMap.Build();
+
+        Assert.Empty(result.GeneratedTransitions);
+    }
+
+    [Fact]
+    public void Build_ShouldTreatBareVolumeTokensAsAuthoredVolumeCells()
+    {
+        string[,,] map =
+        {
+            {
+                { "O" },
+                { "W" }
+            }
+        };
+
+        var authoringMap = new TraversalAuthoringMap(
+            chartName: "BareVolumeTokens",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One);
+
+        TraversalBuildResult result = authoringMap.Build();
+
+        Assert.True(result.Chart.TryGetCell(Vector3d.Zero, out NavigationChartCell openChartCell));
+        Assert.True(openChartCell.HasTraversalData);
+        Assert.False(openChartCell.HasSurface);
+        Assert.True(openChartCell.HasVolume);
+        Assert.True(openChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Open));
+        Assert.False(openChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Water));
+
+        Assert.True(result.Chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell waterChartCell));
+        Assert.True(waterChartCell.HasTraversalData);
+        Assert.False(waterChartCell.HasSurface);
+        Assert.True(waterChartCell.HasVolume);
+        Assert.True(waterChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Water));
+        Assert.False(waterChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Open));
 
         Assert.Empty(result.GeneratedTransitions);
     }

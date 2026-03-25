@@ -148,7 +148,7 @@ public sealed class TraversalAuthoringMap
             | NavigationChartCellFlags.TransitionDestinationHint;
 
         return new NavigationChartCell(
-            chartCell.IsTraversable,
+            chartCell.TraversalKinds,
             chartCell.PathCostModifier,
             flags);
     }
@@ -374,7 +374,7 @@ public sealed class TraversalAuthoringMap
 
         if (hasTransitionMarker
             && entry.AnchorSpace == TraversalTransitionAnchorSpace.Chart
-            && !entry.ChartCell.IsTraversable)
+            && !entry.ChartCell.HasSurface)
         {
             throw new ArgumentException(
                 $"Token '{rawToken}' at [{y}, {x}, {z}] maps to a non-traversable chart cell and cannot be marked.");

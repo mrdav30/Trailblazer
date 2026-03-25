@@ -23,7 +23,7 @@ Relevant code:
 
 ## 1. Why Transitions Matter
 
-Charts are intentionally surface-first.
+Charts provide the main authored surface structure, even though `NavigationChart` can also carry authored volume cells.
 
 That is a good default for:
 

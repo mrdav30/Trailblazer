@@ -54,7 +54,7 @@ Important details:
 
 - the chart itself is data only; it does not become queryable by pathfinding until it is registered and initialized
 - the chart uses flattened internal storage, but the public constructor/factory still works in 3D terms
-- charts remain surface-first; open air and broad water traversal still use `VolumePathRequest`
+- charts can author both surface and raw-volume traversal data; runtime open-air and water routing still flow through `VolumePathRequest`
 - world bounds are derived from `MinBounds`, `Interval`, and the source array size
 
 ### 2.2 PathManager
@@ -132,8 +132,8 @@ Key traits:
 - it resolves against raw `GridForge.Voxel` connectivity instead of `PathPartition` ownership
 - it can stay in direct 3D travel when the corridor is clear
 - it can fall back to a cached volume waypoint guide when blockers force a detour
-- it supports both unrestricted open-volume travel and host-defined constrained volumes such as water
-- Trailblazer does not assign water voxels itself; hosts configure that through `VolumeTraversalRules`
+- it supports both authored open-volume travel and constrained volumes such as water
+- constrained volume membership can come from authored chart cells, `VolumeTraversalRules`, or both
 
 Related support type:
 

@@ -56,7 +56,7 @@ When you use `Trailblazer.Pathing` directly, the normal flow is:
 2. For chart-backed requests, build one or more `NavigationChart` instances.
 3. Register each chart with `PathManager.Register(...)`.
 4. Call `PathManager.InitializeChart(...)` or `InitializeAllCharts()`.
-5. For raw water-volume requests, configure `VolumeTraversalRules` before creating the request.
+5. Optionally configure supplemental `VolumeTraversalRules` before creating constrained volume requests.
 6. Create an `IPathRequest`.
 7. Ask `PathGuideFactory` for a guide.
 8. Consume the guide in your own movement or planning system.
@@ -203,13 +203,13 @@ Use it when:
 
 - there is no meaningful `NavigationChart` for the space
 - movement is fundamentally 3D
-- traversal should stay inside a host-defined volume such as water
+- traversal should stay inside an authored or host-defined volume such as water
 
 Key behavior differences from chart-backed requests:
 
 - endpoints resolve through `RawVoxelFinder`, not `VoxelFinder`
-- traversal validates raw voxels directly and only uses `PathPartition` if one happens to exist
-- non-open modes depend on `VolumeTraversalRules` being configured first
+- traversal validates raw voxels directly and prefers authored `VolumePartition` data when present
+- constrained modes can be satisfied by authored volume cells, `VolumeTraversalRules`, or both
 
 Important nuance:
 
@@ -220,8 +220,6 @@ Important nuance:
 Example:
 
 ```csharp
-VolumeTraversalRules.SetWaterVoxelPartition<MyWaterPartition>();
-
 var request = VolumePathRequest.Create(
     origin,
     destination,
@@ -307,7 +305,7 @@ It:
 - exposes outgoing and incoming transition queries
 - is cleared by `PathManager.Reset()`
 
-For water routes, transition fallback and `VolumePathRequest` both still depend on `VolumeTraversalRules` being configured.
+For water routes, transition fallback and `VolumePathRequest` depend on a valid water medium existing, whether that comes from authored chart cells, `VolumeTraversalRules`, or both.
 
 ## 8. Guide Resolution and Caching
 
@@ -419,7 +417,7 @@ In this mode, transitions are still data owned by `TraversalTransitionRegistry`,
 - `AllowUnwalkableEndNode` relaxes endpoint resolution. It does not guarantee the full route can ignore blocked space.
 - `AllowTraversalTransitions` is a separate opt-in from `AllowUnwalkableEndNode`.
 - `FlowFieldPathRequest` caches by destination-style identity, not unique start-to-end identity.
-- `VolumeTraversalMode.Water` fails until `VolumeTraversalRules` has a water rule.
+- `VolumeTraversalMode.Water` fails until authored water volume exists, `VolumeTraversalRules` provides water membership, or both.
 - `PathManager.Reset()` also clears transition registry state and volume traversal rules.
 - If you request guides directly and forget `ReturnGuide(...)`, results stay checked out.
 

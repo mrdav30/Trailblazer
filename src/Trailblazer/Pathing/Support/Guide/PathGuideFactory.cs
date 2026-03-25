@@ -240,6 +240,11 @@ public static class PathGuideFactory
         _cachedFlowResults.InvalidateWhere(r => UsesChart(r, chartKey));
     }
 
+    internal static void InvalidateVolumeCache()
+    {
+        _cachedVolumeResults.InvalidateAll();
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool UsesChart(ISurveyResult result, string chartId)
     {

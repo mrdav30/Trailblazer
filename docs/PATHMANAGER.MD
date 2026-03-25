@@ -28,6 +28,7 @@ It is responsible for:
 - providing straight-line path viability checks
 - computing search-size hints for path requests
 - maintaining pooled `PathPartition` instances
+- maintaining pooled `VolumePartition` instances
 - triggering guide-cache cleanup through `Tick(...)`
 - clearing global transition and volume-rule state during `Reset()`
 
@@ -48,7 +49,7 @@ The lifecycle is:
 
 1. Build a `NavigationChart`.
 2. `Register(...)` it with `PathManager`.
-3. `InitializeChart(...)` to attach or reuse `PathPartition` instances on the relevant voxels.
+3. `InitializeChart(...)` to attach or reuse `PathPartition` and `VolumePartition` instances on the relevant voxels.
 4. Use the chart indirectly through path requests, surveyors, and guide resolution.
 5. `UnloadChart(...)` when the chart should stop owning those voxels.
 
@@ -90,6 +91,7 @@ Important public state includes:
 Important internal infrastructure includes:
 
 - `PartitionPool`
+- `VolumePartitionPool`
 - `PartitionSetPool`
 - `Tick(int currentFrame)`
 
@@ -102,6 +104,7 @@ It owns:
 - the chart registry `_navigationChartMap`
 - the registry lock `_navigationChartMapLock`
 - the reusable `PathPartition` pool
+- the reusable `VolumePartition` pool
 - the pooled partition-set helper used during initialization and unload
 
 That means:

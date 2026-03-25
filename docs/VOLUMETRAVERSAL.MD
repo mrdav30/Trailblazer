@@ -1,11 +1,11 @@
 # Volume Traversal Reference
 
-This document explains Trailblazer's raw-volume traversal model and the role of `VolumeTraversalRules` in making volume requests meaningful.
+This document explains Trailblazer's raw-volume traversal model, authored `VolumePartition` state, and the role of `VolumeTraversalRules` as a supplemental volume-membership layer.
 
 Use this file when you need to understand:
 
-- why `VolumePathRequest` can work without charts
-- why water traversal needs host configuration
+- why `VolumePathRequest` can work without surface partitions
+- how authored volume cells and host rules work together
 - how raw-volume endpoint resolution differs from chart-backed endpoint resolution
 - how volume traversal interacts with authored transitions
 
@@ -14,6 +14,7 @@ If you need authored handoff registration, pair this with `TRANSITIONS.MD`.
 
 Relevant code:
 
+- `src/Trailblazer/Pathing/Support/Partition/VolumePartition.cs`
 - `src/Trailblazer/Pathing/Support/VolumeTraversalRules.cs`
 - `src/Trailblazer/Pathing/Support/VolumeTraversalMode.cs`
 - `src/Trailblazer/Pathing/VoxelFinder/RawVoxelFinder.cs`
@@ -23,26 +24,25 @@ Relevant code:
 
 ## 1. Why Volume Traversal Matters
 
-Charts are a surface model.
+Surface pathing is great at answering:
 
-They are great at answering:
-
-- where ground or other intentional walkable structure exists
+- where stable ground or other intentional structure exists
 - how chart-backed units should move across that structure
 
-They are not a good fit for:
+Raw volume traversal covers the other side of the world model:
 
 - open 3D travel
-- swimming through water volume
+- swimming through authored or host-defined water volume
 - chartless detours around blocked voxels
-- spaces where the important rule is "stay inside this medium" instead of "stay on this chart"
+- spaces where the important rule is "stay inside this medium" instead of "stay on this surface"
 
 That is the job of Trailblazer's volume traversal flow.
 
 ## 2. Core Model
 
-Volume traversal is built from three pieces:
+Volume traversal is built from four pieces:
 
+- authored `VolumePartition` state
 - `VolumeTraversalMode`
 - `VolumeTraversalRules`
 - raw-volume resolution through `RawVoxelFinder` and `VolumeSurveyor`
@@ -54,13 +54,14 @@ Current volume modes are:
 
 The key mental model is:
 
-- charts say where surface traversal is allowed
-- volume rules say which raw voxels belong to a constrained traversal medium
+- charts author which voxels contribute surface traversal, volume traversal, or both
+- `VolumePartition` says which authored raw voxels belong to a supported traversal medium
+- `VolumeTraversalRules` can supplement authored membership with host-specific logic
 - raw-volume pathing still respects blocked space and unit clearance
 
 ## 3. `VolumeTraversalRules`
 
-`VolumeTraversalRules` is the host-facing configuration point for constrained raw-volume traversal.
+`VolumeTraversalRules` is the host-facing supplemental configuration point for constrained raw-volume traversal.
 
 Its public surface is:
 
@@ -71,20 +72,21 @@ Its public surface is:
 
 ### 3.1 What The Rules Actually Mean
 
-The rules do not replace normal traversability checks.
+The rules do not replace normal traversability checks, and they are not the only source of volume membership.
 
-They are an additional filter on top of:
+They are an additional layer on top of:
 
 - voxel existence
 - blocked state
 - partition or raw-neighbor clearance for the requested `UnitSize`
+- any authored `VolumePartition` state already attached to the voxel
 
 In raw-volume code, a voxel must be both:
 
 - traversable
 - compatible with the requested `VolumeTraversalMode`
 
-That is why `VolumeTraversalRules` matters so much: it defines what "water" means to the library without asking Trailblazer to guess from engine-specific world data.
+Trailblazer can answer "is this voxel authored open volume or authored water volume?" directly from chart initialization, while still letting hosts layer on engine-specific water logic when needed.
 
 ### 3.2 Open Versus Water
 
@@ -92,23 +94,25 @@ That is why `VolumeTraversalRules` matters so much: it defines what "water" mean
 
 - is always considered configured
 - does not require a host rule
+- matches authored open-volume voxels when any authored open-volume space exists
+- otherwise falls back to the legacy permissive open-volume behavior for chartless worlds
 - still respects blockers and clearance
 
 `VolumeTraversalMode.Water`:
 
-- is only configured when a water rule exists
-- fails fast when no water rule is installed
-- only allows voxels that satisfy the host-defined water test
+- is configured when authored water volume exists or a host water rule exists
+- matches authored water voxels directly
+- may also match additional host-defined water voxels through `VolumeTraversalRules`
 
 ### 3.3 Two Ways To Configure Water
 
 Use `SetWaterVoxelPartition<TPartition>()` when:
 
-- your host already marks water voxels with a partition type
+- your host already marks extra water voxels with a partition type
 
 Use `SetWaterVoxelRule(...)` when:
 
-- water membership depends on custom logic beyond one partition type
+- water membership depends on custom logic beyond authored chart data
 
 Examples:
 
@@ -126,11 +130,12 @@ VolumeTraversalRules.SetWaterVoxelRule(voxel =>
 
 `VolumeTraversalRules` is static and global.
 
-Important lifecycle rule:
+Important lifecycle rules:
 
 - `PathManager.Reset()` clears the installed water rule
+- `PathManager.Reset()` also clears authored `VolumePartition` state by unloading charts
 
-That means tests, world reloads, and runtime bootstrap code must reapply volume rules when needed.
+That means tests, world reloads, and runtime bootstrap code must reapply host rules when needed.
 
 ## 4. Raw-Volume Endpoint Resolution
 
@@ -146,6 +151,7 @@ Instead it resolves endpoints against raw voxels and checks:
 - blocked state
 - unit clearance
 - traversal-mode match
+- authored `VolumePartition` state when present
 
 ### 4.1 Endpoint Resolution Order
 
@@ -184,20 +190,21 @@ Base traversability means:
 - it is not blocked
 - it has enough clearance for the requested `UnitSize`
 
-If a `PathPartition` is present, volume traversal still honors its clearance logic.
-If no `PathPartition` is present, raw-volume clearance falls back to neighbor-space checks.
+If a `VolumePartition` is present, volume traversal honors its authored membership and its clearance logic.
+If only a `PathPartition` is present, volume traversal still honors that partition's clearance logic.
+If neither partition is present, raw-volume clearance falls back to neighbor-space checks.
 
 This is important in mixed worlds:
 
 - volume traversal does not ignore the rest of the voxel world
-- it simply stops requiring chart ownership
+- it simply stops requiring surface-partition ownership
 
 ## 6. `VolumePathRequest` In Practice
 
 Use `VolumePathRequest` when:
 
-- there is no meaningful chart for the space
-- movement should stay inside a constrained volume such as water
+- there is no meaningful surface route for the space
+- movement should stay inside a constrained or authored volume such as water
 - open-volume travel should detour around blockers using raw voxels
 
 Examples:
@@ -220,12 +227,12 @@ var request = VolumePathRequest.Create(
 
 Important nuance:
 
-- water-mode creation fails if `VolumeTraversalRules` has no water rule
+- water-mode creation succeeds when authored water volume exists or a host water rule exists
 - open-mode creation does not need extra setup
 
 ## 7. Why Complex Worlds Depend On This
 
-Volume traversal is what keeps Trailblazer from forcing every traversal problem into charts.
+Volume traversal is what keeps Trailblazer from forcing every traversal problem into surface routes.
 
 It matters in worlds with:
 
@@ -234,15 +241,10 @@ It matters in worlds with:
 - blocked straight-line corridors that still have chartless 3D detours
 - shoreline or docking areas where surface and medium traversal meet
 
-Without volume traversal rules, you usually end up with one of two bad outcomes:
+Without authored or host-defined volume membership, you usually end up with one of two bad outcomes:
 
 - water is treated like generic open space
 - water travel is impossible because nothing tells the library what counts as water
-
-With volume rules in place, you get a clean split:
-
-- surface structure lives in charts
-- medium membership lives in host-authored volume rules
 
 ## 8. Relationship To Transitions
 
@@ -252,14 +254,14 @@ With volume rules in place, you get a clean split:
 
 - where a route may hand off into or out of raw volume
 
-`VolumeTraversalRules` answers:
+Volume traversal answers:
 
 - which voxels are actually valid for that volume segment
 
 For example:
 
 - `SwimEntry` and `SwimExit` transitions depend on `VolumeTraversalMode.Water`
-- those transitions are only useful when the water rule marks the intended volume voxels
+- those transitions are only useful when the intended volume voxels resolve as valid water
 - `Takeoff` and `Landing` can use `VolumeTraversalMode.Open`
 
 Important nuance:
@@ -269,31 +271,27 @@ Important nuance:
 
 ## 9. Usage Patterns
 
-### 9.1 Host-Marked Water
+### 9.1 Authored Water Volume
 
-```csharp
-VolumeTraversalRules.SetWaterVoxelPartition<MyWaterPartition>();
+If your chart authoring already produces `W` or `W!` cells, raw water traversal can work without any host rule.
 
-var request = VolumePathRequest.Create(
-    new Vector3d(0, 0, 1),
-    new Vector3d(4, 0, 1),
-    Fixed64.One,
-    traversalMode: VolumeTraversalMode.Water);
-```
+### 9.2 Supplemental Host Water Logic
 
-### 9.2 Open-Volume Detour
+Use `VolumeTraversalRules` when your world has additional water voxels that are not authored through `NavigationChart`.
+
+### 9.3 Open-Volume Detour
 
 Use `VolumeTraversalMode.Open` when movement should stay chart-optional and 3D, but still avoid blocked voxels.
 
-This is the pathing model used for aerial-style detours in the current codebase.
+When authored open-volume cells exist, `Open` now respects that authored space instead of treating every non-blocked voxel as valid.
 
 ## 10. Common Gotchas
 
-- Charts do not mark water for you.
+- Charts can author water or open volume for you.
 - `VolumeTraversalMode.Open` still respects blockers and clearance.
-- `VolumeTraversalMode.Water` fails until a water rule is configured.
+- `VolumeTraversalMode.Water` still fails until valid water membership exists.
 - `VolumeTraversalRules` is global static state.
-- `PathManager.Reset()` clears the installed water rule.
+- `PathManager.Reset()` clears both host water rules and authored volume partitions.
 - Volume traversal does not require charts, but it still depends on real voxels existing.
 - `allowUnwalkableEndNode` only relaxes endpoints; it does not make the whole route ignore blocked voxels.
 
@@ -301,6 +299,7 @@ This is the pathing model used for aerial-style detours in the current codebase.
 
 If you are changing volume traversal behavior, inspect these files together:
 
+- `src/Trailblazer/Pathing/Support/Partition/VolumePartition.cs`
 - `src/Trailblazer/Pathing/Support/VolumeTraversalRules.cs`
 - `src/Trailblazer/Pathing/VoxelFinder/RawVoxelFinder.cs`
 - `src/Trailblazer/Pathing/Volume/VolumePathRequest.cs`
@@ -309,9 +308,9 @@ If you are changing volume traversal behavior, inspect these files together:
 
 Useful tests:
 
+- `tests/Trailblazer.Tests/Pathing/TraversalAuthoringMapTests.cs`
+- `tests/Trailblazer.Tests/Pathing/PathingNavigationMap.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/AerialSurveyor.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/AStarTransitionFallback.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/FlowFieldTransitionFallback.Tests.cs`
 - `tests/Trailblazer.Tests/Navigation/Steering/NavSteering.Tests.cs`
 
 High-risk changes include:
@@ -319,11 +318,12 @@ High-risk changes include:
 - endpoint relaxation rules
 - direct-path validation in raw volume
 - mode matching versus base traversability
+- cache invalidation for authored volume topology
 - reset behavior for global rules
 
 ## 12. Where To Read Next
 
 - `PATHING.MD` for the request-level pathing model
 - `TRANSITIONS.MD` for authored handoffs into and out of raw volume
-- `CHARTS.MD` for the surface-side world model
+- `CHARTS.MD` for the authored chart model
 - `PATHGUIDES.MD` for `VolumeGuide` and guide-factory behavior

@@ -2,8 +2,7 @@
 
 This document is a deep dive into `NavigationChart`, the chart lifecycle managed by `PathManager`, and the role charts play in Trailblazer's world model.
 
-In this document, charts refer to chart-backed surface traversal.
-Raw air and broad water movement remain volume-traversal concerns handled through `VolumePathRequest` and `VolumeTraversalRules`.
+`NavigationChart` is a dense authored traversal map. Surface traversal is its main chart-backed runtime use, but charts can also author raw-volume cells that initialize `VolumePartition` state for `VolumePathRequest`.
 
 If you only need the high-level architecture, start with `OVERVIEW.md`.
 If you are working from the standalone pathing API inward, read `PATHING.MD` before this file.
@@ -18,7 +17,7 @@ Relevant code:
 
 ## 1. Why Charts Matter
 
-`NavigationChart` is the main way Trailblazer represents intentional traversable space.
+`NavigationChart` is the main way Trailblazer represents intentional authored traversal space.
 
 That matters because Trailblazer is supposed to stay engine-agnostic. It should not know:
 
@@ -28,7 +27,7 @@ That matters because Trailblazer is supposed to stay engine-agnostic. It should 
 
 Instead, Trailblazer asks the host to answer a simpler question:
 
-`Which world-aligned voxel positions should count as pathable surface for this chart?`
+`Which world-aligned voxel positions should contribute authored traversal data for this chart?`
 
 That answer becomes a `NavigationChart`.
 
@@ -38,16 +37,17 @@ In practice, a chart is Trailblazer's agnostic representation of a game's naviga
 
 At the data level, a `NavigationChart` is:
 
-- a named grid-aligned walkability map
+- a named dense authored traversal map
 - a world-space bounds definition
 - a fixed interval between cells
-- a flattened authored cell payload where the default case is still a simple walkable or blocked flag
+- a flattened authored cell payload that can describe surface traversal, volume traversal, both, or neither
 
 Structured cell payloads can optionally carry:
 
-- traversable state
-- path cost modifier
-- future-facing transition hint flags
+- surface traversal state
+- volume traversal state
+- surface and volume path cost modifiers
+- transition hint flags
 
 The chart itself is data-only. It does not pathfind, steer, or mutate live voxel connectivity on its own.
 
@@ -58,7 +58,7 @@ Important fields:
 - `MaxBounds`: exclusive upper world bound
 - `Interval`: spacing between chart cells
 - `SizeX`, `SizeY`, `SizeZ`: chart dimensions
-- `IsInitialized`: whether the chart has been pushed into live `PathPartition` state
+- `IsInitialized`: whether the chart has been pushed into live partition state
 
 The core factory today is:
 
@@ -70,11 +70,11 @@ NavigationChart chart = NavigationChart.From3D(
     interval: Fixed64.One);
 ```
 
-When you need authored per-cell metadata instead of only walkable or blocked state, use the `NavigationChartCell[,,]` overload of `NavigationChart.From3D(...)`.
+When you need authored per-cell surface or volume metadata instead of only a simple surface mask, use the `NavigationChartCell[,,]` overload of `NavigationChart.From3D(...)`.
 
 ## 3. What Charts Are For
 
-Charts are best for stable or semi-stable surface traversal.
+Charts are best for stable or semi-stable authored traversal structure.
 
 Good fits:
 
@@ -89,16 +89,15 @@ Good fits:
 
 Less ideal fits:
 
-- free-flight space
-- fully submerged water volumes
 - short-lived dynamic occupancy
 - temporary blockers like units, crates, or doors that change every frame
+- highly procedural media that the host would rather classify entirely outside authored chart data
 
 Those are better handled by other systems:
 
 - raw-volume traversal for chart-optional 3D movement
 - `GridForge.Voxel` blocked state / occupant state
-- host-defined volume rules such as water partitions
+- supplemental host-defined volume rules such as water partitions
 - explicit handoff registration through `TraversalTransitionRegistry` when chart-backed traversal needs a later jump, swim, or flight transition
 
 In other words, charts define navigable structure, not every transient rule in the world.

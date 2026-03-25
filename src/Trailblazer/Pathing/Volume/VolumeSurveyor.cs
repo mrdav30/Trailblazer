@@ -161,22 +161,24 @@ public sealed class VolumeSurveyor
 
     private bool ProcessNeighbor(Voxel current, Voxel neighbor, int movementCost)
     {
+        int totalMovementCost = movementCost + GetTraversalCostModifier(neighbor);
+
         if (neighbor == _request.EndNode)
         {
-            SetVoxelData(neighbor, current.GlobalIndex, movementCost);
+            SetVoxelData(neighbor, current.GlobalIndex, totalMovementCost);
             return true;
         }
 
-        int pathCost = CalculatePathCost(neighbor.WorldPosition, movementCost);
+        int pathCost = CalculatePathCost(neighbor.WorldPosition, totalMovementCost);
         if (!_heap.Contains(neighbor))
         {
-            SetVoxelData(neighbor, current.GlobalIndex, movementCost);
+            SetVoxelData(neighbor, current.GlobalIndex, totalMovementCost);
             _heap.Add(neighbor, pathCost);
         }
         else if (_meta.TryGetValue(neighbor, out VolumeVoxelMeta neighborData)
-            && neighborData.MovementCost > movementCost)
+            && neighborData.MovementCost > totalMovementCost)
         {
-            SetVoxelData(neighbor, current.GlobalIndex, movementCost);
+            SetVoxelData(neighbor, current.GlobalIndex, totalMovementCost);
             _heap.UpdatePathCost(neighbor, pathCost);
             _heap.SortUp(neighbor);
         }
@@ -290,5 +292,13 @@ public sealed class VolumeSurveyor
         return _meta.TryGetValue(voxel, out VolumeVoxelMeta data)
             ? data.MovementCost
             : int.MaxValue;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int GetTraversalCostModifier(Voxel voxel)
+    {
+        return voxel != null && voxel.TryGetPartition(out VolumePartition volumePartition)
+            ? volumePartition.PathCostModifier
+            : 0;
     }
 }

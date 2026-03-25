@@ -161,6 +161,9 @@ internal static class RawVoxelFinder
         if (voxel == null || voxel.IsBlocked)
             return false;
 
+        if (voxel.TryGetPartition(out VolumePartition volumePartition))
+            return !volumePartition.IsImpassable(unitSize);
+
         if (voxel.TryGetPartition(out PathPartition partition))
             return !partition.IsImpassable(unitSize);
 
@@ -219,7 +222,7 @@ internal static class RawVoxelFinder
         return VolumeTraversalRules.Matches(voxel, traversalMode);
     }
 
-    private static bool HasClearance(Voxel origin, Fixed64 unitSize)
+    internal static bool HasClearance(Voxel origin, Fixed64 unitSize)
     {
         if (unitSize <= GlobalGridManager.VoxelSize)
             return true;

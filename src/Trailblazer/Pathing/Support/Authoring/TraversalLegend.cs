@@ -23,7 +23,7 @@ public sealed class TraversalLegend
         legend.Register(string.Empty, TraversalLegendEntry.SkipCell());
         legend.Register(".", TraversalLegendEntry.SkipCell());
         legend.Register("X", TraversalLegendEntry.SkipCell());
-        legend.Register("L", TraversalLegendEntry.Chart(NavigationChartCell.Walkable));
+        legend.Register("L", TraversalLegendEntry.Chart(NavigationChartCell.Surface));
         legend.Register("O", TraversalLegendEntry.OpenVolume());
         legend.Register("W", TraversalLegendEntry.WaterVolume());
         return legend;

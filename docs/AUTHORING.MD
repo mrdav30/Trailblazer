@@ -4,7 +4,7 @@ This document explains the current tokenized authoring workflow built around `Tr
 
 Use this file when you need:
 
-- a lightweight way to author charts and explicit transition handoffs together
+- a lightweight way to author dense traversal charts and explicit transition handoffs together
 - the meaning of the built-in `string[,,]` legend tokens
 - the current rules for generated chart-to-volume transitions
 
@@ -51,7 +51,7 @@ PathManager.Register(buildResult);
 
 - registers the chart
 - registers the generated transitions
-- initializes the chart by default
+- initializes authored surface and volume partitions by default
 
 Registration is all-or-nothing. If any generated transition fails to register, the method rolls back the chart and any transitions it already added in that call.
 
@@ -64,15 +64,15 @@ Registration is all-or-nothing. If any generated transition fails to register, t
 | empty string | skip this cell |
 | `.` | skip this cell |
 | `X` | skip this cell |
-| `L` | traversable chart cell |
-| `O` | open-volume anchor candidate |
-| `W` | water-volume anchor candidate |
+| `L` | authored surface traversal cell |
+| `O` | authored open-volume traversal cell |
+| `W` | authored water-volume traversal cell |
 
 Important nuance:
 
-- `L` produces a traversable chart cell
+- `L` produces a surface cell that initializes a `PathPartition`
 - empty / `.` / `X` contribute no chart surface and no transition anchor
-- `O` and `W` produce non-surface chart output because they are volume-side authoring tokens, not walkable chart cells
+- `O` and `W` produce authored volume cells that initialize `VolumePartition` state
 
 ## 3. Transition Marker Rules
 
@@ -90,6 +90,7 @@ Current marker behavior:
 - only perpendicular neighbors are considered
 - only chart-to-volume pairs are generated
 - chart-to-chart auto-generation is not part of the current builder
+- `O!` and `W!` still emit the same authored volume cells as `O` and `W`; the marker only opts them into transition generation
 
 When a marked chart cell participates in generation, the builder also adds:
 
@@ -125,7 +126,7 @@ This authoring layer intentionally stays small for now.
 
 It does not automatically:
 
-- configure `VolumeTraversalRules`
+- configure supplemental `VolumeTraversalRules`
 - generate diagonal handoffs
 - generate chart-to-chart handoffs
 - refresh generated transitions mid-simulation

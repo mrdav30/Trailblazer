@@ -166,7 +166,7 @@ It may be:
 
 When transition-aware guided fallback is enabled, `AStarGuide` and `FlowFieldGuide` still remain the public guide shapes. The staged transition behavior stays internal to the request-resolution and guide layers.
 
-`GuidedPathMode.Aerial` and `GuidedPathMode.Swim` both use the raw-volume path flow. They stay guide-free while the direct corridor is clear, then allocate a `VolumeGuide` only when raw voxel blockers force a detour. `Swim` additionally requires the host to define which voxels count as water through `VolumeTraversalRules`.
+`GuidedPathMode.Aerial` and `GuidedPathMode.Swim` both use the raw-volume path flow. They stay guide-free while the direct corridor is clear, then allocate a `VolumeGuide` only when raw voxel blockers force a detour. `Swim` depends on a valid water medium, which may come from authored chart cells, `VolumeTraversalRules`, or both.
 
 Guide lifetime is owned by `NavSteering` while the movement session is active.
 

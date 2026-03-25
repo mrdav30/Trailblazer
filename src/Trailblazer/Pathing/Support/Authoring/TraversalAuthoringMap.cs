@@ -105,34 +105,6 @@ public sealed class TraversalAuthoringMap
         return new TraversalBuildResult(chart, generatedTransitions);
     }
 
-    /// <summary>
-    /// Prints the token layout of a specific XZ plane in the source map for debugging purposes.
-    /// </summary>
-    /// <param name="yLevel">The Y level of the XZ plane to print.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown if the specified Y level is out of bounds.</exception>
-    public void PrintXZPlane(int yLevel)
-    {
-        int minY = 0;
-        int maxYExclusive = SourceMap.GetLength(0);
-        if (yLevel < minY || yLevel >= maxYExclusive)
-            throw new ArgumentOutOfRangeException(nameof(yLevel));
-
-        Console.WriteLine($"Token XZ Plane at Y={yLevel} for Traversal Authoring Map [{ChartName}]:");
-
-        int sizeX = SourceMap.GetLength(1);
-        int sizeZ = SourceMap.GetLength(2);
-        for (int z = 0; z < sizeZ; z++)
-        {
-            for (int x = 0; x < sizeX; x++)
-            {
-                string token = SourceMap[yLevel, x, z];
-                Console.Write(string.IsNullOrWhiteSpace(token) ? ". " : $"{token} ");
-            }
-
-            Console.WriteLine();
-        }
-    }
-
     private static NavigationChartCell BuildChartCell(ParsedTraversalCell parsedCell)
     {
         NavigationChartCell chartCell = parsedCell.Entry.ChartCell;

@@ -125,7 +125,7 @@ One important difference from A*:
 
 ### 3.3 VolumePathRequest
 
-Use `VolumePathRequest` when a navigator should travel through authored or explicitly configured 3D grid volume that may not have a navigation chart route.
+Use `VolumePathRequest` when a navigator should travel through 3D voxel connectivity governed by authored or explicitly configured volume membership instead of a chart-backed surface route.
 
 Key traits:
 

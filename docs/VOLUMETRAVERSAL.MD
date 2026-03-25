@@ -147,6 +147,8 @@ Important lifecycle rules:
 - `PathManager.Reset()` clears the installed open and water rules
 - `PathManager.Reset()` also clears authored `VolumePartition` state by unloading charts
 - changing a host rule invalidates cached volume guides
+- unloading a chart invalidates only cached volume guides whose `ChartsUtilized` includes that chart
+- overlapping chart initialization invalidates cached volume guides for the already-active chart owners touched by the change
 
 That means tests, world reloads, and runtime bootstrap code must reapply host rules when needed.
 
@@ -178,6 +180,7 @@ For a volume request, endpoint resolution is:
 Important nuance:
 
 - if the requested mode is not configured, endpoint resolution fails immediately
+- cached volume results record the chart owners used along the resolved raw path so local chart changes can invalidate only affected results
 
 ### 4.2 `allowUnwalkableEndNode` In Volume Requests
 

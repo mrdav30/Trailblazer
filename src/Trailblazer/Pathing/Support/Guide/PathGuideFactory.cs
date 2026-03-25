@@ -238,6 +238,7 @@ public static class PathGuideFactory
 
         _cachedAStarResults.InvalidateWhere(r => UsesChart(r, chartKey));
         _cachedFlowResults.InvalidateWhere(r => UsesChart(r, chartKey));
+        _cachedVolumeResults.InvalidateWhere(r => UsesChart(r, chartKey));
     }
 
     internal static void InvalidateVolumeCache()
@@ -262,7 +263,7 @@ public static class PathGuideFactory
     }
 
     /// <summary>
-    /// Removes all cached guides from both A* and FlowField caches.
+    /// Removes all cached A*, FlowField, and Volume guides.
     /// </summary>
     public static void FlushCache(bool force = false)
     {

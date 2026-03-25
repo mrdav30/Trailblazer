@@ -43,6 +43,11 @@ public sealed class VolumePartition : IVoxelPartition
     public bool HasAnyOwners => _chartOwners.Count > 0;
 
     /// <summary>
+    /// Charts that currently contribute authored volume data to this voxel.
+    /// </summary>
+    public SwiftHashSet<string> ChartOwners => _chartOwners;
+
+    /// <summary>
     /// Additional authored or caller-controlled path cost for this volume voxel.
     /// </summary>
     public int PathCostModifier

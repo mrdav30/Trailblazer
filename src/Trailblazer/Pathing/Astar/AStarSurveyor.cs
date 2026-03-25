@@ -312,7 +312,7 @@ public class AStarSurveyor
             PathCost = start.PathCost,
             GlobalIndex = start.GlobalIndex
         });
-        _chartKeys.AddRange(start.ChartOwners);
+        ChartOwnerUtility.AddOwners(_chartKeys, start.ChartOwners);
 
         Vector3d lastDirection = Vector3d.Zero;
 
@@ -337,7 +337,7 @@ public class AStarSurveyor
             }
 
             lastDirection = direction;
-            _chartKeys.AddRange(_rawPath[i].ChartOwners);
+            ChartOwnerUtility.AddOwners(_chartKeys, _rawPath[i].ChartOwners);
         }
 
         PathPartition end = _rawPath.FromEnd(1);
@@ -348,7 +348,7 @@ public class AStarSurveyor
             GlobalIndex = end.GlobalIndex,
             IsGoal = true
         });
-        _chartKeys.AddRange(end.ChartOwners);
+        ChartOwnerUtility.AddOwners(_chartKeys, end.ChartOwners);
     }
 
     /// <summary>

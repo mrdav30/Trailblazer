@@ -57,8 +57,8 @@ This means chart registration alone is not enough. A chart only becomes pathable
 
 Another important detail:
 
-- multiple charts can share the same underlying partition if they overlap the same walkable voxel
-- partition ownership is tracked per chart through `PathPartition.ChartOwners`
+- multiple charts can share the same underlying runtime partition when they overlap the same authored voxel
+- partition ownership is tracked per chart through `PathPartition.ChartOwners` and `VolumePartition.ChartOwners`
 
 That ownership model is why initialization and unload logic are more complex than simple add/remove operations.
 
@@ -151,7 +151,7 @@ They both operate under the internal reader lock and are safe against concurrent
 
 Important detail:
 
-- it materializes `ToArray()` under the read lock
+- it copies chart values into a fresh array under the read lock
 - callers get an enumerable snapshot, not a live view into the dictionary
 
 That is why `InitializeAllCharts()` and `Reset()` can iterate it safely.
@@ -171,27 +171,28 @@ It returns immediately when:
 When it runs, it:
 
 1. rents a pooled `SwiftHashSet<PathPartition>` for all touched partitions
-2. creates a temporary queue for any existing chart owners encountered on those voxels
-3. iterates `chart.GetWalkablePositions()`
+2. creates a temporary set for any already-active chart owners encountered on touched voxels
+3. iterates `chart.GetAuthoredCells()`
 4. resolves the voxel from `GlobalGridManager`
-5. attaches or reuses a `PathPartition`
-6. records any existing owners for later cache invalidation
-7. adds the current chart as an owner
-8. rebinds neighbors for every touched partition
-9. marks `chart.IsInitialized = true`
-10. invalidates cached guides for any previously owning chart keys collected during the process
+5. attaches or reuses a `PathPartition` for authored solid traversal
+6. attaches or reuses a `VolumePartition` for authored volume traversal
+7. records any existing owners for later cache invalidation
+8. adds the current chart as an owner
+9. rebinds neighbors for every touched path partition
+10. marks `chart.IsInitialized = true`
+11. invalidates cached guides for any previously owning chart keys collected during the process
 
 ### 6.2 Partition Reuse
 
-When a walkable voxel already has a `PathPartition`, initialization does not create a duplicate.
+When an authored voxel already has a compatible runtime partition, initialization does not create a duplicate.
 
 Instead it:
 
-- reuses the existing partition
+- reuses the existing `PathPartition` or `VolumePartition`
 - adds the chart to its `ChartOwners`
-- rebinding neighbors later ensures the adjacency model stays current
+- rebinding neighbors later ensures the solid adjacency model stays current
 
-This is what lets overlapping charts coexist on the same voxels.
+This is what lets overlapping charts coexist on the same voxels for both solid and authored volume data.
 
 ### 6.3 Neighbor Binding
 
@@ -212,12 +213,13 @@ This is a subtle but important correctness rule:
 
 - changing chart ownership on live partitions can change path validity
 - cached guide results must not survive that ownership change blindly
+- unrelated cached guides remain reusable because invalidation is chart-targeted
 
 ## 7. Unload Lifecycle
 
 ### 7.1 UnloadChart(...)
 
-`UnloadChart(...)` removes one chart's ownership from all of its walkable voxels.
+`UnloadChart(...)` removes one chart's ownership from all of its authored voxels.
 
 It returns immediately when:
 
@@ -228,12 +230,12 @@ It returns immediately when:
 When it runs, it:
 
 1. invalidates any cached guide results that reference the chart
-2. walks all of the chart's walkable positions
-3. resolves the attached partition
-4. removes the chart as an owner
-5. removes the partition from the voxel entirely if no owners remain
-6. otherwise refreshes the partition and queues it for neighbor rebinding
-7. rebinds neighbors on still-active partitions
+2. walks all of the chart's authored cells
+3. removes solid ownership from any attached `PathPartition`
+4. removes authored volume ownership from any attached `VolumePartition`
+5. removes a partition from the voxel entirely when it no longer has owners
+6. refreshes and queues any still-active `PathPartition` for neighbor rebinding
+7. rebinds neighbors on still-active path partitions
 8. removes the chart from the registry
 
 ### 7.2 Shared Partition Behavior

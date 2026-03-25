@@ -3,6 +3,7 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
 using System;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -33,6 +34,8 @@ public sealed class VolumeSurveyor
 
     private readonly SwiftList<AStarWaypoint> _waypoints = new();
 
+    private readonly SwiftHashSet<string> _chartKeys = new();
+
     private VolumePathRequest _request;
 
     public VolumeSurveyResult FindPath(VolumePathRequest request)
@@ -48,6 +51,7 @@ public sealed class VolumeSurveyor
             _meta.Clear();
             _rawPath.FastClear();
             _waypoints.FastClear();
+            _chartKeys.Clear();
 
             _meta[_request.StartNode] = new VolumeVoxelMeta();
             _heap.Add(_request.StartNode, 0);
@@ -56,10 +60,11 @@ public sealed class VolumeSurveyor
                 return VolumeSurveyResult.Empty;
 
             BuildRawPath();
+            TrackRawPathChartOwners();
             BuildWaypoints();
 
             return _waypoints.Count > 0
-                ? VolumeSurveyResult.Create(_waypoints.ToArray(), request.RequestCacheKey)
+                ? VolumeSurveyResult.Create(_waypoints.ToArray(), _chartKeys.ToArray(), request.RequestCacheKey)
                 : VolumeSurveyResult.Empty;
         }
     }
@@ -207,9 +212,7 @@ public sealed class VolumeSurveyor
 
             if (!_meta.TryGetValue(current, out VolumeVoxelMeta data)
                 || !data.NextTrailIndex.HasValue)
-            {
                 break;
-            }
 
             if (!GlobalGridManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
                 break;
@@ -260,6 +263,24 @@ public sealed class VolumeSurveyor
             GlobalIndex = end.GlobalIndex,
             IsGoal = true
         });
+    }
+
+    private void TrackRawPathChartOwners()
+    {
+        for (int i = 0; i < _rawPath.Count; i++)
+            AddVoxelChartOwners(_rawPath[i]);
+    }
+
+    private void AddVoxelChartOwners(Voxel voxel)
+    {
+        if (voxel == null)
+            return;
+
+        if (voxel.TryGetPartition(out PathPartition pathPartition))
+            ChartOwnerUtility.AddOwners(_chartKeys, pathPartition.ChartOwners);
+
+        if (voxel.TryGetPartition(out VolumePartition volumePartition))
+            ChartOwnerUtility.AddOwners(_chartKeys, volumePartition.ChartOwners);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

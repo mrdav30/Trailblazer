@@ -97,10 +97,6 @@ public static class PathManager
 
     private static int _activeAuthoredWaterVolumeCellCount;
 
-    private static int _volumeTopologyVersion;
-
-    internal static int VolumeTopologyVersion => _volumeTopologyVersion;
-
     #endregion
 
     internal static void Tick()
@@ -216,8 +212,7 @@ public static class PathManager
         }
 
         SwiftHashSet<PathPartition> allChartPartitions = PartitionSetPool.Rent();
-        SwiftQueue<string> existingChartKeys = new(); // TODO: pool
-        bool changedVolumeTopology = false;
+        SwiftHashSet<string> affectedChartKeys = new();
         foreach ((Vector3d pos, NavigationChartCell cell) in chart.GetAuthoredCells())
         {
             if (!GlobalGridManager.TryGetVoxel(pos, out Voxel voxel))
@@ -232,7 +227,7 @@ public static class PathManager
                 }
 
                 if (part.HasAnyOwners)
-                    existingChartKeys.EnqueueRange(part.ChartOwners);
+                    ChartOwnerUtility.AddOwners(affectedChartKeys, part.ChartOwners);
 
                 part.AddOwner(chart.Name, cell);
                 allChartPartitions.Add(part);
@@ -240,6 +235,12 @@ public static class PathManager
 
             if (!cell.HasVolume)
                 continue;
+
+            if (voxel.TryGetPartition(out VolumePartition existingVolumePart)
+                && existingVolumePart.HasAnyOwners)
+            {
+                ChartOwnerUtility.AddOwners(affectedChartKeys, existingVolumePart.ChartOwners);
+            }
 
             if (!voxel.TryGetPartition(out VolumePartition volumePart))
             {
@@ -249,7 +250,6 @@ public static class PathManager
 
             volumePart.AddOwner(chart.Name, cell);
             TrackVolumeCell(cell, delta: 1);
-            changedVolumeTopology = true;
         }
 
         // bind new neighbor pointers for each partition since they could have changed
@@ -259,13 +259,8 @@ public static class PathManager
         PartitionSetPool.Release(allChartPartitions);
         chart.IsInitialized = true;
 
-        // invalidate existing paths that new charts partitions are in
-        while (existingChartKeys.Count > 0)
-            PathGuideFactory.InvalidateCacheFor(existingChartKeys.Dequeue());
-        // TODO: release existingChartKeys
-
-        if (changedVolumeTopology)
-            InvalidateVolumeTopology();
+        foreach (string affectedChartKey in affectedChartKeys)
+            PathGuideFactory.InvalidateCacheFor(affectedChartKey);
     }
 
     public static void UnloadChart(string chartKey)
@@ -296,7 +291,6 @@ public static class PathManager
         PathGuideFactory.InvalidateCacheFor(chart.Name);
 
         SwiftHashSet<PathPartition> stillActivePartitions = PartitionSetPool.Rent();
-        bool changedVolumeTopology = false;
         foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
         {
             if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
@@ -329,7 +323,6 @@ public static class PathManager
                 voxel.TryRemovePartition<VolumePartition>();
 
             TrackVolumeCell(cell, delta: -1);
-            changedVolumeTopology = true;
         }
 
         // bind neighbor pointers for each partition
@@ -340,9 +333,6 @@ public static class PathManager
 
         RemoveChartFromRegistry(chart.Name);
         chart.IsInitialized = false;
-
-        if (changedVolumeTopology)
-            InvalidateVolumeTopology();
     }
 
     /// <summary>
@@ -393,7 +383,6 @@ public static class PathManager
             _navigationChartMap.Clear();
             _activeAuthoredOpenVolumeCellCount = 0;
             _activeAuthoredWaterVolumeCellCount = 0;
-            Interlocked.Increment(ref _volumeTopologyVersion);
         }
         finally
         {
@@ -441,12 +430,6 @@ public static class PathManager
 
         if (cell.SupportsVolumeTraversal(VolumeTraversalMode.Water))
             _activeAuthoredWaterVolumeCellCount += delta;
-    }
-
-    private static void InvalidateVolumeTopology()
-    {
-        Interlocked.Increment(ref _volumeTopologyVersion);
-        PathGuideFactory.InvalidateVolumeCache();
     }
 
     #region Neighbor Discovery

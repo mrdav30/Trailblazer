@@ -61,7 +61,7 @@ public class FlowFieldSurveyor
             // Start from the end and move towards the start voxel
             targetPart.PathCost = 0;
             _heap.Add(targetPart);
-            _chartKeys.AddRange(targetPart.ChartOwners);
+            ChartOwnerUtility.AddOwners(_chartKeys, targetPart.ChartOwners);
 
             if (!FloodPath())
                 return FlowFieldSurveyResult.Empty;
@@ -229,7 +229,7 @@ public class FlowFieldSurveyor
             }
 
             result.Add(current.GlobalIndex, currentFlow);
-            _chartKeys.AddRange(current.ChartOwners);
+            ChartOwnerUtility.AddOwners(_chartKeys, current.ChartOwners);
         }
 
         return result;

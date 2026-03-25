@@ -412,6 +412,126 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void UnrelatedChartUnload_ShouldNotInvalidateUnrelatedAStarCache()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        bool[,,] data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData("AStarCacheChart", data, Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("UnrelatedAStarChart", new Vector3d(-3, 0, -3));
+
+        AStarPathRequest request = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            HeuristicMethod.Euclidean);
+
+        Assert.NotNull(request);
+        Assert.True(PathGuideFactory.RequestGuide(request, out AStarGuide guide));
+        Assert.NotNull(guide);
+        PathGuideFactory.ReturnGuide(guide);
+
+        Assert.Equal(1, PathGuideFactory.ActiveAStarGuideCount);
+
+        PathManager.UnloadChart("UnrelatedAStarChart");
+
+        Assert.Equal(1, PathGuideFactory.ActiveAStarGuideCount);
+
+        PathManager.UnloadChart("AStarCacheChart");
+
+        Assert.Equal(0, PathGuideFactory.ActiveAStarGuideCount);
+    }
+
+    [Fact]
+    public void UnrelatedChartUnload_ShouldNotInvalidateUnrelatedAuthoredVolumeCache()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1];
+        data[0, 0, 0] = new NavigationChartCell(NavigationChartTraversalKinds.OpenVolume);
+        data[0, 1, 0] = new NavigationChartCell(NavigationChartTraversalKinds.OpenVolume);
+        data[0, 2, 0] = new NavigationChartCell(NavigationChartTraversalKinds.OpenVolume);
+
+        PathManager.Register(NavigationChart.From3D("VolumeCacheChart", data, Vector3d.Zero, Fixed64.One));
+        PathManager.InitializeChart("VolumeCacheChart");
+        PathTestFactory.RegisterSingleWalkablePoint("UnrelatedVolumeChart", new Vector3d(-3, 0, -3));
+
+        VolumePathRequest request = VolumePathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            traversalMode: VolumeTraversalMode.Open);
+
+        Assert.NotNull(request);
+        Assert.True(PathGuideFactory.RequestGuide(request, out VolumeGuide guide));
+        Assert.NotNull(guide);
+        PathGuideFactory.ReturnGuide(guide);
+
+        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+
+        PathManager.UnloadChart("UnrelatedVolumeChart");
+
+        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+
+        PathManager.UnloadChart("VolumeCacheChart");
+
+        Assert.Equal(0, PathGuideFactory.ActiveVolumeGuideCount);
+    }
+
+    [Fact]
+    public void VolumeCache_ShouldTrackSurfaceChartDependencies_WhenHostRuleUsesPathPartitions()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        bool[,,] data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData("SurfaceBackedVolumeChart", data, Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("UnrelatedSurfaceBackedVolumeChart", new Vector3d(-3, 0, -3));
+        VolumeTraversalRules.SetOpenVoxelRule(static voxel =>
+            voxel != null
+            && voxel.HasPartition<PathPartition>());
+
+        VolumePathRequest request = VolumePathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            traversalMode: VolumeTraversalMode.Open);
+
+        Assert.NotNull(request);
+        Assert.True(PathGuideFactory.RequestGuide(request, out VolumeGuide guide));
+        Assert.NotNull(guide);
+        PathGuideFactory.ReturnGuide(guide);
+
+        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+
+        PathManager.UnloadChart("UnrelatedSurfaceBackedVolumeChart");
+
+        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+
+        PathManager.UnloadChart("SurfaceBackedVolumeChart");
+
+        Assert.Equal(0, PathGuideFactory.ActiveVolumeGuideCount);
+    }
+
+    [Fact]
     public void RegisterTraversalBuildResult_ShouldRollback_WhenGeneratedTransitionRegistrationFails()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));

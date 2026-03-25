@@ -274,6 +274,11 @@ Useful status properties:
 - `IsPooling`
 - `AnyInUse`
 
+Important invalidation rule:
+
+- `InvalidateCacheFor(string chartKey)` invalidates cached A*, FlowField, and Volume results whose `ChartsUtilized` contains that chart key
+- unrelated cached guides remain reusable when the invalidation does not match them
+
 ### 5.2 Request Routing
 
 Routing is type-based:

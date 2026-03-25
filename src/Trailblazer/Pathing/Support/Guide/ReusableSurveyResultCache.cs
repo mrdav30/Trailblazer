@@ -102,14 +102,17 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
         _lock.EnterWriteLock();
         try
         {
-            CountInUse--;
+            if (result.IsInUse)
+                CountInUse--;
+
             if (result.HasPath && !dispose)
             {
                 result.Release();
                 return;
             }
 
-            _cache.Remove(result.RequestHashKey);
+            if (result.RequestHashKey >= 0)
+                _cache.Remove(result.RequestHashKey);
         }
         finally { _lock.ExitWriteLock(); }
     }
@@ -169,14 +172,14 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
                 toRemove.Add(kvp.Key);
             }
 
+            if (toRemove.Count == 0)
+                return;
+
             _lock.EnterWriteLock();
             try
             {
                 foreach (int key in toRemove)
                     _cache.Remove(key);
-
-                if (CountInUse == 0)
-                    _cache.Clear();
             }
             finally { _lock.ExitWriteLock(); }
         }

@@ -13,13 +13,16 @@ public sealed class VolumeSurveyResult : SurveyResult
 
     public static readonly VolumeSurveyResult Empty = new();
 
-    public static VolumeSurveyResult Create(AStarWaypoint[] waypoints, int key)
+    public static VolumeSurveyResult Create(
+        AStarWaypoint[] waypoints,
+        string[] chartsUtilized,
+        int key)
     {
         return new VolumeSurveyResult()
         {
             IsValid = true,
             IsInUse = false,
-            ChartsUtilized = Array.Empty<string>(),
+            ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
             Waypoints = waypoints,
             LastUsedFrame = -1,
             RequestHashKey = key

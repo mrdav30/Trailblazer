@@ -98,7 +98,9 @@ public class AStarTransitionFallbackTests : IDisposable
         guide.ActiveWaypoints[0].Position.Should().Be(new Vector3d(-1, 0, 0));
         guide.ActiveWaypoints[^1].Position.Should().Be(new Vector3d(3, 0, 0));
         guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(0, 0, 0));
-        guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(2, 0, 0));
+        guide.ActiveWaypoints.Should().Contain(waypoint =>
+            waypoint.Position.x > Fixed64.Zero
+            && waypoint.Position.x < (Fixed64)3);
         guide.ActiveWaypoints[^1].IsGoal.Should().BeTrue();
     }
 

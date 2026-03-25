@@ -241,7 +241,6 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             Heuristic,
             TraversalMode,
             MaxPathSearchRange,
-            PathManager.VolumeTopologyVersion,
             VolumeTraversalRules.RegistryVersion
         ).CombineHashCodes();
     }

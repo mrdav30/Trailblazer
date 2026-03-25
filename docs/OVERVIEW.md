@@ -129,7 +129,7 @@ Use `VolumePathRequest` when a navigator should travel through 3D voxel connecti
 
 Key traits:
 
-- it resolves against raw `GridForge.Voxel` connectivity instead of `PathPartition` ownership
+- it resolves through raw `GridForge.Voxel` connectivity while still honoring authored `VolumePartition` and `PathPartition` ownership
 - it can stay in direct 3D travel when the corridor is clear
 - it can fall back to a cached volume waypoint guide when blockers force a detour
 - it supports both authored open-volume travel and constrained volumes such as water
@@ -247,6 +247,7 @@ Lifetime rules matter:
 - if you request a guide directly, return it with `PathGuideFactory.ReturnGuide(...)`
 - `NavSteering` handles this automatically when it owns the guide lifecycle
 - unloaded charts invalidate all cached results that reference them
+- `InvalidateCacheFor(...)` is chart-targeted, so unrelated cached A*, FlowField, and Volume guides remain reusable
 
 ## 6. Runtime Navigation Stack
 

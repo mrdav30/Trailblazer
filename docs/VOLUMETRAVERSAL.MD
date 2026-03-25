@@ -85,6 +85,13 @@ They are an additional layer on top of:
 - partition-backed clearance for the requested `UnitSize`
 - any authored `VolumePartition` state already attached to the voxel
 
+The current rule APIs are extend-only:
+
+- they can add open-volume or water-volume membership
+- they can opt `PathPartition`-only voxels into a volume medium
+- they do not suppress authored `VolumePartition` membership
+- removing a host rule returns a voxel to its authored/base state
+
 Host rules do not make fully unpartitioned voxels valid.
 
 In raw-volume code, a voxel must be both:
@@ -101,6 +108,7 @@ Trailblazer can answer "is this voxel authored open volume or authored water vol
 - is configured when authored open volume exists or a host open rule exists
 - matches authored open-volume voxels directly
 - may also match host-defined open-volume voxels through `VolumeTraversalRules`
+- remains valid on authored open-volume voxels even if the host open rule is later removed
 - never falls back to generic unauthored space
 - still respects blockers and clearance
 
@@ -109,6 +117,7 @@ Trailblazer can answer "is this voxel authored open volume or authored water vol
 - is configured when authored water volume exists or a host water rule exists
 - matches authored water voxels directly
 - may also match additional host-defined water voxels through `VolumeTraversalRules`
+- remains valid on authored water voxels even if the host water rule is later removed
 - still requires the voxel to belong to Trailblazer's runtime traversal world
 
 ### 3.3 Host Rule Configuration
@@ -120,6 +129,7 @@ Use `SetOpenVoxelPartition<TPartition>()` or `SetWaterVoxelPartition<TPartition>
 Use `SetOpenVoxelRule(...)` or `SetWaterVoxelRule(...)` when:
 
 - medium membership depends on custom logic beyond authored chart data
+- you want to supplement authored media instead of replacing it
 
 Examples:
 

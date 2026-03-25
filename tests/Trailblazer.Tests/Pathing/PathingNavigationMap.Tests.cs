@@ -412,6 +412,96 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void AuthoredVolume_ShouldRemainValid_WhenMatchingHostRuleIsRemoved()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, VolumeTraversalMode.Open, "AuthoredOpenAuthority");
+
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, VolumeTraversalMode.Open));
+
+        VolumeTraversalRules.SetOpenVoxelRule(static candidate =>
+            candidate != null
+            && candidate.WorldPosition == Vector3d.Zero);
+
+        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, VolumeTraversalMode.Open));
+
+        VolumeTraversalRules.ClearOpenVoxelRule();
+
+        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, VolumeTraversalMode.Open));
+    }
+
+    [Fact]
+    public void HostWaterRule_ShouldSupplementAuthoredOpenVolume_WithoutRemovingOpenTraversal()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, VolumeTraversalMode.Open, "AuthoredOpenPlusWater");
+
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.False(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, VolumeTraversalMode.Water));
+
+        VolumeTraversalRules.SetWaterVoxelRule(static candidate =>
+            candidate != null
+            && candidate.WorldPosition == Vector3d.Zero);
+
+        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, VolumeTraversalMode.Water));
+
+        VolumeTraversalRules.ClearWaterVoxelRule();
+
+        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.False(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, VolumeTraversalMode.Water));
+    }
+
+    [Fact]
+    public void PathPartitionOnlyVoxel_ShouldLoseSupplementalVolumeMembership_WhenHostRuleIsRemoved()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        PathTestFactory.RegisterSingleWalkablePoint("HostOnlyOpenStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("HostOnlyOpenEnd", new Vector3d(1, 0, 0));
+
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel startVoxel));
+        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel endVoxel));
+        Assert.False(RawVoxelFinder.IsTraversable(startVoxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.False(RawVoxelFinder.IsTraversable(endVoxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.Null(VolumePathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            traversalMode: VolumeTraversalMode.Open));
+
+        VolumeTraversalRules.SetOpenVoxelRule(static voxel =>
+            voxel != null
+            && (voxel.WorldPosition == Vector3d.Zero
+            || voxel.WorldPosition == new Vector3d(1, 0, 0)));
+
+        Assert.True(RawVoxelFinder.IsTraversable(startVoxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.True(RawVoxelFinder.IsTraversable(endVoxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.NotNull(VolumePathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            traversalMode: VolumeTraversalMode.Open));
+
+        VolumeTraversalRules.ClearOpenVoxelRule();
+
+        Assert.False(RawVoxelFinder.IsTraversable(startVoxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.False(RawVoxelFinder.IsTraversable(endVoxel, Fixed64.One, VolumeTraversalMode.Open));
+        Assert.Null(VolumePathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            traversalMode: VolumeTraversalMode.Open));
+    }
+
+    [Fact]
     public void UnrelatedChartUnload_ShouldNotInvalidateUnrelatedAStarCache()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));

@@ -12,8 +12,9 @@ namespace Trailblazer.Pathing;
 /// <remarks>
 /// Trailblazer can derive raw-volume membership from authored <see cref="VolumePartition"/> data
 /// created during chart initialization. Hosts can also install supplemental open-volume and
-/// water-volume rules for engine-specific partitioning or bespoke world logic. Host rules are
-/// only evaluated for voxels that already belong to Trailblazer's runtime traversal world.
+/// water-volume rules for engine-specific partitioning or bespoke world logic. These rules are
+/// additive: they can extend medium membership on voxels that already belong to Trailblazer's
+/// runtime traversal world, but they do not suppress authored membership.
 /// </remarks>
 public static class VolumeTraversalRules
 {
@@ -38,7 +39,7 @@ public static class VolumeTraversalRules
     internal static int RegistryVersion => _registryVersion;
 
     /// <summary>
-    /// Uses a host-defined voxel partition type to identify open-volume voxels.
+    /// Uses a host-defined voxel partition type to add open-volume membership on eligible voxels.
     /// </summary>
     public static void SetOpenVoxelPartition<TPartition>()
         where TPartition : class, IVoxelPartition
@@ -49,7 +50,7 @@ public static class VolumeTraversalRules
     }
 
     /// <summary>
-    /// Sets a host-defined open-volume voxel rule.
+    /// Sets a host-defined rule that adds open-volume membership on eligible voxels.
     /// </summary>
     public static void SetOpenVoxelRule(VoxelRule rule)
     {
@@ -67,7 +68,7 @@ public static class VolumeTraversalRules
     }
 
     /// <summary>
-    /// Uses a host-defined voxel partition type to identify water voxels.
+    /// Uses a host-defined voxel partition type to add water-volume membership on eligible voxels.
     /// </summary>
     public static void SetWaterVoxelPartition<TPartition>()
         where TPartition : class, IVoxelPartition
@@ -78,7 +79,7 @@ public static class VolumeTraversalRules
     }
 
     /// <summary>
-    /// Sets a host-defined water voxel rule.
+    /// Sets a host-defined rule that adds water-volume membership on eligible voxels.
     /// </summary>
     public static void SetWaterVoxelRule(VoxelRule rule)
     {
@@ -132,6 +133,7 @@ public static class VolumeTraversalRules
         bool authoredWaterMatch = hasAuthoredVolumePartition
             && volumePartition.SupportsTraversal(VolumeTraversalMode.Water);
 
+        // Host rules only add medium membership; they do not suppress authored media.
         return traversalMode switch
         {
             VolumeTraversalMode.Open => authoredOpenMatch || hostOpenMatch,

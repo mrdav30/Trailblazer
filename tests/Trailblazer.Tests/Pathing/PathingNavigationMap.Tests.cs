@@ -338,6 +338,49 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void RegisterTraversalBuildResult_ShouldKeepEquivalentManualTransitionActiveOverGeneratedOne()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        string[,,] map =
+        {
+            {
+                { "L!" },
+                { "W!" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "ManualPrecedenceBuild",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        TraversalTransition generated = buildResult.GeneratedTransitions[0];
+        TraversalTransition manual = new(
+            id: "manual-precedence",
+            type: generated.Type,
+            source: generated.Source,
+            destination: generated.Destination,
+            pathCostModifier: generated.PathCostModifier,
+            isBidirectional: generated.IsBidirectional);
+
+        Assert.True(TraversalTransitionRegistry.Register(manual));
+        Assert.True(PathManager.Register(buildResult));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(generated.Id));
+        Assert.False(TraversalTransitionRegistry.IsActive(generated.Id));
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.True(TraversalTransitionRegistry.IsActive(buildResult.GeneratedTransitions[1].Id));
+
+        TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(generated.Source.Position);
+        Assert.Single(outgoing);
+        Assert.Equal(manual.Id, outgoing[0].Id);
+
+        PathManager.UnloadChart(buildResult.Chart);
+    }
+
+    [Fact]
     public void AuthoredOpenVolume_ShouldRestrictOpenTraversalToAuthoredVoxels()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));

@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using FixedMathSharp;
+using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
@@ -20,6 +21,8 @@ public static class TraversalTransitionRegistry
     private static readonly SwiftDictionary<string, RegisteredTraversalTransition> _transitions =
         new(8, StringComparer.Ordinal);
 
+    private static readonly SwiftHashSet<string> _activeTransitionIds = new();
+
     private static readonly SwiftDictionary<GlobalVoxelIndex, SwiftHashSet<string>> _outgoingTransitionIdsByVoxel = new();
 
     private static readonly SwiftDictionary<GlobalVoxelIndex, SwiftHashSet<string>> _incomingTransitionIdsByVoxel = new();
@@ -32,7 +35,7 @@ public static class TraversalTransitionRegistry
 
     private static int _registryVersion;
 
-    private static int _allTransitionsSnapshotVersion = -1;
+    private static int _registrationOrder;
 
     private static TraversalTransition[] _allTransitionsSnapshot = Array.Empty<TraversalTransition>();
 
@@ -42,33 +45,15 @@ public static class TraversalTransitionRegistry
     public static int RegistryVersion => _registryVersion;
 
     /// <summary>
-    /// Returns a snapshot of all currently registered transitions.
+    /// Returns a snapshot of all currently active transitions after precedence is applied.
     /// </summary>
     public static TraversalTransition[] AllTransitions
     {
         get
         {
-            _transitionLock.EnterUpgradeableReadLock();
+            _transitionLock.EnterReadLock();
             try
             {
-                int registryVersion = _registryVersion;
-                if (_allTransitionsSnapshotVersion != registryVersion)
-                {
-                    _transitionLock.EnterWriteLock();
-                    try
-                    {
-                        if (_allTransitionsSnapshotVersion != _registryVersion)
-                        {
-                            _allTransitionsSnapshot = BuildTransitionSnapshot();
-                            _allTransitionsSnapshotVersion = _registryVersion;
-                        }
-                    }
-                    finally
-                    {
-                        _transitionLock.ExitWriteLock();
-                    }
-                }
-
                 TraversalTransition[] snapshot = _allTransitionsSnapshot;
                 if (snapshot.Length == 0)
                     return Array.Empty<TraversalTransition>();
@@ -79,19 +64,28 @@ public static class TraversalTransitionRegistry
             }
             finally
             {
-                _transitionLock.ExitUpgradeableReadLock();
+                _transitionLock.ExitReadLock();
             }
         }
     }
 
     /// <summary>
-    /// Registers a traversal transition and resolves both endpoints against the active voxel grid.
+    /// Registers a manual traversal transition and resolves both endpoints against the active voxel grid.
     /// </summary>
     /// <returns>True when the transition is registered; false when the id already exists or either endpoint has no voxel.</returns>
-    public static bool Register(TraversalTransition transition)
+    public static bool Register(TraversalTransition transition) =>
+        RegisterInternal(transition, TraversalTransitionRegistrationSource.Manual);
+
+    internal static bool RegisterGenerated(TraversalTransition transition) =>
+        RegisterInternal(transition, TraversalTransitionRegistrationSource.Generated);
+
+    private static bool RegisterInternal(
+        TraversalTransition transition,
+        TraversalTransitionRegistrationSource registrationSource)
     {
-        if (!TryResolveAnchorVoxelIndex(transition.Source, out GlobalVoxelIndex sourceVoxelIndex)
-            || !TryResolveAnchorVoxelIndex(transition.Destination, out GlobalVoxelIndex destinationVoxelIndex))
+        // Validate that both endpoints resolve to voxels in the active grid setup before acquiring the lock.
+        if (!TryResolveAnchorVoxelIndex(transition.Source, out _)
+            || !TryResolveAnchorVoxelIndex(transition.Destination, out _))
         {
             return false;
         }
@@ -102,9 +96,21 @@ public static class TraversalTransitionRegistry
             if (_transitions.ContainsKey(transition.Id))
                 return false;
 
-            var registered = new RegisteredTraversalTransition(transition, sourceVoxelIndex, destinationVoxelIndex);
+            var registered = new RegisteredTraversalTransition(
+                transition,
+                registrationSource,
+                ++_registrationOrder);
+
+            if (registrationSource == TraversalTransitionRegistrationSource.Manual
+                && CheckDuplicateManualTransition_NoLock(registered))
+            {
+                GridForgeLogger.Warn(
+                    $"Ignored duplicate manual traversal transition '{transition.Id}' because it matches an existing manual transition.");
+                return false;
+            }
+
             _transitions.Add(transition.Id, registered);
-            IndexTransition(registered);
+            RebuildActiveState_NoLock();
             Interlocked.Increment(ref _registryVersion);
             return true;
         }
@@ -125,7 +131,17 @@ public static class TraversalTransitionRegistry
     }
 
     /// <summary>
-    /// Attempts to retrieve a registered transition by id.
+    /// Returns true if the transition is currently active for query purposes after precedence is applied.
+    /// </summary>
+    public static bool IsActive(string id)
+    {
+        _transitionLock.EnterReadLock();
+        try { return _activeTransitionIds.Contains(id); }
+        finally { _transitionLock.ExitReadLock(); }
+    }
+
+    /// <summary>
+    /// Attempts to retrieve a registered transition by id, even if it is currently inactive.
     /// </summary>
     public static bool TryGet(string id, out TraversalTransition transition)
     {
@@ -148,7 +164,7 @@ public static class TraversalTransitionRegistry
     }
 
     /// <summary>
-    /// Attempts to retrieve the voxel indices resolved for a registered transition.
+    /// Attempts to retrieve the voxel indices resolved for a registered transition, even if it is currently inactive.
     /// </summary>
     public static bool TryGetResolvedEndpoints(
         string id,
@@ -186,10 +202,10 @@ public static class TraversalTransitionRegistry
             if (!_transitions.TryGetValue(id, out RegisteredTraversalTransition registered))
                 return false;
 
-            UnindexTransition(registered);
             if (!_transitions.Remove(id))
                 return false;
 
+            RebuildActiveState_NoLock();
             Interlocked.Increment(ref _registryVersion);
             return true;
         }
@@ -197,13 +213,13 @@ public static class TraversalTransitionRegistry
     }
 
     /// <summary>
-    /// Returns the transitions whose authored source anchor resolves to the provided voxel.
+    /// Returns the currently active transitions whose authored source anchor resolves to the provided voxel.
     /// </summary>
     public static TraversalTransition[] GetOutgoingTransitions(GlobalVoxelIndex sourceVoxelIndex) =>
         QueryTransitionsByKey(_outgoingTransitionIdsByVoxel, sourceVoxelIndex);
 
     /// <summary>
-    /// Returns the transitions whose authored destination anchor resolves to the provided voxel.
+    /// Returns the currently active transitions whose authored destination anchor resolves to the provided voxel.
     /// </summary>
     public static TraversalTransition[] GetIncomingTransitions(GlobalVoxelIndex destinationVoxelIndex) =>
         QueryTransitionsByKey(_incomingTransitionIdsByVoxel, destinationVoxelIndex);
@@ -236,25 +252,24 @@ public static class TraversalTransitionRegistry
         try
         {
             _transitions.Clear();
+            _activeTransitionIds.Clear();
             _outgoingTransitionIdsByVoxel.Clear();
             _incomingTransitionIdsByVoxel.Clear();
             _transitionIdsBySourceGrid.Clear();
             _transitionIdsByDestinationGrid.Clear();
+            _registrationOrder = 0;
+            _allTransitionsSnapshot = Array.Empty<TraversalTransition>();
             Interlocked.Increment(ref _registryVersion);
         }
         finally { _transitionLock.ExitWriteLock(); }
     }
 
-    internal static RegisteredTraversalTransition[] GetRegisteredTransitions()
+    internal static TraversalTransition[] GetActiveTransitions()
     {
         _transitionLock.EnterReadLock();
         try
         {
-            SwiftList<RegisteredTraversalTransition> result = new(_transitions.Count);
-            foreach (RegisteredTraversalTransition registered in _transitions.Values)
-                result.Add(registered);
-
-            return result.ToArray();
+            return _allTransitionsSnapshot;
         }
         finally
         {
@@ -262,7 +277,7 @@ public static class TraversalTransitionRegistry
         }
     }
 
-    internal static RegisteredTraversalTransition[] GetRegisteredTransitionsTouchingGrid(int gridIndex)
+    internal static TraversalTransition[] GetActiveTransitionsTouchingGrid(int gridIndex)
     {
         _transitionLock.EnterReadLock();
         try
@@ -270,19 +285,19 @@ public static class TraversalTransitionRegistry
             bool hasSource = _transitionIdsBySourceGrid.TryGetValue(gridIndex, out SwiftHashSet<string> sourceIds);
             bool hasDestination = _transitionIdsByDestinationGrid.TryGetValue(gridIndex, out SwiftHashSet<string> destinationIds);
             if (!hasSource && !hasDestination)
-                return Array.Empty<RegisteredTraversalTransition>();
+                return Array.Empty<TraversalTransition>();
 
             int capacity = (hasSource ? sourceIds.Count : 0) + (hasDestination ? destinationIds.Count : 0);
-            SwiftList<RegisteredTraversalTransition> result = new(capacity);
+            SwiftList<TraversalTransition> result = new(capacity);
             SwiftHashSet<string> seenIds = new();
 
             if (hasSource)
-                AppendRegisteredTransitions(result, seenIds, sourceIds);
+                AppendTransitions(result, seenIds, sourceIds);
 
             if (hasDestination)
-                AppendRegisteredTransitions(result, seenIds, destinationIds);
+                AppendTransitions(result, seenIds, destinationIds);
 
-            return result.ToArray();
+            return BuildSortedSnapshot(result);
         }
         finally
         {
@@ -302,28 +317,12 @@ public static class TraversalTransitionRegistry
 
             SwiftList<TraversalTransition> result = new(transitionIds.Count);
             AppendTransitions(result, transitionIds);
-            return result.ToArray();
+            return BuildSortedSnapshot(result);
         }
         finally
         {
             _transitionLock.ExitReadLock();
         }
-    }
-
-    private static void IndexTransition(RegisteredTraversalTransition registered)
-    {
-        AddIndexValue(_outgoingTransitionIdsByVoxel, registered.SourceVoxelIndex, registered.Transition.Id);
-        AddIndexValue(_incomingTransitionIdsByVoxel, registered.DestinationVoxelIndex, registered.Transition.Id);
-        AddIndexValue(_transitionIdsBySourceGrid, registered.SourceVoxelIndex.GridIndex, registered.Transition.Id);
-        AddIndexValue(_transitionIdsByDestinationGrid, registered.DestinationVoxelIndex.GridIndex, registered.Transition.Id);
-    }
-
-    private static void UnindexTransition(RegisteredTraversalTransition registered)
-    {
-        RemoveIndexValue(_outgoingTransitionIdsByVoxel, registered.SourceVoxelIndex, registered.Transition.Id);
-        RemoveIndexValue(_incomingTransitionIdsByVoxel, registered.DestinationVoxelIndex, registered.Transition.Id);
-        RemoveIndexValue(_transitionIdsBySourceGrid, registered.SourceVoxelIndex.GridIndex, registered.Transition.Id);
-        RemoveIndexValue(_transitionIdsByDestinationGrid, registered.DestinationVoxelIndex.GridIndex, registered.Transition.Id);
     }
 
     private static void AppendTransitions(
@@ -337,8 +336,8 @@ public static class TraversalTransitionRegistry
         }
     }
 
-    private static void AppendRegisteredTransitions(
-        SwiftList<RegisteredTraversalTransition> destination,
+    private static void AppendTransitions(
+        SwiftList<TraversalTransition> destination,
         SwiftHashSet<string> seenIds,
         SwiftHashSet<string> transitionIds)
     {
@@ -348,7 +347,7 @@ public static class TraversalTransitionRegistry
                 continue;
 
             if (_transitions.TryGetValue(transitionId, out RegisteredTraversalTransition registered))
-                destination.Add(registered);
+                destination.Add(registered.Transition);
         }
     }
 
@@ -366,26 +365,76 @@ public static class TraversalTransitionRegistry
         transitionIds.Add(transitionId);
     }
 
-    private static void RemoveIndexValue<TKey>(
-        SwiftDictionary<TKey, SwiftHashSet<string>> index,
-        TKey key,
-        string transitionId)
+    private static TraversalTransition[] BuildSortedSnapshot(SwiftList<TraversalTransition> transitions)
     {
-        if (!index.TryGetValue(key, out SwiftHashSet<string> transitionIds))
-            return;
-
-        transitionIds.Remove(transitionId);
-        if (transitionIds.Count == 0)
-            index.Remove(key);
+        TraversalTransition[] snapshot = transitions.ToArray();
+        TraversalTransitionOrdering.Sort(snapshot);
+        return snapshot;
     }
 
-    private static TraversalTransition[] BuildTransitionSnapshot()
+    private static bool CheckDuplicateManualTransition_NoLock(RegisteredTraversalTransition duplicate)
     {
-        SwiftList<TraversalTransition> snapshot = new(_transitions.Count);
         foreach (RegisteredTraversalTransition registered in _transitions.Values)
-            snapshot.Add(registered.Transition);
+        {
+            if (registered.RegistrationSource == TraversalTransitionRegistrationSource.Manual
+                && registered.Equals(duplicate))
+            {
+                return true;
+            }
+        }
 
-        return snapshot.ToArray();
+        return false;
+    }
+
+    private static bool ShouldPromote(
+        RegisteredTraversalTransition candidate,
+        RegisteredTraversalTransition current)
+    {
+        if (candidate.RegistrationSource != current.RegistrationSource)
+            return candidate.RegistrationSource == TraversalTransitionRegistrationSource.Manual;
+
+        return candidate.RegistrationOrder < current.RegistrationOrder;
+    }
+
+    private static void RebuildActiveState_NoLock()
+    {
+        _activeTransitionIds.Clear();
+        _outgoingTransitionIdsByVoxel.Clear();
+        _incomingTransitionIdsByVoxel.Clear();
+        _transitionIdsBySourceGrid.Clear();
+        _transitionIdsByDestinationGrid.Clear();
+
+        if (_transitions.Count == 0)
+        {
+            _allTransitionsSnapshot = Array.Empty<TraversalTransition>();
+            return;
+        }
+
+        SwiftHashSet<RegisteredTraversalTransition> activeByIdentity = new(_transitions.Count);
+        foreach (RegisteredTraversalTransition registered in _transitions.Values)
+        {
+            if (!activeByIdentity.TryGetValue(registered, out RegisteredTraversalTransition current))
+                activeByIdentity.Add(registered);
+            else if (ShouldPromote(registered, current))
+            {
+                // TODO: this will do until we add an indexer to SwiftHashSet or switch to a different data structure that allows updating values in-place.
+                activeByIdentity.Remove(current);
+                activeByIdentity.Add(registered);
+            }
+        }
+
+        SwiftList<TraversalTransition> activeTransitions = new(activeByIdentity.Count);
+        foreach (RegisteredTraversalTransition registered in activeByIdentity)
+        {
+            _activeTransitionIds.Add(registered.Transition.Id);
+            AddIndexValue(_outgoingTransitionIdsByVoxel, registered.SourceVoxelIndex, registered.Transition.Id);
+            AddIndexValue(_incomingTransitionIdsByVoxel, registered.DestinationVoxelIndex, registered.Transition.Id);
+            AddIndexValue(_transitionIdsBySourceGrid, registered.SourceVoxelIndex.GridIndex, registered.Transition.Id);
+            AddIndexValue(_transitionIdsByDestinationGrid, registered.DestinationVoxelIndex.GridIndex, registered.Transition.Id);
+            activeTransitions.Add(registered.Transition);
+        }
+
+        _allTransitionsSnapshot = BuildSortedSnapshot(activeTransitions);
     }
 
     private static bool TryResolveAnchorVoxelIndex(

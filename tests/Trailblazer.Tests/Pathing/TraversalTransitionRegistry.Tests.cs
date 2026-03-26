@@ -46,6 +46,7 @@ public class TraversalTransitionRegistryTests : IDisposable
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
         Assert.True(TraversalTransitionRegistry.IsRegistered("jump-link"));
+        Assert.True(TraversalTransitionRegistry.IsActive("jump-link"));
         Assert.True(TraversalTransitionRegistry.TryGet("jump-link", out TraversalTransition storedTransition));
         Assert.Equal(TraversalTransitionType.Jump, storedTransition.Type);
         Assert.True(storedTransition.IsBidirectional);
@@ -147,6 +148,129 @@ public class TraversalTransitionRegistryTests : IDisposable
 
         Assert.True(TraversalTransitionRegistry.Register(valid));
         Assert.False(TraversalTransitionRegistry.Register(valid));
+    }
+
+    [Fact]
+    public void Register_ShouldRejectDuplicateManualTransitions_WhenEffectiveSemanticsMatch()
+    {
+        var first = new TraversalTransition(
+            id: "manual-duplicate-a",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            pathCostModifier: 3);
+
+        var duplicate = new TraversalTransition(
+            id: "manual-duplicate-b",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero, Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0), new Vector3d(1, 0, 0)),
+            pathCostModifier: 3);
+
+        Assert.True(TraversalTransitionRegistry.Register(first));
+        Assert.False(TraversalTransitionRegistry.Register(duplicate));
+        Assert.True(TraversalTransitionRegistry.IsRegistered("manual-duplicate-a"));
+        Assert.True(TraversalTransitionRegistry.IsActive("manual-duplicate-a"));
+        Assert.False(TraversalTransitionRegistry.IsRegistered("manual-duplicate-b"));
+        Assert.False(TraversalTransitionRegistry.IsActive("manual-duplicate-b"));
+        Assert.Single(TraversalTransitionRegistry.AllTransitions);
+    }
+
+    [Fact]
+    public void Register_ShouldAllowDistinctPointOverrideTransitionsToCoexist()
+    {
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel sourceVoxel));
+
+        Vector3d pointOverride = sourceVoxel.WorldPosition + new Vector3d(
+            GlobalGridManager.VoxelSize / 4,
+            Fixed64.Zero,
+            Fixed64.Zero);
+
+        var defaultTransition = new TraversalTransition(
+            id: "point-default",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)));
+
+        var offsetTransition = new TraversalTransition(
+            id: "point-offset",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero, pointOverride),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.Register(defaultTransition));
+        Assert.True(TraversalTransitionRegistry.Register(offsetTransition));
+        Assert.True(TraversalTransitionRegistry.IsActive("point-default"));
+        Assert.True(TraversalTransitionRegistry.IsActive("point-offset"));
+
+        TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
+        Assert.Equal(2, outgoing.Length);
+        Assert.Contains(outgoing, transition => transition.Id == "point-default");
+        Assert.Contains(outgoing, transition => transition.Id == "point-offset");
+    }
+
+    [Fact]
+    public void RegisterGenerated_ShouldRemainInactive_WhenEquivalentGeneratedAlreadyExists_ThenReactivateAfterRemoval()
+    {
+        var first = new TraversalTransition(
+            id: "generated-a",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            pathCostModifier: 2);
+
+        var second = new TraversalTransition(
+            id: "generated-b",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            pathCostModifier: 2);
+
+        Assert.True(TraversalTransitionRegistry.RegisterGenerated(first));
+        Assert.True(TraversalTransitionRegistry.RegisterGenerated(second));
+        Assert.True(TraversalTransitionRegistry.IsActive("generated-a"));
+        Assert.False(TraversalTransitionRegistry.IsActive("generated-b"));
+        Assert.Single(TraversalTransitionRegistry.AllTransitions);
+        Assert.True(TraversalTransitionRegistry.TryGet("generated-b", out TraversalTransition inactiveGenerated));
+        Assert.Equal("generated-b", inactiveGenerated.Id);
+
+        Assert.True(TraversalTransitionRegistry.Unregister("generated-a"));
+        Assert.True(TraversalTransitionRegistry.IsActive("generated-b"));
+        Assert.Single(TraversalTransitionRegistry.AllTransitions);
+        Assert.Equal("generated-b", TraversalTransitionRegistry.AllTransitions[0].Id);
+    }
+
+    [Fact]
+    public void Register_ShouldOverrideEquivalentGeneratedTransition_WithoutUnregisteringIt()
+    {
+        var generated = new TraversalTransition(
+            id: "generated-link",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            pathCostModifier: 1);
+
+        var manual = new TraversalTransition(
+            id: "manual-link",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            pathCostModifier: 1);
+
+        Assert.True(TraversalTransitionRegistry.RegisterGenerated(generated));
+        Assert.True(TraversalTransitionRegistry.Register(manual));
+        Assert.True(TraversalTransitionRegistry.IsRegistered("generated-link"));
+        Assert.False(TraversalTransitionRegistry.IsActive("generated-link"));
+        Assert.True(TraversalTransitionRegistry.IsActive("manual-link"));
+
+        TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
+        Assert.Single(outgoing);
+        Assert.Equal("manual-link", outgoing[0].Id);
+
+        Assert.True(TraversalTransitionRegistry.Unregister("manual-link"));
+        Assert.True(TraversalTransitionRegistry.IsActive("generated-link"));
+        Assert.Single(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
+        Assert.Equal("generated-link", TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero)[0].Id);
     }
 
     [Fact]

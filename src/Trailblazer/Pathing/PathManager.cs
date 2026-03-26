@@ -144,7 +144,7 @@ public static class PathManager
         for (int i = 0; i < generatedTransitions.Length; i++)
         {
             TraversalTransition transition = generatedTransitions[i];
-            if (!TraversalTransitionRegistry.Register(transition))
+            if (!TraversalTransitionRegistry.RegisterGenerated(transition))
             {
                 RollbackTraversalBuildRegistration(
                     buildResult.Chart,

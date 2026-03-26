@@ -112,6 +112,7 @@ Important nuance:
 It is responsible for:
 
 - registering transitions by stable id
+- tracking whether a registered transition is currently active after precedence is applied
 - resolving authored anchor positions to real voxel indices
 - exposing transition lookup APIs by id, position, and voxel
 - tracking a monotonic `RegistryVersion` for cache invalidation
@@ -129,11 +130,14 @@ It is not responsible for:
 - the transition id is new
 - both authored anchor voxel indices resolve to real voxels in the current grid setup
 
+Manual registration also rejects an already-registered manual transition with the same effective semantics.
+
 Important nuance:
 
 - creating an anchor from world position resolves that position to a voxel index immediately
 - registration validates that the stored anchor voxel indices still exist in the active grid setup
 - if an anchor uses a point override, that override must still resolve inside the same voxel
+- generated transitions registered through `PathManager.Register(TraversalBuildResult)` participate in precedence as generated transitions, not manual ones
 - it does not verify that a chart anchor actually belongs to a live chart path segment
 - it does not verify that a volume anchor's derived traversal mode is currently configured in `VolumeTraversalRules`
 
@@ -145,6 +149,7 @@ The main public registry APIs are:
 
 - `Register(...)`
 - `IsRegistered(...)`
+- `IsActive(...)`
 - `TryGet(...)`
 - `TryGetResolvedEndpoints(...)`
 - `Unregister(...)`
@@ -154,8 +159,10 @@ The main public registry APIs are:
 
 Useful mental model:
 
-- `AllTransitions` is the authored snapshot
-- outgoing and incoming queries are voxel-scoped views of that authored data
+- `AllTransitions` is the active snapshot after precedence is applied
+- outgoing and incoming queries are active voxel-scoped views
+- `TryGet(...)` and `TryGetResolvedEndpoints(...)` can still reach registered inactive transitions by id
+- `IsActive(...)` tells you whether planners and transition queries will currently use that transition
 - `TryGetResolvedEndpoints(...)` is the bridge from authored anchors to actual voxel indices
 
 ### 3.3 Lifetime And Reset
@@ -165,10 +172,22 @@ Useful mental model:
 Important lifecycle rules:
 
 - `PathManager.Reset()` clears the registry
+- `PathManager.UnloadChart(...)` does not automatically unregister transitions that were already registered, including generated transitions from `TraversalBuildResult`
 - topology changes outside normal reset flow can make registered endpoints stale
 - if the world grid or authored handoff layout changes, hosts should unregister or rebuild transitions
 
 The registry remarks in code are important here: endpoint voxels are resolved at registration time, not lazily every time a request is planned.
+
+### 3.4 Precedence
+
+When two registered transitions have the same effective semantics:
+
+- manual transitions take precedence over generated transitions
+- duplicate manual transitions are ignored and warned rather than replacing the existing manual transition
+- lower-precedence generated transitions remain registered but inactive
+- removing the winning manual transition can reactivate an equivalent generated transition automatically
+
+Transitions that differ in effective point overrides, type, cost, or bidirectional shape are treated as distinct semantics and may coexist.
 
 ## 4. Deterministic Directed Queries
 

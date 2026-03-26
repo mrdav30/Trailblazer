@@ -99,4 +99,42 @@ public class TraversalTransitionQueryTests : IDisposable
         TraversalTransition[] after = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(sourceVoxel.GridIndex);
         Assert.Equal(2, after.Length);
     }
+
+    [Fact]
+    public void DirectedQueries_ShouldOnlyUseActiveTransitions_WhenManualOverrideChanges()
+    {
+        Vector3d source = Vector3d.Zero;
+        Vector3d destination = new(1, 0, 0);
+
+        Assert.True(GlobalGridManager.TryGetVoxel(source, out Voxel sourceVoxel));
+
+        var generated = new TraversalTransition(
+            id: "generated-directed",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(source),
+            destination: TraversalTransitionAnchor.Chart(destination),
+            pathCostModifier: 2);
+
+        var manual = new TraversalTransition(
+            id: "manual-directed",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(source),
+            destination: TraversalTransitionAnchor.Chart(destination),
+            pathCostModifier: 2);
+
+        Assert.True(TraversalTransitionRegistry.RegisterGenerated(generated));
+        TraversalTransition[] before = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(sourceVoxel.GridIndex);
+        Assert.Single(before);
+        Assert.Equal("generated-directed", before[0].Id);
+
+        Assert.True(TraversalTransitionRegistry.Register(manual));
+        TraversalTransition[] overridden = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(sourceVoxel.GridIndex);
+        Assert.Single(overridden);
+        Assert.Equal("manual-directed", overridden[0].Id);
+
+        Assert.True(TraversalTransitionRegistry.Unregister("manual-directed"));
+        TraversalTransition[] reactivated = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(sourceVoxel.GridIndex);
+        Assert.Single(reactivated);
+        Assert.Equal("generated-directed", reactivated[0].Id);
+    }
 }

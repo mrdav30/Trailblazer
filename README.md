@@ -117,7 +117,7 @@ PathManager.InitializeChart(chart.Name);
 
 `NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell surface or volume traversal metadata, cost modifiers, or transition hints. Raw 3D travel still runs through `VolumePathRequest`, while chart-backed `AStarPathRequest` and `FlowFieldPathRequest` requests can opt into registered transition fallback through `AllowTraversalTransitions`.
 
-If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse `string[,,]` input such as `L`, `O`, `W`, `L!`, `O!`, and `W!` into a `TraversalBuildResult`, and `PathManager.Register(buildResult)` will register the chart, initialize any authored surface or volume partitions, and register generated explicit transitions in one step. The built-in legend and current generator rules are documented in `docs/AUTHORING.MD`.
+If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse `string[,,]` input such as `L`, `O`, `W`, `L!`, `O!`, and `W!` into a `TraversalBuildResult`, and `PathManager.Register(buildResult)` will register the chart, initialize any authored surface or volume partitions, and register generated explicit transitions in one step. Those generated transitions participate in manual-vs-generated precedence as generated handoffs, so an equivalent manual transition can stay active without breaking build-result registration. The built-in legend and current generator rules are documented in `docs/AUTHORING.MD`.
 
 ### 2. Request a Guide Directly
 

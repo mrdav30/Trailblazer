@@ -39,7 +39,7 @@ internal static class TraversalTransitionQuery
             if (_hasAllDirectedTransitions)
                 return _allDirectedTransitions;
 
-            _allDirectedTransitions = BuildAllDirectedTransitions(TraversalTransitionRegistry.GetRegisteredTransitions());
+            _allDirectedTransitions = BuildAllDirectedTransitions(TraversalTransitionRegistry.GetActiveTransitions());
             _hasAllDirectedTransitions = true;
             return _allDirectedTransitions;
         }
@@ -54,7 +54,7 @@ internal static class TraversalTransitionQuery
                 return cached;
 
             TraversalTransition[] directed = BuildDirectedTransitionsForGrid(
-                TraversalTransitionRegistry.GetRegisteredTransitionsTouchingGrid(sourceGridIndex),
+                TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(sourceGridIndex),
                 sourceGridIndex,
                 GridMatchAxis.Source);
             _directedTransitionsFromSourceGrid[sourceGridIndex] = directed;
@@ -71,7 +71,7 @@ internal static class TraversalTransitionQuery
                 return cached;
 
             TraversalTransition[] directed = BuildDirectedTransitionsForGrid(
-                TraversalTransitionRegistry.GetRegisteredTransitionsTouchingGrid(destinationGridIndex),
+                TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(destinationGridIndex),
                 destinationGridIndex,
                 GridMatchAxis.Destination);
             _directedTransitionsToDestinationGrid[destinationGridIndex] = directed;
@@ -93,7 +93,7 @@ internal static class TraversalTransitionQuery
     }
 
     private static TraversalTransition[] BuildAllDirectedTransitions(
-        RegisteredTraversalTransition[] transitions)
+        TraversalTransition[] transitions)
     {
         SwiftList<TraversalTransition> directed = new(transitions.Length * 2);
         for (int i = 0; i < transitions.Length; i++)
@@ -103,7 +103,7 @@ internal static class TraversalTransitionQuery
     }
 
     private static TraversalTransition[] BuildDirectedTransitionsForGrid(
-        RegisteredTraversalTransition[] transitions,
+        TraversalTransition[] transitions,
         int gridIndex,
         GridMatchAxis axis)
     {
@@ -111,14 +111,14 @@ internal static class TraversalTransitionQuery
 
         for (int i = 0; i < transitions.Length; i++)
         {
-            RegisteredTraversalTransition registered = transitions[i];
-            if (MatchesGrid(registered, gridIndex, axis))
-                directed.Add(registered.Transition);
+            TraversalTransition transition = transitions[i];
+            if (MatchesGrid(transition, gridIndex, axis))
+                directed.Add(transition);
 
-            if (registered.Transition.IsBidirectional
-                && MatchesGrid(registered, gridIndex, GetOppositeAxis(axis)))
+            if (transition.IsBidirectional
+                && MatchesGrid(transition, gridIndex, GetOppositeAxis(axis)))
             {
-                directed.Add(CreateReversedTransition(registered.Transition));
+                directed.Add(CreateReversedTransition(transition));
             }
         }
 
@@ -126,23 +126,23 @@ internal static class TraversalTransitionQuery
     }
 
     private static bool MatchesGrid(
-        RegisteredTraversalTransition registered,
+        TraversalTransition transition,
         int gridIndex,
         GridMatchAxis axis)
     {
         return axis == GridMatchAxis.Source
-            ? registered.SourceVoxelIndex.GridIndex == gridIndex
-            : registered.DestinationVoxelIndex.GridIndex == gridIndex;
+            ? transition.Source.VoxelIndex.GridIndex == gridIndex
+            : transition.Destination.VoxelIndex.GridIndex == gridIndex;
     }
 
     private static void AddAllDirectedTransitions(
         SwiftList<TraversalTransition> directed,
-        RegisteredTraversalTransition registered)
+        TraversalTransition transition)
     {
-        directed.Add(registered.Transition);
+        directed.Add(transition);
 
-        if (registered.Transition.IsBidirectional)
-            directed.Add(CreateReversedTransition(registered.Transition));
+        if (transition.IsBidirectional)
+            directed.Add(CreateReversedTransition(transition));
     }
 
     private static GridMatchAxis GetOppositeAxis(GridMatchAxis axis)
@@ -166,62 +166,7 @@ internal static class TraversalTransitionQuery
     private static TraversalTransition[] SortTransitions(SwiftList<TraversalTransition> directed)
     {
         TraversalTransition[] ordered = directed.ToArray();
-        Array.Sort(ordered, CompareTransitions);
+        TraversalTransitionOrdering.Sort(ordered);
         return ordered;
-    }
-
-    private static int CompareTransitions(TraversalTransition left, TraversalTransition right)
-    {
-        int idComparison = string.CompareOrdinal(left.Id, right.Id);
-        if (idComparison != 0)
-            return idComparison;
-
-        int typeComparison = left.Type.CompareTo(right.Type);
-        if (typeComparison != 0)
-            return typeComparison;
-
-        int sourceComparison = CompareAnchors(left.Source, right.Source);
-        if (sourceComparison != 0)
-            return sourceComparison;
-
-        int destinationComparison = CompareAnchors(left.Destination, right.Destination);
-        if (destinationComparison != 0)
-            return destinationComparison;
-
-        int costComparison = left.PathCostModifier.CompareTo(right.PathCostModifier);
-        if (costComparison != 0)
-            return costComparison;
-
-        return left.IsBidirectional.CompareTo(right.IsBidirectional);
-    }
-
-    private static int CompareAnchors(TraversalTransitionAnchor left, TraversalTransitionAnchor right)
-    {
-        int spaceComparison = left.Space.CompareTo(right.Space);
-        if (spaceComparison != 0)
-            return spaceComparison;
-
-        int gridComparison = left.VoxelIndex.GridIndex.CompareTo(right.VoxelIndex.GridIndex);
-        if (gridComparison != 0)
-            return gridComparison;
-
-        int positionComparison = ComparePositions(left.Position, right.Position);
-        if (positionComparison != 0)
-            return positionComparison;
-
-        return left.HasPointOverride.CompareTo(right.HasPointOverride);
-    }
-
-    private static int ComparePositions(Vector3d left, Vector3d right)
-    {
-        int xComparison = left.x.CompareTo(right.x);
-        if (xComparison != 0)
-            return xComparison;
-
-        int yComparison = left.y.CompareTo(right.y);
-        if (yComparison != 0)
-            return yComparison;
-
-        return left.z.CompareTo(right.z);
     }
 }

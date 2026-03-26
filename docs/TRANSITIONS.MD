@@ -18,8 +18,8 @@ Relevant code:
 - `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionAnchor.cs`
 - `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionType.cs`
 - `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionQuery.cs`
-- `src/Trailblazer/Pathing/Hybrid/HybridRoutePlanner.cs`
-- `src/Trailblazer/Pathing/Hybrid/HybridPathRequest.cs`
+- `src/Trailblazer/Pathing/Search/Hybrid/HybridRoutePlanner.cs`
+- `src/Trailblazer/Pathing/Search/Hybrid/HybridPathRequest.cs`
 
 ## 1. Why Transitions Matter
 
@@ -342,7 +342,7 @@ If you are changing transition behavior, inspect these files together:
 
 - `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionRegistry.cs`
 - `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionQuery.cs`
-- `src/Trailblazer/Pathing/Hybrid/HybridRoutePlanner.cs`
+- `src/Trailblazer/Pathing/Search/Hybrid/HybridRoutePlanner.cs`
 - `src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`
 
 Useful tests:

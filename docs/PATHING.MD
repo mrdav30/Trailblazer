@@ -13,16 +13,16 @@ Relevant code:
 
 - `src/Trailblazer/Pathing/Support/Request/IPathRequest.cs`
 - `src/Trailblazer/Pathing/Support/Request/PathRequest.cs`
-- `src/Trailblazer/Pathing/AStar/AStarPathRequest.cs`
-- `src/Trailblazer/Pathing/FlowField/FlowFieldPathRequest.cs`
-- `src/Trailblazer/Pathing/Volume/VolumePathRequest.cs`
-- `src/Trailblazer/Pathing/Hybrid/HybridPathRequest.cs`
+- `src/Trailblazer/Pathing/Search/AStar/AStarPathRequest.cs`
+- `src/Trailblazer/Pathing/Search/FlowField/FlowFieldPathRequest.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
+- `src/Trailblazer/Pathing/Search/Hybrid/HybridPathRequest.cs`
 - `src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`
-- `src/Trailblazer/Pathing/AStar/AStarSurveyor.cs`
-- `src/Trailblazer/Pathing/FlowField/FlowFieldSurveyor.cs`
-- `src/Trailblazer/Pathing/Volume/VolumeSurveyor.cs`
-- `src/Trailblazer/Pathing/VoxelFinder/VoxelFinder.cs`
-- `src/Trailblazer/Pathing/VoxelFinder/RawVoxelFinder.cs`
+- `src/Trailblazer/Pathing/Search/AStar/AStarSurveyor.cs`
+- `src/Trailblazer/Pathing/Search/FlowField/FlowFieldSurveyor.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
+- `src/Trailblazer/Pathing/Support/VoxelFinder/VoxelFinder.cs`
+- `src/Trailblazer/Pathing/Support/VoxelFinder/RawVoxelFinder.cs`
 - `src/Trailblazer/Pathing/Support/Transition/*`
 
 ## 1. What Pathing Is
@@ -464,4 +464,5 @@ Good pathing-focused test entry points:
 - `CHARTS.MD` for authored surface-space design
 - `PATHMANAGER.MD` for chart lifecycle and utility APIs
 - `src/Trailblazer/Pathing` for implementation details
-- `src/Trailblazer/Navigation` only if you also need steering or runtime movement
+- `src/Trailblazer/Main` for `Navigator` and `TrailblazerManager`
+- `src/Trailblazer/Navigation` only if you also need steering, turning, or motor flow

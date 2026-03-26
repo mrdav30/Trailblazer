@@ -374,5 +374,6 @@ Before runtime pathing works correctly:
 - [`VOLUMETRAVERSAL.MD`](VOLUMETRAVERSAL.MD) for raw-volume traversal rules
 - [`NAVMOTOR.MD`](NAVMOTOR.MD) for motor phase ordering
 - [`GRAVITY.MD`](GRAVITY.MD) for the gravity model
-- `src/Trailblazer/Pathing` for core pathing logic
-- `src/Trailblazer/Navigation` for steering, turning, and motor flow
+- `src/Trailblazer/Main` for host-facing lifecycle entry points such as `Navigator` and `TrailblazerManager`
+- `src/Trailblazer/Pathing` for core pathing logic, especially the `Search` and `Support` subfolders
+- `src/Trailblazer/Navigation` for steering, turning, motor flow, movement groups, and animation integration

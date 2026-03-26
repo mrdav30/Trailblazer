@@ -19,13 +19,13 @@ Relevant code:
 - `src/Trailblazer/Pathing/Support/Guide/IGuide.cs`
 - `src/Trailblazer/Pathing/Support/Guide/IWaypointGuide.cs`
 - `src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`
-- `src/Trailblazer/Pathing/AStar/AStarGuide.cs`
-- `src/Trailblazer/Pathing/FlowField/FlowFieldGuide.cs`
-- `src/Trailblazer/Pathing/Volume/VolumeGuide.cs`
-- `src/Trailblazer/Pathing/Hybrid/HybridGuide.cs`
-- `src/Trailblazer/Pathing/AStar/AStarSurveyResult.cs`
-- `src/Trailblazer/Pathing/FlowField/FlowFieldSurveyResult.cs`
-- `src/Trailblazer/Pathing/Volume/VolumeSurveyResult.cs`
+- `src/Trailblazer/Pathing/Search/AStar/AStarGuide.cs`
+- `src/Trailblazer/Pathing/Search/FlowField/FlowFieldGuide.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumeGuide.cs`
+- `src/Trailblazer/Pathing/Search/Hybrid/HybridGuide.cs`
+- `src/Trailblazer/Pathing/Search/AStar/AStarSurveyResult.cs`
+- `src/Trailblazer/Pathing/Search/FlowField/FlowFieldSurveyResult.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyResult.cs`
 
 ## 1. What A Guide Is
 
@@ -460,11 +460,11 @@ If you are modifying the guide layer, verify:
 High-risk files:
 
 - `src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`
-- `src/Trailblazer/Pathing/FlowField/FlowFieldGuide.cs`
-- `src/Trailblazer/Pathing/AStar/AStarGuide.cs`
-- `src/Trailblazer/Pathing/Volume/VolumeGuide.cs`
-- `src/Trailblazer/Pathing/Hybrid/HybridGuide.cs`
-- `src/Trailblazer/Pathing/Support/ReusableSurveyResultCache.cs`
+- `src/Trailblazer/Pathing/Search/FlowField/FlowFieldGuide.cs`
+- `src/Trailblazer/Pathing/Search/AStar/AStarGuide.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumeGuide.cs`
+- `src/Trailblazer/Pathing/Search/Hybrid/HybridGuide.cs`
+- `src/Trailblazer/Pathing/Support/Guide/ReusableSurveyResultCache.cs`
 
 Useful test entry points:
 

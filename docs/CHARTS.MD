@@ -13,7 +13,7 @@ Relevant code:
 
 - `src/Trailblazer/Pathing/Support/Chart/NavigationChart.cs`
 - `src/Trailblazer/Pathing/PathManager.cs`
-- `src/Trailblazer/Pathing/Support/PathPartition.cs`
+- `src/Trailblazer/Pathing/Support/Partition/PathPartition.cs`
 
 ## 1. Why Charts Matter
 

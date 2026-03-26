@@ -15,12 +15,12 @@ If you need authored handoff registration, pair this with `TRANSITIONS.MD`.
 Relevant code:
 
 - `src/Trailblazer/Pathing/Support/Partition/VolumePartition.cs`
-- `src/Trailblazer/Pathing/Support/VolumeTraversalRules.cs`
-- `src/Trailblazer/Pathing/Support/VolumeTraversalMode.cs`
-- `src/Trailblazer/Pathing/VoxelFinder/RawVoxelFinder.cs`
-- `src/Trailblazer/Pathing/Volume/VolumePathRequest.cs`
-- `src/Trailblazer/Pathing/Volume/VolumeSurveyor.cs`
-- `src/Trailblazer/Pathing/Volume/VolumeGuide.cs`
+- `src/Trailblazer/Pathing/Support/Volume/VolumeTraversalRules.cs`
+- `src/Trailblazer/Pathing/Support/Volume/VolumeTraversalMode.cs`
+- `src/Trailblazer/Pathing/Support/VoxelFinder/RawVoxelFinder.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumeGuide.cs`
 
 ## 1. Why Volume Traversal Matters
 
@@ -326,11 +326,11 @@ Use `VolumeTraversalMode.Open` when movement should stay chart-optional and 3D, 
 If you are changing volume traversal behavior, inspect these files together:
 
 - `src/Trailblazer/Pathing/Support/Partition/VolumePartition.cs`
-- `src/Trailblazer/Pathing/Support/VolumeTraversalRules.cs`
-- `src/Trailblazer/Pathing/VoxelFinder/RawVoxelFinder.cs`
-- `src/Trailblazer/Pathing/Volume/VolumePathRequest.cs`
-- `src/Trailblazer/Pathing/Volume/VolumeSurveyor.cs`
-- `src/Trailblazer/Pathing/Hybrid/HybridRoutePlanner.cs`
+- `src/Trailblazer/Pathing/Support/Volume/VolumeTraversalRules.cs`
+- `src/Trailblazer/Pathing/Support/VoxelFinder/RawVoxelFinder.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
+- `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
+- `src/Trailblazer/Pathing/Search/Hybrid/HybridRoutePlanner.cs`
 
 Useful tests:
 

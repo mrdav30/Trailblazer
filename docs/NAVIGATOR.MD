@@ -12,8 +12,8 @@ If you need the subsystem references behind `Navigator`, read:
 
 The code referenced here lives primarily in:
 
-- `src/Trailblazer/Navigation/Navigator.cs`
-- `src/Trailblazer/Navigation/Support/INavigate.cs`
+- `src/Trailblazer/Main/Navigator.cs`
+- `src/Trailblazer/Main/INavigate.cs`
 - `src/Trailblazer/Navigation/Animation/*`
 
 ## 1. What Navigator Is

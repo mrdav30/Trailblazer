@@ -220,8 +220,9 @@ Use `VolumePathRequest` when:
 | Path | Purpose |
 | --- | --- |
 | [`src/Trailblazer`](src/Trailblazer) | Main library source |
-| [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Charts, requests, surveyors, guides, caching |
-| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Steering, turning, motor, navigator flow |
+| [`src/Trailblazer/Main`](src/Trailblazer/Main) | Host-facing lifecycle entry points such as `Navigator` and `TrailblazerManager` |
+| [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Charts, requests, search, guides, caching, and transitions |
+| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Steering, turning, motor, movement groups, and animation flow |
 | [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests) | xUnit test suite |
 | [`docs`](docs) | Architecture and subsystem notes |
 
@@ -243,10 +244,10 @@ Start with:
 
 If you are integrating or extending the runtime, the key source entry points are:
 
-- [`src/Trailblazer/TrailblazerManager.cs`](src/Trailblazer/TrailblazerManager.cs)
+- [`src/Trailblazer/Main/TrailblazerManager.cs`](src/Trailblazer/Main/TrailblazerManager.cs)
 - [`src/Trailblazer/Pathing/PathManager.cs`](src/Trailblazer/Pathing/PathManager.cs)
-- [`src/Trailblazer/Pathing/Support/PathGuideFactory.cs`](src/Trailblazer/Pathing/Support/PathGuideFactory.cs)
-- [`src/Trailblazer/Navigation/Navigator.cs`](src/Trailblazer/Navigation/Navigator.cs)
+- [`src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`](src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs)
+- [`src/Trailblazer/Main/Navigator.cs`](src/Trailblazer/Main/Navigator.cs)
 - [`src/Trailblazer/Navigation/Steering/NavSteering.cs`](src/Trailblazer/Navigation/Steering/NavSteering.cs)
 - [`src/Trailblazer/Navigation/Turning/NavTurning.cs`](src/Trailblazer/Navigation/Turning/NavTurning.cs)
 

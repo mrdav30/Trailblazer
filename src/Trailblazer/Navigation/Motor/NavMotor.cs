@@ -3,6 +3,10 @@ using SwiftCollections;
 using System;
 using Trailblazer.Serialization;
 
+#if DEBUG
+using System.Diagnostics;
+#endif
+
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
@@ -82,32 +86,32 @@ public class NavMotor : IRecordable
     /// <summary>
     /// Determines if the navigator is currently on the ground.
     /// </summary>
-    public bool IsGrounded => CurrentState.Medium == TraversalMedium.Ground;
+    public bool IsOnSolid => CurrentState.Medium == TraversalMedium.Solid;
 
     /// <summary>
     /// Determines if the navigator was on the ground in the previous frame.
     /// </summary>
-    public bool WasGrounded => CurrentState.PreviousState?.Medium == TraversalMedium.Ground;
+    public bool WasOnSolid => CurrentState.PreviousState?.Medium == TraversalMedium.Solid;
 
     /// <summary>
     /// Determines if the navigator is currently in the air.
     /// </summary>
-    public bool IsInAir => CurrentState.Medium == TraversalMedium.Air;
+    public bool IsInGas => CurrentState.Medium == TraversalMedium.Gas;
 
     /// <summary>
     /// Determines if the navigator was in the air in the previous frame.
     /// </summary>
-    public bool WasInAir => CurrentState.PreviousState?.Medium == TraversalMedium.Air;
+    public bool WasInGas => CurrentState.PreviousState?.Medium == TraversalMedium.Gas;
 
     /// <summary>
     /// Determines if the navigator is currently in water.
     /// </summary>
-    public bool IsInWater => CurrentState.Medium == TraversalMedium.Water;
+    public bool IsInLiquid => CurrentState.Medium == TraversalMedium.Liquid;
 
     /// <summary>
     /// Determines if the navigator was in water in the previous frame.
     /// </summary>
-    public bool WasInWater => CurrentState.PreviousState?.Medium == TraversalMedium.Water;
+    public bool WasInLiquid => CurrentState.PreviousState?.Medium == TraversalMedium.Liquid;
 
     /// <summary>
     /// Determines if the navigator is currently under active flight control.
@@ -115,10 +119,17 @@ public class NavMotor : IRecordable
     public bool IsFlying => FlyModule?.IsFlying == true;
 
     /// <summary>
+    /// Determines if the navigator is currently in a jump state.
+    /// </summary>
+    public bool IsJumping => JumpModule?.IsJumping == true;
+
+    public bool IsFalling => Handler.Fall?.IsFalling == true;
+
+    /// <summary>
     /// Checks if the navigator is in a state where it is airborne but not actively jumping, flying, or falling.
     /// </summary>
-    public bool InLimbo => !IsGrounded && !IsInAir && !IsInWater
-        || IsInAir && !IsFlying && !(JumpModule?.IsJumping ?? false) && !Handler.Fall.IsFalling;
+    public bool InLimbo => !IsOnSolid && !IsInGas && !IsInLiquid
+        || IsInGas && !IsFlying && !IsJumping && !IsFalling;
 
     #endregion
 
@@ -235,9 +246,9 @@ public class NavMotor : IRecordable
 
 #if DEBUG
         Debug.WriteLine($"NavMotor State: " +
-            $"Grounded={IsGrounded}, " +
-            $"InAir={IsInAir}, " +
-            $"InWater={IsInWater}, " +
+            $"Grounded={IsOnSolid}, " +
+            $"InAir={IsInGas}, " +
+            $"InWater={IsInLiquid}, " +
             $"Flying={IsFlying}, " +
             $"InLimbo={InLimbo}, " +
             $"Velocity={Handler.Move.FrameVelocity}");
@@ -282,8 +293,8 @@ public class NavMotor : IRecordable
         //  - if we aren't grounded and not flying
         bool isMovingWithPlatform = PlatformModule?.IsActive == true
             && !IsFlying
-            && (IsGrounded || PlatformModule.IsLockedToPlatform);
-        if (isMovingWithPlatform && !(JumpModule?.IsJumping ?? false))
+            && (IsOnSolid || PlatformModule.IsLockedToPlatform);
+        if (isMovingWithPlatform && !IsJumping)
             PlatformModule.GetPlatformInfluence(request.FootPosition ?? request.Origin,
                 request.Rotation,
                 out positionDelta,
@@ -302,7 +313,7 @@ public class NavMotor : IRecordable
     private void ComputeMovementForces(TrekRequest frameRequest)
     {
         // Check if navigator is in control
-        if (IsGrounded)
+        if (IsOnSolid)
         {
             if (IsFlying)
             {
@@ -329,13 +340,13 @@ public class NavMotor : IRecordable
             return;
 
         // remove any downward current downward momentum if we aren't grounded or just landed
-        if ((!IsGrounded || IsGrounded && WasInAir) && !IsFlying)
+        if ((!IsOnSolid || IsOnSolid && WasInGas) && !IsFlying)
             _forceOutput.y = Fixed64.Zero;
 
         Vector3d desiredVelocity = GetDesiredVelocity(frameRequest);
 
         // Apply Friction (resistance to motion)
-        if (IsGrounded && !IsFlying && frameRequest.Direction == Vector3d.Zero)
+        if (IsOnSolid && !IsFlying && frameRequest.Direction == Vector3d.Zero)
         {
             Fixed64 friction = CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
             if (friction > Fixed64.Zero && _forceOutput != Vector3d.Zero)
@@ -356,13 +367,13 @@ public class NavMotor : IRecordable
         Vector3d velocityChange = (desiredVelocity - _forceOutput).ClampMagnitude(maxVelocityChange);
 
         // Don't apply velocity changes in air unless controlled
-        if (!IsGrounded && !Handler.IsInControl)
+        if (!IsOnSolid && !Handler.IsInControl)
             return;
 
         _forceOutput += velocityChange;
 
         // Uphill / Downhill velocity Y clamping
-        if (IsGrounded && !IsFlying)
+        if (IsOnSolid && !IsFlying)
             _forceOutput.y = FixedMath.Min(_forceOutput.y, Fixed64.Zero);
     }
 
@@ -394,7 +405,7 @@ public class NavMotor : IRecordable
             result = GetHorizontalVelocity(frameRequest);
 
         // Ensure smoother stops in water instead of abrupt halts
-        if (IsInWater)
+        if (IsInLiquid)
         {
             if (SwimModule?.IsEnabled != true || !SwimModule.CanSwim)
                 result = Vector3d.Zero;
@@ -417,7 +428,7 @@ public class NavMotor : IRecordable
             result.y = Fixed64.Zero;
         }
 
-        if (!IsGrounded || result == Vector3d.Zero)
+        if (!IsOnSolid || result == Vector3d.Zero)
             return result;
 
         // Apply friction (resistance to control)
@@ -510,7 +521,7 @@ public class NavMotor : IRecordable
 
         Vector3d temp;
         Fixed64 zAxisEllipseMultiplier;
-        if (IsInWater)
+        if (IsInLiquid)
         {
             if (SwimModule?.IsEnabled != true || !SwimModule.CanSwim)
                 return Fixed64.Zero;
@@ -556,19 +567,19 @@ public class NavMotor : IRecordable
         }
 
         Fixed64 length = new Vector3d(temp.x, Fixed64.Zero, temp.z * zAxisEllipseMultiplier).Magnitude;
-        Fixed64 baseSpeed = length * (IsInWater
+        Fixed64 baseSpeed = length * (IsInLiquid
             ? SwimModule.MaxSwimSidewaysSpeed
             : Handler.Move.MaxSidewaysSpeed);
 
-        if (IsGrounded)
+        if (IsOnSolid)
             return baseSpeed;
 
         // Apply reduced control when jumping or falling
         Fixed64 controlMultiplier = Fixed64.One;
 
-        if (JumpModule?.IsJumping == true && !IsGrounded)
+        if (IsJumping && !IsOnSolid)
             controlMultiplier = JumpModule.JumpControlMultiplier;
-        else if (Handler.Fall.IsFalling && !IsGrounded)
+        else if (IsFalling && !IsOnSolid)
             controlMultiplier = Handler.Fall.FallControlMultiplier;
 
         return baseSpeed * controlMultiplier;
@@ -580,7 +591,7 @@ public class NavMotor : IRecordable
     /// <returns>The acceleration limit depending on whether the navigator is grounded, airborne, or swimming.</returns>
     public Fixed64 GetMaxAcceleration()
     {
-        if (IsInWater)
+        if (IsInLiquid)
             return SwimModule?.IsEnabled == true && SwimModule.CanSwim
                 ? SwimModule.MaxSwimAcceleration
                 : Handler.Move.MaxAirAcceleration;
@@ -590,11 +601,10 @@ public class NavMotor : IRecordable
                 ? FlyModule.MaxFlyAcceleration
                 : Handler.Move.MaxAirAcceleration;
 
-        if (IsGrounded) return Handler.Move.MaxGroundAcceleration;
+        if (IsOnSolid) return Handler.Move.MaxGroundAcceleration;
 
-        if ((JumpModule?.IsJumping ?? false)
-            || Handler.Fall.IsFalling
-            || IsInAir) return Handler.Move.MaxAirAcceleration;
+        if (IsJumping || IsFalling || IsInGas)
+            return Handler.Move.MaxAirAcceleration;
 
         return Fixed64.MAX_VALUE; // fallback, should never be hit
     }
@@ -616,13 +626,13 @@ public class NavMotor : IRecordable
             return;
         }
 
-        if (IsGrounded)
+        if (IsOnSolid)
         {
             _forceOutput.y = FixedMath.Min(Fixed64.Zero, _forceOutput.y) - gravityStep;
             return;
         }
 
-        if (IsInWater)
+        if (IsInLiquid)
         {
             // Apply buoyancy if we can swim, otherwise apply gravity as normal.
             // Even if we can swim, we still apply gravity but reduce it based on the buoyancy factor to
@@ -635,7 +645,7 @@ public class NavMotor : IRecordable
             return;
         }
 
-        if (!IsInAir) return;
+        if (!IsInGas) return;
 
         _forceOutput.y = Handler.Move.FrameVelocity.y - gravityStep;
 
@@ -646,7 +656,7 @@ public class NavMotor : IRecordable
 
         // When jumping up we don't apply gravity for some time when the user is holding the jump button.
         // This allows for more control over jump height by pressing the button longer.
-        if (JumpModule?.IsJumping == true && JumpModule.IsHoldingJump)
+        if (IsJumping && JumpModule.IsHoldingJump)
         {
             // Calculate the duration that the extra jump force should have effect.
             // If we're still less than that duration after the jumping time, apply the force.
@@ -675,10 +685,10 @@ public class NavMotor : IRecordable
             return;
 
         // Prevent jumping while in active fall state (e.g., walking off a ledge)
-        if (Handler.Fall.IsFalling)
+        if (IsFalling)
             return;
 
-        if (IsInWater && !(SwimModule?.CanBreachWater ?? false))
+        if (IsInLiquid && !(SwimModule?.CanBreachWater ?? false))
             return;
 
         if (!JumpModule.CanJump)
@@ -688,7 +698,7 @@ public class NavMotor : IRecordable
             return;
 
         Vector3d jumpForce;
-        if (IsInWater)
+        if (IsInLiquid)
         {
             JumpModule.FrameJumpDirection = Vector3d.Up;
             jumpForce = JumpModule.FrameJumpDirection * (GetVerticalJumpSpeed() * SwimModule.BreachJumpMultiplier);
@@ -762,24 +772,24 @@ public class NavMotor : IRecordable
         #region Movement State Transitions
 
         // Trasitioning to either ground or water
-        if (WasInAir && !IsInAir)
+        if (WasInGas && !IsInGas)
         {
-            if (JumpModule?.IsJumping == true)
+            if (IsJumping)
             {
                 // Reset cooldown on landing
                 JumpModule.ResetJumpCounter();
 
-                if (IsInWater)
+                if (IsInLiquid)
                     Events.OnStopWaterBreach?.Invoke();
                 else
                     Events.OnStopJump?.Invoke();
             }
-            else if (!IsInWater)
+            else if (!IsInLiquid)
                 Events.OnLandedFall?.Invoke();
         }
 
         // Transitioning out of water
-        if (SwimModule?.IsEnabled == true && !IsInWater && WasInWater)
+        if (SwimModule?.IsEnabled == true && !IsInLiquid && WasInLiquid)
             Handler.ClearTransientState<SwimLocomotion>();
 
         #endregion
@@ -790,7 +800,7 @@ public class NavMotor : IRecordable
 
         HandleFallState(newPosition);
 
-        if (PlatformModule?.IsActive == true && (IsGrounded || PlatformModule.IsLockedToPlatform))
+        if (PlatformModule?.IsActive == true && (IsOnSolid || PlatformModule.IsLockedToPlatform))
             PlatformModule.HandlePlatformMovement(newFootPosition ?? newPosition, newRotation);
 
         AbortTraversalFrame();
@@ -826,7 +836,7 @@ public class NavMotor : IRecordable
     private void HandlePlatformTransitions()
     {
         // Don't process platform state when in water
-        if (PlatformModule?.IsEnabled != true || IsInWater)
+        if (PlatformModule?.IsEnabled != true || IsInLiquid)
             return;
 
         bool isReleasing = false;
@@ -841,7 +851,7 @@ public class NavMotor : IRecordable
 
         if (!PlatformModule.InteriaApplied) return;
 
-        if (WasGrounded && IsInAir)
+        if (WasOnSolid && IsInGas)
         {
             // Scout just left the ground, so it inherits platform inertia into its new velocity.
             PlatformModule.FramePlatformVelocity = PlatformModule.PlatformVelocity;
@@ -849,7 +859,7 @@ public class NavMotor : IRecordable
             return;
         }
 
-        if (WasInAir && IsGrounded)
+        if (WasInGas && IsOnSolid)
         {
             if (PlatformModule.IsNewPlatform)
                 // If navigator landed on a new platform, we have to wait for two frames
@@ -870,16 +880,16 @@ public class NavMotor : IRecordable
     /// </remarks>
     private void HandleSwimState(Vector3d position)
     {
-        if (!IsInWater)
+        if (!IsInLiquid)
         {
-            if (SwimModule?.IsEnabled == true && WasInWater)
+            if (SwimModule?.IsEnabled == true && WasInLiquid)
                 Handler.ClearTransientState<SwimLocomotion>();
 
             return;
         }
 
         // Clear the transient state when entering water for the first time
-        if (!WasInWater)
+        if (!WasInLiquid)
             Handler.ClearAllTransientState();
 
         if (SwimModule?.IsEnabled == true)
@@ -889,7 +899,7 @@ public class NavMotor : IRecordable
 
             SwimModule.UpdateDiveTime();
 
-            if (IsInWater && SwimModule.IsDrowning)
+            if (IsInLiquid && SwimModule.IsDrowning)
                 Events.OnDrowning?.Invoke(SwimModule.UnderwaterTimer);
         }
     }
@@ -902,7 +912,7 @@ public class NavMotor : IRecordable
         if (FlyModule?.IsEnabled != true)
             return;
 
-        if (!IsInAir)
+        if (!IsInGas)
         {
             if (FlyModule.IsFlying)
                 Handler.ClearTransientState<FlyLocomotion>();
@@ -910,7 +920,7 @@ public class NavMotor : IRecordable
             return;
         }
 
-        if (FlyModule.IsFlying && Handler.Fall.IsFalling)
+        if (FlyModule.IsFlying && IsFalling)
             Handler.ClearTransientState<FallLocomotion>();
     }
 
@@ -924,27 +934,27 @@ public class NavMotor : IRecordable
     {
         if (!Handler.Fall.IsEnabled) return;
 
-        if (IsInWater)
+        if (IsInLiquid)
         {
-            if (Handler.Fall.IsFalling)
+            if (IsFalling)
                 Handler.ClearTransientState<FallLocomotion>();
             return;
         }
 
         if (IsFlying)
         {
-            if (Handler.Fall.IsFalling)
+            if (IsFalling)
                 Handler.ClearTransientState<FallLocomotion>();
             return;
         }
 
-        if (Handler.Fall.IsFalling)
+        if (IsFalling)
         {
             // Make sure we didn't somehow get above the initial start point
             if (position.y > Handler.Fall.FallStart)
                 Handler.Fall.FallStart = position.y;
 
-            if (!IsInAir && !IsTooSteep(FrameSlopeAngle))
+            if (!IsInGas && !IsTooSteep(FrameSlopeAngle))
             {
                 // navigator landed after falling
                 Handler.Fall.IsFalling = false;
@@ -970,7 +980,7 @@ public class NavMotor : IRecordable
         bool isSlidingTooSleep = IsTooSteep(FrameSlopeAngle);
 
         // Check if the navigator is in freefall (not simply moving downhill)
-        if ((IsInAir || isSlidingTooSleep) && _forceOutput.y < Fixed64.Zero)
+        if ((IsInGas || isSlidingTooSleep) && _forceOutput.y < Fixed64.Zero)
         {
             // navigator started falling
             Handler.Fall.IsFalling = true;
@@ -994,7 +1004,7 @@ public class NavMotor : IRecordable
 
         bool shouldFly = request.IsRequestingFlight
             && FlyModule.CanFly
-            && !IsInWater
+            && !IsInLiquid
             && CurrentState.Medium != TraversalMedium.Unknown;
 
         if (!shouldFly)
@@ -1005,7 +1015,7 @@ public class NavMotor : IRecordable
 
         FlyModule.IsFlying = true;
 
-        if (Handler.Fall.IsFalling)
+        if (IsFalling)
             Handler.ClearTransientState<FallLocomotion>();
 
         if (JumpModule != null)
@@ -1059,7 +1069,7 @@ public class NavMotor : IRecordable
     /// <returns>True if the slope exceeds the allowable incline; otherwise, false.</returns>
     public bool IsTooSteep(Fixed64 angle)
     {
-        if (!IsGrounded) return false;
+        if (!IsOnSolid) return false;
 
         Fixed64 absAngle = FixedMath.Abs(angle); // Handle both positive (uphill) and negative (downhill) slopes
         return absAngle > Handler.Move.SlopeLimit - Fixed64.Epsilon;
@@ -1071,7 +1081,7 @@ public class NavMotor : IRecordable
     /// <returns>True if the navigator is on a valid slope; otherwise, false.</returns>
     public bool IsOnSlope(Fixed64 angle)
     {
-        if (!IsGrounded) return false;
+        if (!IsOnSolid) return false;
 
         Fixed64 absAngle = FixedMath.Abs(angle); // Account for downhill slopes too
         return absAngle > Fixed64.One && absAngle <= Handler.Move.SlopeLimit + Fixed64.Epsilon;

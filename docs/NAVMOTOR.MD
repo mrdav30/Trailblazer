@@ -70,12 +70,12 @@ Important public state includes:
 - `FrameSlopeAngle`
 - `TraversalInProgress`
 - `IsInitialized`
-- `IsGrounded`
-- `WasGrounded`
-- `IsInAir`
-- `WasInAir`
-- `IsInWater`
-- `WasInWater`
+- `IsOnSolid`
+- `WasOnSolid`
+- `IsInGas`
+- `WasInGas`
+- `IsInLiquid`
+- `WasInLiquid`
 - `InLimbo`
 - `Handler.Platform.InteriaApplied`
 - `Handler.Platform.IsActive`
@@ -503,11 +503,11 @@ If it runs on a later frame, the motor throws and requires `AbortTraversalFrame(
 
 It is not optional. `NavMotor` depends on host-provided `TrekCondition` data for medium changes, surfaces, water, ceilings, and platforms.
 
-### Assuming jump, fall, and air are interchangeable
+### Assuming jump, fall, and airborne traversal are interchangeable
 
 They are related, but distinct:
 
-- `IsInAir` describes the traversal medium
+- `IsInGas` describes the traversal medium
 - `Handler.Jump.IsJumping` describes an active jump state
 - `Handler.Fall.IsFalling` describes a classified fall state
 

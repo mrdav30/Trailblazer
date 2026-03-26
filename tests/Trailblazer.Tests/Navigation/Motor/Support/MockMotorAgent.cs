@@ -92,13 +92,13 @@ public class MockMotorAgent
     public void CheckTrekCondition()
     {
         // If scout is already grounded, maintain state unless velocity pushes it up
-        if (FrameCondition.Medium == TraversalMedium.Ground)
+        if (FrameCondition.Medium == TraversalMedium.Solid)
         {
             if (_velocityDelta.y > Fixed64.Zero)
             {
                 // If scout is moving upwards, it should no longer be grounded
                 _previousMedium = FrameCondition.Medium;
-                FrameCondition.Medium = TraversalMedium.Air;
+                FrameCondition.Medium = TraversalMedium.Gas;
                 return;
             }
 
@@ -119,7 +119,7 @@ public class MockMotorAgent
         }
 
         // If scout is airborne, check if it should transition to grounded
-        if (FrameCondition.Medium == TraversalMedium.Air)
+        if (FrameCondition.Medium == TraversalMedium.Gas)
         {
             Fixed64 surfaceLevel = FrameCondition.SurfaceLevel;
             Fixed64 scoutHeight = Position.y;
@@ -128,10 +128,10 @@ public class MockMotorAgent
             if (_velocityDelta.y < Fixed64.Zero && scoutHeight <= surfaceLevel + Fixed64.FromRaw(0x10000L)) // Small threshold
             {
                 // Set state to previous state or assume ground
-                FrameCondition.Medium = _previousMedium ?? TraversalMedium.Ground;
+                FrameCondition.Medium = _previousMedium ?? TraversalMedium.Solid;
                 Position = new Vector3d(Position.x, surfaceLevel, Position.z);
 
-                if (FrameCondition.Medium == TraversalMedium.Ground)
+                if (FrameCondition.Medium == TraversalMedium.Solid)
                 {
                     // Update ground normal if needed (assuming ground is flat for now)
                     FrameCondition.GroundState ??= new GroundCondition
@@ -144,7 +144,7 @@ public class MockMotorAgent
             return;
         }
 
-        if (FrameCondition.Medium == TraversalMedium.Water)
+        if (FrameCondition.Medium == TraversalMedium.Liquid)
         {
             Fixed64 surfaceLevel = FrameCondition.SurfaceLevel;
             Fixed64 scoutHeight = Position.y;
@@ -155,7 +155,7 @@ public class MockMotorAgent
                 {
                     // If scout is moving upwards, it should no longer be grounded
                     _previousMedium = FrameCondition.Medium;
-                    FrameCondition.Medium = TraversalMedium.Air;
+                    FrameCondition.Medium = TraversalMedium.Gas;
                     return;
                 }
 

@@ -109,8 +109,8 @@ public sealed class TraversalAuthoringMap
     {
         NavigationChartCell chartCell = parsedCell.Entry.ChartCell;
         if (!parsedCell.HasTransitionMarker
-            || !parsedCell.Entry.HasAnchorSpace
-            || parsedCell.Entry.AnchorSpace != TraversalTransitionAnchorSpace.Chart)
+            || !parsedCell.Entry.HasAnchorMedium
+            || parsedCell.Entry.Medium != TraversalMedium.Solid)
         {
             return chartCell;
         }
@@ -180,18 +180,18 @@ public sealed class TraversalAuthoringMap
         int secondX,
         int secondZ)
     {
-        TraversalTransitionAnchorSpace firstSpace = first.Entry.AnchorSpace;
-        TraversalTransitionAnchorSpace secondSpace = second.Entry.AnchorSpace;
+        TraversalMedium firstMedium = first.Entry.Medium;
+        TraversalMedium secondMedium = second.Entry.Medium;
 
-        if (firstSpace == secondSpace)
+        if (firstMedium == secondMedium)
             return;
 
         Vector3d firstPosition = GetWorldPosition(firstY, firstX, firstZ);
         Vector3d secondPosition = GetWorldPosition(secondY, secondX, secondZ);
 
         if (TryResolveChartAndVolumePair(
-            firstSpace,
-            secondSpace,
+            firstMedium,
+            secondMedium,
             firstPosition,
             secondPosition,
             out TraversalTransition chartToVolumeTransition,
@@ -203,8 +203,8 @@ public sealed class TraversalAuthoringMap
     }
 
     private bool TryResolveChartAndVolumePair(
-        TraversalTransitionAnchorSpace firstSpace,
-        TraversalTransitionAnchorSpace secondSpace,
+        TraversalMedium firstMedium,
+        TraversalMedium secondMedium,
         Vector3d firstPosition,
         Vector3d secondPosition,
         out TraversalTransition chartToVolumeTransition,
@@ -213,22 +213,22 @@ public sealed class TraversalAuthoringMap
         chartToVolumeTransition = default;
         volumeToChartTransition = default;
 
-        if (firstSpace == TraversalTransitionAnchorSpace.Chart
+        if (firstMedium == TraversalMedium.Solid
             && TryBuildChartVolumeTransitionPair(
                 firstPosition,
                 secondPosition,
-                secondSpace,
+                secondMedium,
                 out chartToVolumeTransition,
                 out volumeToChartTransition))
         {
             return true;
         }
 
-        if (secondSpace == TraversalTransitionAnchorSpace.Chart
+        if (secondMedium == TraversalMedium.Solid
             && TryBuildChartVolumeTransitionPair(
                 secondPosition,
                 firstPosition,
-                firstSpace,
+                firstMedium,
                 out chartToVolumeTransition,
                 out volumeToChartTransition))
         {
@@ -241,7 +241,7 @@ public sealed class TraversalAuthoringMap
     private bool TryBuildChartVolumeTransitionPair(
         Vector3d chartPosition,
         Vector3d volumePosition,
-        TraversalTransitionAnchorSpace volumeSpace,
+        TraversalMedium volumeMedium,
         out TraversalTransition chartToVolumeTransition,
         out TraversalTransition volumeToChartTransition)
     {
@@ -252,23 +252,23 @@ public sealed class TraversalAuthoringMap
         TraversalTransitionType exitType;
         TraversalTransitionAnchor volumeAnchor;
 
-        switch (volumeSpace)
+        switch (volumeMedium)
         {
-            case TraversalTransitionAnchorSpace.OpenVolume:
+            case TraversalMedium.Gas:
                 entryType = TraversalTransitionType.Takeoff;
                 exitType = TraversalTransitionType.Landing;
-                volumeAnchor = TraversalTransitionAnchor.OpenVolume(volumePosition);
+                volumeAnchor = TraversalTransitionAnchor.Gas(volumePosition);
                 break;
-            case TraversalTransitionAnchorSpace.WaterVolume:
+            case TraversalMedium.Liquid:
                 entryType = TraversalTransitionType.SwimEntry;
                 exitType = TraversalTransitionType.SwimExit;
-                volumeAnchor = TraversalTransitionAnchor.WaterVolume(volumePosition);
+                volumeAnchor = TraversalTransitionAnchor.Liquid(volumePosition);
                 break;
             default:
                 return false;
         }
 
-        TraversalTransitionAnchor chartAnchor = TraversalTransitionAnchor.Chart(chartPosition);
+        TraversalTransitionAnchor chartAnchor = TraversalTransitionAnchor.Solid(chartPosition);
         chartToVolumeTransition = new TraversalTransition(
             CreateGeneratedTransitionId(entryType, chartPosition, volumePosition),
             entryType,
@@ -338,15 +338,15 @@ public sealed class TraversalAuthoringMap
                 $"Unknown traversable-state token '{rawToken}' at [{y}, {x}, {z}].");
         }
 
-        if (hasTransitionMarker && !entry.HasAnchorSpace)
+        if (hasTransitionMarker && !entry.HasAnchorMedium)
         {
             throw new ArgumentException(
                 $"Token '{rawToken}' at [{y}, {x}, {z}] cannot be marked for transition generation.");
         }
 
         if (hasTransitionMarker
-            && entry.AnchorSpace == TraversalTransitionAnchorSpace.Chart
-            && !entry.ChartCell.HasSurface)
+            && entry.Medium == TraversalMedium.Solid
+            && !entry.ChartCell.HasSolid)
         {
             throw new ArgumentException(
                 $"Token '{rawToken}' at [{y}, {x}, {z}] maps to a non-traversable chart cell and cannot be marked.");

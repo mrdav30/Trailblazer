@@ -18,9 +18,9 @@ public static class MockMotorAgentTestFactory
         TrekCondition condition = new();
         switch (startingMedium)
         {
-            case TraversalMedium.Ground:
+            case TraversalMedium.Solid:
                 {
-                    condition.Medium = TraversalMedium.Ground;
+                    condition.Medium = TraversalMedium.Solid;
                     condition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
                     condition.GroundState = new GroundCondition
                     {
@@ -28,12 +28,12 @@ public static class MockMotorAgentTestFactory
                     };
                 }
                 break;
-            case TraversalMedium.Air:
-                condition.Medium = TraversalMedium.Air;
+            case TraversalMedium.Gas:
+                condition.Medium = TraversalMedium.Gas;
                 condition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
                 break;
-            case TraversalMedium.Water:
-                condition.Medium = TraversalMedium.Water;
+            case TraversalMedium.Liquid:
+                condition.Medium = TraversalMedium.Liquid;
                 condition.SurfaceLevel = surfaceLevel ?? Fixed64.Zero;
                 break;
             default:
@@ -63,7 +63,7 @@ public static class MockMotorAgentTestFactory
     {
         TrekCondition condition = new()
         {
-            Medium = TraversalMedium.Air,
+            Medium = TraversalMedium.Gas,
             SurfaceLevel = surfaceLevel ?? -(Fixed64)999,
             CeilingLevel = Fixed64.MAX_VALUE,
         };
@@ -103,7 +103,7 @@ public static class MockMotorAgentTestFactory
     {
         TrekCondition condition = new()
         {
-            Medium = TraversalMedium.Ground,
+            Medium = TraversalMedium.Solid,
             CeilingLevel = Fixed64.MAX_VALUE,
             GroundState = new GroundCondition
             {
@@ -133,7 +133,7 @@ public static class MockMotorAgentTestFactory
     {
         TrekCondition condition = new()
         {
-            Medium = TraversalMedium.Water,
+            Medium = TraversalMedium.Liquid,
             SurfaceLevel = surfaceLevel ?? Fixed64.Zero,
             CeilingLevel = Fixed64.MAX_VALUE
         };
@@ -155,7 +155,7 @@ public static class MockMotorAgentTestFactory
     {
         TrekCondition condition = new()
         {
-            Medium = TraversalMedium.Ground,
+            Medium = TraversalMedium.Solid,
             CeilingLevel = Fixed64.MAX_VALUE,
             GroundState = new GroundCondition
             {

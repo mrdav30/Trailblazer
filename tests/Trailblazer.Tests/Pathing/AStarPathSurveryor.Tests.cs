@@ -597,7 +597,7 @@ public class AStarSurveryorTests : IDisposable
         GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 1), out _, out Voxel diagonalVoxel);
         diagonalVoxel.Should().NotBeNull("Expected midpoint voxel to exist");
 
-        var diagonalPartition = diagonalVoxel.GetPartitionOrDefault<PathPartition>();
+        var diagonalPartition = diagonalVoxel.GetPartitionOrDefault<SolidChartPartition>();
         diagonalPartition.Should().NotBeNull("Expected midpoint partition to exist");
 
         diagonalPartition.PathCostModifier = 1000;

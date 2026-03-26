@@ -1,9 +1,10 @@
 using FixedMathSharp;
 using GridForge.Grids;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
+
+// TODO: clean this up, remove code duplication
 
 /// <summary>
 /// Creates built-in path requests for navigators from host-facing guided travel commands.
@@ -67,11 +68,11 @@ public static class NavigatorPathRequestFactory
                     unitSize,
                     aStarHeuristic,
                     allowUnwalkableEndNode,
-                    VolumeTraversalMode.Open);
+                    TraversalMedium.Gas);
                 return request != null;
 
             case GuidedPathMode.Swim:
-                if (traversalMedium != TraversalMedium.Water)
+                if (traversalMedium != TraversalMedium.Liquid)
                 {
                     request = null;
                     return false;
@@ -83,7 +84,7 @@ public static class NavigatorPathRequestFactory
                     unitSize,
                     aStarHeuristic,
                     allowUnwalkableEndNode,
-                    VolumeTraversalMode.Water);
+                    TraversalMedium.Liquid);
                 return request != null;
 
             default:
@@ -153,13 +154,13 @@ public static class NavigatorPathRequestFactory
                     unitSize,
                     aStarHeuristic,
                     allowUnwalkableEndNode,
-                    VolumeTraversalMode.Open);
+                    TraversalMedium.Gas);
                 if (volume == null)
                     return TryCreateVolumeExitHandoff(
                         origin,
                         targetPosition,
                         unitSize,
-                        VolumeTraversalMode.Open,
+                        TraversalMedium.Gas,
                         fallbackChartPathMode,
                         allowUnwalkableEndNode,
                         allowTraversalTransitions,
@@ -171,7 +172,7 @@ public static class NavigatorPathRequestFactory
 
                 if (TryCreateVolumeExitHandoffIfNeeded(
                     targetPosition,
-                    VolumeTraversalMode.Open,
+                    TraversalMedium.Gas,
                     volume,
                     fallbackChartPathMode,
                     allowUnwalkableEndNode,
@@ -189,7 +190,7 @@ public static class NavigatorPathRequestFactory
                 return true;
 
             case GuidedPathMode.Swim:
-                if (traversalMedium != TraversalMedium.Water)
+                if (traversalMedium != TraversalMedium.Liquid)
                 {
                     request = null;
                     return false;
@@ -201,13 +202,13 @@ public static class NavigatorPathRequestFactory
                     unitSize,
                     aStarHeuristic,
                     allowUnwalkableEndNode,
-                    VolumeTraversalMode.Water);
+                    TraversalMedium.Liquid);
                 if (swim == null)
                     return TryCreateVolumeExitHandoff(
                         origin,
                         targetPosition,
                         unitSize,
-                        VolumeTraversalMode.Water,
+                        TraversalMedium.Liquid,
                         fallbackChartPathMode,
                         allowUnwalkableEndNode,
                         allowTraversalTransitions,
@@ -219,7 +220,7 @@ public static class NavigatorPathRequestFactory
 
                 if (TryCreateVolumeExitHandoffIfNeeded(
                     targetPosition,
-                    VolumeTraversalMode.Water,
+                    TraversalMedium.Liquid,
                     swim,
                     fallbackChartPathMode,
                     allowUnwalkableEndNode,
@@ -246,7 +247,7 @@ public static class NavigatorPathRequestFactory
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        VolumeTraversalMode traversalMode,
+        TraversalMedium medium,
         GuidedPathMode fallbackChartPathMode,
         bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
@@ -260,7 +261,7 @@ public static class NavigatorPathRequestFactory
             origin,
             targetPosition,
             unitSize,
-            traversalMode,
+            medium,
             fallbackChartPathMode,
             allowUnwalkableEndNode,
             allowTraversalTransitions,
@@ -276,7 +277,7 @@ public static class NavigatorPathRequestFactory
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        VolumeTraversalMode traversalMode,
+        TraversalMedium medium,
         GuidedPathMode fallbackChartPathMode,
         bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
@@ -302,7 +303,7 @@ public static class NavigatorPathRequestFactory
             origin,
             targetPosition,
             unitSize,
-            traversalMode,
+            medium,
             chartPathMode,
             allowUnwalkableEndNode,
             allowTraversalTransitions,
@@ -317,7 +318,7 @@ public static class NavigatorPathRequestFactory
 
     private static bool TryCreateVolumeExitHandoffIfNeeded(
         Vector3d targetPosition,
-        VolumeTraversalMode traversalMode,
+        TraversalMedium medium,
         VolumePathRequest directRequest,
         GuidedPathMode fallbackChartPathMode,
         bool allowUnwalkableEndNode,
@@ -335,17 +336,17 @@ public static class NavigatorPathRequestFactory
             || !allowTraversalTransitions
             || !TryGetChartBackedTargetState(
                 targetPosition,
-                traversalMode,
+                medium,
                 out bool targetRequiresConstrainedExitHandoff))
         {
             return false;
         }
 
         if (!targetRequiresConstrainedExitHandoff
-            && !TryCreateOpenVolumeLandingHandoff(
+            && !TryCreateGasLandingHandoff(
                 directRequest,
                 targetPosition,
-                traversalMode,
+                medium,
                 fallbackChartPathMode,
                 allowUnwalkableEndNode,
                 allowTraversalTransitions,
@@ -365,7 +366,7 @@ public static class NavigatorPathRequestFactory
             directRequest.Origin,
             targetPosition,
             directRequest.UnitSize,
-            traversalMode,
+            medium,
             fallbackChartPathMode,
             allowUnwalkableEndNode,
             allowTraversalTransitions,
@@ -378,7 +379,7 @@ public static class NavigatorPathRequestFactory
 
     private static bool TryGetChartBackedTargetState(
         Vector3d targetPosition,
-        VolumeTraversalMode traversalMode,
+        TraversalMedium medium,
         out bool targetRequiresConstrainedExitHandoff)
     {
         targetRequiresConstrainedExitHandoff = false;
@@ -386,17 +387,17 @@ public static class NavigatorPathRequestFactory
         if (!GlobalGridManager.TryGetVoxel(targetPosition, out Voxel targetVoxel))
             return false;
 
-        if (!targetVoxel.TryGetPartition(out PathPartition _))
+        if (!targetVoxel.TryGetPartition(out SolidChartPartition _))
             return false;
 
-        targetRequiresConstrainedExitHandoff = !VolumeTraversalRules.Matches(targetVoxel, traversalMode);
+        targetRequiresConstrainedExitHandoff = !VolumeMediumRules.Matches(targetVoxel, medium);
         return true;
     }
 
-    private static bool TryCreateOpenVolumeLandingHandoff(
+    private static bool TryCreateGasLandingHandoff(
         VolumePathRequest directRequest,
         Vector3d targetPosition,
-        VolumeTraversalMode traversalMode,
+        TraversalMedium medium,
         GuidedPathMode fallbackChartPathMode,
         bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
@@ -409,14 +410,14 @@ public static class NavigatorPathRequestFactory
         request = null;
         handoff = null;
 
-        if (traversalMode != VolumeTraversalMode.Open)
+        if (medium != TraversalMedium.Gas)
             return false;
 
         if (!TryCreateVolumeExitHandoff(
             directRequest.Origin,
             targetPosition,
             directRequest.UnitSize,
-            traversalMode,
+            medium,
             fallbackChartPathMode,
             allowUnwalkableEndNode,
             allowTraversalTransitions,

@@ -11,7 +11,7 @@ If you need guide caching and guide lifetime details, read the relevant pathing 
 The code referenced here lives primarily in:
 
 - `src/Trailblazer/Pathing/PathManager.cs`
-- `src/Trailblazer/Pathing/Support/Partition/PathPartition.cs`
+- `src/Trailblazer/Pathing/Support/Partition/SolidChartPartition.cs`
 - `src/Trailblazer/Pathing/Support/Partition/TraversableVoxel.cs`
 - `src/Trailblazer/Pathing/Support/Chart/NavigationChart.cs`
 
@@ -27,8 +27,8 @@ It is responsible for:
 - exposing walkable-neighbor queries
 - providing straight-line path viability checks
 - computing search-size hints for path requests
-- maintaining pooled `PathPartition` instances
-- maintaining pooled `VolumePartition` instances
+- maintaining pooled `SolidChartPartition` instances
+- maintaining pooled `VolumeChartPartition` instances
 - triggering guide-cache cleanup through `Tick(...)`
 - clearing global transition and volume-rule state during `Reset()`
 
@@ -49,7 +49,7 @@ The lifecycle is:
 
 1. Build a `NavigationChart`.
 2. `Register(...)` it with `PathManager`.
-3. `InitializeChart(...)` to attach or reuse `PathPartition` and `VolumePartition` instances on the relevant voxels.
+3. `InitializeChart(...)` to attach or reuse `SolidChartPartition` and `VolumeChartPartition` instances on the relevant voxels.
 4. Use the chart indirectly through path requests, surveyors, and guide resolution.
 5. `UnloadChart(...)` when the chart should stop owning those voxels.
 
@@ -58,7 +58,7 @@ This means chart registration alone is not enough. A chart only becomes pathable
 Another important detail:
 
 - multiple charts can share the same underlying runtime partition when they overlap the same authored voxel
-- partition ownership is tracked per chart through `PathPartition.ChartOwners` and `VolumePartition.ChartOwners`
+- partition ownership is tracked per chart through `SolidChartPartition.ChartOwners` and `VolumeChartPartition.ChartOwners`
 
 That ownership model is why initialization and unload logic are more complex than simple add/remove operations.
 
@@ -91,7 +91,7 @@ Important public state includes:
 Important internal infrastructure includes:
 
 - `PartitionPool`
-- `VolumePartitionPool`
+- `VolumeChartPartitionPool`
 - `PartitionSetPool`
 - `Tick(int currentFrame)`
 
@@ -103,8 +103,8 @@ It owns:
 
 - the chart registry `_navigationChartMap`
 - the registry lock `_navigationChartMapLock`
-- the reusable `PathPartition` pool
-- the reusable `VolumePartition` pool
+- the reusable `SolidChartPartition` pool
+- the reusable `VolumeChartPartition` pool
 - the pooled partition-set helper used during initialization and unload
 
 That means:
@@ -172,12 +172,12 @@ It returns immediately when:
 
 When it runs, it:
 
-1. rents a pooled `SwiftHashSet<PathPartition>` for all touched partitions
+1. rents a pooled `SwiftHashSet<SolidChartPartition>` for all touched partitions
 2. creates a temporary set for any already-active chart owners encountered on touched voxels
 3. iterates `chart.GetAuthoredCells()`
 4. resolves the voxel from `GlobalGridManager`
-5. attaches or reuses a `PathPartition` for authored solid traversal
-6. attaches or reuses a `VolumePartition` for authored volume traversal
+5. attaches or reuses a `SolidChartPartition` for authored solid traversal
+6. attaches or reuses a `VolumeChartPartition` for authored volume traversal
 7. records any existing owners for later cache invalidation
 8. adds the current chart as an owner
 9. rebinds neighbors for every touched path partition
@@ -190,7 +190,7 @@ When an authored voxel already has a compatible runtime partition, initializatio
 
 Instead it:
 
-- reuses the existing `PathPartition` or `VolumePartition`
+- reuses the existing `SolidChartPartition` or `VolumeChartPartition`
 - adds the chart to its `ChartOwners`
 - rebinding neighbors later ensures the solid adjacency model stays current
 
@@ -205,7 +205,7 @@ This matters because:
 - a new chart can change which adjacent voxels now have path partitions
 - clearance and directional traversal checks depend on up-to-date neighbor pointers
 
-`PathPartition.BindNeighbors()` builds the cached neighbor array used later by surveyors and clearance checks.
+`SolidChartPartition.BindNeighbors()` builds the cached neighbor array used later by surveyors and clearance checks.
 
 ### 6.4 Cache Invalidation on Initialize
 
@@ -233,10 +233,10 @@ When it runs, it:
 
 1. invalidates any cached guide results that reference the chart
 2. walks all of the chart's authored cells
-3. removes solid ownership from any attached `PathPartition`
-4. removes authored volume ownership from any attached `VolumePartition`
+3. removes solid ownership from any attached `SolidChartPartition`
+4. removes authored volume ownership from any attached `VolumeChartPartition`
 5. removes a partition from the voxel entirely when it no longer has owners
-6. refreshes and queues any still-active `PathPartition` for neighbor rebinding
+6. refreshes and queues any still-active `SolidChartPartition` for neighbor rebinding
 7. rebinds neighbors on still-active path partitions
 8. removes the chart from the registry
 
@@ -323,7 +323,7 @@ For a multi-axis step, it:
 
 1. decomposes the direction into single-axis legs
 2. checks each leg neighbor voxel
-3. rejects the diagonal if any leg voxel is missing, blocked, or lacks a `PathPartition`
+3. rejects the diagonal if any leg voxel is missing, blocked, or lacks a `SolidChartPartition`
 
 This prevents diagonal corner cutting.
 
@@ -351,7 +351,7 @@ It:
 
 1. line-traces between `startPos` and `endPos` through `GridTracer.TraceLine(...)`
 2. walks the voxels touched by that trace
-3. requires a path if any voxel lacks a `PathPartition`
+3. requires a path if any voxel lacks a `SolidChartPartition`
 4. requires a path if any traversed partition is impassable for the given unit size
 
 Important detail:
@@ -370,9 +370,9 @@ In the current implementation:
 
 This is a request-policy input, not a global chart rule.
 
-## 12. Relationship to PathPartition
+## 12. Relationship to IVoxelPartition
 
-`PathManager` is tightly coupled to `PathPartition`.
+`PathManager` is tightly coupled to `SolidChartPartition` and `VolumeChartPartition`.
 
 Key partition responsibilities that matter here:
 

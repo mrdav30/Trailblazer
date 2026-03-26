@@ -44,9 +44,9 @@ internal static class TraversalTransitionOrdering
 
     private static int CompareAnchors(TraversalTransitionAnchor left, TraversalTransitionAnchor right)
     {
-        int spaceComparison = left.Space.CompareTo(right.Space);
-        if (spaceComparison != 0)
-            return spaceComparison;
+        int mediumComparison = left.Medium.CompareTo(right.Medium);
+        if (mediumComparison != 0)
+            return mediumComparison;
 
         int voxelComparison = CompareVoxelIndices(left.VoxelIndex, right.VoxelIndex);
         if (voxelComparison != 0)

@@ -28,8 +28,8 @@ The current workflow is:
 string[,,] map =
 {
     {
-        { "L!" },
-        { "W!" }
+        { "S!" },
+        { "L!" }
     }
 };
 
@@ -52,7 +52,7 @@ PathManager.Register(buildResult);
 - registers the chart
 - registers the generated transitions
 - registers generated transitions as lower-precedence generated handoffs rather than manual overrides
-- initializes authored surface and volume partitions by default
+- initializes authored solid and volume partitions by default
 - ties generated transitions to that chart's lifetime, so unloading the chart unregisters them automatically
 
 Registration is all-or-nothing. If any generated transition fails to register, the method rolls back the chart and any transitions it already added in that call.
@@ -66,16 +66,16 @@ Registration is all-or-nothing. If any generated transition fails to register, t
 | empty string | skip this cell |
 | `.` | skip this cell |
 | `X` | skip this cell |
-| `L` | authored surface traversal cell |
-| `O` | authored open-volume traversal cell |
-| `W` | authored water-volume traversal cell |
+| `S` | authored solid traversal cell |
+| `G` | authored gas-volume traversal cell |
+| `L` | authored liquid-volume traversal cell |
 
 Important nuance:
 
-- `L` produces a surface cell that initializes a `PathPartition`
-- empty / `.` / `X` contribute no chart surface and no transition anchor
-- `O` and `W` produce authored volume cells that initialize `VolumePartition` state
-- `O` and `W` are the built-in way to author valid open-volume and water-volume space; Trailblazer does not treat generic empty voxels as implicit volume by default
+- `S` produces a solid cell that initializes a `SolidChartPartition`
+- empty / `.` / `X` contribute no chart-backed solid traversal and no transition anchor
+- `G` and `L` produce authored volume cells that initialize `VolumeChartPartition` state
+- `G` and `L` are the built-in way to author valid gas-volume and liquid-volume space; Trailblazer does not treat generic empty voxels as implicit volume by default
 
 ## 3. Transition Marker Rules
 
@@ -83,9 +83,9 @@ Append `!` to opt a token into generated transition authoring.
 
 Examples:
 
+- `S!`
+- `G!`
 - `L!`
-- `O!`
-- `W!`
 
 Current marker behavior:
 
@@ -93,7 +93,7 @@ Current marker behavior:
 - only perpendicular neighbors are considered
 - only chart-to-volume pairs are generated
 - chart-to-chart auto-generation is not part of the current builder
-- `O!` and `W!` still emit the same authored volume cells as `O` and `W`; the marker only opts them into transition generation
+- `G!` / `L!` / `S!` still emit authored volume cells; the marker only opts them into transition generation
 
 When a marked chart cell participates in generation, the builder also adds:
 
@@ -104,14 +104,14 @@ When a marked chart cell participates in generation, the builder also adds:
 
 The built-in generator currently creates:
 
-- `SwimEntry` and `SwimExit` for `L!` next to `W!`
-- `Takeoff` and `Landing` for `L!` next to `O!`
+- `SwimEntry` and `SwimExit` for `S!` next to `L!`
+- `Takeoff` and `Landing` for `S!` next to `G!`
 
-Generated anchors use canonical voxel identity plus the corresponding traversal space:
+Generated anchors use canonical voxel identity plus the corresponding traversal medium:
 
-- `Chart`
-- `OpenVolume`
-- `WaterVolume`
+- `Solid`
+- `Gas`
+- `Liquid`
 
 ## 5. Custom Legends
 
@@ -129,7 +129,7 @@ This authoring layer intentionally stays small for now.
 
 It does not automatically:
 
-- configure supplemental `VolumeTraversalRules`
+- configure supplemental `VolumeMediumRules`
 - generate diagonal handoffs
 - generate chart-to-chart handoffs
 - refresh generated transitions mid-simulation

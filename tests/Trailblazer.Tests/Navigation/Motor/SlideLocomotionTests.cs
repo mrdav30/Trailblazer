@@ -185,7 +185,7 @@ public class SlideLocomotionTests : IDisposable
         };
 
         // Flatten slope
-        scout.FrameCondition.Medium = TraversalMedium.Ground;
+        scout.FrameCondition.Medium = TraversalMedium.Solid;
         scout.FrameCondition.GroundState = shallowSlopeSurface;
 
         for (int i = 0; i < 3; i++)
@@ -244,7 +244,7 @@ public class SlideLocomotionTests : IDisposable
         {
             TrailblazerManager.Simulate();
             scout.Simulate();
-            if (scout.Motor.IsGrounded)
+            if (scout.Motor.IsOnSolid)
                 break;
         }
 
@@ -252,7 +252,7 @@ public class SlideLocomotionTests : IDisposable
         TrailblazerManager.Simulate();
         scout.Simulate();
 
-        scout.Motor.IsGrounded.Should().BeTrue();
+        scout.Motor.IsOnSolid.Should().BeTrue();
         scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
     }
 

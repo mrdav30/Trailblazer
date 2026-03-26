@@ -36,7 +36,7 @@ public class PlatformLocomotionTests : IDisposable
         scout.Simulate();
 
         //scout.FrameCondition = new(
-        //    TraversalMedium.Ground,
+        //    TraversalMedium.Solid,
         //    Fixed64.Zero,
         //    new GroundCondition
         //    {
@@ -60,7 +60,7 @@ public class PlatformLocomotionTests : IDisposable
         var movedTransform = MockMotorAgentTestFactory.CreatePlatformTransform(startPosition: new Vector3d(2, 0, 0));
         var refreshedCondition = new TrekCondition()
         {
-            Medium = TraversalMedium.Ground,
+            Medium = TraversalMedium.Solid,
             SurfaceLevel = Fixed64.Zero,
             GroundState = new GroundCondition
             {
@@ -382,7 +382,7 @@ public class PlatformLocomotionTests : IDisposable
 
         scout.Simulate();
 
-        scout.FrameCondition.Medium = TraversalMedium.Ground;
+        scout.FrameCondition.Medium = TraversalMedium.Solid;
 
         scout.Motor.FinalizeTraversal(scout.Position, scout.LastPosition, scout.Rotation, scout.FrameCondition, scout.GetFootPosition());
         scout.Motor.Handler.Platform.FramePlatformVelocity.Should().Be(Vector3d.Zero);

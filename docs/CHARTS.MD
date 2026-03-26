@@ -2,7 +2,7 @@
 
 This document is a deep dive into `NavigationChart`, the chart lifecycle managed by `PathManager`, and the role charts play in Trailblazer's world model.
 
-`NavigationChart` is a dense authored traversal map. Surface traversal is its main chart-backed runtime use, but charts can also author raw-volume cells that initialize `VolumePartition` state for `VolumePathRequest`.
+`NavigationChart` is a dense authored traversal map. Solid traversal is its main chart-backed runtime use, but charts can also author raw-volume cells that initialize `VolumeChartPartition` state for `VolumePathRequest`.
 
 If you only need the high-level architecture, start with `OVERVIEW.md`.
 If you are working from the standalone pathing API inward, read `PATHING.MD` before this file.
@@ -13,11 +13,12 @@ Relevant code:
 
 - `src/Trailblazer/Pathing/Support/Chart/NavigationChart.cs`
 - `src/Trailblazer/Pathing/PathManager.cs`
-- `src/Trailblazer/Pathing/Support/Partition/PathPartition.cs`
+- `src/Trailblazer/Pathing/Support/Partition/SolidChartPartition.cs`
+- `src/Trailblazer/Pathing/Support/Partition/VolumeChartPartition.cs`
 
 ## 1. Why Charts Matter
 
-`NavigationChart` is the main way Trailblazer represents intentional authored traversal space.
+`NavigationChart` is the main way Trailblazer represents intentional authored traversal data.
 
 That matters because Trailblazer is supposed to stay engine-agnostic. It should not know:
 
@@ -40,11 +41,11 @@ At the data level, a `NavigationChart` is:
 - a named dense authored traversal map
 - a world-space bounds definition
 - a fixed interval between cells
-- a flattened authored cell payload that can describe surface traversal, volume traversal, both, or neither
+- a flattened authored cell payload that can describe solid traversal, volume traversal, both, or neither
 
 Structured cell payloads can optionally carry:
 
-- surface traversal state
+- solid traversal state
 - volume traversal state
 - surface and volume path cost modifiers
 - transition hint flags
@@ -118,7 +119,7 @@ Trailblazer does not care whether the data came from:
 - imported map metadata
 - procedural terrain analysis
 
-### 4.2 They Turn Raw Voxels Into Intentional Surface Space
+### 4.2 They Turn Raw Voxels Into Intentional Solid Traversal Space
 
 Not every voxel in a grid should necessarily become part of surface pathfinding.
 
@@ -127,11 +128,11 @@ A chart lets the host say:
 - these voxels are part of the walkable network
 - these voxels are not
 
-That keeps surface pathing intentional instead of assuming every open voxel should behave like a floor.
+That keeps surface pathing intentional instead of assuming every open voxel should behave like a floor or traversable volume.
 
 ### 4.3 They Support Multiple Overlapping World Views
 
-Trailblazer can register multiple charts, and overlapping charts can share the same live `PathPartition`.
+Trailblazer can register multiple charts, and overlapping charts can share the same live `SolidChartPartition`.
 
 That enables patterns like:
 
@@ -153,7 +154,7 @@ The runtime flow is:
 1. Build or load chart data.
 2. Register the chart with `PathManager`.
 3. Initialize the chart.
-4. `PathManager` attaches or reuses `PathPartition` instances on the underlying `GridForge` voxels.
+4. `PathManager` attaches or reuses `SolidChartPartition` or `VolumeChartPartition` instances on the underlying `GridForge` voxels.
 5. Surveyors and steering then query those live partitions.
 
 Until a chart is initialized, it is just inert data.
@@ -173,25 +174,51 @@ Charts do not replace the voxel grid. They annotate it.
 The relationship is:
 
 - `GridForge` provides the world-aligned voxel lattice
-- `NavigationChart` says which positions should belong to a pathing surface
-- `PathManager` turns those positions into `PathPartition` ownership on real voxels
+- `NavigationChart` says which positions should belong to a pathing surface or volume and what their traversal properties are
+- `PathManager` turns those positions into `SolidChartPartition` or `VolumeChartPartition` ownership on real voxels
 
 This design keeps Trailblazer agnostic while still letting the host keep full control over world sampling.
 
-## 7. How Charts Relate To PathPartition
+## 7. How Charts Relate To SolidChartPartition
 
-`PathPartition` is the live runtime object attached to a voxel when one or more charts claim it.
+`SolidChartPartition` is the live runtime object attached to a voxel when one or more charts claim it.
 
 You can think of it this way:
 
 - `NavigationChart` = authored or generated intent
-- `PathPartition` = live runtime pathing membership
+- `SolidChartPartition` = live runtime pathing membership
 
 One voxel can have a partition with multiple chart owners. That is how overlapping charts coexist without duplicating runtime voxel data.
 
 ## 8. How Charts Relate To Volume Pathing
 
-Charts and volume traversal solve different problems.
+Volume traversal is chart-aware, but it is not chart-routed the same way solid pathing is.
+
+When a `NavigationChartCell` carries volume traversal data, `PathManager.InitializeChart(...)` attaches or reuses a `VolumeChartPartition` on the underlying voxel.
+
+That live partition holds the authored runtime data volume traversal actually uses:
+
+- which charts currently own that voxel's authored volume state
+- which `TraversalMedium` values the voxel supports
+- authored path cost modifiers for raw-volume travel
+
+`VolumePathRequest` still does not ask charts for a surface route.
+
+Instead, raw-volume traversal:
+
+1. resolves endpoints through `RawVoxelFinder`
+2. validates raw voxel traversability and medium compatibility
+3. searches through raw voxel connectivity with `VolumeSurveyor`
+
+That means charts can author valid gas or liquid space without turning volume traversal into chart graph pathfinding.
+
+`VolumeMediumRules` can also extend authored membership with host-defined gas or liquid logic, so a usable volume corridor can come from:
+
+- authored `VolumeChartPartition` state
+- host-defined `VolumeMediumRules`
+- both at the same time
+
+In practice, charts still matter to volume traversal. They just play a different role than they do for solid pathing: charts seed runtime volume membership and authored costs, while the raw-volume stack handles endpoint resolution and traversal through the space.
 
 Use charts when:
 
@@ -214,8 +241,8 @@ Use transition-aware chart routing when:
 Examples:
 
 - walking on terrain: chart-backed pathing
-- flying through open air: volume pathing
-- swimming through host-marked water voxels: constrained volume pathing
+- flying through authored or configured gas volume: volume pathing
+- swimming through authored or host-marked liquid voxels: constrained volume pathing
 - walking to a shoreline, swimming across, then exiting onto another chart: hybrid pathing
 
 This split is a big part of what keeps Trailblazer flexible without forcing one world model onto every traversal medium.

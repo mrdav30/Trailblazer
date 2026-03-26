@@ -110,8 +110,8 @@ internal static class HybridRoutePlanner
         for (int i = 0; i < transitions.Length; i++)
         {
             TraversalTransition transition = transitions[i];
-            if (transition.Source.Space != TraversalTransitionAnchorSpace.Chart
-                || transition.Destination.Space != TraversalTransitionAnchorSpace.Chart)
+            if (transition.Source.Medium != TraversalMedium.Solid
+                || transition.Destination.Medium != TraversalMedium.Solid)
             {
                 continue;
             }
@@ -182,8 +182,8 @@ internal static class HybridRoutePlanner
         for (int i = 0; i < entries.Length; i++)
         {
             TraversalTransition entry = entries[i];
-            if (entry.Source.Space != TraversalTransitionAnchorSpace.Chart
-                || !entry.Destination.TryGetVolumeTraversalMode(out VolumeTraversalMode entryTraversalMode))
+            if (entry.Source.Medium != TraversalMedium.Solid
+                || !entry.Destination.TryGetVolumeMedium(out TraversalMedium entryTraversalMode))
             {
                 continue;
             }
@@ -201,8 +201,8 @@ internal static class HybridRoutePlanner
             for (int j = 0; j < exits.Length; j++)
             {
                 TraversalTransition exit = exits[j];
-                if (!exit.Source.TryGetVolumeTraversalMode(out VolumeTraversalMode exitTraversalMode)
-                    || exit.Destination.Space != TraversalTransitionAnchorSpace.Chart
+                if (!exit.Source.TryGetVolumeMedium(out TraversalMedium exitTraversalMode)
+                    || exit.Destination.Medium != TraversalMedium.Solid
                     || entryTraversalMode != exitTraversalMode)
                 {
                     continue;
@@ -354,7 +354,7 @@ internal static class HybridRoutePlanner
         Vector3d origin,
         Vector3d destination,
         HybridPathRequest request,
-        VolumeTraversalMode traversalMode,
+        TraversalMedium medium,
         out HybridRouteStep step,
         out int pathCost)
     {
@@ -367,7 +367,7 @@ internal static class HybridRoutePlanner
             request.UnitSize,
             request.Heuristic,
             request.AllowUnwalkableEndNode,
-            traversalMode);
+            medium);
         if (volumeRequest == null)
             return false;
 

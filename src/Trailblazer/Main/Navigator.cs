@@ -576,7 +576,7 @@ public abstract class Navigator : INavigate, IRecordable
         bool updateMotorState = false)
     {
         ApplyTrekCondition(
-            medium: TraversalMedium.Ground,
+            medium: TraversalMedium.Solid,
             surfaceLevel: surfaceLevel,
             surfaceCondition: surfaceCondition,
             replaceSurfaceCondition: true,
@@ -618,7 +618,7 @@ public abstract class Navigator : INavigate, IRecordable
         bool updateMotorState = false)
     {
         ApplyTrekCondition(
-            medium: TraversalMedium.Air,
+            medium: TraversalMedium.Gas,
             surfaceLevel: surfaceLevel,
             surfaceCondition: launchCondition,
             replaceSurfaceCondition: launchCondition.HasValue,
@@ -635,7 +635,7 @@ public abstract class Navigator : INavigate, IRecordable
         bool updateMotorState = false)
     {
         ApplyTrekCondition(
-            medium: TraversalMedium.Water,
+            medium: TraversalMedium.Liquid,
             surfaceLevel: surfaceLevel,
             surfaceCondition: null,
             replaceSurfaceCondition: true,

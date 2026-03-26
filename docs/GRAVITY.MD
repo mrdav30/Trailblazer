@@ -83,7 +83,7 @@ So if you are looking for the mental model, use this one:
 
 ## 4. Airborne Behavior
 
-When `CurrentState.Medium == TraversalMedium.Air`, the motor applies gravity directly to the vertical component.
+When `CurrentState.Medium == TraversalMedium.Gas`, the motor applies gravity directly to the vertical component.
 
 Current flow:
 
@@ -113,7 +113,7 @@ This is also where jump-hold behavior can partially offset gravity for a short t
 
 Water does not use the same vertical rule as ground or air.
 
-When `CurrentState.Medium == TraversalMedium.Water`, Trailblazer applies buoyancy relative to gravity:
+When `CurrentState.Medium == TraversalMedium.Liquid`, Trailblazer applies buoyancy relative to gravity:
 
 ```csharp
 _forceOutput.y += gravityStep * (Handler.Swim.BuoyancyFactor - Fixed64.One);

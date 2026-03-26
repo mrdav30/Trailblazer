@@ -20,7 +20,7 @@ public class JumpLocomotionTests : IDisposable
     public void Given_GroundedScout_When_JumpIsTriggered_Then_ShouldApplyJumpForce()
     {
         // Arrange
-        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
         scout.FrameRequest = new()
         {
             Origin = scout.Position,
@@ -44,7 +44,7 @@ public class JumpLocomotionTests : IDisposable
         var scout = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: Vector3d.Up,
             startVelocity: Vector3d.Down,
-            startingMedium: TraversalMedium.Air);
+            startingMedium: TraversalMedium.Gas);
 
         Vector3d expectedVelocity = Vector3d.Down;
         expectedVelocity.y += -scout.Motor.Handler.Move.GravityForce * TrailblazerManager.DeltaTime;
@@ -61,7 +61,7 @@ public class JumpLocomotionTests : IDisposable
     public void Given_ScoutThatJumped_When_JumpCooldownNotExpired_Then_ShouldNotJump()
     {
         // Arrange
-        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
         // Act - First Jump
         scout.FrameRequest.IsRequestingJump = true;
@@ -78,7 +78,7 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Assert
-        scout.Motor.IsInAir.Should().BeTrue();
+        scout.Motor.IsInGas.Should().BeTrue();
         scout.Motor.Handler.Jump.IsCoolingDown.Should().BeTrue();
         scout.Motor.Handler.Jump.JumpStartTime.Should().Be(expectedJumpFrame);
     }
@@ -87,7 +87,7 @@ public class JumpLocomotionTests : IDisposable
     public void Given_ScoutJumps_When_JumpIsReleasedMidAir_Then_GravityShouldResume()
     {
         // Arrange
-        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
         // Act - First Jump
         scout.FrameRequest.IsRequestingJump = true;
@@ -117,7 +117,7 @@ public class JumpLocomotionTests : IDisposable
     public void Given_ScoutCannotAffordJump_When_JumpRequested_Then_ShouldNotJump()
     {
         // Arrange
-        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
         scout.Motor.Events.CanAffordJump = () => false;
 
         // Act
@@ -133,7 +133,7 @@ public class JumpLocomotionTests : IDisposable
     public void Given_ScoutHoldingJump_When_Simulated_Then_GravityShouldBeTemporarilyReduced()
     {
         // Arrange
-        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
         // Act - Initial Jump
         TrailblazerManager.Simulate();
@@ -207,7 +207,7 @@ public class JumpLocomotionTests : IDisposable
 
         scout.FrameCondition = new()
         {
-            Medium = TraversalMedium.Air,
+            Medium = TraversalMedium.Gas,
             SurfaceLevel = Fixed64.FromRaw(5 << 16),
             CeilingLevel = Fixed64.FromRaw(6 << 16)
         };
@@ -251,7 +251,7 @@ public class JumpLocomotionTests : IDisposable
 
         scout.Simulate();
 
-        scout.FrameCondition.Medium = TraversalMedium.Ground;
+        scout.FrameCondition.Medium = TraversalMedium.Solid;
         scout.FrameCondition.SurfaceLevel = Fixed64.Zero;
 
         // Assert that jump state has been reset after actual landing
@@ -279,7 +279,7 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Continue holding jump and track peak height until we land
-        while (!scout.Motor.IsGrounded)
+        while (!scout.Motor.IsOnSolid)
         {
             TrailblazerManager.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
@@ -387,7 +387,7 @@ public class JumpLocomotionTests : IDisposable
             if (scout.Position.y <= Fixed64.Zero) break;
         }
 
-        scout.FrameCondition.Medium = TraversalMedium.Ground;
+        scout.FrameCondition.Medium = TraversalMedium.Solid;
         scout.FrameCondition.SurfaceLevel = Fixed64.Zero;
         scout.Simulate();
 

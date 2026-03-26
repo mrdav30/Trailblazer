@@ -36,9 +36,9 @@ That is a good default for:
 But many real worlds also need explicit handoffs such as:
 
 - jumpable gaps between disconnected chart islands
-- shoreline entries into water
+- shoreline entries into liquid volume
 - shoreline exits back onto charts
-- takeoff or landing links between chart space and open volume
+- takeoff or landing links between solid chart space and gas volume
 
 Without authored transitions, chart-backed pathing only knows about chart connectivity. It cannot infer that a gap is jumpable or that a shoreline is a valid swim handoff just because those things look plausible to a human.
 
@@ -80,17 +80,17 @@ Each transition endpoint is a `TraversalTransitionAnchor`.
 
 An anchor is defined by:
 
-- a traversal space
+- a traversal medium
 - a canonical `GlobalVoxelIndex`
 - an optional world-space point override inside that voxel
 
 You can create anchors from either a resolved voxel index or a world position that resolves to one.
 
-The built-in spaces are:
+The built-in media are:
 
-- `Chart(...)`
-- `OpenVolume(...)`
-- `WaterVolume(...)`
+- `Solid(...)`
+- `Gas(...)`
+- `Liquid(...)`
 
 This is what lets one transition system cover:
 
@@ -100,9 +100,9 @@ This is what lets one transition system cover:
 
 Important nuance:
 
-- anchors identify their traversal space directly
+- anchors identify their traversal medium directly
 - world-position factory overloads resolve to a voxel index immediately
-- volume route legs still use `VolumeTraversalMode`, but that is resolved from the anchor's traversal space only when a volume segment is actually planned
+- volume route legs use the same `TraversalMedium`; no extra anchor-space conversion remains once the anchor is authored
 - anchors may optionally keep a more precise world-space point override while still resolving through a canonical voxel index
 
 ## 3. `TraversalTransitionRegistry`
@@ -139,7 +139,7 @@ Important nuance:
 - if an anchor uses a point override, that override must still resolve inside the same voxel
 - generated transitions registered through `PathManager.Register(TraversalBuildResult)` participate in precedence as generated transitions, not manual ones
 - it does not verify that a chart anchor actually belongs to a live chart path segment
-- it does not verify that a volume anchor's derived traversal mode is currently configured in `VolumeTraversalRules`
+- it does not verify that a volume anchor's medium is currently configured in `VolumeMediumRules`
 
 That means registration is necessary, but not sufficient, for a handoff to be usable.
 
@@ -277,32 +277,32 @@ Use this when two chart regions should remain disconnected in normal voxel conne
 TraversalTransitionRegistry.Register(new TraversalTransition(
     id: "bridge-gap-jump",
     type: TraversalTransitionType.Jump,
-    source: TraversalTransitionAnchor.Chart(new Vector3d(10, 0, 4)),
-    destination: TraversalTransitionAnchor.Chart(new Vector3d(14, 0, 4)),
+    source: TraversalTransitionAnchor.Solid(new Vector3d(10, 0, 4)),
+    destination: TraversalTransitionAnchor.Solid(new Vector3d(14, 0, 4)),
     pathCostModifier: 3));
 ```
 
 ### 6.2 Shoreline Entry And Exit
 
-Use this when surface pathing should hand off into constrained water traversal and later back onto a chart.
+Use this when solid pathing should hand off into constrained liquid traversal and later back onto a chart.
 
 ```csharp
 TraversalTransitionRegistry.Register(new TraversalTransition(
     id: "shore-entry",
     type: TraversalTransitionType.SwimEntry,
-    source: TraversalTransitionAnchor.Chart(new Vector3d(-1, 0, 0)),
-    destination: TraversalTransitionAnchor.WaterVolume(new Vector3d(0, 0, 0))));
+    source: TraversalTransitionAnchor.Solid(new Vector3d(-1, 0, 0)),
+    destination: TraversalTransitionAnchor.Liquid(new Vector3d(0, 0, 0))));
 
 TraversalTransitionRegistry.Register(new TraversalTransition(
     id: "shore-exit",
     type: TraversalTransitionType.SwimExit,
-    source: TraversalTransitionAnchor.WaterVolume(new Vector3d(4, 0, 0)),
-    destination: TraversalTransitionAnchor.Chart(new Vector3d(5, 0, 0))));
+    source: TraversalTransitionAnchor.Liquid(new Vector3d(4, 0, 0)),
+    destination: TraversalTransitionAnchor.Solid(new Vector3d(5, 0, 0))));
 ```
 
 ### 6.3 Takeoff And Landing
 
-Use `OpenVolume(...)` anchors when authored air handoffs should be available between chart-backed traversal and open-volume travel.
+Use `Gas(...)` anchors when authored gas handoffs should be available between chart-backed traversal and gas-volume travel.
 
 ## 7. Why Complex Worlds Depend On This
 
@@ -322,9 +322,9 @@ Transitions give you a third option:
 This is especially important in worlds with:
 
 - disconnected ledges
-- water crossings
-- mixed ground and open-air traversal
-- layered traversal spaces that share the same voxel grid but not the same movement rules
+- liquid crossings
+- mixed solid and gas traversal
+- layered traversal media that share the same voxel grid but not the same movement rules
 
 ## 8. Common Gotchas
 
@@ -332,7 +332,7 @@ This is especially important in worlds with:
 - Registration only checks voxel existence and duplicate ids.
 - A registered transition can still be unusable if its surrounding chart or volume segments cannot be built.
 - Bidirectional behavior is query-time expansion, not two separate registry entries.
-- Volume anchors depend on `VolumeTraversalRules` and the raw `VolumeTraversalMode` implied by their anchor space.
+- Volume anchors depend on `VolumeMediumRules` and the raw `TraversalMedium` implied by their anchor medium.
 - `PathManager.Reset()` clears the registry.
 - If world topology changes after registration, rebuild your transitions.
 
@@ -363,5 +363,5 @@ High-risk changes include:
 
 - `PATHING.MD` for request-level transition opt-in
 - `VOLUMETRAVERSAL.MD` for raw-volume traversal rules used by volume anchors
-- `CHARTS.MD` for the surface-side world model
+- `CHARTS.MD` for the solid-side world model
 - `PATHGUIDES.MD` for how transition-aware routes still surface as normal guide types

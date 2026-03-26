@@ -11,8 +11,8 @@ namespace Trailblazer.Pathing;
 /// </summary>
 /// <remarks>
 /// Volume requests resolve directly against raw voxels instead of surface partitions. Traversal membership
-/// can come from authored <see cref="VolumePartition"/> data, host-configured <see cref="VolumeTraversalRules"/>,
-/// or both, depending on the requested <see cref="TraversalMode"/>.
+/// can come from authored <see cref="VolumeChartPartition"/> data, host-configured <see cref="VolumeMediumRules"/>,
+/// or both, depending on the requested <see cref="Medium"/>.
 /// </remarks>
 public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathRequest>
 {
@@ -32,7 +32,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
 
     public HeuristicMethod Heuristic { get; set; }
 
-    public VolumeTraversalMode TraversalMode { get; private set; }
+    public TraversalMedium Medium { get; private set; }
 
     public bool HasOrigin => StartNode != null;
 
@@ -58,7 +58,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         out VolumePathRequest request,
         HeuristicMethod heuristic = HeuristicMethod.Euclidean,
         bool allowUnwalkableEndNode = false,
-        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
+        TraversalMedium medium = TraversalMedium.Gas)
     {
         request = Create(
             origin,
@@ -66,7 +66,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             unitSize,
             heuristic,
             allowUnwalkableEndNode,
-            traversalMode);
+            medium);
 
         return request != null;
     }
@@ -76,8 +76,8 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Vector3d destination,
         Fixed64 unitSize,
         HeuristicMethod heuristic = HeuristicMethod.Euclidean,
-        bool allowUnwalkableNode = false,
-        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open)
+        bool allowUnwalkableEndNode = false,
+        TraversalMedium medium = TraversalMedium.Gas)
     {
         if (!RawVoxelFinder.TryGetPathEdgeVoxels(
             origin,
@@ -85,8 +85,8 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             out Voxel startNode,
             out Voxel endNode,
             unitSize,
-            allowUnwalkableNode,
-            traversalMode))
+            allowUnwalkableEndNode,
+            medium))
         {
             return null;
         }
@@ -99,8 +99,8 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             EndNode = endNode,
             UnitSize = unitSize,
             Heuristic = heuristic,
-            AllowUnwalkableEndNode = allowUnwalkableNode,
-            TraversalMode = traversalMode
+            AllowUnwalkableEndNode = allowUnwalkableEndNode,
+            Medium = medium
         };
 
         if (PathManager.TryGetMaxSearchSize(request.StartNode, request.EndNode, out int searchSize))
@@ -122,7 +122,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             out Voxel endNode,
             resolvedUnitSize,
             AllowUnwalkableEndNode,
-            TraversalMode);
+            Medium);
 
         Origin = origin;
         TargetPosition = destination;
@@ -148,7 +148,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             out Voxel startNode,
             AllowUnwalkableEndNode,
             UnitSize,
-            TraversalMode))
+            Medium))
         {
             return false;
         }
@@ -187,7 +187,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             out Voxel endNode,
             AllowUnwalkableEndNode,
             UnitSize,
-            TraversalMode))
+            Medium))
         {
             return false;
         }
@@ -239,9 +239,9 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             UnitSize,
             AllowUnwalkableEndNode,
             Heuristic,
-            TraversalMode,
+            Medium,
             MaxPathSearchRange,
-            VolumeTraversalRules.RegistryVersion
+            VolumeMediumRules.RegistryVersion
         ).CombineHashCodes();
     }
 }

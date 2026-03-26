@@ -47,12 +47,12 @@ public class FallLocomotionTests : IDisposable
         agent.Simulate();
 
         // Assert
-        agent.Motor.IsInAir.Should().BeTrue();
+        agent.Motor.IsInGas.Should().BeTrue();
 
         // Simulate hitting the ground before the next frame
         agent.FrameCondition = new()
         {
-            Medium = TraversalMedium.Ground,
+            Medium = TraversalMedium.Solid,
             SurfaceLevel = Fixed64.Zero,
             GroundState = new GroundCondition
             {
@@ -67,7 +67,7 @@ public class FallLocomotionTests : IDisposable
         agent.Simulate();
 
         // Assert
-        agent.Motor.IsGrounded.Should().BeTrue();
+        agent.Motor.IsOnSolid.Should().BeTrue();
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class FallLocomotionTests : IDisposable
         // Arrange
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 100, 0),
-            startingMedium: TraversalMedium.Air
+            startingMedium: TraversalMedium.Gas
         );
         Vector3d expectedVelocity = Vector3d.Zero;  // store impulse-based velocity change per frame
 
@@ -100,7 +100,7 @@ public class FallLocomotionTests : IDisposable
     public void Given_AgentInAir_When_NoMovement_Then_ShouldFallNaturally()
     {
         var initialPosition = new Vector3d(0, 10, 0);
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Air);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: initialPosition, startingMedium: TraversalMedium.Gas);
 
         for (int i = 0; i < 20; i++) // Simulate multiple frames
         {
@@ -133,13 +133,13 @@ public class FallLocomotionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
-            startingMedium: TraversalMedium.Air);
+            startingMedium: TraversalMedium.Gas);
         agent.Motor.Handler.Fall.MaxFallHeight = Fixed64.One;
 
         bool eventCalled = false;
         agent.Motor.Events.OnMaxFallHeightReached += () => eventCalled = true;
 
-        while (!agent.Motor.IsGrounded)
+        while (!agent.Motor.IsOnSolid)
         {
             TrailblazerManager.Simulate();
             agent.Simulate();
@@ -151,12 +151,12 @@ public class FallLocomotionTests : IDisposable
     [Fact]
     public void Given_AgentFallsAndLands_When_FallHeightIsValid_Then_ShouldCallOnStopFallWithHeight()
     {
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Air);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, 10, 0), startingMedium: TraversalMedium.Gas);
 
         Fixed64 fallHeight = Fixed64.Zero;
         agent.Motor.Events.OnStopFall += (height) => fallHeight = height;
 
-        while (!agent.Motor.IsGrounded)
+        while (!agent.Motor.IsOnSolid)
         {
             TrailblazerManager.Simulate();
             agent.Simulate();
@@ -237,9 +237,9 @@ public class FallLocomotionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 0, 0),
-            startingMedium: TraversalMedium.Air);
+            startingMedium: TraversalMedium.Gas);
 
-        agent.FrameCondition.Medium = TraversalMedium.Ground;
+        agent.FrameCondition.Medium = TraversalMedium.Solid;
         agent.FrameCondition.SurfaceLevel = Fixed64.Zero;
 
         TrailblazerManager.Simulate();
@@ -262,7 +262,7 @@ public class FallLocomotionTests : IDisposable
             eventCalled = true;
         };
 
-        while (!agent.Motor.IsGrounded)
+        while (!agent.Motor.IsOnSolid)
         {
             TrailblazerManager.Simulate();
             agent.Simulate();
@@ -276,7 +276,7 @@ public class FallLocomotionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             new(0, 10, 0),
-            startingMedium: TraversalMedium.Air);
+            startingMedium: TraversalMedium.Gas);
 
         agent.Motor.Handler.Fall.IsFalling = true;
         agent.Motor.Handler.Fall.FallStart = (Fixed64)10;

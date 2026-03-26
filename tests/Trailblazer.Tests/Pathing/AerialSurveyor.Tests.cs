@@ -94,7 +94,7 @@ public class AerialSurveyorTests : IDisposable
             new Vector3d(0, 0, 1),
             new Vector3d(2, 0, 1),
             Fixed64.One,
-            traversalMode: VolumeTraversalMode.Water);
+            medium: TraversalMedium.Liquid);
 
         request.Should().NotBeNull();
 
@@ -116,11 +116,11 @@ public class AerialSurveyorTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "AerialWater");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "AerialWater");
     }
 
     private static void AddOpen(Vector3d position)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Open, "AerialOpen");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "AerialOpen");
     }
 }

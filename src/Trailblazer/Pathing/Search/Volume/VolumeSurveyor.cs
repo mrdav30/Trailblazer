@@ -276,10 +276,10 @@ public sealed class VolumeSurveyor
         if (voxel == null)
             return;
 
-        if (voxel.TryGetPartition(out PathPartition pathPartition))
+        if (voxel.TryGetPartition(out SolidChartPartition pathPartition))
             ChartOwnerUtility.AddOwners(_chartKeys, pathPartition.ChartOwners);
 
-        if (voxel.TryGetPartition(out VolumePartition volumePartition))
+        if (voxel.TryGetPartition(out VolumeChartPartition volumePartition))
             ChartOwnerUtility.AddOwners(_chartKeys, volumePartition.ChartOwners);
     }
 
@@ -299,12 +299,12 @@ public sealed class VolumeSurveyor
             return true;
 
         if (voxel == _request.EndNode && _request.AllowUnwalkableEndNode)
-            return VolumeTraversalRules.Matches(voxel, _request.TraversalMode);
+            return VolumeMediumRules.Matches(voxel, _request.Medium);
 
         return RawVoxelFinder.IsTraversable(
             voxel,
             _request.UnitSize,
-            _request.TraversalMode);
+            _request.Medium);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -318,7 +318,7 @@ public sealed class VolumeSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GetTraversalCostModifier(Voxel voxel)
     {
-        return voxel != null && voxel.TryGetPartition(out VolumePartition volumePartition)
+        return voxel != null && voxel.TryGetPartition(out VolumeChartPartition volumePartition)
             ? volumePartition.PathCostModifier
             : 0;
     }

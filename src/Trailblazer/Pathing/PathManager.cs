@@ -78,27 +78,27 @@ public static class PathManager
         }
     }
 
-    internal static readonly SwiftHashSetPool<PathPartition> PartitionSetPool = new SwiftHashSetPool<PathPartition>();
+    internal static readonly SwiftHashSetPool<SolidChartPartition> PartitionSetPool = new SwiftHashSetPool<SolidChartPartition>();
 
     /// <summary>
-    /// Pool of reusable <see cref="PathPartition"/> instances used for partitioning the navigation grid.
+    /// Pool of reusable <see cref="SolidChartPartition"/> instances used for partitioning the navigation grid.
     /// </summary>
-    internal static readonly SwiftObjectPool<PathPartition> PartitionPool = new(
-        () => new PathPartition(),
+    internal static readonly SwiftObjectPool<SolidChartPartition> PartitionPool = new(
+        () => new SolidChartPartition(),
         actionOnRelease: partition => partition.Reset()
     );
 
     /// <summary>
-    /// Pool of reusable <see cref="VolumePartition"/> instances used for authored raw-volume traversal.
+    /// Pool of reusable <see cref="VolumeChartPartition"/> instances used for authored raw-volume traversal.
     /// </summary>
-    internal static readonly SwiftObjectPool<VolumePartition> VolumePartitionPool = new(
-        () => new VolumePartition(),
+    internal static readonly SwiftObjectPool<VolumeChartPartition> VolumeChartPartitionPool = new(
+        () => new VolumeChartPartition(),
         actionOnRelease: partition => partition.Reset()
     );
 
-    private static int _activeAuthoredOpenVolumeCellCount;
+    private static int _activeAuthoredGasCellCount;
 
-    private static int _activeAuthoredWaterVolumeCellCount;
+    private static int _activeAuthoredLiquidCellCount;
 
     #endregion
 
@@ -216,16 +216,16 @@ public static class PathManager
             return;
         }
 
-        SwiftHashSet<PathPartition> allChartPartitions = PartitionSetPool.Rent();
+        SwiftHashSet<SolidChartPartition> allChartPartitions = PartitionSetPool.Rent();
         SwiftHashSet<string> affectedChartKeys = new();
         foreach ((Vector3d pos, NavigationChartCell cell) in chart.GetAuthoredCells())
         {
             if (!GlobalGridManager.TryGetVoxel(pos, out Voxel voxel))
                 continue;
 
-            if (cell.HasSurface)
+            if (cell.HasSolid)
             {
-                if (!voxel.TryGetPartition(out PathPartition part))
+                if (!voxel.TryGetPartition(out SolidChartPartition part))
                 {
                     part = PartitionPool.Rent();
                     voxel.TryAddPartition(part);
@@ -241,24 +241,24 @@ public static class PathManager
             if (!cell.HasVolume)
                 continue;
 
-            if (voxel.TryGetPartition(out VolumePartition existingVolumePart)
+            if (voxel.TryGetPartition(out VolumeChartPartition existingVolumePart)
                 && existingVolumePart.HasAnyOwners)
             {
                 ChartOwnerUtility.AddOwners(affectedChartKeys, existingVolumePart.ChartOwners);
             }
 
-            if (!voxel.TryGetPartition(out VolumePartition volumePart))
+            if (!voxel.TryGetPartition(out VolumeChartPartition volumePart))
             {
-                volumePart = VolumePartitionPool.Rent();
+                volumePart = VolumeChartPartitionPool.Rent();
                 voxel.TryAddPartition(volumePart);
             }
 
             volumePart.AddOwner(chart.Name, cell);
-            TrackVolumeCell(cell, delta: 1);
+            TrackVolumeMediumCell(cell, delta: 1);
         }
 
         // bind new neighbor pointers for each partition since they could have changed
-        foreach (PathPartition part in allChartPartitions)
+        foreach (SolidChartPartition part in allChartPartitions)
             part.BindNeighbors();
 
         PartitionSetPool.Release(allChartPartitions);
@@ -298,19 +298,19 @@ public static class PathManager
         // invalidate any survey results currently using this chart
         PathGuideFactory.InvalidateCacheFor(chart.Name);
 
-        SwiftHashSet<PathPartition> stillActivePartitions = PartitionSetPool.Rent();
+        SwiftHashSet<SolidChartPartition> stillActivePartitions = PartitionSetPool.Rent();
         foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
         {
             if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
                 continue;
 
-            if (cell.HasSurface
-                && voxel.TryGetPartition(out PathPartition part)
+            if (cell.HasSolid
+                && voxel.TryGetPartition(out SolidChartPartition part)
                 && part.BelongsTo(chart.Name))
             {
                 part.RemoveOwner(chart.Name);
                 if (!part.HasAnyOwners)
-                    voxel.TryRemovePartition<PathPartition>();
+                    voxel.TryRemovePartition<SolidChartPartition>();
                 else
                 {
                     // if partition still belongs to a chart, reset its clearance values and rebind neighbors
@@ -320,7 +320,7 @@ public static class PathManager
             }
 
             if (!cell.HasVolume
-                || !voxel.TryGetPartition(out VolumePartition volumePart)
+                || !voxel.TryGetPartition(out VolumeChartPartition volumePart)
                 || !volumePart.BelongsTo(chart.Name))
             {
                 continue;
@@ -328,13 +328,13 @@ public static class PathManager
 
             volumePart.RemoveOwner(chart.Name);
             if (!volumePart.HasAnyOwners)
-                voxel.TryRemovePartition<VolumePartition>();
+                voxel.TryRemovePartition<VolumeChartPartition>();
 
-            TrackVolumeCell(cell, delta: -1);
+            TrackVolumeMediumCell(cell, delta: -1);
         }
 
         // bind neighbor pointers for each partition
-        foreach (PathPartition part in stillActivePartitions)
+        foreach (SolidChartPartition part in stillActivePartitions)
             part.BindNeighbors();
 
         PartitionSetPool.Release(stillActivePartitions);
@@ -349,7 +349,7 @@ public static class PathManager
     /// </summary>
     public static void Reset()
     {
-        VolumeTraversalRules.Reset();
+        VolumeMediumRules.Reset();
         TraversalTransitionRegistry.Reset();
 
         var allCharts = AllCharts;
@@ -367,22 +367,22 @@ public static class PathManager
                     if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
                         continue;
 
-                    if (cell.HasSurface
-                        && voxel.TryGetPartition(out PathPartition part)
+                    if (cell.HasSolid
+                        && voxel.TryGetPartition(out SolidChartPartition part)
                         && part.BelongsTo(chart.Name))
                     {
                         part.RemoveOwner(chart.Name);
                         if (!part.HasAnyOwners)
-                            voxel.TryRemovePartition<PathPartition>();
+                            voxel.TryRemovePartition<SolidChartPartition>();
                     }
 
                     if (cell.HasVolume
-                        && voxel.TryGetPartition(out VolumePartition volumePart)
+                        && voxel.TryGetPartition(out VolumeChartPartition volumePart)
                         && volumePart.BelongsTo(chart.Name))
                     {
                         volumePart.RemoveOwner(chart.Name);
                         if (!volumePart.HasAnyOwners)
-                            voxel.TryRemovePartition<VolumePartition>();
+                            voxel.TryRemovePartition<VolumeChartPartition>();
                     }
                 }
 
@@ -391,8 +391,8 @@ public static class PathManager
 
             _navigationChartMap.Clear();
             _generatedTransitionIdsByChart.Clear();
-            _activeAuthoredOpenVolumeCellCount = 0;
-            _activeAuthoredWaterVolumeCellCount = 0;
+            _activeAuthoredGasCellCount = 0;
+            _activeAuthoredLiquidCellCount = 0;
         }
         finally
         {
@@ -452,23 +452,23 @@ public static class PathManager
         finally { _navigationChartMapLock.ExitWriteLock(); }
     }
 
-    internal static bool HasAuthoredVolumeTraversal(VolumeTraversalMode traversalMode)
+    internal static bool HasAuthoredVolumeMedium(TraversalMedium medium)
     {
-        return traversalMode switch
+        return medium switch
         {
-            VolumeTraversalMode.Open => _activeAuthoredOpenVolumeCellCount > 0,
-            VolumeTraversalMode.Water => _activeAuthoredWaterVolumeCellCount > 0,
+            TraversalMedium.Gas => _activeAuthoredGasCellCount > 0,
+            TraversalMedium.Liquid => _activeAuthoredLiquidCellCount > 0,
             _ => false
         };
     }
 
-    private static void TrackVolumeCell(NavigationChartCell cell, int delta)
+    private static void TrackVolumeMediumCell(NavigationChartCell cell, int delta)
     {
-        if (cell.SupportsVolumeTraversal(VolumeTraversalMode.Open))
-            _activeAuthoredOpenVolumeCellCount += delta;
+        if (cell.SupportsMedium(TraversalMedium.Gas))
+            _activeAuthoredGasCellCount += delta;
 
-        if (cell.SupportsVolumeTraversal(VolumeTraversalMode.Water))
-            _activeAuthoredWaterVolumeCellCount += delta;
+        if (cell.SupportsMedium(TraversalMedium.Liquid))
+            _activeAuthoredLiquidCellCount += delta;
     }
 
     #region Neighbor Discovery
@@ -488,7 +488,7 @@ public static class PathManager
         foreach (SpatialDirection dir in SpatialAwareness.AllDirections)
         {
             if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
-            if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
+            if (neighbor.IsBlocked || !neighbor.TryGetPartition(out SolidChartPartition part)) continue;
             yield return new TraversableVoxel { Voxel = neighbor, Partition = part, Direction = dir };
         }
     }
@@ -508,7 +508,7 @@ public static class PathManager
         foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
         {
             if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
-            if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
+            if (neighbor.IsBlocked || !neighbor.TryGetPartition(out SolidChartPartition part)) continue;
             yield return new TraversableVoxel { Voxel = neighbor, Partition = part, Direction = dir };
         }
     }
@@ -528,7 +528,7 @@ public static class PathManager
         foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
         {
             if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
-            if (neighbor.IsBlocked || !neighbor.TryGetPartition(out PathPartition part)) continue;
+            if (neighbor.IsBlocked || !neighbor.TryGetPartition(out SolidChartPartition part)) continue;
             if (HasBlockedEdgeNeighbor(voxel, dir)) continue;
             yield return new TraversableVoxel { Voxel = neighbor, Partition = part, Direction = dir };
         }
@@ -546,7 +546,7 @@ public static class PathManager
             if (ax == 0 && ay == 0 && az == 0) continue;
             if (!voxel.TryGetNeighborFromOffset((ax, ay, az), out Voxel edgeVoxel)
                 || edgeVoxel.IsBlocked
-                || !edgeVoxel.HasPartition<PathPartition>())
+                || !edgeVoxel.HasPartition<SolidChartPartition>())
             {
                 return true;
             }
@@ -597,7 +597,7 @@ public static class PathManager
             foreach (Voxel voxel in gridVoxelSet.Voxels)
             {
                 // A path is required if a voxel doesn't exist in the traced line
-                if (!voxel.TryGetPartition(out PathPartition partition))
+                if (!voxel.TryGetPartition(out SolidChartPartition partition))
                     return true;
 
                 if (!allowUnwalkableEndNode && !voxel.IsBlocked && partition.IsImpassable(unitSize))

@@ -117,7 +117,7 @@ PathManager.InitializeChart(chart.Name);
 
 `NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell surface or volume traversal metadata, cost modifiers, or transition hints. Raw 3D travel still runs through `VolumePathRequest`, while chart-backed `AStarPathRequest` and `FlowFieldPathRequest` requests can opt into registered transition fallback through `AllowTraversalTransitions`.
 
-If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse `string[,,]` input such as `L`, `O`, `W`, `L!`, `O!`, and `W!` into a `TraversalBuildResult`, and `PathManager.Register(buildResult)` will register the chart, initialize any authored surface or volume partitions, and register generated explicit transitions in one step. Those generated transitions participate in manual-vs-generated precedence as generated handoffs, so an equivalent manual transition can stay active without breaking build-result registration. The built-in legend and current generator rules are documented in `docs/AUTHORING.MD`.
+If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse a `string[,,]` using the built-in legend into a `TraversalBuildResult`, and `PathManager.Register(buildResult)` will register the chart, initialize any authored solid or volume partitions, and register generated explicit transitions in one step. The built-in legend and current generator rules are documented in `docs/AUTHORING.MD`.
 
 ### 2. Request a Guide Directly
 
@@ -161,7 +161,7 @@ var navigator = new MyNavigator();
 navigator.Setup(new Vector3d(0, 0, 0), size: Fixed64.One);
 navigator.Initialize(new TrekCondition
 {
-    Medium = TraversalMedium.Ground,
+    Medium = TraversalMedium.Solid,
     SurfaceLevel = Fixed64.Zero,
     GroundState = new GroundCondition()
 });
@@ -187,7 +187,7 @@ If several navigators should move as one formation, pass the same optional `grou
 
 Concrete navigator types should implement `CheckTrekCondition()` to populate ground, water, ceiling, and platform state during `CommitFrameMotion()`.
 
-Set `navigator.GuidedAllowTraversalTransitions = true;` when built-in chart-guided travel should fall back through registered `TraversalTransition` handoffs instead of failing at chart boundaries. The same opt-in also allows bounded swim-exit style handoffs from water volume into a follow-up chart request when the requested target is chart-backed outside the active water volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route is a better fit than staying in open-volume travel.
+Set `navigator.GuidedAllowTraversalTransitions = true;` when built-in chart-guided travel should fall back through registered `TraversalTransition` handoffs instead of failing at chart boundaries. The same opt-in also allows bounded swim-exit style handoffs from liquid volume into a follow-up chart request when the requested target is chart-backed outside the active liquid volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route is a better fit than staying in gas-volume travel.
 
 If a navigator should use a smaller locomotion set, override `CreateLocomotionProfile()` and return a custom profile such as `LocomotionProfile.CreateMoveAndFallOnly()`.
 
@@ -212,7 +212,7 @@ Use `FlowFieldPathRequest` when:
 Use `VolumePathRequest` when:
 
 - traversal should stay in raw voxel volume instead of chart-backed surface space
-- movement needs open-air or host-marked water routing without authored chart structure
+- movement needs gas or liquid routing without authored chart structure
 - navigator-owned `Swim` and `Aerial` guidance should stay volume-first but still be allowed to hand off into chart-backed traversal at authored exits or landing zones when `GuidedAllowTraversalTransitions` is enabled
 
 ## Project Layout

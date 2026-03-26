@@ -35,9 +35,9 @@ public class TraversalAuthoringMapTests : IDisposable
         string[,,] map =
         {
             {
-                { "L" },
-                { "L!" },
-                { "W!" }
+                { "S" },
+                { "S!" },
+                { "L!" }
             }
         };
 
@@ -51,13 +51,13 @@ public class TraversalAuthoringMapTests : IDisposable
 
         Assert.True(result.Chart.TryGetCell(new Vector3d(0, 0, 0), out NavigationChartCell plainChartCell));
         Assert.True(plainChartCell.HasTraversalData);
-        Assert.True(plainChartCell.HasSurface);
+        Assert.True(plainChartCell.HasSolid);
         Assert.False(plainChartCell.HasVolume);
         Assert.Equal(NavigationChartCellFlags.None, plainChartCell.Flags);
 
         Assert.True(result.Chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell markedChartCell));
         Assert.True(markedChartCell.HasTraversalData);
-        Assert.True(markedChartCell.HasSurface);
+        Assert.True(markedChartCell.HasSolid);
         Assert.False(markedChartCell.HasVolume);
         Assert.Equal(
             NavigationChartCellFlags.TransitionSourceHint | NavigationChartCellFlags.TransitionDestinationHint,
@@ -65,20 +65,20 @@ public class TraversalAuthoringMapTests : IDisposable
 
         Assert.True(result.Chart.TryGetCell(new Vector3d(2, 0, 0), out NavigationChartCell waterChartCell));
         Assert.True(waterChartCell.HasTraversalData);
-        Assert.False(waterChartCell.HasSurface);
+        Assert.False(waterChartCell.HasSolid);
         Assert.True(waterChartCell.HasVolume);
-        Assert.True(waterChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Water));
-        Assert.False(waterChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Open));
+        Assert.True(waterChartCell.SupportsMedium(TraversalMedium.Liquid));
+        Assert.False(waterChartCell.SupportsMedium(TraversalMedium.Gas));
 
         Assert.Equal(2, result.GeneratedTransitions.Length);
         Assert.Contains(result.GeneratedTransitions, t =>
             t.Type == TraversalTransitionType.SwimEntry
-            && t.Source.Space == TraversalTransitionAnchorSpace.Chart
-            && t.Destination.Space == TraversalTransitionAnchorSpace.WaterVolume);
+            && t.Source.Medium == TraversalMedium.Solid
+            && t.Destination.Medium == TraversalMedium.Liquid);
         Assert.Contains(result.GeneratedTransitions, t =>
             t.Type == TraversalTransitionType.SwimExit
-            && t.Source.Space == TraversalTransitionAnchorSpace.WaterVolume
-            && t.Destination.Space == TraversalTransitionAnchorSpace.Chart);
+            && t.Source.Medium == TraversalMedium.Liquid
+            && t.Destination.Medium == TraversalMedium.Solid);
     }
 
     [Fact]
@@ -87,8 +87,8 @@ public class TraversalAuthoringMapTests : IDisposable
         string[,,] map =
         {
             {
-                { "L!", "." },
-                { ".", "W!" }
+                { "S!", "." },
+                { ".", "L!" }
             }
         };
 
@@ -109,8 +109,8 @@ public class TraversalAuthoringMapTests : IDisposable
         string[,,] map =
         {
             {
-                { "O" },
-                { "W" }
+                { "G" },
+                { "L" }
             }
         };
 
@@ -124,17 +124,17 @@ public class TraversalAuthoringMapTests : IDisposable
 
         Assert.True(result.Chart.TryGetCell(Vector3d.Zero, out NavigationChartCell openChartCell));
         Assert.True(openChartCell.HasTraversalData);
-        Assert.False(openChartCell.HasSurface);
+        Assert.False(openChartCell.HasSolid);
         Assert.True(openChartCell.HasVolume);
-        Assert.True(openChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Open));
-        Assert.False(openChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Water));
+        Assert.True(openChartCell.SupportsMedium(TraversalMedium.Gas));
+        Assert.False(openChartCell.SupportsMedium(TraversalMedium.Liquid));
 
         Assert.True(result.Chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell waterChartCell));
         Assert.True(waterChartCell.HasTraversalData);
-        Assert.False(waterChartCell.HasSurface);
+        Assert.False(waterChartCell.HasSolid);
         Assert.True(waterChartCell.HasVolume);
-        Assert.True(waterChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Water));
-        Assert.False(waterChartCell.SupportsVolumeTraversal(VolumeTraversalMode.Open));
+        Assert.True(waterChartCell.SupportsMedium(TraversalMedium.Liquid));
+        Assert.False(waterChartCell.SupportsMedium(TraversalMedium.Gas));
 
         Assert.Empty(result.GeneratedTransitions);
     }

@@ -613,7 +613,7 @@ public class FlowFieldSurveyorTests : IDisposable
 
         // Mark the center partition with a high cost modifier
         GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 1), out _, out Voxel center);
-        if (center.TryGetPartition(out PathPartition partition))
+        if (center.TryGetPartition(out SolidChartPartition partition))
             partition.PathCostModifier = 10; // Arbitrary high cost to penalize direct path
 
         FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest request);

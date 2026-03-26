@@ -189,7 +189,7 @@ public class NavigatorTests : IDisposable
         request.TargetPosition.Should().Be(target);
         request.UnitSize.Should().Be(navigator.Size);
         request.Heuristic.Should().Be(navigator.GuidedAStarHeuristic);
-        request.TraversalMode.Should().Be(VolumeTraversalMode.Open);
+        request.Medium.Should().Be(TraversalMedium.Gas);
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public class NavigatorTests : IDisposable
             groupId: 9);
 
         VolumePathRequest initialRequest = navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
-        initialRequest.TraversalMode.Should().Be(VolumeTraversalMode.Open);
+        initialRequest.Medium.Should().Be(TraversalMedium.Gas);
         initialRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
 
@@ -299,7 +299,7 @@ public class NavigatorTests : IDisposable
         var request = navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
-        request.TraversalMode.Should().Be(VolumeTraversalMode.Water);
+        request.Medium.Should().Be(TraversalMedium.Liquid);
     }
 
     [Fact]
@@ -319,7 +319,7 @@ public class NavigatorTests : IDisposable
             groupId: 7);
 
         VolumePathRequest initialRequest = navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
-        initialRequest.TraversalMode.Should().Be(VolumeTraversalMode.Water);
+        initialRequest.Medium.Should().Be(TraversalMedium.Liquid);
         initialRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
 
         navigator.SetTestPosition(new Vector3d(2, 0, 0));
@@ -746,7 +746,7 @@ public class NavigatorTests : IDisposable
             motionTransfer: MotionTransfer.PermaLocked,
             updateMotorState: true);
 
-        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Ground);
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Solid);
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)3);
         navigator.FrameCondition.GroundState.Should().NotBeNull();
         navigator.FrameCondition.GroundState.Value.Platform.Should().Be(snapshot);
@@ -755,7 +755,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameCondition.GroundState.Value.MotionTransferState.Should().Be(MotionTransfer.PermaLocked);
 
         TrekCondition motorCondition = navigator.Motor.CurrentState.ToTrekCondition();
-        motorCondition.Medium.Should().Be(TraversalMedium.Ground);
+        motorCondition.Medium.Should().Be(TraversalMedium.Solid);
         motorCondition.SurfaceLevel.Should().Be((Fixed64)3);
         motorCondition.GroundState.Should().NotBeNull();
         motorCondition.GroundState.Value.Platform.Should().Be(snapshot);
@@ -778,13 +778,13 @@ public class NavigatorTests : IDisposable
 
         navigator.SetAirborne(surfaceLevel: (Fixed64)4, updateMotorState: true);
 
-        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Air);
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Gas);
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)4);
         navigator.FrameCondition.GroundState.Should().NotBeNull();
         navigator.FrameCondition.GroundState.Value.Platform.Should().Be(snapshot);
 
         TrekCondition motorCondition = navigator.Motor.CurrentState.ToTrekCondition();
-        motorCondition.Medium.Should().Be(TraversalMedium.Air);
+        motorCondition.Medium.Should().Be(TraversalMedium.Gas);
         motorCondition.GroundState.Should().NotBeNull();
         motorCondition.GroundState.Value.Platform.Should().Be(snapshot);
     }
@@ -805,12 +805,12 @@ public class NavigatorTests : IDisposable
 
         navigator.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
 
-        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Water);
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Liquid);
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)2);
         navigator.FrameCondition.GroundState.Should().BeNull();
 
         TrekCondition motorCondition = navigator.Motor.CurrentState.ToTrekCondition();
-        motorCondition.Medium.Should().Be(TraversalMedium.Water);
+        motorCondition.Medium.Should().Be(TraversalMedium.Liquid);
         motorCondition.GroundState.Should().BeNull();
     }
 
@@ -820,7 +820,7 @@ public class NavigatorTests : IDisposable
         navigator.Setup(position, rotation: rotation, size: Fixed64.One);
         navigator.Initialize(new TrekCondition()
         {
-            Medium = TraversalMedium.Ground,
+            Medium = TraversalMedium.Solid,
             SurfaceLevel = Fixed64.Zero,
             GroundState = new GroundCondition()
         });
@@ -829,12 +829,12 @@ public class NavigatorTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "NavigatorWater");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "NavigatorWater");
     }
 
     private static void AddOpen(Vector3d position)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Open, "NavigatorOpen");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "NavigatorOpen");
     }
 
     private static void AddObstacle(Vector3d position)
@@ -866,15 +866,15 @@ public class NavigatorTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "navigator-transition-fallback-entry",
             type: TraversalTransitionType.SwimEntry,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.WaterVolume(new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Liquid(new Vector3d(1, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "navigator-transition-fallback-exit",
             type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.WaterVolume(new Vector3d(3, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            source: TraversalTransitionAnchor.Liquid(new Vector3d(3, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
     }
 
@@ -890,15 +890,15 @@ public class NavigatorTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
             type: TraversalTransitionType.Landing,
-            source: TraversalTransitionAnchor.OpenVolume(new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-chart-hop",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
     }
 
@@ -928,8 +928,8 @@ public class NavigatorTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{chartKey}-exit",
             type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.WaterVolume(new Vector3d(2, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)),
+            source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
     }
 

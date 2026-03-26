@@ -42,10 +42,10 @@ internal readonly struct RegisteredTraversalTransition : IEquatable<RegisteredTr
         return Transition.Type == other.Transition.Type
             && Transition.PathCostModifier == other.Transition.PathCostModifier
             && Transition.IsBidirectional == other.Transition.IsBidirectional
-            && Transition.Source.Space == other.Transition.Source.Space
+            && Transition.Source.Medium == other.Transition.Source.Medium
             && SourceVoxelIndex.Equals(other.SourceVoxelIndex)
             && SourcePosition.Equals(other.SourcePosition)
-            && Transition.Destination.Space == other.Transition.Destination.Space
+            && Transition.Destination.Medium == other.Transition.Destination.Medium
             && DestinationVoxelIndex.Equals(other.DestinationVoxelIndex)
             && DestinationPosition.Equals(other.DestinationPosition);
     }
@@ -61,10 +61,10 @@ internal readonly struct RegisteredTraversalTransition : IEquatable<RegisteredTr
             hash = hash * 31 + Transition.Type.GetHashCode();
             hash = hash * 31 + Transition.PathCostModifier;
             hash = hash * 31 + Transition.IsBidirectional.GetHashCode();
-            hash = hash * 31 + Transition.Source.Space.GetHashCode();
+            hash = hash * 31 + Transition.Source.Medium.GetHashCode();
             hash = hash * 31 + SourceVoxelIndex.GetHashCode();
             hash = hash * 31 + SourcePosition.GetHashCode();
-            hash = hash * 31 + Transition.Destination.Space.GetHashCode();
+            hash = hash * 31 + Transition.Destination.Medium.GetHashCode();
             hash = hash * 31 + DestinationVoxelIndex.GetHashCode();
             hash = hash * 31 + DestinationPosition.GetHashCode();
             return hash;

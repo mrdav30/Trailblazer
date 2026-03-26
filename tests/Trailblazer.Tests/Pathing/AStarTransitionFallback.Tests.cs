@@ -40,8 +40,8 @@ public class AStarTransitionFallbackTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "jump-gap",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
         AStarPathRequest request = AStarPathRequest.Create(
@@ -73,15 +73,15 @@ public class AStarTransitionFallbackTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "water-entry",
             type: TraversalTransitionType.SwimEntry,
-            source: TraversalTransitionAnchor.Chart(new Vector3d(-1, 0, 0)),
-            destination: TraversalTransitionAnchor.WaterVolume(new Vector3d(0, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(new Vector3d(-1, 0, 0)),
+            destination: TraversalTransitionAnchor.Liquid(new Vector3d(0, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "water-exit",
             type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.WaterVolume(new Vector3d(2, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(3, 0, 0)),
+            source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
         AStarPathRequest request = AStarPathRequest.Create(
@@ -113,8 +113,8 @@ public class AStarTransitionFallbackTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "no-fallback-jump",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
         AStarPathRequest request = AStarPathRequest.Create(
@@ -132,6 +132,6 @@ public class AStarTransitionFallbackTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "AStarFallbackWater");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "AStarFallbackWater");
     }
 }

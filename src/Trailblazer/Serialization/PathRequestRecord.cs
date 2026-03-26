@@ -40,7 +40,7 @@ internal sealed class PathRequestRecord : IRecordable
 
     public int FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
-    public VolumeTraversalMode TraversalMode = VolumeTraversalMode.Open;
+    public TraversalMedium Medium = TraversalMedium.Gas;
 
     public bool HasGuide;
 
@@ -77,7 +77,7 @@ internal sealed class PathRequestRecord : IRecordable
             case VolumePathRequest volume:
                 Kind = PathRequestRecordKind.Volume;
                 AStarHeuristic = volume.Heuristic;
-                TraversalMode = volume.TraversalMode;
+                Medium = volume.Medium;
                 break;
 
             case HybridPathRequest hybrid:
@@ -146,7 +146,7 @@ internal sealed class PathRequestRecord : IRecordable
                     UnitSize,
                     AStarHeuristic,
                     AllowUnwalkableEndNode,
-                    TraversalMode);
+                    Medium);
                 if (volume == null)
                     return false;
 
@@ -209,7 +209,7 @@ internal sealed class PathRequestRecord : IRecordable
         AStarHeuristic = HeuristicMethod.Manhattan;
         AStarMaxClimbHeight = Fixed64.One;
         FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
-        TraversalMode = VolumeTraversalMode.Open;
+        Medium = TraversalMedium.Gas;
         HasGuide = false;
         WaypointIndex = NoWaypointIndex;
     }
@@ -226,7 +226,7 @@ internal sealed class PathRequestRecord : IRecordable
         HeuristicMethod aStarHeuristic = AStarHeuristic;
         Fixed64 aStarMaxClimbHeight = AStarMaxClimbHeight;
         int flowFieldExtraFloodRange = FlowFieldExtraFloodRange;
-        VolumeTraversalMode traversalMode = TraversalMode;
+        TraversalMedium medium = Medium;
         bool hasGuide = HasGuide;
         int waypointIndex = WaypointIndex;
 
@@ -240,7 +240,7 @@ internal sealed class PathRequestRecord : IRecordable
         RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
         RecordValues.Look(chronicler, ref aStarMaxClimbHeight, "aStarMaxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref flowFieldExtraFloodRange, "flowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
-        RecordValues.Look(chronicler, ref traversalMode, "volumeTraversalMode", VolumeTraversalMode.Open);
+        RecordValues.Look(chronicler, ref medium, "medium", TraversalMedium.Gas);
         RecordValues.Look(chronicler, ref hasGuide, "hasGuide", false);
         RecordValues.Look(chronicler, ref waypointIndex, "waypointIndex", NoWaypointIndex);
 
@@ -256,7 +256,7 @@ internal sealed class PathRequestRecord : IRecordable
             AStarHeuristic = aStarHeuristic;
             AStarMaxClimbHeight = aStarMaxClimbHeight;
             FlowFieldExtraFloodRange = flowFieldExtraFloodRange;
-            TraversalMode = traversalMode;
+            Medium = medium;
             HasGuide = hasGuide;
             WaypointIndex = waypointIndex;
         }

@@ -47,7 +47,7 @@ public class FlowFieldSurveyor
         {
             if (request == null
             || request.HasZeroDisplacement
-            || !request.EndNode.TryGetPartition(out PathPartition targetPart))
+            || !request.EndNode.TryGetPartition(out SolidChartPartition targetPart))
             {
                 return FlowFieldSurveyResult.Empty;
             }
@@ -56,7 +56,7 @@ public class FlowFieldSurveyor
 
             _heap.FastClear();
             _chartKeys.Clear();
-            PathPartition.AdvancePathCostVersion();
+            SolidChartPartition.AdvancePathCostVersion();
 
             // Start from the end and move towards the start voxel
             targetPart.PathCost = 0;
@@ -85,7 +85,7 @@ public class FlowFieldSurveyor
         int searchSize = _request.MaxPathSearchRange;
         int maxFloodRange = 0;
 
-        while (_heap.RemoveFirst(out PathPartition current)
+        while (_heap.RemoveFirst(out SolidChartPartition current)
             && iterations++ < searchSize)
         {
             // Check if we found our way to the start voxel
@@ -114,17 +114,17 @@ public class FlowFieldSurveyor
     /// Ensures the wavefront expands in an optimal order.
     /// </summary>
     /// <param name="current">The current path partition being evaluated.</param>
-    private void AnalyzeNeighborDistance(PathPartition current)
+    private void AnalyzeNeighborDistance(SolidChartPartition current)
     {
         TryProcessDirection(current, SpatialAwareness.PerpendicularDirections);
         TryProcessDirection(current, SpatialAwareness.DiagonalDirections, true);
     }
 
-    private void TryProcessDirection(PathPartition current, SpatialDirection[] directions, bool checkEdges = false)
+    private void TryProcessDirection(SolidChartPartition current, SpatialDirection[] directions, bool checkEdges = false)
     {
         foreach (SpatialDirection dir in directions)
         {
-            PathPartition neighbor = current.Neighbors[(int)dir];
+            SolidChartPartition neighbor = current.Neighbors[(int)dir];
             if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request.UnitSize))
                 continue;
 
@@ -147,7 +147,7 @@ public class FlowFieldSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool HasValidDiagonalLegs(PathPartition current, SpatialDirection diagonal)
+    private bool HasValidDiagonalLegs(SolidChartPartition current, SpatialDirection diagonal)
     {
         (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
@@ -164,9 +164,9 @@ public class FlowFieldSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool IsLegClear(PathPartition current, SpatialDirection legDir)
+    private bool IsLegClear(SolidChartPartition current, SpatialDirection legDir)
     {
-        PathPartition leg = current.Neighbors[(int)legDir];
+        SolidChartPartition leg = current.Neighbors[(int)legDir];
         return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request.UnitSize);
     }
 
@@ -180,7 +180,7 @@ public class FlowFieldSurveyor
         SwiftDictionary<GlobalVoxelIndex, FlowField> result = new(_heap.ClosedCount);
         // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
 
-        foreach (PathPartition current in _heap.EnumerateClosed())
+        foreach (SolidChartPartition current in _heap.EnumerateClosed())
         {
             FlowField currentFlow = new()
             {
@@ -197,11 +197,11 @@ public class FlowFieldSurveyor
             }
 
             // Go through all neighbours and find the one with the lowest distance
-            PathPartition minPartition = null;
+            SolidChartPartition minPartition = null;
             int minCost = int.MaxValue;
             for (int i = 0; i < current.Neighbors.Length; i++)
             {
-                PathPartition nPart = current.Neighbors[i];
+                SolidChartPartition nPart = current.Neighbors[i];
                 // check closed heap version to ensure neighbor was part of flood phase
                 if (nPart == null || !_heap.IsClosed(nPart))
                     continue;

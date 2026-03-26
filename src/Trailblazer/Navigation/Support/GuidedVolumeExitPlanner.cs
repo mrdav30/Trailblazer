@@ -10,11 +10,28 @@ namespace Trailblazer.Navigation;
 /// </summary>
 internal static class GuidedVolumeExitPlanner
 {
+    /// <summary>
+    /// Attempts to plan a volume exit path from the origin to a target position, followed by a chart-backed leg to the final destination.
+    /// </summary>
+    /// <param name="origin"></param>
+    /// <param name="targetPosition"></param>
+    /// <param name="unitSize"></param>
+    /// <param name="medium"></param>
+    /// <param name="chartPathMode"></param>
+    /// <param name="allowUnwalkableEndNode"></param>
+    /// <param name="allowTraversalTransitions"></param>
+    /// <param name="aStarHeuristic"></param>
+    /// <param name="aStarMaxClimbHeight"></param>
+    /// <param name="flowFieldExtraFloodRange"></param>
+    /// <param name="request"></param>
+    /// <param name="handoff"></param>
+    /// <param name="totalPathCost"></param>
+    /// <returns>True if a valid path was found; otherwise, false.</returns>
     public static bool TryPlan(
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        VolumeTraversalMode traversalMode,
+        TraversalMedium medium,
         GuidedPathMode chartPathMode,
         bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
@@ -45,7 +62,7 @@ internal static class GuidedVolumeExitPlanner
             origin,
             targetPosition,
             unitSize,
-            traversalMode,
+            medium,
             chartPathMode,
             allowUnwalkableEndNode,
             allowTraversalTransitions,
@@ -75,7 +92,7 @@ internal static class GuidedVolumeExitPlanner
             origin,
             targetPosition,
             unitSize,
-            traversalMode,
+            medium,
             chartPathMode,
             allowUnwalkableEndNode,
             allowTraversalTransitions,
@@ -108,7 +125,7 @@ internal static class GuidedVolumeExitPlanner
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        VolumeTraversalMode traversalMode,
+        TraversalMedium medium,
         GuidedPathMode chartPathMode,
         bool allowUnwalkableEndNode,
         bool allowTraversalTransitions,
@@ -127,9 +144,9 @@ internal static class GuidedVolumeExitPlanner
         for (int i = 0; i < transitions.Length; i++)
         {
             TraversalTransition transition = transitions[i];
-            if (!transition.Source.TryGetVolumeTraversalMode(out VolumeTraversalMode transitionTraversalMode)
-                || transition.Destination.Space != TraversalTransitionAnchorSpace.Chart
-                || transitionTraversalMode != traversalMode)
+            if (!transition.Source.TryGetVolumeMedium(out TraversalMedium transitionMedium)
+                || transition.Destination.Medium != TraversalMedium.Solid
+                || transitionMedium != medium)
             {
                 continue;
             }
@@ -140,7 +157,7 @@ internal static class GuidedVolumeExitPlanner
                 unitSize,
                 aStarHeuristic,
                 allowUnwalkableEndNode,
-                traversalMode);
+                medium);
             if (volumeRequest == null)
                 continue;
 

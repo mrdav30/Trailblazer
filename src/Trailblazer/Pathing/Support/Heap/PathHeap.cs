@@ -26,7 +26,7 @@ internal class PathHeapMeta
 }
 
 /// <summary>
-/// A static class representing a heap of <see cref="PathPartition"/>> for efficient pathfinding.
+/// A static class representing a heap of <see cref="SolidChartPartition"/>> for efficient pathfinding.
 /// </summary>
 internal class PathHeap
 {
@@ -38,9 +38,9 @@ internal class PathHeap
     /// <summary>
     /// Internal storage for heap items.
     /// </summary>
-    private PathPartition[] _items;
+    private SolidChartPartition[] _items;
 
-    private readonly SwiftDictionary<PathPartition, PathHeapMeta> _meta;
+    private readonly SwiftDictionary<SolidChartPartition, PathHeapMeta> _meta;
 
     public uint CurrentHeapVersion { get; private set; } = 0;
 
@@ -58,15 +58,15 @@ internal class PathHeap
 
     public PathHeap()
     {
-        _items = new PathPartition[DefaultCapacity];
+        _items = new SolidChartPartition[DefaultCapacity];
         _meta = new(DefaultCapacity);
         CurrentHeapVersion = 1;
     }
 
     /// <summary>
-    /// Adds a PathPartition to the heap.
+    /// Adds a SolidChartPartition to the heap.
     /// </summary>
-    public void Add(PathPartition item)
+    public void Add(SolidChartPartition item)
     {
         // exit early if item already in the heap
         if (Contains(item))
@@ -92,7 +92,7 @@ internal class PathHeap
     {
         int newCapacity = newSize <= DefaultCapacity ? DefaultCapacity : newSize;
 
-        PathPartition[] newArray = new PathPartition[newCapacity];
+        SolidChartPartition[] newArray = new SolidChartPartition[newCapacity];
         if (HeapCount > 0)
             Array.Copy(_items, 0, newArray, 0, HeapCount);
         _items = newArray;
@@ -101,16 +101,16 @@ internal class PathHeap
     }
 
     /// <summary>
-    /// Retrieves the PathPartition at the specified index without removing it.
+    /// Retrieves the SolidChartPartition at the specified index without removing it.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public PathPartition PeekAt(int index) => _items[index];
+    public SolidChartPartition PeekAt(int index) => _items[index];
 
     /// <summary>
-    /// Removes and returns the first PathPartition in the heap.
+    /// Removes and returns the first SolidChartPartition in the heap.
     /// </summary>
-    /// <returns>The removed PathPartition.</returns>
-    public bool RemoveFirst(out PathPartition result)
+    /// <returns>The removed SolidChartPartition.</returns>
+    public bool RemoveFirst(out SolidChartPartition result)
     {
         if (HeapCount == 0)
         {
@@ -128,7 +128,7 @@ internal class PathHeap
             _items[0] = null;
         else
         {
-            PathPartition temp = _items[HeapCount];
+            SolidChartPartition temp = _items[HeapCount];
             PathHeapMeta tempMeta = _meta[temp];
             _items[0] = temp;
             tempMeta.HeapIndex = 0;
@@ -143,12 +143,12 @@ internal class PathHeap
     }
 
     /// <summary>
-    /// Checks if the heap contains the specified PathPartition.
+    /// Checks if the heap contains the specified SolidChartPartition.
     /// </summary>
-    /// <param name="item">The PathPartition to check.</param>
-    /// <returns>True if the heap contains the PathPartition, otherwise false.</returns>
+    /// <param name="item">The SolidChartPartition to check.</param>
+    /// <returns>True if the heap contains the SolidChartPartition, otherwise false.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Contains(PathPartition item)
+    public bool Contains(SolidChartPartition item)
     {
         if (!_meta.TryGetValue(item, out PathHeapMeta meta)
             || meta.HeapVersion != CurrentHeapVersion)
@@ -160,22 +160,22 @@ internal class PathHeap
     }
 
     /// <summary>
-    /// Marks the specified PathPartition as closed.
+    /// Marks the specified SolidChartPartition as closed.
     /// </summary>
-    /// <param name="item">The PathPartition to mark as closed.</param>
+    /// <param name="item">The SolidChartPartition to mark as closed.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetClosed(PathPartition item)
+    public void SetClosed(SolidChartPartition item)
     {
         _meta[item].ClosedHeapVersion = CurrentHeapVersion;
     }
 
     /// <summary>
-    /// Checks if the specified PathPartition is closed.
+    /// Checks if the specified SolidChartPartition is closed.
     /// </summary>
-    /// <param name="item">The PathPartition to check.</param>
-    /// <returns>True if the PathPartition is closed, otherwise false.</returns>
+    /// <param name="item">The SolidChartPartition to check.</param>
+    /// <returns>True if the SolidChartPartition is closed, otherwise false.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsClosed(PathPartition item)
+    public bool IsClosed(SolidChartPartition item)
     {
         if (!_meta.TryGetValue(item, out PathHeapMeta meta)
             || meta.ClosedHeapVersion != CurrentHeapVersion)
@@ -187,16 +187,16 @@ internal class PathHeap
     }
 
     /// <summary>
-    /// Sorts a PathPartition up the heap based on its HeapCost.
+    /// Sorts a SolidChartPartition up the heap based on its HeapCost.
     /// </summary>
-    public void SortUp(PathPartition item)
+    public void SortUp(SolidChartPartition item)
     {
         PathHeapMeta meta = _meta[item];
         uint index = meta.HeapIndex;
         while (index > 0 && index < HeapCount)
         {
             uint parentIndex = (index - 1) / 2;
-            PathPartition parent = _items[parentIndex];
+            SolidChartPartition parent = _items[parentIndex];
 
             if (item.PathCost >= parent.PathCost)
                 break;
@@ -207,9 +207,9 @@ internal class PathHeap
     }
 
     /// <summary>
-    /// Sorts a PathPartition down the heap based on its HeapCost.
+    /// Sorts a SolidChartPartition down the heap based on its HeapCost.
     /// </summary>
-    public void SortDown(PathPartition item)
+    public void SortDown(SolidChartPartition item)
     {
         PathHeapMeta meta = _meta[item];
         uint index = meta.HeapIndex;
@@ -235,10 +235,10 @@ internal class PathHeap
     }
 
     /// <summary>
-    /// Swaps two PathPartitions in the heap and updates their HeapIndex.
+    /// Swaps two solid chart partitions in the heap and updates their HeapIndex.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void Swap(PathPartition itemA, PathPartition itemB)
+    private void Swap(SolidChartPartition itemA, SolidChartPartition itemB)
     {
         PathHeapMeta metaA = _meta[itemA];
         PathHeapMeta metaB = _meta[itemB];
@@ -254,9 +254,9 @@ internal class PathHeap
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public IEnumerable<PathPartition> EnumerateClosed()
+    public IEnumerable<SolidChartPartition> EnumerateClosed()
     {
-        foreach (KeyValuePair<PathPartition, PathHeapMeta> kvp in _meta)
+        foreach (KeyValuePair<SolidChartPartition, PathHeapMeta> kvp in _meta)
         {
             if (kvp.Value.ClosedHeapVersion == CurrentHeapVersion)
                 yield return kvp.Key;

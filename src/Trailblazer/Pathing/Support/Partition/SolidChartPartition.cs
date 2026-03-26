@@ -13,7 +13,7 @@ namespace Trailblazer.Pathing;
 /// Represents a partition attached to a Voxel that provides additional data used during pathfinding,
 /// such as clearance information, movement cost, and neighbor traversal helpers.
 /// </summary>
-public class PathPartition : IVoxelPartition
+public class SolidChartPartition : IVoxelPartition
 {
     #region Constants
 
@@ -22,10 +22,10 @@ public class PathPartition : IVoxelPartition
     /// </summary>
     public static readonly byte DefaultDegreeCap = 8;
 
-    private static readonly Lazy<SwiftQueuePool<(PathPartition v, byte dist)>> _clearanceQueuePool =
-        new(() => new SwiftQueuePool<(PathPartition v, byte dist)>());
+    private static readonly Lazy<SwiftQueuePool<(SolidChartPartition v, byte dist)>> _clearanceQueuePool =
+        new(() => new SwiftQueuePool<(SolidChartPartition v, byte dist)>());
 
-    internal static SwiftQueuePool<(PathPartition v, byte dist)> ClearanceQueuePool => _clearanceQueuePool.Value;
+    internal static SwiftQueuePool<(SolidChartPartition v, byte dist)> ClearanceQueuePool => _clearanceQueuePool.Value;
 
     #endregion
 
@@ -107,7 +107,7 @@ public class PathPartition : IVoxelPartition
     }
 
 #nullable enable
-    public PathPartition?[]? Neighbors { get; private set; }
+    public SolidChartPartition?[]? Neighbors { get; private set; }
 #nullable disable
 
     #region Clearance Properties
@@ -242,7 +242,7 @@ public class PathPartition : IVoxelPartition
     public void BindNeighbors()
     {
 #nullable enable
-        Neighbors = new PathPartition?[26];
+        Neighbors = new SolidChartPartition?[26];
 #nullable disable
 
         GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out var voxel);
@@ -261,7 +261,7 @@ public class PathPartition : IVoxelPartition
         {
             // use Voxel’s cached neighbor lookup
             if (voxel.TryGetNeighborFromDirection(dir, out var neighborVoxel, useCache: true)
-             && neighborVoxel.TryGetPartition(out PathPartition neighborPart))
+             && neighborVoxel.TryGetPartition(out SolidChartPartition neighborPart))
             {
                 Neighbors[(int)dir] = neighborPart;
             }
@@ -317,8 +317,8 @@ public class PathPartition : IVoxelPartition
 
         // BFS from this voxel until we hit any blocked-or-missing neighbor
         byte best = DefaultDegreeCap;
-        SwiftQueue<(PathPartition v, byte dist)> q = ClearanceQueuePool.Rent();
-        SwiftHashSet<PathPartition> visited = PathManager.PartitionSetPool.Rent();
+        SwiftQueue<(SolidChartPartition v, byte dist)> q = ClearanceQueuePool.Rent();
+        SwiftHashSet<SolidChartPartition> visited = PathManager.PartitionSetPool.Rent();
 
         q.Enqueue((this, 0));
         visited.Add(this);
@@ -326,13 +326,13 @@ public class PathPartition : IVoxelPartition
         // stop BFS either when queue empty or we’ve already found best=1
         while (q.Count > 0 && best > 1)
         {
-            (PathPartition part, byte dist) = q.Dequeue();
+            (SolidChartPartition part, byte dist) = q.Dequeue();
 
             // any neighbor that’s missing or blocked → candidate = dist+1
             for (int i = 0; i < part.Neighbors.Length; i++)
             {
                 byte nextDist = (byte)(dist + 1);
-                PathPartition nPart = part.Neighbors[i];
+                SolidChartPartition nPart = part.Neighbors[i];
 
                 // 1) missing or blocked → candidate radius = nextDist
                 if (nPart == null || !nPart.IsWalkable)
@@ -368,7 +368,7 @@ public class PathPartition : IVoxelPartition
     /// Registers the chart name as one that owns this partition.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void AddOwner(string mapName) => AddOwner(mapName, NavigationChartCell.Surface);
+    public void AddOwner(string mapName) => AddOwner(mapName, NavigationChartCell.Solid);
 
     /// <summary>
     /// Registers the chart name as one that owns this partition together with its authored cell metadata.

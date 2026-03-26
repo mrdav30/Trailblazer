@@ -1,6 +1,6 @@
 # Volume Traversal Reference
 
-This document explains Trailblazer's raw-volume traversal model, authored `VolumePartition` state, and the role of `VolumeTraversalRules` as a supplemental volume-membership layer.
+This document explains Trailblazer's raw-volume traversal model, authored `VolumeChartPartition` state, and the role of `VolumeMediumRules` as a supplemental volume-membership layer.
 
 Use this file when you need to understand:
 
@@ -14,9 +14,9 @@ If you need authored handoff registration, pair this with `TRANSITIONS.MD`.
 
 Relevant code:
 
-- `src/Trailblazer/Pathing/Support/Partition/VolumePartition.cs`
-- `src/Trailblazer/Pathing/Support/Volume/VolumeTraversalRules.cs`
-- `src/Trailblazer/Pathing/Support/Volume/VolumeTraversalMode.cs`
+- `src/Trailblazer/Pathing/Support/Partition/VolumeChartPartition.cs`
+- `src/Trailblazer/Pathing/Support/Volume/VolumeMediumRules.cs`
+- `src/Trailblazer/Navigation/Motor/Support/TraversalMedium.cs`
 - `src/Trailblazer/Pathing/Support/VoxelFinder/RawVoxelFinder.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
@@ -31,8 +31,8 @@ Surface pathing is great at answering:
 
 Raw volume traversal covers the other side of the world model:
 
-- open 3D travel
-- swimming through authored or host-defined water volume
+- free-flight through authored or host-defined gas volume
+- swimming through authored or host-defined liquid volume
 - detours through authored or explicitly configured 3D volume around blocked voxels
 - spaces where the important rule is "stay inside this medium" instead of "stay on this surface"
 
@@ -42,37 +42,37 @@ That is the job of Trailblazer's volume traversal flow.
 
 Volume traversal is built from four pieces:
 
-- authored `VolumePartition` state
-- `VolumeTraversalMode`
-- `VolumeTraversalRules`
+- authored `VolumeChartPartition` state
+- `TraversalMedium`
+- `VolumeMediumRules`
 - raw-volume resolution through `RawVoxelFinder` and `VolumeSurveyor`
 
-Current volume modes are:
+Current supported volume media are:
 
-- `Open`
-- `Water`
+- `Gas`
+- `Liquid`
 
 The key mental model is:
 
-- charts author which voxels contribute surface traversal, volume traversal, or both
-- `VolumePartition` says which authored raw voxels belong to a supported traversal medium
-- `VolumeTraversalRules` can supplement authored membership with host-specific logic on voxels that already belong to Trailblazer's runtime traversal world
+- charts author which voxels contribute solid traversal, volume traversal, or both
+- `VolumeChartPartition` says which authored raw voxels belong to a supported traversal medium
+- `VolumeMediumRules` can supplement authored membership with host-specific logic on voxels that already belong to Trailblazer's runtime traversal world
 - raw-volume pathing still respects blocked space and unit clearance
 
-## 3. `VolumeTraversalRules`
+## 3. `VolumeMediumRules`
 
-`VolumeTraversalRules` is the host-facing supplemental configuration point for constrained raw-volume traversal.
+`VolumeMediumRules` is the host-facing supplemental configuration point for constrained raw-volume traversal.
 
 Its public surface is:
 
-- `HasOpenVoxelRule`
-- `SetOpenVoxelPartition<TPartition>()`
-- `SetOpenVoxelRule(VoxelRule rule)`
-- `ClearOpenVoxelRule()`
-- `HasWaterVoxelRule`
-- `SetWaterVoxelPartition<TPartition>()`
-- `SetWaterVoxelRule(VoxelRule rule)`
-- `ClearWaterVoxelRule()`
+- `HasGasVoxelRule`
+- `SetGasVoxelPartition<TPartition>()`
+- `SetGasVoxelRule(VoxelRule rule)`
+- `ClearGasVoxelRule()`
+- `HasLiquidVoxelRule`
+- `SetLiquidVoxelPartition<TPartition>()`
+- `SetLiquidVoxelRule(VoxelRule rule)`
+- `ClearLiquidVoxelRule()`
 
 ### 3.1 What The Rules Actually Mean
 
@@ -83,13 +83,13 @@ They are an additional layer on top of:
 - voxel existence
 - blocked state
 - partition-backed clearance for the requested `UnitSize`
-- any authored `VolumePartition` state already attached to the voxel
+- any authored `VolumeChartPartition` state already attached to the voxel
 
 The current rule APIs are extend-only:
 
-- they can add open-volume or water-volume membership
-- they can opt `PathPartition`-only voxels into a volume medium
-- they do not suppress authored `VolumePartition` membership
+- they can add gas or liquid membership
+- they can opt `SolidChartPartition`-only voxels into a volume medium
+- they do not suppress authored `VolumeChartPartition` membership
 - removing a host rule returns a voxel to its authored/base state
 
 Host rules do not make fully unpartitioned voxels valid.
@@ -97,36 +97,36 @@ Host rules do not make fully unpartitioned voxels valid.
 In raw-volume code, a voxel must be both:
 
 - traversable
-- compatible with the requested `VolumeTraversalMode`
+- compatible with the requested `TraversalMedium`
 
-Trailblazer can answer "is this voxel authored open volume or authored water volume?" directly from chart initialization, while still letting hosts layer on engine-specific open-volume or water-volume logic when needed.
+Trailblazer can answer "is this voxel authored gas volume or authored liquid volume?" directly from chart initialization, while still letting hosts layer on engine-specific gas or liquid logic when needed.
 
-### 3.2 Open Versus Water
+### 3.2 Gas Versus Liquid
 
-`VolumeTraversalMode.Open`:
+`TraversalMedium.Gas`:
 
-- is configured when authored open volume exists or a host open rule exists
-- matches authored open-volume voxels directly
-- may also match host-defined open-volume voxels through `VolumeTraversalRules`
-- remains valid on authored open-volume voxels even if the host open rule is later removed
+- is configured when authored gas volume exists or a host gas rule exists
+- matches authored gas-volume voxels directly
+- may also match host-defined gas-volume voxels through `VolumeMediumRules`
+- remains valid on authored gas-volume voxels even if the host gas rule is later removed
 - never falls back to generic unauthored space
 - still respects blockers and clearance
 
-`VolumeTraversalMode.Water`:
+`TraversalMedium.Liquid`:
 
-- is configured when authored water volume exists or a host water rule exists
-- matches authored water voxels directly
-- may also match additional host-defined water voxels through `VolumeTraversalRules`
-- remains valid on authored water voxels even if the host water rule is later removed
+- is configured when authored liquid volume exists or a host liquid rule exists
+- matches authored liquid voxels directly
+- may also match additional host-defined liquid voxels through `VolumeMediumRules`
+- remains valid on authored liquid voxels even if the host liquid rule is later removed
 - still requires the voxel to belong to Trailblazer's runtime traversal world
 
 ### 3.3 Host Rule Configuration
 
-Use `SetOpenVoxelPartition<TPartition>()` or `SetWaterVoxelPartition<TPartition>()` when:
+Use `SetGasVoxelPartition<TPartition>()` or `SetLiquidVoxelPartition<TPartition>()` when:
 
 - your host already marks medium membership with a partition type
 
-Use `SetOpenVoxelRule(...)` or `SetWaterVoxelRule(...)` when:
+Use `SetGasVoxelRule(...)` or `SetLiquidVoxelRule(...)` when:
 
 - medium membership depends on custom logic beyond authored chart data
 - you want to supplement authored media instead of replacing it
@@ -134,28 +134,28 @@ Use `SetOpenVoxelRule(...)` or `SetWaterVoxelRule(...)` when:
 Examples:
 
 ```csharp
-VolumeTraversalRules.SetOpenVoxelPartition<MyOpenVolumePartition>();
-VolumeTraversalRules.SetWaterVoxelPartition<MyWaterPartition>();
+VolumeMediumRules.SetGasVoxelPartition<MyGasVolumePartition>();
+VolumeMediumRules.SetLiquidVoxelPartition<MyLiquidVolumePartition>();
 ```
 
 ```csharp
-VolumeTraversalRules.SetOpenVoxelRule(voxel =>
+VolumeMediumRules.SetGasVoxelRule(voxel =>
     voxel != null
-    && voxel.HasPartition<MyOpenVolumePartition>());
+    && voxel.HasPartition<MyGasVolumePartition>());
 
-VolumeTraversalRules.SetWaterVoxelRule(voxel =>
+VolumeMediumRules.SetLiquidVoxelRule(voxel =>
     voxel != null
-    && voxel.HasPartition<MyWaterPartition>());
+    && voxel.HasPartition<MyLiquidVolumePartition>());
 ```
 
 ### 3.4 Global Lifetime
 
-`VolumeTraversalRules` is static and global.
+`VolumeMediumRules` is static and global.
 
 Important lifecycle rules:
 
-- `PathManager.Reset()` clears the installed open and water rules
-- `PathManager.Reset()` also clears authored `VolumePartition` state by unloading charts
+- `PathManager.Reset()` clears the installed gas and liquid rules
+- `PathManager.Reset()` also clears authored `VolumeChartPartition` state by unloading charts
 - changing a host rule invalidates cached volume guides
 - unloading a chart invalidates only cached volume guides whose `ChartsUtilized` includes that chart
 - overlapping chart initialization invalidates cached volume guides for the already-active chart owners touched by the change
@@ -175,9 +175,9 @@ Instead it resolves endpoints against raw voxels and checks:
 
 - blocked state
 - unit clearance
-- traversal-mode match
-- authored `VolumePartition` state when present
-- `PathPartition` or `VolumePartition` presence before raw-volume traversal is even considered
+- traversal-medium match
+- authored `VolumeChartPartition` state when present
+- `SolidChartPartition` or `VolumeChartPartition` presence before raw-volume traversal is even considered
 
 ### 4.1 Endpoint Resolution Order
 
@@ -189,7 +189,7 @@ For a volume request, endpoint resolution is:
 
 Important nuance:
 
-- if the requested mode is not configured, endpoint resolution fails immediately
+- if the requested medium is not configured, endpoint resolution fails immediately
 - cached volume results record the chart owners used along the resolved raw path so local chart changes can invalidate only affected results
 
 ### 4.2 `allowUnwalkableEndNode` In Volume Requests
@@ -200,7 +200,7 @@ It can relax start or end acceptance, but it does not make the entire corridor i
 
 For direct-path validation, relaxed endpoints still have to:
 
-- match the requested `VolumeTraversalMode`
+- match the requested `TraversalMedium`
 
 Interior voxels still have to be truly traversable.
 
@@ -209,7 +209,7 @@ Interior voxels still have to be truly traversable.
 `RawVoxelFinder.IsTraversable(...)` combines:
 
 - base raw-voxel traversability
-- volume-mode filtering
+- volume-medium filtering
 
 Base traversability means:
 
@@ -217,8 +217,8 @@ Base traversability means:
 - it is not blocked
 - it has enough clearance for the requested `UnitSize`
 
-If a `VolumePartition` is present, volume traversal honors its authored membership and its clearance logic.
-If only a `PathPartition` is present, volume traversal still honors that partition's clearance logic.
+If a `VolumeChartPartition` is present, volume traversal honors its authored membership and its clearance logic.
+If only a `SolidChartPartition` is present, volume traversal still honors that partition's clearance logic.
 If neither partition is present, the voxel is rejected immediately.
 
 This is important in mixed worlds:
@@ -231,8 +231,8 @@ This is important in mixed worlds:
 Use `VolumePathRequest` when:
 
 - there is no meaningful surface route for the space
-- movement should stay inside a constrained or authored volume such as water
-- open-volume travel should detour around blockers using raw voxels
+- movement should stay inside a constrained or authored volume such as liquid
+- gas-volume travel should detour around blockers using raw voxels
 
 Examples:
 
@@ -241,7 +241,7 @@ var request = VolumePathRequest.Create(
     origin,
     destination,
     Fixed64.One,
-    traversalMode: VolumeTraversalMode.Open);
+    medium: TraversalMedium.Gas);
 ```
 
 ```csharp
@@ -249,13 +249,13 @@ var request = VolumePathRequest.Create(
     origin,
     destination,
     Fixed64.One,
-    traversalMode: VolumeTraversalMode.Water);
+    medium: TraversalMedium.Liquid);
 ```
 
 Important nuance:
 
-- water-mode creation succeeds when authored water volume exists or a host water rule exists
-- open-mode creation succeeds only when authored open volume exists or a host open rule exists
+- liquid request creation succeeds when authored liquid volume exists or a host liquid rule exists
+- gas request creation succeeds only when authored gas volume exists or a host gas rule exists
 
 ## 7. Why Complex Worlds Depend On This
 
@@ -275,7 +275,7 @@ Without authored or host-defined volume membership, you usually end up with one 
 
 ## 8. Relationship To Transitions
 
-`VolumeTraversalRules` and `TraversalTransitionRegistry` solve different problems, but they work together.
+`VolumeMediumRules` and `TraversalTransitionRegistry` solve different problems, but they work together.
 
 `TraversalTransitionRegistry` answers:
 
@@ -287,9 +287,9 @@ Volume traversal answers:
 
 For example:
 
-- `SwimEntry` and `SwimExit` transitions depend on `VolumeTraversalMode.Water`
-- those transitions are only useful when the intended volume voxels resolve as valid water
-- `Takeoff` and `Landing` can use `VolumeTraversalMode.Open`
+- `SwimEntry` and `SwimExit` transitions depend on `TraversalMedium.Liquid`
+- those transitions are only useful when the intended volume voxels resolve as valid liquid traversal
+- `Takeoff` and `Landing` can use `TraversalMedium.Gas`
 
 Important nuance:
 
@@ -298,25 +298,24 @@ Important nuance:
 
 ## 9. Usage Patterns
 
-### 9.1 Authored Water Volume
+### 9.1 Authored Liquid Volume
 
-If your chart authoring already produces `W` or `W!` cells, raw water traversal can work without any host rule.
+If your chart authoring already produces `L` or `L!` cells, raw liquid traversal can work without any host rule.
 
 ### 9.2 Supplemental Host Volume Logic
 
-Use `VolumeTraversalRules` when your world has additional open-volume or water-volume membership that is not authored through `NavigationChart`.
+Use `VolumeMediumRules` when your world has additional gas or liquid membership that is not authored through `NavigationChart`.
 
-### 9.3 Open-Volume Detour
+### 9.3 Gas-Volume Detour
 
-Use `VolumeTraversalMode.Open` when movement should stay chart-optional and 3D, but still avoid blocked voxels inside authored or explicitly configured open volume.
+Use `TraversalMedium.Gas` when movement should stay chart-optional and 3D, but still avoid blocked voxels inside authored or explicitly configured gas volume.
 
 ## 10. Common Gotchas
 
-- Charts can author water or open volume for you.
-- `VolumeTraversalMode.Open` still respects blockers and clearance.
-- `VolumeTraversalMode.Open` fails until valid authored or host-configured open membership exists.
-- `VolumeTraversalMode.Water` still fails until valid water membership exists.
-- `VolumeTraversalRules` is global static state.
+- Charts can author liquid or gas volume for you.
+- `TraversalMedium.Gas` and `TraversalMedium.Liquid` still respect blockers and clearance.
+- `TraversalMedium.Gas` and `TraversalMedium.Liquid` fail until valid authored or host-configured gas or liquid membership exists.
+- `VolumeMediumRules` is global static state.
 - `PathManager.Reset()` clears both host volume rules and authored volume partitions.
 - Volume traversal does not require charts, but it still depends on real voxels existing.
 - `allowUnwalkableEndNode` only relaxes endpoints; it does not make the whole route ignore blocked voxels.
@@ -325,8 +324,8 @@ Use `VolumeTraversalMode.Open` when movement should stay chart-optional and 3D, 
 
 If you are changing volume traversal behavior, inspect these files together:
 
-- `src/Trailblazer/Pathing/Support/Partition/VolumePartition.cs`
-- `src/Trailblazer/Pathing/Support/Volume/VolumeTraversalRules.cs`
+- `src/Trailblazer/Pathing/Support/Partition/VolumeChartPartition.cs`
+- `src/Trailblazer/Pathing/Support/Volume/VolumeMediumRules.cs`
 - `src/Trailblazer/Pathing/Support/VoxelFinder/RawVoxelFinder.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
@@ -343,7 +342,7 @@ High-risk changes include:
 
 - endpoint relaxation rules
 - direct-path validation in raw volume
-- mode matching versus base traversability
+- medium matching versus base traversability
 - cache invalidation for authored volume topology
 - reset behavior for global rules
 

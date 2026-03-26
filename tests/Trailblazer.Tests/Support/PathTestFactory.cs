@@ -33,7 +33,7 @@ public static class PathTestFactory
     public static NavigationChart RegisterSingleTraversalPoint(
         string mapName,
         Vector3d pos,
-        NavigationChartTraversalKinds traversalKinds)
+        TraversalMedia traversalKinds)
     {
         Vector3d minBounds = pos - new Vector3d(1, 1, 1);
         NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
@@ -47,13 +47,13 @@ public static class PathTestFactory
 
     public static NavigationChart RegisterGeneratedVolumePoint(
         Vector3d pos,
-        VolumeTraversalMode traversalMode,
+        TraversalMedium medium,
         string chartNamePrefix = "GeneratedVolume")
     {
         return RegisterSingleTraversalPoint(
             mapName: $"{chartNamePrefix}-{Interlocked.Increment(ref _generatedChartId)}",
             pos: pos,
-            traversalKinds: ToTraversalKinds(traversalMode));
+            traversalKinds: ToTraversalKinds(medium));
     }
 
     public static NavigationChart BuildSinglePointMap(string name, Vector3d worldPos)
@@ -66,13 +66,13 @@ public static class PathTestFactory
         return NavigationChart.From3D(name, data, minBounds, Fixed64.One);
     }
 
-    private static NavigationChartTraversalKinds ToTraversalKinds(VolumeTraversalMode traversalMode)
+    private static TraversalMedia ToTraversalKinds(TraversalMedium medium)
     {
-        return traversalMode switch
+        return medium switch
         {
-            VolumeTraversalMode.Open => NavigationChartTraversalKinds.OpenVolume,
-            VolumeTraversalMode.Water => NavigationChartTraversalKinds.WaterVolume,
-            _ => throw new ArgumentOutOfRangeException(nameof(traversalMode))
+            TraversalMedium.Gas => TraversalMedia.Gas,
+            TraversalMedium.Liquid => TraversalMedia.Liquid,
+            _ => throw new ArgumentOutOfRangeException(nameof(medium))
         };
     }
 }

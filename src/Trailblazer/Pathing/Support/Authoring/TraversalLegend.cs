@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Maps authoring tokens into chart cells and generated transition spaces.
+/// Maps authoring tokens into chart cells and generated transition media.
 /// </summary>
 public sealed class TraversalLegend
 {
@@ -19,13 +19,13 @@ public sealed class TraversalLegend
     public static TraversalLegend CreateBuiltIn()
     {
         var legend = new TraversalLegend();
-        // These tokens intentionally contribute no chart surface and no generated transition anchor.
+        // These tokens intentionally contribute no chart traversal and no generated transition anchor.
         legend.Register(string.Empty, TraversalLegendEntry.SkipCell());
         legend.Register(".", TraversalLegendEntry.SkipCell());
         legend.Register("X", TraversalLegendEntry.SkipCell());
-        legend.Register("L", TraversalLegendEntry.Chart(NavigationChartCell.Surface));
-        legend.Register("O", TraversalLegendEntry.OpenVolume());
-        legend.Register("W", TraversalLegendEntry.WaterVolume());
+        legend.Register("S", TraversalLegendEntry.Solid(NavigationChartCell.Solid));
+        legend.Register("G", TraversalLegendEntry.Gas());
+        legend.Register("L", TraversalLegendEntry.Liquid());
         return legend;
     }
 

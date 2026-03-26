@@ -10,7 +10,7 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Represents authored raw-volume traversal data attached to a voxel.
 /// </summary>
-public sealed class VolumePartition : IVoxelPartition
+public sealed class VolumeChartPartition : IVoxelPartition
 {
     private readonly SwiftHashSet<string> _chartOwners = new();
 
@@ -20,7 +20,7 @@ public sealed class VolumePartition : IVoxelPartition
 
     private int _chartPathCostModifier;
 
-    private NavigationChartTraversalKinds _volumeKinds;
+    private TraversalMedia _volumeKinds;
 
     /// <summary>
     /// The global coordinate of the voxel this partition is attached to.
@@ -73,7 +73,7 @@ public sealed class VolumePartition : IVoxelPartition
     public void OnRemoveFromVoxel(Voxel voxel)
     {
         voxel.OnObstacleChange -= HandleChange;
-        PathManager.VolumePartitionPool.Release(this);
+        PathManager.VolumeChartPartitionPool.Release(this);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -83,14 +83,14 @@ public sealed class VolumePartition : IVoxelPartition
     }
 
     /// <summary>
-    /// Returns true if this partition currently supports the requested raw volume traversal mode.
+    /// Returns true if this partition currently supports the requested raw volume traversal medium.
     /// </summary>
-    public bool SupportsTraversal(VolumeTraversalMode traversalMode)
+    public bool SupportsMedium(TraversalMedium medium)
     {
-        return traversalMode switch
+        return medium switch
         {
-            VolumeTraversalMode.Open => (_volumeKinds & NavigationChartTraversalKinds.OpenVolume) != 0,
-            VolumeTraversalMode.Water => (_volumeKinds & NavigationChartTraversalKinds.WaterVolume) != 0,
+            TraversalMedium.Gas => (_volumeKinds & TraversalMedia.Gas) != 0,
+            TraversalMedium.Liquid => (_volumeKinds & TraversalMedia.Liquid) != 0,
             _ => false
         };
     }
@@ -140,7 +140,7 @@ public sealed class VolumePartition : IVoxelPartition
         IsWalkable = false;
         PathCostModifier = 0;
         _chartPathCostModifier = 0;
-        _volumeKinds = NavigationChartTraversalKinds.None;
+        _volumeKinds = TraversalMedia.None;
         _chartOwners.Clear();
         _chartCells.Clear();
     }
@@ -159,12 +159,12 @@ public sealed class VolumePartition : IVoxelPartition
     private void RefreshChartMetadata()
     {
         _chartPathCostModifier = 0;
-        _volumeKinds = NavigationChartTraversalKinds.None;
+        _volumeKinds = TraversalMedia.None;
 
         foreach (NavigationChartCell cell in _chartCells.Values)
         {
             _chartPathCostModifier += cell.PathCostModifier;
-            _volumeKinds |= cell.TraversalKinds & NavigationChartTraversalKinds.AnyVolume;
+            _volumeKinds |= cell.TraversalKinds & TraversalMedia.AnyVolume;
         }
     }
 }

@@ -43,7 +43,7 @@ public class SwimLocomotionTests : IDisposable
     public void Given_ScoutEntersWater_When_Simulated_Then_ShouldTransitionToSwimming()
     {
         // Arrange
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
         // Act - First frame, still on ground
         TrailblazerManager.Simulate();
@@ -52,7 +52,7 @@ public class SwimLocomotionTests : IDisposable
         // 2nd Frame - Enter Water
         TrailblazerManager.Simulate();
 
-        agent.FrameCondition.Medium = TraversalMedium.Water;
+        agent.FrameCondition.Medium = TraversalMedium.Liquid;
         agent.FrameCondition.SurfaceLevel = agent.Position.y;
 
         agent.Simulate();
@@ -73,7 +73,7 @@ public class SwimLocomotionTests : IDisposable
 
         TrailblazerManager.Simulate();
 
-        agent.FrameCondition.Medium = TraversalMedium.Ground;
+        agent.FrameCondition.Medium = TraversalMedium.Solid;
 
         agent.Simulate();
 
@@ -224,7 +224,7 @@ public class SwimLocomotionTests : IDisposable
         var initialPosition = new Vector3d(0, -2, 0);
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: initialPosition,
-            startingMedium: TraversalMedium.Water);
+            startingMedium: TraversalMedium.Liquid);
         agent.Motor.Handler.Swim.IsSwimming = true;
 
         for (int i = 0; i < 10; i++) // Simulate swimming upwards
@@ -241,7 +241,7 @@ public class SwimLocomotionTests : IDisposable
     [Fact]
     public void Given_ScoutUnderwater_When_OutOfBreath_Then_ShouldTriggerDrowning()
     {
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, -5, 0), startingMedium: TraversalMedium.Water);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(0, -5, 0), startingMedium: TraversalMedium.Liquid);
 
         agent.Motor.Handler.Swim.HoldBreathTime = (Fixed64)3;
         agent.Motor.Handler.Swim.CanDrown = true;
@@ -313,11 +313,11 @@ public class SwimLocomotionTests : IDisposable
         {
             TrailblazerManager.Simulate();
             agent.Simulate();
-            if (agent.FrameCondition.Medium == TraversalMedium.Water)
+            if (agent.FrameCondition.Medium == TraversalMedium.Liquid)
                 break;
         }
 
-        agent.Motor.IsInWater.Should().BeTrue();
+        agent.Motor.IsInLiquid.Should().BeTrue();
         agent.Motor.Handler.Swim.IsSwimming.Should().BeTrue();
         stopBreach.Should().BeTrue();
     }

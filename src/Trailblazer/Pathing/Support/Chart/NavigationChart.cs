@@ -175,7 +175,7 @@ public class NavigationChart
         if (!TryGetCell(worldPos, out NavigationChartCell cell))
             return false;
 
-        return cell.HasSurface;
+        return cell.HasSolid;
     }
 
     /// <summary>
@@ -216,7 +216,7 @@ public class NavigationChart
                 for (int z = 0; z < SizeZ; z++)
                 {
                     NavigationChartCell cell = GetCell(x, y, z);
-                    if (cell.HasSurface)
+                    if (cell.HasSolid)
                     {
                         yield return (
                             new Vector3d(
@@ -342,7 +342,7 @@ public class NavigationChart
 
         var cells = new NavigationChartCell[map.Length];
         for (int i = 0; i < map.Length; i++)
-            cells[i] = map[i] ? NavigationChartCell.Surface : NavigationChartCell.Empty;
+            cells[i] = map[i] ? NavigationChartCell.Solid : NavigationChartCell.Empty;
 
         return cells;
     }

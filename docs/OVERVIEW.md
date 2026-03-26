@@ -13,7 +13,7 @@ See also:
 - `PATHING.MD` for a standalone guide to the `Trailblazer.Pathing` namespace
 - `PATHGUIDES.MD` for the runtime guide and guide-factory layer
 - `TRANSITIONS.MD` for authored handoffs between charts and raw volume
-- `VOLUMETRAVERSAL.MD` for raw-volume traversal modes and host rules
+- `VOLUMETRAVERSAL.MD` for raw-volume traversal media and host rules
 - `CHARTS.MD` for a deeper explanation of `NavigationChart` and the chart lifecycle
 - `SERIALIZATION.MD` for Trailblazer's current serialization coverage and runtime behavior
 - `../src/Trailblazer/Serialization/README.md` for the reusable Chronicler API reference
@@ -25,7 +25,7 @@ Trailblazer assumes:
 
 - world-space math uses `FixedMathSharp` types such as `Fixed64`, `Vector3d`, and `FixedQuaternion`
 - traversable space is represented by `GridForge` voxels
-- pathfinding is driven by `NavigationChart` data and `PathPartition` ownership
+- pathfinding is driven by `NavigationChart` data and `SolidChartPartition` ownership
 - simulation advances in deterministic fixed steps through `TrailblazerManager`
 
 At a high level, the runtime loop is:
@@ -54,7 +54,7 @@ Important details:
 
 - the chart itself is data only; it does not become queryable by pathfinding until it is registered and initialized
 - the chart uses flattened internal storage, but the public constructor/factory still works in 3D terms
-- charts can author both surface and raw-volume traversal data; runtime open-air and water routing still flow through `VolumePathRequest`
+- charts can author both solid and raw-volume traversal data; runtime gas and liquid routing still flow through `VolumePathRequest`
 - world bounds are derived from `MinBounds`, `Interval`, and the source array size
 
 ### 2.2 PathManager
@@ -129,12 +129,12 @@ Use `VolumePathRequest` when a navigator should travel through 3D voxel connecti
 
 Key traits:
 
-- it resolves through raw `GridForge.Voxel` connectivity while still honoring authored `VolumePartition` and `PathPartition` ownership
+- it resolves through raw `GridForge.Voxel` connectivity while still honoring authored `VolumeChartPartition` and `SolidChartPartition` ownership
 - it can stay in direct 3D travel when the corridor is clear
 - it can fall back to a cached volume waypoint guide when blockers force a detour
-- it supports both authored open-volume travel and constrained volumes such as water
-- constrained volume membership can come from authored chart cells, `VolumeTraversalRules`, or both
-- open-volume requests fail until authored open volume or a host open rule is configured
+- it supports both authored gas-volume travel and constrained volumes such as liquid
+- constrained volume membership can come from authored chart cells, `VolumeMediumRules`, or both
+- gas requests fail until authored gas volume or a host gas rule is configured
 
 Related support type:
 
@@ -156,7 +156,7 @@ Current behavior:
 - Setting `AllowTraversalTransitions` lets either request use internal staged fallback through authored `TraversalTransition` handoffs when direct chart routing is not enough.
 - That fallback does not change the caller's intent: an `AStarPathRequest` still means "route this as A*," and a `FlowFieldPathRequest` still means "route this as FlowField."
 - `Navigator` exposes the same policy for built-in guided travel through `GuidedAllowTraversalTransitions`.
-- For navigator-owned volume-first travel, that same opt-in also enables bounded swim-exit handoffs from water volume into a follow-up chart request and bounded aerial landing handoffs into chart-backed follow-up travel.
+- For navigator-owned volume-first travel, that same opt-in also enables bounded swim-exit handoffs from liquid volume into a follow-up chart request and bounded aerial landing handoffs into chart-backed follow-up travel.
 - The staged route is resolved internally from the request plus the live `TraversalTransitionRegistry`.
 - Surveyors stay single-mode; staged escalation happens above them.
 
@@ -170,7 +170,7 @@ Trailblazer separates raw path computation from runtime movement consumption.
 
 Surveyors build reusable results:
 
-- `AStarSurveyor` expands `PathPartition` nodes and produces waypoint trails
+- `AStarSurveyor` expands `SolidChartPartition` nodes and produces waypoint trails
 - `FlowFieldSurveyor` performs a reverse flood and produces directional field data
 - `VolumeSurveyor` expands raw voxel neighbors and produces 3D waypoint trails for chart-optional volume travel
 

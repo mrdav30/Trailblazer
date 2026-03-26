@@ -45,8 +45,8 @@ public class TraversalTransitionQueryTests : IDisposable
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "cross-grid-link",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(firstGridPosition),
-            destination: TraversalTransitionAnchor.Chart(secondGridPosition),
+            source: TraversalTransitionAnchor.Solid(firstGridPosition),
+            destination: TraversalTransitionAnchor.Solid(secondGridPosition),
             pathCostModifier: 2,
             isBidirectional: true)));
 
@@ -84,8 +84,8 @@ public class TraversalTransitionQueryTests : IDisposable
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "cache-refresh-a",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(source),
-            destination: TraversalTransitionAnchor.Chart(mid))));
+            source: TraversalTransitionAnchor.Solid(source),
+            destination: TraversalTransitionAnchor.Solid(mid))));
 
         TraversalTransition[] before = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(sourceVoxel.GridIndex);
         Assert.Single(before);
@@ -93,8 +93,8 @@ public class TraversalTransitionQueryTests : IDisposable
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "cache-refresh-b",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(mid),
-            destination: TraversalTransitionAnchor.Chart(end))));
+            source: TraversalTransitionAnchor.Solid(mid),
+            destination: TraversalTransitionAnchor.Solid(end))));
 
         TraversalTransition[] after = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(sourceVoxel.GridIndex);
         Assert.Equal(2, after.Length);
@@ -111,15 +111,15 @@ public class TraversalTransitionQueryTests : IDisposable
         var generated = new TraversalTransition(
             id: "generated-directed",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(source),
-            destination: TraversalTransitionAnchor.Chart(destination),
+            source: TraversalTransitionAnchor.Solid(source),
+            destination: TraversalTransitionAnchor.Solid(destination),
             pathCostModifier: 2);
 
         var manual = new TraversalTransition(
             id: "manual-directed",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(source),
-            destination: TraversalTransitionAnchor.Chart(destination),
+            source: TraversalTransitionAnchor.Solid(source),
+            destination: TraversalTransitionAnchor.Solid(destination),
             pathCostModifier: 2);
 
         Assert.True(TraversalTransitionRegistry.RegisterGenerated(generated));
@@ -144,14 +144,14 @@ public class TraversalTransitionQueryTests : IDisposable
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "stale-grid-a",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)))));
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)))));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "stale-grid-b",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)))));
+            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)))));
 
         GlobalGridManager.Reset();
         GlobalGridManager.Setup();

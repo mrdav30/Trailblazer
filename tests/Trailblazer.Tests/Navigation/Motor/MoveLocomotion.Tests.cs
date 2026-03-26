@@ -20,7 +20,7 @@ public class MoveLocomotionTests : IDisposable
     public void Given_When_ForceIsApplied_Then_VelocityShouldIncrease()
     {
         // Arrange
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
         Vector3d initialPosition = agent.Position;
         agent.FrameRequest = new()
@@ -46,7 +46,7 @@ public class MoveLocomotionTests : IDisposable
     public void Given_SmallMovements_When_Simulated_Then_PositionShouldAccumulateCorrectly()
     {
         // Arrange
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
         // Act - Apply movement over multiple frames
         for (int i = 0; i < 10; i++)
@@ -98,7 +98,7 @@ public class MoveLocomotionTests : IDisposable
     [Fact]
     public void Given_TraversalStarted_When_TryTraversalCalledAgainInSameFrame_Then_ShouldRemainPendingAndReturnFalse()
     {
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
         TrekRequest frameRequest = new()
         {
             Origin = agent.Position,
@@ -122,7 +122,7 @@ public class MoveLocomotionTests : IDisposable
     [Fact]
     public void Given_TraversalStarted_When_NextFrameStartsWithoutFinalize_Then_ShouldThrowExplicitError()
     {
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
         TrekRequest frameRequest = new()
         {
             Origin = agent.Position,
@@ -149,7 +149,7 @@ public class MoveLocomotionTests : IDisposable
     [Fact]
     public void Given_TraversalStarted_When_FinalizedOnLaterFrame_Then_ShouldThrowExplicitError()
     {
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
         TrekRequest frameRequest = new()
         {
             Origin = agent.Position,
@@ -180,7 +180,7 @@ public class MoveLocomotionTests : IDisposable
     [Fact]
     public void Given_StaleTraversal_When_AbortTraversalFrameCalled_Then_NextTraversalCanProceed()
     {
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
         TrekRequest frameRequest = new()
         {
             Origin = agent.Position,
@@ -212,7 +212,7 @@ public class MoveLocomotionTests : IDisposable
     [Fact]
     public void Given_AgentWhenNoInput_Then_VelocityShouldDecayToZero()
     {
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: new Vector3d(5, 0, 0), startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: new Vector3d(5, 0, 0), startingMedium: TraversalMedium.Solid);
 
         for (int i = 0; i < 100; i++) // Simulate multiple frames to test deceleration
         {
@@ -231,7 +231,7 @@ public class MoveLocomotionTests : IDisposable
         Vector3d iniitialVelocity = new(3, 0, 0);
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startVelocity: iniitialVelocity,
-            startingMedium: TraversalMedium.Ground);
+            startingMedium: TraversalMedium.Solid);
 
         agent.FrameRequest.Direction = new(-1, 0, 0);
         agent.FrameRequest.Rate = TrekRate.Moderate;
@@ -381,7 +381,7 @@ public class MoveLocomotionTests : IDisposable
     [Fact]
     public void Given_AgentOnFlatSurface_When_MovingForward_Then_ShouldMaintainSpeed()
     {
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
         agent.FrameRequest.Direction = Vector3d.Forward;
         agent.FrameRequest.Rate = TrekRate.Moderate;
@@ -403,7 +403,7 @@ public class MoveLocomotionTests : IDisposable
     public void Given_AgentMoving_When_StopRequested_Then_ShouldStopImmediately()
     {
         var initialVelocity = new Vector3d(5, 0, 0);
-        var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: initialVelocity, startingMedium: TraversalMedium.Ground);
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startVelocity: initialVelocity, startingMedium: TraversalMedium.Solid);
 
         agent.Simulate();
 
@@ -489,7 +489,7 @@ public class MoveLocomotionTests : IDisposable
     public void Given_ScoutGrounded_When_Moving_Then_ControlMultiplierShouldNotAffectSpeed()
     {
         var scout = MockMotorAgentTestFactory.CreateMockAgent(
-            startingMedium: TraversalMedium.Ground);
+            startingMedium: TraversalMedium.Solid);
         scout.Motor.Handler.Move.MaxSidewaysSpeed = (Fixed64)5;
 
         var speed = scout.Motor.MaxHoritzontalSpeedInDirection(

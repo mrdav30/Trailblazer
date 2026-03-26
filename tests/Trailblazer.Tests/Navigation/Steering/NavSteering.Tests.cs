@@ -181,7 +181,7 @@ public class NavSteeringTests : IDisposable
             new Vector3d(2, 0, 1),
             Fixed64.One,
             out VolumePathRequest request,
-            traversalMode: VolumeTraversalMode.Water).Should().BeTrue();
+            medium: TraversalMedium.Liquid).Should().BeTrue();
 
         steer.ApplyPathRequest(request);
 
@@ -859,11 +859,11 @@ public class NavSteeringTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "NavSteeringWater");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "NavSteeringWater");
     }
 
     private static void AddOpen(Vector3d position)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Open, "NavSteeringOpen");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "NavSteeringOpen");
     }
 }

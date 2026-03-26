@@ -8,9 +8,9 @@ using Xunit;
 namespace Trailblazer.Tests.Pathing;
 
 [Collection("PathingCollection")]
-public class PathPartitionHeapTests : IDisposable
+public class SolidChartPartitionHeapTests : IDisposable
 {
-    public PathPartitionHeapTests()
+    public SolidChartPartitionHeapTests()
     {
         if (GlobalGridManager.IsActive)
             GlobalGridManager.Reset();
@@ -33,12 +33,12 @@ public class PathPartitionHeapTests : IDisposable
     {
         var heap = new PathHeap();
 
-        PathPartition voxel = CreateAttachedPartition(Vector3d.Zero, pathCost: 1);
+        SolidChartPartition voxel = CreateAttachedPartition(Vector3d.Zero, pathCost: 1);
 
         heap.Add(voxel);
         Assert.Equal(1u, heap.HeapCount);
 
-        heap.RemoveFirst(out PathPartition removed);
+        heap.RemoveFirst(out SolidChartPartition removed);
         Assert.Equal(voxel, removed);
         Assert.Equal(0u, heap.HeapCount);
 
@@ -51,9 +51,9 @@ public class PathPartitionHeapTests : IDisposable
     {
         var heap = new PathHeap();
 
-        PathPartition a = CreateAttachedPartition(new Vector3d(0, 0, 0), pathCost: 30);
-        PathPartition b = CreateAttachedPartition(new Vector3d(1, 0, 0), pathCost: 20);
-        PathPartition c = CreateAttachedPartition(new Vector3d(2, 0, 0), pathCost: 10);
+        SolidChartPartition a = CreateAttachedPartition(new Vector3d(0, 0, 0), pathCost: 30);
+        SolidChartPartition b = CreateAttachedPartition(new Vector3d(1, 0, 0), pathCost: 20);
+        SolidChartPartition c = CreateAttachedPartition(new Vector3d(2, 0, 0), pathCost: 10);
 
         heap.Add(a);
         heap.Add(b);
@@ -70,23 +70,23 @@ public class PathPartitionHeapTests : IDisposable
     [Fact]
     public void PathCost_ShouldExpireWhenSurveyVersionAdvances()
     {
-        PathPartition partition = CreateAttachedPartition(Vector3d.Zero, pathCost: 7);
+        SolidChartPartition partition = CreateAttachedPartition(Vector3d.Zero, pathCost: 7);
         partition.PathCostModifier = 3;
 
         Assert.Equal(7, partition.PathCost);
         Assert.Equal(10, partition.PathCostTotal);
 
-        PathPartition.AdvancePathCostVersion();
+        SolidChartPartition.AdvancePathCostVersion();
 
         Assert.Equal(int.MaxValue, partition.PathCost);
         Assert.Equal(int.MaxValue, partition.PathCostTotal);
     }
 
-    private static PathPartition CreateAttachedPartition(Vector3d position, int pathCost)
+    private static SolidChartPartition CreateAttachedPartition(Vector3d position, int pathCost)
     {
         Assert.True(GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel));
 
-        var partition = new PathPartition
+        var partition = new SolidChartPartition
         {
         };
 

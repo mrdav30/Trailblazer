@@ -21,7 +21,7 @@ public class LocomotionCompositionTests : IDisposable
     public void Given_MinimalProfile_When_MotorIsCreated_Then_OnlyCoreLocomotionsAreInstalled()
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
-            startingMedium: TraversalMedium.Ground,
+            startingMedium: TraversalMedium.Solid,
             profile: LocomotionProfile.CreateMoveAndFallOnly());
 
         agent.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
@@ -41,7 +41,7 @@ public class LocomotionCompositionTests : IDisposable
         navigator.Setup(Vector3d.Zero);
         navigator.Initialize(new TrekCondition
         {
-            Medium = TraversalMedium.Ground,
+            Medium = TraversalMedium.Solid,
             SurfaceLevel = Fixed64.Zero,
             GroundState = new GroundCondition()
         });
@@ -62,7 +62,7 @@ public class LocomotionCompositionTests : IDisposable
         agent.Simulate();
 
         agent.Position.y.Should().Be(Fixed64.Zero);
-        agent.Motor.IsGrounded.Should().BeTrue();
+        agent.Motor.IsOnSolid.Should().BeTrue();
         agent.Motor.Handler.Jump.Should().BeNull();
     }
 
@@ -125,7 +125,7 @@ public class LocomotionCompositionTests : IDisposable
     public void RoundTrip_MinimalProfile_ShouldPreserveInstalledKinds(bool useMemoryPack)
     {
         var source = MockMotorAgentTestFactory.CreateMockAgent(
-            startingMedium: TraversalMedium.Ground,
+            startingMedium: TraversalMedium.Solid,
             profile: LocomotionProfile.CreateMoveAndFallOnly());
         source.Motor.Handler.Move.MaxFastSpeed = (Fixed64)2;
         source.Motor.Handler.Fall.IsFalling = true;

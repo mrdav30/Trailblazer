@@ -251,7 +251,7 @@ public static class VoxelFinder
             return false;
         }
 
-        voxel.TryGetPartition(out PathPartition partition);
+        voxel.TryGetPartition(out SolidChartPartition partition);
         return unitSize == GlobalGridManager.VoxelSize
             || !partition.IsImpassable(unitSize);
     }
@@ -260,14 +260,14 @@ public static class VoxelFinder
     private static bool IsBaseChartTraversable(Voxel voxel) =>
         voxel != null
         && !voxel.IsBlocked
-        && voxel.HasPartition<PathPartition>();
+        && voxel.HasPartition<SolidChartPartition>();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool RequiresSizeFallback(Voxel voxel, Fixed64 unitSize)
     {
         if (unitSize == GlobalGridManager.VoxelSize
             || !IsBaseChartTraversable(voxel)
-            || !voxel.TryGetPartition(out PathPartition partition))
+            || !voxel.TryGetPartition(out SolidChartPartition partition))
         {
             return false;
         }

@@ -22,7 +22,7 @@ public class FlyLocomotionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
-            startingMedium: TraversalMedium.Air);
+            startingMedium: TraversalMedium.Gas);
 
         agent.Motor.Handler.Fly.GravityCompensation = Fixed64.One;
 
@@ -40,7 +40,7 @@ public class FlyLocomotionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
-            startingMedium: TraversalMedium.Air);
+            startingMedium: TraversalMedium.Gas);
 
         agent.Motor.Handler.Fly.GravityCompensation = Fixed64.Half;
 
@@ -62,7 +62,7 @@ public class FlyLocomotionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
-            startingMedium: TraversalMedium.Air);
+            startingMedium: TraversalMedium.Gas);
 
         TrailblazerManager.Simulate();
         agent.FrameRequest.Direction = Vector3d.Down;
@@ -80,7 +80,7 @@ public class FlyLocomotionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
-            startingMedium: TraversalMedium.Air);
+            startingMedium: TraversalMedium.Gas);
 
         agent.Motor.Handler.Fly.GravityCompensation = Fixed64.One;
 
@@ -105,7 +105,7 @@ public class FlyLocomotionTests : IDisposable
     {
         var source = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
-            startingMedium: TraversalMedium.Air);
+            startingMedium: TraversalMedium.Gas);
         source.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)3;
         source.Motor.Handler.Fly.MaxAscendSpeed = (Fixed64)2;
         source.Motor.Handler.Fly.MaxDescendSpeed = (Fixed64)1.5f;
@@ -117,7 +117,7 @@ public class FlyLocomotionTests : IDisposable
 
         var target = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: Vector3d.Zero,
-            startingMedium: TraversalMedium.Ground);
+            startingMedium: TraversalMedium.Solid);
         PopulateRecord(target.Motor, payload, useMemoryPack);
 
         target.Motor.Handler.Fly.Should().NotBeNull();

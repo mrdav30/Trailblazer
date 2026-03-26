@@ -8,6 +8,10 @@ using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
 
+#if DEBUG
+using System.Diagnostics;
+#endif
+
 namespace Trailblazer.Navigation.Steering;
 
 /// <summary>
@@ -478,7 +482,7 @@ public class NavSteering : IRecordable
                         Destination,
                         _currentRequest.UnitSize,
                         _currentRequest.AllowUnwalkableEndNode,
-                        volumeRequest.TraversalMode,
+                        volumeRequest.Medium,
                         _currentRequest.StartNode,
                         _currentRequest.EndNode);
 
@@ -602,7 +606,7 @@ public class NavSteering : IRecordable
                 Destination,
                 _currentRequest.UnitSize,
                 _currentRequest.AllowUnwalkableEndNode,
-                volumeRequest.TraversalMode,
+                volumeRequest.Medium,
                 _currentRequest.StartNode,
                 _currentRequest.EndNode);
 
@@ -829,7 +833,7 @@ public class NavSteering : IRecordable
         Vector3d destination,
         Fixed64 unitSize,
         bool allowUnwalkableEndNode,
-        VolumeTraversalMode traversalMode = VolumeTraversalMode.Open,
+        TraversalMedium medium = TraversalMedium.Gas,
         Voxel startNode = null,
         Voxel endNode = null)
     {
@@ -838,7 +842,7 @@ public class NavSteering : IRecordable
             destination,
             unitSize,
             allowUnwalkableEndNode,
-            traversalMode,
+            medium,
             startNode,
             endNode);
     }

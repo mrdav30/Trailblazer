@@ -13,36 +13,36 @@ public readonly struct NavigationChartCell
     /// <summary>
     /// A reusable empty authored cell with no traversal data.
     /// </summary>
-    public static readonly NavigationChartCell Empty = new(NavigationChartTraversalKinds.None);
+    public static readonly NavigationChartCell Empty = new(TraversalMedia.None);
 
     /// <summary>
-    /// A reusable surface traversal cell with no additional authored metadata.
+    /// A reusable solid traversal cell with no additional authored metadata.
     /// </summary>
-    public static readonly NavigationChartCell Surface = new(NavigationChartTraversalKinds.Surface);
+    public static readonly NavigationChartCell Solid = new(TraversalMedia.Solid);
 
     #endregion
 
     #region Properties
 
     /// <summary>
-    /// Describes which authored traversal spaces this cell contributes to.
+    /// Describes which authored traversal media this cell contributes to.
     /// </summary>
-    public NavigationChartTraversalKinds TraversalKinds { get; }
+    public TraversalMedia TraversalKinds { get; }
 
     /// <summary>
     /// Returns true when this cell contributes any authored traversal data.
     /// </summary>
-    public bool HasTraversalData => TraversalKinds != NavigationChartTraversalKinds.None;
+    public bool HasTraversalData => TraversalKinds != TraversalMedia.None;
 
     /// <summary>
-    /// Returns true when this cell contributes chart-backed surface traversal.
+    /// Returns true when this cell contributes chart-backed solid traversal.
     /// </summary>
-    public bool HasSurface => (TraversalKinds & NavigationChartTraversalKinds.Surface) != 0;
+    public bool HasSolid => (TraversalKinds & TraversalMedia.Solid) != 0;
 
     /// <summary>
     /// Returns true when this cell contributes any authored raw-volume traversal data.
     /// </summary>
-    public bool HasVolume => (TraversalKinds & NavigationChartTraversalKinds.AnyVolume) != 0;
+    public bool HasVolume => (TraversalKinds & TraversalMedia.AnyVolume) != 0;
 
     /// <summary>
     /// An authored path cost adjustment applied when this cell initializes a live partition.
@@ -62,16 +62,16 @@ public readonly struct NavigationChartCell
     /// Creates a new chart cell payload.
     /// </summary>
     public NavigationChartCell(
-        NavigationChartTraversalKinds traversalKinds,
+        TraversalMedia traversalKinds,
         int pathCostModifier = 0,
         NavigationChartCellFlags flags = NavigationChartCellFlags.None)
     {
-        bool hasOpenVolume = (traversalKinds & NavigationChartTraversalKinds.OpenVolume) != 0;
-        bool hasWaterVolume = (traversalKinds & NavigationChartTraversalKinds.WaterVolume) != 0;
-        if (hasOpenVolume && hasWaterVolume)
+        bool hasGas = (traversalKinds & TraversalMedia.Gas) != 0;
+        bool hasLiquid = (traversalKinds & TraversalMedia.Liquid) != 0;
+        if (hasGas && hasLiquid)
         {
             throw new ArgumentException(
-                "A single authored cell cannot currently declare both open-volume and water-volume traversal.",
+                "A single authored cell cannot currently declare both gas and liquid traversal.",
                 nameof(traversalKinds));
         }
 
@@ -83,14 +83,15 @@ public readonly struct NavigationChartCell
     #endregion
 
     /// <summary>
-    /// Returns true when this cell contributes the requested raw volume traversal mode.
+    /// Returns true when this cell contributes the requested traversal medium.
     /// </summary>
-    public bool SupportsVolumeTraversal(VolumeTraversalMode traversalMode)
+    public bool SupportsMedium(TraversalMedium medium)
     {
-        return traversalMode switch
+        return medium switch
         {
-            VolumeTraversalMode.Open => (TraversalKinds & NavigationChartTraversalKinds.OpenVolume) != 0,
-            VolumeTraversalMode.Water => (TraversalKinds & NavigationChartTraversalKinds.WaterVolume) != 0,
+            TraversalMedium.Solid => (TraversalKinds & TraversalMedia.Solid) != 0,
+            TraversalMedium.Gas => (TraversalKinds & TraversalMedia.Gas) != 0,
+            TraversalMedium.Liquid => (TraversalKinds & TraversalMedia.Liquid) != 0,
             _ => false
         };
     }

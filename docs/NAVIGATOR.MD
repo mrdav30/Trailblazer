@@ -305,7 +305,7 @@ It:
 - optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`
 
-`GuidedAllowTraversalTransitions` controls whether the built-in chart-backed guided modes (`AStar` and `FlowField`) may fall back through authored `TraversalTransition` handoffs. It also allows bounded swim-exit style handoffs from water volume into a follow-up chart request when the requested target is chart-backed outside the active water volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route beats staying in open-volume travel. This keeps the public navigator surface on the existing guided modes instead of adding a separate hybrid mode.
+`GuidedAllowTraversalTransitions` controls whether the built-in chart-backed guided modes (`AStar` and `FlowField`) may fall back through authored `TraversalTransition` handoffs. It also allows bounded swim-exit style handoffs from liquid volume into a follow-up chart request when the requested target is chart-backed outside the active liquid volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route beats staying in gas-volume travel. This keeps the public navigator surface on the existing guided modes instead of adding a separate hybrid mode.
 
 While guided movement remains active:
 
@@ -313,9 +313,9 @@ While guided movement remains active:
 - `IsRequestingFlight` persists until changed or replaced by a different request
 - `IsRequestingJump` is still frame-scoped unless the host reissues it
 
-When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically. Steering may then travel directly through authored or explicitly configured open volume, acquire a volume guide if blockers force a detour inside that space, or hand off into a chart-backed follow-up route through an authored landing transition when transition fallback is enabled and the landing route is preferable.
+When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically. Steering may then travel directly through authored or explicitly configured gas volume, acquire a volume guide if blockers force a detour inside that space, or hand off into a chart-backed follow-up route through an authored landing transition when transition fallback is enabled and the landing route is preferable.
 
-When the selected path mode is `GuidedPathMode.Swim`, guided travel does not toggle a swim state. Swim remains medium-driven through `TrekCondition.Medium == TraversalMedium.Water`. The request simply uses the raw-volume pathing stack with authored water-volume cells, `VolumeTraversalRules`, or both providing the valid swim medium.
+When the selected path mode is `GuidedPathMode.Swim`, guided travel does not toggle a swim state. Swim remains medium-driven through `TrekCondition.Medium == TraversalMedium.Liquid`. The request simply uses the raw-volume pathing stack with authored liquid-volume cells, `VolumeMediumRules`, or both providing the valid swim medium.
 
 `GuidedPathMode.Aerial` and `GuidedPathMode.Swim` remain volume-first. `GuidedAllowTraversalTransitions` does not reinterpret those modes as a new hybrid navigator flow, although `Swim` can use a bounded authored exit handoff into a normal chart-backed request and `Aerial` can use a bounded authored landing handoff into chart-backed follow-up travel.
 
@@ -465,7 +465,7 @@ Prefer `SetGroundContact(...)`, `SetAirborne(...)`, or `SetWaterContact(...)` wh
 Concrete navigator types implement it to:
 
 - probe the world
-- determine ground, air, or water medium
+- determine solid, gas, or liquid medium
 - update surface normals and sampled platform data
 - set ceiling constraints
 - write the result into `_frameCondition`
@@ -573,7 +573,7 @@ navigator.Setup(
 
 navigator.Initialize(new TrekCondition
 {
-    Medium = TraversalMedium.Ground,
+    Medium = TraversalMedium.Solid,
     SurfaceLevel = Fixed64.Zero,
     GroundState = new GroundCondition()
 });

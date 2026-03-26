@@ -45,7 +45,7 @@ public class NavigatorSerializationTests : IDisposable
 
         string json = JsonRecordSerializer.Serialize(source.Motor, writeIndented: true);
 
-        var target = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(-2, 0, -2), startingMedium: TraversalMedium.Ground);
+        var target = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(-2, 0, -2), startingMedium: TraversalMedium.Solid);
         JsonRecordSerializer.Populate(target.Motor, json);
 
         AssertMotorStateMatches(source.Motor, target.Motor);
@@ -101,7 +101,7 @@ public class NavigatorSerializationTests : IDisposable
 
         byte[] data = MemoryPackRecordSerializer.Serialize(source.Motor);
 
-        var target = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(-2, 0, -2), startingMedium: TraversalMedium.Ground);
+        var target = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(-2, 0, -2), startingMedium: TraversalMedium.Solid);
         MemoryPackRecordSerializer.Populate(target.Motor, data);
 
         AssertMotorStateMatches(source.Motor, target.Motor);
@@ -351,7 +351,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
         target.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
-        ((VolumePathRequest)target.Steering.CurrentRequest).TraversalMode.Should().Be(VolumeTraversalMode.Water);
+        ((VolumePathRequest)target.Steering.CurrentRequest).Medium.Should().Be(TraversalMedium.Liquid);
 
         TrailblazerManager.Simulate();
         target.Simulate();
@@ -695,7 +695,7 @@ public class NavigatorSerializationTests : IDisposable
             size: size ?? (Fixed64)2);
         navigator.Initialize(new TrekCondition()
         {
-            Medium = TraversalMedium.Ground,
+            Medium = TraversalMedium.Solid,
             SurfaceLevel = Fixed64.Zero,
             GroundState = new GroundCondition()
         });
@@ -922,15 +922,15 @@ public class NavigatorSerializationTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "transition-fallback-entry",
             type: TraversalTransitionType.SwimEntry,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.WaterVolume(new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Liquid(new Vector3d(1, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "transition-fallback-exit",
             type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.WaterVolume(new Vector3d(3, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            source: TraversalTransitionAnchor.Liquid(new Vector3d(3, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
     }
 
@@ -954,8 +954,8 @@ public class NavigatorSerializationTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{chartKey}-exit",
             type: TraversalTransitionType.SwimExit,
-            source: TraversalTransitionAnchor.WaterVolume(new Vector3d(2, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)),
+            source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
     }
 
@@ -971,15 +971,15 @@ public class NavigatorSerializationTests : IDisposable
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
             type: TraversalTransitionType.Landing,
-            source: TraversalTransitionAnchor.OpenVolume(new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-chart-hop",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(4, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
     }
 
@@ -1151,7 +1151,7 @@ public class NavigatorSerializationTests : IDisposable
                 && actual.CurrentRequest is VolumePathRequest actualVolume)
             {
                 actualVolume.Heuristic.Should().Be(expectedVolume.Heuristic);
-                actualVolume.TraversalMode.Should().Be(expectedVolume.TraversalMode);
+                actualVolume.Medium.Should().Be(expectedVolume.Medium);
             }
 
             if (expected.CurrentRequest is HybridPathRequest expectedHybrid
@@ -1210,12 +1210,12 @@ public class NavigatorSerializationTests : IDisposable
 
     private static void AddWater(Vector3d position)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Water, "NavigatorSerializationWater");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "NavigatorSerializationWater");
     }
 
     private static void AddOpen(Vector3d position)
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, VolumeTraversalMode.Open, "NavigatorSerializationOpen");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "NavigatorSerializationOpen");
     }
 
     private static void AssertTurningStateMatches(NavTurning expected, NavTurning actual)

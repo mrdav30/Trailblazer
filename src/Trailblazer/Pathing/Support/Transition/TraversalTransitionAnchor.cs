@@ -12,9 +12,9 @@ namespace Trailblazer.Pathing;
 public readonly struct TraversalTransitionAnchor
 {
     /// <summary>
-    /// Identifies the traversal space this anchor belongs to.
+    /// Identifies the traversal medium this anchor belongs to.
     /// </summary>
-    public TraversalTransitionAnchorSpace Space { get; }
+    public TraversalMedium Medium { get; }
 
     /// <summary>
     /// The canonical voxel identity this anchor resolves through.
@@ -39,108 +39,108 @@ public readonly struct TraversalTransitionAnchor
         : GetVoxelWorldPosition(VoxelIndex);
 
     /// <summary>
-    /// Creates a chart-backed anchor for the provided voxel index.
+    /// Creates a solid anchor for the provided voxel index.
     /// </summary>
-    public static TraversalTransitionAnchor Chart(GlobalVoxelIndex voxelIndex) =>
-        Create(TraversalTransitionAnchorSpace.Chart, voxelIndex);
+    public static TraversalTransitionAnchor Solid(GlobalVoxelIndex voxelIndex) =>
+        Create(TraversalMedium.Solid, voxelIndex);
 
     /// <summary>
-    /// Creates a chart-backed anchor for the provided voxel index with an explicit world-space point override.
+    /// Creates a solid anchor for the provided voxel index with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor Chart(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
-        Create(TraversalTransitionAnchorSpace.Chart, voxelIndex, pointOverride, hasPointOverride: true);
+    public static TraversalTransitionAnchor Solid(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
+        Create(TraversalMedium.Solid, voxelIndex, pointOverride, hasPointOverride: true);
 
     /// <summary>
-    /// Creates a chart-backed anchor at the provided world position.
+    /// Creates a solid anchor at the provided world position.
     /// </summary>
-    public static TraversalTransitionAnchor Chart(Vector3d position) =>
-        CreateFromPosition(TraversalTransitionAnchorSpace.Chart, position);
+    public static TraversalTransitionAnchor Solid(Vector3d position) =>
+        CreateFromPosition(TraversalMedium.Solid, position);
 
     /// <summary>
-    /// Creates a chart-backed anchor with an explicit world-space point override.
+    /// Creates a solid anchor with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor Chart(Vector3d position, Vector3d pointOverride) =>
-        CreateFromPosition(TraversalTransitionAnchorSpace.Chart, position, pointOverride, hasPointOverride: true);
+    public static TraversalTransitionAnchor Solid(Vector3d position, Vector3d pointOverride) =>
+        CreateFromPosition(TraversalMedium.Solid, position, pointOverride, hasPointOverride: true);
 
     /// <summary>
-    /// Creates an open-volume anchor for the provided voxel index.
+    /// Creates a gas anchor for the provided voxel index.
     /// </summary>
-    public static TraversalTransitionAnchor OpenVolume(GlobalVoxelIndex voxelIndex) =>
-        Create(TraversalTransitionAnchorSpace.OpenVolume, voxelIndex);
+    public static TraversalTransitionAnchor Gas(GlobalVoxelIndex voxelIndex) =>
+        Create(TraversalMedium.Gas, voxelIndex);
 
     /// <summary>
-    /// Creates an open-volume anchor for the provided voxel index with an explicit world-space point override.
+    /// Creates a gas anchor for the provided voxel index with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor OpenVolume(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
-        Create(TraversalTransitionAnchorSpace.OpenVolume, voxelIndex, pointOverride, hasPointOverride: true);
+    public static TraversalTransitionAnchor Gas(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
+        Create(TraversalMedium.Gas, voxelIndex, pointOverride, hasPointOverride: true);
 
     /// <summary>
-    /// Creates an open-volume anchor at the provided world position.
+    /// Creates a gas anchor at the provided world position.
     /// </summary>
-    public static TraversalTransitionAnchor OpenVolume(Vector3d position) =>
-        CreateFromPosition(TraversalTransitionAnchorSpace.OpenVolume, position);
+    public static TraversalTransitionAnchor Gas(Vector3d position) =>
+        CreateFromPosition(TraversalMedium.Gas, position);
 
     /// <summary>
-    /// Creates an open-volume anchor with an explicit world-space point override.
+    /// Creates a gas anchor with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor OpenVolume(Vector3d position, Vector3d pointOverride) =>
-        CreateFromPosition(TraversalTransitionAnchorSpace.OpenVolume, position, pointOverride, hasPointOverride: true);
+    public static TraversalTransitionAnchor Gas(Vector3d position, Vector3d pointOverride) =>
+        CreateFromPosition(TraversalMedium.Gas, position, pointOverride, hasPointOverride: true);
 
     /// <summary>
-    /// Creates a water-volume anchor for the provided voxel index.
+    /// Creates a liquid anchor for the provided voxel index.
     /// </summary>
-    public static TraversalTransitionAnchor WaterVolume(GlobalVoxelIndex voxelIndex) =>
-        Create(TraversalTransitionAnchorSpace.WaterVolume, voxelIndex);
+    public static TraversalTransitionAnchor Liquid(GlobalVoxelIndex voxelIndex) =>
+        Create(TraversalMedium.Liquid, voxelIndex);
 
     /// <summary>
-    /// Creates a water-volume anchor for the provided voxel index with an explicit world-space point override.
+    /// Creates a liquid anchor for the provided voxel index with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor WaterVolume(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
-        Create(TraversalTransitionAnchorSpace.WaterVolume, voxelIndex, pointOverride, hasPointOverride: true);
+    public static TraversalTransitionAnchor Liquid(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
+        Create(TraversalMedium.Liquid, voxelIndex, pointOverride, hasPointOverride: true);
 
     /// <summary>
-    /// Creates a water-volume anchor at the provided world position.
+    /// Creates a liquid anchor at the provided world position.
     /// </summary>
-    public static TraversalTransitionAnchor WaterVolume(Vector3d position) =>
-        CreateFromPosition(TraversalTransitionAnchorSpace.WaterVolume, position);
+    public static TraversalTransitionAnchor Liquid(Vector3d position) =>
+        CreateFromPosition(TraversalMedium.Liquid, position);
 
     /// <summary>
-    /// Creates a water-volume anchor with an explicit world-space point override.
+    /// Creates a liquid anchor with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor WaterVolume(Vector3d position, Vector3d pointOverride) =>
-        CreateFromPosition(TraversalTransitionAnchorSpace.WaterVolume, position, pointOverride, hasPointOverride: true);
+    public static TraversalTransitionAnchor Liquid(Vector3d position, Vector3d pointOverride) =>
+        CreateFromPosition(TraversalMedium.Liquid, position, pointOverride, hasPointOverride: true);
 
     /// <summary>
-    /// Returns true when this anchor belongs to any raw-volume traversal space.
+    /// Returns true when this anchor belongs to any raw-volume traversal medium.
     /// </summary>
-    public bool IsVolumeSpace => Space != TraversalTransitionAnchorSpace.Chart;
+    public bool IsVolumeMedium => Medium == TraversalMedium.Gas || Medium == TraversalMedium.Liquid;
 
     /// <summary>
-    /// Attempts to convert this anchor's traversal space into a raw volume traversal mode.
+    /// Attempts to get the volume medium carried by this anchor.
     /// </summary>
-    public bool TryGetVolumeTraversalMode(out VolumeTraversalMode volumeMode)
+    public bool TryGetVolumeMedium(out TraversalMedium volumeMedium)
     {
-        switch (Space)
+        switch (Medium)
         {
-            case TraversalTransitionAnchorSpace.OpenVolume:
-                volumeMode = VolumeTraversalMode.Open;
+            case TraversalMedium.Gas:
+                volumeMedium = TraversalMedium.Gas;
                 return true;
-            case TraversalTransitionAnchorSpace.WaterVolume:
-                volumeMode = VolumeTraversalMode.Water;
+            case TraversalMedium.Liquid:
+                volumeMedium = TraversalMedium.Liquid;
                 return true;
             default:
-                volumeMode = VolumeTraversalMode.Open;
+                volumeMedium = TraversalMedium.Unknown;
                 return false;
         }
     }
 
     private TraversalTransitionAnchor(
-        TraversalTransitionAnchorSpace space,
+        TraversalMedium medium,
         GlobalVoxelIndex voxelIndex,
         Vector3d pointOverride = default,
         bool hasPointOverride = false)
     {
-        Space = space;
+        Medium = medium;
         VoxelIndex = voxelIndex;
         HasPointOverride = hasPointOverride;
         PointOverride = pointOverride;
@@ -159,7 +159,7 @@ public readonly struct TraversalTransitionAnchor
     }
 
     private static TraversalTransitionAnchor CreateFromPosition(
-        TraversalTransitionAnchorSpace space,
+        TraversalMedium medium,
         Vector3d position,
         Vector3d pointOverride = default,
         bool hasPointOverride = false)
@@ -171,11 +171,11 @@ public readonly struct TraversalTransitionAnchor
                 nameof(position));
         }
 
-        return Create(space, voxelIndex, pointOverride, hasPointOverride);
+        return Create(medium, voxelIndex, pointOverride, hasPointOverride);
     }
 
     private static TraversalTransitionAnchor Create(
-        TraversalTransitionAnchorSpace space,
+        TraversalMedium medium,
         GlobalVoxelIndex voxelIndex,
         Vector3d pointOverride = default,
         bool hasPointOverride = false)
@@ -187,7 +187,7 @@ public readonly struct TraversalTransitionAnchor
                 nameof(pointOverride));
         }
 
-        return new TraversalTransitionAnchor(space, voxelIndex, pointOverride, hasPointOverride);
+        return new TraversalTransitionAnchor(medium, voxelIndex, pointOverride, hasPointOverride);
     }
 
     private static bool PointOverrideMatchesVoxel(GlobalVoxelIndex voxelIndex, Vector3d pointOverride)

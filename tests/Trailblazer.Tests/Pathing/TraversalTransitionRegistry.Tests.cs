@@ -39,8 +39,8 @@ public class TraversalTransitionRegistryTests : IDisposable
         var transition = new TraversalTransition(
             id: "jump-link",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(source),
-            destination: TraversalTransitionAnchor.Chart(destination),
+            source: TraversalTransitionAnchor.Solid(source),
+            destination: TraversalTransitionAnchor.Solid(destination),
             pathCostModifier: 3,
             isBidirectional: true);
 
@@ -77,16 +77,16 @@ public class TraversalTransitionRegistryTests : IDisposable
         var transition = new TraversalTransition(
             id: "shoreline-entry",
             type: TraversalTransitionType.SwimEntry,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.WaterVolume(new Vector3d(0, 0, 1)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Liquid(new Vector3d(0, 0, 1)),
             pathCostModifier: 2);
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
         Assert.True(TraversalTransitionRegistry.TryGet("shoreline-entry", out TraversalTransition storedTransition));
-        Assert.Equal(TraversalTransitionAnchorSpace.Chart, storedTransition.Source.Space);
-        Assert.Equal(TraversalTransitionAnchorSpace.WaterVolume, storedTransition.Destination.Space);
-        Assert.True(storedTransition.Destination.TryGetVolumeTraversalMode(out VolumeTraversalMode volumeMode));
-        Assert.Equal(VolumeTraversalMode.Water, volumeMode);
+        Assert.Equal(TraversalMedium.Solid, storedTransition.Source.Medium);
+        Assert.Equal(TraversalMedium.Liquid, storedTransition.Destination.Medium);
+        Assert.True(storedTransition.Destination.TryGetVolumeMedium(out TraversalMedium volumeMode));
+        Assert.Equal(TraversalMedium.Liquid, volumeMode);
     }
 
     [Fact]
@@ -105,8 +105,8 @@ public class TraversalTransitionRegistryTests : IDisposable
         var transition = new TraversalTransition(
             id: "voxel-override",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(sourceVoxel.WorldPosition, pointOverride),
-            destination: TraversalTransitionAnchor.Chart(destinationVoxel.WorldPosition));
+            source: TraversalTransitionAnchor.Solid(sourceVoxel.WorldPosition, pointOverride),
+            destination: TraversalTransitionAnchor.Solid(destinationVoxel.WorldPosition));
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
         Assert.True(TraversalTransitionRegistry.TryGet("voxel-override", out TraversalTransition storedTransition));
@@ -128,13 +128,13 @@ public class TraversalTransitionRegistryTests : IDisposable
     public void ChartAnchor_ShouldRejectPointOverridesOutsideTheResolvedVoxel()
     {
         Assert.Throws<ArgumentException>(() =>
-            TraversalTransitionAnchor.Chart(Vector3d.Zero, new Vector3d(1, 0, 0)));
+            TraversalTransitionAnchor.Solid(Vector3d.Zero, new Vector3d(1, 0, 0)));
     }
 
     [Fact]
     public void ChartAnchor_ShouldRejectMissingVoxelPositions()
     {
-        Assert.Throws<ArgumentException>(() => TraversalTransitionAnchor.Chart(new Vector3d(64, 0, 0)));
+        Assert.Throws<ArgumentException>(() => TraversalTransitionAnchor.Solid(new Vector3d(64, 0, 0)));
     }
 
     [Fact]
@@ -143,8 +143,8 @@ public class TraversalTransitionRegistryTests : IDisposable
         var valid = new TraversalTransition(
             id: "duplicate-check",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)));
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
 
         Assert.True(TraversalTransitionRegistry.Register(valid));
         Assert.False(TraversalTransitionRegistry.Register(valid));
@@ -156,15 +156,15 @@ public class TraversalTransitionRegistryTests : IDisposable
         var first = new TraversalTransition(
             id: "manual-duplicate-a",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 3);
 
         var duplicate = new TraversalTransition(
             id: "manual-duplicate-b",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero, Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0), new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero, Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0), new Vector3d(1, 0, 0)),
             pathCostModifier: 3);
 
         Assert.True(TraversalTransitionRegistry.Register(first));
@@ -189,14 +189,14 @@ public class TraversalTransitionRegistryTests : IDisposable
         var defaultTransition = new TraversalTransition(
             id: "point-default",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)));
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
 
         var offsetTransition = new TraversalTransition(
             id: "point-offset",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero, pointOverride),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)));
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero, pointOverride),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
 
         Assert.True(TraversalTransitionRegistry.Register(defaultTransition));
         Assert.True(TraversalTransitionRegistry.Register(offsetTransition));
@@ -215,15 +215,15 @@ public class TraversalTransitionRegistryTests : IDisposable
         var first = new TraversalTransition(
             id: "generated-a",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 2);
 
         var second = new TraversalTransition(
             id: "generated-b",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 2);
 
         Assert.True(TraversalTransitionRegistry.RegisterGenerated(first));
@@ -246,15 +246,15 @@ public class TraversalTransitionRegistryTests : IDisposable
         var generated = new TraversalTransition(
             id: "generated-link",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 1);
 
         var manual = new TraversalTransition(
             id: "manual-link",
             type: TraversalTransitionType.Jump,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 1);
 
         Assert.True(TraversalTransitionRegistry.RegisterGenerated(generated));
@@ -279,8 +279,8 @@ public class TraversalTransitionRegistryTests : IDisposable
         var transition = new TraversalTransition(
             id: "reset-check",
             type: TraversalTransitionType.Takeoff,
-            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
-            destination: TraversalTransitionAnchor.OpenVolume(new Vector3d(0, 1, 0)));
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Gas(new Vector3d(0, 1, 0)));
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
         Assert.NotEmpty(TraversalTransitionRegistry.AllTransitions);

@@ -61,7 +61,7 @@ public class AStarSurveyor
 
     private readonly SwiftDictionary<Voxel, AStarVoxelMeta> _meta = new();
 
-    private readonly SwiftList<PathPartition> _rawPath = new();
+    private readonly SwiftList<SolidChartPartition> _rawPath = new();
 
     private readonly SwiftList<AStarWaypoint> _waypoints = new();
 
@@ -88,7 +88,7 @@ public class AStarSurveyor
         {
             if (request == null
                 || request.HasZeroDisplacement
-                || !request.StartNode.TryGetPartition(out PathPartition startPartition))
+                || !request.StartNode.TryGetPartition(out SolidChartPartition startPartition))
             {
                 return AStarSurveyResult.Empty;
             }
@@ -100,7 +100,7 @@ public class AStarSurveyor
             _rawPath.FastClear();
             _waypoints.FastClear();
             _chartKeys.Clear();
-            PathPartition.AdvancePathCostVersion();
+            SolidChartPartition.AdvancePathCostVersion();
 
             // Trace path from the start to the end
             _meta.Add(_request.StartNode, new());
@@ -129,7 +129,7 @@ public class AStarSurveyor
     {
         int iterations = 0;
         int searchSize = _request.MaxPathSearchRange;
-        while (_heap.RemoveFirst(out PathPartition currentPartition)
+        while (_heap.RemoveFirst(out SolidChartPartition currentPartition)
             && iterations++ < searchSize)
         {
             if (currentPartition.Voxel == _request.EndNode)
@@ -148,7 +148,7 @@ public class AStarSurveyor
     /// Indicates whether straight and diagonal neighbor voxels should be processed during pathfinding.
     /// </summary>
     /// <returns>True if any neighbor is the target destination.</returns>
-    private bool ProcessNeighbors(PathPartition current)
+    private bool ProcessNeighbors(SolidChartPartition current)
     {
         if (!_meta.TryGetValue(current.Voxel, out AStarVoxelMeta data))
             return false;
@@ -161,11 +161,11 @@ public class AStarSurveyor
         return false;
     }
 
-    private bool TryProcessDirection(PathPartition current, SpatialDirection[] directions, int cost, bool checkEdges = false)
+    private bool TryProcessDirection(SolidChartPartition current, SpatialDirection[] directions, int cost, bool checkEdges = false)
     {
         foreach (SpatialDirection dir in directions)
         {
-            PathPartition neighbor = current.Neighbors[(int)dir];
+            SolidChartPartition neighbor = current.Neighbors[(int)dir];
             if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request.UnitSize))
                 continue;
 
@@ -180,7 +180,7 @@ public class AStarSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool HasValidDiagonalLegs(PathPartition current, SpatialDirection diagonal)
+    private bool HasValidDiagonalLegs(SolidChartPartition current, SpatialDirection diagonal)
     {
         (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
@@ -197,9 +197,9 @@ public class AStarSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool IsLegClear(PathPartition current, SpatialDirection legDir)
+    private bool IsLegClear(SolidChartPartition current, SpatialDirection legDir)
     {
-        PathPartition leg = current.Neighbors[(int)legDir];
+        SolidChartPartition leg = current.Neighbors[(int)legDir];
         return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request.UnitSize);
     }
 
@@ -208,8 +208,8 @@ public class AStarSurveyor
     /// </summary>
     /// <returns>True if the neighbor is the target destination.</returns>
     private bool ProcessNeighbor(
-        PathPartition current,
-        PathPartition neighbor,
+        SolidChartPartition current,
+        SolidChartPartition neighbor,
         int cost)
     {
         // Skip neighbors that have a height difference greater than the allowed maximum
@@ -248,7 +248,7 @@ public class AStarSurveyor
     /// <param name="nextTrailCoordinates">The coordinates of the parent partition leading to this one.</param>
     /// <param name="movementCost">The cumulative movement cost to this partition.</param>
     private void SetPathPartitionData(
-        PathPartition partition,
+        SolidChartPartition partition,
         GlobalVoxelIndex nextTrailCoordinates,
         int movementCost)
     {
@@ -277,7 +277,7 @@ public class AStarSurveyor
         Voxel current = _request.EndNode;
         while (current != _request.StartNode)
         {
-            PathPartition currentPartition = current.GetPartitionOrDefault<PathPartition>();
+            SolidChartPartition currentPartition = current.GetPartitionOrDefault<SolidChartPartition>();
             _rawPath.Insert(0, currentPartition);
 
             if (!_meta.TryGetValue(current, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
@@ -290,7 +290,7 @@ public class AStarSurveyor
         }
 
         // Ensure start position is included
-        PathPartition startPartition = _request.StartNode.GetPartitionOrDefault<PathPartition>();
+        SolidChartPartition startPartition = _request.StartNode.GetPartitionOrDefault<SolidChartPartition>();
         _rawPath.Insert(0, startPartition);
     }
 
@@ -305,7 +305,7 @@ public class AStarSurveyor
             return;
 
         _waypoints.EnsureCapacity(_rawPath.Count);
-        PathPartition start = _rawPath[0];
+        SolidChartPartition start = _rawPath[0];
         _waypoints.Add(new()
         {
             Position = start.VoxelPosition,
@@ -340,7 +340,7 @@ public class AStarSurveyor
             ChartOwnerUtility.AddOwners(_chartKeys, _rawPath[i].ChartOwners);
         }
 
-        PathPartition end = _rawPath.FromEnd(1);
+        SolidChartPartition end = _rawPath.FromEnd(1);
         _waypoints.Add(new()
         {
             Position = end.VoxelPosition,

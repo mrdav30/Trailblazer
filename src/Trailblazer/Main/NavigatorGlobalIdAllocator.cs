@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace Trailblazer.Navigation;
+namespace Trailblazer;
 
 /// <summary>
 /// Allocates deterministic navigator ids for the current Trailblazer runtime session.

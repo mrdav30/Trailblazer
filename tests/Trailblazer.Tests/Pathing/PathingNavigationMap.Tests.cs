@@ -737,6 +737,132 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void OverlappingChartInitialize_ShouldInvalidateOnlyDependentAStarCacheEntries()
+    {
+        var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        bool[,,] data = CreateThreeVoxelLine();
+
+        PathTestFactory.RegisterFromData("OverlappedAStarChart", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData("UnrelatedAStarChart", data, new Vector3d(-6, 0, 0));
+
+        AStarPathRequest overlappedRequest = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            HeuristicMethod.Euclidean);
+        AStarPathRequest unrelatedRequest = AStarPathRequest.Create(
+            new Vector3d(-6, 0, 0),
+            new Vector3d(-4, 0, 0),
+            Fixed64.One,
+            HeuristicMethod.Euclidean);
+
+        Assert.NotNull(overlappedRequest);
+        Assert.NotNull(unrelatedRequest);
+        Assert.True(PathGuideFactory.RequestGuide(overlappedRequest, out AStarGuide overlappedGuide));
+        Assert.True(PathGuideFactory.RequestGuide(unrelatedRequest, out AStarGuide unrelatedGuide));
+
+        PathGuideFactory.ReturnGuide(overlappedGuide);
+        PathGuideFactory.ReturnGuide(unrelatedGuide);
+
+        Assert.Equal(2, PathGuideFactory.ActiveAStarGuideCount);
+
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("OverlapAStarChart", new Vector3d(1, 0, 0)));
+        PathManager.InitializeChart("OverlapAStarChart");
+
+        Assert.Equal(1, PathGuideFactory.ActiveAStarGuideCount);
+
+        PathManager.UnloadChart("UnrelatedAStarChart");
+
+        Assert.Equal(0, PathGuideFactory.ActiveAStarGuideCount);
+    }
+
+    [Fact]
+    public void OverlappingChartInitialize_ShouldInvalidateOnlyDependentFlowFieldCacheEntries()
+    {
+        var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        bool[,,] data = CreateThreeVoxelLine();
+
+        PathTestFactory.RegisterFromData("OverlappedFlowChart", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData("UnrelatedFlowChart", data, new Vector3d(-6, 0, 0));
+
+        FlowFieldPathRequest overlappedRequest = FlowFieldPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One);
+        FlowFieldPathRequest unrelatedRequest = FlowFieldPathRequest.Create(
+            new Vector3d(-6, 0, 0),
+            new Vector3d(-4, 0, 0),
+            Fixed64.One);
+
+        Assert.NotNull(overlappedRequest);
+        Assert.NotNull(unrelatedRequest);
+        Assert.True(PathGuideFactory.RequestGuide(overlappedRequest, out FlowFieldGuide overlappedGuide));
+        Assert.True(PathGuideFactory.RequestGuide(unrelatedRequest, out FlowFieldGuide unrelatedGuide));
+
+        PathGuideFactory.ReturnGuide(overlappedGuide);
+        PathGuideFactory.ReturnGuide(unrelatedGuide);
+
+        Assert.Equal(2, PathGuideFactory.ActiveFlowGuideCount);
+
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("OverlapFlowChart", new Vector3d(1, 0, 0)));
+        PathManager.InitializeChart("OverlapFlowChart");
+
+        Assert.Equal(1, PathGuideFactory.ActiveFlowGuideCount);
+
+        PathManager.UnloadChart("UnrelatedFlowChart");
+
+        Assert.Equal(0, PathGuideFactory.ActiveFlowGuideCount);
+    }
+
+    [Fact]
+    public void OverlappingChartInitialize_ShouldInvalidateOnlyDependentVolumeCacheEntries()
+    {
+        var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] data = CreateThreeVoxelTraversalLine(TraversalMedia.Gas);
+
+        PathManager.Register(NavigationChart.From3D("OverlappedVolumeChart", data, Vector3d.Zero, Fixed64.One));
+        PathManager.InitializeChart("OverlappedVolumeChart");
+        PathManager.Register(NavigationChart.From3D("UnrelatedVolumeChart", data, new Vector3d(-6, 0, 0), Fixed64.One));
+        PathManager.InitializeChart("UnrelatedVolumeChart");
+
+        VolumePathRequest overlappedRequest = VolumePathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            medium: TraversalMedium.Gas);
+        VolumePathRequest unrelatedRequest = VolumePathRequest.Create(
+            new Vector3d(-6, 0, 0),
+            new Vector3d(-4, 0, 0),
+            Fixed64.One,
+            medium: TraversalMedium.Gas);
+
+        Assert.NotNull(overlappedRequest);
+        Assert.NotNull(unrelatedRequest);
+        Assert.True(PathGuideFactory.RequestGuide(overlappedRequest, out VolumeGuide overlappedGuide));
+        Assert.True(PathGuideFactory.RequestGuide(unrelatedRequest, out VolumeGuide unrelatedGuide));
+
+        PathGuideFactory.ReturnGuide(overlappedGuide);
+        PathGuideFactory.ReturnGuide(unrelatedGuide);
+
+        Assert.Equal(2, PathGuideFactory.ActiveVolumeGuideCount);
+
+        PathManager.Register(BuildSingleTraversalPointChart("OverlapVolumeChart", new Vector3d(1, 0, 0), TraversalMedia.Gas));
+        PathManager.InitializeChart("OverlapVolumeChart");
+
+        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+
+        PathManager.UnloadChart("UnrelatedVolumeChart");
+
+        Assert.Equal(0, PathGuideFactory.ActiveVolumeGuideCount);
+    }
+
+    [Fact]
     public void RegisterTraversalBuildResult_ShouldRollback_WhenGeneratedTransitionRegistrationFails()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
@@ -766,5 +892,37 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(TraversalTransitionRegistry.IsRegistered(preRegisteredTransition.Id));
         Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
+    }
+
+    private static bool[,,] CreateThreeVoxelLine()
+    {
+        return new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+    }
+
+    private static NavigationChartCell[,,] CreateThreeVoxelTraversalLine(TraversalMedia traversalMedia)
+    {
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1];
+        data[0, 0, 0] = new NavigationChartCell(traversalMedia);
+        data[0, 1, 0] = new NavigationChartCell(traversalMedia);
+        data[0, 2, 0] = new NavigationChartCell(traversalMedia);
+        return data;
+    }
+
+    private static NavigationChart BuildSingleTraversalPointChart(
+        string chartName,
+        Vector3d position,
+        TraversalMedia traversalMedia)
+    {
+        Vector3d minBounds = position - new Vector3d(1, 1, 1);
+        NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
+        data[1, 1, 1] = new NavigationChartCell(traversalMedia);
+        return NavigationChart.From3D(chartName, data, minBounds, Fixed64.One);
     }
 }

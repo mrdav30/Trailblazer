@@ -247,9 +247,7 @@ public static class VoxelFinder
     private static bool IsChartTraversable(Voxel voxel, Fixed64 unitSize)
     {
         if (!IsBaseChartTraversable(voxel))
-        {
             return false;
-        }
 
         voxel.TryGetPartition(out SolidChartPartition partition);
         return unitSize == GlobalGridManager.VoxelSize

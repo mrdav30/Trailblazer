@@ -71,7 +71,7 @@ public class NavigatorSerializationTests : IDisposable
         target.Size.Should().Be(source.Size);
         target.FootPositionAdjust.Should().Be(source.FootPositionAdjust);
         target.GuidedPathMode.Should().Be(source.GuidedPathMode);
-        target.GuidedAllowUnwalkableEndNode.Should().Be(source.GuidedAllowUnwalkableEndNode);
+        target.GuidedAllowUnwalkableEndpoints.Should().Be(source.GuidedAllowUnwalkableEndpoints);
         target.GuidedAllowTraversalTransitions.Should().Be(source.GuidedAllowTraversalTransitions);
         target.GuidedAStarHeuristic.Should().Be(source.GuidedAStarHeuristic);
         target.GuidedAStarMaxClimbHeight.Should().Be(source.GuidedAStarMaxClimbHeight);
@@ -127,7 +127,7 @@ public class NavigatorSerializationTests : IDisposable
         target.Size.Should().Be(source.Size);
         target.FootPositionAdjust.Should().Be(source.FootPositionAdjust);
         target.GuidedPathMode.Should().Be(source.GuidedPathMode);
-        target.GuidedAllowUnwalkableEndNode.Should().Be(source.GuidedAllowUnwalkableEndNode);
+        target.GuidedAllowUnwalkableEndpoints.Should().Be(source.GuidedAllowUnwalkableEndpoints);
         target.GuidedAllowTraversalTransitions.Should().Be(source.GuidedAllowTraversalTransitions);
         target.GuidedAStarHeuristic.Should().Be(source.GuidedAStarHeuristic);
         target.GuidedAStarMaxClimbHeight.Should().Be(source.GuidedAStarMaxClimbHeight);
@@ -494,7 +494,7 @@ public class NavigatorSerializationTests : IDisposable
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.FlowField);
         object payload = SerializeRecord(source, useMemoryPack);
 
-        payload = RemovePayloadEntry(payload, useMemoryPack, "guidedAllowUnwalkableEndNode");
+        payload = RemovePayloadEntry(payload, useMemoryPack, "guidedAllowUnwalkableEndpoints");
         payload = RemovePayloadEntry(payload, useMemoryPack, "guidedAllowTraversalTransitions");
         payload = RemovePayloadEntry(payload, useMemoryPack, "guidedFlowFieldExtraFloodRange");
         payload = RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRecheckCooldownFrames");
@@ -503,7 +503,7 @@ public class NavigatorSerializationTests : IDisposable
         payload = RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRequest", "flowFieldExtraFloodRange");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        bool expectedAllowUnwalkable = target.GuidedAllowUnwalkableEndNode;
+        bool expectedAllowUnwalkable = target.GuidedAllowUnwalkableEndpoints;
         bool expectedAllowTraversalTransitions = target.GuidedAllowTraversalTransitions;
         int expectedRootExtraFloodRange = target.GuidedFlowFieldExtraFloodRange;
         int expectedPathRecheckCooldown = target.Steering.PathRecheckCooldownFrames;
@@ -513,7 +513,7 @@ public class NavigatorSerializationTests : IDisposable
         PopulateRecord(target, payload, useMemoryPack);
 
         target.IsGuideded.Should().BeTrue();
-        target.GuidedAllowUnwalkableEndNode.Should().Be(expectedAllowUnwalkable);
+        target.GuidedAllowUnwalkableEndpoints.Should().Be(expectedAllowUnwalkable);
         target.GuidedAllowTraversalTransitions.Should().Be(expectedAllowTraversalTransitions);
         target.GuidedFlowFieldExtraFloodRange.Should().Be(expectedRootExtraFloodRange);
         target.Steering.PathRecheckCooldownFrames.Should().Be(expectedPathRecheckCooldown);
@@ -551,8 +551,8 @@ public class NavigatorSerializationTests : IDisposable
         RegisterGuidedPathChart("NavigatorSerializationInvalidRequest");
 
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.AStar);
-        source.GuidedAllowUnwalkableEndNode = false;
-        source.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject.AllowUnwalkableEndNode = false;
+        source.GuidedAllowUnwalkableEndpoints = false;
+        source.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject.AllowUnwalkableEndpoints = false;
         object payload = SerializeRecord(source, useMemoryPack);
         payload = SetPayloadValue(
             payload,
@@ -762,7 +762,7 @@ public class NavigatorSerializationTests : IDisposable
             updateMotorState: true);
 
         source.GuidedPathMode = GuidedPathMode.FlowField;
-        source.GuidedAllowUnwalkableEndNode = true;
+        source.GuidedAllowUnwalkableEndpoints = true;
         source.GuidedAllowTraversalTransitions = true;
         source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         source.GuidedAStarMaxClimbHeight = (Fixed64)4;
@@ -791,7 +791,7 @@ public class NavigatorSerializationTests : IDisposable
     {
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.GuidedPathMode = pathMode;
-        source.GuidedAllowUnwalkableEndNode = true;
+        source.GuidedAllowUnwalkableEndpoints = true;
         source.GuidedAllowTraversalTransitions = true;
         source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         source.GuidedAStarMaxClimbHeight = (Fixed64)2;
@@ -871,7 +871,7 @@ public class NavigatorSerializationTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
-            allowUnwalkableEndNode: true);
+            allowUnwalkableEndpoints: true);
 
         request.Should().NotBeNull();
         request.MaxClimbHeight = (Fixed64)2;
@@ -1129,7 +1129,7 @@ public class NavigatorSerializationTests : IDisposable
             actual.CurrentRequest.Origin.Should().Be(expected.CurrentRequest.Origin);
             actual.CurrentRequest.TargetPosition.Should().Be(expected.CurrentRequest.TargetPosition);
             actual.CurrentRequest.UnitSize.Should().Be(expected.CurrentRequest.UnitSize);
-            actual.CurrentRequest.AllowUnwalkableEndNode.Should().Be(expected.CurrentRequest.AllowUnwalkableEndNode);
+            actual.CurrentRequest.AllowUnwalkableEndpoints.Should().Be(expected.CurrentRequest.AllowUnwalkableEndpoints);
             actual.CurrentRequest.MaxPathSearchRange.Should().Be(expected.CurrentRequest.MaxPathSearchRange);
 
             if (expected.CurrentRequest is AStarPathRequest expectedAStar

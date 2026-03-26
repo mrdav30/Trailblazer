@@ -128,7 +128,7 @@ public abstract class Navigator : INavigate, IRecordable
     /// <summary>
     /// Whether navigator-built guided requests may target unwalkable voxels.
     /// </summary>
-    public bool GuidedAllowUnwalkableEndNode { get; set; }
+    public bool GuidedAllowUnwalkableEndpoints { get; set; }
 
     /// <summary>
     /// Whether navigator-built guided requests may use authored traversal transitions for chart fallback,
@@ -393,7 +393,7 @@ public abstract class Navigator : INavigate, IRecordable
             unitSize: Size,
             pathMode: pathMode,
             fallbackChartPathMode: GuidedPathMode,
-            allowUnwalkableEndNode: GuidedAllowUnwalkableEndNode,
+            allowUnwalkableEndpoints: GuidedAllowUnwalkableEndpoints,
             allowTraversalTransitions: GuidedAllowTraversalTransitions,
             aStarHeuristic: GuidedAStarHeuristic,
             aStarMaxClimbHeight: GuidedAStarMaxClimbHeight,
@@ -836,7 +836,7 @@ public abstract class Navigator : INavigate, IRecordable
         Fixed64 size = Size;
         Fixed64 footPositionAdjust = FootPositionAdjust;
         GuidedPathMode guidedPathMode = GuidedPathMode;
-        bool guidedAllowUnwalkableEndNode = GuidedAllowUnwalkableEndNode;
+        bool guidedAllowUnwalkableEndpoints = GuidedAllowUnwalkableEndpoints;
         bool guidedAllowTraversalTransitions = GuidedAllowTraversalTransitions;
         HeuristicMethod guidedAStarHeuristic = GuidedAStarHeuristic;
         Fixed64 guidedAStarMaxClimbHeight = GuidedAStarMaxClimbHeight;
@@ -865,7 +865,7 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref size, "size", Fixed64.One);
         RecordValues.Look(chronicler, ref footPositionAdjust, "footPositionAdjust", DefaultFootPositionAdjust);
         RecordValues.Look(chronicler, ref guidedPathMode, "guidedPathMode", GuidedPathMode.AStar);
-        RecordValues.Look(chronicler, ref guidedAllowUnwalkableEndNode, "guidedAllowUnwalkableEndNode", false);
+        RecordValues.Look(chronicler, ref guidedAllowUnwalkableEndpoints, "guidedAllowUnwalkableEndpoints", false);
         RecordValues.Look(chronicler, ref guidedAllowTraversalTransitions, "guidedAllowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref guidedAStarHeuristic, "guidedAStarHeuristic", HeuristicMethod.Manhattan);
         RecordValues.Look(chronicler, ref guidedAStarMaxClimbHeight, "guidedAStarMaxClimbHeight", Fixed64.One);
@@ -894,7 +894,7 @@ public abstract class Navigator : INavigate, IRecordable
             Size = size;
             FootPositionAdjust = footPositionAdjust;
             GuidedPathMode = guidedPathMode;
-            GuidedAllowUnwalkableEndNode = guidedAllowUnwalkableEndNode;
+            GuidedAllowUnwalkableEndpoints = guidedAllowUnwalkableEndpoints;
             GuidedAllowTraversalTransitions = guidedAllowTraversalTransitions;
             GuidedAStarHeuristic = guidedAStarHeuristic;
             GuidedAStarMaxClimbHeight = guidedAStarMaxClimbHeight;

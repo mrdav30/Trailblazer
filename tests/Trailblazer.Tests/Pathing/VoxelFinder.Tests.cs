@@ -41,19 +41,19 @@ public class VoxelFinderTests : IDisposable
             out _,
             out _,
             Fixed64.One,
-            allowUnwalkableEndNode: false).Should().BeFalse();
+            allowUnwalkableEndpoints: false).Should().BeFalse();
 
         AStarPathRequest.Create(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: false).Should().BeNull();
+            allowUnwalkableEndpoints: false).Should().BeNull();
 
         FlowFieldPathRequest.Create(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: false).Should().BeNull();
+            allowUnwalkableEndpoints: false).Should().BeNull();
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class VoxelFinderTests : IDisposable
             out Voxel startVoxel,
             out Voxel endVoxel,
             Fixed64.One,
-            allowUnwalkableEndNode: true).Should().BeTrue();
+            allowUnwalkableEndpoints: true).Should().BeTrue();
 
         startVoxel.WorldPosition.Should().Be(Vector3d.Zero);
         endVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
@@ -76,7 +76,7 @@ public class VoxelFinderTests : IDisposable
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: true);
+            allowUnwalkableEndpoints: true);
         aStarRequest.Should().NotBeNull();
         aStarRequest.StartNode.WorldPosition.Should().Be(Vector3d.Zero);
         aStarRequest.EndNode.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
@@ -85,7 +85,7 @@ public class VoxelFinderTests : IDisposable
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: true);
+            allowUnwalkableEndpoints: true);
         flowFieldRequest.Should().NotBeNull();
         flowFieldRequest.StartNode.WorldPosition.Should().Be(Vector3d.Zero);
         flowFieldRequest.EndNode.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
@@ -100,7 +100,7 @@ public class VoxelFinderTests : IDisposable
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: true);
+            allowUnwalkableEndpoints: true);
         created.Should().NotBeNull();
         created.StartNode.WorldPosition.Should().Be(Vector3d.Zero);
         created.EndNode.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
@@ -109,7 +109,7 @@ public class VoxelFinderTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: true);
+            allowUnwalkableEndpoints: true);
         updated.Should().NotBeNull();
 
         updated.UpdateRequest(new Vector3d(-1, 0, 0), new Vector3d(2, 0, 0), Fixed64.One).Should().BeTrue();
@@ -120,7 +120,7 @@ public class VoxelFinderTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: true);
+            allowUnwalkableEndpoints: true);
         setters.Should().NotBeNull();
 
         setters.TrySetOrigin(new Vector3d(-1, 0, 0)).Should().BeTrue();
@@ -138,7 +138,7 @@ public class VoxelFinderTests : IDisposable
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: true);
+            allowUnwalkableEndpoints: true);
         created.Should().NotBeNull();
         created.StartNode.WorldPosition.Should().Be(Vector3d.Zero);
         created.EndNode.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
@@ -147,7 +147,7 @@ public class VoxelFinderTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: true);
+            allowUnwalkableEndpoints: true);
         updated.Should().NotBeNull();
 
         updated.UpdateRequest(new Vector3d(-1, 0, 0), new Vector3d(2, 0, 0), Fixed64.One).Should().BeTrue();
@@ -158,7 +158,7 @@ public class VoxelFinderTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndNode: true);
+            allowUnwalkableEndpoints: true);
         setters.Should().NotBeNull();
 
         setters.TrySetOrigin(new Vector3d(-1, 0, 0)).Should().BeTrue();

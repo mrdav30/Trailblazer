@@ -81,7 +81,7 @@ The main entry points are:
 - `GetWalkableDiagonalNeighbors(GlobalVoxelIndex idx)`
 - `WalkableDiagonalNeighborsOf(Voxel voxel)`
 - `GetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)`
-- `NeedsPath(Vector3d startPos, Vector3d endPos, Fixed64 unitSize, bool allowUnwalkableEndNode = false)`
+- `NeedsPath(Vector3d startPos, Vector3d endPos, Fixed64 unitSize, bool allowUnwalkableEndpoints = false)`
 
 Important public state includes:
 
@@ -360,13 +360,13 @@ Important detail:
 - it does not mean a route is impossible if it returns `true`
 - it only means a path guide is needed instead of direct travel
 
-### 11.3 `allowUnwalkableEndNode`
+### 11.3 `allowUnwalkableEndpoints`
 
-The `allowUnwalkableEndNode` argument affects the direct-travel check.
+The `allowUnwalkableEndpoints` argument affects the direct-travel check.
 
 In the current implementation:
 
-- the unit-size impassability check is skipped when `allowUnwalkableEndNode` is true
+- the unit-size impassability check is skipped when `allowUnwalkableEndpoints` is true
 
 This is a request-policy input, not a global chart rule.
 

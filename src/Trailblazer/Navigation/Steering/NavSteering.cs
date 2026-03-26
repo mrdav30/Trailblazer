@@ -481,7 +481,7 @@ public class NavSteering : IRecordable
                         navigator.Position,
                         Destination,
                         _currentRequest.UnitSize,
-                        _currentRequest.AllowUnwalkableEndNode,
+                        _currentRequest.AllowUnwalkableEndpoints,
                         volumeRequest.Medium,
                         _currentRequest.StartNode,
                         _currentRequest.EndNode);
@@ -495,7 +495,7 @@ public class NavSteering : IRecordable
                         navigator.Position,
                         Destination,
                         _currentRequest.UnitSize,
-                        _currentRequest.AllowUnwalkableEndNode);
+                        _currentRequest.AllowUnwalkableEndpoints);
                 }
 
                 _pathCheckCooldown = PathRecheckCooldownFrames;
@@ -605,7 +605,7 @@ public class NavSteering : IRecordable
                 origin,
                 Destination,
                 _currentRequest.UnitSize,
-                _currentRequest.AllowUnwalkableEndNode,
+                _currentRequest.AllowUnwalkableEndpoints,
                 volumeRequest.Medium,
                 _currentRequest.StartNode,
                 _currentRequest.EndNode);
@@ -623,7 +623,7 @@ public class NavSteering : IRecordable
                 origin,
                 Destination,
                 _currentRequest.UnitSize,
-                _currentRequest.AllowUnwalkableEndNode);
+                _currentRequest.AllowUnwalkableEndpoints);
             if (HasLineOfSightPath)
                 return true;  // no path required
         }
@@ -816,10 +816,10 @@ public class NavSteering : IRecordable
     /// <summary>
     /// Whether the destination is currently visible and reachable from the agent's position.
     /// </summary>
-    public static bool IsDestinationInSight(Vector3d position, Vector3d destination, Fixed64 unitSize, bool allowUnwalkableEndNode)
+    public static bool IsDestinationInSight(Vector3d position, Vector3d destination, Fixed64 unitSize, bool allowUnwalkableEndpoints)
     {
         bool result = false;
-        if (!PathManager.NeedsPath(position, destination, unitSize, allowUnwalkableEndNode))
+        if (!PathManager.NeedsPath(position, destination, unitSize, allowUnwalkableEndpoints))
             result = true;
 
         return result;
@@ -832,7 +832,7 @@ public class NavSteering : IRecordable
         Vector3d position,
         Vector3d destination,
         Fixed64 unitSize,
-        bool allowUnwalkableEndNode,
+        bool allowUnwalkableEndpoints,
         TraversalMedium medium = TraversalMedium.Gas,
         Voxel startNode = null,
         Voxel endNode = null)
@@ -841,7 +841,7 @@ public class NavSteering : IRecordable
             position,
             destination,
             unitSize,
-            allowUnwalkableEndNode,
+            allowUnwalkableEndpoints,
             medium,
             startNode,
             endNode);

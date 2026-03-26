@@ -15,7 +15,7 @@ public abstract class PathRequest : IPathRequest
 
     public Fixed64 UnitSize { get; protected set; }
 
-    public bool AllowUnwalkableEndNode { get; set; }
+    public bool AllowUnwalkableEndpoints { get; set; }
 
     /// <summary>
     /// Whether chart-backed requests may fall back through authored traversal transitions when direct chart routing fails.
@@ -49,7 +49,7 @@ public abstract class PathRequest : IPathRequest
             out Voxel startVoxel,
             out Voxel endVoxel,
             unitSize,
-            AllowUnwalkableEndNode);
+            AllowUnwalkableEndpoints);
 
         // need to set these even if null incase the new size invalidates the request
         Origin = origin;
@@ -75,7 +75,7 @@ public abstract class PathRequest : IPathRequest
             origin,
             TargetPosition,
             out Voxel newVoxel,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             UnitSize);
 
         if (!success) return false;
@@ -113,7 +113,7 @@ public abstract class PathRequest : IPathRequest
             Origin,
             destination,
             out Voxel newVoxel,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             UnitSize);
 
         if (!success) return false;

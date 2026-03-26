@@ -35,7 +35,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     public Fixed64 UnitSize { get; private set; }
 
     /// <inheritdoc/>
-    public bool AllowUnwalkableEndNode { get; set; }
+    public bool AllowUnwalkableEndpoints { get; set; }
 
     /// <inheritdoc/>
     public int MaxPathSearchRange { get; set; }
@@ -88,7 +88,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     /// <param name="request">The resulting HybridPathRequest if creation is successful.</param>
     /// <param name="heuristic">The heuristic method to use for pathfinding.</param>
     /// <param name="maxClimbHeight">The maximum climb height for the pathfinding unit.</param>
-    /// <param name="allowUnwalkableEndNode">Whether to allow paths to unwalkable areas.</param>
+    /// <param name="allowUnwalkableEndpoints">Whether to allow paths to unwalkable areas.</param>
     /// <returns>True if the request was successfully created; otherwise, false.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryCreate(
@@ -98,9 +98,9 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         out HybridPathRequest request,
         HeuristicMethod heuristic = HeuristicMethod.Manhattan,
         Fixed64? maxClimbHeight = null,
-        bool allowUnwalkableEndNode = false)
+        bool allowUnwalkableEndpoints = false)
     {
-        request = Create(origin, destination, unitSize, heuristic, maxClimbHeight, allowUnwalkableEndNode);
+        request = Create(origin, destination, unitSize, heuristic, maxClimbHeight, allowUnwalkableEndpoints);
         return request != null;
     }
 
@@ -112,7 +112,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     /// <param name="unitSize">The size of the unit for pathfinding.</param>
     /// <param name="heuristic">The heuristic method to use for pathfinding.</param>
     /// <param name="maxClimbHeight">The maximum climb height for the pathfinding unit.</param>
-    /// <param name="allowUnwalkableEndNode">Whether to allow paths to unwalkable areas.</param>
+    /// <param name="allowUnwalkableEndpoints">Whether to allow paths to unwalkable areas.</param>
     /// <returns>The created HybridPathRequest if successful; otherwise, null.</returns>
     public static HybridPathRequest Create(
         Vector3d origin,
@@ -120,7 +120,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         Fixed64 unitSize,
         HeuristicMethod heuristic = HeuristicMethod.Manhattan,
         Fixed64? maxClimbHeight = null,
-        bool allowUnwalkableEndNode = false)
+        bool allowUnwalkableEndpoints = false)
     {
         if (!VoxelFinder.TryGetPathEdgeVoxels(
             origin,
@@ -128,7 +128,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             out Voxel startNode,
             out Voxel endNode,
             unitSize,
-            allowUnwalkableEndNode))
+            allowUnwalkableEndpoints))
         {
             return null;
         }
@@ -142,7 +142,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             UnitSize = unitSize,
             ChartRequestKind = HybridChartRequestKind.AStar,
             Heuristic = heuristic,
-            AllowUnwalkableEndNode = allowUnwalkableEndNode,
+            AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             MaxClimbHeight = maxClimbHeight ?? GlobalGridManager.VoxelSize
         };
 
@@ -173,7 +173,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             UnitSize = request.UnitSize,
             ChartRequestKind = HybridChartRequestKind.AStar,
             Heuristic = request.Heuristic,
-            AllowUnwalkableEndNode = request.AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints = request.AllowUnwalkableEndpoints,
             MaxClimbHeight = request.MaxClimbHeight
         };
 
@@ -200,7 +200,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             EndNode = request.EndNode,
             UnitSize = request.UnitSize,
             ChartRequestKind = HybridChartRequestKind.FlowField,
-            AllowUnwalkableEndNode = request.AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints = request.AllowUnwalkableEndpoints,
             ExtraFloodRange = request.ExtraFloodRange
         };
 
@@ -222,7 +222,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             out Voxel startVoxel,
             out Voxel endVoxel,
             resolvedUnitSize,
-            AllowUnwalkableEndNode);
+            AllowUnwalkableEndpoints);
 
         Origin = origin;
         TargetPosition = destination;
@@ -250,7 +250,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             origin,
             TargetPosition,
             out Voxel startNode,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             UnitSize))
         {
             return false;
@@ -271,7 +271,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             Origin,
             destination,
             out Voxel endNode,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             UnitSize))
         {
             return false;
@@ -319,7 +319,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             EndNode?.SpawnToken ?? 0,
             UnitSize,
             ChartRequestKind,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             Heuristic,
             MaxClimbHeight,
             ExtraFloodRange,

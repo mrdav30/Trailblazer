@@ -76,7 +76,7 @@ All guide requests implement `IPathRequest`. Shared request state includes:
 - `StartNode`
 - `EndNode`
 - `UnitSize`
-- `AllowUnwalkableEndNode`
+- `AllowUnwalkableEndpoints`
 - `MaxPathSearchRange`
 - `HasValidEndpoints`
 - `IsValid`

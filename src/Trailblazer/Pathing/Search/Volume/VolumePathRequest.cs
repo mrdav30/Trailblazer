@@ -26,7 +26,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
 
     public Fixed64 UnitSize { get; private set; }
 
-    public bool AllowUnwalkableEndNode { get; set; }
+    public bool AllowUnwalkableEndpoints { get; set; }
 
     public int MaxPathSearchRange { get; set; }
 
@@ -57,7 +57,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Fixed64 unitSize,
         out VolumePathRequest request,
         HeuristicMethod heuristic = HeuristicMethod.Euclidean,
-        bool allowUnwalkableEndNode = false,
+        bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {
         request = Create(
@@ -65,7 +65,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             destination,
             unitSize,
             heuristic,
-            allowUnwalkableEndNode,
+            allowUnwalkableEndpoints,
             medium);
 
         return request != null;
@@ -76,7 +76,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Vector3d destination,
         Fixed64 unitSize,
         HeuristicMethod heuristic = HeuristicMethod.Euclidean,
-        bool allowUnwalkableEndNode = false,
+        bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {
         if (!RawVoxelFinder.TryGetPathEdgeVoxels(
@@ -85,7 +85,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             out Voxel startNode,
             out Voxel endNode,
             unitSize,
-            allowUnwalkableEndNode,
+            allowUnwalkableEndpoints,
             medium))
         {
             return null;
@@ -99,7 +99,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             EndNode = endNode,
             UnitSize = unitSize,
             Heuristic = heuristic,
-            AllowUnwalkableEndNode = allowUnwalkableEndNode,
+            AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             Medium = medium
         };
 
@@ -121,7 +121,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             out Voxel startNode,
             out Voxel endNode,
             resolvedUnitSize,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             Medium);
 
         Origin = origin;
@@ -146,7 +146,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             origin,
             TargetPosition,
             out Voxel startNode,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             UnitSize,
             Medium))
         {
@@ -185,7 +185,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             Origin,
             destination,
             out Voxel endNode,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             UnitSize,
             Medium))
         {
@@ -237,7 +237,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             StartNode?.SpawnToken ?? 0,
             EndNode?.SpawnToken ?? 0,
             UnitSize,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             Heuristic,
             Medium,
             MaxPathSearchRange,

@@ -53,7 +53,7 @@ public class NavigatorTests : IDisposable
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.GuidedPathMode = GuidedPathMode.AStar;
-        navigator.GuidedAllowUnwalkableEndNode = true;
+        navigator.GuidedAllowUnwalkableEndpoints = true;
         navigator.GuidedAllowTraversalTransitions = true;
         navigator.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         navigator.GuidedAStarMaxClimbHeight = (Fixed64)2;
@@ -70,7 +70,7 @@ public class NavigatorTests : IDisposable
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
         request.UnitSize.Should().Be(navigator.Size);
-        request.AllowUnwalkableEndNode.Should().BeTrue();
+        request.AllowUnwalkableEndpoints.Should().BeTrue();
         request.AllowTraversalTransitions.Should().BeTrue();
         request.Heuristic.Should().Be(HeuristicMethod.Euclidean);
         request.MaxClimbHeight.Should().Be((Fixed64)2);
@@ -145,7 +145,7 @@ public class NavigatorTests : IDisposable
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.GuidedPathMode = GuidedPathMode.AStar;
-        navigator.GuidedAllowUnwalkableEndNode = true;
+        navigator.GuidedAllowUnwalkableEndpoints = true;
         navigator.GuidedAllowTraversalTransitions = true;
         navigator.GuidedFlowFieldExtraFloodRange = 24;
 
@@ -159,7 +159,7 @@ public class NavigatorTests : IDisposable
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
         request.UnitSize.Should().Be(navigator.Size);
-        request.AllowUnwalkableEndNode.Should().BeTrue();
+        request.AllowUnwalkableEndpoints.Should().BeTrue();
         request.AllowTraversalTransitions.Should().BeTrue();
         request.ExtraFloodRange.Should().Be(24);
 
@@ -341,7 +341,7 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
-    public void ApplyGuidedTrekRequest_Should_KeepDirectSwimRequest_WhenTransitionOptInIsDisabled()
+    public void ApplyGuidedTrekRequest_Should_RejectSwimRequest_WhenTransitionOptInIsDisabled_AndTargetRequiresExitHandoff()
     {
         RegisterVolumeExitHandoffScene("NavigatorSwimExitDisabled");
 
@@ -355,9 +355,9 @@ public class NavigatorTests : IDisposable
             pathMode: GuidedPathMode.Swim,
             rate: TrekRate.Fast);
 
-        navigator.IsGuideded.Should().BeTrue();
-        navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
-            .Which.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
+        navigator.IsGuideded.Should().BeFalse();
+        navigator.Steering.CurrentRequest.Should().BeNull();
+        navigator.Steering.ShouldMove.Should().BeFalse();
 
         PathManager.UnloadChart("NavigatorSwimExitDisabled");
     }

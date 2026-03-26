@@ -19,7 +19,7 @@ internal static class RawVoxelFinder
         out Voxel originVoxel,
         out Voxel targetVoxel,
         Fixed64 unitSize,
-        bool allowUnwalkableEndNode = false,
+        bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {
         if (!VolumeMediumRules.IsConfigured(medium))
@@ -30,10 +30,10 @@ internal static class RawVoxelFinder
         }
 
         targetVoxel = null;
-        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkableEndNode, unitSize, medium))
+        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkableEndpoints, unitSize, medium))
             return false;
 
-        if (!GetEndVoxel(origin, target, out targetVoxel, allowUnwalkableEndNode, unitSize, medium))
+        if (!GetEndVoxel(origin, target, out targetVoxel, allowUnwalkableEndpoints, unitSize, medium))
             return false;
 
         return true;
@@ -43,7 +43,7 @@ internal static class RawVoxelFinder
         Vector3d origin,
         Vector3d target,
         out Voxel originVoxel,
-        bool allowUnwalkableEndNode = false,
+        bool allowUnwalkableEndpoints = false,
         Fixed64? unitSize = null,
         TraversalMedium medium = TraversalMedium.Gas)
     {
@@ -51,7 +51,7 @@ internal static class RawVoxelFinder
             origin,
             target,
             out originVoxel,
-            allowUnwalkableEndNode,
+            allowUnwalkableEndpoints,
             unitSize ?? GlobalGridManager.VoxelSize,
             medium);
     }
@@ -60,7 +60,7 @@ internal static class RawVoxelFinder
         Vector3d origin,
         Vector3d target,
         out Voxel targetVoxel,
-        bool allowUnwalkableEndNode = false,
+        bool allowUnwalkableEndpoints = false,
         Fixed64? unitSize = null,
         TraversalMedium medium = TraversalMedium.Gas)
     {
@@ -68,7 +68,7 @@ internal static class RawVoxelFinder
             target,
             origin,
             out targetVoxel,
-            allowUnwalkableEndNode,
+            allowUnwalkableEndpoints,
             unitSize ?? GlobalGridManager.VoxelSize,
             medium);
     }
@@ -77,7 +77,7 @@ internal static class RawVoxelFinder
         Vector3d start,
         Vector3d end,
         Fixed64 unitSize,
-        bool allowUnwalkableEndNode,
+        bool allowUnwalkableEndpoints,
         TraversalMedium medium = TraversalMedium.Gas,
         Voxel startNode = null,
         Voxel endNode = null)
@@ -93,7 +93,7 @@ internal static class RawVoxelFinder
             {
                 foundAny = true;
 
-                bool isRelaxedEndpoint = allowUnwalkableEndNode
+                bool isRelaxedEndpoint = allowUnwalkableEndpoints
                     && ((startNode != null && voxel.GlobalIndex == startNode.GlobalIndex)
                     || (endNode != null && voxel.GlobalIndex == endNode.GlobalIndex));
                 if (isRelaxedEndpoint)
@@ -174,7 +174,7 @@ internal static class RawVoxelFinder
         Vector3d position,
         Vector3d traceToward,
         out Voxel voxel,
-        bool allowUnwalkableEndNode,
+        bool allowUnwalkableEndpoints,
         Fixed64 unitSize,
         TraversalMedium medium)
     {
@@ -185,21 +185,27 @@ internal static class RawVoxelFinder
         }
 
         voxel = null;
+        bool shouldRelaxEndpoint = allowUnwalkableEndpoints;
 
         if (GlobalGridManager.TryGetVoxel(position, out voxel))
         {
             if (PassesMedium(voxel, medium)
-                && (allowUnwalkableEndNode || IsBaseTraversable(voxel, unitSize)))
+                && (allowUnwalkableEndpoints || IsBaseTraversable(voxel, unitSize)))
             {
                 return true;
             }
 
-            if (TryGetClosestTraversableVoxel(voxel, out Voxel closestNeighbor, unitSize, medium))
+            shouldRelaxEndpoint = shouldRelaxEndpoint || RequiresSizeFallback(voxel, unitSize, medium);
+            if (shouldRelaxEndpoint
+                && TryGetClosestTraversableVoxel(voxel, out Voxel closestNeighbor, unitSize, medium))
             {
                 voxel = closestNeighbor;
                 return true;
             }
         }
+
+        if (!shouldRelaxEndpoint)
+            return false;
 
         foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(position, traceToward))
         {
@@ -220,6 +226,27 @@ internal static class RawVoxelFinder
     private static bool PassesMedium(Voxel voxel, TraversalMedium medium)
     {
         return VolumeMediumRules.Matches(voxel, medium);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool RequiresSizeFallback(
+        Voxel voxel,
+        Fixed64 unitSize,
+        TraversalMedium medium)
+    {
+        if (unitSize == GlobalGridManager.VoxelSize
+            || voxel == null
+            || voxel.IsBlocked
+            || !PassesMedium(voxel, medium))
+        {
+            return false;
+        }
+
+        if (voxel.TryGetPartition(out VolumeChartPartition volumePartition))
+            return volumePartition.IsImpassable(unitSize);
+
+        return voxel.TryGetPartition(out SolidChartPartition partition)
+            && partition.IsImpassable(unitSize);
     }
 
     internal static bool HasClearance(Voxel origin, Fixed64 unitSize)

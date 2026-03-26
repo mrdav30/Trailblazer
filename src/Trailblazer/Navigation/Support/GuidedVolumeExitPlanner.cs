@@ -18,7 +18,7 @@ internal static class GuidedVolumeExitPlanner
     /// <param name="unitSize"></param>
     /// <param name="medium"></param>
     /// <param name="chartPathMode"></param>
-    /// <param name="allowUnwalkableEndNode"></param>
+    /// <param name="allowUnwalkableEndpoints"></param>
     /// <param name="allowTraversalTransitions"></param>
     /// <param name="aStarHeuristic"></param>
     /// <param name="aStarMaxClimbHeight"></param>
@@ -33,7 +33,7 @@ internal static class GuidedVolumeExitPlanner
         Fixed64 unitSize,
         TraversalMedium medium,
         GuidedPathMode chartPathMode,
-        bool allowUnwalkableEndNode,
+        bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -64,7 +64,7 @@ internal static class GuidedVolumeExitPlanner
             unitSize,
             medium,
             chartPathMode,
-            allowUnwalkableEndNode,
+            allowUnwalkableEndpoints,
             allowTraversalTransitions,
             aStarHeuristic,
             aStarMaxClimbHeight,
@@ -79,7 +79,7 @@ internal static class GuidedVolumeExitPlanner
                 bestTransition,
                 targetPosition,
                 chartPathMode,
-                allowUnwalkableEndNode,
+                allowUnwalkableEndpoints,
                 allowTraversalTransitions,
                 aStarHeuristic,
                 aStarMaxClimbHeight,
@@ -94,7 +94,7 @@ internal static class GuidedVolumeExitPlanner
             unitSize,
             medium,
             chartPathMode,
-            allowUnwalkableEndNode,
+            allowUnwalkableEndpoints,
             allowTraversalTransitions,
             aStarHeuristic,
             aStarMaxClimbHeight,
@@ -112,7 +112,7 @@ internal static class GuidedVolumeExitPlanner
             bestTransition,
             targetPosition,
             chartPathMode,
-            allowUnwalkableEndNode,
+            allowUnwalkableEndpoints,
             allowTraversalTransitions,
             aStarHeuristic,
             aStarMaxClimbHeight,
@@ -127,7 +127,7 @@ internal static class GuidedVolumeExitPlanner
         Fixed64 unitSize,
         TraversalMedium medium,
         GuidedPathMode chartPathMode,
-        bool allowUnwalkableEndNode,
+        bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -156,7 +156,7 @@ internal static class GuidedVolumeExitPlanner
                 transition.Source.Position,
                 unitSize,
                 aStarHeuristic,
-                allowUnwalkableEndNode,
+                allowUnwalkableEndpoints,
                 medium);
             if (volumeRequest == null)
                 continue;
@@ -176,7 +176,7 @@ internal static class GuidedVolumeExitPlanner
                 targetPosition,
                 unitSize,
                 chartPathMode,
-                allowUnwalkableEndNode,
+                allowUnwalkableEndpoints,
                 allowTraversalTransitions,
                 aStarHeuristic,
                 aStarMaxClimbHeight,
@@ -211,7 +211,7 @@ internal static class GuidedVolumeExitPlanner
         TraversalTransition transition,
         Vector3d targetPosition,
         GuidedPathMode chartPathMode,
-        bool allowUnwalkableEndNode,
+        bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -223,7 +223,7 @@ internal static class GuidedVolumeExitPlanner
             ChartOriginPosition = transition.Destination.Position,
             TargetPosition = targetPosition,
             ChartPathMode = chartPathMode,
-            AllowUnwalkableEndNode = allowUnwalkableEndNode,
+            AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             AllowTraversalTransitions = allowTraversalTransitions,
             AStarHeuristic = aStarHeuristic,
             AStarMaxClimbHeight = aStarMaxClimbHeight,
@@ -236,7 +236,7 @@ internal static class GuidedVolumeExitPlanner
         Vector3d targetPosition,
         Fixed64 unitSize,
         GuidedPathMode chartPathMode,
-        bool allowUnwalkableEndNode,
+        bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         HeuristicMethod aStarHeuristic,
         Fixed64 aStarMaxClimbHeight,
@@ -252,7 +252,7 @@ internal static class GuidedVolumeExitPlanner
                     origin,
                     targetPosition,
                     unitSize,
-                    allowUnwalkableEndNode,
+                    allowUnwalkableEndpoints,
                     allowTraversalTransitions);
                 if (flowFieldRequest == null)
                     return false;
@@ -276,7 +276,7 @@ internal static class GuidedVolumeExitPlanner
                     targetPosition,
                     unitSize,
                     aStarHeuristic,
-                    allowUnwalkableEndNode,
+                    allowUnwalkableEndpoints,
                     allowTraversalTransitions);
                 if (aStarRequest == null)
                     return false;

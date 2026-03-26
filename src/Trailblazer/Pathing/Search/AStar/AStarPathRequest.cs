@@ -55,7 +55,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
         Vector3d destination,
         Fixed64 unitSize,
         HeuristicMethod heuristic = HeuristicMethod.Manhattan,
-        bool allowUnwalkableEndNode = false,
+        bool allowUnwalkableEndpoints = false,
         bool allowTraversalTransitions = false)
     {
         if (!VoxelFinder.TryGetPathEdgeVoxels(
@@ -64,7 +64,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
             out Voxel startNode,
             out Voxel endNode,
             unitSize,
-            allowUnwalkableEndNode))
+            allowUnwalkableEndpoints))
         {
             return null;
         }
@@ -77,7 +77,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
             EndNode = endNode,
             UnitSize = unitSize,
             Heuristic = heuristic,
-            AllowUnwalkableEndNode = allowUnwalkableEndNode,
+            AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             AllowTraversalTransitions = allowTraversalTransitions,
             MaxClimbHeight = GlobalGridManager.VoxelSize
         };
@@ -99,7 +99,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
             StartNode?.SpawnToken ?? 0,
             EndNode?.SpawnToken ?? 0,
             UnitSize,
-            AllowUnwalkableEndNode,
+            AllowUnwalkableEndpoints,
             AllowTraversalTransitions,
             Heuristic,
             MaxClimbHeight,

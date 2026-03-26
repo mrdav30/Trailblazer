@@ -584,13 +584,13 @@ public static class PathManager
     /// <param name="startPos">The starting position.</param>
     /// <param name="endPos">The destination position.</param>
     /// <param name="unitSize">The size of the navigating unit.</param>
-    /// <param name="allowUnwalkableEndNode">Whether to permit unwalkable voxels.</param>
+    /// <param name="allowUnwalkableEndpoints">Whether to permit unwalkable voxels.</param>
     /// <returns>True if a path is required; otherwise, false.</returns>
     public static bool NeedsPath(
         Vector3d startPos,
         Vector3d endPos,
         Fixed64 unitSize,
-        bool allowUnwalkableEndNode = false)
+        bool allowUnwalkableEndpoints = false)
     {
         foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(startPos, endPos))
         {
@@ -600,7 +600,7 @@ public static class PathManager
                 if (!voxel.TryGetPartition(out SolidChartPartition partition))
                     return true;
 
-                if (!allowUnwalkableEndNode && !voxel.IsBlocked && partition.IsImpassable(unitSize))
+                if (!allowUnwalkableEndpoints && !voxel.IsBlocked && partition.IsImpassable(unitSize))
                     return true;
             }
         }

@@ -184,19 +184,24 @@ Instead it resolves endpoints against raw voxels and checks:
 For a volume request, endpoint resolution is:
 
 1. try the direct voxel
-2. try a nearby traversable raw-volume neighbor
-3. trace toward the other endpoint and take the first compatible voxel found
+2. if endpoint relaxation is active, try a nearby traversable raw-volume neighbor
+3. if endpoint relaxation is active, trace toward the other endpoint and take the first compatible voxel found
 
 Important nuance:
 
 - if the requested medium is not configured, endpoint resolution fails immediately
+- snapped fallback voxels still have to match the requested `TraversalMedium` through `VolumeMediumRules`
 - cached volume results record the chart owners used along the resolved raw path so local chart changes can invalidate only affected results
 
-### 4.2 `allowUnwalkableEndNode` In Volume Requests
+### 4.2 `allowUnwalkableEndpoints` In Volume Requests
 
-`allowUnwalkableEndNode` in volume requests is still only an endpoint policy.
+`allowUnwalkableEndpoints` in volume requests is still only an endpoint policy.
 
-It can relax start or end acceptance, but it does not make the entire corridor ignore blockers.
+It can relax start or end acceptance, and it can enable endpoint snapping after direct-voxel failure, but it does not make the entire corridor ignore blockers.
+
+Volume requests also keep a size-based endpoint fallback path:
+
+- if the exact voxel matches the requested medium but fails only because required clearance is too large for that cell, endpoint snapping may still run even when `allowUnwalkableEndpoints` is false
 
 For direct-path validation, relaxed endpoints still have to:
 
@@ -318,7 +323,7 @@ Use `TraversalMedium.Gas` when movement should stay chart-optional and 3D, but s
 - `VolumeMediumRules` is global static state.
 - `PathManager.Reset()` clears both host volume rules and authored volume partitions.
 - Volume traversal does not require charts, but it still depends on real voxels existing.
-- `allowUnwalkableEndNode` only relaxes endpoints; it does not make the whole route ignore blocked voxels.
+- `allowUnwalkableEndpoints` only relaxes endpoints; it does not make the whole route ignore blocked voxels.
 
 ## 11. AI And Contributor Notes
 

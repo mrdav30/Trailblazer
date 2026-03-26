@@ -28,7 +28,7 @@ internal sealed class PathRequestRecord : IRecordable
 
     public Fixed64 UnitSize = Fixed64.One;
 
-    public bool AllowUnwalkableEndNode;
+    public bool AllowUnwalkableEndpoints;
 
     public bool AllowTraversalTransitions;
 
@@ -55,7 +55,7 @@ internal sealed class PathRequestRecord : IRecordable
         Origin = request.Origin;
         TargetPosition = request.TargetPosition;
         UnitSize = request.UnitSize;
-        AllowUnwalkableEndNode = request.AllowUnwalkableEndNode;
+        AllowUnwalkableEndpoints = request.AllowUnwalkableEndpoints;
         MaxPathSearchRange = request.MaxPathSearchRange;
         HasGuide = guide != null;
 
@@ -110,7 +110,7 @@ internal sealed class PathRequestRecord : IRecordable
                     TargetPosition,
                     UnitSize,
                     AStarHeuristic,
-                    AllowUnwalkableEndNode,
+                    AllowUnwalkableEndpoints,
                     AllowTraversalTransitions);
                 if (aStar == null)
                     return false;
@@ -127,7 +127,7 @@ internal sealed class PathRequestRecord : IRecordable
                     Origin,
                     TargetPosition,
                     UnitSize,
-                    AllowUnwalkableEndNode,
+                    AllowUnwalkableEndpoints,
                     AllowTraversalTransitions);
                 if (flowField == null)
                     return false;
@@ -145,7 +145,7 @@ internal sealed class PathRequestRecord : IRecordable
                     TargetPosition,
                     UnitSize,
                     AStarHeuristic,
-                    AllowUnwalkableEndNode,
+                    AllowUnwalkableEndpoints,
                     Medium);
                 if (volume == null)
                     return false;
@@ -163,7 +163,7 @@ internal sealed class PathRequestRecord : IRecordable
                     UnitSize,
                     AStarHeuristic,
                     AStarMaxClimbHeight,
-                    AllowUnwalkableEndNode);
+                    AllowUnwalkableEndpoints);
                 if (hybrid == null)
                     return false;
 
@@ -203,7 +203,7 @@ internal sealed class PathRequestRecord : IRecordable
         Origin = Vector3d.Zero;
         TargetPosition = Vector3d.Zero;
         UnitSize = Fixed64.One;
-        AllowUnwalkableEndNode = false;
+        AllowUnwalkableEndpoints = false;
         AllowTraversalTransitions = false;
         MaxPathSearchRange = 0;
         AStarHeuristic = HeuristicMethod.Manhattan;
@@ -220,7 +220,7 @@ internal sealed class PathRequestRecord : IRecordable
         Vector3d origin = Origin;
         Vector3d targetPosition = TargetPosition;
         Fixed64 unitSize = UnitSize;
-        bool allowUnwalkableEndNode = AllowUnwalkableEndNode;
+        bool allowUnwalkableEndpoints = AllowUnwalkableEndpoints;
         bool allowTraversalTransitions = AllowTraversalTransitions;
         int maxPathSearchRange = MaxPathSearchRange;
         HeuristicMethod aStarHeuristic = AStarHeuristic;
@@ -234,7 +234,7 @@ internal sealed class PathRequestRecord : IRecordable
         RecordValues.Look(chronicler, ref origin, "origin", Vector3d.Zero);
         RecordValues.Look(chronicler, ref targetPosition, "targetPosition", Vector3d.Zero);
         RecordValues.Look(chronicler, ref unitSize, "unitSize", Fixed64.One);
-        RecordValues.Look(chronicler, ref allowUnwalkableEndNode, "allowUnwalkableEndNode", false);
+        RecordValues.Look(chronicler, ref allowUnwalkableEndpoints, "allowUnwalkableEndpoints", false);
         RecordValues.Look(chronicler, ref allowTraversalTransitions, "allowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref maxPathSearchRange, "maxPathSearchRange", 0);
         RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
@@ -250,7 +250,7 @@ internal sealed class PathRequestRecord : IRecordable
             Origin = origin;
             TargetPosition = targetPosition;
             UnitSize = unitSize;
-            AllowUnwalkableEndNode = allowUnwalkableEndNode;
+            AllowUnwalkableEndpoints = allowUnwalkableEndpoints;
             AllowTraversalTransitions = allowTraversalTransitions;
             MaxPathSearchRange = maxPathSearchRange;
             AStarHeuristic = aStarHeuristic;

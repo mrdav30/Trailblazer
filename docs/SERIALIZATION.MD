@@ -95,7 +95,7 @@ That means this runtime is not designed for:
 - `Acceleration`
 - `Size`
 - `FootPositionAdjust`
-- guided-request defaults such as `GuidedPathMode`, `GuidedAllowUnwalkableEndNode`, `GuidedAllowTraversalTransitions`, and the built-in chart request tuning values
+- guided-request defaults such as `GuidedPathMode`, `GuidedAllowUnwalkableEndpoints`, `GuidedAllowTraversalTransitions`, and the built-in chart request tuning values
 - `GlobalId`
 - `OccupantGroupId`
 - `IsLockedOn`

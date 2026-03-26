@@ -1,6 +1,6 @@
+using SwiftCollections;
 using System;
 using System.Collections.Generic;
-using SwiftCollections;
 
 // TODO: these should be in a seperate utility project
 

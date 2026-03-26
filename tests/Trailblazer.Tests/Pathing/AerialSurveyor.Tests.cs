@@ -4,7 +4,6 @@ using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
-using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 using Trailblazer.Tests;
 using Xunit;

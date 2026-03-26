@@ -1,6 +1,6 @@
-using System;
 using FixedMathSharp;
 using GridForge.Grids;
+using System;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;

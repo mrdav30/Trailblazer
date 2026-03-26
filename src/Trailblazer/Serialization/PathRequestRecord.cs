@@ -1,6 +1,5 @@
-using System;
 using FixedMathSharp;
-using Trailblazer.Navigation;
+using System;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Serialization;

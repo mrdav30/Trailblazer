@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Support;
 using Trailblazer.Serialization;
+using Trailblazer.Support;
 
 namespace Trailblazer.Navigation.Motor;
 

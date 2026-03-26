@@ -1,6 +1,6 @@
-using System;
 using MemoryPack;
 using SwiftCollections;
+using System;
 
 namespace Trailblazer.Serialization;
 

@@ -2,7 +2,6 @@
 using System;
 using System.Runtime.CompilerServices;
 using Trailblazer.Serialization;
-using Trailblazer.Support;
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -57,9 +56,9 @@ public struct TrekRequest : IRecordable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetRequest(
-        Vector3d direction, 
-        TrekRate rate, 
-        bool isRequestingJump, 
+        Vector3d direction,
+        TrekRate rate,
+        bool isRequestingJump,
         bool isRequestingFlight,
         Vector3d? facingDirection = null)
     {
@@ -74,9 +73,9 @@ public struct TrekRequest : IRecordable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetTransientState(
-        Vector3d origin, 
-        Vector3d? footPosition, 
-        FixedQuaternion rotation, 
+        Vector3d origin,
+        Vector3d? footPosition,
+        FixedQuaternion rotation,
         Vector3d? direction)
     {
         Origin = origin;

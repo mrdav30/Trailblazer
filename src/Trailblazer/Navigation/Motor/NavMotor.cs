@@ -1,7 +1,6 @@
 ﻿using FixedMathSharp;
 using SwiftCollections;
 using System;
-using System.Diagnostics;
 using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Motor;
@@ -182,7 +181,7 @@ public class NavMotor : IRecordable
     /// </summary>
     public void ConfigureLocomotions(Action<LocomotionProfileBuilder> configure)
     {
-        if (configure == null) 
+        if (configure == null)
             ThrowHelper.ThrowArgumentNullException(nameof(configure));
 
         var builder = LocomotionProfile.CreateBuilder(Handler);
@@ -628,7 +627,7 @@ public class NavMotor : IRecordable
             // Apply buoyancy if we can swim, otherwise apply gravity as normal.
             // Even if we can swim, we still apply gravity but reduce it based on the buoyancy factor to
             // create a more natural sinking effect when not actively swimming upwards.
-            if (SwimModule?.IsEnabled == true)      
+            if (SwimModule?.IsEnabled == true)
                 _forceOutput.y += gravityStep * (SwimModule.BuoyancyFactor - Fixed64.One);
             else
                 _forceOutput.y = Handler.Move.FrameVelocity.y - gravityStep;

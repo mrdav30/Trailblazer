@@ -388,7 +388,7 @@ public class FlowFieldSurveyorTests : IDisposable
         {
             GlobalVoxelIndex index = pair.Key;
             FlowField field = pair.Value;
-    
+
             if (field.IsGoal || field.Direction == Vector3d.Zero)
                 continue;
 

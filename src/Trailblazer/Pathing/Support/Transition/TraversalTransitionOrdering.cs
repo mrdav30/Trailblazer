@@ -1,6 +1,6 @@
-using System;
 using FixedMathSharp;
 using GridForge.Spatial;
+using System;
 
 namespace Trailblazer.Pathing;
 

@@ -10,7 +10,7 @@ public struct MotorOutput
 
     public FixedQuaternion RotationDelta;
 
-    public MotorOutput( Vector3d velocityDelta, Vector3d positionDelta, FixedQuaternion rotationDelta)
+    public MotorOutput(Vector3d velocityDelta, Vector3d positionDelta, FixedQuaternion rotationDelta)
     {
         VelocityDelta = velocityDelta;
         PositionDelta = positionDelta;

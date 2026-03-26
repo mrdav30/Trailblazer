@@ -1,7 +1,6 @@
-﻿using System;
+﻿using SwiftCollections;
+using System;
 using System.Runtime.CompilerServices;
-using SwiftCollections;
-using Trailblazer.Navigation;
 
 namespace Trailblazer.Pathing;
 

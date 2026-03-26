@@ -3,9 +3,7 @@ using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using Trailblazer.Navigation;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
@@ -955,7 +953,7 @@ public class NavSteering : IRecordable
 
     #region Movement Groups
 
-    private void CacheOwner(ISteer navigator) => 
+    private void CacheOwner(ISteer navigator) =>
         MovementGroupCoordinator.CacheOwner(_movementGroupSession, navigator.GlobalId);
 
     private void UpdateMovementGroupState(Vector3d position, bool resetFormationOffset = false)

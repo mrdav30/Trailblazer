@@ -10,9 +10,9 @@ using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
-using Xunit;
 using Trailblazer.Tests;
 using Trailblazer.Tests.Navigation.Motor;
+using Xunit;
 
 namespace Trailblazer.Tests.Navigation;
 

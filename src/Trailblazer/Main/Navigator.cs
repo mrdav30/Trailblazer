@@ -6,6 +6,7 @@ using SwiftCollections;
 using System;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using Trailblazer.Navigation;
 using Trailblazer.Navigation.Animation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
@@ -13,7 +14,7 @@ using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
 
-namespace Trailblazer.Navigation;
+namespace Trailblazer;
 
 /// <summary>
 /// Base class representing a navigator, responsible for handling movement, traversal state, and simulation flow.

@@ -1,6 +1,5 @@
 using GridForge.Grids;
 using GridForge.Spatial;
-using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 

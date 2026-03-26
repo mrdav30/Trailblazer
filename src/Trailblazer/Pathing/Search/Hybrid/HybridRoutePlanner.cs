@@ -1,5 +1,4 @@
 using FixedMathSharp;
-using SwiftCollections;
 using System;
 
 namespace Trailblazer.Pathing;

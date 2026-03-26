@@ -1,8 +1,8 @@
 using FluentAssertions;
 using System;
 using System.Collections.Generic;
-using Trailblazer.Tests;
 using Trailblazer.Serialization;
+using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Serialization;

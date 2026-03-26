@@ -1,5 +1,5 @@
-using System;
 using SwiftCollections;
+using System;
 
 namespace Trailblazer.Navigation.Motor;
 

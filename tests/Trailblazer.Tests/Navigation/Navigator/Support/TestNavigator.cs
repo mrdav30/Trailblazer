@@ -1,5 +1,4 @@
 using FixedMathSharp;
-using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Tests.Navigation;

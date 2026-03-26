@@ -1,8 +1,8 @@
+using SwiftCollections;
 using System;
 using System.IO;
 using System.Text;
 using System.Text.Json;
-using SwiftCollections;
 
 namespace Trailblazer.Serialization;
 
@@ -94,7 +94,7 @@ public static class JsonRecordSerializer
 
         public void LookValue<T>(ref T value, string name, T defaultValue = default)
         {
-            if(value == null || value.Equals(defaultValue))
+            if (value == null || value.Equals(defaultValue))
                 return;
             _entries[name] = JsonSerializer.Serialize(value, _options);
         }

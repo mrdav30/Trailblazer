@@ -4,7 +4,6 @@ using GridForge.Spatial;
 using SwiftCollections;
 using SwiftCollections.Pool;
 using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 

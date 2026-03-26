@@ -281,13 +281,13 @@ public class NavigationChart
                     flat[(y * sizeX * sizeZ) + (x * sizeZ) + z] = sourceMap[y, x, z];
 
         return new(
-            name, 
-            CreateCells(flat), 
-            sizeX, 
-            sizeY, 
-            sizeZ, 
-            minBounds, 
-            maxBounds, 
+            name,
+            CreateCells(flat),
+            sizeX,
+            sizeY,
+            sizeZ,
+            minBounds,
+            maxBounds,
             interval);
     }
 
@@ -322,13 +322,13 @@ public class NavigationChart
                     flat[(y * sizeX * sizeZ) + (x * sizeZ) + z] = sourceMap[y, x, z];
 
         return new(
-            name, 
-            flat, 
-            sizeX, 
-            sizeY, 
-            sizeZ, 
-            minBounds, 
-            maxBounds, 
+            name,
+            flat,
+            sizeX,
+            sizeY,
+            sizeZ,
+            minBounds,
+            maxBounds,
             interval);
     }
 

@@ -1,10 +1,10 @@
-using System;
-using System.Threading;
 using FixedMathSharp;
 using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
+using System;
+using System.Threading;
 
 namespace Trailblazer.Pathing;
 

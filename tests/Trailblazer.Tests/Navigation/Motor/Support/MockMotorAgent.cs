@@ -1,5 +1,4 @@
 ﻿using FixedMathSharp;
-using Microsoft.VisualStudio.TestPlatform.Utilities;
 using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.Motor;
 

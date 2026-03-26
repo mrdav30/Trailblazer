@@ -1,6 +1,6 @@
+using SwiftCollections;
 using System;
 using System.Collections.Generic;
-using SwiftCollections;
 
 namespace Trailblazer.Serialization;
 

@@ -53,7 +53,7 @@ PathManager.Register(buildResult);
 - registers the generated transitions
 - registers generated transitions as lower-precedence generated handoffs rather than manual overrides
 - initializes authored surface and volume partitions by default
-- leaves generated transitions in the global transition registry until they are explicitly unregistered or `PathManager.Reset()` clears global state
+- ties generated transitions to that chart's lifetime, so unloading the chart unregisters them automatically
 
 Registration is all-or-nothing. If any generated transition fails to register, the method rolls back the chart and any transitions it already added in that call.
 

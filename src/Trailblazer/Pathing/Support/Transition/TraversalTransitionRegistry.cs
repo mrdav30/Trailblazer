@@ -212,6 +212,40 @@ public static class TraversalTransitionRegistry
         finally { _transitionLock.ExitWriteLock(); }
     }
 
+    internal static void UnregisterRange(string[] ids, int count = -1)
+    {
+        if (ids == null || ids.Length == 0)
+            return;
+
+        int unregisterCount = count < 0 || count > ids.Length
+            ? ids.Length
+            : count;
+        if (unregisterCount == 0)
+            return;
+
+        _transitionLock.EnterWriteLock();
+        try
+        {
+            bool removedAny = false;
+            for (int i = 0; i < unregisterCount; i++)
+            {
+                string id = ids[i];
+                if (string.IsNullOrEmpty(id))
+                    continue;
+
+                if (_transitions.Remove(id))
+                    removedAny = true;
+            }
+
+            if (!removedAny)
+                return;
+
+            RebuildActiveState_NoLock();
+            Interlocked.Increment(ref _registryVersion);
+        }
+        finally { _transitionLock.ExitWriteLock(); }
+    }
+
     /// <summary>
     /// Returns the currently active transitions whose authored source anchor resolves to the provided voxel.
     /// </summary>

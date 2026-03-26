@@ -1,5 +1,6 @@
 using System;
 using FixedMathSharp;
+using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
 
@@ -47,15 +48,35 @@ internal static class TraversalTransitionOrdering
         if (spaceComparison != 0)
             return spaceComparison;
 
-        int gridComparison = left.VoxelIndex.GridIndex.CompareTo(right.VoxelIndex.GridIndex);
+        int voxelComparison = CompareVoxelIndices(left.VoxelIndex, right.VoxelIndex);
+        if (voxelComparison != 0)
+            return voxelComparison;
+
+        int pointOverrideComparison = left.HasPointOverride.CompareTo(right.HasPointOverride);
+        if (pointOverrideComparison != 0)
+            return pointOverrideComparison;
+
+        if (!left.HasPointOverride)
+            return 0;
+
+        return ComparePositions(left.PointOverride, right.PointOverride);
+    }
+
+    private static int CompareVoxelIndices(GlobalVoxelIndex left, GlobalVoxelIndex right)
+    {
+        int gridComparison = left.GridIndex.CompareTo(right.GridIndex);
         if (gridComparison != 0)
             return gridComparison;
 
-        int positionComparison = ComparePositions(left.Position, right.Position);
-        if (positionComparison != 0)
-            return positionComparison;
+        int xComparison = left.VoxelIndex.x.CompareTo(right.VoxelIndex.x);
+        if (xComparison != 0)
+            return xComparison;
 
-        return left.HasPointOverride.CompareTo(right.HasPointOverride);
+        int yComparison = left.VoxelIndex.y.CompareTo(right.VoxelIndex.y);
+        if (yComparison != 0)
+            return yComparison;
+
+        return left.VoxelIndex.z.CompareTo(right.VoxelIndex.z);
     }
 
     private static int ComparePositions(Vector3d left, Vector3d right)

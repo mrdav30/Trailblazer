@@ -35,6 +35,9 @@ public static class PathManager
     /// </summary>
     private static readonly SwiftDictionary<string, NavigationChart> _navigationChartMap = new();
 
+    private static readonly SwiftDictionary<string, string[]> _generatedTransitionIdsByChart =
+        new(8, StringComparer.Ordinal);
+
     /// <summary>
     /// Lock for managing concurrent access to <c>_navigationChartMap</c> operations.
     /// Ensures thread safety for read/write operations.
@@ -155,6 +158,8 @@ public static class PathManager
 
             registeredTransitionIds[registeredTransitionCount++] = transition.Id;
         }
+
+        RememberGeneratedTransitions(buildResult.Chart.Name, registeredTransitionIds, registeredTransitionCount);
 
         if (initializeChart)
             InitializeChart(buildResult.Chart.Name);
@@ -280,9 +285,12 @@ public static class PathManager
         if (chart == null)
             return;
 
+        string[] generatedTransitionIds = RemoveGeneratedTransitions(chart.Name);
+
         if (!chart.IsInitialized)
         {
             RemoveChartFromRegistry(chart.Name);
+            TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
             chart.IsInitialized = false;
             return;
         }
@@ -331,6 +339,7 @@ public static class PathManager
 
         PartitionSetPool.Release(stillActivePartitions);
 
+        TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
         RemoveChartFromRegistry(chart.Name);
         chart.IsInitialized = false;
     }
@@ -381,6 +390,7 @@ public static class PathManager
             }
 
             _navigationChartMap.Clear();
+            _generatedTransitionIdsByChart.Clear();
             _activeAuthoredOpenVolumeCellCount = 0;
             _activeAuthoredWaterVolumeCellCount = 0;
         }
@@ -400,10 +410,39 @@ public static class PathManager
         string[] registeredTransitionIds,
         int registeredTransitionCount)
     {
-        for (int i = 0; i < registeredTransitionCount; i++)
-            TraversalTransitionRegistry.Unregister(registeredTransitionIds[i]);
+        TraversalTransitionRegistry.UnregisterRange(registeredTransitionIds, registeredTransitionCount);
 
         UnloadChart(chart);
+    }
+
+    private static void RememberGeneratedTransitions(
+        string chartName,
+        string[] transitionIds,
+        int transitionCount)
+    {
+        if (transitionCount <= 0)
+            return;
+
+        string[] ownedTransitionIds = new string[transitionCount];
+        Array.Copy(transitionIds, ownedTransitionIds, transitionCount);
+
+        _navigationChartMapLock.EnterWriteLock();
+        try { _generatedTransitionIdsByChart[chartName] = ownedTransitionIds; }
+        finally { _navigationChartMapLock.ExitWriteLock(); }
+    }
+
+    private static string[] RemoveGeneratedTransitions(string chartName)
+    {
+        _navigationChartMapLock.EnterWriteLock();
+        try
+        {
+            if (!_generatedTransitionIdsByChart.TryGetValue(chartName, out string[] transitionIds))
+                return Array.Empty<string>();
+
+            _generatedTransitionIdsByChart.Remove(chartName);
+            return transitionIds;
+        }
+        finally { _navigationChartMapLock.ExitWriteLock(); }
     }
 
     private static void RemoveChartFromRegistry(string chartName)

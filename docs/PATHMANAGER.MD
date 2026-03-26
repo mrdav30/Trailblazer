@@ -139,7 +139,7 @@ Behavior:
 - rolls back the chart and any transitions registered in that call when registration fails partway through
 - registers generated transitions with generated precedence semantics, so an equivalent manual transition may stay active without causing build-result registration to fail
 - initializes the built chart by default after chart and transition registration succeed
-- generated transitions remain global transition-registry entries until they are explicitly unregistered or `PathManager.Reset()` clears global state
+- generated transitions are tied to that chart's lifetime and are unregistered automatically when the chart unloads or `PathManager.Reset()` clears global state
 
 ### 5.2 IsChartRegistered(...) and TryGetNavigationChart(...)
 
@@ -243,7 +243,8 @@ When it runs, it:
 Important nuance:
 
 - `UnloadChart(...)` only removes chart-owned partition state
-- it does not automatically unregister transitions that were previously registered separately or through `TraversalBuildResult`
+- it unregisters generated transitions that were registered through `TraversalBuildResult` for that chart
+- it does not automatically unregister separately registered manual transitions
 
 ### 7.2 Shared Partition Behavior
 

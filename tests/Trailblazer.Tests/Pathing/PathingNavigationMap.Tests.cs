@@ -381,6 +381,78 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void UnloadChart_ShouldUnregisterGeneratedTransitionsFromBuildResult_AndKeepManualTransitions()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        string[,,] map =
+        {
+            {
+                { "L!" },
+                { "W!" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "UnloadGeneratedTransitions",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        TraversalTransition generated = buildResult.GeneratedTransitions[0];
+        TraversalTransition manual = new(
+            id: "manual-survives-unload",
+            type: generated.Type,
+            source: generated.Source,
+            destination: generated.Destination,
+            pathCostModifier: generated.PathCostModifier,
+            isBidirectional: generated.IsBidirectional);
+
+        Assert.True(TraversalTransitionRegistry.Register(manual));
+        Assert.True(PathManager.Register(buildResult));
+
+        PathManager.UnloadChart(buildResult.Chart);
+
+        Assert.False(PathManager.IsChartRegistered(buildResult.Chart.Name));
+        Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
+        Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+    }
+
+    [Fact]
+    public void UnloadUninitializedChart_ShouldUnregisterGeneratedTransitionsFromBuildResult()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        string[,,] map =
+        {
+            {
+                { "L!" },
+                { "W!" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "UnloadUninitializedGeneratedTransitions",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(PathManager.Register(buildResult, initializeChart: false));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
+
+        PathManager.UnloadChart(buildResult.Chart);
+
+        Assert.False(PathManager.IsChartRegistered(buildResult.Chart.Name));
+        Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
+        Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
+    }
+
+    [Fact]
     public void AuthoredOpenVolume_ShouldRestrictOpenTraversalToAuthoredVoxels()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));

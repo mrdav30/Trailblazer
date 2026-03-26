@@ -172,7 +172,8 @@ Useful mental model:
 Important lifecycle rules:
 
 - `PathManager.Reset()` clears the registry
-- `PathManager.UnloadChart(...)` does not automatically unregister transitions that were already registered, including generated transitions from `TraversalBuildResult`
+- `PathManager.UnloadChart(...)` unregisters generated transitions that originated from `TraversalBuildResult` for that chart
+- manually registered transitions still remain global until explicit unregister or `PathManager.Reset()`
 - topology changes outside normal reset flow can make registered endpoints stale
 - if the world grid or authored handoff layout changes, hosts should unregister or rebuild transitions
 

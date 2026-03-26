@@ -137,4 +137,27 @@ public class TraversalTransitionQueryTests : IDisposable
         Assert.Single(reactivated);
         Assert.Equal("generated-directed", reactivated[0].Id);
     }
+
+    [Fact]
+    public void GetDirectedTransitions_ShouldNotRequireLiveVoxelPositionLookups_ForDefaultAnchors()
+    {
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "stale-grid-a",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)))));
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "stale-grid-b",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Chart(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Chart(new Vector3d(2, 0, 0)))));
+
+        GlobalGridManager.Reset();
+        GlobalGridManager.Setup();
+
+        Exception? exception = Record.Exception(() => TraversalTransitionQuery.GetDirectedTransitions());
+        Assert.Null(exception);
+        Assert.Equal(2, TraversalTransitionQuery.GetDirectedTransitions().Length);
+    }
 }

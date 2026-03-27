@@ -18,8 +18,8 @@ public static class NavigatorPathRequestFactory
         GuidedPathMode pathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         TraversalMedium traversalMedium,
         out IPathRequest request)
@@ -40,7 +40,7 @@ public static class NavigatorPathRequestFactory
                     return false;
                 }
 
-                aStar.MaxClimbHeight = aStarMaxClimbHeight;
+                aStar.MaxClimbHeight = maxClimbHeight;
                 request = aStar;
                 return true;
 
@@ -57,6 +57,7 @@ public static class NavigatorPathRequestFactory
                     return false;
                 }
 
+                flowField.MaxClimbHeight = maxClimbHeight;
                 flowField.ExtraFloodRange = flowFieldExtraFloodRange;
                 request = flowField;
                 return true;
@@ -101,8 +102,8 @@ public static class NavigatorPathRequestFactory
         GuidedPathMode fallbackChartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         TraversalMedium traversalMedium,
         out IPathRequest request,
@@ -126,7 +127,7 @@ public static class NavigatorPathRequestFactory
                     return false;
                 }
 
-                aStar.MaxClimbHeight = aStarMaxClimbHeight;
+                aStar.MaxClimbHeight = maxClimbHeight;
                 request = aStar;
                 return true;
 
@@ -143,6 +144,7 @@ public static class NavigatorPathRequestFactory
                     return false;
                 }
 
+                flowField.MaxClimbHeight = maxClimbHeight;
                 flowField.ExtraFloodRange = flowFieldExtraFloodRange;
                 request = flowField;
                 return true;
@@ -164,8 +166,8 @@ public static class NavigatorPathRequestFactory
                         fallbackChartPathMode,
                         allowUnwalkableEndpoints,
                         allowTraversalTransitions,
+                        maxClimbHeight,
                         aStarHeuristic,
-                        aStarMaxClimbHeight,
                         flowFieldExtraFloodRange,
                         out request,
                         out handoff);
@@ -177,8 +179,8 @@ public static class NavigatorPathRequestFactory
                     fallbackChartPathMode,
                     allowUnwalkableEndpoints,
                     allowTraversalTransitions,
+                    maxClimbHeight,
                     aStarHeuristic,
-                    aStarMaxClimbHeight,
                     flowFieldExtraFloodRange,
                     out request,
                     out handoff))
@@ -212,8 +214,8 @@ public static class NavigatorPathRequestFactory
                         fallbackChartPathMode,
                         allowUnwalkableEndpoints,
                         allowTraversalTransitions,
+                        maxClimbHeight,
                         aStarHeuristic,
-                        aStarMaxClimbHeight,
                         flowFieldExtraFloodRange,
                         out request,
                         out handoff);
@@ -225,8 +227,8 @@ public static class NavigatorPathRequestFactory
                     fallbackChartPathMode,
                     allowUnwalkableEndpoints,
                     allowTraversalTransitions,
+                    maxClimbHeight,
                     aStarHeuristic,
-                    aStarMaxClimbHeight,
                     flowFieldExtraFloodRange,
                     out request,
                     out handoff))
@@ -251,8 +253,8 @@ public static class NavigatorPathRequestFactory
         GuidedPathMode fallbackChartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         out IPathRequest request,
         out GuidedVolumeExitHandoff handoff)
@@ -265,8 +267,8 @@ public static class NavigatorPathRequestFactory
             fallbackChartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
+            maxClimbHeight,
             aStarHeuristic,
-            aStarMaxClimbHeight,
             flowFieldExtraFloodRange,
             out request,
             out handoff,
@@ -281,8 +283,8 @@ public static class NavigatorPathRequestFactory
         GuidedPathMode fallbackChartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         out IPathRequest request,
         out GuidedVolumeExitHandoff handoff,
@@ -307,8 +309,8 @@ public static class NavigatorPathRequestFactory
             chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
+            maxClimbHeight,
             aStarHeuristic,
-            aStarMaxClimbHeight,
             flowFieldExtraFloodRange,
             out VolumePathRequest volumeRequest,
             out handoff,
@@ -323,8 +325,8 @@ public static class NavigatorPathRequestFactory
         GuidedPathMode fallbackChartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         out IPathRequest request,
         out GuidedVolumeExitHandoff handoff)
@@ -350,8 +352,8 @@ public static class NavigatorPathRequestFactory
                 fallbackChartPathMode,
                 allowUnwalkableEndpoints,
                 allowTraversalTransitions,
+                maxClimbHeight,
                 aStarHeuristic,
-                aStarMaxClimbHeight,
                 flowFieldExtraFloodRange,
                 out request,
                 out handoff))
@@ -370,8 +372,8 @@ public static class NavigatorPathRequestFactory
             fallbackChartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
+            maxClimbHeight,
             aStarHeuristic,
-            aStarMaxClimbHeight,
             flowFieldExtraFloodRange,
             out request,
             out handoff);
@@ -401,8 +403,8 @@ public static class NavigatorPathRequestFactory
         GuidedPathMode fallbackChartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         out IPathRequest request,
         out GuidedVolumeExitHandoff handoff)
@@ -421,8 +423,8 @@ public static class NavigatorPathRequestFactory
             fallbackChartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
+            maxClimbHeight,
             aStarHeuristic,
-            aStarMaxClimbHeight,
             flowFieldExtraFloodRange,
             out IPathRequest plannedRequest,
             out GuidedVolumeExitHandoff plannedHandoff,

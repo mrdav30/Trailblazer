@@ -137,14 +137,14 @@ public abstract class Navigator : INavigate, IRecordable
     public bool GuidedAllowTraversalTransitions { get; set; }
 
     /// <summary>
+    /// Default max climb height used when the navigator builds guided requests.
+    /// </summary>
+    public Fixed64 GuidedMaxClimbHeight { get; set; } = Fixed64.One;
+
+    /// <summary>
     /// Default heuristic used when the navigator builds A* requests.
     /// </summary>
     public HeuristicMethod GuidedAStarHeuristic { get; set; } = HeuristicMethod.Manhattan;
-
-    /// <summary>
-    /// Default max climb height used when the navigator builds A* requests.
-    /// </summary>
-    public Fixed64 GuidedAStarMaxClimbHeight { get; set; } = Fixed64.One;
 
     /// <summary>
     /// Default extra flood range used when the navigator builds flow-field requests.
@@ -395,8 +395,8 @@ public abstract class Navigator : INavigate, IRecordable
             fallbackChartPathMode: GuidedPathMode,
             allowUnwalkableEndpoints: GuidedAllowUnwalkableEndpoints,
             allowTraversalTransitions: GuidedAllowTraversalTransitions,
+            maxClimbHeight: GuidedMaxClimbHeight,
             aStarHeuristic: GuidedAStarHeuristic,
-            aStarMaxClimbHeight: GuidedAStarMaxClimbHeight,
             flowFieldExtraFloodRange: GuidedFlowFieldExtraFloodRange,
             traversalMedium: _frameCondition.Medium,
             out pathRequest,
@@ -838,8 +838,8 @@ public abstract class Navigator : INavigate, IRecordable
         GuidedPathMode guidedPathMode = GuidedPathMode;
         bool guidedAllowUnwalkableEndpoints = GuidedAllowUnwalkableEndpoints;
         bool guidedAllowTraversalTransitions = GuidedAllowTraversalTransitions;
+        Fixed64 guidedMaxClimbHeight = GuidedMaxClimbHeight;
         HeuristicMethod guidedAStarHeuristic = GuidedAStarHeuristic;
-        Fixed64 guidedAStarMaxClimbHeight = GuidedAStarMaxClimbHeight;
         int guidedFlowFieldExtraFloodRange = GuidedFlowFieldExtraFloodRange;
         Guid globalId = GlobalId;
         byte occupantGroupId = OccupantGroupId;
@@ -867,8 +867,8 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref guidedPathMode, "guidedPathMode", GuidedPathMode.AStar);
         RecordValues.Look(chronicler, ref guidedAllowUnwalkableEndpoints, "guidedAllowUnwalkableEndpoints", false);
         RecordValues.Look(chronicler, ref guidedAllowTraversalTransitions, "guidedAllowTraversalTransitions", false);
+        RecordValues.Look(chronicler, ref guidedMaxClimbHeight, "guidedMaxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref guidedAStarHeuristic, "guidedAStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref guidedAStarMaxClimbHeight, "guidedAStarMaxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref guidedFlowFieldExtraFloodRange, "guidedFlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
         RecordValues.Look(chronicler, ref globalId, "globalId", Guid.Empty);
         RecordValues.Look(chronicler, ref occupantGroupId, "occupantGroupId", (byte)1);
@@ -896,8 +896,8 @@ public abstract class Navigator : INavigate, IRecordable
             GuidedPathMode = guidedPathMode;
             GuidedAllowUnwalkableEndpoints = guidedAllowUnwalkableEndpoints;
             GuidedAllowTraversalTransitions = guidedAllowTraversalTransitions;
+            GuidedMaxClimbHeight = guidedMaxClimbHeight;
             GuidedAStarHeuristic = guidedAStarHeuristic;
-            GuidedAStarMaxClimbHeight = guidedAStarMaxClimbHeight;
             GuidedFlowFieldExtraFloodRange = guidedFlowFieldExtraFloodRange;
             GlobalId = globalId;
             OccupantGroupId = occupantGroupId;

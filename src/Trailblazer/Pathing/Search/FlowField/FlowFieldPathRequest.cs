@@ -16,6 +16,12 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
     public const int DefaultExtraFloodRange = 10;
 
     /// <summary>
+    /// The maximum Y-axis height delta a unit can step or climb per voxel while the field is built.
+    /// Voxels exceeding this are ignored even if walkable and adjacent.
+    /// </summary>
+    public Fixed64 MaxClimbHeight { get; set; }
+
+    /// <summary>
     /// Limits how much extra distance the flood will expand after the target is reached.
     /// </summary>
     public int ExtraFloodRange { get; set; }
@@ -62,6 +68,7 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
             UnitSize = unitSize,
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             AllowTraversalTransitions = allowTraversalTransitions,
+            MaxClimbHeight = GlobalGridManager.VoxelSize,
             ExtraFloodRange = DefaultExtraFloodRange
         };
 
@@ -74,7 +81,8 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
     public override bool Equals(object obj) =>
         obj is FlowFieldPathRequest other && Equals(other);
 
-    public bool Equals(FlowFieldPathRequest other) => RequestCacheKey == other.RequestCacheKey;
+    public bool Equals(FlowFieldPathRequest other) =>
+        other != null && RequestCacheKey == other.RequestCacheKey;
 
     public override int GetHashCode()
     {
@@ -84,6 +92,7 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
             UnitSize,
             AllowUnwalkableEndpoints,
             AllowTraversalTransitions,
+            MaxClimbHeight,
             ExtraFloodRange,
             MaxPathSearchRange,
             AllowTraversalTransitions ? TraversalTransitionRegistry.RegistryVersion : 0

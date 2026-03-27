@@ -21,9 +21,9 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
 
     public bool AllowTraversalTransitions;
 
-    public HeuristicMethod AStarHeuristic = HeuristicMethod.Manhattan;
+    public Fixed64 MaxClimbHeight = Fixed64.One;
 
-    public Fixed64 AStarMaxClimbHeight = Fixed64.One;
+    public HeuristicMethod AStarHeuristic = HeuristicMethod.Manhattan;
 
     public int FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
@@ -54,7 +54,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
                 if (aStar == null || !aStar.TrySetOrigin(currentPosition))
                     return false;
 
-                aStar.MaxClimbHeight = AStarMaxClimbHeight;
+                aStar.MaxClimbHeight = MaxClimbHeight;
                 request = aStar;
                 return true;
 
@@ -68,6 +68,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
                 if (flowField == null || !flowField.TrySetOrigin(currentPosition))
                     return false;
 
+                flowField.MaxClimbHeight = MaxClimbHeight;
                 flowField.ExtraFloodRange = FlowFieldExtraFloodRange;
                 request = flowField;
                 return true;
@@ -85,8 +86,8 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         GuidedPathMode chartPathMode = ChartPathMode;
         bool allowUnwalkableEndpoints = AllowUnwalkableEndpoints;
         bool allowTraversalTransitions = AllowTraversalTransitions;
+        Fixed64 maxClimbHeight = MaxClimbHeight;
         HeuristicMethod aStarHeuristic = AStarHeuristic;
-        Fixed64 aStarMaxClimbHeight = AStarMaxClimbHeight;
         int flowFieldExtraFloodRange = FlowFieldExtraFloodRange;
         int movementGroupId = MovementGroupId;
 
@@ -96,8 +97,8 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         RecordValues.Look(chronicler, ref chartPathMode, "chartPathMode", GuidedPathMode.AStar);
         RecordValues.Look(chronicler, ref allowUnwalkableEndpoints, "allowUnwalkableEndpoints", false);
         RecordValues.Look(chronicler, ref allowTraversalTransitions, "allowTraversalTransitions", false);
+        RecordValues.Look(chronicler, ref maxClimbHeight, "maxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref aStarMaxClimbHeight, "aStarMaxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref flowFieldExtraFloodRange, "flowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
         RecordValues.Look(chronicler, ref movementGroupId, "movementGroupId", -1);
 
@@ -109,8 +110,8 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
             ChartPathMode = chartPathMode;
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints;
             AllowTraversalTransitions = allowTraversalTransitions;
+            MaxClimbHeight = maxClimbHeight;
             AStarHeuristic = aStarHeuristic;
-            AStarMaxClimbHeight = aStarMaxClimbHeight;
             FlowFieldExtraFloodRange = flowFieldExtraFloodRange;
             MovementGroupId = movementGroupId;
         }

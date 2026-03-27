@@ -122,8 +122,8 @@ Important public state includes:
 - `GuidedPathMode`
 - `GuidedAllowUnwalkableEndpoints`
 - `GuidedAllowTraversalTransitions`
+- `GuidedMaxClimbHeight`
 - `GuidedAStarHeuristic`
-- `GuidedAStarMaxClimbHeight`
 - `GuidedFlowFieldExtraFloodRange`
 - `GlobalId`
 - `OccupantGroupId`

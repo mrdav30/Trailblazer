@@ -162,6 +162,7 @@ Use `FlowFieldPathRequest` when multiple agents can share one destination-center
 
 Key configuration:
 
+- `MaxClimbHeight`
 - `ExtraFloodRange`
 - `AllowUnwalkableEndpoints`
 - `AllowTraversalTransitions`
@@ -174,7 +175,7 @@ Use it when:
 Cache-key behavior:
 
 - ignores the start voxel on purpose
-- includes `EndNode`, `UnitSize`, `AllowUnwalkableEndpoints`, `AllowTraversalTransitions`, `ExtraFloodRange`, and `MaxPathSearchRange`
+- includes `EndNode`, `UnitSize`, `AllowUnwalkableEndpoints`, `AllowTraversalTransitions`, `MaxClimbHeight`, `ExtraFloodRange`, and `MaxPathSearchRange`
 - includes `TraversalTransitionRegistry.RegistryVersion` when transition fallback is enabled
 
 Important nuance:
@@ -391,6 +392,7 @@ if (PathGuideFactory.RequestGuide(request, out AStarGuide guide))
 
 ```csharp
 var request = FlowFieldPathRequest.Create(origin, destination, Fixed64.One);
+request.MaxClimbHeight = Fixed64.One;
 request.ExtraFloodRange = 12;
 
 if (PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide))

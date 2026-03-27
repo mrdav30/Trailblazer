@@ -132,6 +132,9 @@ public class FlowFieldSurveyor
             if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request.UnitSize))
                 continue;
 
+            if (ExceedsMaxClimbHeight(current, neighbor))
+                continue;
+
             if (checkEdges && !HasValidDiagonalLegs(current, dir))
                 continue;
 
@@ -147,6 +150,13 @@ public class FlowFieldSurveyor
                 _heap.SortUp(neighbor);
             }
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool ExceedsMaxClimbHeight(SolidChartPartition current, SolidChartPartition neighbor)
+    {
+        Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
+        return heightDifference > _request.MaxClimbHeight;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -207,6 +217,9 @@ public class FlowFieldSurveyor
                 SolidChartPartition nPart = current.Neighbors[i];
                 // check closed heap version to ensure neighbor was part of flood phase
                 if (nPart == null || !_heap.IsClosed(nPart))
+                    continue;
+
+                if (ExceedsMaxClimbHeight(current, nPart))
                     continue;
 
                 if (i > 6 && !HasValidDiagonalLegs(current, (SpatialDirection)i))

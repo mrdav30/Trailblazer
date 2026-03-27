@@ -330,6 +330,7 @@ internal static class HybridRoutePlanner
         if (chartRequest == null)
             return false;
 
+        chartRequest.MaxClimbHeight = request.MaxClimbHeight;
         chartRequest.ExtraFloodRange = request.ExtraFloodRange;
 
         if (chartRequest.HasZeroDisplacement)

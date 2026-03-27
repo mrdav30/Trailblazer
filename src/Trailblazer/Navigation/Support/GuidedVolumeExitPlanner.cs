@@ -20,8 +20,8 @@ internal static class GuidedVolumeExitPlanner
     /// <param name="chartPathMode"></param>
     /// <param name="allowUnwalkableEndpoints"></param>
     /// <param name="allowTraversalTransitions"></param>
+    /// <param name="maxClimbHeight"></param>
     /// <param name="aStarHeuristic"></param>
-    /// <param name="aStarMaxClimbHeight"></param>
     /// <param name="flowFieldExtraFloodRange"></param>
     /// <param name="request"></param>
     /// <param name="handoff"></param>
@@ -35,8 +35,8 @@ internal static class GuidedVolumeExitPlanner
         GuidedPathMode chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         out VolumePathRequest request,
         out GuidedVolumeExitHandoff handoff,
@@ -66,8 +66,8 @@ internal static class GuidedVolumeExitPlanner
             chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
+            maxClimbHeight,
             aStarHeuristic,
-            aStarMaxClimbHeight,
             flowFieldExtraFloodRange,
             ref bestTransition,
             ref bestRequest,
@@ -81,8 +81,8 @@ internal static class GuidedVolumeExitPlanner
                 chartPathMode,
                 allowUnwalkableEndpoints,
                 allowTraversalTransitions,
+                maxClimbHeight,
                 aStarHeuristic,
-                aStarMaxClimbHeight,
                 flowFieldExtraFloodRange);
             return true;
         }
@@ -96,8 +96,8 @@ internal static class GuidedVolumeExitPlanner
             chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
+            maxClimbHeight,
             aStarHeuristic,
-            aStarMaxClimbHeight,
             flowFieldExtraFloodRange,
             ref bestTransition,
             ref bestRequest,
@@ -114,8 +114,8 @@ internal static class GuidedVolumeExitPlanner
             chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
+            maxClimbHeight,
             aStarHeuristic,
-            aStarMaxClimbHeight,
             flowFieldExtraFloodRange);
         return true;
     }
@@ -129,8 +129,8 @@ internal static class GuidedVolumeExitPlanner
         GuidedPathMode chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         ref TraversalTransition bestTransition,
         ref VolumePathRequest bestRequest,
@@ -178,8 +178,8 @@ internal static class GuidedVolumeExitPlanner
                 chartPathMode,
                 allowUnwalkableEndpoints,
                 allowTraversalTransitions,
+                maxClimbHeight,
                 aStarHeuristic,
-                aStarMaxClimbHeight,
                 flowFieldExtraFloodRange,
                 out int chartCost))
             {
@@ -213,8 +213,8 @@ internal static class GuidedVolumeExitPlanner
         GuidedPathMode chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange)
     {
         return new GuidedVolumeExitHandoff
@@ -225,8 +225,8 @@ internal static class GuidedVolumeExitPlanner
             ChartPathMode = chartPathMode,
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             AllowTraversalTransitions = allowTraversalTransitions,
+            MaxClimbHeight = maxClimbHeight,
             AStarHeuristic = aStarHeuristic,
-            AStarMaxClimbHeight = aStarMaxClimbHeight,
             FlowFieldExtraFloodRange = flowFieldExtraFloodRange
         };
     }
@@ -238,8 +238,8 @@ internal static class GuidedVolumeExitPlanner
         GuidedPathMode chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
-        Fixed64 aStarMaxClimbHeight,
         int flowFieldExtraFloodRange,
         out int chartCost)
     {
@@ -257,6 +257,7 @@ internal static class GuidedVolumeExitPlanner
                 if (flowFieldRequest == null)
                     return false;
 
+                flowFieldRequest.MaxClimbHeight = maxClimbHeight;
                 flowFieldRequest.ExtraFloodRange = flowFieldExtraFloodRange;
                 if (flowFieldRequest.HasZeroDisplacement)
                     return true;
@@ -281,7 +282,7 @@ internal static class GuidedVolumeExitPlanner
                 if (aStarRequest == null)
                     return false;
 
-                aStarRequest.MaxClimbHeight = aStarMaxClimbHeight;
+                aStarRequest.MaxClimbHeight = maxClimbHeight;
                 if (aStarRequest.HasZeroDisplacement)
                     return true;
 

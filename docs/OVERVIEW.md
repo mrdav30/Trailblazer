@@ -110,6 +110,7 @@ Use `FlowFieldPathRequest` when many agents can share a destination-centric fiel
 
 Additional configuration includes:
 
+- `MaxClimbHeight`, which restricts vertical step height during flood expansion and flow selection
 - `ExtraFloodRange`, which controls how far the flood expands beyond the destination
 
 Factory helpers:

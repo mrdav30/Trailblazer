@@ -201,6 +201,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             UnitSize = request.UnitSize,
             ChartRequestKind = HybridChartRequestKind.FlowField,
             AllowUnwalkableEndpoints = request.AllowUnwalkableEndpoints,
+            MaxClimbHeight = request.MaxClimbHeight,
             ExtraFloodRange = request.ExtraFloodRange
         };
 

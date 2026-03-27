@@ -56,7 +56,7 @@ public class NavigatorTests : IDisposable
         navigator.GuidedAllowUnwalkableEndpoints = true;
         navigator.GuidedAllowTraversalTransitions = true;
         navigator.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
-        navigator.GuidedAStarMaxClimbHeight = (Fixed64)2;
+        navigator.GuidedMaxClimbHeight = (Fixed64)2;
 
         Vector3d target = new(4, 0, 0);
         navigator.ApplyGuidedTrekRequest(target, rate: TrekRate.Moderate, groupId: 4);
@@ -147,6 +147,7 @@ public class NavigatorTests : IDisposable
         navigator.GuidedPathMode = GuidedPathMode.AStar;
         navigator.GuidedAllowUnwalkableEndpoints = true;
         navigator.GuidedAllowTraversalTransitions = true;
+        navigator.GuidedMaxClimbHeight = (Fixed64)2;
         navigator.GuidedFlowFieldExtraFloodRange = 24;
 
         Vector3d target = new(4, 0, 0);
@@ -161,6 +162,7 @@ public class NavigatorTests : IDisposable
         request.UnitSize.Should().Be(navigator.Size);
         request.AllowUnwalkableEndpoints.Should().BeTrue();
         request.AllowTraversalTransitions.Should().BeTrue();
+        request.MaxClimbHeight.Should().Be((Fixed64)2);
         request.ExtraFloodRange.Should().Be(24);
 
         PathManager.UnloadChart("NavigatorFlowField");
@@ -311,6 +313,7 @@ public class NavigatorTests : IDisposable
         navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         navigator.GuidedPathMode = GuidedPathMode.FlowField;
         navigator.GuidedAllowTraversalTransitions = true;
+        navigator.GuidedMaxClimbHeight = (Fixed64)2;
 
         navigator.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
@@ -331,6 +334,7 @@ public class NavigatorTests : IDisposable
 
         FlowFieldPathRequest followupRequest = navigator.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
         followupRequest.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
+        followupRequest.MaxClimbHeight.Should().Be((Fixed64)2);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
         navigator.Steering.MovementGroupID.Should().Be(7);

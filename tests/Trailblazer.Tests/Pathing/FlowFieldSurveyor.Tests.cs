@@ -97,6 +97,45 @@ public class FlowFieldSurveyorTests : IDisposable
     }
 
     [Fact]
+    public void FlowField_ShouldRespectMaxClimbHeight()
+    {
+        bool[,,] data = new bool[3, 1, 1];
+        for (int y = 0; y < 3; y++)
+            data[y, 0, 0] = true;
+
+        PathTestFactory.RegisterFromData("FlowHeightLimit", data, Vector3d.Zero);
+
+        FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(0, 2, 0), out FlowFieldPathRequest request);
+        request.MaxClimbHeight = Fixed64.Half;
+
+        FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+
+        result.HasPath.Should().BeFalse();
+        result.Fields.Should().BeNull();
+
+        PathManager.UnloadChart("FlowHeightLimit");
+    }
+
+    [Fact]
+    public void HybridFlowFieldRequest_ShouldRespectMaxClimbHeight_WhenBuildingRoutePlan()
+    {
+        bool[,,] data = new bool[3, 1, 1];
+        for (int y = 0; y < 3; y++)
+            data[y, 0, 0] = true;
+
+        PathTestFactory.RegisterFromData("HybridFlowHeightLimit", data, Vector3d.Zero);
+
+        FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(0, 2, 0), out FlowFieldPathRequest request);
+        request.MaxClimbHeight = Fixed64.Half;
+
+        HybridPathRequest hybrid = HybridPathRequest.CreateFromFlowField(request);
+
+        hybrid.Should().BeNull();
+
+        PathManager.UnloadChart("HybridFlowHeightLimit");
+    }
+
+    [Fact]
     public void FlowField_ShouldRespectSearchRange()
     {
         bool[,,] data = new bool[1, 8, 8];

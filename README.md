@@ -169,6 +169,7 @@ navigator.Initialize(new TrekCondition
 Vector3d target = new(10, 0, 10);
 navigator.GuidedPathMode = GuidedPathMode.FlowField;
 navigator.GuidedAllowTraversalTransitions = true;
+navigator.GuidedMaxClimbHeight = Fixed64.One;
 navigator.GuidedFlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
 navigator.ApplyGuidedTrekRequest(
@@ -206,6 +207,7 @@ Use `FlowFieldPathRequest` when:
 
 - many units can share the same destination
 - you want local vector sampling rather than waypoint following
+- you want to restrict per-step climb height while keeping destination-centric reuse
 - you want optional transition-aware fallback while keeping a FlowField request surface
 - you want destination-centric caching and group-friendly movement; paired `groupId` values can preserve relative offsets while the group stays cohesive
 

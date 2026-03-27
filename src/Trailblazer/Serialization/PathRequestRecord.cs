@@ -34,9 +34,9 @@ internal sealed class PathRequestRecord : IRecordable
 
     public int MaxPathSearchRange;
 
-    public HeuristicMethod AStarHeuristic = HeuristicMethod.Manhattan;
+    public Fixed64 MaxClimbHeight = Fixed64.One;
 
-    public Fixed64 AStarMaxClimbHeight = Fixed64.One;
+    public HeuristicMethod AStarHeuristic = HeuristicMethod.Manhattan;
 
     public int FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
@@ -65,12 +65,13 @@ internal sealed class PathRequestRecord : IRecordable
                 Kind = PathRequestRecordKind.AStar;
                 AllowTraversalTransitions = aStar.AllowTraversalTransitions;
                 AStarHeuristic = aStar.Heuristic;
-                AStarMaxClimbHeight = aStar.MaxClimbHeight;
+                MaxClimbHeight = aStar.MaxClimbHeight;
                 break;
 
             case FlowFieldPathRequest flowField:
                 Kind = PathRequestRecordKind.FlowField;
                 AllowTraversalTransitions = flowField.AllowTraversalTransitions;
+                MaxClimbHeight = flowField.MaxClimbHeight;
                 FlowFieldExtraFloodRange = flowField.ExtraFloodRange;
                 break;
 
@@ -83,7 +84,7 @@ internal sealed class PathRequestRecord : IRecordable
             case HybridPathRequest hybrid:
                 Kind = PathRequestRecordKind.Hybrid;
                 AStarHeuristic = hybrid.Heuristic;
-                AStarMaxClimbHeight = hybrid.MaxClimbHeight;
+                MaxClimbHeight = hybrid.MaxClimbHeight;
                 break;
 
             default:
@@ -115,7 +116,7 @@ internal sealed class PathRequestRecord : IRecordable
                 if (aStar == null)
                     return false;
 
-                aStar.MaxClimbHeight = AStarMaxClimbHeight;
+                aStar.MaxClimbHeight = MaxClimbHeight;
                 if (MaxPathSearchRange > 0)
                     aStar.MaxPathSearchRange = MaxPathSearchRange;
 
@@ -132,6 +133,7 @@ internal sealed class PathRequestRecord : IRecordable
                 if (flowField == null)
                     return false;
 
+                flowField.MaxClimbHeight = MaxClimbHeight;
                 flowField.ExtraFloodRange = FlowFieldExtraFloodRange;
                 if (MaxPathSearchRange > 0)
                     flowField.MaxPathSearchRange = MaxPathSearchRange;
@@ -162,7 +164,7 @@ internal sealed class PathRequestRecord : IRecordable
                     TargetPosition,
                     UnitSize,
                     AStarHeuristic,
-                    AStarMaxClimbHeight,
+                    MaxClimbHeight,
                     AllowUnwalkableEndpoints);
                 if (hybrid == null)
                     return false;
@@ -206,8 +208,8 @@ internal sealed class PathRequestRecord : IRecordable
         AllowUnwalkableEndpoints = false;
         AllowTraversalTransitions = false;
         MaxPathSearchRange = 0;
+        MaxClimbHeight = Fixed64.One;
         AStarHeuristic = HeuristicMethod.Manhattan;
-        AStarMaxClimbHeight = Fixed64.One;
         FlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
         Medium = TraversalMedium.Gas;
         HasGuide = false;
@@ -223,8 +225,8 @@ internal sealed class PathRequestRecord : IRecordable
         bool allowUnwalkableEndpoints = AllowUnwalkableEndpoints;
         bool allowTraversalTransitions = AllowTraversalTransitions;
         int maxPathSearchRange = MaxPathSearchRange;
+        Fixed64 maxClimbHeight = MaxClimbHeight;
         HeuristicMethod aStarHeuristic = AStarHeuristic;
-        Fixed64 aStarMaxClimbHeight = AStarMaxClimbHeight;
         int flowFieldExtraFloodRange = FlowFieldExtraFloodRange;
         TraversalMedium medium = Medium;
         bool hasGuide = HasGuide;
@@ -237,8 +239,8 @@ internal sealed class PathRequestRecord : IRecordable
         RecordValues.Look(chronicler, ref allowUnwalkableEndpoints, "allowUnwalkableEndpoints", false);
         RecordValues.Look(chronicler, ref allowTraversalTransitions, "allowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref maxPathSearchRange, "maxPathSearchRange", 0);
+        RecordValues.Look(chronicler, ref maxClimbHeight, "maxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref aStarMaxClimbHeight, "aStarMaxClimbHeight", Fixed64.One);
         RecordValues.Look(chronicler, ref flowFieldExtraFloodRange, "flowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
         RecordValues.Look(chronicler, ref medium, "medium", TraversalMedium.Gas);
         RecordValues.Look(chronicler, ref hasGuide, "hasGuide", false);
@@ -253,8 +255,8 @@ internal sealed class PathRequestRecord : IRecordable
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints;
             AllowTraversalTransitions = allowTraversalTransitions;
             MaxPathSearchRange = maxPathSearchRange;
+            MaxClimbHeight = maxClimbHeight;
             AStarHeuristic = aStarHeuristic;
-            AStarMaxClimbHeight = aStarMaxClimbHeight;
             FlowFieldExtraFloodRange = flowFieldExtraFloodRange;
             Medium = medium;
             HasGuide = hasGuide;

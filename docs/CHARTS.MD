@@ -71,7 +71,9 @@ NavigationChart chart = NavigationChart.From3D(
     interval: Fixed64.One);
 ```
 
-When you need authored per-cell surface or volume metadata instead of only a simple surface mask, use the `NavigationChartCell[,,]` overload of `NavigationChart.From3D(...)`.
+The `bool[,,]` overload emits authored solid cells by default, or one authored volume medium when you pass `TraversalMedium.Gas` or `TraversalMedium.Liquid`.
+
+When you need mixed traversal media or authored per-cell metadata instead of one uniform medium, use the `NavigationChartCell[,,]` overload of `NavigationChart.From3D(...)`.
 
 ## 3. What Charts Are For
 

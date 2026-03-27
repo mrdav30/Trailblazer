@@ -73,6 +73,12 @@ public class NavigationChart
     /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
     /// <param name="maxBounds">The maximum world-space bounds of the grid.</param>
     /// <param name="interval">Distance between adjacent grid points.</param>
+    /// <param name="medium">The authored traversal medium emitted for each <c>true</c> cell.</param>
+     /// <exception cref="ArgumentNullException">Thrown when <paramref name="map"/> is null.</exception>
+     /// <exception cref="ArgumentOutOfRangeException">
+     /// Thrown when <paramref name="medium"/> is not <see cref="TraversalMedium.Solid"/>,
+     /// <see cref="TraversalMedium.Gas"/>, or <see cref="TraversalMedium.Liquid"/>.
+     /// </exception>
     public NavigationChart(
         string name,
         bool[] map,
@@ -81,10 +87,11 @@ public class NavigationChart
         int sizeZ,
         Vector3d minBounds,
         Vector3d maxBounds,
-        Fixed64 interval)
+        Fixed64 interval,
+        TraversalMedium medium = TraversalMedium.Solid)
         : this(
             name,
-            CreateCells(map),
+            CreateCells(map, medium),
             sizeX,
             sizeY,
             sizeZ,
@@ -251,19 +258,29 @@ public class NavigationChart
     }
 
     /// <summary>
-    /// Creates a navigation chart from a 3D boolean array representing walkable voxels.
+    /// Creates a navigation chart from a 3D boolean array representing authored traversal voxels.
     /// </summary>
     /// <param name="name">Name identifier for the chart.</param>
-    /// <param name="sourceMap">3D map of walkable cells (true = walkable).</param>
+    /// <param name="sourceMap">3D map of authored cells (true = authored traversal).</param>
     /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
     /// <param name="interval">The spacing between each grid point.</param>
+    /// <param name="medium">The authored traversal medium emitted for each <c>true</c> cell.</param>
     /// <returns>A constructed NavigationChart instance.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="sourceMap"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="medium"/> is not <see cref="TraversalMedium.Solid"/>,
+    /// <see cref="TraversalMedium.Gas"/>, or <see cref="TraversalMedium.Liquid"/>.
+    /// </exception>
     public static NavigationChart From3D(
         string name,
         bool[,,] sourceMap,
         Vector3d minBounds,
-        Fixed64 interval)
+        Fixed64 interval,
+        TraversalMedium medium = TraversalMedium.Solid)
     {
+        if (sourceMap == null)
+            ThrowHelper.ThrowArgumentNullException(nameof(sourceMap));
+
         int sizeY = sourceMap.GetLength(0);
         int sizeX = sourceMap.GetLength(1);
         int sizeZ = sourceMap.GetLength(2);
@@ -282,7 +299,7 @@ public class NavigationChart
 
         return new(
             name,
-            CreateCells(flat),
+            CreateCells(flat, medium),
             sizeX,
             sizeY,
             sizeZ,
@@ -305,6 +322,9 @@ public class NavigationChart
         Vector3d minBounds,
         Fixed64 interval)
     {
+        if (sourceMap == null)
+            ThrowHelper.ThrowArgumentNullException(nameof(sourceMap));
+
         int sizeY = sourceMap.GetLength(0);
         int sizeX = sourceMap.GetLength(1);
         int sizeZ = sourceMap.GetLength(2);
@@ -335,14 +355,25 @@ public class NavigationChart
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private NavigationChartCell GetCell(int x, int y, int z) => _cells[ToIndex(x, y, z)];
 
-    private static NavigationChartCell[] CreateCells(bool[] map)
+    private static NavigationChartCell[] CreateCells(bool[] map, TraversalMedium medium)
     {
         if (map == null)
             ThrowHelper.ThrowArgumentNullException(nameof(map));
 
+        NavigationChartCell traversableCell = medium switch
+        {
+            TraversalMedium.Solid => NavigationChartCell.Solid,
+            TraversalMedium.Gas => NavigationChartCell.Gas,
+            TraversalMedium.Liquid => NavigationChartCell.Liquid,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(medium),
+                medium,
+                "Boolean chart factories support Solid, Gas, or Liquid traversal only.")
+        };
+
         var cells = new NavigationChartCell[map.Length];
         for (int i = 0; i < map.Length; i++)
-            cells[i] = map[i] ? NavigationChartCell.Solid : NavigationChartCell.Empty;
+            cells[i] = map[i] ? traversableCell : NavigationChartCell.Empty;
 
         return cells;
     }

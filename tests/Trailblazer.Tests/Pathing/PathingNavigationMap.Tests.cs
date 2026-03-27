@@ -176,6 +176,82 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void TryGetCell_ShouldReturnRequestedVolumeMetadata_ForBooleanCharts()
+    {
+        bool[,,] data = new bool[1, 2, 1]
+        {
+            {
+                { true },
+                { false }
+            }
+        };
+
+        var chart = NavigationChart.From3D(
+            "BoolVolumePayload",
+            data,
+            Vector3d.Zero,
+            Fixed64.One,
+            TraversalMedium.Liquid);
+
+        Assert.True(chart.TryGetCell(Vector3d.Zero, out NavigationChartCell traversableCell));
+        Assert.True(traversableCell.HasTraversalData);
+        Assert.False(traversableCell.HasSolid);
+        Assert.True(traversableCell.HasVolume);
+        Assert.True(traversableCell.SupportsMedium(TraversalMedium.Liquid));
+        Assert.False(traversableCell.SupportsMedium(TraversalMedium.Gas));
+        Assert.Equal(0, traversableCell.PathCostModifier);
+        Assert.Equal(NavigationChartCellFlags.None, traversableCell.Flags);
+
+        Assert.True(chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell emptyCell));
+        Assert.False(emptyCell.HasTraversalData);
+        Assert.False(emptyCell.HasSolid);
+        Assert.False(emptyCell.HasVolume);
+    }
+
+    [Fact]
+    public void From3D_ShouldRejectUnsupportedBooleanTraversalMedium()
+    {
+        bool[,,] data = new bool[1, 1, 1];
+        data[0, 0, 0] = true;
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            NavigationChart.From3D(
+                "InvalidBoolMedium",
+                data,
+                Vector3d.Zero,
+                Fixed64.One,
+                TraversalMedium.Unknown));
+    }
+
+    [Fact]
+    public void InitializeChart_ShouldCreateVolumePartitions_ForBooleanVolumeCharts()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        bool[,,] data = new bool[3, 3, 3];
+        data[1, 1, 1] = true;
+
+        Vector3d targetPosition = Vector3d.Zero;
+        var chart = NavigationChart.From3D(
+            "BoolVolumeChart",
+            data,
+            new Vector3d(-1, -1, -1),
+            Fixed64.One,
+            TraversalMedium.Gas);
+
+        PathManager.Register(chart);
+
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.True(voxel.TryGetPartition(out VolumeChartPartition volumePartition));
+        Assert.True(volumePartition.SupportsMedium(TraversalMedium.Gas));
+        Assert.False(volumePartition.SupportsMedium(TraversalMedium.Liquid));
+
+        PathManager.UnloadChart(chart.Name);
+    }
+
+    [Fact]
     public void InitializeChart_ShouldApplyStructuredCellMetadata_ToPartitions()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));

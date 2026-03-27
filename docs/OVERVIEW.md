@@ -43,7 +43,7 @@ At a high level, the runtime loop is:
 
 `NavigationChart` is the pathable surface description of your world. It stores authored chart-cell data and exposes:
 
-- `NavigationChart.From3D(...)` to build a chart from `bool[,,]` or `NavigationChartCell[,,]` voxel data
+- `NavigationChart.From3D(...)` to build a chart from `bool[,,]` voxel data for one authored medium at a time, or from `NavigationChartCell[,,]` voxel data for mixed authored payloads
 - `TraversalAuthoringMap.Build()` to build a `TraversalBuildResult` from tokenized `string[,,]` authoring input
 - `TryGetCell(...)` to inspect the authored cell payload at a world position
 - `TryWorldToIndex(...)` to map world positions into chart coordinates

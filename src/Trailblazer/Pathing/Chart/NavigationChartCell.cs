@@ -20,6 +20,16 @@ public readonly struct NavigationChartCell
     /// </summary>
     public static readonly NavigationChartCell Solid = new(TraversalMedia.Solid);
 
+    /// <summary>
+    /// A reusable gas traversal cell with no additional authored metadata.
+    /// </summary>
+    public static readonly NavigationChartCell Gas = new(TraversalMedia.Gas);
+
+    /// <summary>
+    /// A reusable liquid traversal cell with no additional authored metadata.
+    /// </summary>
+    public static readonly NavigationChartCell Liquid = new(TraversalMedia.Liquid);
+
     #endregion
 
     #region Properties

@@ -374,7 +374,6 @@ Choose transition-aware chart requests when:
 ```csharp
 NavigationChart chart = NavigationChart.From3D("Ground", data, minBounds, Fixed64.One);
 PathManager.Register(chart);
-PathManager.InitializeChart(chart.Name);
 
 var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
 if (PathGuideFactory.RequestGuide(request, out AStarGuide guide))

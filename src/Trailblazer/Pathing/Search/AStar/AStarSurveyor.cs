@@ -17,6 +17,11 @@ internal struct AStarVoxelMeta
     public int MovementCost;
 
     /// <summary>
+    /// The total survey path cost recorded for this voxel.
+    /// </summary>
+    public int PathCost;
+
+    /// <summary>
     /// The next voxel in the trail path.
     /// </summary>
     public GlobalVoxelIndex? NextTrailIndex;
@@ -57,7 +62,7 @@ public class AStarSurveyor
 
     #endregion
 
-    private readonly PathHeap _heap = new();
+    private readonly PathHeap<SolidChartPartition> _heap = new();
 
     private readonly SwiftDictionary<Voxel, AStarVoxelMeta> _meta = new();
 
@@ -100,12 +105,12 @@ public class AStarSurveyor
             _rawPath.FastClear();
             _waypoints.FastClear();
             _chartKeys.Clear();
-            SolidChartPartition.AdvancePathCostVersion();
-
             // Trace path from the start to the end
-            _meta.Add(_request.StartNode, new());
-            startPartition.PathCost = 0;
-            _heap.Add(startPartition);
+            _meta[_request.StartNode] = new AStarVoxelMeta
+            {
+                PathCost = 0
+            };
+            _heap.Add(startPartition, pathCost: 0);
 
             if (!TracePath())
                 return AStarSurveyResult.Empty;
@@ -222,19 +227,22 @@ public class AStarSurveyor
 
         if (neighbor.Voxel == _request.EndNode)
         {
-            SetPathPartitionData(neighbor, current.GlobalIndex, cost);
+            int endPathCost = CalculatePathCost(neighbor, cost);
+            SetPathPartitionData(neighbor, current.GlobalIndex, cost, endPathCost);
             return true;
         }
 
+        int pathCost = CalculatePathCost(neighbor, cost);
         if (!_heap.Contains(neighbor))
         {
-            SetPathPartitionData(neighbor, current.GlobalIndex, cost);
-            _heap.Add(neighbor);
+            SetPathPartitionData(neighbor, current.GlobalIndex, cost, pathCost);
+            _heap.Add(neighbor, pathCost);
         }
         else if (_meta.TryGetValue(neighbor.Voxel, out AStarVoxelMeta neighborData)
             && neighborData.MovementCost > cost)
         {
-            SetPathPartitionData(neighbor, current.GlobalIndex, cost);
+            SetPathPartitionData(neighbor, current.GlobalIndex, cost, pathCost);
+            _heap.UpdatePathCost(neighbor, pathCost);
             _heap.SortUp(neighbor);
         }
 
@@ -247,25 +255,19 @@ public class AStarSurveyor
     /// <param name="partition">The path partition being updated.</param>
     /// <param name="nextTrailCoordinates">The coordinates of the parent partition leading to this one.</param>
     /// <param name="movementCost">The cumulative movement cost to this partition.</param>
+    /// <param name="pathCost">The total survey path cost recorded for this partition.</param>
     private void SetPathPartitionData(
         SolidChartPartition partition,
         GlobalVoxelIndex nextTrailCoordinates,
-        int movementCost)
+        int movementCost,
+        int pathCost)
     {
-        _meta.Add(partition.Voxel, new AStarVoxelMeta
+        _meta[partition.Voxel] = new AStarVoxelMeta
         {
             MovementCost = movementCost,
-            NextTrailIndex = nextTrailCoordinates
-        });
-
-        int heuristicCost = CalculateHeuristic(
-            partition.VoxelPosition,
-            _request.EndNode.WorldPosition,
-            _request.Heuristic);
-
-        // Calculate the total cost (fCost) by adding modifier to the heuristic cost (hCost)
-        // and to the movement cost (gCost)
-        partition.PathCost = partition.PathCostModifier + movementCost + heuristicCost;
+            NextTrailIndex = nextTrailCoordinates,
+            PathCost = pathCost
+        };
     }
 
     /// <summary>
@@ -309,7 +311,7 @@ public class AStarSurveyor
         _waypoints.Add(new()
         {
             Position = start.VoxelPosition,
-            PathCost = start.PathCost,
+            PathCost = GetPathCost(start.Voxel),
             GlobalIndex = start.GlobalIndex
         });
         ChartOwnerUtility.AddOwners(_chartKeys, start.ChartOwners);
@@ -331,7 +333,7 @@ public class AStarSurveyor
                 _waypoints.Add(new()
                 {
                     Position = _rawPath[i].VoxelPosition,
-                    PathCost = _rawPath[i].PathCost,
+                    PathCost = GetPathCost(_rawPath[i].Voxel),
                     GlobalIndex = _rawPath[i].GlobalIndex
                 });
             }
@@ -344,11 +346,30 @@ public class AStarSurveyor
         _waypoints.Add(new()
         {
             Position = end.VoxelPosition,
-            PathCost = end.PathCost,
+            PathCost = GetPathCost(end.Voxel),
             GlobalIndex = end.GlobalIndex,
             IsGoal = true
         });
         ChartOwnerUtility.AddOwners(_chartKeys, end.ChartOwners);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int CalculatePathCost(SolidChartPartition partition, int movementCost)
+    {
+        int heuristicCost = CalculateHeuristic(
+            partition.VoxelPosition,
+            _request.EndNode.WorldPosition,
+            _request.Heuristic);
+
+        return partition.PathCostModifier + movementCost + heuristicCost;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int GetPathCost(Voxel voxel)
+    {
+        return _meta.TryGetValue(voxel, out AStarVoxelMeta data)
+            ? data.PathCost
+            : int.MaxValue;
     }
 
     /// <summary>

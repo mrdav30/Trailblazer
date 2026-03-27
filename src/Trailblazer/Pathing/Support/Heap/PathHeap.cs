@@ -7,68 +7,45 @@ using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
 
-internal class PathHeapMeta
+internal sealed class PathHeapMeta
 {
-    /// <summary>
-    /// The index of this voxel in the heap.
-    /// </summary>
     public uint HeapIndex;
 
-    /// <summary>
-    /// Internal version counter to distinguish heap generations.
-    /// </summary>
     public uint HeapVersion;
 
-    /// <summary>
-    /// A version used to track closed voxels in the heap for the current search.
-    /// </summary>
     public uint ClosedHeapVersion;
+
+    public int PathCost;
 }
 
 /// <summary>
-/// A static class representing a heap of <see cref="SolidChartPartition"/>> for efficient pathfinding.
+/// Shared binary heap used by the pathing surveyors to track open and closed nodes.
+/// Heap ordering cost is owned by the heap metadata instead of the node types themselves.
 /// </summary>
-internal class PathHeap
+internal sealed class PathHeap<TNode> where TNode : class
 {
-    /// <summary>
-    /// /// Default initial capacity of the heap (64 x 64 = 4096).
-    /// </summary>
     public const int DefaultCapacity = 128;
 
-    /// <summary>
-    /// Internal storage for heap items.
-    /// </summary>
-    private SolidChartPartition[] _items;
+    private TNode[] _items;
 
-    private readonly SwiftDictionary<SolidChartPartition, PathHeapMeta> _meta;
+    private readonly SwiftDictionary<TNode, PathHeapMeta> _meta;
 
-    public uint CurrentHeapVersion { get; private set; } = 0;
+    public uint CurrentHeapVersion { get; private set; } = 1;
 
-    /// <summary>
-    /// Gets the number of items in the heap.
-    /// </summary>
     public uint HeapCount { get; private set; }
 
-    public int ClosedCount => _meta.Count;
+    public int TrackedCount => _meta.Count;
 
-    /// <summary>
-    /// Current total capacity of the heap.
-    /// </summary>
     public int Capacity => _items.Length;
 
     public PathHeap()
     {
-        _items = new SolidChartPartition[DefaultCapacity];
+        _items = new TNode[DefaultCapacity];
         _meta = new(DefaultCapacity);
-        CurrentHeapVersion = 1;
     }
 
-    /// <summary>
-    /// Adds a SolidChartPartition to the heap.
-    /// </summary>
-    public void Add(SolidChartPartition item)
+    public void Add(TNode item, int pathCost)
     {
-        // exit early if item already in the heap
         if (Contains(item))
             return;
 
@@ -78,39 +55,39 @@ internal class PathHeap
         PathHeapMeta meta = new()
         {
             HeapIndex = HeapCount,
-            HeapVersion = CurrentHeapVersion
+            HeapVersion = CurrentHeapVersion,
+            PathCost = pathCost
         };
+
         _meta[item] = meta;
         _items[HeapCount++] = item;
         SortUp(item);
     }
 
-    /// <summary>
-    /// Resizes the internal array to accommodate more items.
-    /// </summary>
-    private void Resize(int newSize)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryGetPathCost(TNode item, out int pathCost)
     {
-        int newCapacity = newSize <= DefaultCapacity ? DefaultCapacity : newSize;
+        if (!_meta.TryGetValue(item, out PathHeapMeta meta))
+        {
+            pathCost = int.MaxValue;
+            return false;
+        }
 
-        SolidChartPartition[] newArray = new SolidChartPartition[newCapacity];
-        if (HeapCount > 0)
-            Array.Copy(_items, 0, newArray, 0, HeapCount);
-        _items = newArray;
-
-        _meta.EnsureCapacity(newCapacity);
+        pathCost = meta.PathCost;
+        return true;
     }
 
-    /// <summary>
-    /// Retrieves the SolidChartPartition at the specified index without removing it.
-    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public SolidChartPartition PeekAt(int index) => _items[index];
+    public void UpdatePathCost(TNode item, int pathCost)
+    {
+        if (_meta.TryGetValue(item, out PathHeapMeta meta))
+            meta.PathCost = pathCost;
+    }
 
-    /// <summary>
-    /// Removes and returns the first SolidChartPartition in the heap.
-    /// </summary>
-    /// <returns>The removed SolidChartPartition.</returns>
-    public bool RemoveFirst(out SolidChartPartition result)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TNode PeekAt(int index) => _items[index];
+
+    public bool RemoveFirst(out TNode result)
     {
         if (HeapCount == 0)
         {
@@ -125,10 +102,12 @@ internal class PathHeap
         HeapCount--;
 
         if (HeapCount == 0)
+        {
             _items[0] = null;
+        }
         else
         {
-            SolidChartPartition temp = _items[HeapCount];
+            TNode temp = _items[HeapCount];
             PathHeapMeta tempMeta = _meta[temp];
             _items[0] = temp;
             tempMeta.HeapIndex = 0;
@@ -142,63 +121,38 @@ internal class PathHeap
         return true;
     }
 
-    /// <summary>
-    /// Checks if the heap contains the specified SolidChartPartition.
-    /// </summary>
-    /// <param name="item">The SolidChartPartition to check.</param>
-    /// <returns>True if the heap contains the SolidChartPartition, otherwise false.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Contains(SolidChartPartition item)
+    public bool Contains(TNode item)
     {
-        if (!_meta.TryGetValue(item, out PathHeapMeta meta)
-            || meta.HeapVersion != CurrentHeapVersion)
-        {
-            return false;
-        }
-
-        return true;
+        return _meta.TryGetValue(item, out PathHeapMeta meta)
+            && meta.HeapVersion == CurrentHeapVersion;
     }
 
-    /// <summary>
-    /// Marks the specified SolidChartPartition as closed.
-    /// </summary>
-    /// <param name="item">The SolidChartPartition to mark as closed.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetClosed(SolidChartPartition item)
+    public void SetClosed(TNode item)
     {
-        _meta[item].ClosedHeapVersion = CurrentHeapVersion;
+        if (_meta.TryGetValue(item, out PathHeapMeta meta))
+            meta.ClosedHeapVersion = CurrentHeapVersion;
     }
 
-    /// <summary>
-    /// Checks if the specified SolidChartPartition is closed.
-    /// </summary>
-    /// <param name="item">The SolidChartPartition to check.</param>
-    /// <returns>True if the SolidChartPartition is closed, otherwise false.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsClosed(SolidChartPartition item)
+    public bool IsClosed(TNode item)
     {
-        if (!_meta.TryGetValue(item, out PathHeapMeta meta)
-            || meta.ClosedHeapVersion != CurrentHeapVersion)
-        {
-            return false;
-        }
-
-        return true;
+        return _meta.TryGetValue(item, out PathHeapMeta meta)
+            && meta.ClosedHeapVersion == CurrentHeapVersion;
     }
 
-    /// <summary>
-    /// Sorts a SolidChartPartition up the heap based on its HeapCost.
-    /// </summary>
-    public void SortUp(SolidChartPartition item)
+    public void SortUp(TNode item)
     {
         PathHeapMeta meta = _meta[item];
         uint index = meta.HeapIndex;
+
         while (index > 0 && index < HeapCount)
         {
             uint parentIndex = (index - 1) / 2;
-            SolidChartPartition parent = _items[parentIndex];
+            TNode parent = _items[parentIndex];
 
-            if (item.PathCost >= parent.PathCost)
+            if (meta.PathCost >= _meta[parent].PathCost)
                 break;
 
             Swap(item, parent);
@@ -206,39 +160,76 @@ internal class PathHeap
         }
     }
 
-    /// <summary>
-    /// Sorts a SolidChartPartition down the heap based on its HeapCost.
-    /// </summary>
-    public void SortDown(SolidChartPartition item)
+    public void SortDown(TNode item)
     {
         PathHeapMeta meta = _meta[item];
         uint index = meta.HeapIndex;
+
         while (true)
         {
             uint left = (index * 2) + 1;
             uint right = left + 1;
             uint lowest = index;
 
-            if (left < HeapCount && _items[left].PathCost < _items[lowest].PathCost)
+            if (left < HeapCount
+                && _meta[_items[left]].PathCost < _meta[_items[lowest]].PathCost)
+            {
                 lowest = left;
+            }
 
-            if (right < HeapCount && _items[right].PathCost < _items[lowest].PathCost)
+            if (right < HeapCount
+                && _meta[_items[right]].PathCost < _meta[_items[lowest]].PathCost)
+            {
                 lowest = right;
+            }
 
             if (lowest == index)
                 break;
 
             Swap(item, _items[lowest]);
-
             index = meta.HeapIndex;
         }
     }
 
-    /// <summary>
-    /// Swaps two solid chart partitions in the heap and updates their HeapIndex.
-    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void Swap(SolidChartPartition itemA, SolidChartPartition itemB)
+    public IEnumerable<TNode> EnumerateClosed()
+    {
+        foreach (KeyValuePair<TNode, PathHeapMeta> kvp in _meta)
+        {
+            if (kvp.Value.ClosedHeapVersion == CurrentHeapVersion)
+                yield return kvp.Key;
+        }
+    }
+
+    public void FastClear()
+    {
+        HeapCount = 0;
+        CurrentHeapVersion++;
+        _meta.Clear();
+    }
+
+    public void Reset()
+    {
+        HeapCount = 0;
+        CurrentHeapVersion = 1;
+        _meta.Clear();
+        _meta.TrimExcess();
+    }
+
+    private void Resize(int newSize)
+    {
+        int newCapacity = newSize <= DefaultCapacity ? DefaultCapacity : newSize;
+
+        TNode[] newArray = new TNode[newCapacity];
+        if (HeapCount > 0)
+            Array.Copy(_items, 0, newArray, 0, HeapCount);
+
+        _items = newArray;
+        _meta.EnsureCapacity(newCapacity);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void Swap(TNode itemA, TNode itemB)
     {
         PathHeapMeta metaA = _meta[itemA];
         PathHeapMeta metaB = _meta[itemB];
@@ -251,36 +242,5 @@ internal class PathHeap
 
         metaA.HeapIndex = indexB;
         metaB.HeapIndex = indexA;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public IEnumerable<SolidChartPartition> EnumerateClosed()
-    {
-        foreach (KeyValuePair<SolidChartPartition, PathHeapMeta> kvp in _meta)
-        {
-            if (kvp.Value.ClosedHeapVersion == CurrentHeapVersion)
-                yield return kvp.Key;
-        }
-    }
-
-    /// <summary>
-    /// Clears the heap quickly by incrementing the heap version.
-    /// </summary>
-    public void FastClear()
-    {
-        HeapCount = 0;
-        CurrentHeapVersion++;
-        _meta.Clear();
-    }
-
-    /// <summary>
-    /// Resets the heap by setting the heap version to 1 and clearing the count.
-    /// </summary>
-    public void Reset()
-    {
-        HeapCount = 0;
-        CurrentHeapVersion = 1;
-        _meta.Clear();
-        _meta.TrimExcess();
     }
 }

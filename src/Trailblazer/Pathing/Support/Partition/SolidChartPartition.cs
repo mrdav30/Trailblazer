@@ -5,7 +5,6 @@ using SwiftCollections;
 using SwiftCollections.Pool;
 using System;
 using System.Runtime.CompilerServices;
-using System.Threading;
 
 #if DEBUG
 using System.Diagnostics;
@@ -73,42 +72,9 @@ public class SolidChartPartition : IVoxelPartition
         set => _manualPathCostModifier = value;
     }
 
-    private static int _currentPathCostVersion = 1;
-
     private int _manualPathCostModifier;
 
     private int _chartPathCostModifier;
-
-    private int _pathCost = int.MaxValue;
-
-    private int _pathCostVersion;
-
-    /// <summary>
-    /// The combined cost for use in pathfinding heap prioritization.
-    /// Values automatically expire when a new pathing survey begins.
-    /// </summary>
-    internal int PathCost
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _pathCostVersion == Volatile.Read(ref _currentPathCostVersion)
-            ? _pathCost
-            : int.MaxValue;
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        set
-        {
-            _pathCost = value;
-            _pathCostVersion = Volatile.Read(ref _currentPathCostVersion);
-        }
-    }
-
-    internal int PathCostTotal
-    {
-        get
-        {
-            if (PathCost == int.MaxValue) return int.MaxValue;
-            return PathCost + PathCostModifier;
-        }
-    }
 
 #nullable enable
     public SolidChartPartition?[]? Neighbors { get; private set; }
@@ -169,7 +135,6 @@ public class SolidChartPartition : IVoxelPartition
         IsWalkable = !voxel.IsBlocked;
 
         _clearanceRadiusInVoxels = DefaultDegreeCap;
-        ResetPathCost();
 
         IsPartitioned = true;
     }
@@ -203,7 +168,6 @@ public class SolidChartPartition : IVoxelPartition
         PathCostModifier = 0;
         _chartPathCostModifier = 0;
         ChartFlags = NavigationChartCellFlags.None;
-        ResetPathCost();
 
         Neighbors = null;
 
@@ -213,21 +177,6 @@ public class SolidChartPartition : IVoxelPartition
         _chartCells.Clear();
 
         IsPartitioned = false;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static void AdvancePathCostVersion()
-    {
-        int next = Interlocked.Increment(ref _currentPathCostVersion);
-        if (next == int.MaxValue)
-            Interlocked.Exchange(ref _currentPathCostVersion, 1);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void ResetPathCost()
-    {
-        _pathCost = int.MaxValue;
-        _pathCostVersion = 0;
     }
 
     /// <summary>

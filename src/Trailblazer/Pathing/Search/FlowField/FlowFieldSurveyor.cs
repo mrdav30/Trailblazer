@@ -30,7 +30,7 @@ public class FlowFieldSurveyor
 
     #endregion
 
-    private readonly PathHeap _heap = new();
+    private readonly PathHeap<SolidChartPartition> _heap = new();
 
     private readonly SwiftHashSet<string> _chartKeys = new();
 
@@ -56,11 +56,8 @@ public class FlowFieldSurveyor
 
             _heap.FastClear();
             _chartKeys.Clear();
-            SolidChartPartition.AdvancePathCostVersion();
-
             // Start from the end and move towards the start voxel
-            targetPart.PathCost = 0;
-            _heap.Add(targetPart);
+            _heap.Add(targetPart, pathCost: 0);
             ChartOwnerUtility.AddOwners(_chartKeys, targetPart.ChartOwners);
 
             if (!FloodPath())
@@ -88,20 +85,22 @@ public class FlowFieldSurveyor
         while (_heap.RemoveFirst(out SolidChartPartition current)
             && iterations++ < searchSize)
         {
+            int currentPathCost = GetPathCost(current);
+
             // Check if we found our way to the start voxel
             if (!targetReached)
             {
                 if (current.Voxel == _request.StartNode)
                 {
-                    maxFloodRange = current.PathCost + _request.ExtraFloodRange;
+                    maxFloodRange = currentPathCost + _request.ExtraFloodRange;
                     targetReached = true;
                 }
 
             }
-            else if (current.PathCost >= maxFloodRange)
+            else if (currentPathCost >= maxFloodRange)
                 break;
 
-            AnalyzeNeighborDistance(current);
+            AnalyzeNeighborDistance(current, currentPathCost);
 
             _heap.SetClosed(current);
         }
@@ -114,13 +113,18 @@ public class FlowFieldSurveyor
     /// Ensures the wavefront expands in an optimal order.
     /// </summary>
     /// <param name="current">The current path partition being evaluated.</param>
-    private void AnalyzeNeighborDistance(SolidChartPartition current)
+    /// <param name="currentPathCost">The current flood distance stored for the partition.</param>
+    private void AnalyzeNeighborDistance(SolidChartPartition current, int currentPathCost)
     {
-        TryProcessDirection(current, SpatialAwareness.PerpendicularDirections);
-        TryProcessDirection(current, SpatialAwareness.DiagonalDirections, true);
+        TryProcessDirection(current, SpatialAwareness.PerpendicularDirections, currentPathCost);
+        TryProcessDirection(current, SpatialAwareness.DiagonalDirections, currentPathCost, true);
     }
 
-    private void TryProcessDirection(SolidChartPartition current, SpatialDirection[] directions, bool checkEdges = false)
+    private void TryProcessDirection(
+        SolidChartPartition current,
+        SpatialDirection[] directions,
+        int currentPathCost,
+        bool checkEdges = false)
     {
         foreach (SpatialDirection dir in directions)
         {
@@ -131,16 +135,15 @@ public class FlowFieldSurveyor
             if (checkEdges && !HasValidDiagonalLegs(current, dir))
                 continue;
 
-            int newCost = current.PathCost + 1;
+            int newCost = currentPathCost + 1;
 
             if (!_heap.Contains(neighbor))
             {
-                neighbor.PathCost = newCost;
-                _heap.Add(neighbor);
+                _heap.Add(neighbor, newCost);
             }
-            else if (neighbor.PathCost > newCost)
+            else if (GetPathCost(neighbor) > newCost)
             {
-                neighbor.PathCost = newCost;
+                _heap.UpdatePathCost(neighbor, newCost);
                 _heap.SortUp(neighbor);
             }
         }
@@ -177,7 +180,7 @@ public class FlowFieldSurveyor
     /// <returns>A dictionary of directional flow field data indexed by voxel spawn tokens.</returns>
     private SwiftDictionary<GlobalVoxelIndex, FlowField> GenerateFlowFields()
     {
-        SwiftDictionary<GlobalVoxelIndex, FlowField> result = new(_heap.ClosedCount);
+        SwiftDictionary<GlobalVoxelIndex, FlowField> result = new(_heap.TrackedCount);
         // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
 
         foreach (SolidChartPartition current in _heap.EnumerateClosed())
@@ -185,7 +188,7 @@ public class FlowFieldSurveyor
             FlowField currentFlow = new()
             {
                 GlobalIndex = current.GlobalIndex,
-                PathCost = current.PathCostTotal
+                PathCost = GetPathCostTotal(current)
             };
 
             if (current.Voxel == _request.EndNode)
@@ -209,11 +212,11 @@ public class FlowFieldSurveyor
                 if (i > 6 && !HasValidDiagonalLegs(current, (SpatialDirection)i))
                     continue;
 
-                int cost = nPart.PathCostTotal;
+                int cost = GetPathCostTotal(nPart);
                 if (cost < minCost)
                 {
                     minPartition = nPart;
-                    minCost = nPart.PathCostTotal;
+                    minCost = cost;
                 }
             }
 
@@ -233,6 +236,23 @@ public class FlowFieldSurveyor
         }
 
         return result;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int GetPathCost(SolidChartPartition partition)
+    {
+        return _heap.TryGetPathCost(partition, out int pathCost)
+            ? pathCost
+            : int.MaxValue;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int GetPathCostTotal(SolidChartPartition partition)
+    {
+        int pathCost = GetPathCost(partition);
+        return pathCost == int.MaxValue
+            ? int.MaxValue
+            : pathCost + partition.PathCostModifier;
     }
 
     /// <summary>

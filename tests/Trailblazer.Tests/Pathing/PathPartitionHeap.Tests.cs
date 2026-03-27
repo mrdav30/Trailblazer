@@ -2,15 +2,16 @@
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
+using System.Linq;
 using Trailblazer.Pathing;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing;
 
 [Collection("PathingCollection")]
-public class SolidChartPartitionHeapTests : IDisposable
+public class PathHeapTests : IDisposable
 {
-    public SolidChartPartitionHeapTests()
+    public PathHeapTests()
     {
         if (GlobalGridManager.IsActive)
             GlobalGridManager.Reset();
@@ -31,11 +32,11 @@ public class SolidChartPartitionHeapTests : IDisposable
     [Fact]
     public void RemoveFirst_WhenCountIsOne_ShouldClearRootSafely()
     {
-        var heap = new PathHeap();
+        var heap = new PathHeap<SolidChartPartition>();
 
-        SolidChartPartition voxel = CreateAttachedPartition(Vector3d.Zero, pathCost: 1);
+        SolidChartPartition voxel = CreateAttachedPartition(Vector3d.Zero);
 
-        heap.Add(voxel);
+        heap.Add(voxel, pathCost: 1);
         Assert.Equal(1u, heap.HeapCount);
 
         heap.RemoveFirst(out SolidChartPartition removed);
@@ -49,18 +50,17 @@ public class SolidChartPartitionHeapTests : IDisposable
     [Fact]
     public void AStarHeap_ShouldSortAfterCostUpdate()
     {
-        var heap = new PathHeap();
+        var heap = new PathHeap<SolidChartPartition>();
 
-        SolidChartPartition a = CreateAttachedPartition(new Vector3d(0, 0, 0), pathCost: 30);
-        SolidChartPartition b = CreateAttachedPartition(new Vector3d(1, 0, 0), pathCost: 20);
-        SolidChartPartition c = CreateAttachedPartition(new Vector3d(2, 0, 0), pathCost: 10);
+        SolidChartPartition a = CreateAttachedPartition(new Vector3d(0, 0, 0));
+        SolidChartPartition b = CreateAttachedPartition(new Vector3d(1, 0, 0));
+        SolidChartPartition c = CreateAttachedPartition(new Vector3d(2, 0, 0));
 
-        heap.Add(a);
-        heap.Add(b);
-        heap.Add(c);
+        heap.Add(a, pathCost: 30);
+        heap.Add(b, pathCost: 20);
+        heap.Add(c, pathCost: 10);
 
-        // Update 'a' to have lower cost than 'c'
-        a.PathCost = 5;
+        heap.UpdatePathCost(a, pathCost: 5);
         heap.SortUp(a);
 
         heap.RemoveFirst(out var first);
@@ -68,30 +68,38 @@ public class SolidChartPartitionHeapTests : IDisposable
     }
 
     [Fact]
-    public void PathCost_ShouldExpireWhenSurveyVersionAdvances()
+    public void Heap_ShouldTrackVoxelPathCostAndClosedState()
     {
-        SolidChartPartition partition = CreateAttachedPartition(Vector3d.Zero, pathCost: 7);
-        partition.PathCostModifier = 3;
+        var heap = new PathHeap<Voxel>();
 
-        Assert.Equal(7, partition.PathCost);
-        Assert.Equal(10, partition.PathCostTotal);
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel a));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel b));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(2, 0, 0), out _, out Voxel c));
 
-        SolidChartPartition.AdvancePathCostVersion();
+        heap.Add(a, pathCost: 30);
+        heap.Add(b, pathCost: 20);
+        heap.Add(c, pathCost: 10);
 
-        Assert.Equal(int.MaxValue, partition.PathCost);
-        Assert.Equal(int.MaxValue, partition.PathCostTotal);
+        heap.UpdatePathCost(a, pathCost: 5);
+        heap.SortUp(a);
+
+        heap.RemoveFirst(out Voxel first);
+        heap.SetClosed(first);
+
+        Assert.Equal(a, first);
+        Assert.True(heap.IsClosed(a));
+        Assert.True(heap.TryGetPathCost(a, out int pathCost));
+        Assert.Equal(5, pathCost);
+        Assert.Single(heap.EnumerateClosed().ToArray());
     }
 
-    private static SolidChartPartition CreateAttachedPartition(Vector3d position, int pathCost)
+    private static SolidChartPartition CreateAttachedPartition(Vector3d position)
     {
         Assert.True(GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel));
 
-        var partition = new SolidChartPartition
-        {
-        };
+        var partition = new SolidChartPartition();
 
         partition.OnAddToVoxel(voxel);
-        partition.PathCost = pathCost;
         return partition;
     }
 }

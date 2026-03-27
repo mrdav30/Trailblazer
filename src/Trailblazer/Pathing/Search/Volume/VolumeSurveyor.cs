@@ -26,7 +26,7 @@ public sealed class VolumeSurveyor
 
     public static VolumeSurveyor Shared => _instance.Value;
 
-    private readonly VoxelPathHeap _heap = new();
+    private readonly PathHeap<Voxel> _heap = new();
 
     private readonly SwiftDictionary<Voxel, VolumeVoxelMeta> _meta = new();
 

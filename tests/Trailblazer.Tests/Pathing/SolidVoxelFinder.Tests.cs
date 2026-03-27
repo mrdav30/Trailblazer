@@ -167,6 +167,18 @@ public class SolidVoxelFinderTests : IDisposable
         setters.EndNode.WorldPosition.Should().Be(created.EndNode.WorldPosition);
     }
 
+    [Fact]
+    public void StarCast_ShouldBiasFallbackFromTheAnchorVoxelLocalOffset()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("StarCastLocalBias", new Vector3d(1, 0, 0));
+
+        Fixed64 quarter = GlobalGridManager.VoxelSize / 4;
+        Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
+
+        SolidVoxelFinder.StarCast(query, out Voxel targetVoxel).Should().BeTrue();
+        targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+    }
+
     private static void RegisterTwoPointChart(string chartName)
     {
         bool[,,] data = new bool[1, 2, 1];

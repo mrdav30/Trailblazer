@@ -256,6 +256,7 @@ public static class VolumeVoxelFinder
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetFinalFallbackVoxel(
             Vector3d position,
+            Voxel directVoxel,
             Fixed64 unitSize,
             out Voxel voxel)
         {

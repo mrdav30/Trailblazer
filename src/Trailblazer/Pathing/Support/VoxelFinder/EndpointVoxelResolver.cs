@@ -21,6 +21,7 @@ internal interface IVoxelEndpointResolutionPolicy
 
     bool TryGetFinalFallbackVoxel(
         Vector3d position,
+        Voxel directVoxel,
         Fixed64 unitSize,
         out Voxel voxel);
 }
@@ -60,6 +61,14 @@ internal static class EndpointVoxelResolver
                 voxel = closestNeighbor;
                 return true;
             }
+
+            if (!shouldRelaxEndpoint)
+                return false;
+
+            if (TryTraceToClosestTraversableVoxel(position, traceToward, unitSize, out voxel, policy))
+                return true;
+
+            return policy.TryGetFinalFallbackVoxel(position, directVoxel, unitSize, out voxel);
         }
 
         if (!shouldRelaxEndpoint)
@@ -68,7 +77,8 @@ internal static class EndpointVoxelResolver
         if (TryTraceToClosestTraversableVoxel(position, traceToward, unitSize, out voxel, policy))
             return true;
 
-        return policy.TryGetFinalFallbackVoxel(position, unitSize, out voxel);
+        voxel = null;
+        return false;
     }
 
     public static bool TryGetClosestTraversableVoxel<TPolicy>(

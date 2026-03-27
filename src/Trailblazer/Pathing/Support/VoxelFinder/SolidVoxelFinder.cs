@@ -94,7 +94,8 @@ public static class SolidVoxelFinder
 
 
     /// <summary>
-    /// Performs a star-shaped radial search around the target position to find the closest valid voxel, prioritizing straight directions first.
+    /// Performs a bounded same-layer star search around the target position and returns the first valid voxel found,
+    /// prioritizing straight directions before diagonals.
     /// </summary>
     /// <param name="target"></param>
     /// <param name="targetVoxel"></param>
@@ -103,7 +104,8 @@ public static class SolidVoxelFinder
         StarCast(target, out targetVoxel, GlobalGridManager.VoxelSize);
 
     /// <summary>
-    /// Performs a radial search around the target position to find the closest valid voxel, prioritizing straight directions first.
+    /// Performs a bounded same-layer star search around the target position and returns the first valid voxel found,
+    /// prioritizing straight directions before diagonals.
     /// </summary>
     /// <param name="target"></param>
     /// <param name="targetVoxel"></param>
@@ -111,22 +113,13 @@ public static class SolidVoxelFinder
     /// <returns></returns>
     public static bool StarCast(Vector3d target, out Voxel targetVoxel, Fixed64 unitSize)
     {
-        targetVoxel = null;
-        if (!GlobalGridManager.TryGetGrid(target, out VoxelGrid outGrid))
-            return false; // no grid found at this position!
-
-        AlternativeVoxelFinder.Instance.SetQuery(target, outGrid.BoundsMin, MaxTestDistance);
-
-        if (!AlternativeVoxelFinder.Instance.GetVoxel(out Voxel candidateVoxel))
-            return false;
-
-        if (IsChartTraversable(candidateVoxel, unitSize))
+        if (!GlobalGridManager.TryGetVoxel(target, out Voxel directVoxel))
         {
-            targetVoxel = candidateVoxel;
-            return true;
+            targetVoxel = null;
+            return false;
         }
 
-        return TryGetClosestWalkableVoxel(candidateVoxel, out targetVoxel, unitSize);
+        return StarCast(target, directVoxel, out targetVoxel, unitSize);
     }
 
     /// <summary>
@@ -248,10 +241,33 @@ public static class SolidVoxelFinder
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetFinalFallbackVoxel(
             Vector3d position,
+            Voxel directVoxel,
             Fixed64 unitSize,
             out Voxel voxel)
         {
-            return StarCast(position, out voxel, unitSize);
+            return StarCast(position, directVoxel, out voxel, unitSize);
         }
+    }
+
+    private static bool StarCast(
+        Vector3d target,
+        Voxel directVoxel,
+        out Voxel targetVoxel,
+        Fixed64 unitSize)
+    {
+        targetVoxel = null;
+
+        AlternativeVoxelFinder.Instance.SetQuery(target, directVoxel, MaxTestDistance);
+
+        if (!AlternativeVoxelFinder.Instance.GetVoxel(out Voxel candidateVoxel))
+            return false;
+
+        if (IsChartTraversable(candidateVoxel, unitSize))
+        {
+            targetVoxel = candidateVoxel;
+            return true;
+        }
+
+        return TryGetClosestWalkableVoxel(candidateVoxel, out targetVoxel, unitSize);
     }
 }

@@ -153,7 +153,7 @@ The runtime flow is:
 
 1. Build or load chart data.
 2. Register the chart with `PathManager`.
-3. Initialize the chart.
+3. If you registered with `initializeChart: false`, initialize the chart.
 4. `PathManager` attaches or reuses `SolidChartPartition` or `VolumeChartPartition` instances on the underlying `GridForge` voxels.
 5. Surveyors and steering then query those live partitions.
 
@@ -162,8 +162,8 @@ Until a chart is initialized, it is just inert data.
 That means:
 
 - chart creation is cheap relative to full runtime activation
-- registration alone does not make a chart pathable
-- initialization is the point where chart data becomes live world connectivity
+- a chart is not pathable until initialization has run
+- `PathManager.Register(chart)` performs that initialization by default, while `initializeChart: false` keeps the chart inert until a later explicit activation step
 
 ## 6. How Charts Relate To GridForge
 
@@ -310,7 +310,6 @@ NavigationChart chart = NavigationChart.From3D(
     interval: Fixed64.One);
 
 PathManager.Register(chart);
-PathManager.InitializeChart(chart.Name);
 ```
 
 ### 10.2 Bake From Scene Geometry
@@ -348,7 +347,7 @@ One reasonable Unity workflow would look like this:
 3. If the ray hits a valid navigation layer, mark the hit cell as walkable.
 4. Convert the collected cells into a `bool[,,]`.
 5. Build a `NavigationChart`.
-6. Serialize or regenerate that chart at runtime, then register and initialize it.
+6. Serialize or regenerate that chart at runtime, then register it and initialize later only if you opted out of default registration-time activation.
 
 Very rough pseudo-code:
 
@@ -382,7 +381,6 @@ NavigationChart chart = NavigationChart.From3D(
     interval);
 
 PathManager.Register(chart);
-PathManager.InitializeChart(chart.Name);
 
 // Later, path requests and navigators can use the live chart-backed pathing graph.
 ```

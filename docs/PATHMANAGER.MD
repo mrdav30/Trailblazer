@@ -49,11 +49,11 @@ The lifecycle is:
 
 1. Build a `NavigationChart`.
 2. `Register(...)` it with `PathManager`.
-3. `InitializeChart(...)` to attach or reuse `SolidChartPartition` and `VolumeChartPartition` instances on the relevant voxels.
+3. If you registered with `initializeChart: false`, call `InitializeChart(...)` to attach or reuse `SolidChartPartition` and `VolumeChartPartition` instances on the relevant voxels.
 4. Use the chart indirectly through path requests, surveyors, and guide resolution.
 5. `UnloadChart(...)` when the chart should stop owning those voxels.
 
-This means chart registration alone is not enough. A chart only becomes pathable after initialization.
+This means a chart only becomes pathable after initialization. `Register(chart)` now initializes by default, but callers can still defer live activation with `initializeChart: false`.
 
 Another important detail:
 
@@ -66,7 +66,7 @@ That ownership model is why initialization and unload logic are more complex tha
 
 The main entry points are:
 
-- `Register(NavigationChart chart)`
+- `Register(NavigationChart chart, bool initializeChart = true)`
 - `Register(TraversalBuildResult buildResult, bool initializeChart = true)`
 - `IsChartRegistered(string name)`
 - `TryGetNavigationChart(string name, out NavigationChart chart)`
@@ -114,15 +114,13 @@ That means:
 
 `PathManager` currently exposes two registration flows.
 
-`Register(NavigationChart chart)` adds a chart to the global registry by its `Name`.
+`Register(NavigationChart chart, bool initializeChart = true)` adds a chart to the global registry by its `Name`.
 
 Behavior:
 
 - returns `false` if a chart with the same name is already registered
-- does not initialize partitions
-- does not touch voxel state
-
-This is only the first step of making a chart available.
+- initializes authored partitions by default after registration succeeds
+- leaves the chart inert when `initializeChart` is `false`, so callers can stage registration before live activation
 
 `Register(TraversalBuildResult buildResult, bool initializeChart = true)` applies the output of `TraversalAuthoringMap.Build()`.
 
@@ -363,7 +361,6 @@ The usual chart lifecycle is:
 var chart = NavigationChart.From3D("Arena", data, minBounds, Fixed64.One);
 
 PathManager.Register(chart);
-PathManager.InitializeChart(chart);
 
 // ... use the chart through requests and guides ...
 
@@ -378,9 +375,9 @@ PathManager.Reset();
 
 ## 13. Common Gotchas
 
-### Registering a chart does not make it pathable
+### Forgetting deferred registration still needs initialization
 
-You still need `InitializeChart(...)`.
+`Register(chart)` initializes by default, but `Register(chart, initializeChart: false)` still requires a later `InitializeChart(...)` call before the chart is pathable.
 
 ### Forgetting cache invalidation is tied to chart ownership
 

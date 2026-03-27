@@ -112,8 +112,9 @@ var chart = NavigationChart.From3D(
     interval: Fixed64.One);
 
 PathManager.Register(chart);
-PathManager.InitializeChart(chart.Name);
 ```
+
+`PathManager.Register(chart)` can initialize the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step.
 
 `NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell surface or volume traversal metadata, cost modifiers, or transition hints. Raw 3D travel still runs through `VolumePathRequest`, while chart-backed `AStarPathRequest` and `FlowFieldPathRequest` requests can opt into registered transition fallback through `AllowTraversalTransitions`.
 

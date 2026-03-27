@@ -29,30 +29,33 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
-    public void Register_AddsMapToManager()
+    public void Register_WithInitializeChartFalse_AddsMapWithoutInitializingIt()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         GlobalGridManager.TryAddGrid(config, out _);
 
         var map = PathTestFactory.BuildSinglePointMap("TestMap", new Vector3d(0, 0, 0));
-        PathManager.Register(map);
+        Assert.True(PathManager.Register(map, initializeChart: false));
 
         Assert.True(PathManager.TryGetNavigationChart("TestMap", out var retrieved));
         Assert.Equal(map, retrieved);
+        Assert.False(map.IsInitialized);
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
+        Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart("TestMap");
     }
 
     [Fact]
-    public void InitializeMap_AddsPartitionToExpectedVoxel()
+    public void Register_InitializesChartByDefault()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         GlobalGridManager.TryAddGrid(config, out _);
 
         var map = PathTestFactory.BuildSinglePointMap("InitMap", new Vector3d(0, 0, 0));
-        PathManager.Register(map);
-        PathManager.InitializeChart("InitMap");
+        Assert.True(PathManager.Register(map));
 
+        Assert.True(map.IsInitialized);
         Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 

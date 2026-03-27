@@ -113,15 +113,24 @@ public static class PathManager
     /// Attempts to register a new navigation chart with the manager.
     /// </summary>
     /// <param name="chart">The map to register.</param>
+    /// <param name="initializeChart">Whether to initialize the chart after registration succeeds.</param>
     /// <returns>True if successful, false if a duplicate name exists.</returns>
-    public static bool Register(NavigationChart chart)
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="chart"/> is null.</exception>
+    public static bool Register(NavigationChart chart, bool initializeChart = true)
     {
+        if (chart == null)
+            ThrowHelper.ThrowArgumentNullException(nameof(chart));
+
         if (IsChartRegistered(chart.Name))
             return false;
 
         _navigationChartMapLock.EnterWriteLock();
         try { _navigationChartMap.Add(chart.Name, chart); }
         finally { _navigationChartMapLock.ExitWriteLock(); }
+
+        if (initializeChart)
+            InitializeChart(chart.Name);
+
         return true;
     }
 
@@ -137,7 +146,7 @@ public static class PathManager
         if (buildResult == null)
             ThrowHelper.ThrowArgumentNullException(nameof(buildResult));
 
-        if (!Register(buildResult.Chart))
+        if (!Register(buildResult.Chart, initializeChart: false))
             return false;
 
         TraversalTransition[] generatedTransitions = buildResult.GeneratedTransitions;

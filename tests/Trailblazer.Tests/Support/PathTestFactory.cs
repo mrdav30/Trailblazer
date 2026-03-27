@@ -1,4 +1,4 @@
-﻿using FixedMathSharp;
+using FixedMathSharp;
 using GridForge.Grids;
 using System;
 using System.Threading;
@@ -18,7 +18,6 @@ public static class PathTestFactory
 
         var map = NavigationChart.From3D(mapName, data, minBounds, Fixed64.One);
         PathManager.Register(map);
-        PathManager.InitializeChart(mapName);
         return map;
     }
 
@@ -26,7 +25,6 @@ public static class PathTestFactory
     {
         var map = NavigationChart.From3D(name, data, minBounds, GlobalGridManager.VoxelSize);
         PathManager.Register(map);
-        PathManager.InitializeChart(name);
         return map;
     }
 
@@ -41,7 +39,6 @@ public static class PathTestFactory
 
         var map = NavigationChart.From3D(mapName, data, minBounds, Fixed64.One);
         PathManager.Register(map);
-        PathManager.InitializeChart(mapName);
         return map;
     }
 

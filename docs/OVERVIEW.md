@@ -351,14 +351,14 @@ Before runtime pathing works correctly:
 1. Set up `GridForge` global grids.
 2. Build `NavigationChart` data for the relevant walkable space.
 3. Register the chart with `PathManager.Register(...)`.
-4. Call `PathManager.InitializeChart(chart.Name)`.
+4. If you registered with `initializeChart: false`, call `PathManager.InitializeChart(chart.Name)` before requesting guides or simulating navigators.
 5. Create and initialize your `Navigator`, or request guides directly.
 6. Keep traversal state up to date through your concrete navigator's `CheckTrekCondition()` implementation.
 7. Unload charts or clear caches during teardown.
 
 ## 10. Common Gotchas
 
-- A chart is not pathable until `InitializeChart(...)` has run.
+- A chart is not pathable until it has been initialized; `Register(chart)` does this by default unless you pass `initializeChart: false`.
 - `IPathRequest.IsValid` depends on valid endpoints and a computed `MaxPathSearchRange`.
 - If you request guides directly, forgetting `ReturnGuide(...)` will keep results checked out.
 - `NeedsPath(...)` is a line trace over voxels, not a guarantee that a long route is globally optimal.

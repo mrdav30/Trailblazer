@@ -10,10 +10,10 @@ Use this file when you need:
 
 Relevant code:
 
-- `src/Trailblazer/Pathing/Support/Authoring/TraversalAuthoringMap.cs`
-- `src/Trailblazer/Pathing/Support/Authoring/TraversalLegend.cs`
-- `src/Trailblazer/Pathing/Support/Authoring/TraversalLegendEntry.cs`
-- `src/Trailblazer/Pathing/Support/Authoring/TraversalBuildResult.cs`
+- `src/Trailblazer/Pathing/Authoring/TraversalAuthoringMap.cs`
+- `src/Trailblazer/Pathing/Authoring/TraversalLegend.cs`
+- `src/Trailblazer/Pathing/Authoring/TraversalLegendEntry.cs`
+- `src/Trailblazer/Pathing/Authoring/TraversalBuildResult.cs`
 - `src/Trailblazer/Pathing/PathManager.cs`
 
 ## 1. Core Workflow

@@ -16,9 +16,9 @@ If you need the broader pathing model first, read `PATHING.MD`.
 
 Relevant code:
 
-- `src/Trailblazer/Pathing/Support/Guide/IGuide.cs`
-- `src/Trailblazer/Pathing/Support/Guide/IWaypointGuide.cs`
-- `src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`
+- `src/Trailblazer/Pathing/Search/Support/Guide/IGuide.cs`
+- `src/Trailblazer/Pathing/Search/Support/Guide/IWaypointGuide.cs`
+- `src/Trailblazer/Pathing/Search/PathGuideFactory.cs`
 - `src/Trailblazer/Pathing/Search/AStar/AStarGuide.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldGuide.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeGuide.cs`
@@ -459,12 +459,12 @@ If you are modifying the guide layer, verify:
 
 High-risk files:
 
-- `src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`
+- `src/Trailblazer/Pathing/Search/PathGuideFactory.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldGuide.cs`
 - `src/Trailblazer/Pathing/Search/AStar/AStarGuide.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeGuide.cs`
 - `src/Trailblazer/Pathing/Search/Hybrid/HybridGuide.cs`
-- `src/Trailblazer/Pathing/Support/Guide/ReusableSurveyResultCache.cs`
+- `src/Trailblazer/Pathing/Search/Support/Survey/ReusableSurveyResultCache.cs`
 
 Useful test entry points:
 

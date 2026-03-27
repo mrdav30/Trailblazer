@@ -11,9 +11,9 @@ If you need guide caching and guide lifetime details, read the relevant pathing 
 The code referenced here lives primarily in:
 
 - `src/Trailblazer/Pathing/PathManager.cs`
-- `src/Trailblazer/Pathing/Support/Partition/SolidChartPartition.cs`
-- `src/Trailblazer/Pathing/Support/Partition/TraversableVoxel.cs`
-- `src/Trailblazer/Pathing/Support/Chart/NavigationChart.cs`
+- `src/Trailblazer/Pathing/Partition/SolidChartPartition.cs`
+- `src/Trailblazer/Pathing/Partition/TraversableVoxel.cs`
+- `src/Trailblazer/Pathing/Chart/NavigationChart.cs`
 
 ## 1. What PathManager Is
 

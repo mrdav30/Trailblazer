@@ -75,7 +75,7 @@ Representative entry points:
 
 - [`src/Trailblazer/TrailblazerManager.cs`](src/Trailblazer/TrailblazerManager.cs)
 - [`src/Trailblazer/Pathing/PathManager.cs`](src/Trailblazer/Pathing/PathManager.cs)
-- [`src/Trailblazer/Pathing/Support/PathGuideFactory.cs`](src/Trailblazer/Pathing/Support/PathGuideFactory.cs)
+- [`src/Trailblazer/Pathing/Search/PathGuideFactory.cs`](src/Trailblazer/Pathing/Search/PathGuideFactory.cs)
 - [`src/Trailblazer/Navigation/Navigator.cs`](src/Trailblazer/Navigation/Navigator.cs)
 - [`src/Trailblazer/Navigation/Steering/NavSteering.cs`](src/Trailblazer/Navigation/Steering/NavSteering.cs)
 - [`src/Trailblazer/Navigation/Motor/NavMotor.cs`](src/Trailblazer/Navigation/Motor/NavMotor.cs)

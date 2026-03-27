@@ -11,19 +11,19 @@ If you need authored handoffs and volume rules, read `TRANSITIONS.MD` and `VOLUM
 
 Relevant code:
 
-- `src/Trailblazer/Pathing/Support/Request/IPathRequest.cs`
-- `src/Trailblazer/Pathing/Support/Request/PathRequest.cs`
+- `src/Trailblazer/Pathing/Search/Support/Request/IPathRequest.cs`
+- `src/Trailblazer/Pathing/Search/Support/Request/PathRequest.cs`
 - `src/Trailblazer/Pathing/Search/AStar/AStarPathRequest.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldPathRequest.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
 - `src/Trailblazer/Pathing/Search/Hybrid/HybridPathRequest.cs`
-- `src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`
+- `src/Trailblazer/Pathing/Search/PathGuideFactory.cs`
 - `src/Trailblazer/Pathing/Search/AStar/AStarSurveyor.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldSurveyor.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
-- `src/Trailblazer/Pathing/Support/SolidVoxelFinder/SolidVoxelFinder.cs`
-- `src/Trailblazer/Pathing/Support/SolidVoxelFinder/VolumeVoxelFinder.cs`
-- `src/Trailblazer/Pathing/Support/Transition/*`
+- `src/Trailblazer/Pathing/Search/Support/VoxelFinder/SolidVoxelFinder.cs`
+- `src/Trailblazer/Pathing/Search/Support/VoxelFinder/VolumeVoxelFinder.cs`
+- `src/Trailblazer/Pathing/Transition/*`
 
 ## 1. What Pathing Is
 

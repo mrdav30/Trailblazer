@@ -13,11 +13,11 @@ If you need raw-volume traversal rules, pair this with `VOLUMETRAVERSAL.MD`.
 
 Relevant code:
 
-- `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionRegistry.cs`
-- `src/Trailblazer/Pathing/Support/Transition/TraversalTransition.cs`
-- `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionAnchor.cs`
-- `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionType.cs`
-- `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionQuery.cs`
+- `src/Trailblazer/Pathing/Transition/TraversalTransitionRegistry.cs`
+- `src/Trailblazer/Pathing/Transition/TraversalTransition.cs`
+- `src/Trailblazer/Pathing/Transition/TraversalTransitionAnchor.cs`
+- `src/Trailblazer/Pathing/Transition/TraversalTransitionType.cs`
+- `src/Trailblazer/Pathing/Transition/TraversalTransitionQuery.cs`
 - `src/Trailblazer/Pathing/Search/Hybrid/HybridRoutePlanner.cs`
 - `src/Trailblazer/Pathing/Search/Hybrid/HybridPathRequest.cs`
 
@@ -340,10 +340,10 @@ This is especially important in worlds with:
 
 If you are changing transition behavior, inspect these files together:
 
-- `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionRegistry.cs`
-- `src/Trailblazer/Pathing/Support/Transition/TraversalTransitionQuery.cs`
+- `src/Trailblazer/Pathing/Transition/TraversalTransitionRegistry.cs`
+- `src/Trailblazer/Pathing/Transition/TraversalTransitionQuery.cs`
 - `src/Trailblazer/Pathing/Search/Hybrid/HybridRoutePlanner.cs`
-- `src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`
+- `src/Trailblazer/Pathing/Search/PathGuideFactory.cs`
 
 Useful tests:
 

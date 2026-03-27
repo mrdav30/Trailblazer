@@ -11,10 +11,10 @@ If you need the registry and lifecycle details, read `PATHMANAGER.MD` alongside 
 
 Relevant code:
 
-- `src/Trailblazer/Pathing/Support/Chart/NavigationChart.cs`
+- `src/Trailblazer/Pathing/Chart/NavigationChart.cs`
 - `src/Trailblazer/Pathing/PathManager.cs`
-- `src/Trailblazer/Pathing/Support/Partition/SolidChartPartition.cs`
-- `src/Trailblazer/Pathing/Support/Partition/VolumeChartPartition.cs`
+- `src/Trailblazer/Pathing/Partition/SolidChartPartition.cs`
+- `src/Trailblazer/Pathing/Partition/VolumeChartPartition.cs`
 
 ## 1. Why Charts Matter
 

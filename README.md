@@ -248,7 +248,7 @@ If you are integrating or extending the runtime, the key source entry points are
 
 - [`src/Trailblazer/Main/TrailblazerManager.cs`](src/Trailblazer/Main/TrailblazerManager.cs)
 - [`src/Trailblazer/Pathing/PathManager.cs`](src/Trailblazer/Pathing/PathManager.cs)
-- [`src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs`](src/Trailblazer/Pathing/Support/Guide/PathGuideFactory.cs)
+- [`src/Trailblazer/Pathing/Search/PathGuideFactory.cs`](src/Trailblazer/Pathing/Search/PathGuideFactory.cs)
 - [`src/Trailblazer/Main/Navigator.cs`](src/Trailblazer/Main/Navigator.cs)
 - [`src/Trailblazer/Navigation/Steering/NavSteering.cs`](src/Trailblazer/Navigation/Steering/NavSteering.cs)
 - [`src/Trailblazer/Navigation/Turning/NavTurning.cs`](src/Trailblazer/Navigation/Turning/NavTurning.cs)

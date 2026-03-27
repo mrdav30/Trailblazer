@@ -9,9 +9,9 @@ using Xunit;
 namespace Trailblazer.Tests.Pathing;
 
 [Collection("PathingCollection")]
-public sealed class RawVoxelFinderTests : IDisposable
+public sealed class VolumeVoxelFinderTests : IDisposable
 {
-    public RawVoxelFinderTests()
+    public VolumeVoxelFinderTests()
     {
         if (GlobalGridManager.IsActive)
             GlobalGridManager.Reset();
@@ -33,7 +33,7 @@ public sealed class RawVoxelFinderTests : IDisposable
         ConfigureGrid(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         RegisterGasLine(Vector3d.Zero, 2, "StrictVolume");
 
-        RawVoxelFinder.TryGetPathEdgeVoxels(
+        VolumeVoxelFinder.TryGetPathEdgeVoxels(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             out _,
@@ -56,7 +56,7 @@ public sealed class RawVoxelFinderTests : IDisposable
         ConfigureGrid(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         RegisterGasLine(Vector3d.Zero, 2, "RelaxedVolume");
 
-        RawVoxelFinder.TryGetPathEdgeVoxels(
+        VolumeVoxelFinder.TryGetPathEdgeVoxels(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             out Voxel startVoxel,
@@ -117,7 +117,7 @@ public sealed class RawVoxelFinderTests : IDisposable
             && (voxel.WorldPosition == Vector3d.Zero
             || voxel.WorldPosition == new Vector3d(1, 0, 0)));
 
-        RawVoxelFinder.TryGetPathEdgeVoxels(
+        VolumeVoxelFinder.TryGetPathEdgeVoxels(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             out Voxel startVoxel,
@@ -148,7 +148,7 @@ public sealed class RawVoxelFinderTests : IDisposable
 
         VolumeMediumRules.SetLiquidVoxelRule(static _ => false);
 
-        RawVoxelFinder.TryGetPathEdgeVoxels(
+        VolumeVoxelFinder.TryGetPathEdgeVoxels(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             out _,
@@ -174,10 +174,10 @@ public sealed class RawVoxelFinderTests : IDisposable
         GlobalGridManager.TryGetVoxel(new Vector3d(0, 2, 2), out Voxel edgeVoxel).Should().BeTrue();
         GlobalGridManager.TryGetVoxel(new Vector3d(1, 2, 2), out Voxel interiorVoxel).Should().BeTrue();
 
-        RawVoxelFinder.IsTraversable(edgeVoxel, Fixed64.Two, TraversalMedium.Gas).Should().BeFalse();
-        RawVoxelFinder.IsTraversable(interiorVoxel, Fixed64.Two, TraversalMedium.Gas).Should().BeTrue();
+        VolumeVoxelFinder.IsTraversable(edgeVoxel, Fixed64.Two, TraversalMedium.Gas).Should().BeFalse();
+        VolumeVoxelFinder.IsTraversable(interiorVoxel, Fixed64.Two, TraversalMedium.Gas).Should().BeTrue();
 
-        RawVoxelFinder.GetStartVoxel(
+        VolumeVoxelFinder.GetStartVoxel(
             new Vector3d(0, 2, 2),
             new Vector3d(4, 2, 2),
             out Voxel startVoxel,

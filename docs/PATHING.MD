@@ -21,8 +21,8 @@ Relevant code:
 - `src/Trailblazer/Pathing/Search/AStar/AStarSurveyor.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldSurveyor.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
-- `src/Trailblazer/Pathing/Support/VoxelFinder/VoxelFinder.cs`
-- `src/Trailblazer/Pathing/Support/VoxelFinder/RawVoxelFinder.cs`
+- `src/Trailblazer/Pathing/Support/SolidVoxelFinder/SolidVoxelFinder.cs`
+- `src/Trailblazer/Pathing/Support/SolidVoxelFinder/VolumeVoxelFinder.cs`
 - `src/Trailblazer/Pathing/Support/Transition/*`
 
 ## 1. What Pathing Is
@@ -107,7 +107,7 @@ Important model rules:
 
 It provides:
 
-- endpoint resolution through `VoxelFinder`
+- endpoint resolution through `SolidVoxelFinder`
 - size-aware endpoint revalidation
 - search-range calculation through `PathManager.TryGetMaxSearchSize(...)`
 - reusable origin and destination mutation without recreating the request object
@@ -207,7 +207,7 @@ Use it when:
 
 Key behavior differences from chart-backed requests:
 
-- endpoints resolve through `RawVoxelFinder`, not `VoxelFinder`
+- endpoints resolve through `VolumeVoxelFinder`, not `SolidVoxelFinder`
 - traversal validates raw voxels directly and prefers authored `VolumeChartPartition` data when present
 - constrained modes can be satisfied by authored volume cells, `VolumeMediumRules`, or both
 
@@ -258,13 +258,13 @@ If you are documenting or modifying public API, treat `HybridPathRequest` as int
 
 The request object is where world-space intent turns into pathing nodes.
 
-Chart-backed requests use `VoxelFinder`:
+Chart-backed requests use `SolidVoxelFinder`:
 
 - direct voxel first
 - nearby chart-traversable neighbor second
 - traced fallback or star search only when endpoint relaxation is allowed or size fallback is required
 
-Volume requests use `RawVoxelFinder`:
+Volume requests use `VolumeVoxelFinder`:
 
 - direct voxel first
 - nearby traversable raw-volume neighbor second when endpoint relaxation is allowed or size fallback is required
@@ -278,7 +278,7 @@ Practical consequences:
 - `AllowUnwalkableEndpoints` also does not imply transition fallback
 - exact target points inside the destination voxel are preserved in `TargetPosition`
 
-The tests in `tests/Trailblazer.Tests/Pathing/VoxelFinder.Tests.cs` are the best executable reference for these rules.
+The tests in `tests/Trailblazer.Tests/Pathing/SolidVoxelFinder.Tests.cs` are the best executable reference for these rules.
 
 ## 7. Transitions and Staged Fallback
 
@@ -451,7 +451,7 @@ When docs and code disagree:
 
 Good pathing-focused test entry points:
 
-- `tests/Trailblazer.Tests/Pathing/VoxelFinder.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/SolidVoxelFinder.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/AStarTransitionFallback.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/FlowFieldTransitionFallback.Tests.cs`
 - `tests/Trailblazer.Tests/Pathing/TraversalTransitionRegistry.Tests.cs`

@@ -9,9 +9,9 @@ using Xunit;
 namespace Trailblazer.Tests.Pathing;
 
 [Collection("PathingCollection")]
-public class VoxelFinderTests : IDisposable
+public class SolidVoxelFinderTests : IDisposable
 {
-    public VoxelFinderTests()
+    public SolidVoxelFinderTests()
     {
         if (GlobalGridManager.IsActive)
             GlobalGridManager.Reset();
@@ -35,7 +35,7 @@ public class VoxelFinderTests : IDisposable
     {
         RegisterTwoPointChart("StrictChart");
 
-        VoxelFinder.TryGetPathEdgeVoxels(
+        SolidVoxelFinder.TryGetPathEdgeVoxels(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             out _,
@@ -61,7 +61,7 @@ public class VoxelFinderTests : IDisposable
     {
         RegisterTwoPointChart("RelaxedChart");
 
-        VoxelFinder.TryGetPathEdgeVoxels(
+        SolidVoxelFinder.TryGetPathEdgeVoxels(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             out Voxel startVoxel,

@@ -43,7 +43,7 @@ public abstract class PathRequest : IPathRequest
         Vector3d destination,
         Fixed64? unitSize = null)
     {
-        bool success = VoxelFinder.TryGetPathEdgeVoxels(
+        bool success = SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
             out Voxel startVoxel,
@@ -71,7 +71,7 @@ public abstract class PathRequest : IPathRequest
     {
         if (EndNode == null) return false;
 
-        bool success = VoxelFinder.GetStartVoxel(
+        bool success = SolidVoxelFinder.GetStartVoxel(
             origin,
             TargetPosition,
             out Voxel newVoxel,
@@ -109,7 +109,7 @@ public abstract class PathRequest : IPathRequest
     {
         if (StartNode == null) return false;
 
-        bool success = VoxelFinder.GetEndVoxel(
+        bool success = SolidVoxelFinder.GetEndVoxel(
             Origin,
             destination,
             out Voxel newVoxel,

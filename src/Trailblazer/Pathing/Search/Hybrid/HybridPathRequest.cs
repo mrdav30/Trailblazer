@@ -122,7 +122,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         Fixed64? maxClimbHeight = null,
         bool allowUnwalkableEndpoints = false)
     {
-        if (!VoxelFinder.TryGetPathEdgeVoxels(
+        if (!SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
             out Voxel startNode,
@@ -216,7 +216,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         Fixed64? unitSize)
     {
         Fixed64 resolvedUnitSize = unitSize ?? GlobalGridManager.VoxelSize;
-        bool success = VoxelFinder.TryGetPathEdgeVoxels(
+        bool success = SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
             out Voxel startVoxel,
@@ -246,7 +246,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         if (EndNode == null)
             return false;
 
-        if (!VoxelFinder.GetStartVoxel(
+        if (!SolidVoxelFinder.GetStartVoxel(
             origin,
             TargetPosition,
             out Voxel startNode,
@@ -267,7 +267,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         if (StartNode == null)
             return false;
 
-        if (!VoxelFinder.GetEndVoxel(
+        if (!SolidVoxelFinder.GetEndVoxel(
             Origin,
             destination,
             out Voxel endNode,

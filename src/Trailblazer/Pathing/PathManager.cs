@@ -405,6 +405,8 @@ public static class PathManager
 
     #endregion
 
+    #region Pathfinding Utilities
+
     private static void RollbackTraversalBuildRegistration(
         NavigationChart chart,
         string[] registeredTransitionIds,
@@ -469,89 +471,6 @@ public static class PathManager
 
         if (cell.SupportsMedium(TraversalMedium.Liquid))
             _activeAuthoredLiquidCellCount += delta;
-    }
-
-    #region Neighbor Discovery
-
-    /// <summary>Returns all walkable neighbors of the voxel.</summary>
-    public static IEnumerable<TraversableVoxel> GetWalkableNeighbors(GlobalVoxelIndex idx)
-    {
-        if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel))
-            yield break;
-        foreach (TraversableVoxel tv in WalkableNeighborsOf(voxel))
-            yield return tv;
-    }
-
-    /// <summary>Returns walkable neighbors for a specific voxel.</summary>
-    public static IEnumerable<TraversableVoxel> WalkableNeighborsOf(Voxel voxel)
-    {
-        foreach (SpatialDirection dir in SpatialAwareness.AllDirections)
-        {
-            if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
-            if (neighbor.IsBlocked || !neighbor.TryGetPartition(out SolidChartPartition part)) continue;
-            yield return new TraversableVoxel { Voxel = neighbor, Partition = part, Direction = dir };
-        }
-    }
-
-    /// <summary>Returns all straight (orthogonal) neighbors.</summary>
-    public static IEnumerable<TraversableVoxel> GetWalkablePerpendicularNeighbors(GlobalVoxelIndex idx)
-    {
-        if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel))
-            yield break;
-        foreach (TraversableVoxel tv in WalkablePerpendicularNeighborsOf(voxel))
-            yield return tv;
-    }
-
-    /// <summary>Returns all straight (orthogonal) neighbors.</summary>
-    public static IEnumerable<TraversableVoxel> WalkablePerpendicularNeighborsOf(Voxel voxel)
-    {
-        foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
-        {
-            if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
-            if (neighbor.IsBlocked || !neighbor.TryGetPartition(out SolidChartPartition part)) continue;
-            yield return new TraversableVoxel { Voxel = neighbor, Partition = part, Direction = dir };
-        }
-    }
-
-    /// <summary>Returns all diagonal neighbors, avoiding edge-cutting.</summary>
-    public static IEnumerable<TraversableVoxel> GetWalkableDiagonalNeighbors(GlobalVoxelIndex idx)
-    {
-        if (!GlobalGridManager.TryGetGridAndVoxel(idx, out _, out Voxel voxel))
-            yield break;
-        foreach (TraversableVoxel tv in WalkableDiagonalNeighborsOf(voxel))
-            yield return tv;
-    }
-
-    /// <summary>Returns all diagonal neighbors, avoiding edge-cutting.</summary>
-    public static IEnumerable<TraversableVoxel> WalkableDiagonalNeighborsOf(Voxel voxel)
-    {
-        foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
-        {
-            if (!voxel.TryGetNeighborFromDirection(dir, out Voxel neighbor)) continue;
-            if (neighbor.IsBlocked || !neighbor.TryGetPartition(out SolidChartPartition part)) continue;
-            if (HasBlockedEdgeNeighbor(voxel, dir)) continue;
-            yield return new TraversableVoxel { Voxel = neighbor, Partition = part, Direction = dir };
-        }
-    }
-
-    /// <summary>
-    /// For any multi-axis step (dx,dy,dz), ensures each single-axis "leg" is walkable.
-    /// </summary>
-    private static bool HasBlockedEdgeNeighbor(Voxel voxel, SpatialDirection dir)
-    {
-        (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)dir];
-        // build legs for each non-zero axis
-        foreach ((int ax, int ay, int az) in new[] { (dx, 0, 0), (0, dy, 0), (0, 0, dz) })
-        {
-            if (ax == 0 && ay == 0 && az == 0) continue;
-            if (!voxel.TryGetNeighborFromOffset((ax, ay, az), out Voxel edgeVoxel)
-                || edgeVoxel.IsBlocked
-                || !edgeVoxel.HasPartition<SolidChartPartition>())
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     #endregion

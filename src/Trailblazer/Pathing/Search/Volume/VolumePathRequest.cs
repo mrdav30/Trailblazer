@@ -79,7 +79,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {
-        if (!RawVoxelFinder.TryGetPathEdgeVoxels(
+        if (!VolumeVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
             out Voxel startNode,
@@ -115,7 +115,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Fixed64? unitSize)
     {
         Fixed64 resolvedUnitSize = unitSize ?? GlobalGridManager.VoxelSize;
-        bool hasEndpoints = RawVoxelFinder.TryGetPathEdgeVoxels(
+        bool hasEndpoints = VolumeVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
             out Voxel startNode,
@@ -142,7 +142,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         if (EndNode == null)
             return false;
 
-        if (!RawVoxelFinder.GetStartVoxel(
+        if (!VolumeVoxelFinder.GetStartVoxel(
             origin,
             TargetPosition,
             out Voxel startNode,
@@ -181,7 +181,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         if (StartNode == null)
             return false;
 
-        if (!RawVoxelFinder.GetEndVoxel(
+        if (!VolumeVoxelFinder.GetEndVoxel(
             Origin,
             destination,
             out Voxel endNode,

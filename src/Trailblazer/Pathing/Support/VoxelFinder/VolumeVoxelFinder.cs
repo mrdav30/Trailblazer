@@ -1,7 +1,6 @@
 using FixedMathSharp;
 using GridForge;
 using GridForge.Grids;
-using GridForge.Spatial;
 using GridForge.Utility;
 using System.Runtime.CompilerServices;
 
@@ -10,7 +9,7 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Resolves and validates raw voxel volumes without requiring navigation chart partitions.
 /// </summary>
-internal static class RawVoxelFinder
+public static class VolumeVoxelFinder
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryGetPathEdgeVoxels(
@@ -22,13 +21,6 @@ internal static class RawVoxelFinder
         bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {
-        if (!VolumeMediumRules.IsConfigured(medium))
-        {
-            originVoxel = null;
-            targetVoxel = null;
-            return false;
-        }
-
         targetVoxel = null;
         if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkableEndpoints, unitSize, medium))
             return false;
@@ -128,31 +120,11 @@ internal static class RawVoxelFinder
         Fixed64 unitSize,
         TraversalMedium medium = TraversalMedium.Gas)
     {
-        closestNeighbor = null;
-
-        foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
-        {
-            if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
-                || !IsTraversable(closestNeighbor, unitSize, medium))
-            {
-                continue;
-            }
-
-            return true;
-        }
-
-        foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
-        {
-            if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
-                || !IsTraversable(closestNeighbor, unitSize, medium))
-            {
-                continue;
-            }
-
-            return true;
-        }
-
-        return false;
+        return EndpointVoxelResolver.TryGetClosestTraversableVoxel(
+            voxel,
+            out closestNeighbor,
+            unitSize,
+            new VolumeEndpointPolicy(medium));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -178,48 +150,13 @@ internal static class RawVoxelFinder
         Fixed64 unitSize,
         TraversalMedium medium)
     {
-        if (!VolumeMediumRules.IsConfigured(medium))
-        {
-            voxel = null;
-            return false;
-        }
-
-        voxel = null;
-        bool shouldRelaxEndpoint = allowUnwalkableEndpoints;
-
-        if (GlobalGridManager.TryGetVoxel(position, out voxel))
-        {
-            if (PassesMedium(voxel, medium)
-                && (allowUnwalkableEndpoints || IsBaseTraversable(voxel, unitSize)))
-            {
-                return true;
-            }
-
-            shouldRelaxEndpoint = shouldRelaxEndpoint || RequiresSizeFallback(voxel, unitSize, medium);
-            if (shouldRelaxEndpoint
-                && TryGetClosestTraversableVoxel(voxel, out Voxel closestNeighbor, unitSize, medium))
-            {
-                voxel = closestNeighbor;
-                return true;
-            }
-        }
-
-        if (!shouldRelaxEndpoint)
-            return false;
-
-        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(position, traceToward))
-        {
-            foreach (Voxel current in gridVoxelSet.Voxels)
-            {
-                if (!IsTraversable(current, unitSize, medium))
-                    continue;
-
-                voxel = current;
-                return true;
-            }
-        }
-
-        return false;
+        return EndpointVoxelResolver.TryGetEndpointVoxel(
+            position,
+            traceToward,
+            out voxel,
+            allowUnwalkableEndpoints,
+            unitSize,
+            new VolumeEndpointPolicy(medium));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -277,5 +214,53 @@ internal static class RawVoxelFinder
         }
 
         return true;
+    }
+
+    private readonly struct VolumeEndpointPolicy : IVoxelEndpointResolutionPolicy
+    {
+        private readonly TraversalMedium _medium;
+
+        public VolumeEndpointPolicy(TraversalMedium medium)
+        {
+            _medium = medium;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool CanResolve()
+        {
+            return VolumeMediumRules.IsConfigured(_medium);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryAcceptDirectVoxel(
+            Voxel voxel,
+            Fixed64 unitSize,
+            bool allowUnwalkableEndpoints)
+        {
+            return PassesMedium(voxel, _medium)
+                && (allowUnwalkableEndpoints || IsBaseTraversable(voxel, unitSize));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool RequiresSizeFallback(Voxel voxel, Fixed64 unitSize)
+        {
+            return VolumeVoxelFinder.RequiresSizeFallback(voxel, unitSize, _medium);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsTraversable(Voxel voxel, Fixed64 unitSize)
+        {
+            return VolumeVoxelFinder.IsTraversable(voxel, unitSize, _medium);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGetFinalFallbackVoxel(
+            Vector3d position,
+            Fixed64 unitSize,
+            out Voxel voxel)
+        {
+            voxel = null;
+            return false;
+        }
     }
 }

@@ -7,6 +7,10 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
+#if DEBUG
+using System.Diagnostics;
+#endif
+
 namespace Trailblazer.Pathing;
 
 /// <summary>

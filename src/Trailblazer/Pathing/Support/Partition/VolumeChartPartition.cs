@@ -129,7 +129,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// </summary>
     internal bool IsImpassable(Fixed64 unitSize)
     {
-        return !RawVoxelFinder.HasClearance(Voxel, unitSize);
+        return !VolumeVoxelFinder.HasClearance(Voxel, unitSize);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

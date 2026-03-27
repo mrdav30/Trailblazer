@@ -206,7 +206,7 @@ That live partition holds the authored runtime data volume traversal actually us
 
 Instead, raw-volume traversal:
 
-1. resolves endpoints through `RawVoxelFinder`
+1. resolves endpoints through `VolumeVoxelFinder`
 2. validates raw voxel traversability and medium compatibility
 3. searches through raw voxel connectivity with `VolumeSurveyor`
 

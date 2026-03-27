@@ -301,7 +301,7 @@ public sealed class VolumeSurveyor
         if (voxel == _request.EndNode && _request.AllowUnwalkableEndpoints)
             return VolumeMediumRules.Matches(voxel, _request.Medium);
 
-        return RawVoxelFinder.IsTraversable(
+        return VolumeVoxelFinder.IsTraversable(
             voxel,
             _request.UnitSize,
             _request.Medium);

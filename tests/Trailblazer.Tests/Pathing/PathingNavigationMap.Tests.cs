@@ -459,7 +459,7 @@ public class PathingNavigationMapTests : IDisposable
         GlobalGridManager.TryAddGrid(config, out _);
 
         Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel unAuthoredVoxel));
-        Assert.False(RawVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.False(VolumeVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, TraversalMedium.Gas));
 
         string[,,] map =
         {
@@ -476,8 +476,8 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(PathManager.Register(buildResult));
         Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel authoredOpenVoxel));
-        Assert.True(RawVoxelFinder.IsTraversable(authoredOpenVoxel, Fixed64.One, TraversalMedium.Gas));
-        Assert.False(RawVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.True(VolumeVoxelFinder.IsTraversable(authoredOpenVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.False(VolumeVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, TraversalMedium.Gas));
 
         PathManager.UnloadChart(buildResult.Chart);
     }
@@ -493,12 +493,12 @@ public class PathingNavigationMapTests : IDisposable
             || voxel.WorldPosition == new Vector3d(1, 0, 0));
 
         Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel unpartitionedVoxel));
-        Assert.False(RawVoxelFinder.IsTraversable(unpartitionedVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.False(VolumeVoxelFinder.IsTraversable(unpartitionedVoxel, Fixed64.One, TraversalMedium.Gas));
 
         PathTestFactory.RegisterSingleWalkablePoint("OpenRuleSurfaceA", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("OpenRuleSurfaceB", new Vector3d(1, 0, 0));
 
-        Assert.True(RawVoxelFinder.IsTraversable(unpartitionedVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.True(VolumeVoxelFinder.IsTraversable(unpartitionedVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.True(VolumePathRequest.TryCreate(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -535,17 +535,17 @@ public class PathingNavigationMapTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "AuthoredOpenAuthority");
 
         Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
-        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.True(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
 
         VolumeMediumRules.SetGasVoxelRule(static candidate =>
             candidate != null
             && candidate.WorldPosition == Vector3d.Zero);
 
-        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.True(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
 
         VolumeMediumRules.ClearGasVoxelRule();
 
-        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.True(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
     }
 
     [Fact]
@@ -557,20 +557,20 @@ public class PathingNavigationMapTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "AuthoredOpenPlusWater");
 
         Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
-        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
-        Assert.False(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Liquid));
+        Assert.True(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.False(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Liquid));
 
         VolumeMediumRules.SetLiquidVoxelRule(static candidate =>
             candidate != null
             && candidate.WorldPosition == Vector3d.Zero);
 
-        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
-        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Liquid));
+        Assert.True(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.True(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Liquid));
 
         VolumeMediumRules.ClearLiquidVoxelRule();
 
-        Assert.True(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
-        Assert.False(RawVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Liquid));
+        Assert.True(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.False(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Liquid));
     }
 
     [Fact]
@@ -584,8 +584,8 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel startVoxel));
         Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel endVoxel));
-        Assert.False(RawVoxelFinder.IsTraversable(startVoxel, Fixed64.One, TraversalMedium.Gas));
-        Assert.False(RawVoxelFinder.IsTraversable(endVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.False(VolumeVoxelFinder.IsTraversable(startVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.False(VolumeVoxelFinder.IsTraversable(endVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.Null(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -597,8 +597,8 @@ public class PathingNavigationMapTests : IDisposable
             && (voxel.WorldPosition == Vector3d.Zero
             || voxel.WorldPosition == new Vector3d(1, 0, 0)));
 
-        Assert.True(RawVoxelFinder.IsTraversable(startVoxel, Fixed64.One, TraversalMedium.Gas));
-        Assert.True(RawVoxelFinder.IsTraversable(endVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.True(VolumeVoxelFinder.IsTraversable(startVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.True(VolumeVoxelFinder.IsTraversable(endVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -607,8 +607,8 @@ public class PathingNavigationMapTests : IDisposable
 
         VolumeMediumRules.ClearGasVoxelRule();
 
-        Assert.False(RawVoxelFinder.IsTraversable(startVoxel, Fixed64.One, TraversalMedium.Gas));
-        Assert.False(RawVoxelFinder.IsTraversable(endVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.False(VolumeVoxelFinder.IsTraversable(startVoxel, Fixed64.One, TraversalMedium.Gas));
+        Assert.False(VolumeVoxelFinder.IsTraversable(endVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.Null(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),

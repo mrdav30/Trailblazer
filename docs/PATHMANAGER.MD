@@ -74,12 +74,6 @@ The main entry points are:
 - `InitializeAllCharts()`
 - `UnloadChart(string chartKey)`
 - `Reset()`
-- `GetWalkableNeighbors(GlobalVoxelIndex idx)`
-- `WalkableNeighborsOf(Voxel voxel)`
-- `GetWalkablePerpendicularNeighbors(GlobalVoxelIndex idx)`
-- `WalkablePerpendicularNeighborsOf(Voxel voxel)`
-- `GetWalkableDiagonalNeighbors(GlobalVoxelIndex idx)`
-- `WalkableDiagonalNeighborsOf(Voxel voxel)`
 - `GetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)`
 - `NeedsPath(Vector3d startPos, Vector3d endPos, Fixed64 unitSize, bool allowUnwalkableEndpoints = false)`
 
@@ -276,9 +270,7 @@ That means:
 
 It will walk live voxels and remove partitions itself.
 
-That means the accurate teardown pattern is:
-
-1. `Reset()`
+That means the accurate teardown pattern is just call `Reset()`.
 
 ### 8.2 Tick(...)
 
@@ -290,48 +282,9 @@ It currently forwards to:
 
 So while `PathManager` does not own guide caches directly, it does participate in their frame-based maintenance.
 
-## 9. Neighbor Discovery APIs
+## 9. Utility Methods
 
-`PathManager` exposes three families of neighbor queries.
-
-### 9.1 All Walkable Neighbors
-
-- `GetWalkableNeighbors(...)`
-- `WalkableNeighborsOf(...)`
-
-These return all traversable neighbors found in `SpatialAwareness.AllDirections`.
-
-### 9.2 Orthogonal Neighbors
-
-- `GetWalkablePerpendicularNeighbors(...)`
-- `WalkablePerpendicularNeighborsOf(...)`
-
-These restrict traversal to perpendicular directions only.
-
-### 9.3 Diagonal Neighbors
-
-- `GetWalkableDiagonalNeighbors(...)`
-- `WalkableDiagonalNeighborsOf(...)`
-
-These return diagonal neighbors, but only when edge-leg validation passes.
-
-## 10. Diagonal Edge Validation
-
-Diagonal traversal is filtered through `HasBlockedEdgeNeighbor(...)`.
-
-For a multi-axis step, it:
-
-1. decomposes the direction into single-axis legs
-2. checks each leg neighbor voxel
-3. rejects the diagonal if any leg voxel is missing, blocked, or lacks a `SolidChartPartition`
-
-This prevents diagonal corner cutting.
-
-That is one of the core rules that keeps path validity aligned with the rest of the library's traversal model.
-
-## 11. Utility Methods
-
-### 11.1 GetMaxSearchSize(...)
+### 9.1 GetMaxSearchSize(...)
 
 `GetMaxSearchSize(...)` computes a search bound for path requests based on the sizes of the start and end grids.
 
@@ -343,7 +296,7 @@ Behavior:
 
 This is not a geometric distance estimate. It is a grid-size-derived search cap hint.
 
-### 11.2 NeedsPath(...)
+### 9.2 NeedsPath(...)
 
 `NeedsPath(...)` is the fast direct-travel viability check.
 
@@ -360,7 +313,7 @@ Important detail:
 - it does not mean a route is impossible if it returns `true`
 - it only means a path guide is needed instead of direct travel
 
-### 11.3 `allowUnwalkableEndpoints`
+### 9.3 `allowUnwalkableEndpoints`
 
 The `allowUnwalkableEndpoints` argument affects the direct-travel check.
 
@@ -370,7 +323,7 @@ In the current implementation:
 
 This is a request-policy input, not a global chart rule.
 
-## 12. Relationship to IVoxelPartition
+## 10. Relationship to IVoxelPartition
 
 `PathManager` is tightly coupled to `SolidChartPartition` and `VolumeChartPartition`.
 
@@ -384,7 +337,7 @@ Key partition responsibilities that matter here:
 
 This means `PathManager` is not just a registry. It is the layer that keeps live partition topology coherent for the rest of the pathing system.
 
-## 13. Threading and Determinism Notes
+## 11. Threading and Determinism Notes
 
 The chart registry is guarded by `ReaderWriterLockSlim`.
 
@@ -402,7 +355,7 @@ From a determinism perspective:
 - initialization and unload order can matter because they affect cache invalidation and live partition ownership
 - direct-travel checks depend on the current live partition topology, not just source chart data
 
-## 14. Common Integration Pattern
+## 12. Common Integration Pattern
 
 The usual chart lifecycle is:
 
@@ -423,7 +376,7 @@ For multi-chart teardown in tests or world resets, the normal pattern is:
 PathManager.Reset();
 ```
 
-## 15. Common Gotchas
+## 13. Common Gotchas
 
 ### Registering a chart does not make it pathable
 
@@ -445,7 +398,7 @@ It is only a direct-line viability check.
 
 Overlapping charts can legitimately share a partition. Unloading one chart does not necessarily remove that partition from the voxel.
 
-## 16. Testing References
+## 14. Testing References
 
 Direct chart lifecycle coverage currently lives in:
 

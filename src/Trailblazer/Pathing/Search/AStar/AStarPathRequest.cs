@@ -58,7 +58,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
         bool allowUnwalkableEndpoints = false,
         bool allowTraversalTransitions = false)
     {
-        if (!VoxelFinder.TryGetPathEdgeVoxels(
+        if (!SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
             out Voxel startNode,

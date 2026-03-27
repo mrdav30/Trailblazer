@@ -1,8 +1,5 @@
 ﻿using FixedMathSharp;
-using GridForge;
 using GridForge.Grids;
-using GridForge.Spatial;
-using GridForge.Utility;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
@@ -11,7 +8,7 @@ namespace Trailblazer.Pathing;
 /// Utility for resolving valid start and end voxels for pathfinding based on world positions, 
 /// with optional size consideration and walkability fallback.
 /// </summary>
-public static class VoxelFinder
+public static class SolidVoxelFinder
 {
     // set to the highest height or width valu1e of any game object
     public const int MaxTestDistance = 3;
@@ -144,25 +141,11 @@ public static class VoxelFinder
     out Voxel closestNeighbor,
     Fixed64? unitSize = null)
     {
-        closestNeighbor = null;
-        Fixed64 resolvedUnitSize = unitSize ?? GlobalGridManager.VoxelSize;
-
-        // prefer straight neighbors since they cost less
-        foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
-        {
-            if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
-                || !IsChartTraversable(closestNeighbor, resolvedUnitSize)) continue;
-            return true;
-        }
-
-        foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
-        {
-            if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
-                || !IsChartTraversable(closestNeighbor, resolvedUnitSize)) continue;
-            return true;
-        }
-
-        return false;
+        return EndpointVoxelResolver.TryGetClosestTraversableVoxel(
+            voxel,
+            out closestNeighbor,
+            unitSize ?? GlobalGridManager.VoxelSize,
+            new SolidEndpointPolicy());
     }
 
     /// <summary>
@@ -181,7 +164,13 @@ public static class VoxelFinder
         out Voxel targetVoxel,
         bool allowUnwalkableEndpoints = false)
     {
-        return TryGetEndpointVoxel(origin, target, out targetVoxel, allowUnwalkableEndpoints, unitSize);
+        return EndpointVoxelResolver.TryGetEndpointVoxel(
+            origin,
+            target,
+            out targetVoxel,
+            allowUnwalkableEndpoints,
+            unitSize,
+            new SolidEndpointPolicy());
     }
 
     private static bool TryGetEndpointVoxel(
@@ -191,56 +180,13 @@ public static class VoxelFinder
         bool allowUnwalkableEndpoints,
         Fixed64 unitSize)
     {
-        voxel = null;
-        bool shouldRelaxEndpoint = allowUnwalkableEndpoints;
-
-        if (GlobalGridManager.TryGetVoxel(position, out Voxel directVoxel))
-        {
-            if (IsChartTraversable(directVoxel, unitSize))
-            {
-                voxel = directVoxel;
-                return true;
-            }
-
-            shouldRelaxEndpoint = shouldRelaxEndpoint || RequiresSizeFallback(directVoxel, unitSize);
-            if (shouldRelaxEndpoint
-                && TryGetClosestWalkableVoxel(directVoxel, out Voxel closestNeighbor, unitSize))
-            {
-                voxel = closestNeighbor;
-                return true;
-            }
-        }
-
-        if (!shouldRelaxEndpoint)
-            return false;
-
-        if (TryTraceToClosestWalkableVoxel(position, traceToward, unitSize, out voxel))
-            return true;
-
-        return StarCast(position, out voxel, unitSize)
-            && IsChartTraversable(voxel, unitSize);
-    }
-
-    private static bool TryTraceToClosestWalkableVoxel(
-        Vector3d position,
-        Vector3d traceToward,
-        Fixed64 unitSize,
-        out Voxel voxel)
-    {
-        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(position, traceToward))
-        {
-            foreach (Voxel current in gridVoxelSet.Voxels)
-            {
-                if (!IsChartTraversable(current, unitSize))
-                    continue;
-
-                voxel = current;
-                return true;
-            }
-        }
-
-        voxel = null;
-        return false;
+        return EndpointVoxelResolver.TryGetEndpointVoxel(
+            position,
+            traceToward,
+            out voxel,
+            allowUnwalkableEndpoints,
+            unitSize,
+            new SolidEndpointPolicy());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -271,5 +217,41 @@ public static class VoxelFinder
         }
 
         return partition.IsImpassable(unitSize);
+    }
+
+    private readonly struct SolidEndpointPolicy : IVoxelEndpointResolutionPolicy
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool CanResolve() => true;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryAcceptDirectVoxel(
+            Voxel voxel,
+            Fixed64 unitSize,
+            bool allowUnwalkableEndpoints)
+        {
+            return IsChartTraversable(voxel, unitSize);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool RequiresSizeFallback(Voxel voxel, Fixed64 unitSize)
+        {
+            return SolidVoxelFinder.RequiresSizeFallback(voxel, unitSize);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsTraversable(Voxel voxel, Fixed64 unitSize)
+        {
+            return IsChartTraversable(voxel, unitSize);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGetFinalFallbackVoxel(
+            Vector3d position,
+            Fixed64 unitSize,
+            out Voxel voxel)
+        {
+            return StarCast(position, out voxel, unitSize);
+        }
     }
 }

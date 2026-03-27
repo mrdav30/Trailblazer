@@ -17,7 +17,7 @@ Relevant code:
 - `src/Trailblazer/Pathing/Support/Partition/VolumeChartPartition.cs`
 - `src/Trailblazer/Pathing/Support/Volume/VolumeMediumRules.cs`
 - `src/Trailblazer/Navigation/Motor/Support/TraversalMedium.cs`
-- `src/Trailblazer/Pathing/Support/VoxelFinder/RawVoxelFinder.cs`
+- `src/Trailblazer/Pathing/Support/SolidVoxelFinder/VolumeVoxelFinder.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeGuide.cs`
@@ -45,7 +45,7 @@ Volume traversal is built from four pieces:
 - authored `VolumeChartPartition` state
 - `TraversalMedium`
 - `VolumeMediumRules`
-- raw-volume resolution through `RawVoxelFinder` and `VolumeSurveyor`
+- raw-volume resolution through `VolumeVoxelFinder` and `VolumeSurveyor`
 
 Current supported volume media are:
 
@@ -164,12 +164,12 @@ That means tests, world reloads, and runtime bootstrap code must reapply host ru
 
 ## 4. Raw-Volume Endpoint Resolution
 
-Chart-backed requests use `VoxelFinder`.
-Volume requests use `RawVoxelFinder`.
+Chart-backed requests use `SolidVoxelFinder`.
+Volume requests use `VolumeVoxelFinder`.
 
 That is a very important difference.
 
-`RawVoxelFinder` does not require a surface chart route, but it does require compatible Trailblazer partitioned space.
+`VolumeVoxelFinder` does not require a surface chart route, but it does require compatible Trailblazer partitioned space.
 
 Instead it resolves endpoints against raw voxels and checks:
 
@@ -211,7 +211,7 @@ Interior voxels still have to be truly traversable.
 
 ## 5. Raw-Volume Traversability
 
-`RawVoxelFinder.IsTraversable(...)` combines:
+`VolumeVoxelFinder.IsTraversable(...)` combines:
 
 - base raw-voxel traversability
 - volume-medium filtering
@@ -299,7 +299,7 @@ For example:
 Important nuance:
 
 - a valid transition does not make the middle volume segment valid
-- the volume segment still has to resolve through `RawVoxelFinder` and `VolumeSurveyor`
+- the volume segment still has to resolve through `VolumeVoxelFinder` and `VolumeSurveyor`
 
 ## 9. Usage Patterns
 
@@ -331,7 +331,7 @@ If you are changing volume traversal behavior, inspect these files together:
 
 - `src/Trailblazer/Pathing/Support/Partition/VolumeChartPartition.cs`
 - `src/Trailblazer/Pathing/Support/Volume/VolumeMediumRules.cs`
-- `src/Trailblazer/Pathing/Support/VoxelFinder/RawVoxelFinder.cs`
+- `src/Trailblazer/Pathing/Support/SolidVoxelFinder/VolumeVoxelFinder.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumePathRequest.cs`
 - `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`
 - `src/Trailblazer/Pathing/Search/Hybrid/HybridRoutePlanner.cs`

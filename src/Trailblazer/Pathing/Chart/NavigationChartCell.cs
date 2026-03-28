@@ -26,9 +26,19 @@ public readonly struct NavigationChartCell
     public static readonly NavigationChartCell Gas = new(TraversalMedia.Gas);
 
     /// <summary>
+    /// A reusable solid-plus-gas traversal cell with no additional authored metadata.
+    /// </summary>
+    public static readonly NavigationChartCell SolidGas = new(TraversalMedia.Solid | TraversalMedia.Gas);
+
+    /// <summary>
     /// A reusable liquid traversal cell with no additional authored metadata.
     /// </summary>
     public static readonly NavigationChartCell Liquid = new(TraversalMedia.Liquid);
+
+    /// <summary>
+    /// A reusable solid-plus-liquid traversal cell with no additional authored metadata.
+    /// </summary>
+    public static readonly NavigationChartCell SolidLiquid = new(TraversalMedia.Solid | TraversalMedia.Liquid);
 
     #endregion
 
@@ -78,10 +88,13 @@ public readonly struct NavigationChartCell
     {
         bool hasGas = (traversalKinds & TraversalMedia.Gas) != 0;
         bool hasLiquid = (traversalKinds & TraversalMedia.Liquid) != 0;
+        bool hasSolid = (traversalKinds & TraversalMedia.Solid) != 0;
         if (hasGas && hasLiquid)
         {
             throw new ArgumentException(
-                "A single authored cell cannot currently declare both gas and liquid traversal.",
+                hasSolid
+                    ? "A single authored cell cannot currently declare solid, gas, and liquid traversal together."
+                    : "A single authored cell cannot currently declare both gas and liquid traversal.",
                 nameof(traversalKinds));
         }
 

@@ -99,22 +99,22 @@ public class SolidChartPartition : IVoxelPartition
     /// <summary>
     /// Maps that currently include this partition as part of their traversable space.
     /// </summary>
-    private readonly SwiftHashSet<string> _chartOwners = new();
-
-    private readonly SwiftDictionary<string, NavigationChartCell> _chartCells = new(4, StringComparer.Ordinal);
-
-    ///<inheritdoc cref="_chartOwners"/>
-    public SwiftHashSet<string> ChartOwners => _chartOwners;
+    public SwiftHashSet<string> ChartOwners { get; private set; }
 
     /// <summary>
-    /// The combined authored chart flags currently applied to this live partition.
+    /// The chart whose authored cell currently wins overlap resolution for this voxel.
+    /// </summary>
+    public string EffectiveChartOwner { get; private set; }
+
+    /// <summary>
+    /// The authored chart flags from the winning effective cell currently applied to this live partition.
     /// </summary>
     public NavigationChartCellFlags ChartFlags { get; private set; }
 
     /// <summary>
     /// Returns true if any map currently references this partition.
     /// </summary>
-    public bool HasAnyOwners => _chartOwners.Count > 0;
+    public bool HasAnyOwners => ChartOwners?.Count > 0;
 
     #endregion
 
@@ -173,8 +173,8 @@ public class SolidChartPartition : IVoxelPartition
 
         _clearanceRadiusInVoxels = DefaultDegreeCap;
 
-        _chartOwners.Clear();
-        _chartCells.Clear();
+        ChartOwners?.Clear();
+        EffectiveChartOwner = null;
 
         IsPartitioned = false;
     }
@@ -318,49 +318,27 @@ public class SolidChartPartition : IVoxelPartition
     #region NavigationChart Management
 
     /// <summary>
-    /// Registers the chart name as one that owns this partition.
+    /// Applies the resolved overlap state for this voxel to the active solid partition.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void AddOwner(string mapName) => AddOwner(mapName, NavigationChartCell.Solid);
-
-    /// <summary>
-    /// Registers the chart name as one that owns this partition together with its authored cell metadata.
-    /// Overlapping chart modifiers currently combine by summing path cost contributions and OR-ing flags.
-    /// </summary>
-    public void AddOwner(string mapName, NavigationChartCell cell)
+    internal void ApplyAuthoredState(
+        SwiftHashSet<string> chartOwners,
+        string effectiveChartOwner,
+        NavigationChartCell effectiveCell)
     {
-        _chartOwners.Add(mapName);
-        _chartCells[mapName] = cell;
-        RefreshChartMetadata();
-    }
+        ChartOwners ??= new SwiftHashSet<string>();
+        ChartOwners.Clear();
+        ChartOwnerUtility.AddOwners(ChartOwners, chartOwners);
 
-    /// <summary>
-    /// Removes the chart name from those that reference this partition.
-    /// </summary>
-    public void RemoveOwner(string mapName)
-    {
-        _chartOwners.Remove(mapName);
-        _chartCells.Remove(mapName);
-        RefreshChartMetadata();
+        EffectiveChartOwner = effectiveChartOwner;
+        _chartPathCostModifier = effectiveCell.PathCostModifier;
+        ChartFlags = effectiveCell.Flags;
     }
 
     /// <summary>
     /// Returns true if the partition is claimed by the given map name.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool BelongsTo(string mapName) => _chartOwners.Contains(mapName);
-
-    private void RefreshChartMetadata()
-    {
-        _chartPathCostModifier = 0;
-        ChartFlags = NavigationChartCellFlags.None;
-
-        foreach (NavigationChartCell cell in _chartCells.Values)
-        {
-            _chartPathCostModifier += cell.PathCostModifier;
-            ChartFlags |= cell.Flags;
-        }
-    }
+    public bool BelongsTo(string mapName) => ChartOwners?.Contains(mapName) == true;
 
     #endregion
 

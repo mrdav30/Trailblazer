@@ -140,6 +140,137 @@ public class TraversalAuthoringMapTests : IDisposable
     }
 
     [Fact]
+    public void Build_ShouldTreatBuiltInMixedTokensAsExplicitMixedMediaCells()
+    {
+        string[,,] map =
+        {
+            {
+                { "SG" },
+                { "SL" }
+            }
+        };
+
+        var authoringMap = new TraversalAuthoringMap(
+            chartName: "MixedTokens",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One);
+
+        TraversalBuildResult result = authoringMap.Build();
+
+        Assert.True(result.Chart.TryGetCell(Vector3d.Zero, out NavigationChartCell gasBoundaryCell));
+        Assert.True(gasBoundaryCell.HasSolid);
+        Assert.True(gasBoundaryCell.HasVolume);
+        Assert.True(gasBoundaryCell.SupportsMedium(TraversalMedium.Gas));
+        Assert.False(gasBoundaryCell.SupportsMedium(TraversalMedium.Liquid));
+
+        Assert.True(result.Chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell liquidBoundaryCell));
+        Assert.True(liquidBoundaryCell.HasSolid);
+        Assert.True(liquidBoundaryCell.HasVolume);
+        Assert.True(liquidBoundaryCell.SupportsMedium(TraversalMedium.Liquid));
+        Assert.False(liquidBoundaryCell.SupportsMedium(TraversalMedium.Gas));
+
+        Assert.Empty(result.GeneratedTransitions);
+    }
+
+    [Fact]
+    public void Build_ShouldGenerateSwimTransitionsFromMarkedMixedBoundaryTokens()
+    {
+        string[,,] map =
+        {
+            {
+                { "S!" },
+                { "SL!" }
+            }
+        };
+
+        var authoringMap = new TraversalAuthoringMap(
+            chartName: "MixedSwimBoundary",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One);
+
+        TraversalBuildResult result = authoringMap.Build();
+
+        Assert.True(result.Chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell markedMixedCell));
+        Assert.True(markedMixedCell.HasSolid);
+        Assert.True(markedMixedCell.SupportsMedium(TraversalMedium.Liquid));
+        Assert.Equal(
+            NavigationChartCellFlags.TransitionSourceHint | NavigationChartCellFlags.TransitionDestinationHint,
+            markedMixedCell.Flags);
+
+        Assert.Equal(2, result.GeneratedTransitions.Length);
+        Assert.Contains(result.GeneratedTransitions, t =>
+            t.Type == TraversalTransitionType.SwimEntry
+            && t.Source.Position == Vector3d.Zero
+            && t.Source.Medium == TraversalMedium.Solid
+            && t.Destination.Position == new Vector3d(1, 0, 0)
+            && t.Destination.Medium == TraversalMedium.Liquid);
+        Assert.Contains(result.GeneratedTransitions, t =>
+            t.Type == TraversalTransitionType.SwimExit
+            && t.Source.Position == new Vector3d(1, 0, 0)
+            && t.Source.Medium == TraversalMedium.Liquid
+            && t.Destination.Position == Vector3d.Zero
+            && t.Destination.Medium == TraversalMedium.Solid);
+    }
+
+    [Fact]
+    public void Build_ShouldGenerateAerialTransitionsFromMarkedMixedBoundaryTokens()
+    {
+        string[,,] map =
+        {
+            {
+                { "SG!" },
+                { "G!" }
+            }
+        };
+
+        var authoringMap = new TraversalAuthoringMap(
+            chartName: "MixedGasBoundary",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One);
+
+        TraversalBuildResult result = authoringMap.Build();
+
+        Assert.Equal(2, result.GeneratedTransitions.Length);
+        Assert.Contains(result.GeneratedTransitions, t =>
+            t.Type == TraversalTransitionType.Takeoff
+            && t.Source.Position == Vector3d.Zero
+            && t.Source.Medium == TraversalMedium.Solid
+            && t.Destination.Position == new Vector3d(1, 0, 0)
+            && t.Destination.Medium == TraversalMedium.Gas);
+        Assert.Contains(result.GeneratedTransitions, t =>
+            t.Type == TraversalTransitionType.Landing
+            && t.Source.Position == new Vector3d(1, 0, 0)
+            && t.Source.Medium == TraversalMedium.Gas
+            && t.Destination.Position == Vector3d.Zero
+            && t.Destination.Medium == TraversalMedium.Solid);
+    }
+
+    [Fact]
+    public void Build_ShouldNotGenerateTransitionsForAmbiguousMixedToMixedBoundaries()
+    {
+        string[,,] map =
+        {
+            {
+                { "SG!" },
+                { "SL!" }
+            }
+        };
+
+        var authoringMap = new TraversalAuthoringMap(
+            chartName: "AmbiguousMixedBoundary",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One);
+
+        TraversalBuildResult result = authoringMap.Build();
+
+        Assert.Empty(result.GeneratedTransitions);
+    }
+
+    [Fact]
     public void Build_ShouldRejectInvalidMarkerUsage()
     {
         string[,,] map =

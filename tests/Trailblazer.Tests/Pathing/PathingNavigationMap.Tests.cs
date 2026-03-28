@@ -277,7 +277,7 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
-    public void UnloadChart_ShouldRestoreRemainingChartMetadata_WhenOwnersOverlap()
+    public void OverlappingChartResolution_ShouldUseRegistrationPrecedence_AndRestoreTheNextOwnerOnUnload()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         GlobalGridManager.TryAddGrid(config, out _);
@@ -297,28 +297,34 @@ public class PathingNavigationMapTests : IDisposable
             pathCostModifier: 5,
             flags: NavigationChartCellFlags.TransitionDestinationHint);
 
-        PathManager.Register(NavigationChart.From3D("StructuredA", mapAData, minBounds, Fixed64.One));
-        PathManager.Register(NavigationChart.From3D("StructuredB", mapBData, minBounds, Fixed64.One));
+        PathManager.Register(
+            NavigationChart.From3D("StructuredA", mapAData, minBounds, Fixed64.One),
+            initializeChart: false);
+        PathManager.Register(
+            NavigationChart.From3D("StructuredB", mapBData, minBounds, Fixed64.One),
+            initializeChart: false);
 
-        PathManager.InitializeChart("StructuredA");
         PathManager.InitializeChart("StructuredB");
+        PathManager.InitializeChart("StructuredA");
 
         Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition(out SolidChartPartition partition));
-        Assert.Equal(7, partition.PathCostModifier);
-        Assert.Equal(
-            NavigationChartCellFlags.TransitionSourceHint | NavigationChartCellFlags.TransitionDestinationHint,
-            partition.ChartFlags);
-
-        PathManager.UnloadChart("StructuredA");
-
-        Assert.True(voxel.TryGetPartition(out SolidChartPartition remainingPartition));
-        Assert.True(remainingPartition.BelongsTo("StructuredB"));
-        Assert.False(remainingPartition.BelongsTo("StructuredA"));
-        Assert.Equal(5, remainingPartition.PathCostModifier);
-        Assert.Equal(NavigationChartCellFlags.TransitionDestinationHint, remainingPartition.ChartFlags);
+        Assert.True(partition.BelongsTo("StructuredA"));
+        Assert.True(partition.BelongsTo("StructuredB"));
+        Assert.Equal("StructuredB", partition.EffectiveChartOwner);
+        Assert.Equal(5, partition.PathCostModifier);
+        Assert.Equal(NavigationChartCellFlags.TransitionDestinationHint, partition.ChartFlags);
 
         PathManager.UnloadChart("StructuredB");
+
+        Assert.True(voxel.TryGetPartition(out SolidChartPartition remainingPartition));
+        Assert.True(remainingPartition.BelongsTo("StructuredA"));
+        Assert.False(remainingPartition.BelongsTo("StructuredB"));
+        Assert.Equal("StructuredA", remainingPartition.EffectiveChartOwner);
+        Assert.Equal(2, remainingPartition.PathCostModifier);
+        Assert.Equal(NavigationChartCellFlags.TransitionSourceHint, remainingPartition.ChartFlags);
+
+        PathManager.UnloadChart("StructuredA");
     }
 
     [Fact]
@@ -345,6 +351,71 @@ public class PathingNavigationMapTests : IDisposable
         Assert.Equal(9, volumePartition.PathCostModifier);
 
         PathManager.UnloadChart(chart.Name);
+    }
+
+    [Fact]
+    public void InitializeChart_ShouldApplyStructuredMixedSolidLiquidCells_ToBothPartitionTypes()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
+        data[1, 1, 1] = new NavigationChartCell(
+            TraversalMedia.Solid | TraversalMedia.Liquid,
+            pathCostModifier: 4,
+            flags: NavigationChartCellFlags.TransitionSourceHint);
+
+        Vector3d targetPosition = Vector3d.Zero;
+        var chart = NavigationChart.From3D("StructuredMixed", data, new Vector3d(-1, -1, -1), Fixed64.One);
+        PathManager.Register(chart);
+        PathManager.InitializeChart(chart.Name);
+
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.True(voxel.TryGetPartition(out SolidChartPartition solidPartition));
+        Assert.Equal(4, solidPartition.PathCostModifier);
+        Assert.Equal(NavigationChartCellFlags.TransitionSourceHint, solidPartition.ChartFlags);
+
+        Assert.True(voxel.TryGetPartition(out VolumeChartPartition volumePartition));
+        Assert.True(volumePartition.SupportsMedium(TraversalMedium.Liquid));
+        Assert.False(volumePartition.SupportsMedium(TraversalMedium.Gas));
+        Assert.Equal(4, volumePartition.PathCostModifier);
+        Assert.Equal("StructuredMixed", volumePartition.EffectiveChartOwner);
+
+        PathManager.UnloadChart(chart.Name);
+    }
+
+    [Fact]
+    public void OverlappingSolidAndLiquidCharts_ShouldResolveToOneEffectiveCell_AndRestoreThePreviousWinnerOnUnload()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        Vector3d targetPosition = Vector3d.Zero;
+        Vector3d minBounds = new(-1, -1, -1);
+
+        NavigationChartCell[,,] solidData = new NavigationChartCell[3, 3, 3];
+        solidData[1, 1, 1] = NavigationChartCell.Solid;
+
+        NavigationChartCell[,,] liquidData = new NavigationChartCell[3, 3, 3];
+        liquidData[1, 1, 1] = NavigationChartCell.Liquid;
+
+        PathManager.Register(NavigationChart.From3D("LowSolid", solidData, minBounds, Fixed64.One, priority: 0));
+        PathManager.Register(NavigationChart.From3D("HighLiquid", liquidData, minBounds, Fixed64.One, priority: 1));
+
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.True(voxel.TryGetPartition(out VolumeChartPartition liquidPartition));
+        Assert.Equal("HighLiquid", liquidPartition.EffectiveChartOwner);
+        Assert.True(liquidPartition.SupportsMedium(TraversalMedium.Liquid));
+        Assert.False(liquidPartition.SupportsMedium(TraversalMedium.Gas));
+
+        PathManager.UnloadChart("HighLiquid");
+
+        Assert.True(voxel.TryGetPartition(out SolidChartPartition restoredSolidPartition));
+        Assert.Equal("LowSolid", restoredSolidPartition.EffectiveChartOwner);
+        Assert.False(voxel.TryGetPartition<VolumeChartPartition>(out _));
+
+        PathManager.UnloadChart("LowSolid");
     }
 
     [Fact]

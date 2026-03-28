@@ -109,8 +109,8 @@ public sealed class TraversalAuthoringMap
     {
         NavigationChartCell chartCell = parsedCell.Entry.ChartCell;
         if (!parsedCell.HasTransitionMarker
-            || !parsedCell.Entry.HasAnchorMedium
-            || parsedCell.Entry.Medium != TraversalMedium.Solid)
+            || !parsedCell.CanGenerateTransition
+            || !chartCell.HasSolid)
         {
             return chartCell;
         }
@@ -180,18 +180,12 @@ public sealed class TraversalAuthoringMap
         int secondX,
         int secondZ)
     {
-        TraversalMedium firstMedium = first.Entry.Medium;
-        TraversalMedium secondMedium = second.Entry.Medium;
-
-        if (firstMedium == secondMedium)
-            return;
-
         Vector3d firstPosition = GetWorldPosition(firstY, firstX, firstZ);
         Vector3d secondPosition = GetWorldPosition(secondY, secondX, secondZ);
 
-        if (TryResolveChartAndVolumePair(
-            firstMedium,
-            secondMedium,
+        if (TryResolveSingleChartAndVolumePair(
+            first.TransitionMedia,
+            second.TransitionMedia,
             firstPosition,
             secondPosition,
             out TraversalTransition chartToVolumeTransition,
@@ -202,9 +196,9 @@ public sealed class TraversalAuthoringMap
         }
     }
 
-    private bool TryResolveChartAndVolumePair(
-        TraversalMedium firstMedium,
-        TraversalMedium secondMedium,
+    private bool TryResolveSingleChartAndVolumePair(
+        TraversalMedia firstTransitionMedia,
+        TraversalMedia secondTransitionMedia,
         Vector3d firstPosition,
         Vector3d secondPosition,
         out TraversalTransition chartToVolumeTransition,
@@ -213,29 +207,106 @@ public sealed class TraversalAuthoringMap
         chartToVolumeTransition = default;
         volumeToChartTransition = default;
 
-        if (firstMedium == TraversalMedium.Solid
-            && TryBuildChartVolumeTransitionPair(
-                firstPosition,
-                secondPosition,
-                secondMedium,
-                out chartToVolumeTransition,
-                out volumeToChartTransition))
+        if (!TryResolveSingleBoundaryCandidate(
+            firstTransitionMedia,
+            secondTransitionMedia,
+            firstPosition,
+            secondPosition,
+            out Vector3d chartPosition,
+            out Vector3d volumePosition,
+            out TraversalMedium volumeMedium))
         {
-            return true;
+            return false;
         }
 
-        if (secondMedium == TraversalMedium.Solid
-            && TryBuildChartVolumeTransitionPair(
-                secondPosition,
-                firstPosition,
-                firstMedium,
-                out chartToVolumeTransition,
-                out volumeToChartTransition))
+        return TryBuildChartVolumeTransitionPair(
+            chartPosition,
+            volumePosition,
+            volumeMedium,
+            out chartToVolumeTransition,
+            out volumeToChartTransition);
+    }
+
+    private static bool TryResolveSingleBoundaryCandidate(
+        TraversalMedia firstTransitionMedia,
+        TraversalMedia secondTransitionMedia,
+        Vector3d firstPosition,
+        Vector3d secondPosition,
+        out Vector3d chartPosition,
+        out Vector3d volumePosition,
+        out TraversalMedium volumeMedium)
+    {
+        chartPosition = default;
+        volumePosition = default;
+        volumeMedium = TraversalMedium.Unknown;
+
+        int candidateCount = 0;
+
+        TryAddChartVolumeCandidate(
+            firstTransitionMedia,
+            secondTransitionMedia,
+            TraversalMedium.Gas,
+            firstPosition,
+            secondPosition,
+            ref candidateCount,
+            ref chartPosition,
+            ref volumePosition,
+            ref volumeMedium);
+        TryAddChartVolumeCandidate(
+            firstTransitionMedia,
+            secondTransitionMedia,
+            TraversalMedium.Liquid,
+            firstPosition,
+            secondPosition,
+            ref candidateCount,
+            ref chartPosition,
+            ref volumePosition,
+            ref volumeMedium);
+
+        return candidateCount == 1;
+    }
+
+    private static void TryAddChartVolumeCandidate(
+        TraversalMedia firstTransitionMedia,
+        TraversalMedia secondTransitionMedia,
+        TraversalMedium candidateVolumeMedium,
+        Vector3d firstPosition,
+        Vector3d secondPosition,
+        ref int candidateCount,
+        ref Vector3d chartPosition,
+        ref Vector3d volumePosition,
+        ref TraversalMedium volumeMedium)
+    {
+        TraversalMedia candidateVolumeKind = candidateVolumeMedium switch
         {
-            return true;
+            TraversalMedium.Gas => TraversalMedia.Gas,
+            TraversalMedium.Liquid => TraversalMedia.Liquid,
+            _ => TraversalMedia.None
+        };
+
+        if (candidateVolumeKind == TraversalMedia.None)
+            return;
+
+        bool firstCanBeChart = (firstTransitionMedia & TraversalMedia.Solid) != 0;
+        bool secondCanBeChart = (secondTransitionMedia & TraversalMedia.Solid) != 0;
+        bool firstCanBeVolume = (firstTransitionMedia & candidateVolumeKind) != 0;
+        bool secondCanBeVolume = (secondTransitionMedia & candidateVolumeKind) != 0;
+
+        if (firstCanBeChart && secondCanBeVolume)
+        {
+            candidateCount++;
+            chartPosition = firstPosition;
+            volumePosition = secondPosition;
+            volumeMedium = candidateVolumeMedium;
         }
 
-        return false;
+        if (secondCanBeChart && firstCanBeVolume)
+        {
+            candidateCount++;
+            chartPosition = secondPosition;
+            volumePosition = firstPosition;
+            volumeMedium = candidateVolumeMedium;
+        }
     }
 
     private bool TryBuildChartVolumeTransitionPair(
@@ -338,14 +409,14 @@ public sealed class TraversalAuthoringMap
                 $"Unknown traversable-state token '{rawToken}' at [{y}, {x}, {z}].");
         }
 
-        if (hasTransitionMarker && !entry.HasAnchorMedium)
+        if (hasTransitionMarker && !entry.HasTransitionMedia)
         {
             throw new ArgumentException(
                 $"Token '{rawToken}' at [{y}, {x}, {z}] cannot be marked for transition generation.");
         }
 
         if (hasTransitionMarker
-            && entry.Medium == TraversalMedium.Solid
+            && (entry.TransitionMedia & TraversalMedia.Solid) != 0
             && !entry.ChartCell.HasSolid)
         {
             throw new ArgumentException(

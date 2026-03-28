@@ -69,12 +69,15 @@ Registration is all-or-nothing. If any generated transition fails to register, t
 | `S` | authored solid traversal cell |
 | `G` | authored gas-volume traversal cell |
 | `L` | authored liquid-volume traversal cell |
+| `SG` | authored solid-plus-gas traversal cell |
+| `SL` | authored solid-plus-liquid traversal cell |
 
 Important nuance:
 
 - `S` produces a solid cell that initializes a `SolidChartPartition`
 - empty / `.` / `X` contribute no chart-backed solid traversal and no transition anchor
 - `G` and `L` produce authored volume cells that initialize `VolumeChartPartition` state
+- `SG` and `SL` are the built-in explicit mixed-media cells; overlap is not used to synthesize those combinations
 - `G` and `L` are the built-in way to author valid gas-volume and liquid-volume space; Trailblazer does not treat generic empty voxels as implicit volume by default
 
 ## 3. Transition Marker Rules
@@ -86,6 +89,8 @@ Examples:
 - `S!`
 - `G!`
 - `L!`
+- `SG!`
+- `SL!`
 
 Current marker behavior:
 
@@ -93,7 +98,8 @@ Current marker behavior:
 - only perpendicular neighbors are considered
 - only chart-to-volume pairs are generated
 - chart-to-chart auto-generation is not part of the current builder
-- `G!` / `L!` / `S!` still emit authored volume cells; the marker only opts them into transition generation
+- `G!` / `L!` / `S!` / `SG!` / `SL!` still emit their authored chart cells; the marker only opts them into transition generation
+- `SG!` and `SL!` keep mixed-media meaning narrow: they participate only when there is one unambiguous solid-to-volume boundary pair
 
 When a marked chart cell participates in generation, the builder also adds:
 
@@ -105,7 +111,11 @@ When a marked chart cell participates in generation, the builder also adds:
 The built-in generator currently creates:
 
 - `SwimEntry` and `SwimExit` for `S!` next to `L!`
+- `SwimEntry` and `SwimExit` for `S!` next to `SL!`, or `SL!` next to `L!`
 - `Takeoff` and `Landing` for `S!` next to `G!`
+- `Takeoff` and `Landing` for `S!` next to `SG!`, or `SG!` next to `G!`
+
+Ambiguous mixed-to-mixed boundaries such as `SG!` next to `SL!` do not auto-generate transitions.
 
 Generated anchors use canonical voxel identity plus the corresponding traversal medium:
 

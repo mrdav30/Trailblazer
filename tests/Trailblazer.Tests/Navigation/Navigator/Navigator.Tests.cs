@@ -884,10 +884,12 @@ public class NavigatorTests : IDisposable
 
     private static void RegisterAerialLandingHandoffScene(string sceneKey)
     {
-        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Landing", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleTraversalPoint(
+            $"{sceneKey}-Landing",
+            new Vector3d(1, 0, 0),
+            TraversalMedia.Solid | TraversalMedia.Gas);
         PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
         AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(1, 0, 0));
 
         AddObstaclePlaneAtX(2);
 
@@ -914,20 +916,19 @@ public class NavigatorTests : IDisposable
 
     private static void RegisterVolumeExitHandoffScene(string chartKey)
     {
-        bool[,,] data = new bool[1, 3, 1]
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1]
         {
             {
-                { true },
-                { true },
-                { true }
+                { NavigationChartCell.SolidLiquid },
+                { NavigationChartCell.Solid },
+                { NavigationChartCell.Solid }
             }
         };
 
-        PathTestFactory.RegisterFromData(chartKey, data, new Vector3d(2, 0, 0));
+        PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One));
 
         AddWater(Vector3d.Zero);
         AddWater(new Vector3d(1, 0, 0));
-        AddWater(new Vector3d(2, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{chartKey}-exit",

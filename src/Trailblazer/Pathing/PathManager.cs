@@ -38,6 +38,9 @@ public static class PathManager
     private static readonly SwiftDictionary<string, string[]> _generatedTransitionIdsByChart =
         new(8, StringComparer.Ordinal);
 
+    private static readonly SwiftDictionary<GlobalVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates =
+        new();
+
     /// <summary>
     /// Lock for managing concurrent access to <c>_navigationChartMap</c> operations.
     /// Ensures thread safety for read/write operations.
@@ -100,6 +103,8 @@ public static class PathManager
 
     private static int _activeAuthoredLiquidCellCount;
 
+    private static int _nextChartRegistrationOrder;
+
     #endregion
 
     internal static void Tick()
@@ -121,11 +126,15 @@ public static class PathManager
         if (chart == null)
             ThrowHelper.ThrowArgumentNullException(nameof(chart));
 
-        if (IsChartRegistered(chart.Name))
-            return false;
-
         _navigationChartMapLock.EnterWriteLock();
-        try { _navigationChartMap.Add(chart.Name, chart); }
+        try
+        {
+            if (_navigationChartMap.ContainsKey(chart.Name))
+                return false;
+
+            chart.RegistrationOrder = unchecked(++_nextChartRegistrationOrder);
+            _navigationChartMap.Add(chart.Name, chart);
+        }
         finally { _navigationChartMapLock.ExitWriteLock(); }
 
         if (initializeChart)
@@ -225,56 +234,36 @@ public static class PathManager
             return;
         }
 
-        SwiftHashSet<SolidChartPartition> allChartPartitions = PartitionSetPool.Rent();
-        SwiftHashSet<string> affectedChartKeys = new();
+        SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
+        SwiftHashSet<string> affectedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
         foreach ((Vector3d pos, NavigationChartCell cell) in chart.GetAuthoredCells())
         {
             if (!GlobalGridManager.TryGetVoxel(pos, out Voxel voxel))
                 continue;
 
-            if (cell.HasSolid)
+            if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state))
             {
-                if (!voxel.TryGetPartition(out SolidChartPartition part))
-                {
-                    part = PartitionPool.Rent();
-                    voxel.TryAddPartition(part);
-                }
-
-                if (part.HasAnyOwners)
-                    ChartOwnerUtility.AddOwners(affectedChartKeys, part.ChartOwners);
-
-                part.AddOwner(chart.Name, cell);
-                allChartPartitions.Add(part);
+                state = new ResolvedChartVoxelState();
+                _resolvedChartVoxelStates[voxel.GlobalIndex] = state;
             }
+            else if (state.HasAnyOwners)
+                ChartOwnerUtility.AddOwners(affectedChartKeys, state.ChartOwners);
 
-            if (!cell.HasVolume)
-                continue;
-
-            if (voxel.TryGetPartition(out VolumeChartPartition existingVolumePart)
-                && existingVolumePart.HasAnyOwners)
-            {
-                ChartOwnerUtility.AddOwners(affectedChartKeys, existingVolumePart.ChartOwners);
-            }
-
-            if (!voxel.TryGetPartition(out VolumeChartPartition volumePart))
-            {
-                volumePart = VolumeChartPartitionPool.Rent();
-                voxel.TryAddPartition(volumePart);
-            }
-
-            volumePart.AddOwner(chart.Name, cell);
-            TrackVolumeMediumCell(cell, delta: 1);
+            NavigationChartCell previousEffectiveCell = state.EffectiveCell;
+            state.AddOwner(chart.Name, cell);
+            ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
         }
 
-        // bind new neighbor pointers for each partition since they could have changed
-        foreach (SolidChartPartition part in allChartPartitions)
+        foreach (SolidChartPartition part in partitionsToRebind)
             part.BindNeighbors();
 
-        PartitionSetPool.Release(allChartPartitions);
+        PartitionSetPool.Release(partitionsToRebind);
         chart.IsInitialized = true;
 
         foreach (string affectedChartKey in affectedChartKeys)
             PathGuideFactory.InvalidateCacheFor(affectedChartKey);
+
+        SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
     }
 
     public static void UnloadChart(string chartKey)
@@ -307,50 +296,48 @@ public static class PathManager
         // invalidate any survey results currently using this chart
         PathGuideFactory.InvalidateCacheFor(chart.Name);
 
-        SwiftHashSet<SolidChartPartition> stillActivePartitions = PartitionSetPool.Rent();
+        SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
+        SwiftHashSet<string> affectedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
+        affectedChartKeys.Add(chart.Name);
         foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
         {
             if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
                 continue;
 
-            if (cell.HasSolid
-                && voxel.TryGetPartition(out SolidChartPartition part)
-                && part.BelongsTo(chart.Name))
-            {
-                part.RemoveOwner(chart.Name);
-                if (!part.HasAnyOwners)
-                    voxel.TryRemovePartition<SolidChartPartition>();
-                else
-                {
-                    // if partition still belongs to a chart, reset its clearance values and rebind neighbors
-                    part.HandleChange(GridChange.Update, voxel);
-                    stillActivePartitions.Add(part);
-                }
-            }
-
-            if (!cell.HasVolume
-                || !voxel.TryGetPartition(out VolumeChartPartition volumePart)
-                || !volumePart.BelongsTo(chart.Name))
+            if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state)
+                || !state.ChartOwners.Contains(chart.Name))
             {
                 continue;
             }
 
-            volumePart.RemoveOwner(chart.Name);
-            if (!volumePart.HasAnyOwners)
-                voxel.TryRemovePartition<VolumeChartPartition>();
+            ChartOwnerUtility.AddOwners(affectedChartKeys, state.ChartOwners);
 
-            TrackVolumeMediumCell(cell, delta: -1);
+            NavigationChartCell previousEffectiveCell = state.EffectiveCell;
+            state.RemoveOwner(chart.Name);
+            ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+
+            if (!state.HasAnyOwners)
+                _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
         }
 
-        // bind neighbor pointers for each partition
-        foreach (SolidChartPartition part in stillActivePartitions)
+        foreach (SolidChartPartition part in partitionsToRebind)
             part.BindNeighbors();
 
-        PartitionSetPool.Release(stillActivePartitions);
+        PartitionSetPool.Release(partitionsToRebind);
 
         TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
         RemoveChartFromRegistry(chart.Name);
         chart.IsInitialized = false;
+
+        foreach (string affectedChartKey in affectedChartKeys)
+        {
+            if (affectedChartKey == chart.Name)
+                continue;
+
+            PathGuideFactory.InvalidateCacheFor(affectedChartKey);
+        }
+
+        SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
     }
 
     /// <summary>
@@ -363,45 +350,32 @@ public static class PathManager
 
         var allCharts = AllCharts;
 
-        // remove all partitions from voxels and clear navigation map references
+        foreach (KeyValuePair<GlobalVoxelIndex, ResolvedChartVoxelState> pair in _resolvedChartVoxelStates)
+        {
+            if (!GlobalGridManager.TryGetGridAndVoxel(pair.Key, out _, out Voxel voxel))
+                continue;
+
+            if (voxel.TryGetPartition(out SolidChartPartition _))
+                voxel.TryRemovePartition<SolidChartPartition>();
+
+            if (voxel.TryGetPartition(out VolumeChartPartition _))
+                voxel.TryRemovePartition<VolumeChartPartition>();
+        }
+
+        _resolvedChartVoxelStates.Clear();
+
         _navigationChartMapLock.EnterWriteLock();
         try
         {
             foreach (NavigationChart chart in allCharts)
-            {
-                if (chart == null) continue;
-
-                foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
-                {
-                    if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
-                        continue;
-
-                    if (cell.HasSolid
-                        && voxel.TryGetPartition(out SolidChartPartition part)
-                        && part.BelongsTo(chart.Name))
-                    {
-                        part.RemoveOwner(chart.Name);
-                        if (!part.HasAnyOwners)
-                            voxel.TryRemovePartition<SolidChartPartition>();
-                    }
-
-                    if (cell.HasVolume
-                        && voxel.TryGetPartition(out VolumeChartPartition volumePart)
-                        && volumePart.BelongsTo(chart.Name))
-                    {
-                        volumePart.RemoveOwner(chart.Name);
-                        if (!volumePart.HasAnyOwners)
-                            voxel.TryRemovePartition<VolumeChartPartition>();
-                    }
-                }
-
-                chart.IsInitialized = false;
-            }
+                if (chart != null)
+                    chart.IsInitialized = false;
 
             _navigationChartMap.Clear();
             _generatedTransitionIdsByChart.Clear();
             _activeAuthoredGasCellCount = 0;
             _activeAuthoredLiquidCellCount = 0;
+            _nextChartRegistrationOrder = 0;
         }
         finally
         {
@@ -473,13 +447,134 @@ public static class PathManager
         };
     }
 
-    private static void TrackVolumeMediumCell(NavigationChartCell cell, int delta)
+    internal static bool IsHigherChartPrecedence(string candidateChartName, string currentChartName)
     {
-        if (cell.SupportsMedium(TraversalMedium.Gas))
-            _activeAuthoredGasCellCount += delta;
+        if (string.Equals(candidateChartName, currentChartName, StringComparison.Ordinal))
+            return false;
 
-        if (cell.SupportsMedium(TraversalMedium.Liquid))
-            _activeAuthoredLiquidCellCount += delta;
+        return CompareChartPrecedence(candidateChartName, currentChartName) > 0;
+    }
+
+    private static int CompareChartPrecedence(string candidateChartName, string currentChartName)
+    {
+        bool hasCandidate = TryGetChartPrecedence(candidateChartName, out int candidatePriority, out int candidateOrder);
+        bool hasCurrent = TryGetChartPrecedence(currentChartName, out int currentPriority, out int currentOrder);
+
+        if (!hasCandidate)
+            return hasCurrent ? -1 : 0;
+
+        if (!hasCurrent)
+            return 1;
+
+        if (candidatePriority != currentPriority)
+            return candidatePriority > currentPriority ? 1 : -1;
+
+        if (candidateOrder != currentOrder)
+            return candidateOrder > currentOrder ? 1 : -1;
+
+        return string.CompareOrdinal(candidateChartName, currentChartName);
+    }
+
+    private static bool TryGetChartPrecedence(string chartName, out int priority, out int registrationOrder)
+    {
+        _navigationChartMapLock.EnterReadLock();
+        try
+        {
+            if (_navigationChartMap.TryGetValue(chartName, out NavigationChart chart))
+            {
+                priority = chart.Priority;
+                registrationOrder = chart.RegistrationOrder;
+                return true;
+            }
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitReadLock();
+        }
+
+        priority = 0;
+        registrationOrder = 0;
+        return false;
+    }
+
+    private static void ApplyResolvedVoxelState(
+        Voxel voxel,
+        ResolvedChartVoxelState state,
+        NavigationChartCell previousEffectiveCell,
+        SwiftHashSet<SolidChartPartition> partitionsToRebind)
+    {
+        NavigationChartCell effectiveCell = state?.EffectiveCell ?? NavigationChartCell.Empty;
+        UpdateActiveVolumeMediumCounts(previousEffectiveCell, effectiveCell);
+
+        bool solidPresenceChanged = previousEffectiveCell.HasSolid != effectiveCell.HasSolid;
+
+        if (effectiveCell.HasSolid)
+        {
+            if (!voxel.TryGetPartition(out SolidChartPartition solidPartition))
+            {
+                solidPartition = PartitionPool.Rent();
+                voxel.TryAddPartition(solidPartition);
+            }
+
+            solidPartition.ApplyAuthoredState(state.ChartOwners, state.EffectiveChartOwner, effectiveCell);
+            if (solidPresenceChanged)
+                CollectSolidPartitionsForRebind(voxel, partitionsToRebind);
+        }
+        else if (previousEffectiveCell.HasSolid && voxel.TryGetPartition(out SolidChartPartition _))
+        {
+            voxel.TryRemovePartition<SolidChartPartition>();
+            CollectSolidPartitionsForRebind(voxel, partitionsToRebind);
+        }
+
+        if (effectiveCell.HasVolume)
+        {
+            if (!voxel.TryGetPartition(out VolumeChartPartition volumePartition))
+            {
+                volumePartition = VolumeChartPartitionPool.Rent();
+                voxel.TryAddPartition(volumePartition);
+            }
+
+            volumePartition.ApplyAuthoredState(state.ChartOwners, state.EffectiveChartOwner, effectiveCell);
+        }
+        else if (previousEffectiveCell.HasVolume && voxel.TryGetPartition(out VolumeChartPartition _))
+            voxel.TryRemovePartition<VolumeChartPartition>();
+    }
+
+    private static void UpdateActiveVolumeMediumCounts(
+        NavigationChartCell previousEffectiveCell,
+        NavigationChartCell currentEffectiveCell)
+    {
+        if (previousEffectiveCell.SupportsMedium(TraversalMedium.Gas))
+            _activeAuthoredGasCellCount--;
+
+        if (previousEffectiveCell.SupportsMedium(TraversalMedium.Liquid))
+            _activeAuthoredLiquidCellCount--;
+
+        if (currentEffectiveCell.SupportsMedium(TraversalMedium.Gas))
+            _activeAuthoredGasCellCount++;
+
+        if (currentEffectiveCell.SupportsMedium(TraversalMedium.Liquid))
+            _activeAuthoredLiquidCellCount++;
+    }
+
+    private static void CollectSolidPartitionsForRebind(
+        Voxel voxel,
+        SwiftHashSet<SolidChartPartition> partitionsToRebind)
+    {
+        if (voxel == null || partitionsToRebind == null)
+            return;
+
+        if (voxel.TryGetPartition(out SolidChartPartition currentPartition))
+            partitionsToRebind.Add(currentPartition);
+
+        foreach (SpatialDirection direction in SpatialAwareness.AllDirections)
+        {
+            if (voxel.TryGetNeighborFromDirection(direction, out Voxel neighborVoxel, useCache: true)
+                && neighborVoxel.TryGetPartition(out SolidChartPartition neighborPartition))
+            {
+                partitionsToRebind.Add(neighborPartition);
+            }
+        }
     }
 
     #endregion

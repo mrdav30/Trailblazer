@@ -55,9 +55,14 @@ Current supported volume media are:
 The key mental model is:
 
 - charts author which voxels contribute solid traversal, volume traversal, or both
-- `VolumeChartPartition` says which authored raw voxels belong to a supported traversal medium
+- `VolumeChartPartition` says which winning authored voxels belong to a supported traversal medium
 - `VolumeMediumRules` can supplement authored membership with host-specific logic on voxels that already belong to Trailblazer's runtime traversal world
 - raw-volume pathing still respects blocked space and unit clearance
+
+Important overlap rule:
+
+- chart overlap does not implicitly create `Solid | Gas` or `Solid | Liquid`
+- if one voxel should intentionally support both surface and volume traversal, author that mixed cell explicitly
 
 ## 3. `VolumeMediumRules`
 

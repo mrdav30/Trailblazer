@@ -12,10 +12,6 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public sealed class VolumeChartPartition : IVoxelPartition
 {
-    private readonly SwiftHashSet<string> _chartOwners = new();
-
-    private readonly SwiftDictionary<string, NavigationChartCell> _chartCells = new(4, StringComparer.Ordinal);
-
     private int _manualPathCostModifier;
 
     private int _chartPathCostModifier;
@@ -38,14 +34,19 @@ public sealed class VolumeChartPartition : IVoxelPartition
     public bool IsWalkable { get; private set; }
 
     /// <summary>
-    /// Returns true if any chart currently contributes authored volume data to this voxel.
-    /// </summary>
-    public bool HasAnyOwners => _chartOwners.Count > 0;
-
-    /// <summary>
     /// Charts that currently contribute authored volume data to this voxel.
     /// </summary>
-    public SwiftHashSet<string> ChartOwners => _chartOwners;
+    public SwiftHashSet<string> ChartOwners { get; private set; }
+
+    /// <summary>
+    /// Returns true if any chart currently contributes authored volume data to this voxel.
+    /// </summary>
+    public bool HasAnyOwners => ChartOwners?.Count > 0;
+
+    /// <summary>
+    /// The chart whose authored cell currently wins overlap resolution for this voxel.
+    /// </summary>
+    public string EffectiveChartOwner { get; private set; }
 
     /// <summary>
     /// Additional authored or caller-controlled path cost for this volume voxel.
@@ -99,30 +100,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// Returns true if this partition is claimed by the given chart name.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool BelongsTo(string chartName) => _chartOwners.Contains(chartName);
-
-    /// <summary>
-    /// Registers authored volume ownership for this voxel.
-    /// </summary>
-    public void AddOwner(string chartName, NavigationChartCell cell)
-    {
-        if (!cell.HasVolume)
-            return;
-
-        _chartOwners.Add(chartName);
-        _chartCells[chartName] = cell;
-        RefreshChartMetadata();
-    }
-
-    /// <summary>
-    /// Removes authored volume ownership for the given chart name.
-    /// </summary>
-    public void RemoveOwner(string chartName)
-    {
-        _chartOwners.Remove(chartName);
-        _chartCells.Remove(chartName);
-        RefreshChartMetadata();
-    }
+    public bool BelongsTo(string chartName) => ChartOwners?.Contains(chartName) == true;
 
     /// <summary>
     /// Returns true if the requested unit size cannot fit through this voxel.
@@ -141,8 +119,8 @@ public sealed class VolumeChartPartition : IVoxelPartition
         PathCostModifier = 0;
         _chartPathCostModifier = 0;
         _volumeKinds = TraversalMedia.None;
-        _chartOwners.Clear();
-        _chartCells.Clear();
+        ChartOwners?.Clear();
+        EffectiveChartOwner = null;
     }
 
     private Voxel Voxel
@@ -156,15 +134,17 @@ public sealed class VolumeChartPartition : IVoxelPartition
         }
     }
 
-    private void RefreshChartMetadata()
+    internal void ApplyAuthoredState(
+        SwiftHashSet<string> chartOwners,
+        string effectiveChartOwner,
+        NavigationChartCell effectiveCell)
     {
-        _chartPathCostModifier = 0;
-        _volumeKinds = TraversalMedia.None;
+        ChartOwners ??= new SwiftHashSet<string>();
+        ChartOwners.Clear();
+        ChartOwnerUtility.AddOwners(ChartOwners, chartOwners);
 
-        foreach (NavigationChartCell cell in _chartCells.Values)
-        {
-            _chartPathCostModifier += cell.PathCostModifier;
-            _volumeKinds |= cell.TraversalKinds & TraversalMedia.AnyVolume;
-        }
+        EffectiveChartOwner = effectiveChartOwner;
+        _chartPathCostModifier = effectiveCell.PathCostModifier;
+        _volumeKinds = effectiveCell.TraversalKinds & TraversalMedia.AnyVolume;
     }
 }

@@ -14,29 +14,37 @@ public readonly struct TraversalLegendEntry
     public NavigationChartCell ChartCell { get; }
 
     /// <summary>
-    /// Indicates whether this token may participate in generated transition anchors.
+    /// Indicates which transition media this token may contribute when explicitly marked.
     /// </summary>
-    public bool HasAnchorMedium { get; }
+    public TraversalMedia TransitionMedia { get; }
 
     /// <summary>
-    /// The transition anchor medium emitted for this token when it is explicitly marked.
+    /// Returns true when this token may participate in generated transition anchors.
     /// </summary>
-    public TraversalMedium Medium { get; }
+    public bool HasTransitionMedia => TransitionMedia != TraversalMedia.None;
 
     /// <summary>
     /// Creates a new legend entry with the specified chart output and optional transition-anchor output.
     /// </summary>
     /// <param name="chartCell">The chart cell emitted for this token.</param>
-    /// <param name="medium">The transition-anchor medium emitted when this token is marked.</param>
-    /// <param name="hasAnchorMedium">Whether this token may participate in generated transition anchors.</param>
+    /// <param name="transitionMedia">
+    /// The transition media emitted when this token is marked.
+    /// These media must be a subset of the authored media declared by <paramref name="chartCell"/>.
+    /// </param>
     public TraversalLegendEntry(
         NavigationChartCell chartCell,
-        TraversalMedium medium = TraversalMedium.Solid,
-        bool hasAnchorMedium = false)
+        TraversalMedia transitionMedia = TraversalMedia.None)
     {
+        TraversalMedia authoredMedia = chartCell.TraversalKinds;
+        if ((transitionMedia & ~authoredMedia) != 0)
+        {
+            throw new ArgumentException(
+                "Transition media must be a subset of the authored chart cell traversal media.",
+                nameof(transitionMedia));
+        }
+
         ChartCell = chartCell;
-        Medium = medium;
-        HasAnchorMedium = hasAnchorMedium;
+        TransitionMedia = transitionMedia;
     }
 
     /// <summary>
@@ -49,17 +57,17 @@ public readonly struct TraversalLegendEntry
     /// Creates an entry that emits an authored solid cell and may participate in generated solid anchors.
     /// </summary>
     public static TraversalLegendEntry Solid(NavigationChartCell chartCell) =>
-        new(chartCell, TraversalMedium.Solid, hasAnchorMedium: true);
+        new(chartCell, TraversalMedia.Solid);
 
     /// <summary>
     /// Creates an entry that emits authored gas traversal data and an anchor when explicitly marked.
     /// </summary>
     public static TraversalLegendEntry Gas() =>
-        new(new NavigationChartCell(TraversalMedia.Gas), TraversalMedium.Gas, hasAnchorMedium: true);
+        new(NavigationChartCell.Gas, TraversalMedia.Gas);
 
     /// <summary>
     /// Creates an entry that emits authored liquid traversal data and an anchor when explicitly marked.
     /// </summary>
     public static TraversalLegendEntry Liquid() =>
-        new(new NavigationChartCell(TraversalMedia.Liquid), TraversalMedium.Liquid, hasAnchorMedium: true);
+        new(NavigationChartCell.Liquid, TraversalMedia.Liquid);
 }

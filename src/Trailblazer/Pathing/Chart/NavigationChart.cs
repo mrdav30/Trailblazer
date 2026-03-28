@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 
 // TODO: Consider only allowing these to be 1 layer high and using the Y axis for verticality, as this is more common in games and simplifies indexing logic.
 // This would also allow us to use a more cache-friendly layout of X, Z, then Y, which is more intuitive for 2D grid-based pathfinding and reduces the likelihood of cache misses when iterating over walkable cells in a typical game scenario.
+// ...or we could keep the current layout but provide optimized methods for iterating over surface cells that skip over empty vertical columns, which would mitigate some of the cache inefficiency while still supporting fully 3D charts when needed.
 
 namespace Trailblazer.Pathing;
 
@@ -25,6 +26,11 @@ public class NavigationChart
     /// The minimum world-space bounds of the grid. Determines the starting point for grid indexing.
     /// </summary>
     public readonly Vector3d MinBounds;
+
+    /// <summary>
+    /// Higher values take precedence when this chart overlaps another chart on the same voxel.
+    /// </summary>
+    public readonly int Priority;
 
     /// <summary>
     /// The maximum world-space bounds of the grid, computed as MinBounds + grid size * Interval.
@@ -63,6 +69,12 @@ public class NavigationChart
     public bool IsInitialized { get; internal set; }
 
     /// <summary>
+    /// Tracks when the chart was registered relative to other charts.
+    /// Higher values win same-priority overlap ties.
+    /// </summary>
+    public int RegistrationOrder { get; internal set; }
+
+    /// <summary>
     /// Creates a new navigation chart using a pre-flattened map array and spatial parameters.
     /// </summary>
     /// <param name="name">The chart's unique identifier.</param>
@@ -74,6 +86,7 @@ public class NavigationChart
     /// <param name="maxBounds">The maximum world-space bounds of the grid.</param>
     /// <param name="interval">Distance between adjacent grid points.</param>
     /// <param name="medium">The authored traversal medium emitted for each <c>true</c> cell.</param>
+    /// <param name="priority">The authored precedence used when this chart overlaps another chart on the same voxel.</param>
      /// <exception cref="ArgumentNullException">Thrown when <paramref name="map"/> is null.</exception>
      /// <exception cref="ArgumentOutOfRangeException">
      /// Thrown when <paramref name="medium"/> is not <see cref="TraversalMedium.Solid"/>,
@@ -88,7 +101,8 @@ public class NavigationChart
         Vector3d minBounds,
         Vector3d maxBounds,
         Fixed64 interval,
-        TraversalMedium medium = TraversalMedium.Solid)
+        TraversalMedium medium = TraversalMedium.Solid,
+        int priority = 0)
         : this(
             name,
             CreateCells(map, medium),
@@ -97,7 +111,8 @@ public class NavigationChart
             sizeZ,
             minBounds,
             maxBounds,
-            interval)
+            interval,
+            priority)
     { }
 
     /// <summary>
@@ -111,6 +126,7 @@ public class NavigationChart
     /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
     /// <param name="maxBounds">The maximum world-space bounds of the grid.</param>
     /// <param name="interval">Distance between adjacent grid points.</param>
+    /// <param name="priority">The authored precedence used when this chart overlaps another chart on the same voxel.</param>
     public NavigationChart(
         string name,
         NavigationChartCell[] cells,
@@ -119,7 +135,8 @@ public class NavigationChart
         int sizeZ,
         Vector3d minBounds,
         Vector3d maxBounds,
-        Fixed64 interval)
+        Fixed64 interval,
+        int priority = 0)
     {
         Name = name;
         _cells = cells ?? throw new ArgumentNullException(nameof(cells));
@@ -129,6 +146,7 @@ public class NavigationChart
         MinBounds = minBounds;
         MaxBounds = maxBounds;
         Interval = interval;
+        Priority = priority;
 
         int expectedCellCount = sizeX * sizeY * sizeZ;
         if (_cells.Length != expectedCellCount)
@@ -265,6 +283,7 @@ public class NavigationChart
     /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
     /// <param name="interval">The spacing between each grid point.</param>
     /// <param name="medium">The authored traversal medium emitted for each <c>true</c> cell.</param>
+    /// <param name="priority">The authored precedence used when this chart overlaps another chart on the same voxel.</param>
     /// <returns>A constructed NavigationChart instance.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="sourceMap"/> is null.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
@@ -276,7 +295,8 @@ public class NavigationChart
         bool[,,] sourceMap,
         Vector3d minBounds,
         Fixed64 interval,
-        TraversalMedium medium = TraversalMedium.Solid)
+        TraversalMedium medium = TraversalMedium.Solid,
+        int priority = 0)
     {
         if (sourceMap == null)
             ThrowHelper.ThrowArgumentNullException(nameof(sourceMap));
@@ -305,7 +325,8 @@ public class NavigationChart
             sizeZ,
             minBounds,
             maxBounds,
-            interval);
+            interval,
+            priority);
     }
 
     /// <summary>
@@ -315,12 +336,14 @@ public class NavigationChart
     /// <param name="sourceMap">3D map of authored chart cells.</param>
     /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
     /// <param name="interval">The spacing between each grid point.</param>
+    /// <param name="priority">The authored precedence used when this chart overlaps another chart on the same voxel.</param>
     /// <returns>A constructed NavigationChart instance.</returns>
     public static NavigationChart From3D(
         string name,
         NavigationChartCell[,,] sourceMap,
         Vector3d minBounds,
-        Fixed64 interval)
+        Fixed64 interval,
+        int priority = 0)
     {
         if (sourceMap == null)
             ThrowHelper.ThrowArgumentNullException(nameof(sourceMap));
@@ -349,7 +372,8 @@ public class NavigationChart
             sizeZ,
             minBounds,
             maxBounds,
-            interval);
+            interval,
+            priority);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

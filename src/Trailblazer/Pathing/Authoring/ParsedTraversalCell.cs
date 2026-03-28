@@ -17,5 +17,9 @@ internal readonly struct ParsedTraversalCell
 
     public bool HasTransitionMarker { get; }
 
-    public bool CanGenerateTransition => HasTransitionMarker && Entry.HasAnchorMedium;
+    public bool CanGenerateTransition => TransitionMedia != TraversalMedia.None;
+
+    public TraversalMedia TransitionMedia => HasTransitionMarker
+        ? Entry.TransitionMedia
+        : TraversalMedia.None;
 }

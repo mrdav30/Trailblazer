@@ -73,7 +73,7 @@ NavigationChart chart = NavigationChart.From3D(
 
 The `bool[,,]` overload emits authored solid cells by default, or one authored volume medium when you pass `TraversalMedium.Gas` or `TraversalMedium.Liquid`.
 
-When you need mixed traversal media or authored per-cell metadata instead of one uniform medium, use the `NavigationChartCell[,,]` overload of `NavigationChart.From3D(...)`.
+When you need mixed traversal media or authored per-cell metadata instead of one uniform medium, use the `NavigationChartCell[,,]` overload of `NavigationChart.From3D(...)`. Explicit `Solid | Gas` and `Solid | Liquid` cells are the supported way to author one voxel with both affordances intentionally.
 
 ## 3. What Charts Are For
 
@@ -134,7 +134,7 @@ That keeps surface pathing intentional instead of assuming every open voxel shou
 
 ### 4.3 They Support Multiple Overlapping World Views
 
-Trailblazer can register multiple charts, and overlapping charts can share the same live `SolidChartPartition`.
+Trailblazer can register multiple charts, but overlap resolves to one winning authored cell per voxel instead of additively merging chart data.
 
 That enables patterns like:
 
@@ -142,6 +142,11 @@ That enables patterns like:
 - one chart for rooftop patrol routes
 - one chart for an interior level slice
 - one chart for a specialized traversal layer
+
+The precedence rules are:
+
+- higher `NavigationChart.Priority` wins
+- same-priority ties fall back to later chart registration order
 
 This ownership model is one of the reasons `PathManager.InitializeChart(...)` and `UnloadChart(...)` are more involved than a simple add/remove operation.
 
@@ -190,13 +195,13 @@ You can think of it this way:
 - `NavigationChart` = authored or generated intent
 - `SolidChartPartition` = live runtime pathing membership
 
-One voxel can have a partition with multiple chart owners. That is how overlapping charts coexist without duplicating runtime voxel data.
+One voxel can still record multiple chart owners for invalidation and unload bookkeeping, but the live solid behavior comes from the winning effective cell only. Overlap does not implicitly create mixed media.
 
 ## 8. How Charts Relate To Volume Pathing
 
 Volume traversal is chart-aware, but it is not chart-routed the same way solid pathing is.
 
-When a `NavigationChartCell` carries volume traversal data, `PathManager.InitializeChart(...)` attaches or reuses a `VolumeChartPartition` on the underlying voxel.
+When the winning `NavigationChartCell` carries volume traversal data, `PathManager.InitializeChart(...)` attaches or reuses a `VolumeChartPartition` on the underlying voxel.
 
 That live partition holds the authored runtime data volume traversal actually uses:
 
@@ -204,7 +209,7 @@ That live partition holds the authored runtime data volume traversal actually us
 - which `TraversalMedium` values the voxel supports
 - authored path cost modifiers for raw-volume travel
 
-`VolumePathRequest` still does not ask charts for a surface route.
+`VolumePathRequest` does not ask charts for a surface route.
 
 Instead, raw-volume traversal:
 

@@ -120,6 +120,8 @@ PathManager.Register(chart);
 
 When charts overlap on the same voxel, Trailblazer resolves one winning authored cell instead of merging them additively. Higher `NavigationChart.Priority` wins; same-priority ties fall back to later chart registration order. If one voxel should intentionally support both solid and volume traversal, author that explicitly in the cell payload or tokenized authoring input instead of relying on overlap.
 
+Registered charts are mutable after registration through `PathManager.TryUpdateChartCell(...)` and `PathManager.ApplyChartUpdates(...)`. Initialized charts re-resolve only the touched voxels and keep the rest of the live pathing state intact. If the chart came from `TraversalBuildResult`, the first successful mutation unregisters that chart's generated transitions instead of trying to regenerate them live.
+
 If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse a `string[,,]` using the built-in legend into a `TraversalBuildResult`, and `PathManager.Register(buildResult)` will register the chart, initialize any authored solid or volume partitions, and register generated explicit transitions in one step. The built-in legend includes `SG` and `SL` for explicit mixed-media cells; `SG!` and `SL!` also opt those cells into narrow boundary-transition generation. The built-in legend and current generator rules are documented in `docs/AUTHORING.MD`.
 
 ### 2. Request a Guide Directly

@@ -172,6 +172,22 @@ That means:
 - a chart is not pathable until initialization has run
 - `PathManager.Register(chart)` performs that initialization by default, while `initializeChart: false` keeps the chart inert until a later explicit activation step
 
+Registered charts are not frozen, though.
+
+`PathManager.TryUpdateChartCell(...)` and `PathManager.ApplyChartUpdates(...)` let the host mutate authored chart cells after registration.
+
+For initialized charts, those APIs reuse the same resolved effective-cell pipeline as initialization and unload:
+
+- only touched voxels are re-resolved
+- solid neighbors are rebound only when solid topology changes
+- cache invalidation stays chart-targeted and only fires when the live winning state changes
+
+For inert charts registered with `initializeChart: false`, the mutation simply updates the authored data so a later initialization uses the new cell payloads.
+
+One important current limitation:
+
+- mutating a chart that still owns generated transitions from `TraversalBuildResult` unregisters those generated transitions instead of trying to regenerate them live
+
 ## 6. How Charts Relate To GridForge
 
 Trailblazer pathing runs on top of `GridForge` voxels.

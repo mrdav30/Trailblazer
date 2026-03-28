@@ -419,6 +419,70 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void TryUpdateChartCell_ShouldRefreshLivePartitionsWithoutUnload()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
+        data[1, 1, 1] = NavigationChartCell.Solid;
+
+        var chart = NavigationChart.From3D("LiveUpdateChart", data, new Vector3d(-1, -1, -1), Fixed64.One);
+        PathManager.Register(chart);
+
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(voxel.TryGetPartition(out SolidChartPartition solidPartition));
+        Assert.Equal("LiveUpdateChart", solidPartition.EffectiveChartOwner);
+        Assert.False(voxel.TryGetPartition<VolumeChartPartition>(out _));
+
+        Assert.True(PathManager.TryUpdateChartCell(chart.Name, 1, 1, 1, NavigationChartCell.SolidLiquid));
+
+        Assert.True(voxel.TryGetPartition(out SolidChartPartition updatedSolidPartition));
+        Assert.Equal("LiveUpdateChart", updatedSolidPartition.EffectiveChartOwner);
+        Assert.True(voxel.TryGetPartition(out VolumeChartPartition mixedVolumePartition));
+        Assert.True(mixedVolumePartition.SupportsMedium(TraversalMedium.Liquid));
+        Assert.False(mixedVolumePartition.SupportsMedium(TraversalMedium.Gas));
+
+        Assert.True(PathManager.TryUpdateChartCell(chart.Name, Vector3d.Zero, NavigationChartCell.Liquid));
+
+        Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.True(voxel.TryGetPartition(out VolumeChartPartition liquidPartition));
+        Assert.Equal("LiveUpdateChart", liquidPartition.EffectiveChartOwner);
+        Assert.True(liquidPartition.SupportsMedium(TraversalMedium.Liquid));
+        Assert.False(liquidPartition.SupportsMedium(TraversalMedium.Gas));
+    }
+
+    [Fact]
+    public void ApplyChartUpdates_ShouldApplySparseBatchAndReportChangedCellCount()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1];
+        data[0, 0, 0] = NavigationChartCell.Gas;
+        data[0, 2, 0] = NavigationChartCell.Gas;
+
+        var chart = NavigationChart.From3D("BatchUpdateChart", data, Vector3d.Zero, Fixed64.One);
+        PathManager.Register(chart);
+
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel middleVoxel));
+        Assert.False(middleVoxel.TryGetPartition<VolumeChartPartition>(out _));
+
+        int changedCount = PathManager.ApplyChartUpdates(
+            chart.Name,
+            new[]
+            {
+                new NavigationChartCellUpdate(1, 0, 0, NavigationChartCell.Gas),
+                new NavigationChartCellUpdate(0, 0, 0, NavigationChartCell.Gas),
+                new NavigationChartCellUpdate(10, 0, 0, NavigationChartCell.Gas)
+            });
+
+        Assert.Equal(1, changedCount);
+        Assert.True(middleVoxel.TryGetPartition(out VolumeChartPartition middleVolumePartition));
+        Assert.True(middleVolumePartition.SupportsMedium(TraversalMedium.Gas));
+    }
+
+    [Fact]
     public void RegisterTraversalBuildResult_ShouldRegisterTransitionsAndInitializeChart()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
@@ -929,6 +993,91 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void HiddenChartUpdate_ShouldNotInvalidateAStarCache_WhenEffectiveStateDoesNotChange()
+    {
+        var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        bool[,,] data = CreateThreeVoxelLine();
+
+        PathManager.Register(NavigationChart.From3D("DominantAStarChart", data, Vector3d.Zero, Fixed64.One, priority: 1));
+        PathManager.Register(NavigationChart.From3D("UnrelatedAStarChart", data, new Vector3d(-6, 0, 0), Fixed64.One));
+        PathManager.Register(NavigationChart.From3D(
+            "HiddenAStarChart",
+            new NavigationChartCell[3, 3, 3],
+            new Vector3d(0, -1, -1),
+            Fixed64.One));
+
+        AStarPathRequest overlappedRequest = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            HeuristicMethod.Euclidean);
+        AStarPathRequest unrelatedRequest = AStarPathRequest.Create(
+            new Vector3d(-6, 0, 0),
+            new Vector3d(-4, 0, 0),
+            Fixed64.One,
+            HeuristicMethod.Euclidean);
+
+        Assert.NotNull(overlappedRequest);
+        Assert.NotNull(unrelatedRequest);
+        Assert.True(PathGuideFactory.RequestGuide(overlappedRequest, out AStarGuide overlappedGuide));
+        Assert.True(PathGuideFactory.RequestGuide(unrelatedRequest, out AStarGuide unrelatedGuide));
+
+        PathGuideFactory.ReturnGuide(overlappedGuide);
+        PathGuideFactory.ReturnGuide(unrelatedGuide);
+
+        Assert.Equal(2, PathGuideFactory.ActiveAStarGuideCount);
+
+        Assert.True(PathManager.TryUpdateChartCell("HiddenAStarChart", 1, 1, 1, NavigationChartCell.Solid));
+
+        Assert.Equal(2, PathGuideFactory.ActiveAStarGuideCount);
+    }
+
+    [Fact]
+    public void EffectiveChartUpdate_ShouldInvalidateOnlyDependentAStarCacheEntries()
+    {
+        var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        bool[,,] data = CreateThreeVoxelLine();
+
+        PathManager.Register(NavigationChart.From3D("MutableAStarChart", data, Vector3d.Zero, Fixed64.One));
+        PathManager.Register(NavigationChart.From3D("UnrelatedAStarChart", data, new Vector3d(-6, 0, 0), Fixed64.One));
+        PathManager.Register(NavigationChart.From3D(
+            "DynamicWinnerChart",
+            new NavigationChartCell[3, 3, 3],
+            new Vector3d(0, -1, -1),
+            Fixed64.One,
+            priority: 1));
+
+        AStarPathRequest overlappedRequest = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            HeuristicMethod.Euclidean);
+        AStarPathRequest unrelatedRequest = AStarPathRequest.Create(
+            new Vector3d(-6, 0, 0),
+            new Vector3d(-4, 0, 0),
+            Fixed64.One,
+            HeuristicMethod.Euclidean);
+
+        Assert.NotNull(overlappedRequest);
+        Assert.NotNull(unrelatedRequest);
+        Assert.True(PathGuideFactory.RequestGuide(overlappedRequest, out AStarGuide overlappedGuide));
+        Assert.True(PathGuideFactory.RequestGuide(unrelatedRequest, out AStarGuide unrelatedGuide));
+
+        PathGuideFactory.ReturnGuide(overlappedGuide);
+        PathGuideFactory.ReturnGuide(unrelatedGuide);
+
+        Assert.Equal(2, PathGuideFactory.ActiveAStarGuideCount);
+
+        Assert.True(PathManager.TryUpdateChartCell("DynamicWinnerChart", 1, 1, 1, NavigationChartCell.Solid));
+
+        Assert.Equal(1, PathGuideFactory.ActiveAStarGuideCount);
+    }
+
+    [Fact]
     public void OverlappingChartInitialize_ShouldInvalidateOnlyDependentFlowFieldCacheEntries()
     {
         var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
@@ -1042,6 +1191,37 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(TraversalTransitionRegistry.IsRegistered(preRegisteredTransition.Id));
         Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
+    }
+
+    [Fact]
+    public void ChartUpdate_ShouldUnregisterGeneratedTransitions_FromTraversalBuildCharts()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        string[,,] map =
+        {
+            {
+                { "S!" },
+                { "L!" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "MutableBuildChart",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(PathManager.Register(buildResult, initializeChart: false));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
+
+        Assert.True(PathManager.TryUpdateChartCell(buildResult.Chart.Name, 0, 0, 0, NavigationChartCell.Empty));
+
+        Assert.True(PathManager.IsChartRegistered(buildResult.Chart.Name));
+        Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
+        Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
     }
 
     private static bool[,,] CreateThreeVoxelLine()

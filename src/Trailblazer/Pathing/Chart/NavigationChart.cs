@@ -377,6 +377,40 @@ public class NavigationChart
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool IsInBounds(int x, int y, int z)
+    {
+        return x >= 0 && x < SizeX
+            && y >= 0 && y < SizeY
+            && z >= 0 && z < SizeZ;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal Vector3d GetWorldPosition(int x, int y, int z)
+    {
+        return new Vector3d(
+            MinBounds.x + x * Interval,
+            MinBounds.y + y * Interval,
+            MinBounds.z + z * Interval);
+    }
+
+    internal bool TrySetCell(int x, int y, int z, NavigationChartCell cell, out NavigationChartCell previousCell)
+    {
+        if (!IsInBounds(x, y, z))
+        {
+            previousCell = default;
+            return false;
+        }
+
+        int index = ToIndex(x, y, z);
+        previousCell = _cells[index];
+        if (previousCell.Equals(cell))
+            return false;
+
+        _cells[index] = cell;
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private NavigationChartCell GetCell(int x, int y, int z) => _cells[ToIndex(x, y, z)];
 
     private static NavigationChartCell[] CreateCells(bool[] map, TraversalMedium medium)

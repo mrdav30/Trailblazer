@@ -72,6 +72,9 @@ The main entry points are:
 - `TryGetNavigationChart(string name, out NavigationChart chart)`
 - `InitializeChart(string chartKey)`
 - `InitializeAllCharts()`
+- `TryUpdateChartCell(string chartName, int x, int y, int z, NavigationChartCell cell)`
+- `TryUpdateChartCell(string chartName, Vector3d worldPosition, NavigationChartCell cell)`
+- `ApplyChartUpdates(string chartName, IReadOnlyList<NavigationChartCellUpdate> updates)`
 - `UnloadChart(string chartKey)`
 - `Reset()`
 - `GetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)`
@@ -208,6 +211,23 @@ This is a subtle but important correctness rule:
 - changing chart ownership on live partitions can change path validity
 - cached guide results must not survive that ownership change blindly
 - unrelated cached guides remain reusable because invalidation is chart-targeted
+
+### 6.5 Chart Update APIs
+
+`TryUpdateChartCell(...)` and `ApplyChartUpdates(...)` let callers mutate authored chart cells after registration without unloading the whole chart.
+
+The important behavior is:
+
+- single-cell updates can target either chart-local indices or a world-space position
+- batch updates are sparse deltas through `NavigationChartCellUpdate`
+- inert charts registered with `initializeChart: false` simply update their stored authored data
+- initialized charts re-resolve only the touched voxels through the same effective-cell ownership path used by initialize and unload
+- solid neighbor rebinding only happens when a touched voxel's live solid presence changes
+- cache invalidation stays chart-targeted and only happens when a touched voxel's live winning state changes
+
+Current safety rule:
+
+- if the mutated chart still owns generated transitions from `TraversalBuildResult`, `PathManager` unregisters those generated transitions on the first successful mutation instead of attempting live regeneration
 
 ## 7. Unload Lifecycle
 

@@ -222,6 +222,117 @@ public static class PathManager
     }
 
     /// <summary>
+    /// Applies one authored cell mutation to a registered chart using chart-local indices.
+    /// </summary>
+    /// <returns>
+    /// <c>true</c> when the target cell was in bounds and the authored payload changed; otherwise, <c>false</c>.
+    /// </returns>
+    public static bool TryUpdateChartCell(string chartName, int x, int y, int z, NavigationChartCell cell)
+    {
+        if (!TryGetNavigationChart(chartName, out NavigationChart chart))
+            return false;
+
+        return TryUpdateChartCell(chart, x, y, z, cell);
+    }
+
+    private static bool TryUpdateChartCell(
+        NavigationChart chart,
+        int x,
+        int y,
+        int z,
+        NavigationChartCell cell)
+    {
+        SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
+        SwiftHashSet<string> invalidatedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
+        try
+        {
+            bool generatedTransitionsChecked = false;
+            bool changed = TryApplyChartCellUpdate(
+                chart,
+                x,
+                y,
+                z,
+                cell,
+                partitionsToRebind,
+                invalidatedChartKeys,
+                ref generatedTransitionsChecked);
+
+            RebindAndInvalidate(partitionsToRebind, invalidatedChartKeys);
+            return changed;
+        }
+        finally
+        {
+            PartitionSetPool.Release(partitionsToRebind);
+            SwiftHashSetPool<string>.Shared.Release(invalidatedChartKeys);
+        }
+    }
+
+    /// <summary>
+    /// Applies one authored cell mutation to a registered chart using a world-space position.
+    /// </summary>
+    /// <returns>
+    /// <c>true</c> when the position resolves inside the chart and the authored payload changed; otherwise, <c>false</c>.
+    /// </returns>
+    public static bool TryUpdateChartCell(string chartName, Vector3d worldPosition, NavigationChartCell cell)
+    {
+        if (!TryGetNavigationChart(chartName, out NavigationChart chart)
+            || !chart.TryWorldToIndex(worldPosition, out int x, out int y, out int z))
+        {
+            return false;
+        }
+
+        return TryUpdateChartCell(chart, x, y, z, cell);
+    }
+
+    /// <summary>
+    /// Applies a sparse batch of authored cell mutations to a registered chart.
+    /// </summary>
+    /// <param name="chartName">The registered chart to mutate.</param>
+    /// <param name="updates">The sparse set of cell changes to apply in order.</param>
+    /// <returns>The number of authored cell mutations that changed the chart payload.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="updates"/> is null.</exception>
+    public static int ApplyChartUpdates(string chartName, IReadOnlyList<NavigationChartCellUpdate> updates)
+    {
+        if (updates == null)
+            ThrowHelper.ThrowArgumentNullException(nameof(updates));
+
+        if (updates.Count == 0 || !TryGetNavigationChart(chartName, out NavigationChart chart))
+            return 0;
+
+        SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
+        SwiftHashSet<string> invalidatedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
+        try
+        {
+            int changedCount = 0;
+            bool generatedTransitionsChecked = false;
+            for (int i = 0; i < updates.Count; i++)
+            {
+                NavigationChartCellUpdate update = updates[i];
+                if (TryApplyChartCellUpdate(
+                    chart,
+                    update.X,
+                    update.Y,
+                    update.Z,
+                    update.Cell,
+                    partitionsToRebind,
+                    invalidatedChartKeys,
+                    ref generatedTransitionsChecked))
+                {
+                    changedCount++;
+                }
+            }
+
+            RebindAndInvalidate(partitionsToRebind, invalidatedChartKeys);
+            return changedCount;
+        }
+        finally
+        {
+            PartitionSetPool.Release(partitionsToRebind);
+            SwiftHashSetPool<string>.Shared.Release(invalidatedChartKeys);
+        }
+    }
+
+    /// <summary>
     /// Initializes a specific navigation chart by materializing its authored surface and volume partitions.
     /// </summary>
     /// <param name="chartKey">The name of the map to initialize.</param>
@@ -236,34 +347,39 @@ public static class PathManager
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> affectedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
-        foreach ((Vector3d pos, NavigationChartCell cell) in chart.GetAuthoredCells())
+        try
         {
-            if (!GlobalGridManager.TryGetVoxel(pos, out Voxel voxel))
-                continue;
-
-            if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state))
+            foreach ((Vector3d pos, NavigationChartCell cell) in chart.GetAuthoredCells())
             {
-                state = new ResolvedChartVoxelState();
-                _resolvedChartVoxelStates[voxel.GlobalIndex] = state;
+                if (!GlobalGridManager.TryGetVoxel(pos, out Voxel voxel))
+                    continue;
+
+                if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state))
+                {
+                    state = new ResolvedChartVoxelState();
+                    _resolvedChartVoxelStates[voxel.GlobalIndex] = state;
+                }
+                else if (state.HasAnyOwners)
+                    ChartOwnerUtility.AddOwners(affectedChartKeys, state.ChartOwners);
+
+                NavigationChartCell previousEffectiveCell = state.EffectiveCell;
+                state.AddOwner(chart.Name, cell);
+                ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
             }
-            else if (state.HasAnyOwners)
-                ChartOwnerUtility.AddOwners(affectedChartKeys, state.ChartOwners);
 
-            NavigationChartCell previousEffectiveCell = state.EffectiveCell;
-            state.AddOwner(chart.Name, cell);
-            ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+            foreach (SolidChartPartition part in partitionsToRebind)
+                part.BindNeighbors();
+
+            chart.IsInitialized = true;
+
+            foreach (string affectedChartKey in affectedChartKeys)
+                PathGuideFactory.InvalidateCacheFor(affectedChartKey);
         }
-
-        foreach (SolidChartPartition part in partitionsToRebind)
-            part.BindNeighbors();
-
-        PartitionSetPool.Release(partitionsToRebind);
-        chart.IsInitialized = true;
-
-        foreach (string affectedChartKey in affectedChartKeys)
-            PathGuideFactory.InvalidateCacheFor(affectedChartKey);
-
-        SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
+        finally
+        {
+            PartitionSetPool.Release(partitionsToRebind);
+            SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
+        }
     }
 
     public static void UnloadChart(string chartKey)
@@ -298,46 +414,50 @@ public static class PathManager
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> affectedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
-        affectedChartKeys.Add(chart.Name);
-        foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
+        try
         {
-            if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
-                continue;
-
-            if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state)
-                || !state.ChartOwners.Contains(chart.Name))
+            affectedChartKeys.Add(chart.Name);
+            foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
             {
-                continue;
+                if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
+                    continue;
+
+                if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state)
+                    || !state.ChartOwners.Contains(chart.Name))
+                {
+                    continue;
+                }
+
+                ChartOwnerUtility.AddOwners(affectedChartKeys, state.ChartOwners);
+
+                NavigationChartCell previousEffectiveCell = state.EffectiveCell;
+                state.RemoveOwner(chart.Name);
+                ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+
+                if (!state.HasAnyOwners)
+                    _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
             }
 
-            ChartOwnerUtility.AddOwners(affectedChartKeys, state.ChartOwners);
+            foreach (SolidChartPartition part in partitionsToRebind)
+                part.BindNeighbors();
 
-            NavigationChartCell previousEffectiveCell = state.EffectiveCell;
-            state.RemoveOwner(chart.Name);
-            ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+            TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
+            RemoveChartFromRegistry(chart.Name);
+            chart.IsInitialized = false;
 
-            if (!state.HasAnyOwners)
-                _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
+            foreach (string affectedChartKey in affectedChartKeys)
+            {
+                if (affectedChartKey == chart.Name)
+                    continue;
+
+                PathGuideFactory.InvalidateCacheFor(affectedChartKey);
+            }
         }
-
-        foreach (SolidChartPartition part in partitionsToRebind)
-            part.BindNeighbors();
-
-        PartitionSetPool.Release(partitionsToRebind);
-
-        TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
-        RemoveChartFromRegistry(chart.Name);
-        chart.IsInitialized = false;
-
-        foreach (string affectedChartKey in affectedChartKeys)
+        finally
         {
-            if (affectedChartKey == chart.Name)
-                continue;
-
-            PathGuideFactory.InvalidateCacheFor(affectedChartKey);
+            PartitionSetPool.Release(partitionsToRebind);
+            SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
         }
-
-        SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
     }
 
     /// <summary>
@@ -435,6 +555,94 @@ public static class PathManager
         _navigationChartMapLock.EnterWriteLock();
         try { _navigationChartMap.Remove(chartName); }
         finally { _navigationChartMapLock.ExitWriteLock(); }
+    }
+
+    private static bool TryApplyChartCellUpdate(
+        NavigationChart chart,
+        int x,
+        int y,
+        int z,
+        NavigationChartCell cell,
+        SwiftHashSet<SolidChartPartition> partitionsToRebind,
+        SwiftHashSet<string> invalidatedChartKeys,
+        ref bool generatedTransitionsChecked)
+    {
+        if (chart == null || !chart.TrySetCell(x, y, z, cell, out _))
+            return false;
+
+        if (!generatedTransitionsChecked)
+        {
+            generatedTransitionsChecked = true;
+            string[] generatedTransitionIds = RemoveGeneratedTransitions(chart.Name);
+            TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
+        }
+
+        if (!chart.IsInitialized)
+            return true;
+
+        Vector3d position = chart.GetWorldPosition(x, y, z);
+        if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
+            return true;
+
+        _resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state);
+
+        NavigationChartCell previousEffectiveCell = state?.EffectiveCell ?? NavigationChartCell.Empty;
+        string previousEffectiveOwner = state?.EffectiveChartOwner;
+
+        if (cell.HasTraversalData)
+        {
+            state ??= new ResolvedChartVoxelState();
+            state.AddOwner(chart.Name, cell);
+            _resolvedChartVoxelStates[voxel.GlobalIndex] = state;
+        }
+        else if (state != null && state.ChartOwners.Contains(chart.Name))
+        {
+            state.RemoveOwner(chart.Name);
+            if (!state.HasAnyOwners)
+                _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
+        }
+        else
+            return true;
+
+        ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+        CollectEffectiveStateInvalidations(
+            previousEffectiveOwner,
+            previousEffectiveCell,
+            state?.EffectiveChartOwner,
+            state?.EffectiveCell ?? NavigationChartCell.Empty,
+            invalidatedChartKeys);
+        return true;
+    }
+
+    private static void RebindAndInvalidate(
+        SwiftHashSet<SolidChartPartition> partitionsToRebind,
+        SwiftHashSet<string> invalidatedChartKeys)
+    {
+        foreach (SolidChartPartition part in partitionsToRebind)
+            part.BindNeighbors();
+
+        foreach (string chartKey in invalidatedChartKeys)
+            PathGuideFactory.InvalidateCacheFor(chartKey);
+    }
+
+    private static void CollectEffectiveStateInvalidations(
+        string previousEffectiveOwner,
+        NavigationChartCell previousEffectiveCell,
+        string currentEffectiveOwner,
+        NavigationChartCell currentEffectiveCell,
+        SwiftHashSet<string> invalidatedChartKeys)
+    {
+        if (previousEffectiveCell.Equals(currentEffectiveCell)
+            && string.Equals(previousEffectiveOwner, currentEffectiveOwner, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(previousEffectiveOwner))
+            invalidatedChartKeys.Add(previousEffectiveOwner);
+
+        if (!string.IsNullOrEmpty(currentEffectiveOwner))
+            invalidatedChartKeys.Add(currentEffectiveOwner);
     }
 
     internal static bool HasAuthoredVolumeMedium(TraversalMedium medium)

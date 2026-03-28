@@ -62,6 +62,7 @@ public class TraversalAuthoringMapTests : IDisposable
         Assert.Equal(
             NavigationChartCellFlags.TransitionSourceHint | NavigationChartCellFlags.TransitionDestinationHint,
             markedChartCell.Flags);
+        Assert.Equal(TraversalMedia.Solid, markedChartCell.GeneratedTransitionMedia);
 
         Assert.True(result.Chart.TryGetCell(new Vector3d(2, 0, 0), out NavigationChartCell waterChartCell));
         Assert.True(waterChartCell.HasTraversalData);
@@ -69,6 +70,7 @@ public class TraversalAuthoringMapTests : IDisposable
         Assert.True(waterChartCell.HasVolume);
         Assert.True(waterChartCell.SupportsMedium(TraversalMedium.Liquid));
         Assert.False(waterChartCell.SupportsMedium(TraversalMedium.Gas));
+        Assert.Equal(TraversalMedia.Liquid, waterChartCell.GeneratedTransitionMedia);
 
         Assert.Equal(2, result.GeneratedTransitions.Length);
         Assert.Contains(result.GeneratedTransitions, t =>
@@ -198,6 +200,7 @@ public class TraversalAuthoringMapTests : IDisposable
         Assert.Equal(
             NavigationChartCellFlags.TransitionSourceHint | NavigationChartCellFlags.TransitionDestinationHint,
             markedMixedCell.Flags);
+        Assert.Equal(TraversalMedia.Solid | TraversalMedia.Liquid, markedMixedCell.GeneratedTransitionMedia);
 
         Assert.Equal(2, result.GeneratedTransitions.Length);
         Assert.Contains(result.GeneratedTransitions, t =>

@@ -74,6 +74,16 @@ public readonly struct NavigationChartCell
     /// </summary>
     public NavigationChartCellFlags Flags { get; }
 
+    /// <summary>
+    /// Indicates which authored media on this cell participate in generated transition pairing.
+    /// </summary>
+    public TraversalMedia GeneratedTransitionMedia { get; }
+
+    /// <summary>
+    /// Returns true when this cell may participate in generated transition pairing.
+    /// </summary>
+    public bool CanGenerateTransition => GeneratedTransitionMedia != TraversalMedia.None;
+
     #endregion
 
     #region Constructors
@@ -84,7 +94,8 @@ public readonly struct NavigationChartCell
     public NavigationChartCell(
         TraversalMedia traversalKinds,
         int pathCostModifier = 0,
-        NavigationChartCellFlags flags = NavigationChartCellFlags.None)
+        NavigationChartCellFlags flags = NavigationChartCellFlags.None,
+        TraversalMedia generatedTransitionMedia = TraversalMedia.None)
     {
         bool hasGas = (traversalKinds & TraversalMedia.Gas) != 0;
         bool hasLiquid = (traversalKinds & TraversalMedia.Liquid) != 0;
@@ -98,9 +109,17 @@ public readonly struct NavigationChartCell
                 nameof(traversalKinds));
         }
 
+        if ((generatedTransitionMedia & ~traversalKinds) != 0)
+        {
+            throw new ArgumentException(
+                "Generated transition media must be a subset of the authored traversal media.",
+                nameof(generatedTransitionMedia));
+        }
+
         TraversalKinds = traversalKinds;
         PathCostModifier = pathCostModifier;
         Flags = flags;
+        GeneratedTransitionMedia = generatedTransitionMedia;
     }
 
     #endregion

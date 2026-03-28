@@ -227,7 +227,8 @@ The important behavior is:
 
 Current safety rule:
 
-- if the mutated chart still owns generated transitions from `TraversalBuildResult`, `PathManager` unregisters those generated transitions on the first successful mutation instead of attempting live regeneration
+- if the mutated chart came from `TraversalBuildResult`, `PathManager` refreshes only the locally affected generated transition pairs instead of unregistering the whole chart-owned generated set
+- build-result charts retain their transition id prefix even when they started with zero generated transitions, so later mutations can still create local generated transitions when the edited cells carry generated-transition media
 
 ## 7. Unload Lifecycle
 

@@ -411,7 +411,7 @@ public class NavigationChart
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private NavigationChartCell GetCell(int x, int y, int z) => _cells[ToIndex(x, y, z)];
+    internal NavigationChartCell GetCell(int x, int y, int z) => _cells[ToIndex(x, y, z)];
 
     private static NavigationChartCell[] CreateCells(bool[] map, TraversalMedium medium)
     {

@@ -35,7 +35,7 @@ public static class PathManager
     /// </summary>
     private static readonly SwiftDictionary<string, NavigationChart> _navigationChartMap = new();
 
-    private static readonly SwiftDictionary<string, string[]> _generatedTransitionIdsByChart =
+    private static readonly SwiftDictionary<string, GeneratedChartTransitionState> _generatedTransitionsByChart =
         new(8, StringComparer.Ordinal);
 
     private static readonly SwiftDictionary<GlobalVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates =
@@ -177,7 +177,11 @@ public static class PathManager
             registeredTransitionIds[registeredTransitionCount++] = transition.Id;
         }
 
-        RememberGeneratedTransitions(buildResult.Chart.Name, registeredTransitionIds, registeredTransitionCount);
+        RememberGeneratedTransitions(
+            buildResult.Chart.Name,
+            buildResult.GeneratedTransitionIdPrefix,
+            registeredTransitionIds,
+            registeredTransitionCount);
 
         if (initializeChart)
             InitializeChart(buildResult.Chart.Name);
@@ -246,7 +250,6 @@ public static class PathManager
         SwiftHashSet<string> invalidatedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
         try
         {
-            bool generatedTransitionsChecked = false;
             bool changed = TryApplyChartCellUpdate(
                 chart,
                 x,
@@ -254,8 +257,10 @@ public static class PathManager
                 z,
                 cell,
                 partitionsToRebind,
-                invalidatedChartKeys,
-                ref generatedTransitionsChecked);
+                invalidatedChartKeys);
+
+            if (changed)
+                RefreshGeneratedTransitionsForChartMutation(chart, x, y, z);
 
             RebindAndInvalidate(partitionsToRebind, invalidatedChartKeys);
             return changed;
@@ -304,7 +309,7 @@ public static class PathManager
         try
         {
             int changedCount = 0;
-            bool generatedTransitionsChecked = false;
+            SwiftList<NavigationChartCellUpdate> changedUpdates = new();
             for (int i = 0; i < updates.Count; i++)
             {
                 NavigationChartCellUpdate update = updates[i];
@@ -315,11 +320,17 @@ public static class PathManager
                     update.Z,
                     update.Cell,
                     partitionsToRebind,
-                    invalidatedChartKeys,
-                    ref generatedTransitionsChecked))
+                    invalidatedChartKeys))
                 {
                     changedCount++;
+                    changedUpdates.Add(update);
                 }
+            }
+
+            for (int i = 0; i < changedUpdates.Count; i++)
+            {
+                NavigationChartCellUpdate update = changedUpdates[i];
+                RefreshGeneratedTransitionsForChartMutation(chart, update.X, update.Y, update.Z);
             }
 
             RebindAndInvalidate(partitionsToRebind, invalidatedChartKeys);
@@ -492,7 +503,7 @@ public static class PathManager
                     chart.IsInitialized = false;
 
             _navigationChartMap.Clear();
-            _generatedTransitionIdsByChart.Clear();
+            _generatedTransitionsByChart.Clear();
             _activeAuthoredGasCellCount = 0;
             _activeAuthoredLiquidCellCount = 0;
             _nextChartRegistrationOrder = 0;
@@ -522,17 +533,19 @@ public static class PathManager
 
     private static void RememberGeneratedTransitions(
         string chartName,
+        string transitionIdPrefix,
         string[] transitionIds,
         int transitionCount)
     {
-        if (transitionCount <= 0)
-            return;
-
-        string[] ownedTransitionIds = new string[transitionCount];
-        Array.Copy(transitionIds, ownedTransitionIds, transitionCount);
-
         _navigationChartMapLock.EnterWriteLock();
-        try { _generatedTransitionIdsByChart[chartName] = ownedTransitionIds; }
+        try
+        {
+            var state = new GeneratedChartTransitionState(transitionIdPrefix);
+            for (int i = 0; i < transitionCount; i++)
+                state.TransitionIds.Add(transitionIds[i]);
+
+            _generatedTransitionsByChart[chartName] = state;
+        }
         finally { _navigationChartMapLock.ExitWriteLock(); }
     }
 
@@ -541,13 +554,35 @@ public static class PathManager
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            if (!_generatedTransitionIdsByChart.TryGetValue(chartName, out string[] transitionIds))
+            if (!_generatedTransitionsByChart.TryGetValue(chartName, out GeneratedChartTransitionState state))
                 return Array.Empty<string>();
 
-            _generatedTransitionIdsByChart.Remove(chartName);
-            return transitionIds;
+            _generatedTransitionsByChart.Remove(chartName);
+            return CopyTransitionIds(state.TransitionIds);
         }
         finally { _navigationChartMapLock.ExitWriteLock(); }
+    }
+
+    private static bool TryGetGeneratedTransitionState(
+        string chartName,
+        out GeneratedChartTransitionState state)
+    {
+        _navigationChartMapLock.EnterReadLock();
+        try { return _generatedTransitionsByChart.TryGetValue(chartName, out state); }
+        finally { _navigationChartMapLock.ExitReadLock(); }
+    }
+
+    private static string[] CopyTransitionIds(SwiftHashSet<string> transitionIds)
+    {
+        if (transitionIds == null || transitionIds.Count == 0)
+            return Array.Empty<string>();
+
+        string[] copy = new string[transitionIds.Count];
+        int index = 0;
+        foreach (string transitionId in transitionIds)
+            copy[index++] = transitionId;
+
+        return copy;
     }
 
     private static void RemoveChartFromRegistry(string chartName)
@@ -564,18 +599,10 @@ public static class PathManager
         int z,
         NavigationChartCell cell,
         SwiftHashSet<SolidChartPartition> partitionsToRebind,
-        SwiftHashSet<string> invalidatedChartKeys,
-        ref bool generatedTransitionsChecked)
+        SwiftHashSet<string> invalidatedChartKeys)
     {
         if (chart == null || !chart.TrySetCell(x, y, z, cell, out _))
             return false;
-
-        if (!generatedTransitionsChecked)
-        {
-            generatedTransitionsChecked = true;
-            string[] generatedTransitionIds = RemoveGeneratedTransitions(chart.Name);
-            TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
-        }
 
         if (!chart.IsInitialized)
             return true;
@@ -611,6 +638,102 @@ public static class PathManager
             state?.EffectiveChartOwner,
             state?.EffectiveCell ?? NavigationChartCell.Empty,
             invalidatedChartKeys);
+        return true;
+    }
+
+    private static void RefreshGeneratedTransitionsForChartMutation(
+        NavigationChart chart,
+        int x,
+        int y,
+        int z)
+    {
+        if (chart == null || !TryGetGeneratedTransitionState(chart.Name, out GeneratedChartTransitionState state))
+            return;
+
+        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x - 1, y, z);
+        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x + 1, y, z);
+        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x, y - 1, z);
+        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x, y + 1, z);
+        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x, y, z - 1);
+        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x, y, z + 1);
+    }
+
+    private static void RefreshGeneratedTransitionsForPair(
+        NavigationChart chart,
+        GeneratedChartTransitionState state,
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ)
+    {
+        if (!chart.IsInBounds(firstX, firstY, firstZ)
+            || !chart.IsInBounds(secondX, secondY, secondZ))
+        {
+            return;
+        }
+
+        string[] potentialTransitionIds = GeneratedTraversalTransitionBuilder.GetPotentialTransitionIdsForPair(
+            state.TransitionIdPrefix,
+            firstX,
+            firstY,
+            firstZ,
+            secondX,
+            secondY,
+            secondZ);
+
+        SwiftList<string> existingPairIds = new();
+        for (int i = 0; i < potentialTransitionIds.Length; i++)
+        {
+            if (state.TransitionIds.Contains(potentialTransitionIds[i]))
+                existingPairIds.Add(potentialTransitionIds[i]);
+        }
+
+        TraversalTransition[] currentPairTransitions =
+            GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
+                chart,
+                state.TransitionIdPrefix,
+                firstX,
+                firstY,
+                firstZ,
+                secondX,
+                secondY,
+                secondZ);
+
+        if (AreEquivalentTransitionSets(existingPairIds, currentPairTransitions))
+            return;
+
+        if (existingPairIds.Count > 0)
+        {
+            TraversalTransitionRegistry.UnregisterRange(existingPairIds.ToArray());
+            for (int i = 0; i < existingPairIds.Count; i++)
+                state.TransitionIds.Remove(existingPairIds[i]);
+        }
+
+        for (int i = 0; i < currentPairTransitions.Length; i++)
+        {
+            TraversalTransition transition = currentPairTransitions[i];
+            if (!TraversalTransitionRegistry.RegisterGenerated(transition))
+                continue;
+
+            state.TransitionIds.Add(transition.Id);
+        }
+    }
+
+    private static bool AreEquivalentTransitionSets(
+        SwiftList<string> existingPairIds,
+        TraversalTransition[] currentPairTransitions)
+    {
+        if (existingPairIds.Count != currentPairTransitions.Length)
+            return false;
+
+        for (int i = 0; i < currentPairTransitions.Length; i++)
+        {
+            if (!existingPairIds.Contains(currentPairTransitions[i].Id))
+                return false;
+        }
+
         return true;
     }
 

@@ -1,5 +1,4 @@
 using FixedMathSharp;
-using SwiftCollections;
 using System;
 
 namespace Trailblazer.Pathing;
@@ -9,12 +8,6 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public sealed class TraversalAuthoringMap
 {
-    private static readonly (int Dy, int Dx, int Dz)[] PositivePerpendicularNeighborOffsets =
-    {
-        (0, 1, 0),
-        (1, 0, 0),
-        (0, 0, 1)
-    };
 
     /// <summary>
     /// Creates a new traversal authoring map with the specified parameters.
@@ -101,281 +94,30 @@ public sealed class TraversalAuthoringMap
                 }
 
         var chart = NavigationChart.From3D(ChartName, chartCells, MinBounds, Interval);
-        TraversalTransition[] generatedTransitions = BuildTransitions(parsedCells);
-        return new TraversalBuildResult(chart, generatedTransitions);
+        TraversalTransition[] generatedTransitions =
+            GeneratedTraversalTransitionBuilder.BuildTransitions(chart, TransitionIdPrefix);
+        return new TraversalBuildResult(chart, generatedTransitions, TransitionIdPrefix);
     }
 
     private static NavigationChartCell BuildChartCell(ParsedTraversalCell parsedCell)
     {
         NavigationChartCell chartCell = parsedCell.Entry.ChartCell;
-        if (!parsedCell.HasTransitionMarker
-            || !parsedCell.CanGenerateTransition
-            || !chartCell.HasSolid)
-        {
+        if (!parsedCell.HasTransitionMarker || !parsedCell.CanGenerateTransition)
             return chartCell;
-        }
 
-        NavigationChartCellFlags flags = chartCell.Flags
-            | NavigationChartCellFlags.TransitionSourceHint
-            | NavigationChartCellFlags.TransitionDestinationHint;
+        NavigationChartCellFlags flags = chartCell.Flags;
+        if (chartCell.HasSolid)
+        {
+            flags |= NavigationChartCellFlags.TransitionSourceHint
+                | NavigationChartCellFlags.TransitionDestinationHint;
+        }
 
         return new NavigationChartCell(
             chartCell.TraversalKinds,
             chartCell.PathCostModifier,
-            flags);
+            flags,
+            parsedCell.TransitionMedia);
     }
-
-    private TraversalTransition[] BuildTransitions(ParsedTraversalCell[,,] parsedCells)
-    {
-        int sizeY = parsedCells.GetLength(0);
-        int sizeX = parsedCells.GetLength(1);
-        int sizeZ = parsedCells.GetLength(2);
-
-        SwiftList<TraversalTransition> transitions = new();
-        for (int y = 0; y < sizeY; y++)
-            for (int x = 0; x < sizeX; x++)
-                for (int z = 0; z < sizeZ; z++)
-                {
-                    ParsedTraversalCell current = parsedCells[y, x, z];
-                    if (!current.CanGenerateTransition)
-                        continue;
-
-                    for (int i = 0; i < PositivePerpendicularNeighborOffsets.Length; i++)
-                    {
-                        (int dy, int dx, int dz) = PositivePerpendicularNeighborOffsets[i];
-                        int neighborY = y + dy;
-                        int neighborX = x + dx;
-                        int neighborZ = z + dz;
-                        if (!IsInBounds(parsedCells, neighborY, neighborX, neighborZ))
-                            continue;
-
-                        ParsedTraversalCell neighbor = parsedCells[neighborY, neighborX, neighborZ];
-                        if (!neighbor.CanGenerateTransition)
-                            continue;
-
-                        AddTransitionsForPair(
-                            transitions,
-                            current,
-                            neighbor,
-                            y,
-                            x,
-                            z,
-                            neighborY,
-                            neighborX,
-                            neighborZ);
-                    }
-                }
-
-        return transitions.ToArray();
-    }
-
-    private void AddTransitionsForPair(
-        SwiftList<TraversalTransition> transitions,
-        ParsedTraversalCell first,
-        ParsedTraversalCell second,
-        int firstY,
-        int firstX,
-        int firstZ,
-        int secondY,
-        int secondX,
-        int secondZ)
-    {
-        Vector3d firstPosition = GetWorldPosition(firstY, firstX, firstZ);
-        Vector3d secondPosition = GetWorldPosition(secondY, secondX, secondZ);
-
-        if (TryResolveSingleChartAndVolumePair(
-            first.TransitionMedia,
-            second.TransitionMedia,
-            firstPosition,
-            secondPosition,
-            out TraversalTransition chartToVolumeTransition,
-            out TraversalTransition volumeToChartTransition))
-        {
-            transitions.Add(chartToVolumeTransition);
-            transitions.Add(volumeToChartTransition);
-        }
-    }
-
-    private bool TryResolveSingleChartAndVolumePair(
-        TraversalMedia firstTransitionMedia,
-        TraversalMedia secondTransitionMedia,
-        Vector3d firstPosition,
-        Vector3d secondPosition,
-        out TraversalTransition chartToVolumeTransition,
-        out TraversalTransition volumeToChartTransition)
-    {
-        chartToVolumeTransition = default;
-        volumeToChartTransition = default;
-
-        if (!TryResolveSingleBoundaryCandidate(
-            firstTransitionMedia,
-            secondTransitionMedia,
-            firstPosition,
-            secondPosition,
-            out Vector3d chartPosition,
-            out Vector3d volumePosition,
-            out TraversalMedium volumeMedium))
-        {
-            return false;
-        }
-
-        return TryBuildChartVolumeTransitionPair(
-            chartPosition,
-            volumePosition,
-            volumeMedium,
-            out chartToVolumeTransition,
-            out volumeToChartTransition);
-    }
-
-    private static bool TryResolveSingleBoundaryCandidate(
-        TraversalMedia firstTransitionMedia,
-        TraversalMedia secondTransitionMedia,
-        Vector3d firstPosition,
-        Vector3d secondPosition,
-        out Vector3d chartPosition,
-        out Vector3d volumePosition,
-        out TraversalMedium volumeMedium)
-    {
-        chartPosition = default;
-        volumePosition = default;
-        volumeMedium = TraversalMedium.Unknown;
-
-        int candidateCount = 0;
-
-        TryAddChartVolumeCandidate(
-            firstTransitionMedia,
-            secondTransitionMedia,
-            TraversalMedium.Gas,
-            firstPosition,
-            secondPosition,
-            ref candidateCount,
-            ref chartPosition,
-            ref volumePosition,
-            ref volumeMedium);
-        TryAddChartVolumeCandidate(
-            firstTransitionMedia,
-            secondTransitionMedia,
-            TraversalMedium.Liquid,
-            firstPosition,
-            secondPosition,
-            ref candidateCount,
-            ref chartPosition,
-            ref volumePosition,
-            ref volumeMedium);
-
-        return candidateCount == 1;
-    }
-
-    private static void TryAddChartVolumeCandidate(
-        TraversalMedia firstTransitionMedia,
-        TraversalMedia secondTransitionMedia,
-        TraversalMedium candidateVolumeMedium,
-        Vector3d firstPosition,
-        Vector3d secondPosition,
-        ref int candidateCount,
-        ref Vector3d chartPosition,
-        ref Vector3d volumePosition,
-        ref TraversalMedium volumeMedium)
-    {
-        TraversalMedia candidateVolumeKind = candidateVolumeMedium switch
-        {
-            TraversalMedium.Gas => TraversalMedia.Gas,
-            TraversalMedium.Liquid => TraversalMedia.Liquid,
-            _ => TraversalMedia.None
-        };
-
-        if (candidateVolumeKind == TraversalMedia.None)
-            return;
-
-        bool firstCanBeChart = (firstTransitionMedia & TraversalMedia.Solid) != 0;
-        bool secondCanBeChart = (secondTransitionMedia & TraversalMedia.Solid) != 0;
-        bool firstCanBeVolume = (firstTransitionMedia & candidateVolumeKind) != 0;
-        bool secondCanBeVolume = (secondTransitionMedia & candidateVolumeKind) != 0;
-
-        if (firstCanBeChart && secondCanBeVolume)
-        {
-            candidateCount++;
-            chartPosition = firstPosition;
-            volumePosition = secondPosition;
-            volumeMedium = candidateVolumeMedium;
-        }
-
-        if (secondCanBeChart && firstCanBeVolume)
-        {
-            candidateCount++;
-            chartPosition = secondPosition;
-            volumePosition = firstPosition;
-            volumeMedium = candidateVolumeMedium;
-        }
-    }
-
-    private bool TryBuildChartVolumeTransitionPair(
-        Vector3d chartPosition,
-        Vector3d volumePosition,
-        TraversalMedium volumeMedium,
-        out TraversalTransition chartToVolumeTransition,
-        out TraversalTransition volumeToChartTransition)
-    {
-        chartToVolumeTransition = default;
-        volumeToChartTransition = default;
-
-        TraversalTransitionType entryType;
-        TraversalTransitionType exitType;
-        TraversalTransitionAnchor volumeAnchor;
-
-        switch (volumeMedium)
-        {
-            case TraversalMedium.Gas:
-                entryType = TraversalTransitionType.Takeoff;
-                exitType = TraversalTransitionType.Landing;
-                volumeAnchor = TraversalTransitionAnchor.Gas(volumePosition);
-                break;
-            case TraversalMedium.Liquid:
-                entryType = TraversalTransitionType.SwimEntry;
-                exitType = TraversalTransitionType.SwimExit;
-                volumeAnchor = TraversalTransitionAnchor.Liquid(volumePosition);
-                break;
-            default:
-                return false;
-        }
-
-        TraversalTransitionAnchor chartAnchor = TraversalTransitionAnchor.Solid(chartPosition);
-        chartToVolumeTransition = new TraversalTransition(
-            CreateGeneratedTransitionId(entryType, chartPosition, volumePosition),
-            entryType,
-            chartAnchor,
-            volumeAnchor);
-        volumeToChartTransition = new TraversalTransition(
-            CreateGeneratedTransitionId(exitType, volumePosition, chartPosition),
-            exitType,
-            volumeAnchor,
-            chartAnchor);
-        return true;
-    }
-
-    private string CreateGeneratedTransitionId(
-        TraversalTransitionType transitionType,
-        Vector3d sourcePosition,
-        Vector3d destinationPosition)
-    {
-        (int sourceY, int sourceX, int sourceZ) = ToIndices(sourcePosition);
-        (int destinationY, int destinationX, int destinationZ) = ToIndices(destinationPosition);
-        return $"{TransitionIdPrefix}:{transitionType}:{sourceY}_{sourceX}_{sourceZ}->{destinationY}_{destinationX}_{destinationZ}";
-    }
-
-    private (int Y, int X, int Z) ToIndices(Vector3d worldPosition)
-    {
-        int x = (int)((worldPosition.x - MinBounds.x) / Interval);
-        int y = (int)((worldPosition.y - MinBounds.y) / Interval);
-        int z = (int)((worldPosition.z - MinBounds.z) / Interval);
-        return (y, x, z);
-    }
-
-    private Vector3d GetWorldPosition(int y, int x, int z) =>
-        new(
-            MinBounds.x + x * Interval,
-            MinBounds.y + y * Interval,
-            MinBounds.z + z * Interval);
 
     private ParsedTraversalCell ParseCell(string rawToken, int y, int x, int z)
     {
@@ -424,12 +166,5 @@ public sealed class TraversalAuthoringMap
         }
 
         return new ParsedTraversalCell(entry, hasTransitionMarker);
-    }
-
-    private static bool IsInBounds(ParsedTraversalCell[,,] parsedCells, int y, int x, int z)
-    {
-        return y >= 0 && y < parsedCells.GetLength(0)
-            && x >= 0 && x < parsedCells.GetLength(1)
-            && z >= 0 && z < parsedCells.GetLength(2);
     }
 }

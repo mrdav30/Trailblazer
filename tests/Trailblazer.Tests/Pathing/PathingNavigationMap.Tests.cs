@@ -1194,7 +1194,7 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
-    public void ChartUpdate_ShouldUnregisterGeneratedTransitions_FromTraversalBuildCharts()
+    public void ChartUpdate_ShouldPreserveUnrelatedGeneratedTransitions_FromTraversalBuildCharts()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         GlobalGridManager.TryAddGrid(config, out _);
@@ -1203,7 +1203,8 @@ public class PathingNavigationMapTests : IDisposable
         {
             {
                 { "S!" },
-                { "L!" }
+                { "L!" },
+                { "S" }
             }
         };
 
@@ -1217,11 +1218,95 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
         Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
 
-        Assert.True(PathManager.TryUpdateChartCell(buildResult.Chart.Name, 0, 0, 0, NavigationChartCell.Empty));
+        Assert.True(PathManager.TryUpdateChartCell(buildResult.Chart.Name, 2, 0, 0, NavigationChartCell.Empty));
 
         Assert.True(PathManager.IsChartRegistered(buildResult.Chart.Name));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
+    }
+
+    [Fact]
+    public void ChartUpdate_ShouldRegenerateAffectedGeneratedTransitions_FromTraversalBuildCharts()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        string[,,] map =
+        {
+            {
+                { "S!" },
+                { "L!" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "MutableRegeneratedBuildChart",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(PathManager.Register(buildResult, initializeChart: false));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
+
+        Assert.True(PathManager.TryUpdateChartCell(buildResult.Chart.Name, 1, 0, 0, NavigationChartCell.Empty));
+
         Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
         Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
+
+        Assert.True(PathManager.TryUpdateChartCell(
+            buildResult.Chart.Name,
+            1,
+            0,
+            0,
+            new NavigationChartCell(
+                TraversalMedia.Liquid,
+                generatedTransitionMedia: TraversalMedia.Liquid)));
+
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
+    }
+
+    [Fact]
+    public void ChartUpdate_ShouldGenerateTransitions_ForBuildChartsThatStartedWithoutAny()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        string[,,] map =
+        {
+            {
+                { "S!" },
+                { "." },
+                { "." }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName: "MutableLatentBuildChart",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.Empty(buildResult.GeneratedTransitions);
+        Assert.True(PathManager.Register(buildResult, initializeChart: false));
+
+        Assert.True(PathManager.TryUpdateChartCell(
+            buildResult.Chart.Name,
+            1,
+            0,
+            0,
+            new NavigationChartCell(
+                TraversalMedia.Liquid,
+                generatedTransitionMedia: TraversalMedia.Liquid)));
+
+        TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
+        TraversalTransition[] incoming = TraversalTransitionRegistry.GetIncomingTransitions(Vector3d.Zero);
+
+        Assert.Single(outgoing);
+        Assert.Equal(TraversalTransitionType.SwimEntry, outgoing[0].Type);
+        Assert.Single(incoming);
+        Assert.Equal(TraversalTransitionType.SwimExit, incoming[0].Type);
     }
 
     private static bool[,,] CreateThreeVoxelLine()

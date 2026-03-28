@@ -186,7 +186,8 @@ For inert charts registered with `initializeChart: false`, the mutation simply u
 
 One important current limitation:
 
-- mutating a chart that still owns generated transitions from `TraversalBuildResult` unregisters those generated transitions instead of trying to regenerate them live
+- charts registered through `TraversalBuildResult` refresh generated transitions only around the edited cells
+- direct `Register(chart)` treats generated transitions as a separate concern unless the chart came through the build-result flow
 
 ## 6. How Charts Relate To GridForge
 

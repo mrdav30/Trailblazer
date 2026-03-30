@@ -168,6 +168,7 @@ Likely hotspots:
 Optimization rules:
 
 - Preserve path correctness before reducing allocations.
+- Do not knowingly land avoidable steady-state inefficiencies in new runtime or pathing infrastructure with the expectation of "optimizing it later"; new stateful runtime code should start lean in both allocation behavior and update complexity.
 - Pool only when lifetime management stays obvious and testable.
 - Be careful with cache invalidation; stale guide reuse is worse than a small allocation.
 - Avoid broad refactors across pathing and navigation in one change set.

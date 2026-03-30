@@ -18,6 +18,8 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public static class PathManager
 {
+    public static readonly int DefaultMaxPathSearchRange = 1000;
+
     internal static void RegisterTrailblazerLifecycleHooks()
     {
         TrailblazerManager.RegisterOnSimulateCore(
@@ -26,26 +28,29 @@ public static class PathManager
             callback: Tick);
     }
 
+    #region Pools
+
+    internal static readonly SwiftHashSetPool<SolidChartPartition> PartitionSetPool = new SwiftHashSetPool<SolidChartPartition>();
+
+    /// <summary>
+    /// Pool of reusable <see cref="SolidChartPartition"/> instances used for partitioning the navigation grid.
+    /// </summary>
+    internal static readonly SwiftObjectPool<SolidChartPartition> PartitionPool = new(
+        () => new SolidChartPartition(),
+        actionOnRelease: partition => partition.Reset()
+    );
+
+    /// <summary>
+    /// Pool of reusable <see cref="VolumeChartPartition"/> instances used for authored raw-volume traversal.
+    /// </summary>
+    internal static readonly SwiftObjectPool<VolumeChartPartition> VolumeChartPartitionPool = new(
+        () => new VolumeChartPartition(),
+        actionOnRelease: partition => partition.Reset()
+    );
+
+    #endregion
+
     #region Properties
-
-    public static readonly int DefaultMaxPathSearchRange = 1000;
-
-    /// <summary>
-    /// Internal dictionary of all registered navigation charts, keyed by their unique names.
-    /// </summary>
-    private static readonly SwiftDictionary<string, NavigationChart> _navigationChartMap = new();
-
-    private static readonly SwiftDictionary<string, GeneratedChartTransitionState> _generatedTransitionsByChart =
-        new(8, StringComparer.Ordinal);
-
-    private static readonly SwiftDictionary<GlobalVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates =
-        new();
-
-    /// <summary>
-    /// Lock for managing concurrent access to <c>_navigationChartMap</c> operations.
-    /// Ensures thread safety for read/write operations.
-    /// </summary>
-    private static readonly ReaderWriterLockSlim _navigationChartMapLock = new();
 
     /// <summary>
     /// Gets an enumerable collection of all currently registered navigation charts.
@@ -81,23 +86,20 @@ public static class PathManager
         }
     }
 
-    internal static readonly SwiftHashSetPool<SolidChartPartition> PartitionSetPool = new SwiftHashSetPool<SolidChartPartition>();
+    /// <summary>
+    /// Internal dictionary of all registered navigation charts, keyed by their unique names.
+    /// </summary>
+    private static readonly SwiftDictionary<string, NavigationChart> _navigationChartMap = new();
+
+    private static readonly SwiftDictionary<string, ManagedChartTransitionState> _managedGeneratedTransitionsByChart = new(8, StringComparer.Ordinal);
+
+    private static readonly SwiftDictionary<GlobalVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates = new();
 
     /// <summary>
-    /// Pool of reusable <see cref="SolidChartPartition"/> instances used for partitioning the navigation grid.
+    /// Lock for managing concurrent access to <c>_navigationChartMap</c> operations.
+    /// Ensures thread safety for read/write operations.
     /// </summary>
-    internal static readonly SwiftObjectPool<SolidChartPartition> PartitionPool = new(
-        () => new SolidChartPartition(),
-        actionOnRelease: partition => partition.Reset()
-    );
-
-    /// <summary>
-    /// Pool of reusable <see cref="VolumeChartPartition"/> instances used for authored raw-volume traversal.
-    /// </summary>
-    internal static readonly SwiftObjectPool<VolumeChartPartition> VolumeChartPartitionPool = new(
-        () => new VolumeChartPartition(),
-        actionOnRelease: partition => partition.Reset()
-    );
+    private static readonly ReaderWriterLockSlim _navigationChartMapLock = new();
 
     private static int _activeAuthoredGasCellCount;
 
@@ -126,21 +128,11 @@ public static class PathManager
         if (chart == null)
             ThrowHelper.ThrowArgumentNullException(nameof(chart));
 
-        _navigationChartMapLock.EnterWriteLock();
-        try
-        {
-            if (_navigationChartMap.ContainsKey(chart.Name))
-                return false;
-
-            chart.RegistrationOrder = unchecked(++_nextChartRegistrationOrder);
-            _navigationChartMap.Add(chart.Name, chart);
-        }
-        finally { _navigationChartMapLock.ExitWriteLock(); }
-
-        if (initializeChart)
-            InitializeChart(chart.Name);
-
-        return true;
+        return RegisterChartInternal(
+            chart,
+            generatedTransitionIdPrefix: chart.Name,
+            precomputedGeneratedTransitions: null,
+            initializeChart);
     }
 
     /// <summary>
@@ -155,36 +147,42 @@ public static class PathManager
         if (buildResult == null)
             ThrowHelper.ThrowArgumentNullException(nameof(buildResult));
 
-        if (!Register(buildResult.Chart, initializeChart: false))
-            return false;
+        return RegisterChartInternal(
+            buildResult.Chart,
+            buildResult.GeneratedTransitionIdPrefix,
+            buildResult.GeneratedTransitions,
+            initializeChart);
+    }
 
-        TraversalTransition[] generatedTransitions = buildResult.GeneratedTransitions;
-        string[] registeredTransitionIds = new string[generatedTransitions.Length];
-        int registeredTransitionCount = 0;
-
-        for (int i = 0; i < generatedTransitions.Length; i++)
+    private static bool RegisterChartInternal(
+        NavigationChart chart,
+        string generatedTransitionIdPrefix,
+        TraversalTransition[] precomputedGeneratedTransitions,
+        bool initializeChart)
+    {
+        _navigationChartMapLock.EnterWriteLock();
+        try
         {
-            TraversalTransition transition = generatedTransitions[i];
-            if (!TraversalTransitionRegistry.RegisterGenerated(transition))
-            {
-                RollbackTraversalBuildRegistration(
-                    buildResult.Chart,
-                    registeredTransitionIds,
-                    registeredTransitionCount);
+            if (_navigationChartMap.ContainsKey(chart.Name))
                 return false;
-            }
 
-            registeredTransitionIds[registeredTransitionCount++] = transition.Id;
+            chart.RegistrationOrder = unchecked(++_nextChartRegistrationOrder);
+            _navigationChartMap.Add(chart.Name, chart);
+        }
+        finally { _navigationChartMapLock.ExitWriteLock(); }
+
+        if (!TryRegisterManagedGeneratedTransitions(
+            chart,
+            generatedTransitionIdPrefix,
+            precomputedGeneratedTransitions))
+        {
+            RemoveChartFromRegistry(chart.Name);
+            chart.IsInitialized = false;
+            return false;
         }
 
-        RememberGeneratedTransitions(
-            buildResult.Chart.Name,
-            buildResult.GeneratedTransitionIdPrefix,
-            registeredTransitionIds,
-            registeredTransitionCount);
-
         if (initializeChart)
-            InitializeChart(buildResult.Chart.Name);
+            InitializeChart(chart.Name);
 
         return true;
     }
@@ -248,6 +246,7 @@ public static class PathManager
     {
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> invalidatedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
+        SwiftHashSet<string> managedChartsToRefresh = SwiftHashSetPool<string>.Shared.Rent();
         try
         {
             bool changed = TryApplyChartCellUpdate(
@@ -257,10 +256,13 @@ public static class PathManager
                 z,
                 cell,
                 partitionsToRebind,
-                invalidatedChartKeys);
+                invalidatedChartKeys,
+                managedChartsToRefresh);
 
             if (changed)
-                RefreshGeneratedTransitionsForChartMutation(chart, x, y, z);
+                RefreshManagedGeneratedTransitionsForVoxel(
+                    chart.GetWorldPosition(x, y, z),
+                    managedChartsToRefresh);
 
             RebindAndInvalidate(partitionsToRebind, invalidatedChartKeys);
             return changed;
@@ -269,6 +271,7 @@ public static class PathManager
         {
             PartitionSetPool.Release(partitionsToRebind);
             SwiftHashSetPool<string>.Shared.Release(invalidatedChartKeys);
+            SwiftHashSetPool<string>.Shared.Release(managedChartsToRefresh);
         }
     }
 
@@ -306,12 +309,13 @@ public static class PathManager
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> invalidatedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
+        SwiftHashSet<string> managedChartsToRefresh = SwiftHashSetPool<string>.Shared.Rent();
         try
         {
             int changedCount = 0;
-            SwiftList<NavigationChartCellUpdate> changedUpdates = new();
             for (int i = 0; i < updates.Count; i++)
             {
+                managedChartsToRefresh.Clear();
                 NavigationChartCellUpdate update = updates[i];
                 if (TryApplyChartCellUpdate(
                     chart,
@@ -320,17 +324,14 @@ public static class PathManager
                     update.Z,
                     update.Cell,
                     partitionsToRebind,
-                    invalidatedChartKeys))
+                    invalidatedChartKeys,
+                    managedChartsToRefresh))
                 {
                     changedCount++;
-                    changedUpdates.Add(update);
+                    RefreshManagedGeneratedTransitionsForVoxel(
+                        chart.GetWorldPosition(update.X, update.Y, update.Z),
+                        managedChartsToRefresh);
                 }
-            }
-
-            for (int i = 0; i < changedUpdates.Count; i++)
-            {
-                NavigationChartCellUpdate update = changedUpdates[i];
-                RefreshGeneratedTransitionsForChartMutation(chart, update.X, update.Y, update.Z);
             }
 
             RebindAndInvalidate(partitionsToRebind, invalidatedChartKeys);
@@ -340,6 +341,7 @@ public static class PathManager
         {
             PartitionSetPool.Release(partitionsToRebind);
             SwiftHashSetPool<string>.Shared.Release(invalidatedChartKeys);
+            SwiftHashSetPool<string>.Shared.Release(managedChartsToRefresh);
         }
     }
 
@@ -382,6 +384,9 @@ public static class PathManager
                 part.BindNeighbors();
 
             chart.IsInitialized = true;
+            affectedChartKeys.Add(chart.Name);
+
+            RefreshManagedGeneratedTransitionsForCharts(affectedChartKeys);
 
             foreach (string affectedChartKey in affectedChartKeys)
                 PathGuideFactory.InvalidateCacheFor(affectedChartKey);
@@ -410,7 +415,7 @@ public static class PathManager
         if (chart == null)
             return;
 
-        string[] generatedTransitionIds = RemoveGeneratedTransitions(chart.Name);
+        string[] generatedTransitionIds = RemoveManagedGeneratedTransitions(chart.Name);
 
         if (!chart.IsInitialized)
         {
@@ -449,12 +454,15 @@ public static class PathManager
                     _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
             }
 
+            // TODO: why aren't we doing this for volumes...?
             foreach (SolidChartPartition part in partitionsToRebind)
                 part.BindNeighbors();
 
             TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
             RemoveChartFromRegistry(chart.Name);
             chart.IsInitialized = false;
+
+            RefreshManagedGeneratedTransitionsForCharts(affectedChartKeys, chart.Name);
 
             foreach (string affectedChartKey in affectedChartKeys)
             {
@@ -503,7 +511,7 @@ public static class PathManager
                     chart.IsInitialized = false;
 
             _navigationChartMap.Clear();
-            _generatedTransitionsByChart.Clear();
+            _managedGeneratedTransitionsByChart.Clear();
             _activeAuthoredGasCellCount = 0;
             _activeAuthoredLiquidCellCount = 0;
             _nextChartRegistrationOrder = 0;
@@ -521,55 +529,568 @@ public static class PathManager
 
     #region Pathfinding Utilities
 
-    private static void RollbackTraversalBuildRegistration(
-        NavigationChart chart,
-        string[] registeredTransitionIds,
-        int registeredTransitionCount)
+    private static readonly (int Dx, int Dy, int Dz)[] ManagedGeneratedNeighborOffsets =
     {
-        TraversalTransitionRegistry.UnregisterRange(registeredTransitionIds, registeredTransitionCount);
+        (1, 0, 0),
+        (-1, 0, 0),
+        (0, 1, 0),
+        (0, -1, 0),
+        (0, 0, 1),
+        (0, 0, -1)
+    };
 
-        UnloadChart(chart);
+    private static readonly (int Dx, int Dy, int Dz)[] PositiveManagedGeneratedNeighborOffsets =
+    {
+        (1, 0, 0),
+        (0, 1, 0),
+        (0, 0, 1)
+    };
+
+    private static bool TryRegisterManagedGeneratedTransitions(
+        NavigationChart chart,
+        string transitionIdPrefix,
+        TraversalTransition[] precomputedGeneratedTransitions)
+    {
+        TraversalTransition[] generatedTransitions = precomputedGeneratedTransitions
+            ?? GeneratedTraversalTransitionBuilder.BuildTransitions(chart, transitionIdPrefix);
+        int transitionCount = generatedTransitions?.Length ?? 0;
+        if (transitionCount > 0
+            && !TraversalTransitionRegistry.RegisterGeneratedRange(
+                generatedTransitions,
+                chart.Priority,
+                startSuppressed: true))
+        {
+            return false;
+        }
+
+        string[] registeredTransitionIds = transitionCount == 0
+            ? Array.Empty<string>()
+            : new string[transitionCount];
+        for (int i = 0; i < transitionCount; i++)
+            registeredTransitionIds[i] = generatedTransitions[i].Id;
+
+        RememberManagedGeneratedTransitions(
+            chart.Name,
+            transitionIdPrefix,
+            chart.Priority,
+            registeredTransitionIds,
+            transitionCount);
+        return true;
     }
 
-    private static void RememberGeneratedTransitions(
+    private static void RememberManagedGeneratedTransitions(
         string chartName,
         string transitionIdPrefix,
+        int priority,
         string[] transitionIds,
         int transitionCount)
     {
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            var state = new GeneratedChartTransitionState(transitionIdPrefix);
+            var state = new ManagedChartTransitionState(transitionIdPrefix, priority);
             for (int i = 0; i < transitionCount; i++)
                 state.TransitionIds.Add(transitionIds[i]);
 
-            _generatedTransitionsByChart[chartName] = state;
+            _managedGeneratedTransitionsByChart[chartName] = state;
         }
         finally { _navigationChartMapLock.ExitWriteLock(); }
     }
 
-    private static string[] RemoveGeneratedTransitions(string chartName)
+    private static string[] RemoveManagedGeneratedTransitions(string chartName)
     {
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            if (!_generatedTransitionsByChart.TryGetValue(chartName, out GeneratedChartTransitionState state))
+            if (!_managedGeneratedTransitionsByChart.TryGetValue(chartName, out ManagedChartTransitionState state))
                 return Array.Empty<string>();
 
-            _generatedTransitionsByChart.Remove(chartName);
+            _managedGeneratedTransitionsByChart.Remove(chartName);
             return CopyTransitionIds(state.TransitionIds);
         }
         finally { _navigationChartMapLock.ExitWriteLock(); }
     }
 
-    private static bool TryGetGeneratedTransitionState(
+    private static bool TryGetManagedGeneratedTransitionState(
         string chartName,
-        out GeneratedChartTransitionState state)
+        out ManagedChartTransitionState state)
     {
         _navigationChartMapLock.EnterReadLock();
-        try { return _generatedTransitionsByChart.TryGetValue(chartName, out state); }
+        try { return _managedGeneratedTransitionsByChart.TryGetValue(chartName, out state); }
         finally { _navigationChartMapLock.ExitReadLock(); }
+    }
+
+    private static void RefreshManagedGeneratedTransitionsForCharts(
+        SwiftHashSet<string> chartNames,
+        string excludedChartName = null)
+    {
+        if (chartNames == null || chartNames.Count == 0)
+            return;
+
+        foreach (string chartName in chartNames)
+        {
+            if (string.IsNullOrEmpty(chartName)
+                || string.Equals(chartName, excludedChartName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            RefreshManagedGeneratedTransitionsForChart(chartName);
+        }
+    }
+
+    private static void RefreshManagedGeneratedTransitionsForChart(string chartName)
+    {
+        if (!TryGetNavigationChart(chartName, out NavigationChart chart)
+            || !TryGetManagedGeneratedTransitionState(chartName, out ManagedChartTransitionState state))
+        {
+            return;
+        }
+
+        SwiftHashSet<string> desiredTransitionIds = SwiftHashSetPool<string>.Shared.Rent();
+        SwiftHashSet<string> activeTransitionIds = SwiftHashSetPool<string>.Shared.Rent();
+        try
+        {
+            TraversalTransition[] missingTransitions = CollectManagedGeneratedTransitionsForChart(
+                chart,
+                state,
+                desiredTransitionIds,
+                activeTransitionIds);
+
+            ApplyManagedGeneratedTransitionDelta(
+                chartName,
+                state,
+                desiredTransitionIds,
+                activeTransitionIds,
+                missingTransitions);
+        }
+        finally
+        {
+            SwiftHashSetPool<string>.Shared.Release(desiredTransitionIds);
+            SwiftHashSetPool<string>.Shared.Release(activeTransitionIds);
+        }
+    }
+
+    private static TraversalTransition[] CollectManagedGeneratedTransitionsForChart(
+        NavigationChart chart,
+        ManagedChartTransitionState state,
+        SwiftHashSet<string> desiredTransitionIds,
+        SwiftHashSet<string> activeTransitionIds)
+    {
+        SwiftList<TraversalTransition> missingTransitions = new();
+        for (int y = 0; y < chart.SizeY; y++)
+            for (int x = 0; x < chart.SizeX; x++)
+                for (int z = 0; z < chart.SizeZ; z++)
+                {
+                    NavigationChartCell currentCell = chart.GetCell(x, y, z);
+                    if (!currentCell.CanGenerateTransition)
+                        continue;
+
+                    for (int i = 0; i < PositiveManagedGeneratedNeighborOffsets.Length; i++)
+                    {
+                        (int dx, int dy, int dz) = PositiveManagedGeneratedNeighborOffsets[i];
+                        int neighborX = x + dx;
+                        int neighborY = y + dy;
+                        int neighborZ = z + dz;
+                        if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
+                            continue;
+
+                        CollectManagedGeneratedTransitionsForPair(
+                            chart,
+                            state,
+                            x,
+                            y,
+                            z,
+                            neighborX,
+                            neighborY,
+                            neighborZ,
+                            desiredTransitionIds,
+                            activeTransitionIds,
+                            missingTransitions);
+                    }
+                }
+
+        return missingTransitions.Count == 0
+            ? Array.Empty<TraversalTransition>()
+            : missingTransitions.ToArray();
+    }
+
+    private static void RefreshManagedGeneratedTransitionsForVoxel(
+        Vector3d worldPosition,
+        SwiftHashSet<string> chartNames)
+    {
+        if (chartNames == null || chartNames.Count == 0)
+            return;
+
+        foreach (string chartName in chartNames)
+        {
+            if (string.IsNullOrEmpty(chartName)
+                || !TryGetNavigationChart(chartName, out NavigationChart chart)
+                || !TryGetManagedGeneratedTransitionState(chartName, out ManagedChartTransitionState state)
+                || !chart.TryWorldToIndex(worldPosition, out int x, out int y, out int z))
+            {
+                continue;
+            }
+
+            RefreshManagedGeneratedTransitionsForVoxel(chartName, chart, state, x, y, z);
+        }
+    }
+
+    private static void RefreshManagedGeneratedTransitionsForVoxel(
+        string chartName,
+        NavigationChart chart,
+        ManagedChartTransitionState state,
+        int x,
+        int y,
+        int z)
+    {
+        for (int i = 0; i < ManagedGeneratedNeighborOffsets.Length; i++)
+        {
+            (int dx, int dy, int dz) = ManagedGeneratedNeighborOffsets[i];
+            int neighborX = x + dx;
+            int neighborY = y + dy;
+            int neighborZ = z + dz;
+            if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
+                continue;
+
+            if (neighborX < x
+                || (neighborX == x && neighborY < y)
+                || (neighborX == x && neighborY == y && neighborZ < z))
+            {
+                RefreshManagedGeneratedTransitionsForPair(
+                    chartName,
+                    chart,
+                    state,
+                    neighborX,
+                    neighborY,
+                    neighborZ,
+                    x,
+                    y,
+                    z);
+            }
+            else
+            {
+                RefreshManagedGeneratedTransitionsForPair(
+                    chartName,
+                    chart,
+                    state,
+                    x,
+                    y,
+                    z,
+                    neighborX,
+                    neighborY,
+                    neighborZ);
+            }
+        }
+    }
+
+    private static void RefreshManagedGeneratedTransitionsForPair(
+        string chartName,
+        NavigationChart chart,
+        ManagedChartTransitionState state,
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ)
+    {
+        TraversalTransition[] desiredTransitions = GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
+            chart,
+            state.TransitionIdPrefix,
+            firstX,
+            firstY,
+            firstZ,
+            secondX,
+            secondY,
+            secondZ);
+
+        string[] potentialTransitionIds = GeneratedTraversalTransitionBuilder.GetPotentialTransitionIdsForPair(
+            state.TransitionIdPrefix,
+            firstX,
+            firstY,
+            firstZ,
+            secondX,
+            secondY,
+            secondZ);
+
+        string[] obsoleteTransitionIds = GetObsoleteManagedGeneratedTransitionIds(
+            state,
+            potentialTransitionIds,
+            desiredTransitions);
+        if (obsoleteTransitionIds.Length > 0)
+        {
+            TraversalTransitionRegistry.UnregisterRange(obsoleteTransitionIds);
+            RemoveManagedGeneratedTransitionIds(chartName, obsoleteTransitionIds);
+        }
+
+        TraversalTransition[] missingTransitions = GetMissingManagedGeneratedTransitions(state, desiredTransitions);
+        if (missingTransitions.Length > 0
+            && TraversalTransitionRegistry.RegisterGeneratedRange(
+                missingTransitions,
+                state.Priority,
+                startSuppressed: true))
+        {
+            AddManagedGeneratedTransitionIds(chartName, missingTransitions);
+        }
+
+        if (desiredTransitions.Length == 0)
+            return;
+
+        string[] desiredTransitionIds = CopyTransitionIds(desiredTransitions);
+        bool shouldBeActive = IsManagedGeneratedPairActive(
+            chartName,
+            chart,
+            firstX,
+            firstY,
+            firstZ,
+            secondX,
+            secondY,
+            secondZ);
+        TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+            desiredTransitionIds,
+            suppressed: !shouldBeActive);
+    }
+
+    private static string[] GetObsoleteManagedGeneratedTransitionIds(
+        ManagedChartTransitionState state,
+        string[] potentialTransitionIds,
+        TraversalTransition[] desiredTransitions)
+    {
+        if (potentialTransitionIds == null || potentialTransitionIds.Length == 0)
+            return Array.Empty<string>();
+
+        SwiftHashSet<string> desiredTransitionIds = SwiftHashSetPool<string>.Shared.Rent();
+        try
+        {
+            for (int i = 0; i < desiredTransitions.Length; i++)
+                desiredTransitionIds.Add(desiredTransitions[i].Id);
+
+            SwiftList<string> obsoleteTransitionIds = new();
+            for (int i = 0; i < potentialTransitionIds.Length; i++)
+            {
+                string transitionId = potentialTransitionIds[i];
+                if (state.TransitionIds.Contains(transitionId)
+                    && !desiredTransitionIds.Contains(transitionId))
+                {
+                    obsoleteTransitionIds.Add(transitionId);
+                }
+            }
+
+            return obsoleteTransitionIds.Count == 0
+                ? Array.Empty<string>()
+                : obsoleteTransitionIds.ToArray();
+        }
+        finally
+        {
+            SwiftHashSetPool<string>.Shared.Release(desiredTransitionIds);
+        }
+    }
+
+    private static TraversalTransition[] GetMissingManagedGeneratedTransitions(
+        ManagedChartTransitionState state,
+        TraversalTransition[] desiredTransitions)
+    {
+        if (desiredTransitions == null || desiredTransitions.Length == 0)
+            return Array.Empty<TraversalTransition>();
+
+        SwiftList<TraversalTransition> missingTransitions = new();
+        for (int i = 0; i < desiredTransitions.Length; i++)
+        {
+            TraversalTransition transition = desiredTransitions[i];
+            if (!state.TransitionIds.Contains(transition.Id))
+                missingTransitions.Add(transition);
+        }
+
+        return missingTransitions.Count == 0
+            ? Array.Empty<TraversalTransition>()
+            : missingTransitions.ToArray();
+    }
+
+    private static void ApplyManagedGeneratedTransitionDelta(
+        string chartName,
+        ManagedChartTransitionState state,
+        SwiftHashSet<string> desiredTransitionIds,
+        SwiftHashSet<string> activeTransitionIds,
+        TraversalTransition[] missingTransitions)
+    {
+        if (missingTransitions != null
+            && missingTransitions.Length > 0
+            && TraversalTransitionRegistry.RegisterGeneratedRange(
+                missingTransitions,
+                state.Priority,
+                startSuppressed: true))
+        {
+            AddManagedGeneratedTransitionIds(chartName, missingTransitions);
+        }
+
+        string[] obsoleteTransitionIds = GetObsoleteManagedGeneratedTransitionIds(state, desiredTransitionIds);
+        if (obsoleteTransitionIds.Length > 0)
+        {
+            TraversalTransitionRegistry.UnregisterRange(obsoleteTransitionIds);
+            RemoveManagedGeneratedTransitionIds(chartName, obsoleteTransitionIds);
+        }
+
+        SyncManagedGeneratedTransitionSuppressions(state, activeTransitionIds);
+    }
+
+    private static string[] GetObsoleteManagedGeneratedTransitionIds(
+        ManagedChartTransitionState state,
+        SwiftHashSet<string> desiredTransitionIds)
+    {
+        if (state.TransitionIds.Count == 0)
+            return Array.Empty<string>();
+
+        SwiftList<string> obsoleteTransitionIds = new();
+        foreach (string transitionId in state.TransitionIds)
+        {
+            if (!desiredTransitionIds.Contains(transitionId))
+                obsoleteTransitionIds.Add(transitionId);
+        }
+
+        return obsoleteTransitionIds.Count == 0
+            ? Array.Empty<string>()
+            : obsoleteTransitionIds.ToArray();
+    }
+
+    private static void SyncManagedGeneratedTransitionSuppressions(
+        ManagedChartTransitionState state,
+        SwiftHashSet<string> activeTransitionIds)
+    {
+        if (state.TransitionIds.Count == 0)
+            return;
+
+        SwiftList<string> transitionsToSuppress = new();
+        SwiftList<string> transitionsToUnsuppress = new();
+        foreach (string transitionId in state.TransitionIds)
+        {
+            if (activeTransitionIds.Contains(transitionId))
+                transitionsToUnsuppress.Add(transitionId);
+            else
+                transitionsToSuppress.Add(transitionId);
+        }
+
+        if (transitionsToSuppress.Count > 0)
+            TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+                transitionsToSuppress.ToArray(),
+                suppressed: true);
+
+        if (transitionsToUnsuppress.Count > 0)
+            TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+                transitionsToUnsuppress.ToArray(),
+                suppressed: false);
+    }
+
+    private static void CollectManagedGeneratedTransitionsForPair(
+        NavigationChart chart,
+        ManagedChartTransitionState state,
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ,
+        SwiftHashSet<string> desiredTransitionIds,
+        SwiftHashSet<string> activeTransitionIds,
+        SwiftList<TraversalTransition> missingTransitions)
+    {
+        TraversalTransition[] pairTransitions = GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
+            chart,
+            state.TransitionIdPrefix,
+            firstX,
+            firstY,
+            firstZ,
+            secondX,
+            secondY,
+            secondZ);
+        if (pairTransitions.Length == 0)
+            return;
+
+        bool isActive = IsManagedGeneratedPairActive(
+            chart.Name,
+            chart,
+            firstX,
+            firstY,
+            firstZ,
+            secondX,
+            secondY,
+            secondZ);
+        for (int i = 0; i < pairTransitions.Length; i++)
+        {
+            TraversalTransition transition = pairTransitions[i];
+            desiredTransitionIds.Add(transition.Id);
+            if (isActive)
+                activeTransitionIds.Add(transition.Id);
+
+            if (!state.TransitionIds.Contains(transition.Id))
+                missingTransitions.Add(transition);
+        }
+    }
+
+    private static bool IsManagedGeneratedPairActive(
+        string chartName,
+        NavigationChart chart,
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ)
+    {
+        if (!chart.IsInitialized)
+            return false;
+
+        return IsChartEffectiveOwnerAtPosition(chartName, chart.GetWorldPosition(firstX, firstY, firstZ))
+            && IsChartEffectiveOwnerAtPosition(chartName, chart.GetWorldPosition(secondX, secondY, secondZ));
+    }
+
+    private static bool IsChartEffectiveOwnerAtPosition(string chartName, Vector3d worldPosition)
+    {
+        if (!GlobalGridManager.TryGetVoxel(worldPosition, out Voxel voxel)
+            || !_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state))
+        {
+            return false;
+        }
+
+        return string.Equals(state.EffectiveChartOwner, chartName, StringComparison.Ordinal);
+    }
+
+    private static void AddManagedGeneratedTransitionIds(
+        string chartName,
+        TraversalTransition[] transitions)
+    {
+        if (transitions == null || transitions.Length == 0)
+            return;
+
+        _navigationChartMapLock.EnterWriteLock();
+        try
+        {
+            if (!_managedGeneratedTransitionsByChart.TryGetValue(chartName, out ManagedChartTransitionState state))
+                return;
+
+            for (int i = 0; i < transitions.Length; i++)
+                state.TransitionIds.Add(transitions[i].Id);
+        }
+        finally { _navigationChartMapLock.ExitWriteLock(); }
+    }
+
+    private static void RemoveManagedGeneratedTransitionIds(
+        string chartName,
+        string[] transitionIds)
+    {
+        if (transitionIds == null || transitionIds.Length == 0)
+            return;
+
+        _navigationChartMapLock.EnterWriteLock();
+        try
+        {
+            if (!_managedGeneratedTransitionsByChart.TryGetValue(chartName, out ManagedChartTransitionState state))
+                return;
+
+            for (int i = 0; i < transitionIds.Length; i++)
+                state.TransitionIds.Remove(transitionIds[i]);
+        }
+        finally { _navigationChartMapLock.ExitWriteLock(); }
     }
 
     private static string[] CopyTransitionIds(SwiftHashSet<string> transitionIds)
@@ -583,6 +1104,18 @@ public static class PathManager
             copy[index++] = transitionId;
 
         return copy;
+    }
+
+    private static string[] CopyTransitionIds(TraversalTransition[] transitions)
+    {
+        if (transitions == null || transitions.Length == 0)
+            return Array.Empty<string>();
+
+        string[] ids = new string[transitions.Length];
+        for (int i = 0; i < transitions.Length; i++)
+            ids[i] = transitions[i].Id;
+
+        return ids;
     }
 
     private static void RemoveChartFromRegistry(string chartName)
@@ -599,10 +1132,13 @@ public static class PathManager
         int z,
         NavigationChartCell cell,
         SwiftHashSet<SolidChartPartition> partitionsToRebind,
-        SwiftHashSet<string> invalidatedChartKeys)
+        SwiftHashSet<string> invalidatedChartKeys,
+        SwiftHashSet<string> managedChartsToRefresh)
     {
         if (chart == null || !chart.TrySetCell(x, y, z, cell, out _))
             return false;
+
+        managedChartsToRefresh?.Add(chart.Name);
 
         if (!chart.IsInitialized)
             return true;
@@ -612,6 +1148,8 @@ public static class PathManager
             return true;
 
         _resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state);
+        if (state != null && state.HasAnyOwners)
+            ChartOwnerUtility.AddOwners(managedChartsToRefresh, state.ChartOwners);
 
         NavigationChartCell previousEffectiveCell = state?.EffectiveCell ?? NavigationChartCell.Empty;
         string previousEffectiveOwner = state?.EffectiveChartOwner;
@@ -638,101 +1176,8 @@ public static class PathManager
             state?.EffectiveChartOwner,
             state?.EffectiveCell ?? NavigationChartCell.Empty,
             invalidatedChartKeys);
-        return true;
-    }
-
-    private static void RefreshGeneratedTransitionsForChartMutation(
-        NavigationChart chart,
-        int x,
-        int y,
-        int z)
-    {
-        if (chart == null || !TryGetGeneratedTransitionState(chart.Name, out GeneratedChartTransitionState state))
-            return;
-
-        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x - 1, y, z);
-        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x + 1, y, z);
-        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x, y - 1, z);
-        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x, y + 1, z);
-        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x, y, z - 1);
-        RefreshGeneratedTransitionsForPair(chart, state, x, y, z, x, y, z + 1);
-    }
-
-    private static void RefreshGeneratedTransitionsForPair(
-        NavigationChart chart,
-        GeneratedChartTransitionState state,
-        int firstX,
-        int firstY,
-        int firstZ,
-        int secondX,
-        int secondY,
-        int secondZ)
-    {
-        if (!chart.IsInBounds(firstX, firstY, firstZ)
-            || !chart.IsInBounds(secondX, secondY, secondZ))
-        {
-            return;
-        }
-
-        string[] potentialTransitionIds = GeneratedTraversalTransitionBuilder.GetPotentialTransitionIdsForPair(
-            state.TransitionIdPrefix,
-            firstX,
-            firstY,
-            firstZ,
-            secondX,
-            secondY,
-            secondZ);
-
-        SwiftList<string> existingPairIds = new();
-        for (int i = 0; i < potentialTransitionIds.Length; i++)
-        {
-            if (state.TransitionIds.Contains(potentialTransitionIds[i]))
-                existingPairIds.Add(potentialTransitionIds[i]);
-        }
-
-        TraversalTransition[] currentPairTransitions =
-            GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
-                chart,
-                state.TransitionIdPrefix,
-                firstX,
-                firstY,
-                firstZ,
-                secondX,
-                secondY,
-                secondZ);
-
-        if (AreEquivalentTransitionSets(existingPairIds, currentPairTransitions))
-            return;
-
-        if (existingPairIds.Count > 0)
-        {
-            TraversalTransitionRegistry.UnregisterRange(existingPairIds.ToArray());
-            for (int i = 0; i < existingPairIds.Count; i++)
-                state.TransitionIds.Remove(existingPairIds[i]);
-        }
-
-        for (int i = 0; i < currentPairTransitions.Length; i++)
-        {
-            TraversalTransition transition = currentPairTransitions[i];
-            if (!TraversalTransitionRegistry.RegisterGenerated(transition))
-                continue;
-
-            state.TransitionIds.Add(transition.Id);
-        }
-    }
-
-    private static bool AreEquivalentTransitionSets(
-        SwiftList<string> existingPairIds,
-        TraversalTransition[] currentPairTransitions)
-    {
-        if (existingPairIds.Count != currentPairTransitions.Length)
-            return false;
-
-        for (int i = 0; i < currentPairTransitions.Length; i++)
-        {
-            if (!existingPairIds.Contains(currentPairTransitions[i].Id))
-                return false;
-        }
+        if (state != null && state.HasAnyOwners)
+            ChartOwnerUtility.AddOwners(managedChartsToRefresh, state.ChartOwners);
 
         return true;
     }

@@ -11,7 +11,8 @@ internal readonly struct RegisteredTraversalTransition : IEquatable<RegisteredTr
 {
     public RegisteredTraversalTransition(
         TraversalTransition transition,
-        TraversalTransitionRegistrationSource registrationSource,
+        TraversalTransitionOwnershipKind ownershipKind,
+        int priority,
         int registrationOrder)
     {
         Transition = transition;
@@ -19,7 +20,8 @@ internal readonly struct RegisteredTraversalTransition : IEquatable<RegisteredTr
         SourcePosition = transition.Source.Position;
         DestinationVoxelIndex = transition.Destination.VoxelIndex;
         DestinationPosition = transition.Destination.Position;
-        RegistrationSource = registrationSource;
+        OwnershipKind = ownershipKind;
+        Priority = priority;
         RegistrationOrder = registrationOrder;
     }
 
@@ -33,7 +35,9 @@ internal readonly struct RegisteredTraversalTransition : IEquatable<RegisteredTr
 
     public Vector3d DestinationPosition { get; }
 
-    public TraversalTransitionRegistrationSource RegistrationSource { get; }
+    public TraversalTransitionOwnershipKind OwnershipKind { get; }
+
+    public int Priority { get; }
 
     public int RegistrationOrder { get; }
 

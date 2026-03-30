@@ -1300,6 +1300,11 @@ public class PathingNavigationMapTests : IDisposable
                 TraversalMedia.Liquid,
                 generatedTransitionMedia: TraversalMedia.Liquid)));
 
+        Assert.Empty(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
+        Assert.Empty(TraversalTransitionRegistry.GetIncomingTransitions(Vector3d.Zero));
+
+        PathManager.InitializeChart(buildResult.Chart.Name);
+
         TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
         TraversalTransition[] incoming = TraversalTransitionRegistry.GetIncomingTransitions(Vector3d.Zero);
 
@@ -1307,6 +1312,58 @@ public class PathingNavigationMapTests : IDisposable
         Assert.Equal(TraversalTransitionType.SwimEntry, outgoing[0].Type);
         Assert.Single(incoming);
         Assert.Equal(TraversalTransitionType.SwimExit, incoming[0].Type);
+    }
+
+    [Fact]
+    public void Overlap_ShouldSuppressPlainChartGeneratedTransitions_ThenReactivateThemOnUnload()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] generatedCells =
+        {
+            {
+                { new NavigationChartCell(TraversalMedia.Solid, generatedTransitionMedia: TraversalMedia.Solid) },
+                { new NavigationChartCell(TraversalMedia.Liquid, generatedTransitionMedia: TraversalMedia.Liquid) }
+            }
+        };
+
+        NavigationChartCell[,,] overrideCells =
+        {
+            {
+                { new NavigationChartCell(TraversalMedia.Solid) },
+                { new NavigationChartCell(TraversalMedia.Liquid) }
+            }
+        };
+
+        NavigationChart generatedChart = NavigationChart.From3D(
+            "PlainGeneratedChart",
+            generatedCells,
+            Vector3d.Zero,
+            Fixed64.One,
+            priority: 0);
+        NavigationChart overrideChart = NavigationChart.From3D(
+            "PlainGeneratedOverride",
+            overrideCells,
+            Vector3d.Zero,
+            Fixed64.One,
+            priority: 1);
+
+        Assert.True(PathManager.Register(generatedChart));
+
+        TraversalTransition[] beforeOverride = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
+        Assert.Single(beforeOverride);
+        Assert.Equal(TraversalTransitionType.SwimEntry, beforeOverride[0].Type);
+
+        Assert.True(PathManager.Register(overrideChart));
+        Assert.Empty(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
+        Assert.Empty(TraversalTransitionRegistry.GetIncomingTransitions(new Vector3d(1, 0, 0)));
+
+        PathManager.UnloadChart(overrideChart);
+
+        TraversalTransition[] afterUnload = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
+        Assert.Single(afterUnload);
+        Assert.Equal(TraversalTransitionType.SwimEntry, afterUnload[0].Type);
     }
 
     private static bool[,,] CreateThreeVoxelLine()

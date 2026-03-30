@@ -51,8 +51,9 @@ PathManager.Register(buildResult);
 
 - registers the chart
 - registers the generated transitions
-- registers generated transitions as lower-precedence generated handoffs rather than manual overrides
+- registers generated transitions as chart-managed handoffs that inherit the chart priority
 - initializes authored solid and volume partitions by default
+- keeps generated transitions registered but suppressed until their supporting authored pair is active
 - ties generated transitions to that chart's lifetime, so unloading the chart unregisters them automatically
 
 Registration is all-or-nothing. If any generated transition fails to register, the method rolls back the chart and any transitions it already added in that call.

@@ -132,8 +132,9 @@ Behavior:
 - returns `false` if chart registration fails
 - returns `false` if any generated transition fails to register
 - rolls back the chart and any transitions registered in that call when registration fails partway through
-- registers generated transitions with generated precedence semantics, so an equivalent manual transition may stay active without causing build-result registration to fail
+- registers generated transitions as managed transitions that inherit the owning chart priority
 - initializes the built chart by default after chart and transition registration succeed
+- generated transitions stay registered but suppressed until their authored pair is active in the current effective world state
 - generated transitions are tied to that chart's lifetime and are unregistered automatically when the chart unloads or `PathManager.Reset()` clears global state
 
 ### 5.2 IsChartRegistered(...) and TryGetNavigationChart(...)
@@ -227,8 +228,10 @@ The important behavior is:
 
 Current safety rule:
 
-- if the mutated chart came from `TraversalBuildResult`, `PathManager` refreshes only the locally affected generated transition pairs instead of unregistering the whole chart-owned generated set
-- build-result charts retain their transition id prefix even when they started with zero generated transitions, so later mutations can still create local generated transitions when the edited cells carry generated-transition media
+- any registered chart carrying generated-transition media refreshes only the locally affected generated transition pairs instead of unregistering the whole chart-owned generated set
+- managed generated transitions stay registered while masked or inert, but active queries see only the unsuppressed subset
+- charts registered with `initializeChart: false` keep their managed generated transitions suppressed until `InitializeChart(...)` activates the supporting authored pairs
+- charts retain their managed generated transition id prefix even when they started with zero generated transitions, so later mutations can still create local generated transitions when edited cells gain generated-transition media
 
 ## 7. Unload Lifecycle
 
@@ -256,7 +259,7 @@ When it runs, it:
 Important nuance:
 
 - `UnloadChart(...)` only removes chart-owned partition state
-- it unregisters generated transitions that were registered through `TraversalBuildResult` for that chart
+- it unregisters chart-owned managed generated transitions for that chart regardless of how it was registered, but it does not unregister separately registered manual transitions that happen to reference the same chart key in their id prefix
 - it does not automatically unregister separately registered manual transitions
 
 ### 7.2 Shared Partition Behavior

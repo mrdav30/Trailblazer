@@ -184,10 +184,12 @@ For initialized charts, those APIs reuse the same resolved effective-cell pipeli
 
 For inert charts registered with `initializeChart: false`, the mutation simply updates the authored data so a later initialization uses the new cell payloads.
 
-One important current limitation:
+Generated-transition lifecycle is now chart-driven rather than registration-path-driven:
 
-- charts registered through `TraversalBuildResult` refresh generated transitions only around the edited cells
-- direct `Register(chart)` treats generated transitions as a separate concern unless the chart came through the build-result flow
+- any registered chart carrying generated-transition media refreshes only the affected adjacent pairs when edited
+- inert charts registered with `initializeChart: false` keep those managed generated transitions suppressed until initialization
+- overlap masking can suppress managed generated transitions temporarily without unregistering them
+- unloading the chart removes its managed generated transitions entirely
 
 ## 6. How Charts Relate To GridForge
 

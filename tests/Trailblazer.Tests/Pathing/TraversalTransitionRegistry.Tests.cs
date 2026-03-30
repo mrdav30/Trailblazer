@@ -274,6 +274,52 @@ public class TraversalTransitionRegistryTests : IDisposable
     }
 
     [Fact]
+    public void Register_ShouldPreferHigherPriorityTransition_RegardlessOfOwnershipKind()
+    {
+        var generated = new TraversalTransition(
+            id: "generated-priority",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        var manual = new TraversalTransition(
+            id: "manual-priority",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.Register(manual, priority: 1));
+        Assert.True(TraversalTransitionRegistry.RegisterGenerated(generated, priority: 3));
+
+        Assert.True(TraversalTransitionRegistry.IsActive("generated-priority"));
+        Assert.False(TraversalTransitionRegistry.IsActive("manual-priority"));
+        Assert.Single(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
+        Assert.Equal("generated-priority", TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero)[0].Id);
+    }
+
+    [Fact]
+    public void ManagedSuppression_ShouldKeepTransitionRegistered_WhileRemovingItFromActiveQueries()
+    {
+        var generated = new TraversalTransition(
+            id: "generated-suppressed",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.RegisterGenerated(generated, startSuppressed: true));
+        Assert.True(TraversalTransitionRegistry.IsRegistered("generated-suppressed"));
+        Assert.False(TraversalTransitionRegistry.IsActive("generated-suppressed"));
+        Assert.Empty(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
+
+        TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+            new[] { "generated-suppressed" },
+            suppressed: false);
+
+        Assert.True(TraversalTransitionRegistry.IsActive("generated-suppressed"));
+        Assert.Single(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
+    }
+
+    [Fact]
     public void PathManagerReset_ShouldClearTransitionRegistry()
     {
         var transition = new TraversalTransition(

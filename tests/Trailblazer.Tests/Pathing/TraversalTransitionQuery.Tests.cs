@@ -3,6 +3,7 @@ using GridForge.Configuration;
 using GridForge.Grids;
 using System;
 using Trailblazer.Pathing;
+using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing;
@@ -38,6 +39,8 @@ public class TraversalTransitionQueryTests : IDisposable
 
         Vector3d firstGridPosition = Vector3d.Zero;
         Vector3d secondGridPosition = new(16, 0, 0);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryFirstGridPoint", firstGridPosition);
+        PathTestFactory.RegisterSingleWalkablePoint("QuerySecondGridPoint", secondGridPosition);
 
         Assert.True(GlobalGridManager.TryGetVoxel(firstGridPosition, out Voxel firstGridVoxel));
         Assert.True(GlobalGridManager.TryGetVoxel(secondGridPosition, out Voxel secondGridVoxel));
@@ -78,6 +81,9 @@ public class TraversalTransitionQueryTests : IDisposable
         Vector3d source = Vector3d.Zero;
         Vector3d mid = new(1, 0, 0);
         Vector3d end = new(2, 0, 0);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryRefreshSource", source);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryRefreshMid", mid);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryRefreshEnd", end);
 
         Assert.True(GlobalGridManager.TryGetVoxel(source, out Voxel sourceVoxel));
 
@@ -105,6 +111,8 @@ public class TraversalTransitionQueryTests : IDisposable
     {
         Vector3d source = Vector3d.Zero;
         Vector3d destination = new(1, 0, 0);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryOverrideSource", source);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryOverrideDestination", destination);
 
         Assert.True(GlobalGridManager.TryGetVoxel(source, out Voxel sourceVoxel));
 
@@ -139,8 +147,12 @@ public class TraversalTransitionQueryTests : IDisposable
     }
 
     [Fact]
-    public void GetDirectedTransitions_ShouldNotRequireLiveVoxelPositionLookups_ForDefaultAnchors()
+    public void GetDirectedTransitions_ShouldReturnEmptyAfterPathManagerReset()
     {
+        PathTestFactory.RegisterSingleWalkablePoint("QueryStaleA", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryStaleB", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("QueryStaleC", new Vector3d(2, 0, 0));
+
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "stale-grid-a",
             type: TraversalTransitionType.Jump,
@@ -153,11 +165,10 @@ public class TraversalTransitionQueryTests : IDisposable
             source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)))));
 
-        GlobalGridManager.Reset();
-        GlobalGridManager.Setup();
+        PathManager.Reset();
 
         Exception? exception = Record.Exception(() => TraversalTransitionQuery.GetDirectedTransitions());
         Assert.Null(exception);
-        Assert.Equal(2, TraversalTransitionQuery.GetDirectedTransitions().Length);
+        Assert.Empty(TraversalTransitionQuery.GetDirectedTransitions());
     }
 }

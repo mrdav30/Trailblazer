@@ -12,14 +12,16 @@ namespace Trailblazer.Pathing;
 /// Global registry for authored traversal transitions.
 /// </summary>
 /// <remarks>
-/// Registration resolves transition endpoints to the current voxel grid, but it does not validate
-/// chart ownership or configured volume rules yet. Hosts should unregister or rebuild transitions
-/// when topology changes outside of <see cref="PathManager.Reset"/>.
+/// Registration resolves transition endpoints to the current voxel grid and keeps transitions
+/// registered even while their resolved endpoints are temporarily unsupported. Manual transitions
+/// participate in the same active versus suppressed lifecycle model as chart-generated transitions,
+/// but direct grid teardown outside Trailblazer's pathing lifecycle APIs is not observed
+/// automatically.
 /// </remarks>
 public static class TraversalTransitionRegistry
 {
     /// <summary>
-    /// Default priority assigned to raw manual transition registrations.
+    /// Default priority assigned to manual transition registrations.
     /// </summary>
     public const int DefaultManualPriority = 1;
 
@@ -29,6 +31,8 @@ public static class TraversalTransitionRegistry
     private static readonly SwiftHashSet<string> _activeTransitionIds = new();
 
     private static readonly SwiftHashSet<string> _suppressedManagedTransitionIds = new();
+
+    private static readonly SwiftDictionary<GlobalVoxelIndex, SwiftHashSet<string>> _managedManualTransitionIdsByVoxel = new();
 
     private static readonly SwiftDictionary<GlobalVoxelIndex, SwiftHashSet<string>> _outgoingTransitionIdsByVoxel = new();
 
@@ -77,7 +81,7 @@ public static class TraversalTransitionRegistry
     }
 
     /// <summary>
-    /// Registers a raw manual traversal transition and resolves both endpoints against the active voxel grid.
+    /// Registers a managed manual traversal transition and resolves both endpoints against the active voxel grid.
     /// </summary>
     /// <param name="transition">The authored transition to register.</param>
     /// <param name="priority">
@@ -88,7 +92,7 @@ public static class TraversalTransitionRegistry
     public static bool Register(TraversalTransition transition, int priority = DefaultManualPriority) =>
         RegisterInternal(
             transition,
-            TraversalTransitionOwnershipKind.RawManual,
+            TraversalTransitionOwnershipKind.ManagedManual,
             priority,
             startSuppressed: false);
 
@@ -194,8 +198,15 @@ public static class TraversalTransitionRegistry
             }
 
             _transitions.Add(transition.Id, registered);
-            if (startSuppressed && IsManagedOwnershipKind(ownershipKind))
+            if (IsManualOwnershipKind(ownershipKind))
+                AddManagedManualDependencyIndexes_NoLock(registered);
+
+            if ((startSuppressed && IsManagedOwnershipKind(ownershipKind))
+                || (ownershipKind == TraversalTransitionOwnershipKind.ManagedManual
+                    && !IsManagedManualTransitionCurrentlyActive(registered)))
+            {
                 _suppressedManagedTransitionIds.Add(transition.Id);
+            }
 
             RebuildActiveState_NoLock();
             Interlocked.Increment(ref _registryVersion);
@@ -292,6 +303,7 @@ public static class TraversalTransitionRegistry
             if (!_transitions.Remove(id))
                 return false;
 
+            RemoveManagedManualDependencyIndexes_NoLock(registered);
             _suppressedManagedTransitionIds.Remove(id);
             RebuildActiveState_NoLock();
             Interlocked.Increment(ref _registryVersion);
@@ -321,8 +333,12 @@ public static class TraversalTransitionRegistry
                 if (string.IsNullOrEmpty(id))
                     continue;
 
+                if (!_transitions.TryGetValue(id, out RegisteredTraversalTransition registered))
+                    continue;
+
                 if (_transitions.Remove(id))
                 {
+                    RemoveManagedManualDependencyIndexes_NoLock(registered);
                     _suppressedManagedTransitionIds.Remove(id);
                     removedAny = true;
                 }
@@ -379,6 +395,7 @@ public static class TraversalTransitionRegistry
             _transitions.Clear();
             _activeTransitionIds.Clear();
             _suppressedManagedTransitionIds.Clear();
+            _managedManualTransitionIdsByVoxel.Clear();
             _outgoingTransitionIdsByVoxel.Clear();
             _incomingTransitionIdsByVoxel.Clear();
             _transitionIdsBySourceGrid.Clear();
@@ -593,6 +610,68 @@ public static class TraversalTransitionRegistry
         finally { _transitionLock.ExitReadLock(); }
     }
 
+    internal static void RefreshManagedManualTransitions()
+    {
+        _transitionLock.EnterWriteLock();
+        try
+        {
+            bool changed = false;
+            foreach (RegisteredTraversalTransition registered in _transitions.Values)
+            {
+                if (registered.OwnershipKind != TraversalTransitionOwnershipKind.ManagedManual)
+                    continue;
+
+                changed |= SetManagedTransitionSuppressedState_NoLock(
+                    registered.Transition.Id,
+                    suppress: !IsManagedManualTransitionCurrentlyActive(registered));
+            }
+
+            if (!changed)
+                return;
+
+            RebuildActiveState_NoLock();
+            Interlocked.Increment(ref _registryVersion);
+        }
+        finally
+        {
+            _transitionLock.ExitWriteLock();
+        }
+    }
+
+    internal static void RefreshManagedManualTransitionsForVoxel(GlobalVoxelIndex voxelIndex)
+    {
+        _transitionLock.EnterWriteLock();
+        try
+        {
+            if (!_managedManualTransitionIdsByVoxel.TryGetValue(voxelIndex, out SwiftHashSet<string> transitionIds))
+                return;
+
+            bool changed = false;
+            foreach (string transitionId in transitionIds)
+            {
+                if (!_transitions.TryGetValue(transitionId, out RegisteredTraversalTransition registered)
+                    || registered.OwnershipKind != TraversalTransitionOwnershipKind.ManagedManual)
+                {
+                    continue;
+                }
+
+                changed |= SetManagedTransitionSuppressedState_NoLock(
+                    transitionId,
+                    suppress: !IsManagedManualTransitionCurrentlyActive(registered));
+            }
+
+            if (!changed)
+                return;
+
+            RebuildActiveState_NoLock();
+            Interlocked.Increment(ref _registryVersion);
+        }
+        finally
+        {
+            _transitionLock.ExitWriteLock();
+        }
+    }
+
     internal static void SetManagedTransitionsSuppressed(string[] ids, bool suppressed, int count = -1)
     {
         if (ids == null || ids.Length == 0)
@@ -643,15 +722,78 @@ public static class TraversalTransitionRegistry
             if (string.IsNullOrEmpty(id))
                 continue;
 
+            if (_transitions.TryGetValue(id, out RegisteredTraversalTransition registered))
+                RemoveManagedManualDependencyIndexes_NoLock(registered);
+
             _transitions.Remove(id);
             _suppressedManagedTransitionIds.Remove(id);
         }
     }
 
+    private static void AddManagedManualDependencyIndexes_NoLock(RegisteredTraversalTransition registered)
+    {
+        if (registered.OwnershipKind != TraversalTransitionOwnershipKind.ManagedManual)
+            return;
+
+        AddIndexValue(_managedManualTransitionIdsByVoxel, registered.SourceVoxelIndex, registered.Transition.Id);
+        if (!registered.SourceVoxelIndex.Equals(registered.DestinationVoxelIndex))
+            AddIndexValue(_managedManualTransitionIdsByVoxel, registered.DestinationVoxelIndex, registered.Transition.Id);
+    }
+
+    private static void RemoveManagedManualDependencyIndexes_NoLock(RegisteredTraversalTransition registered)
+    {
+        if (registered.OwnershipKind != TraversalTransitionOwnershipKind.ManagedManual)
+            return;
+
+        RemoveIndexValue(_managedManualTransitionIdsByVoxel, registered.SourceVoxelIndex, registered.Transition.Id);
+        if (!registered.SourceVoxelIndex.Equals(registered.DestinationVoxelIndex))
+            RemoveIndexValue(_managedManualTransitionIdsByVoxel, registered.DestinationVoxelIndex, registered.Transition.Id);
+    }
+
+    private static void RemoveIndexValue<TKey>(
+        SwiftDictionary<TKey, SwiftHashSet<string>> index,
+        TKey key,
+        string transitionId)
+    {
+        if (!index.TryGetValue(key, out SwiftHashSet<string> transitionIds))
+            return;
+
+        transitionIds.Remove(transitionId);
+        if (transitionIds.Count == 0)
+            index.Remove(key);
+    }
+
+    private static bool SetManagedTransitionSuppressedState_NoLock(string id, bool suppress)
+    {
+        return suppress
+            ? _suppressedManagedTransitionIds.Add(id)
+            : _suppressedManagedTransitionIds.Remove(id);
+    }
+
+    private static bool IsManagedManualTransitionCurrentlyActive(RegisteredTraversalTransition registered)
+    {
+        return DoesResolvedEndpointSupportMedium(registered.SourceVoxelIndex, registered.Transition.Source.Medium)
+            && DoesResolvedEndpointSupportMedium(registered.DestinationVoxelIndex, registered.Transition.Destination.Medium);
+    }
+
+    private static bool DoesResolvedEndpointSupportMedium(GlobalVoxelIndex voxelIndex, TraversalMedium medium)
+    {
+        if (!GlobalGridManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel voxel))
+            return false;
+
+        return medium switch
+        {
+            TraversalMedium.Solid => voxel.TryGetPartition(out SolidChartPartition _),
+            TraversalMedium.Gas => VolumeMediumRules.Matches(voxel, TraversalMedium.Gas),
+            TraversalMedium.Liquid => VolumeMediumRules.Matches(voxel, TraversalMedium.Liquid),
+            _ => false
+        };
+    }
+
     private static bool IsManagedOwnershipKind(TraversalTransitionOwnershipKind ownershipKind) =>
-        ownershipKind != TraversalTransitionOwnershipKind.RawManual;
+        ownershipKind == TraversalTransitionOwnershipKind.ManagedManual
+        || ownershipKind == TraversalTransitionOwnershipKind.ManagedGenerated;
 
     private static bool IsManualOwnershipKind(TraversalTransitionOwnershipKind ownershipKind) =>
-        ownershipKind == TraversalTransitionOwnershipKind.RawManual
-            || ownershipKind == TraversalTransitionOwnershipKind.ManagedManual;
+        ownershipKind == TraversalTransitionOwnershipKind.ManagedManual;
 }

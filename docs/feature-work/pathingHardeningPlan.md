@@ -65,10 +65,13 @@ Already landed from the recent boundary-authoring work:
 - mixed `SL`, `SG`, `SL!`, and `SG!` cell authoring is explicit
 - transition precedence now uses explicit transition priority plus stable registration order
 - managed generated transitions stay registered while inactive and are suppressed instead of churned
+- manual registrations are now lifecycle-managed by default and stay registered while inactive
 - any registered chart carrying generated-transition media now participates in the same managed
   generated-transition lifecycle regardless of registration path
 - overlap masking and inert registration can suppress managed generated transitions without losing
   their registration identity
+- local chart mutation and chart init/unload now also refresh managed manual transitions that touch
+  the affected voxels
 - local chart mutation refreshes only the affected adjacent generated-transition pairs
 
 That gives us a usable base. The remaining work is mostly about contract clarity, query coverage,
@@ -97,24 +100,27 @@ Current shape in [ResolvedChartVoxelState.cs](/mnt/f/gamedevrepos/Trailblazer/sr
 That is fine for the current alpha baseline, but it is the most obvious new place where avoidable
 storage duplication and unnecessary rescans could accumulate if layered worlds become common.
 
-### 3. Transition Ownership Is Still Only Partially Explicit
+### 3. Transition Lifecycle Still Needs One More Generalization Pass
 
 Current behavior is much stronger now, but the contract is not fully rounded out yet:
 
 - chart-managed generated transitions are now lifecycle-managed regardless of registration path
-- mutation and overlap masking both drive local suppression/reactivation
-- raw manual transitions still stay host-managed by default
-- the explicit managed-manual lane is still not implemented
+- manual transitions are now lifecycle-managed by default after registration
+- mutation, init, unload, overlap masking, and volume-rule changes can all drive local
+  suppression/reactivation
+- manual regeneration is still intentionally deferred
 - `ManagedChartTransitionState` still only models chart-owned generated dependencies, not the broader
-  managed transition shape we may want if manual lifecycle support lands
+  managed transition shape we may want if manual regeneration or richer dependency ownership lands
 
-The biggest remaining gap is the managed-manual lane, followed by host-facing query coverage.
+The biggest remaining gap is now host-facing query coverage, followed by whether managed state needs
+to generalize beyond chart-generated dependencies.
 
 ## Track Status
 
 ### Track 1. Harden Transition Ownership And Regeneration
 
-Status: core landed. Managed-manual follow-up still deferred until we prove we need it.
+Status: landed for active versus suppressed lifecycle behavior. Manual regeneration remains
+deferred.
 
 We should explicitly define what Trailblazer owns versus what the host owns.
 
@@ -127,11 +133,10 @@ Locked direction:
   the chart was registered as a `TraversalBuildResult` or plain `NavigationChart`
 - manual transitions should use an explicit priority with a documented default
 - ownership semantics should stay separate from precedence semantics
-- manual transitions may participate in the same managed lifecycle if they are registered through an
-  explicit managed lane
+- manual transitions should be lifecycle-managed by default once registered
 - generated transitions remain managed and chart-owned regardless of chart registration path when
   the chart carries transition-generating cell metadata
-- raw manual registration should remain host-managed by default
+- manual regeneration stays out of scope for this pass
 
 Lifecycle direction:
 
@@ -188,24 +193,27 @@ Completed:
    mutation.
 5. Applied the same generated-transition lifecycle to any registered chart carrying
    transition-generating cell metadata, regardless of registration path.
+6. Moved manual registrations into the same managed active versus suppressed lifecycle by default.
 
 Deferred:
 
-6. Add an explicit managed-manual lane only after generated managed lifecycle behavior is stable.
+7. Revisit whether managed manual transitions need regeneration support or a broader dependency
+   state beyond the current chart-generated model.
 
 Acceptance criteria:
 
 - transition lifecycle behavior is documented for mutation, overlap, unload, and registration
 - managed transitions have predictable local refresh rules on both mutation and effective-state
   masking changes
-- manual transitions are never silently converted into managed transitions
+- manual transitions are lifecycle-managed by default without forcing hosts to unregister and
+  reregister them on local topology changes
 - transition precedence remains stable even when managed transitions deactivate and later reactivate
 
 Current note:
 
-- Track 1 is complete for chart-managed generated transitions.
-- Managed-manual lifecycle support is still intentionally deferred so we can validate the generated
-  lifecycle shape first.
+- Track 1 is complete for lifecycle-managed manual and generated transitions.
+- Manual regeneration remains intentionally deferred until we decide whether the broader managed
+  dependency state is worth the complexity.
 
 ### Track 2. Add Public Query APIs
 
@@ -324,7 +332,11 @@ Documentation should stay aligned in:
   lifecycle ownership and dependency rules, not by broad transition heuristics or partition flags
   alone.
 - `ManagedChartTransitionState` is a better fit than the old generated-only name, but it is still
-  chart-generated-specific. If managed-manual support lands later, this type may need one more
-  generalization pass.
+  chart-generated-specific. If manual regeneration or richer managed dependency ownership lands
+  later, this type may need one more generalization pass.
+- Direct `GlobalGridManager` teardown or rebuild performed outside `PathManager` and
+  `VolumeMediumRules` lifecycle entry points still does not broadcast a topology-change signal to
+  managed transitions. That is acceptable for alpha if we keep the contract Trailblazer-centric,
+  but it is worth tracking.
 - Any future override convenience should still route through the existing precedence and mutation
   path instead of creating a second live-state pipeline.

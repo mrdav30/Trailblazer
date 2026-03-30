@@ -595,7 +595,7 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
-    public void UnloadChart_ShouldUnregisterGeneratedTransitionsFromBuildResult_AndKeepManualTransitions()
+    public void UnloadChart_ShouldUnregisterGeneratedTransitionsFromBuildResult_AndSuppressManualTransitionsWithoutUnregisteringThem()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         GlobalGridManager.TryAddGrid(config, out _);
@@ -632,7 +632,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
         Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[1].Id));
         Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
-        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.False(TraversalTransitionRegistry.IsActive(manual.Id));
     }
 
     [Fact]
@@ -1366,6 +1366,41 @@ public class PathingNavigationMapTests : IDisposable
         Assert.Equal(TraversalTransitionType.SwimEntry, afterUnload[0].Type);
     }
 
+    [Fact]
+    public void Overlap_ShouldSuppressManagedManualTransitions_ThenReactivateThemOnUnload()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        PathTestFactory.RegisterSingleWalkablePoint("ManualManagedSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("ManualManagedDestination", new Vector3d(1, 0, 0));
+
+        var manual = new TraversalTransition(
+            id: "managed-manual-link",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.Register(manual));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+
+        NavigationChart overrideChart = BuildSingleTraversalPointChart(
+            "ManagedManualOverride",
+            Vector3d.Zero,
+            TraversalMedia.Liquid,
+            priority: 1);
+        Assert.True(PathManager.Register(overrideChart));
+
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.False(TraversalTransitionRegistry.IsActive(manual.Id));
+
+        PathManager.UnloadChart(overrideChart);
+
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+    }
+
     private static bool[,,] CreateThreeVoxelLine()
     {
         return new bool[1, 3, 1]
@@ -1390,11 +1425,12 @@ public class PathingNavigationMapTests : IDisposable
     private static NavigationChart BuildSingleTraversalPointChart(
         string chartName,
         Vector3d position,
-        TraversalMedia traversalMedia)
+        TraversalMedia traversalMedia,
+        int priority = 0)
     {
         Vector3d minBounds = position - new Vector3d(1, 1, 1);
         NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
         data[1, 1, 1] = new NavigationChartCell(traversalMedia);
-        return NavigationChart.From3D(chartName, data, minBounds, Fixed64.One);
+        return NavigationChart.From3D(chartName, data, minBounds, Fixed64.One, priority);
     }
 }

@@ -137,6 +137,9 @@ Important nuance:
 - creating an anchor from world position resolves that position to a voxel index immediately
 - registration validates that the stored anchor voxel indices still exist in the active grid setup
 - if an anchor uses a point override, that override must still resolve inside the same voxel
+- manual registrations enter the managed active-versus-suppressed lifecycle immediately
+- a newly registered manual transition starts suppressed when its resolved endpoint media is not
+  currently supported
 - chart-managed generated transitions inherit the owning chart priority when `PathManager` registers them
 - it does not verify that a chart anchor actually belongs to a live chart path segment
 - it does not verify that a volume anchor's medium is currently configured in `VolumeMediumRules`
@@ -173,9 +176,12 @@ Important lifecycle rules:
 
 - `PathManager.Reset()` clears the registry
 - `PathManager.UnloadChart(...)` unregisters chart-managed generated transitions for that chart regardless of registration path
-- manually registered transitions still remain global until explicit unregister or `PathManager.Reset()`
-- topology changes outside normal reset flow can make registered endpoints stale
-- if the world grid or authored handoff layout changes, hosts should unregister or rebuild transitions
+- manually registered transitions remain registered until explicit unregister or `PathManager.Reset()`,
+  but they can be suppressed and later reactivated as local topology changes alter their endpoint support
+- chart initialization, unload, mutation, overlap masking, and `VolumeMediumRules` changes all
+  reevaluate the managed manual transitions touching the affected voxels
+- direct grid teardown outside Trailblazer's lifecycle entry points is not currently broadcast back
+  into the registry
 
 The registry remarks in code are important here: endpoint voxels are resolved at registration time, not lazily every time a request is planned.
 
@@ -191,7 +197,7 @@ When two registered transitions have the same effective semantics:
 
 Current defaults:
 
-- raw manual registrations use `TraversalTransitionRegistry.DefaultManualPriority`
+- manual registrations use `TraversalTransitionRegistry.DefaultManualPriority`
 - chart-managed generated transitions inherit the owning chart priority
 - ownership kind controls lifecycle, not precedence
 

@@ -4,6 +4,7 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using System;
 using Trailblazer.Pathing;
+using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing;
@@ -35,6 +36,8 @@ public class TraversalTransitionRegistryTests : IDisposable
     {
         Vector3d source = Vector3d.Zero;
         Vector3d destination = new(1, 0, 0);
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryChartSource", source);
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryChartDestination", destination);
 
         var transition = new TraversalTransition(
             id: "jump-link",
@@ -92,6 +95,9 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void Register_ShouldSupportVoxelScopedAnchorsWithPointOverrides()
     {
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryPointOverrideSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryPointOverrideDestination", new Vector3d(1, 0, 0));
+
         Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel sourceVoxel));
         Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel destinationVoxel));
 
@@ -153,6 +159,9 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void Register_ShouldRejectDuplicateManualTransitions_WhenEffectiveSemanticsMatch()
     {
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryDuplicateSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryDuplicateDestination", new Vector3d(1, 0, 0));
+
         var first = new TraversalTransition(
             id: "manual-duplicate-a",
             type: TraversalTransitionType.Jump,
@@ -179,6 +188,9 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void Register_ShouldAllowDistinctPointOverrideTransitionsToCoexist()
     {
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryDistinctOverrideSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryDistinctOverrideDestination", new Vector3d(1, 0, 0));
+
         Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel sourceVoxel));
 
         Vector3d pointOverride = sourceVoxel.WorldPosition + new Vector3d(
@@ -243,6 +255,9 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void Register_ShouldOverrideEquivalentGeneratedTransition_WithoutUnregisteringIt()
     {
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryOverrideSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryOverrideDestination", new Vector3d(1, 0, 0));
+
         var generated = new TraversalTransition(
             id: "generated-link",
             type: TraversalTransitionType.Jump,
@@ -322,6 +337,9 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void PathManagerReset_ShouldClearTransitionRegistry()
     {
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryResetSource", Vector3d.Zero);
+        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(0, 1, 0), TraversalMedium.Gas, "RegistryResetGas");
+
         var transition = new TraversalTransition(
             id: "reset-check",
             type: TraversalTransitionType.Takeoff,

@@ -229,6 +229,7 @@ The important behavior is:
 Current safety rule:
 
 - any registered chart carrying generated-transition media refreshes only the locally affected generated transition pairs instead of unregistering the whole chart-owned generated set
+- manual transitions touching changed voxels are reevaluated locally and may be suppressed or reactivated without unregistering them
 - managed generated transitions stay registered while masked or inert, but active queries see only the unsuppressed subset
 - charts registered with `initializeChart: false` keep their managed generated transitions suppressed until `InitializeChart(...)` activates the supporting authored pairs
 - charts retain their managed generated transition id prefix even when they started with zero generated transitions, so later mutations can still create local generated transitions when edited cells gain generated-transition media
@@ -259,8 +260,8 @@ When it runs, it:
 Important nuance:
 
 - `UnloadChart(...)` only removes chart-owned partition state
-- it unregisters chart-owned managed generated transitions for that chart regardless of how it was registered, but it does not unregister separately registered manual transitions that happen to reference the same chart key in their id prefix
-- it does not automatically unregister separately registered manual transitions
+- it unregisters chart-owned managed generated transitions for that chart regardless of how it was registered
+- separately registered manual transitions stay registered, but any manual transition touching the unloaded voxels is reevaluated and may become suppressed if its endpoint media is no longer supported
 
 ### 7.2 Shared Partition Behavior
 

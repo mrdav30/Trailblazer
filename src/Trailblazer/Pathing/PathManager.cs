@@ -260,7 +260,7 @@ public static class PathManager
                 managedChartsToRefresh);
 
             if (changed)
-                RefreshManagedGeneratedTransitionsForVoxel(
+                RefreshManagedTransitionsForVoxel(
                     chart.GetWorldPosition(x, y, z),
                     managedChartsToRefresh);
 
@@ -328,7 +328,7 @@ public static class PathManager
                     managedChartsToRefresh))
                 {
                     changedCount++;
-                    RefreshManagedGeneratedTransitionsForVoxel(
+                    RefreshManagedTransitionsForVoxel(
                         chart.GetWorldPosition(update.X, update.Y, update.Z),
                         managedChartsToRefresh);
                 }
@@ -360,12 +360,15 @@ public static class PathManager
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> affectedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
+        SwiftHashSet<GlobalVoxelIndex> touchedVoxelIndices = SwiftHashSetPool<GlobalVoxelIndex>.Shared.Rent();
         try
         {
             foreach ((Vector3d pos, NavigationChartCell cell) in chart.GetAuthoredCells())
             {
                 if (!GlobalGridManager.TryGetVoxel(pos, out Voxel voxel))
                     continue;
+
+                touchedVoxelIndices.Add(voxel.GlobalIndex);
 
                 if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state))
                 {
@@ -386,6 +389,7 @@ public static class PathManager
             chart.IsInitialized = true;
             affectedChartKeys.Add(chart.Name);
 
+            RefreshManagedManualTransitionsForVoxels(touchedVoxelIndices);
             RefreshManagedGeneratedTransitionsForCharts(affectedChartKeys);
 
             foreach (string affectedChartKey in affectedChartKeys)
@@ -395,6 +399,7 @@ public static class PathManager
         {
             PartitionSetPool.Release(partitionsToRebind);
             SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
+            SwiftHashSetPool<GlobalVoxelIndex>.Shared.Release(touchedVoxelIndices);
         }
     }
 
@@ -430,13 +435,16 @@ public static class PathManager
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> affectedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
+        SwiftHashSet<GlobalVoxelIndex> touchedVoxelIndices = SwiftHashSetPool<GlobalVoxelIndex>.Shared.Rent();
         try
         {
             affectedChartKeys.Add(chart.Name);
-            foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
+            foreach ((Vector3d position, _) in chart.GetAuthoredCells())
             {
                 if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
                     continue;
+
+                touchedVoxelIndices.Add(voxel.GlobalIndex);
 
                 if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state)
                     || !state.ChartOwners.Contains(chart.Name))
@@ -454,7 +462,7 @@ public static class PathManager
                     _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
             }
 
-            // TODO: why aren't we doing this for volumes...?
+            // TODO: why aren't we doing this for volumes...?  I think this may be behavior that was missed as this is mainly used for clearance checks based on the navigators unit size
             foreach (SolidChartPartition part in partitionsToRebind)
                 part.BindNeighbors();
 
@@ -462,6 +470,7 @@ public static class PathManager
             RemoveChartFromRegistry(chart.Name);
             chart.IsInitialized = false;
 
+            RefreshManagedManualTransitionsForVoxels(touchedVoxelIndices);
             RefreshManagedGeneratedTransitionsForCharts(affectedChartKeys, chart.Name);
 
             foreach (string affectedChartKey in affectedChartKeys)
@@ -476,6 +485,7 @@ public static class PathManager
         {
             PartitionSetPool.Release(partitionsToRebind);
             SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
+            SwiftHashSetPool<GlobalVoxelIndex>.Shared.Release(touchedVoxelIndices);
         }
     }
 
@@ -637,6 +647,25 @@ public static class PathManager
 
             RefreshManagedGeneratedTransitionsForChart(chartName);
         }
+    }
+
+    private static void RefreshManagedTransitionsForVoxel(
+        Vector3d worldPosition,
+        SwiftHashSet<string> chartNames)
+    {
+        if (GlobalGridManager.TryGetVoxel(worldPosition, out Voxel voxel))
+            TraversalTransitionRegistry.RefreshManagedManualTransitionsForVoxel(voxel.GlobalIndex);
+
+        RefreshManagedGeneratedTransitionsForVoxel(worldPosition, chartNames);
+    }
+
+    private static void RefreshManagedManualTransitionsForVoxels(SwiftHashSet<GlobalVoxelIndex> voxelIndices)
+    {
+        if (voxelIndices == null || voxelIndices.Count == 0)
+            return;
+
+        foreach (GlobalVoxelIndex voxelIndex in voxelIndices)
+            TraversalTransitionRegistry.RefreshManagedManualTransitionsForVoxel(voxelIndex);
     }
 
     private static void RefreshManagedGeneratedTransitionsForChart(string chartName)

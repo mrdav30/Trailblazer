@@ -144,6 +144,7 @@ public static class VolumeMediumRules
     private static void InvalidateRuleConfiguration()
     {
         Interlocked.Increment(ref _registryVersion);
+        TraversalTransitionRegistry.RefreshManagedManualTransitions();
         PathGuideFactory.InvalidateVolumeCache();
     }
 }

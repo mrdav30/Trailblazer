@@ -5,7 +5,6 @@ namespace Trailblazer.Pathing;
 /// </summary>
 internal enum TraversalTransitionOwnershipKind
 {
-    RawManual = 0,
-    ManagedManual = 1,
-    ManagedGenerated = 2
+    ManagedManual = 0,
+    ManagedGenerated = 1
 }

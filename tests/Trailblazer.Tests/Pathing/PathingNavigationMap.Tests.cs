@@ -123,6 +123,140 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void TryGetEffectiveCellAndOwner_ShouldReturnWinningResolvedState()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        Assert.True(PathManager.Register(BuildSingleTraversalPointChart(
+            "EffectiveLow",
+            Vector3d.Zero,
+            TraversalMedia.Solid,
+            priority: 0)));
+        Assert.True(PathManager.Register(BuildSingleTraversalPointChart(
+            "EffectiveHigh",
+            Vector3d.Zero,
+            TraversalMedia.Gas,
+            priority: 1)));
+
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+
+        Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell worldCell));
+        Assert.True(PathManager.TryGetEffectiveCell(voxel.GlobalIndex, out NavigationChartCell voxelCell));
+        Assert.True(PathManager.TryGetEffectiveChartOwner(Vector3d.Zero, out string worldOwner));
+        Assert.True(PathManager.TryGetEffectiveChartOwner(voxel.GlobalIndex, out string voxelOwner));
+
+        Assert.Equal(TraversalMedia.Gas, worldCell.TraversalKinds);
+        Assert.Equal(worldCell, voxelCell);
+        Assert.Equal("EffectiveHigh", worldOwner);
+        Assert.Equal(worldOwner, voxelOwner);
+
+        Assert.False(PathManager.TryGetEffectiveCell(new Vector3d(3, 0, 3), out _));
+        Assert.False(PathManager.TryGetEffectiveChartOwner(new Vector3d(3, 0, 3), out _));
+    }
+
+    [Fact]
+    public void TryGetClosestActiveTransition_ShouldReturnClosestDirectedTransitionOfRequestedType()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(12, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpStartA", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpEndA", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestLandingStart", new Vector3d(3, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestLandingEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpStartB", new Vector3d(8, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpEndB", new Vector3d(9, 0, 0));
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "closest-jump-a",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)))));
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "closest-landing",
+            type: TraversalTransitionType.Landing,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)))));
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "closest-jump-b",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(8, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(9, 0, 0)))));
+
+        Assert.True(PathManager.TryGetClosestActiveTransition(
+            new Vector3d(7, 0, 0),
+            TraversalTransitionType.Jump,
+            out TraversalTransition closestJump));
+        Assert.Equal("closest-jump-b", closestJump.Id);
+        Assert.Equal(new Vector3d(8, 0, 0), closestJump.Source.Position);
+
+        Assert.True(PathManager.TryGetClosestActiveTransition(
+            new Vector3d(3, 0, 0),
+            TraversalTransitionType.Landing,
+            out TraversalTransition closestLanding));
+        Assert.Equal("closest-landing", closestLanding.Id);
+
+        Assert.False(PathManager.TryGetClosestActiveTransition(
+            Vector3d.Zero,
+            TraversalTransitionType.Takeoff,
+            out _));
+    }
+
+    [Fact]
+    public void TryGetClosestActiveTransition_ShouldUseReversedBidirectionalView_AndIgnoreSuppressedTransitions()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(12, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestReverseStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestReverseEnd", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestFallbackStart", new Vector3d(6, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestFallbackEnd", new Vector3d(7, 0, 0));
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "closest-bidirectional",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            isBidirectional: true)));
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "closest-fallback",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(6, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(7, 0, 0)))));
+
+        Assert.True(PathManager.TryGetClosestActiveTransition(
+            new Vector3d(1, 0, 0),
+            TraversalTransitionType.Jump,
+            out TraversalTransition reversed));
+        Assert.Equal("closest-bidirectional", reversed.Id);
+        Assert.Equal(new Vector3d(1, 0, 0), reversed.Source.Position);
+        Assert.Equal(Vector3d.Zero, reversed.Destination.Position);
+
+        Assert.True(PathManager.Register(BuildSingleTraversalPointChart(
+            "ClosestOverride",
+            new Vector3d(1, 0, 0),
+            TraversalMedia.Liquid,
+            priority: 1)));
+
+        Assert.True(PathManager.TryGetClosestActiveTransition(
+            new Vector3d(1, 0, 0),
+            TraversalTransitionType.Jump,
+            out TraversalTransition fallback));
+        Assert.Equal("closest-fallback", fallback.Id);
+
+        PathManager.UnloadChart("ClosestOverride");
+
+        Assert.True(PathManager.TryGetClosestActiveTransition(
+            new Vector3d(1, 0, 0),
+            TraversalTransitionType.Jump,
+            out TraversalTransition reactivated));
+        Assert.Equal("closest-bidirectional", reactivated.Id);
+        Assert.Equal(new Vector3d(1, 0, 0), reactivated.Source.Position);
+    }
+
+    [Fact]
     public void UnloadChart_ShouldClearInitializationStateSoChartCanBeRegisteredAgain()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));

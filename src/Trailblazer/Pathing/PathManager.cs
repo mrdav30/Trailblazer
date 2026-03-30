@@ -215,6 +215,116 @@ public static class PathManager
     }
 
     /// <summary>
+    /// Attempts to retrieve the winning effective authored cell at the provided voxel.
+    /// </summary>
+    /// <param name="voxelIndex">The voxel to inspect.</param>
+    /// <param name="cell">The effective authored cell currently winning overlap resolution.</param>
+    /// <returns>True when the voxel currently has an effective authored chart cell; otherwise, false.</returns>
+    public static bool TryGetEffectiveCell(GlobalVoxelIndex voxelIndex, out NavigationChartCell cell)
+    {
+        if (TryGetResolvedChartVoxelState(voxelIndex, out ResolvedChartVoxelState state))
+        {
+            cell = state.EffectiveCell;
+            return true;
+        }
+
+        cell = NavigationChartCell.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve the winning effective authored cell at the provided world position.
+    /// </summary>
+    /// <param name="worldPosition">The world position to inspect.</param>
+    /// <param name="cell">The effective authored cell currently winning overlap resolution.</param>
+    /// <returns>True when the position resolves to a voxel with an effective authored chart cell; otherwise, false.</returns>
+    public static bool TryGetEffectiveCell(Vector3d worldPosition, out NavigationChartCell cell)
+    {
+        if (TryGetResolvedChartVoxelState(worldPosition, out _, out ResolvedChartVoxelState state))
+        {
+            cell = state.EffectiveCell;
+            return true;
+        }
+
+        cell = NavigationChartCell.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve the chart currently winning overlap resolution at the provided voxel.
+    /// </summary>
+    /// <param name="voxelIndex">The voxel to inspect.</param>
+    /// <param name="chartName">The effective chart owner.</param>
+    /// <returns>True when the voxel currently has an effective chart owner; otherwise, false.</returns>
+    public static bool TryGetEffectiveChartOwner(GlobalVoxelIndex voxelIndex, out string chartName)
+    {
+        if (TryGetResolvedChartVoxelState(voxelIndex, out ResolvedChartVoxelState state))
+        {
+            chartName = state.EffectiveChartOwner;
+            return true;
+        }
+
+        chartName = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve the chart currently winning overlap resolution at the provided world position.
+    /// </summary>
+    /// <param name="worldPosition">The world position to inspect.</param>
+    /// <param name="chartName">The effective chart owner.</param>
+    /// <returns>True when the position resolves to a voxel with an effective chart owner; otherwise, false.</returns>
+    public static bool TryGetEffectiveChartOwner(Vector3d worldPosition, out string chartName)
+    {
+        if (TryGetResolvedChartVoxelState(worldPosition, out _, out ResolvedChartVoxelState state))
+        {
+            chartName = state.EffectiveChartOwner;
+            return true;
+        }
+
+        chartName = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve the closest currently active directed transition of the requested type.
+    /// </summary>
+    /// <param name="worldPosition">The position to measure from.</param>
+    /// <param name="transitionType">The directed handoff family to search.</param>
+    /// <param name="transition">
+    /// The closest active directed transition. Bidirectional registrations may return the reversed
+    /// directed view when that source anchor is closer.
+    /// </param>
+    /// <returns>True when at least one active directed transition of that type exists; otherwise, false.</returns>
+    public static bool TryGetClosestActiveTransition(
+        Vector3d worldPosition,
+        TraversalTransitionType transitionType,
+        out TraversalTransition transition)
+    {
+        TraversalTransition[] candidates = TraversalTransitionQuery.GetDirectedTransitions(transitionType);
+        if (candidates.Length == 0)
+        {
+            transition = default;
+            return false;
+        }
+
+        int closestIndex = 0;
+        Fixed64 closestDistanceSq = (candidates[0].Source.Position - worldPosition).SqrMagnitude;
+        for (int i = 1; i < candidates.Length; i++)
+        {
+            Fixed64 candidateDistanceSq = (candidates[i].Source.Position - worldPosition).SqrMagnitude;
+            if (candidateDistanceSq < closestDistanceSq)
+            {
+                closestDistanceSq = candidateDistanceSq;
+                closestIndex = i;
+            }
+        }
+
+        transition = candidates[closestIndex];
+        return true;
+    }
+
+    /// <summary>
     /// Initializes all registered navigation charts by materializing their authored surface and volume partitions.
     /// </summary>
     public static void InitializeAllCharts()
@@ -1075,8 +1185,7 @@ public static class PathManager
 
     private static bool IsChartEffectiveOwnerAtPosition(string chartName, Vector3d worldPosition)
     {
-        if (!GlobalGridManager.TryGetVoxel(worldPosition, out Voxel voxel)
-            || !_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state))
+        if (!TryGetResolvedChartVoxelState(worldPosition, out _, out ResolvedChartVoxelState state))
         {
             return false;
         }
@@ -1152,6 +1261,38 @@ public static class PathManager
         _navigationChartMapLock.EnterWriteLock();
         try { _navigationChartMap.Remove(chartName); }
         finally { _navigationChartMapLock.ExitWriteLock(); }
+    }
+
+    private static bool TryGetResolvedChartVoxelState(
+        Vector3d worldPosition,
+        out GlobalVoxelIndex voxelIndex,
+        out ResolvedChartVoxelState state)
+    {
+        if (GlobalGridManager.TryGetVoxel(worldPosition, out Voxel voxel))
+        {
+            voxelIndex = voxel.GlobalIndex;
+            return TryGetResolvedChartVoxelState(voxelIndex, out state);
+        }
+
+        voxelIndex = default;
+        state = null;
+        return false;
+    }
+
+    private static bool TryGetResolvedChartVoxelState(
+        GlobalVoxelIndex voxelIndex,
+        out ResolvedChartVoxelState state)
+    {
+        if (_resolvedChartVoxelStates.TryGetValue(voxelIndex, out state)
+            && state != null
+            && state.HasAnyOwners
+            && !string.IsNullOrEmpty(state.EffectiveChartOwner))
+        {
+            return true;
+        }
+
+        state = null;
+        return false;
     }
 
     private static bool TryApplyChartCellUpdate(

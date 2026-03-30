@@ -70,6 +70,11 @@ The main entry points are:
 - `Register(TraversalBuildResult buildResult, bool initializeChart = true)`
 - `IsChartRegistered(string name)`
 - `TryGetNavigationChart(string name, out NavigationChart chart)`
+- `TryGetEffectiveCell(GlobalVoxelIndex voxelIndex, out NavigationChartCell cell)`
+- `TryGetEffectiveCell(Vector3d worldPosition, out NavigationChartCell cell)`
+- `TryGetEffectiveChartOwner(GlobalVoxelIndex voxelIndex, out string chartName)`
+- `TryGetEffectiveChartOwner(Vector3d worldPosition, out string chartName)`
+- `TryGetClosestActiveTransition(Vector3d worldPosition, TraversalTransitionType transitionType, out TraversalTransition transition)`
 - `InitializeChart(string chartKey)`
 - `InitializeAllCharts()`
 - `TryUpdateChartCell(string chartName, int x, int y, int z, NavigationChartCell cell)`
@@ -143,7 +148,27 @@ These are the basic lookup APIs for chart identity and retrieval.
 
 They both operate under the internal reader lock and are safe against concurrent registry access.
 
-### 5.3 AllCharts
+### 5.3 Effective-State Query Helpers
+
+`PathManager` now exposes the winning overlap result directly.
+
+Important details:
+
+- `TryGetEffectiveCell(...)` returns only the winning effective cell, not losing contributors
+- `TryGetEffectiveChartOwner(...)` returns only the chart currently winning overlap precedence
+- the world-position overloads fail when the position does not resolve to a live voxel
+- the voxel overloads fail when the voxel currently has no effective authored owner
+
+`TryGetClosestActiveTransition(...)` is the transition-side query helper.
+
+Important details:
+
+- it searches active directed transitions only
+- bidirectional registrations may return the reversed directed view when that source anchor is closer
+- it filters by `TraversalTransitionType` before evaluating distance
+- it does not expose suppressed or inactive transitions
+
+### 5.4 AllCharts
 
 `AllCharts` returns a snapshot of registered chart values.
 

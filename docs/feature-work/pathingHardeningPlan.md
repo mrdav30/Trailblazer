@@ -217,7 +217,7 @@ Current note:
 
 ### Track 2. Add Public Query APIs
 
-Status: next / high priority after Track 1.
+Status: landed.
 
 The most useful public surface is still query-oriented, but it should land after the active versus
 inactive transition model is stable.
@@ -240,6 +240,15 @@ Likely acceptance criteria:
 - hosts can ask for the closest active transition of a given type without rebuilding their own search
 - docs clearly state whether the query returns active transition state, registered transition state,
   or both
+
+Current note:
+
+- `PathManager.TryGetEffectiveCell(...)` and `PathManager.TryGetEffectiveChartOwner(...)` now expose
+  the winning overlap result by voxel or world position
+- `PathManager.TryGetClosestActiveTransition(...)` now returns the closest active directed
+  transition of the requested type from a world position
+- the closest-transition query intentionally works over active directed transitions only; it does
+  not expose inactive registrations or losing overlap contributors
 
 ### Track 3. Tighten `ResolvedChartVoxelState`
 
@@ -328,6 +337,9 @@ Documentation should stay aligned in:
 - Public query APIs will likely remove pressure to expose internal owner bookkeeping directly.
 - Transition discovery may be more useful to hosts than resolved-cell inspection, so it should not
   be treated as a minor follow-up.
+- The new closest-transition query is correct and deterministic, but it still scans the active
+  directed transitions for the requested type. If hosts start calling it at high frequency, a
+  tighter spatial index may be worth adding later.
 - If overlap masking should deactivate managed transitions, that should be enforced by explicit
   lifecycle ownership and dependency rules, not by broad transition heuristics or partition flags
   alone.

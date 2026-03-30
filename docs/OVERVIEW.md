@@ -59,7 +59,7 @@ Important details:
 
 ### 2.2 PathManager
 
-`PathManager` is the global chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes neighbor and direct-travel utilities, and participates in guide-cache maintenance.
+`PathManager` is the global chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell and closest-active-transition query helpers, exposes neighbor and direct-travel utilities, and participates in guide-cache maintenance.
 
 Explicit handoff data between chart-backed traversal and raw-volume traversal is registered separately through `TraversalTransitionRegistry`.
 

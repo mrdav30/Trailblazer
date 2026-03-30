@@ -35,7 +35,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 - `NavigationChart` and `NavigationChartCell` for defining chart-backed surface space with optional per-cell cost and hint metadata
 - `TraversalAuthoringMap`, `TraversalLegend`, and `TraversalBuildResult` for tokenized `string[,,]` authoring that can build and apply a chart plus generated transitions
 - `TraversalTransition` and `TraversalTransitionRegistry` for explicit chart-to-chart and chart-to-volume handoff data
-- `PathManager` for chart registration, initialization, unloading, and path utilities
+- `PathManager` for chart registration, initialization, unloading, effective-state queries, closest-active-transition queries, and path utilities
 - `AStarPathRequest`, `FlowFieldPathRequest`, and `VolumePathRequest` for request configuration
 - `AStarSurveyor` and `FlowFieldSurveyor` for raw path generation
 - `PathGuideFactory` and `ReusableSurveyResultCache<T>` for guide reuse

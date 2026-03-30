@@ -26,6 +26,8 @@ internal static class TraversalTransitionQuery
 
     private static bool _hasAllDirectedTransitions;
 
+    private static readonly SwiftDictionary<TraversalTransitionType, TraversalTransition[]> _directedTransitionsByType = new();
+
     private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsFromSourceGrid = new();
 
     private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsToDestinationGrid = new();
@@ -41,6 +43,26 @@ internal static class TraversalTransitionQuery
             _allDirectedTransitions = BuildAllDirectedTransitions(TraversalTransitionRegistry.GetActiveTransitions());
             _hasAllDirectedTransitions = true;
             return _allDirectedTransitions;
+        }
+    }
+
+    public static TraversalTransition[] GetDirectedTransitions(TraversalTransitionType type)
+    {
+        lock (_cacheLock)
+        {
+            EnsureCacheVersion();
+            if (_directedTransitionsByType.TryGetValue(type, out TraversalTransition[] cached))
+                return cached;
+
+            if (!_hasAllDirectedTransitions)
+            {
+                _allDirectedTransitions = BuildAllDirectedTransitions(TraversalTransitionRegistry.GetActiveTransitions());
+                _hasAllDirectedTransitions = true;
+            }
+
+            TraversalTransition[] filtered = FilterDirectedTransitionsByType(_allDirectedTransitions, type);
+            _directedTransitionsByType[type] = filtered;
+            return filtered;
         }
     }
 
@@ -86,9 +108,29 @@ internal static class TraversalTransitionQuery
 
         _allDirectedTransitions = Array.Empty<TraversalTransition>();
         _hasAllDirectedTransitions = false;
+        _directedTransitionsByType.Clear();
         _directedTransitionsFromSourceGrid.Clear();
         _directedTransitionsToDestinationGrid.Clear();
         _cachedRegistryVersion = registryVersion;
+    }
+
+    private static TraversalTransition[] FilterDirectedTransitionsByType(
+        TraversalTransition[] transitions,
+        TraversalTransitionType type)
+    {
+        if (transitions.Length == 0)
+            return Array.Empty<TraversalTransition>();
+
+        SwiftList<TraversalTransition> filtered = new();
+        for (int i = 0; i < transitions.Length; i++)
+        {
+            if (transitions[i].Type == type)
+                filtered.Add(transitions[i]);
+        }
+
+        return filtered.Count == 0
+            ? Array.Empty<TraversalTransition>()
+            : filtered.ToArray();
     }
 
     private static TraversalTransition[] BuildAllDirectedTransitions(

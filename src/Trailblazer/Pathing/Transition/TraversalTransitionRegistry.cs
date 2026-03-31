@@ -14,9 +14,10 @@ namespace Trailblazer.Pathing;
 /// <remarks>
 /// Registration resolves transition endpoints to the current voxel grid and keeps transitions
 /// registered even while their resolved endpoints are temporarily unsupported. Manual transitions
-/// participate in the same active versus suppressed lifecycle model as chart-generated transitions,
-/// but direct grid teardown outside Trailblazer's pathing lifecycle APIs is not observed
-/// automatically.
+/// participate in the same active versus suppressed lifecycle model as chart-generated transitions.
+/// External <see cref="GlobalGridManager"/> add and remove events are reevaluated through
+/// <see cref="PathManager"/>'s grid-lifecycle bridge, and external grid reset is treated as a hard
+/// pathing reset.
 /// </remarks>
 public static class TraversalTransitionRegistry
 {

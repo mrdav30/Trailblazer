@@ -180,8 +180,10 @@ Important lifecycle rules:
   but they can be suppressed and later reactivated as local topology changes alter their endpoint support
 - chart initialization, unload, mutation, overlap masking, and `VolumeMediumRules` changes all
   reevaluate the managed manual transitions touching the affected voxels
-- direct grid teardown outside Trailblazer's lifecycle entry points is not currently broadcast back
-  into the registry
+- external `GlobalGridManager.TryAddGrid(...)` and `TryRemoveGrid(...)` rebuild live pathing state
+  from the registered initialized charts and then reevaluate managed transitions
+- external `GlobalGridManager.Reset()` is treated as simulation teardown and hard resets
+  `PathManager`, which also clears the registry
 
 The registry remarks in code are important here: endpoint voxels are resolved at registration time, not lazily every time a request is planned.
 

@@ -1535,6 +1535,115 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
     }
 
+    [Fact]
+    public void GlobalGridReset_ShouldHardResetPathManagerChartsAndTransitions()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChart sourceChart = PathTestFactory.RegisterSingleWalkablePoint("ExternalResetSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("ExternalResetDestination", new Vector3d(1, 0, 0));
+
+        var manual = new TraversalTransition(
+            id: "external-reset-transition",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.Register(manual));
+        Assert.True(PathManager.IsChartRegistered(sourceChart.Name));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+
+        GlobalGridManager.Reset();
+
+        Assert.False(PathManager.IsChartRegistered(sourceChart.Name));
+        Assert.False(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.Empty(PathManager.AllCharts);
+    }
+
+    [Fact]
+    public void GlobalGridRemoveAndAdd_ShouldRebuildInitializedCharts_AndReactivateManagedManualTransitions()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
+
+        NavigationChart sourceChart = PathTestFactory.RegisterSingleWalkablePoint("ExternalRemoveSource", Vector3d.Zero);
+        NavigationChart destinationChart = PathTestFactory.RegisterSingleWalkablePoint("ExternalRemoveDestination", new Vector3d(1, 0, 0));
+
+        var manual = new TraversalTransition(
+            id: "external-remove-transition",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.Register(manual));
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel sourceVoxel));
+        Assert.True(sourceVoxel.TryGetPartition<SolidChartPartition>(out _));
+
+        Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+
+        Assert.True(PathManager.IsChartRegistered(sourceChart.Name));
+        Assert.True(PathManager.IsChartRegistered(destinationChart.Name));
+        Assert.True(PathManager.TryGetNavigationChart(sourceChart.Name, out NavigationChart removedSourceChart));
+        Assert.True(removedSourceChart.IsInitialized);
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.False(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
+
+        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell restoredCell));
+        Assert.True(restoredCell.HasSolid);
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel rebuiltSourceVoxel));
+        Assert.True(rebuiltSourceVoxel.TryGetPartition<SolidChartPartition>(out _));
+    }
+
+    [Fact]
+    public void GlobalGridRemoveAndAdd_ShouldSuppressGeneratedTransitions_AndReactivateThemAfterRebuild()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
+
+        NavigationChartCell[,,] generatedCells =
+        {
+            {
+                { new NavigationChartCell(TraversalMedia.Solid, generatedTransitionMedia: TraversalMedia.Solid) },
+                { new NavigationChartCell(TraversalMedia.Liquid, generatedTransitionMedia: TraversalMedia.Liquid) }
+            }
+        };
+
+        NavigationChart generatedChart = NavigationChart.From3D(
+            "ExternalGeneratedChart",
+            generatedCells,
+            Vector3d.Zero,
+            Fixed64.One,
+            priority: 0);
+
+        Assert.True(PathManager.Register(generatedChart));
+
+        TraversalTransition[] beforeRemove = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
+        Assert.Single(beforeRemove);
+        string generatedTransitionId = beforeRemove[0].Id;
+        Assert.Equal(TraversalTransitionType.SwimEntry, beforeRemove[0].Type);
+
+        Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+
+        Assert.True(PathManager.IsChartRegistered(generatedChart.Name));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(generatedTransitionId));
+        Assert.False(TraversalTransitionRegistry.IsActive(generatedTransitionId));
+        Assert.Empty(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
+
+        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+
+        TraversalTransition[] afterAdd = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
+        Assert.Single(afterAdd);
+        Assert.Equal(generatedTransitionId, afterAdd[0].Id);
+        Assert.Equal(TraversalTransitionType.SwimEntry, afterAdd[0].Type);
+    }
+
     private static bool[,,] CreateThreeVoxelLine()
     {
         return new bool[1, 3, 1]

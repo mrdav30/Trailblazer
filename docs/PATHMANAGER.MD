@@ -259,6 +259,27 @@ Current safety rule:
 - charts registered with `initializeChart: false` keep their managed generated transitions suppressed until `InitializeChart(...)` activates the supporting authored pairs
 - charts retain their managed generated transition id prefix even when they started with zero generated transitions, so later mutations can still create local generated transitions when edited cells gain generated-transition media
 
+### 6.6 External Grid Lifecycle
+
+`PathManager` listens to `GlobalGridManager` lifecycle events directly.
+
+Current behavior:
+
+- external `GlobalGridManager.Reset()` is treated as simulation teardown and calls `PathManager.Reset()`
+- external `TryAddGrid(...)` and `TryRemoveGrid(...)` preserve registered charts, clear only live
+  voxel-backed state, and rebuild the charts that were initialized before the grid mutation
+- rebuild order follows chart registration order for deterministic overlap restoration
+- managed manual transitions get a full reevaluation pass after rebuild
+- managed generated transitions are suppressed before rebuild and then refreshed against the rebuilt
+  live state
+
+Important nuance:
+
+- a chart can remain registered and logically initialized even when no active grid currently
+  materializes any of its authored voxels
+- in that state the chart simply contributes no live partitions and its managed transitions stay
+  suppressed until matching grids exist again
+
 ## 7. Unload Lifecycle
 
 ### 7.1 UnloadChart(...)

@@ -295,7 +295,61 @@ Current note:
 - `ResolvedChartVoxelState` now keeps per-owner precedence locally and only rescans contributors
   when the current winner is removed
 
-### Track 4. Coverage And Documentation Hardening
+### Track 4. External Grid Lifecycle Hardening
+
+Status: landed.
+
+Trailblazer currently assumes that grid lifecycle is driven through its own pathing entry points.
+That is no longer a safe enough assumption for alpha if hosts can mutate `GlobalGridManager`
+directly.
+
+Primary targets:
+
+- subscribe once to `GlobalGridManager.OnReset`
+- subscribe once to `GlobalGridManager.OnActiveGridChange`
+- treat external grid reset as a hard Trailblazer pathing reset
+- treat external grid add/remove as a live-state rebuild against the currently registered charts
+
+Locked direction:
+
+- `GlobalGridManager.Reset()` should be treated as simulation teardown and should hard reset
+  `PathManager`
+- `GlobalGridManager.TryAddGrid(...)` and `GlobalGridManager.TryRemoveGrid(...)` should preserve
+  chart registrations, then rebuild live grid-backed state from those registrations instead of
+  trying to maintain a fragile per-grid diff system
+- add/remove handling should clear only live voxel-backed state, not the authored chart registry
+- add/remove rebuild should rerun initialization only for charts that were initialized before the
+  external grid mutation
+- managed-manual transitions should get a full reevaluation pass after rebuild
+- generated transitions should reuse the rebuilt chart initialization path rather than a second
+  bespoke lifecycle path
+
+Implementation direction:
+
+- keep GridForge event plumbing in one small bridge owned by `PathManager`
+- avoid coupling normal chart mutation hot paths to external grid lifecycle code
+- prefer one coarse rebuild path for external add/remove over fine-grained grid diff logic
+- preserve deterministic behavior by rebuilding from the existing registered-chart order
+
+Acceptance criteria:
+
+- direct `GlobalGridManager.Reset()` leaves Trailblazer pathing in a clean reset state
+- direct `TryAddGrid(...)` and `TryRemoveGrid(...)` do not leave stale live partitions or stale
+  active managed transitions behind
+- charts that no longer overlap any active grid after rebuild remain registered but simply have no
+  live voxel state until matching grids exist again
+- tests pin reset, add-grid rebuild, remove-grid rebuild, and transition reevaluation behavior
+
+Current note:
+
+- `PathManager` now owns one small GridForge bridge through `GlobalGridManager.OnReset` and
+  `GlobalGridManager.OnActiveGridChange`
+- external reset is treated as a hard `PathManager.Reset()`
+- external add/remove clears only live voxel-backed state, suppresses managed generated
+  transitions, rebuilds previously initialized charts in registration order, then reevaluates
+  managed transitions against the rebuilt world
+
+### Track 5. Coverage And Documentation Hardening
 
 Status: continuous.
 
@@ -323,8 +377,9 @@ Documentation should stay aligned in:
    managed suppression, and effective-state-driven reevaluation.
 2. Add the public query contract after Track 1 stabilizes, especially the closest-transition query.
 3. Run the focused runtime optimization pass around chart-index reuse and resolved overlap state.
-4. Expand tests and docs around whichever of the above lands.
-5. Revisit override convenience only if the query and ownership work still leave a real gap.
+4. Harden external `GlobalGridManager` reset and add/remove lifecycle handling.
+5. Expand tests and docs around whichever of the above lands.
+6. Revisit override convenience only if the query and ownership work still leave a real gap.
 
 ## Current Decisions
 
@@ -373,9 +428,8 @@ Documentation should stay aligned in:
 - `ManagedChartTransitionState` is a better fit than the old generated-only name, but it is still
   chart-generated-specific. If manual regeneration or richer managed dependency ownership lands
   later, this type may need one more generalization pass.
-- Direct `GlobalGridManager` teardown or rebuild performed outside `PathManager` and
-  `VolumeMediumRules` lifecycle entry points still does not broadcast a topology-change signal to
-  managed transitions. That is acceptable for alpha if we keep the contract Trailblazer-centric,
-  but it is worth tracking.
+- External `GlobalGridManager` reset and add/remove handling should be treated as first-class
+  hardening work instead of a later convenience cleanup, because stale live pathing state after
+  direct grid lifecycle mutations would be easy for hosts to miss.
 - Any future override convenience should still route through the existing precedence and mutation
   path instead of creating a second live-state pipeline.

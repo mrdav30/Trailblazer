@@ -63,6 +63,24 @@ public class NavigationChart
     /// </summary>
     private readonly NavigationChartCell[] _cells;
 
+    private readonly SwiftHashSet<int> _authoredCellIndices = new();
+
+    private readonly SwiftHashSet<int> _surfaceCellIndices = new();
+
+    private readonly SwiftHashSet<int> _generatedTransitionCellIndices = new();
+
+    private int[] _cachedAuthoredCellIndices = Array.Empty<int>();
+
+    private int[] _cachedSurfaceCellIndices = Array.Empty<int>();
+
+    private int[] _cachedGeneratedTransitionCellIndices = Array.Empty<int>();
+
+    private bool _authoredCellIndicesDirty;
+
+    private bool _surfaceCellIndicesDirty;
+
+    private bool _generatedTransitionCellIndicesDirty;
+
     /// <summary>
     /// Indicates whether this chart has been fully initialized and is ready for queries.
     /// </summary>
@@ -151,6 +169,8 @@ public class NavigationChart
         int expectedCellCount = sizeX * sizeY * sizeZ;
         if (_cells.Length != expectedCellCount)
             throw new ArgumentException($"Expected {expectedCellCount} chart cells but received {_cells.Length}.", nameof(cells));
+
+        BuildCellIndexCaches();
     }
 
     /// <summary>
@@ -236,21 +256,13 @@ public class NavigationChart
     /// </summary>
     internal IEnumerable<(Vector3d Position, NavigationChartCell Cell)> GetSurfaceCells()
     {
-        for (int y = 0; y < SizeY; y++)
-            for (int x = 0; x < SizeX; x++)
-                for (int z = 0; z < SizeZ; z++)
-                {
-                    NavigationChartCell cell = GetCell(x, y, z);
-                    if (cell.HasSolid)
-                    {
-                        yield return (
-                            new Vector3d(
-                                MinBounds.x + x * Interval,
-                                MinBounds.y + y * Interval,
-                                MinBounds.z + z * Interval),
-                            cell);
-                    }
-                }
+        int[] surfaceIndices = GetSortedSurfaceCellIndices();
+        for (int i = 0; i < surfaceIndices.Length; i++)
+        {
+            int flatIndex = surfaceIndices[i];
+            DecodeIndex(flatIndex, out int x, out int y, out int z);
+            yield return (GetWorldPosition(x, y, z), _cells[flatIndex]);
+        }
     }
 
     /// <summary>
@@ -258,21 +270,13 @@ public class NavigationChart
     /// </summary>
     internal IEnumerable<(Vector3d Position, NavigationChartCell Cell)> GetAuthoredCells()
     {
-        for (int y = 0; y < SizeY; y++)
-            for (int x = 0; x < SizeX; x++)
-                for (int z = 0; z < SizeZ; z++)
-                {
-                    NavigationChartCell cell = GetCell(x, y, z);
-                    if (!cell.HasTraversalData)
-                        continue;
-
-                    yield return (
-                        new Vector3d(
-                            MinBounds.x + x * Interval,
-                            MinBounds.y + y * Interval,
-                            MinBounds.z + z * Interval),
-                        cell);
-                }
+        int[] authoredIndices = GetSortedAuthoredCellIndices();
+        for (int i = 0; i < authoredIndices.Length; i++)
+        {
+            int flatIndex = authoredIndices[i];
+            DecodeIndex(flatIndex, out int x, out int y, out int z);
+            yield return (GetWorldPosition(x, y, z), _cells[flatIndex]);
+        }
     }
 
     /// <summary>
@@ -393,6 +397,16 @@ public class NavigationChart
             MinBounds.z + z * Interval);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void DecodeIndex(int flatIndex, out int x, out int y, out int z)
+    {
+        int yStride = SizeX * SizeZ;
+        y = flatIndex / yStride;
+        int remainder = flatIndex - (y * yStride);
+        x = remainder / SizeZ;
+        z = remainder - (x * SizeZ);
+    }
+
     internal bool TrySetCell(int x, int y, int z, NavigationChartCell cell, out NavigationChartCell previousCell)
     {
         if (!IsInBounds(x, y, z))
@@ -407,11 +421,119 @@ public class NavigationChart
             return false;
 
         _cells[index] = cell;
+        UpdateIndexMembership(
+            _authoredCellIndices,
+            index,
+            previousCell.HasTraversalData,
+            cell.HasTraversalData,
+            ref _authoredCellIndicesDirty);
+        UpdateIndexMembership(
+            _surfaceCellIndices,
+            index,
+            previousCell.HasSolid,
+            cell.HasSolid,
+            ref _surfaceCellIndicesDirty);
+        UpdateIndexMembership(
+            _generatedTransitionCellIndices,
+            index,
+            previousCell.CanGenerateTransition,
+            cell.CanGenerateTransition,
+            ref _generatedTransitionCellIndicesDirty);
         return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal NavigationChartCell GetCell(int x, int y, int z) => _cells[ToIndex(x, y, z)];
+
+    internal int[] GetGeneratedTransitionIndices() => GetSortedGeneratedTransitionCellIndices();
+
+    private void BuildCellIndexCaches()
+    {
+        for (int i = 0; i < _cells.Length; i++)
+        {
+            NavigationChartCell cell = _cells[i];
+            if (cell.HasTraversalData)
+                _authoredCellIndices.Add(i);
+
+            if (cell.HasSolid)
+                _surfaceCellIndices.Add(i);
+
+            if (cell.CanGenerateTransition)
+                _generatedTransitionCellIndices.Add(i);
+        }
+
+        _authoredCellIndicesDirty = true;
+        _surfaceCellIndicesDirty = true;
+        _generatedTransitionCellIndicesDirty = true;
+    }
+
+    private static void UpdateIndexMembership(
+        SwiftHashSet<int> indices,
+        int flatIndex,
+        bool wasPresent,
+        bool isPresent,
+        ref bool cacheDirty)
+    {
+        if (wasPresent == isPresent)
+            return;
+
+        if (isPresent)
+            indices.Add(flatIndex);
+        else
+            indices.Remove(flatIndex);
+
+        cacheDirty = true;
+    }
+
+    private int[] GetSortedAuthoredCellIndices()
+    {
+        return GetSortedIndexCache(
+            _authoredCellIndices,
+            ref _cachedAuthoredCellIndices,
+            ref _authoredCellIndicesDirty);
+    }
+
+    private int[] GetSortedSurfaceCellIndices()
+    {
+        return GetSortedIndexCache(
+            _surfaceCellIndices,
+            ref _cachedSurfaceCellIndices,
+            ref _surfaceCellIndicesDirty);
+    }
+
+    private int[] GetSortedGeneratedTransitionCellIndices()
+    {
+        return GetSortedIndexCache(
+            _generatedTransitionCellIndices,
+            ref _cachedGeneratedTransitionCellIndices,
+            ref _generatedTransitionCellIndicesDirty);
+    }
+
+    private static int[] GetSortedIndexCache(
+        SwiftHashSet<int> source,
+        ref int[] cache,
+        ref bool cacheDirty)
+    {
+        if (!cacheDirty)
+            return cache;
+
+        if (source.Count == 0)
+        {
+            cache = Array.Empty<int>();
+            cacheDirty = false;
+            return cache;
+        }
+
+        int[] sorted = new int[source.Count];
+        int index = 0;
+        foreach (int value in source)
+            sorted[index++] = value;
+
+        Array.Sort(sorted);
+        cache = sorted;
+        cacheDirty = false;
+        return cache;
+    }
 
     private static NavigationChartCell[] CreateCells(bool[] map, TraversalMedium medium)
     {

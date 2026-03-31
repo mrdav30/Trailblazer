@@ -135,13 +135,13 @@ public sealed class VolumeChartPartition : IVoxelPartition
     }
 
     internal void ApplyAuthoredState(
-        SwiftHashSet<string> chartOwners,
+        ResolvedChartVoxelState state,
         string effectiveChartOwner,
         NavigationChartCell effectiveCell)
     {
         ChartOwners ??= new SwiftHashSet<string>();
         ChartOwners.Clear();
-        ChartOwnerUtility.AddOwners(ChartOwners, chartOwners);
+        state?.AddChartOwnersTo(ChartOwners);
 
         EffectiveChartOwner = effectiveChartOwner;
         _chartPathCostModifier = effectiveCell.PathCostModifier;

@@ -24,10 +24,7 @@ Relevant code:
 
 ## Scope
 
-This is not a second authoring plan.
-
-The boundary-authoring work already established the intended runtime direction. This note is about
-hardening that direction for alpha:
+This is about hardening the `Pathing` namespace for alpha:
 
 - clarify the public query surface hosts actually need
 - tighten transition ownership and regeneration rules
@@ -250,24 +247,53 @@ Current note:
 - the closest-transition query intentionally works over active directed transitions only; it does
   not expose inactive registrations or losing overlap contributors
 
-### Track 3. Tighten `ResolvedChartVoxelState`
+### Track 3. Focused Runtime Optimization Pass
 
-Status: next / medium-high priority after Tracks 1 and 2.
+Status: landed.
 
-This track is intentionally not a broad refactor. It is a focused cleanup pass if there is obvious
-room to reduce code bloat or steady-state work.
+This is now an intentionally broader optimization pass, but it should still stay disciplined:
+target the obvious steady-state cost centers we have already identified, without turning into a
+large architecture rewrite.
 
-Likely targets:
+Ordered targets:
 
-- collapse duplicate owner bookkeeping if one structure can serve both needs cleanly
-- avoid full winner rescans when a non-winning owner changes and the current winner is unchanged
-- keep precedence checks deterministic and readable
+1. Reduce whole-chart scan cost by caching authored, surface, and generated-transition cell indices
+   on `NavigationChart` and reusing them in init, unload, and chart-wide generated-transition
+   refresh paths.
+2. Tighten `ResolvedChartVoxelState` so winner changes are incremental instead of rescanning all
+   contributors when a non-winning owner changes.
+3. Leave closest-transition spatial indexing deferred unless profiling shows the active-transition
+   scan is becoming a real host cost.
+4. Treat `TraversalTransitionRegistry.Tests.cs` dedup only as opportunistic cleanup if the runtime
+   changes naturally touch those cases.
+
+Implementation direction:
+
+- preserve deterministic iteration by sorting cached chart indices into the same flat-index order
+  as the current `y/x/z` scan
+- keep chart mutation updates lean by updating cache membership directly instead of rescanning the
+  whole chart after every cell edit
+- keep overlap precedence local to `ResolvedChartVoxelState` so winner checks do not bounce back
+  through `PathManager` lookups on every change
+- do not broaden public API surface as part of this track
 
 Acceptance criteria:
 
-- no behavior change relative to the current overlap rules
-- no new public surface area required
-- tests pin winner changes, non-winner updates, winner removal, and same-priority ties
+- no behavior change relative to the current overlap and transition rules
+- sparse charts no longer force full-volume scans during init, unload, or chart-wide generated
+  transition refresh
+- overlap updates avoid full winner rescans when the edited owner is not the current winner
+- tests pin chart-index maintenance, winner changes, winner removal, and same-priority ties
+
+Current note:
+
+- `NavigationChart` now caches authored, surface, and generated-transition flat indices and reuses
+  deterministic sorted snapshots instead of rescanning full chart volume on every enumeration
+- `PathManager` chart-wide generated-transition refresh and
+  `GeneratedTraversalTransitionBuilder.BuildTransitions(...)` now iterate cached generated cells
+  instead of full `y/x/z` scans
+- `ResolvedChartVoxelState` now keeps per-owner precedence locally and only rescans contributors
+  when the current winner is removed
 
 ### Track 4. Coverage And Documentation Hardening
 
@@ -296,7 +322,7 @@ Documentation should stay aligned in:
 1. Implement the transition lifecycle refactor first, especially explicit transition priority,
    managed suppression, and effective-state-driven reevaluation.
 2. Add the public query contract after Track 1 stabilizes, especially the closest-transition query.
-3. Tighten `ResolvedChartVoxelState` if there is obvious lean-up work with low behavior risk.
+3. Run the focused runtime optimization pass around chart-index reuse and resolved overlap state.
 4. Expand tests and docs around whichever of the above lands.
 5. Revisit override convenience only if the query and ownership work still leave a real gap.
 
@@ -332,8 +358,9 @@ Documentation should stay aligned in:
 
 ## Issues And Potential Improvements
 
-- `ResolvedChartVoxelState` is the clearest candidate for cleanup if we want to reduce code bloat or
-  steady-state cost from the recent overlap work.
+- Init and unload are now proportional to authored or generated cell count instead of full chart
+  volume, but they are still not near-`O(1)` lifecycle operations. If hosts start activating or
+  unloading large sparse charts frequently, a tighter dependency index may still be worthwhile.
 - Public query APIs will likely remove pressure to expose internal owner bookkeeping directly.
 - Transition discovery may be more useful to hosts than resolved-cell inspection, so it should not
   be treated as a minor follow-up.

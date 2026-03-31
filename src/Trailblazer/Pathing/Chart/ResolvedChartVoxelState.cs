@@ -9,46 +9,124 @@ namespace Trailblazer.Pathing;
 /// </summary>
 internal sealed class ResolvedChartVoxelState
 {
-    private readonly SwiftHashSet<string> _chartOwners = new();
-
-    private readonly SwiftDictionary<string, NavigationChartCell> _chartCells =
+    private readonly SwiftDictionary<string, ChartContribution> _chartContributions =
         new(4, StringComparer.Ordinal);
 
-    public SwiftHashSet<string> ChartOwners => _chartOwners;
+    private int _effectivePriority;
 
-    public bool HasAnyOwners => _chartOwners.Count > 0;
+    private int _effectiveRegistrationOrder;
+
+    public bool HasAnyOwners => _chartContributions.Count > 0;
 
     public string EffectiveChartOwner { get; private set; }
 
     public NavigationChartCell EffectiveCell { get; private set; }
 
-    public void AddOwner(string chartName, NavigationChartCell cell)
+    public void AddOwner(
+        string chartName,
+        NavigationChartCell cell,
+        int priority,
+        int registrationOrder)
     {
-        _chartOwners.Add(chartName);
-        _chartCells[chartName] = cell;
-        ResolveEffectiveCell();
+        var contribution = new ChartContribution(cell, priority, registrationOrder);
+        _chartContributions[chartName] = contribution;
+
+        if (EffectiveChartOwner == null
+            || string.Equals(chartName, EffectiveChartOwner, StringComparison.Ordinal)
+            || HasHigherPrecedence(
+                chartName,
+                priority,
+                registrationOrder,
+                EffectiveChartOwner,
+                _effectivePriority,
+                _effectiveRegistrationOrder))
+        {
+            SetEffectiveContribution(chartName, contribution);
+        }
     }
 
     public void RemoveOwner(string chartName)
     {
-        _chartOwners.Remove(chartName);
-        _chartCells.Remove(chartName);
-        ResolveEffectiveCell();
+        if (!_chartContributions.ContainsKey(chartName))
+            return;
+
+        _chartContributions.Remove(chartName);
+        if (string.Equals(chartName, EffectiveChartOwner, StringComparison.Ordinal))
+            ResolveEffectiveCell();
+    }
+
+    public bool ContainsOwner(string chartName) => _chartContributions.ContainsKey(chartName);
+
+    public void AddChartOwnersTo(SwiftHashSet<string> destination)
+    {
+        if (destination == null)
+            return;
+
+        foreach (KeyValuePair<string, ChartContribution> pair in _chartContributions)
+            destination.Add(pair.Key);
     }
 
     private void ResolveEffectiveCell()
     {
         EffectiveChartOwner = null;
         EffectiveCell = NavigationChartCell.Empty;
+        _effectivePriority = 0;
+        _effectiveRegistrationOrder = 0;
 
-        foreach (KeyValuePair<string, NavigationChartCell> pair in _chartCells)
+        foreach (KeyValuePair<string, ChartContribution> pair in _chartContributions)
         {
             if (EffectiveChartOwner == null
-                || PathManager.IsHigherChartPrecedence(pair.Key, EffectiveChartOwner))
+                || HasHigherPrecedence(
+                    pair.Key,
+                    pair.Value.Priority,
+                    pair.Value.RegistrationOrder,
+                    EffectiveChartOwner,
+                    _effectivePriority,
+                    _effectiveRegistrationOrder))
             {
-                EffectiveChartOwner = pair.Key;
-                EffectiveCell = pair.Value;
+                SetEffectiveContribution(pair.Key, pair.Value);
             }
         }
+    }
+
+    private void SetEffectiveContribution(string chartName, ChartContribution contribution)
+    {
+        EffectiveChartOwner = chartName;
+        EffectiveCell = contribution.Cell;
+        _effectivePriority = contribution.Priority;
+        _effectiveRegistrationOrder = contribution.RegistrationOrder;
+    }
+
+    private static bool HasHigherPrecedence(
+        string candidateChartName,
+        int candidatePriority,
+        int candidateRegistrationOrder,
+        string currentChartName,
+        int currentPriority,
+        int currentRegistrationOrder)
+    {
+        if (candidatePriority != currentPriority)
+            return candidatePriority > currentPriority;
+
+        if (candidateRegistrationOrder != currentRegistrationOrder)
+            return candidateRegistrationOrder > currentRegistrationOrder;
+
+        return string.CompareOrdinal(candidateChartName, currentChartName) > 0;
+    }
+
+    private readonly struct ChartContribution
+    {
+        public ChartContribution(NavigationChartCell cell, int priority, int registrationOrder)
+        {
+            Cell = cell;
+            Priority = priority;
+            RegistrationOrder = registrationOrder;
+        }
+
+        public NavigationChartCell Cell { get; }
+
+        public int Priority { get; }
+
+        public int RegistrationOrder { get; }
     }
 }

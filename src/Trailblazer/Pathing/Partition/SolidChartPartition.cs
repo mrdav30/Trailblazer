@@ -321,13 +321,13 @@ public class SolidChartPartition : IVoxelPartition
     /// Applies the resolved overlap state for this voxel to the active solid partition.
     /// </summary>
     internal void ApplyAuthoredState(
-        SwiftHashSet<string> chartOwners,
+        ResolvedChartVoxelState state,
         string effectiveChartOwner,
         NavigationChartCell effectiveCell)
     {
         ChartOwners ??= new SwiftHashSet<string>();
         ChartOwners.Clear();
-        ChartOwnerUtility.AddOwners(ChartOwners, chartOwners);
+        state?.AddChartOwnersTo(ChartOwners);
 
         EffectiveChartOwner = effectiveChartOwner;
         _chartPathCostModifier = effectiveCell.PathCostModifier;

@@ -486,10 +486,10 @@ public static class PathManager
                     _resolvedChartVoxelStates[voxel.GlobalIndex] = state;
                 }
                 else if (state.HasAnyOwners)
-                    ChartOwnerUtility.AddOwners(affectedChartKeys, state.ChartOwners);
+                    state.AddChartOwnersTo(affectedChartKeys);
 
                 NavigationChartCell previousEffectiveCell = state.EffectiveCell;
-                state.AddOwner(chart.Name, cell);
+                state.AddOwner(chart.Name, cell, chart.Priority, chart.RegistrationOrder);
                 ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
             }
 
@@ -557,12 +557,12 @@ public static class PathManager
                 touchedVoxelIndices.Add(voxel.GlobalIndex);
 
                 if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state)
-                    || !state.ChartOwners.Contains(chart.Name))
+                    || !state.ContainsOwner(chart.Name))
                 {
                     continue;
                 }
 
-                ChartOwnerUtility.AddOwners(affectedChartKeys, state.ChartOwners);
+                state.AddChartOwnersTo(affectedChartKeys);
 
                 NavigationChartCell previousEffectiveCell = state.EffectiveCell;
                 state.RemoveOwner(chart.Name);
@@ -817,37 +817,33 @@ public static class PathManager
         SwiftHashSet<string> activeTransitionIds)
     {
         SwiftList<TraversalTransition> missingTransitions = new();
-        for (int y = 0; y < chart.SizeY; y++)
-            for (int x = 0; x < chart.SizeX; x++)
-                for (int z = 0; z < chart.SizeZ; z++)
-                {
-                    NavigationChartCell currentCell = chart.GetCell(x, y, z);
-                    if (!currentCell.CanGenerateTransition)
-                        continue;
+        int[] generatedIndices = chart.GetGeneratedTransitionIndices();
+        for (int i = 0; i < generatedIndices.Length; i++)
+        {
+            chart.DecodeIndex(generatedIndices[i], out int x, out int y, out int z);
+            for (int neighborOffsetIndex = 0; neighborOffsetIndex < PositiveManagedGeneratedNeighborOffsets.Length; neighborOffsetIndex++)
+            {
+                (int dx, int dy, int dz) = PositiveManagedGeneratedNeighborOffsets[neighborOffsetIndex];
+                int neighborX = x + dx;
+                int neighborY = y + dy;
+                int neighborZ = z + dz;
+                if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
+                    continue;
 
-                    for (int i = 0; i < PositiveManagedGeneratedNeighborOffsets.Length; i++)
-                    {
-                        (int dx, int dy, int dz) = PositiveManagedGeneratedNeighborOffsets[i];
-                        int neighborX = x + dx;
-                        int neighborY = y + dy;
-                        int neighborZ = z + dz;
-                        if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
-                            continue;
-
-                        CollectManagedGeneratedTransitionsForPair(
-                            chart,
-                            state,
-                            x,
-                            y,
-                            z,
-                            neighborX,
-                            neighborY,
-                            neighborZ,
-                            desiredTransitionIds,
-                            activeTransitionIds,
-                            missingTransitions);
-                    }
-                }
+                CollectManagedGeneratedTransitionsForPair(
+                    chart,
+                    state,
+                    x,
+                    y,
+                    z,
+                    neighborX,
+                    neighborY,
+                    neighborZ,
+                    desiredTransitionIds,
+                    activeTransitionIds,
+                    missingTransitions);
+            }
+        }
 
         return missingTransitions.Count == 0
             ? Array.Empty<TraversalTransition>()
@@ -1319,7 +1315,7 @@ public static class PathManager
 
         _resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state);
         if (state != null && state.HasAnyOwners)
-            ChartOwnerUtility.AddOwners(managedChartsToRefresh, state.ChartOwners);
+            state.AddChartOwnersTo(managedChartsToRefresh);
 
         NavigationChartCell previousEffectiveCell = state?.EffectiveCell ?? NavigationChartCell.Empty;
         string previousEffectiveOwner = state?.EffectiveChartOwner;
@@ -1327,10 +1323,10 @@ public static class PathManager
         if (cell.HasTraversalData)
         {
             state ??= new ResolvedChartVoxelState();
-            state.AddOwner(chart.Name, cell);
+            state.AddOwner(chart.Name, cell, chart.Priority, chart.RegistrationOrder);
             _resolvedChartVoxelStates[voxel.GlobalIndex] = state;
         }
-        else if (state != null && state.ChartOwners.Contains(chart.Name))
+        else if (state != null && state.ContainsOwner(chart.Name))
         {
             state.RemoveOwner(chart.Name);
             if (!state.HasAnyOwners)
@@ -1347,7 +1343,7 @@ public static class PathManager
             state?.EffectiveCell ?? NavigationChartCell.Empty,
             invalidatedChartKeys);
         if (state != null && state.HasAnyOwners)
-            ChartOwnerUtility.AddOwners(managedChartsToRefresh, state.ChartOwners);
+            state.AddChartOwnersTo(managedChartsToRefresh);
 
         return true;
     }
@@ -1393,56 +1389,6 @@ public static class PathManager
         };
     }
 
-    internal static bool IsHigherChartPrecedence(string candidateChartName, string currentChartName)
-    {
-        if (string.Equals(candidateChartName, currentChartName, StringComparison.Ordinal))
-            return false;
-
-        return CompareChartPrecedence(candidateChartName, currentChartName) > 0;
-    }
-
-    private static int CompareChartPrecedence(string candidateChartName, string currentChartName)
-    {
-        bool hasCandidate = TryGetChartPrecedence(candidateChartName, out int candidatePriority, out int candidateOrder);
-        bool hasCurrent = TryGetChartPrecedence(currentChartName, out int currentPriority, out int currentOrder);
-
-        if (!hasCandidate)
-            return hasCurrent ? -1 : 0;
-
-        if (!hasCurrent)
-            return 1;
-
-        if (candidatePriority != currentPriority)
-            return candidatePriority > currentPriority ? 1 : -1;
-
-        if (candidateOrder != currentOrder)
-            return candidateOrder > currentOrder ? 1 : -1;
-
-        return string.CompareOrdinal(candidateChartName, currentChartName);
-    }
-
-    private static bool TryGetChartPrecedence(string chartName, out int priority, out int registrationOrder)
-    {
-        _navigationChartMapLock.EnterReadLock();
-        try
-        {
-            if (_navigationChartMap.TryGetValue(chartName, out NavigationChart chart))
-            {
-                priority = chart.Priority;
-                registrationOrder = chart.RegistrationOrder;
-                return true;
-            }
-        }
-        finally
-        {
-            _navigationChartMapLock.ExitReadLock();
-        }
-
-        priority = 0;
-        registrationOrder = 0;
-        return false;
-    }
-
     private static void ApplyResolvedVoxelState(
         Voxel voxel,
         ResolvedChartVoxelState state,
@@ -1462,7 +1408,7 @@ public static class PathManager
                 voxel.TryAddPartition(solidPartition);
             }
 
-            solidPartition.ApplyAuthoredState(state.ChartOwners, state.EffectiveChartOwner, effectiveCell);
+            solidPartition.ApplyAuthoredState(state, state.EffectiveChartOwner, effectiveCell);
             if (solidPresenceChanged)
                 CollectSolidPartitionsForRebind(voxel, partitionsToRebind);
         }
@@ -1480,7 +1426,7 @@ public static class PathManager
                 voxel.TryAddPartition(volumePartition);
             }
 
-            volumePartition.ApplyAuthoredState(state.ChartOwners, state.EffectiveChartOwner, effectiveCell);
+            volumePartition.ApplyAuthoredState(state, state.EffectiveChartOwner, effectiveCell);
         }
         else if (previousEffectiveCell.HasVolume && voxel.TryGetPartition(out VolumeChartPartition _))
             voxel.TryRemovePartition<VolumeChartPartition>();

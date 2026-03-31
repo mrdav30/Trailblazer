@@ -20,46 +20,45 @@ internal static class GeneratedTraversalTransitionBuilder
         string transitionIdPrefix)
     {
         SwiftList<TraversalTransition> transitions = new();
-        for (int y = 0; y < chart.SizeY; y++)
-            for (int x = 0; x < chart.SizeX; x++)
-                for (int z = 0; z < chart.SizeZ; z++)
+        int[] generatedIndices = chart.GetGeneratedTransitionIndices();
+        for (int i = 0; i < generatedIndices.Length; i++)
+        {
+            int flatIndex = generatedIndices[i];
+            chart.DecodeIndex(flatIndex, out int x, out int y, out int z);
+            NavigationChartCell currentCell = chart.GetCell(x, y, z);
+
+            for (int neighborOffsetIndex = 0; neighborOffsetIndex < PositivePerpendicularNeighborOffsets.Length; neighborOffsetIndex++)
+            {
+                (int dx, int dy, int dz) = PositivePerpendicularNeighborOffsets[neighborOffsetIndex];
+                int neighborX = x + dx;
+                int neighborY = y + dy;
+                int neighborZ = z + dz;
+                if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
+                    continue;
+
+                NavigationChartCell neighborCell = chart.GetCell(neighborX, neighborY, neighborZ);
+                if (!neighborCell.CanGenerateTransition)
+                    continue;
+
+                if (TryBuildTransitionsForPair(
+                    chart,
+                    transitionIdPrefix,
+                    x,
+                    y,
+                    z,
+                    currentCell,
+                    neighborX,
+                    neighborY,
+                    neighborZ,
+                    neighborCell,
+                    out TraversalTransition chartToVolumeTransition,
+                    out TraversalTransition volumeToChartTransition))
                 {
-                    NavigationChartCell currentCell = chart.GetCell(x, y, z);
-                    if (!currentCell.CanGenerateTransition)
-                        continue;
-
-                    for (int i = 0; i < PositivePerpendicularNeighborOffsets.Length; i++)
-                    {
-                        (int dx, int dy, int dz) = PositivePerpendicularNeighborOffsets[i];
-                        int neighborX = x + dx;
-                        int neighborY = y + dy;
-                        int neighborZ = z + dz;
-                        if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
-                            continue;
-
-                        NavigationChartCell neighborCell = chart.GetCell(neighborX, neighborY, neighborZ);
-                        if (!neighborCell.CanGenerateTransition)
-                            continue;
-
-                        if (TryBuildTransitionsForPair(
-                            chart,
-                            transitionIdPrefix,
-                            x,
-                            y,
-                            z,
-                            currentCell,
-                            neighborX,
-                            neighborY,
-                            neighborZ,
-                            neighborCell,
-                            out TraversalTransition chartToVolumeTransition,
-                            out TraversalTransition volumeToChartTransition))
-                        {
-                            transitions.Add(chartToVolumeTransition);
-                            transitions.Add(volumeToChartTransition);
-                        }
-                    }
+                    transitions.Add(chartToVolumeTransition);
+                    transitions.Add(volumeToChartTransition);
                 }
+            }
+        }
 
         return transitions.ToArray();
     }

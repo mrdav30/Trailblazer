@@ -715,23 +715,6 @@ public static class PathManager
 
     #region Pathfinding Utilities
 
-    private static void RebuildInitializedChartsAgainstCurrentGrids()
-    {
-        NavigationChart[] initializedCharts = GetInitializedChartsSnapshot();
-        if (initializedCharts.Length == 0 && _resolvedChartVoxelStates.Count == 0)
-            return;
-
-        if (initializedCharts.Length == 0)
-        {
-            ClearLiveGridStatePreservingRegistrations();
-            SuppressAllManagedGeneratedTransitions();
-            TraversalTransitionRegistry.RefreshManagedManualTransitions();
-            return;
-        }
-
-        RebuildInitializedChartsAgainstCurrentGrids(initializedCharts);
-    }
-
     private static void RebuildInitializedChartsAgainstCurrentGrids(
         Vector3d boundsMin,
         Vector3d boundsMax)
@@ -758,34 +741,6 @@ public static class PathManager
 
         RefreshManagedGeneratedTransitionsForCharts(GetInitializedChartsSnapshot());
         TraversalTransitionRegistry.RefreshManagedManualTransitions();
-    }
-
-    private static void SuppressAllManagedGeneratedTransitions()
-    {
-        _navigationChartMapLock.EnterReadLock();
-        try
-        {
-            int transitionCount = 0;
-            foreach (ManagedChartTransitionState state in _managedGeneratedTransitionsByChart.Values)
-                transitionCount += state.TransitionIds.Count;
-
-            if (transitionCount == 0)
-                return;
-
-            string[] transitionIds = new string[transitionCount];
-            int index = 0;
-            foreach (ManagedChartTransitionState state in _managedGeneratedTransitionsByChart.Values)
-            {
-                foreach (string transitionId in state.TransitionIds)
-                    transitionIds[index++] = transitionId;
-            }
-
-            TraversalTransitionRegistry.SetManagedTransitionsSuppressed(transitionIds, suppressed: true, count: index);
-        }
-        finally
-        {
-            _navigationChartMapLock.ExitReadLock();
-        }
     }
 
     private static void SuppressManagedGeneratedTransitionsForCharts(NavigationChart[] charts)
@@ -884,21 +839,6 @@ public static class PathManager
         finally
         {
             _navigationChartMapLock.ExitReadLock();
-        }
-    }
-
-    private static void ClearLiveGridStatePreservingRegistrations()
-    {
-        ClearLiveGridState();
-
-        _navigationChartMapLock.EnterWriteLock();
-        try
-        {
-            MarkRegisteredChartsUninitialized_NoLock();
-        }
-        finally
-        {
-            _navigationChartMapLock.ExitWriteLock();
         }
     }
 

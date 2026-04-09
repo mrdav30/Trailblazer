@@ -31,26 +31,9 @@ Tracked here:
 
 This is the main active follow-up track.
 
-## 2. Fast Follow-Up Issues Found During Phase 1
+## 2. Fast Follow-Up Issues
 
-- `FlowFieldGuide` staged execution still carries a known TODO around unbounded stage-advance
-  looping if route steps are never satisfied cleanly. Coverage can pin current behavior, but the
-  safety guard itself is still a separate hardening item.
-- `PathRequest.UpdateRequest(...)` currently leaves `MaxPathSearchRange` untouched when endpoint
-  resolution fails. The request still becomes invalid because the endpoints are cleared, but the
-  stale range value remains in the object state and may be worth normalizing later.
-- `TrailblazerManager.SetFrameRate(...)` currently accepts non-positive values without validation,
-  which can produce invalid `DeltaTime` / `InvDeltaTime` state. Coverage can document current
-  behavior, but input guarding is still a separate hardening decision.
-- `TraversalAuthoringMap.ParseCell(...)` still carries a defensive branch for solid transition
-  media on non-traversable authored cells, but `TraversalLegendEntry` already rejects that state at
-  construction time. That guard appears unreachable now and may be worth simplifying or
-  documenting explicitly.
-- `PathManager.RebuildInitializedChartsAgainstCurrentGrids()` still has a private parameterless
-  rebuild path, plus `ClearLiveGridStatePreservingRegistrations()` and
-  `SuppressAllManagedGeneratedTransitions()`, that now appear orphaned after the bounds-targeted
-  external grid bridge work. Coverage surfaced them as effectively dead code candidates worth
-  pruning or reconnecting explicitly.
+Track any smaller follow-up issues that are straightforward to execute and don't require significant design or profiling work here:
 
 ### 3. Optional Runtime Follow-Ups
 
@@ -71,8 +54,7 @@ These are valid future hardening items, but they should stay demand-driven rathe
 
 1. Execute the phased coverage plan.
 2. Keep docs aligned as coverage work lands.
-3. Execute the fast follow-up issues as they are triaged and prioritized.
-4. Revisit the optional runtime follow-ups only if profiling or host usage shows a real need.
+3. Revisit the optional runtime follow-ups only if profiling or host usage shows a real need.
 
 ## Retirement Note
 

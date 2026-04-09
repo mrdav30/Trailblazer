@@ -157,14 +157,6 @@ public sealed class TraversalAuthoringMap
                 $"Token '{rawToken}' at [{y}, {x}, {z}] cannot be marked for transition generation.");
         }
 
-        if (hasTransitionMarker
-            && (entry.TransitionMedia & TraversalMedia.Solid) != 0
-            && !entry.ChartCell.HasSolid)
-        {
-            throw new ArgumentException(
-                $"Token '{rawToken}' at [{y}, {x}, {z}] maps to a non-traversable chart cell and cannot be marked.");
-        }
-
         return new ParsedTraversalCell(entry, hasTransitionMarker);
     }
 }

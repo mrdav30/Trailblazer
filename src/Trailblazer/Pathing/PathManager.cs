@@ -24,6 +24,7 @@ public static class PathManager
         GlobalGridManager.OnReset += HandleExternalGridReset;
         GlobalGridManager.OnActiveGridAdded += HandleExternalGridChange;
         GlobalGridManager.OnActiveGridRemoved += HandleExternalGridChange;
+        GlobalGridManager.OnActiveGridChange += HandleExternalGridChange;
     }
 
     #region Pools
@@ -129,7 +130,7 @@ public static class PathManager
 
     private static void HandleExternalGridChange(GridEventInfo eventInfo)
     {
-        RebuildInitializedChartsAgainstCurrentGrids();
+        RebuildInitializedChartsAgainstCurrentGrids(eventInfo.BoundsMin, eventInfo.BoundsMax);
     }
 
     /// <summary>
@@ -139,34 +140,14 @@ public static class PathManager
     {
         VolumeMediumRules.Reset();
         TraversalTransitionRegistry.Reset();
-
-        var allCharts = AllCharts;
-
-        foreach (KeyValuePair<GlobalVoxelIndex, ResolvedChartVoxelState> pair in _resolvedChartVoxelStates)
-        {
-            if (!GlobalGridManager.TryGetGridAndVoxel(pair.Key, out _, out Voxel voxel))
-                continue;
-
-            if (voxel.TryGetPartition(out SolidChartPartition _))
-                voxel.TryRemovePartition<SolidChartPartition>();
-
-            if (voxel.TryGetPartition(out VolumeChartPartition _))
-                voxel.TryRemovePartition<VolumeChartPartition>();
-        }
-
-        _resolvedChartVoxelStates.Clear();
+        ClearLiveGridState();
 
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            foreach (NavigationChart chart in allCharts)
-                if (chart != null)
-                    chart.IsInitialized = false;
-
+            MarkRegisteredChartsUninitialized_NoLock();
             _navigationChartMap.Clear();
             _managedGeneratedTransitionsByChart.Clear();
-            _activeAuthoredGasCellCount = 0;
-            _activeAuthoredLiquidCellCount = 0;
             _nextChartRegistrationOrder = 0;
         }
         finally
@@ -672,25 +653,43 @@ public static class PathManager
         if (initializedCharts.Length == 0 && _resolvedChartVoxelStates.Count == 0)
             return;
 
-        ClearLiveGridStatePreservingRegistrations();
-        SuppressAllManagedGeneratedTransitions();
-
-        SwiftHashSet<string> rebuiltChartNames = SwiftHashSetPool<string>.Shared.Rent();
-        try
+        if (initializedCharts.Length == 0)
         {
-            for (int i = 0; i < initializedCharts.Length; i++)
-            {
-                rebuiltChartNames.Add(initializedCharts[i].Name);
-                InitializeChart(initializedCharts[i].Name);
-            }
-
-            RefreshManagedGeneratedTransitionsForCharts(rebuiltChartNames);
+            ClearLiveGridStatePreservingRegistrations();
+            SuppressAllManagedGeneratedTransitions();
             TraversalTransitionRegistry.RefreshManagedManualTransitions();
+            return;
         }
-        finally
-        {
-            SwiftHashSetPool<string>.Shared.Release(rebuiltChartNames);
-        }
+
+        RebuildInitializedChartsAgainstCurrentGrids(initializedCharts);
+    }
+
+    private static void RebuildInitializedChartsAgainstCurrentGrids(
+        Vector3d boundsMin,
+        Vector3d boundsMax)
+    {
+        NavigationChart[] initializedCharts = GetInitializedChartsIntersectingBoundsSnapshot(boundsMin, boundsMax);
+        if (initializedCharts.Length == 0)
+            return;
+
+        RebuildInitializedChartsAgainstCurrentGrids(initializedCharts);
+    }
+
+    private static void RebuildInitializedChartsAgainstCurrentGrids(NavigationChart[] chartsToRebuild)
+    {
+        if (chartsToRebuild == null || chartsToRebuild.Length == 0)
+            return;
+
+        SuppressManagedGeneratedTransitionsForCharts(chartsToRebuild);
+
+        for (int i = 0; i < chartsToRebuild.Length; i++)
+            ClearInitializedChartLiveStatePreservingRegistration(chartsToRebuild[i]);
+
+        for (int i = 0; i < chartsToRebuild.Length; i++)
+            InitializeChart(chartsToRebuild[i].Name);
+
+        RefreshManagedGeneratedTransitionsForCharts(GetInitializedChartsSnapshot());
+        TraversalTransitionRegistry.RefreshManagedManualTransitions();
     }
 
     private static void SuppressAllManagedGeneratedTransitions()
@@ -721,6 +720,42 @@ public static class PathManager
         }
     }
 
+    private static void SuppressManagedGeneratedTransitionsForCharts(NavigationChart[] charts)
+    {
+        if (charts == null || charts.Length == 0)
+            return;
+
+        SwiftList<string> transitionIds = new();
+        _navigationChartMapLock.EnterReadLock();
+        try
+        {
+            for (int i = 0; i < charts.Length; i++)
+            {
+                NavigationChart chart = charts[i];
+                if (chart == null
+                    || !_managedGeneratedTransitionsByChart.TryGetValue(chart.Name, out ManagedChartTransitionState state)
+                    || state.TransitionIds.Count == 0)
+                {
+                    continue;
+                }
+
+                foreach (string transitionId in state.TransitionIds)
+                    transitionIds.Add(transitionId);
+            }
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitReadLock();
+        }
+
+        if (transitionIds.Count == 0)
+            return;
+
+        TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+            transitionIds.ToArray(),
+            suppressed: true);
+    }
+
     private static NavigationChart[] GetInitializedChartsSnapshot()
     {
         _navigationChartMapLock.EnterReadLock();
@@ -749,34 +784,143 @@ public static class PathManager
         }
     }
 
+    private static NavigationChart[] GetInitializedChartsIntersectingBoundsSnapshot(
+        Vector3d boundsMin,
+        Vector3d boundsMax)
+    {
+        _navigationChartMapLock.EnterReadLock();
+        try
+        {
+            if (_navigationChartMap.Count == 0)
+                return Array.Empty<NavigationChart>();
+
+            SwiftList<NavigationChart> initializedCharts = new();
+            foreach (NavigationChart chart in _navigationChartMap.Values)
+            {
+                if (!chart.IsInitialized
+                    || !DoBoundsOverlap(chart.MinBounds, chart.MaxBounds, boundsMin, boundsMax))
+                {
+                    continue;
+                }
+
+                initializedCharts.Add(chart);
+            }
+
+            if (initializedCharts.Count == 0)
+                return Array.Empty<NavigationChart>();
+
+            NavigationChart[] snapshot = initializedCharts.ToArray();
+            Array.Sort(snapshot, CompareChartsByRegistrationOrder);
+            return snapshot;
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitReadLock();
+        }
+    }
+
     private static void ClearLiveGridStatePreservingRegistrations()
+    {
+        ClearLiveGridState();
+
+        _navigationChartMapLock.EnterWriteLock();
+        try
+        {
+            MarkRegisteredChartsUninitialized_NoLock();
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitWriteLock();
+        }
+    }
+
+    private static void ClearInitializedChartLiveStatePreservingRegistration(NavigationChart chart)
+    {
+        if (chart == null || !chart.IsInitialized)
+            return;
+
+        PathGuideFactory.InvalidateCacheFor(chart.Name);
+
+        SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
+        SwiftList<GlobalVoxelIndex> resolvedVoxelIndicesToRemove = new();
+        try
+        {
+            foreach (KeyValuePair<GlobalVoxelIndex, ResolvedChartVoxelState> pair in _resolvedChartVoxelStates)
+            {
+                ResolvedChartVoxelState state = pair.Value;
+                if (!state.ContainsOwner(chart.Name))
+                    continue;
+
+                NavigationChartCell previousEffectiveCell = state.EffectiveCell;
+                state.RemoveOwner(chart.Name);
+
+                bool hasLiveVoxel = GlobalGridManager.TryGetGridAndVoxel(pair.Key, out _, out Voxel voxel);
+                if (hasLiveVoxel)
+                    ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+
+                if (!state.HasAnyOwners
+                    || !hasLiveVoxel)
+                {
+                    resolvedVoxelIndicesToRemove.Add(pair.Key);
+                }
+            }
+
+            for (int i = 0; i < resolvedVoxelIndicesToRemove.Count; i++)
+                _resolvedChartVoxelStates.Remove(resolvedVoxelIndicesToRemove[i]);
+
+            foreach (SolidChartPartition part in partitionsToRebind)
+                part.BindNeighbors();
+
+            chart.IsInitialized = false;
+        }
+        finally
+        {
+            PartitionSetPool.Release(partitionsToRebind);
+        }
+    }
+
+    private static void ClearLiveGridState()
     {
         foreach (KeyValuePair<GlobalVoxelIndex, ResolvedChartVoxelState> pair in _resolvedChartVoxelStates)
         {
             if (!GlobalGridManager.TryGetGridAndVoxel(pair.Key, out _, out Voxel voxel))
                 continue;
 
-            if (voxel.TryGetPartition(out SolidChartPartition _))
-                voxel.TryRemovePartition<SolidChartPartition>();
-
-            if (voxel.TryGetPartition(out VolumeChartPartition _))
-                voxel.TryRemovePartition<VolumeChartPartition>();
+            RemoveLivePathingPartitions(voxel);
         }
 
         _resolvedChartVoxelStates.Clear();
         _activeAuthoredGasCellCount = 0;
         _activeAuthoredLiquidCellCount = 0;
+    }
 
-        _navigationChartMapLock.EnterWriteLock();
-        try
-        {
-            foreach (NavigationChart chart in _navigationChartMap.Values)
-                chart.IsInitialized = false;
-        }
-        finally
-        {
-            _navigationChartMapLock.ExitWriteLock();
-        }
+    private static bool DoBoundsOverlap(
+        Vector3d firstMin,
+        Vector3d firstMax,
+        Vector3d secondMin,
+        Vector3d secondMax)
+    {
+        return firstMin.x <= secondMax.x
+            && firstMax.x >= secondMin.x
+            && firstMin.y <= secondMax.y
+            && firstMax.y >= secondMin.y
+            && firstMin.z <= secondMax.z
+            && firstMax.z >= secondMin.z;
+    }
+
+    private static void RemoveLivePathingPartitions(Voxel voxel)
+    {
+        if (voxel.TryGetPartition(out SolidChartPartition _))
+            voxel.TryRemovePartition<SolidChartPartition>();
+
+        if (voxel.TryGetPartition(out VolumeChartPartition _))
+            voxel.TryRemovePartition<VolumeChartPartition>();
+    }
+
+    private static void MarkRegisteredChartsUninitialized_NoLock()
+    {
+        foreach (NavigationChart chart in _navigationChartMap.Values)
+            chart.IsInitialized = false;
     }
 
     private static int CompareChartsByRegistrationOrder(NavigationChart left, NavigationChart right)
@@ -903,6 +1047,28 @@ public static class PathManager
             }
 
             RefreshManagedGeneratedTransitionsForChart(chartName);
+        }
+    }
+
+    private static void RefreshManagedGeneratedTransitionsForCharts(NavigationChart[] charts)
+    {
+        if (charts == null || charts.Length == 0)
+            return;
+
+        SwiftHashSet<string> chartNames = SwiftHashSetPool<string>.Shared.Rent();
+        try
+        {
+            for (int i = 0; i < charts.Length; i++)
+            {
+                if (charts[i] != null)
+                    chartNames.Add(charts[i].Name);
+            }
+
+            RefreshManagedGeneratedTransitionsForCharts(chartNames);
+        }
+        finally
+        {
+            SwiftHashSetPool<string>.Shared.Release(chartNames);
         }
     }
 

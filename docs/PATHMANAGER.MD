@@ -266,8 +266,8 @@ Current safety rule:
 Current behavior:
 
 - external `GlobalGridManager.Reset()` is treated as simulation teardown and calls `PathManager.Reset()`
-- external `TryAddGrid(...)` and `TryRemoveGrid(...)` preserve registered charts, clear only live
-  voxel-backed state, and rebuild the charts that were initialized before the grid mutation
+- external grid add, remove, and change notifications preserve registered charts and rebuild only
+  the initialized charts whose authored bounds overlap the grid event payload
 - rebuild order follows chart registration order for deterministic overlap restoration
 - managed manual transitions get a full reevaluation pass after rebuild
 - managed generated transitions are suppressed before rebuild and then refreshed against the rebuilt

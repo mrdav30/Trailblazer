@@ -345,13 +345,14 @@ Current note:
 - `PathManager` now owns one small GridForge bridge through `GlobalGridManager.OnReset` and
   `GlobalGridManager.OnActiveGridChange`
 - external reset is treated as a hard `PathManager.Reset()`
-- external add/remove clears only live voxel-backed state, suppresses managed generated
-  transitions, rebuilds previously initialized charts in registration order, then reevaluates
-  managed transitions against the rebuilt world
+- external grid event payload bounds now narrow add/remove/change rebuilds to overlapping initialized
+  charts instead of forcing a full registered-chart rebuild
+- managed generated transitions are suppressed for just the rebuilt charts, and managed manual
+  transitions are reevaluated after the targeted rebuild completes
 
 ### Track 5. Reset And Live-State Tightening
 
-Status: planned.
+Status: landed.
 
 Now that external grid lifecycle hardening is in place, the next cleanup pass should tighten the
 two internal clear paths that currently overlap:
@@ -381,6 +382,16 @@ Acceptance criteria:
 - chart instance reuse remains safe after reset
 - reset no longer does obvious extra work beyond what is needed to preserve correct post-reset
   object state
+
+Current note:
+
+- `PathManager.Reset()` and `PathManager.ClearLiveGridStatePreservingRegistrations()` now share one
+  low-level live-state clearing path instead of duplicating partition stripping logic
+- the hard reset path no longer snapshots `AllCharts` before clearing; it marks currently
+  registered chart instances uninitialized directly under the chart-map write lock
+- chart instance reuse after hard reset is now pinned explicitly in regression coverage
+- external grid lifecycle now reuses the same tighter clear path while rebuilding only the
+  initialized charts whose authored bounds overlap the incoming `GridEventInfo`
 
 ### Track 6. Transition Query And Hybrid Candidate Hardening
 

@@ -280,6 +280,27 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void PathManagerReset_ShouldClearInitializationStateSoSameChartInstanceCanBeRegisteredAgain()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        var map = PathTestFactory.BuildSinglePointMap("ResettableMap", new Vector3d(0, 0, 0));
+        Assert.True(PathManager.Register(map));
+        Assert.True(map.IsInitialized);
+
+        PathManager.Reset();
+
+        Assert.False(map.IsInitialized);
+        Assert.True(PathManager.Register(map));
+        Assert.True(map.IsInitialized);
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
+        Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
+
+        PathManager.UnloadChart(map);
+    }
+
+    [Fact]
     public void TryGetCell_ShouldReturnDefaultMetadata_ForBooleanCharts()
     {
         bool[,,] data = new bool[1, 2, 1]

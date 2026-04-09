@@ -180,8 +180,8 @@ Important lifecycle rules:
   but they can be suppressed and later reactivated as local topology changes alter their endpoint support
 - chart initialization, unload, mutation, overlap masking, and `VolumeMediumRules` changes all
   reevaluate the managed manual transitions touching the affected voxels
-- external `GlobalGridManager.TryAddGrid(...)` and `TryRemoveGrid(...)` rebuild live pathing state
-  from the registered initialized charts and then reevaluate managed transitions
+- external grid add, remove, and change notifications rebuild only the overlapping initialized chart
+  state and then reevaluate managed transitions
 - external `GlobalGridManager.Reset()` is treated as simulation teardown and hard resets
   `PathManager`, which also clears the registry
 

@@ -63,6 +63,25 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void Register_ShouldRejectDuplicateChartNames_WithoutReplacingTheOriginal()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        var original = PathTestFactory.BuildSinglePointMap("DuplicateChart", Vector3d.Zero);
+        var duplicate = PathTestFactory.BuildSinglePointMap("DuplicateChart", new Vector3d(1, 0, 0));
+
+        Assert.True(PathManager.Register(original, initializeChart: false));
+        Assert.False(PathManager.Register(duplicate, initializeChart: false));
+        Assert.True(PathManager.TryGetNavigationChart("DuplicateChart", out var retrieved));
+        Assert.Same(original, retrieved);
+        Assert.False(original.IsInitialized);
+        Assert.False(duplicate.IsInitialized);
+
+        PathManager.UnloadChart("DuplicateChart");
+    }
+
+    [Fact]
     public void AllCharts_ShouldReturnEmptyAndRegisteredSnapshots()
     {
         Assert.Empty(PathManager.AllCharts);
@@ -81,6 +100,33 @@ public class PathingNavigationMapTests : IDisposable
 
         PathManager.UnloadChart("SnapshotA");
         PathManager.UnloadChart("SnapshotB");
+    }
+
+    [Fact]
+    public void InitializeAllCharts_ShouldInitializeDeferredCharts()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(6, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        var first = PathTestFactory.BuildSinglePointMap("DeferredA", Vector3d.Zero);
+        var second = PathTestFactory.BuildSinglePointMap("DeferredB", new Vector3d(2, 0, 0));
+
+        Assert.True(PathManager.Register(first, initializeChart: false));
+        Assert.True(PathManager.Register(second, initializeChart: false));
+        Assert.False(first.IsInitialized);
+        Assert.False(second.IsInitialized);
+
+        PathManager.InitializeAllCharts();
+
+        Assert.True(first.IsInitialized);
+        Assert.True(second.IsInitialized);
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel firstVoxel));
+        Assert.True(firstVoxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(2, 0, 0), out _, out Voxel secondVoxel));
+        Assert.True(secondVoxel.TryGetPartition<SolidChartPartition>(out _));
+
+        PathManager.UnloadChart("DeferredA");
+        PathManager.UnloadChart("DeferredB");
     }
 
     [Fact]
@@ -320,6 +366,40 @@ public class PathingNavigationMapTests : IDisposable
             out TraversalTransition closest));
         Assert.Equal("closest-neighbor-grid", closest.Id);
         Assert.Equal(new Vector3d(4, 0, 0), closest.Source.Position);
+    }
+
+    [Fact]
+    public void TryGetClosestActiveTransition_ShouldSearchAcrossSourceGrids_WhenOriginIsOutsideAnyGrid()
+    {
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            out _));
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(14, 4, 4)),
+            out _));
+
+        PathTestFactory.RegisterSingleWalkablePoint("OutsideSearchNearSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("OutsideSearchNearDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("OutsideSearchFarSource", new Vector3d(10, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("OutsideSearchFarDestination", new Vector3d(11, 0, 0));
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "outside-search-near",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)))));
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "outside-search-far",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(10, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(11, 0, 0)))));
+
+        Assert.False(GlobalGridManager.TryGetGrid(new Vector3d(8, 6, 0), out _));
+        Assert.True(PathManager.TryGetClosestActiveTransition(
+            new Vector3d(8, 6, 0),
+            TraversalTransitionType.Jump,
+            out TraversalTransition closest));
+        Assert.Equal("outside-search-far", closest.Id);
     }
 
     [Fact]
@@ -701,6 +781,32 @@ public class PathingNavigationMapTests : IDisposable
         Assert.Equal(1, changedCount);
         Assert.True(middleVoxel.TryGetPartition(out VolumeChartPartition middleVolumePartition));
         Assert.True(middleVolumePartition.SupportsMedium(TraversalMedium.Gas));
+    }
+
+    [Fact]
+    public void ChartUpdateApis_ShouldRejectUnknownChartsOutOfBoundsUpdates_AndNullBatches()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 1, 1];
+        data[0, 0, 0] = NavigationChartCell.Solid;
+
+        var chart = NavigationChart.From3D("ValidationChart", data, Vector3d.Zero, Fixed64.One);
+        Assert.True(PathManager.Register(chart));
+
+        Assert.False(PathManager.TryUpdateChartCell("MissingChart", 0, 0, 0, NavigationChartCell.Empty));
+        Assert.False(PathManager.TryUpdateChartCell(chart.Name, 10, 0, 0, NavigationChartCell.Empty));
+        Assert.False(PathManager.TryUpdateChartCell(chart.Name, new Vector3d(4, 0, 0), NavigationChartCell.Empty));
+
+        Assert.Equal(0, PathManager.ApplyChartUpdates(chart.Name, Array.Empty<NavigationChartCellUpdate>()));
+        Assert.Equal(0, PathManager.ApplyChartUpdates("MissingChart", new[]
+        {
+            new NavigationChartCellUpdate(0, 0, 0, NavigationChartCell.Empty)
+        }));
+        Assert.Throws<ArgumentNullException>(() => PathManager.ApplyChartUpdates(chart.Name, null!));
+
+        PathManager.UnloadChart(chart.Name);
     }
 
     [Fact]
@@ -1729,6 +1835,39 @@ public class PathingNavigationMapTests : IDisposable
         Assert.Single(afterAdd);
         Assert.Equal(generatedTransitionId, afterAdd[0].Id);
         Assert.Equal(TraversalTransitionType.SwimEntry, afterAdd[0].Type);
+    }
+
+    [Fact]
+    public void GlobalGridChange_ShouldRebuildOnlyIntersectingCharts()
+    {
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            out ushort leftGridIndex));
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(18, 4, 4)),
+            out ushort rightGridIndex));
+
+        NavigationChart leftChart = PathTestFactory.RegisterSingleWalkablePoint("ChangedLeftChart", Vector3d.Zero);
+        NavigationChart rightChart = PathTestFactory.RegisterSingleWalkablePoint("ChangedRightChart", new Vector3d(10, 0, 0));
+
+        Assert.True(leftChart.IsInitialized);
+        Assert.True(rightChart.IsInitialized);
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel leftVoxel));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(10, 0, 0), out _, out Voxel rightVoxel));
+        Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.True(rightVoxel.TryGetPartition<SolidChartPartition>(out _));
+
+        GlobalGridManager.IncrementGridVersion(rightGridIndex, false);
+
+        Assert.True(leftChart.IsInitialized);
+        Assert.True(rightChart.IsInitialized);
+        Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.True(rightVoxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell leftCell));
+        Assert.True(leftCell.HasSolid);
+        Assert.True(PathManager.TryGetEffectiveCell(new Vector3d(10, 0, 0), out NavigationChartCell rightCell));
+        Assert.True(rightCell.HasSolid);
+        Assert.Equal(leftGridIndex, leftVoxel.GridIndex);
     }
 
     private static bool[,,] CreateThreeVoxelLine()

@@ -30,18 +30,18 @@ dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj \
 
 Current Trailblazer snapshot:
 
-- line coverage: `90.64%` (`8880 / 9796`)
-- branch coverage: `80.90%` (`3249 / 4016`)
+- line coverage: `91.00%` (`8915 / 9796`)
+- branch coverage: `81.47%` (`3272 / 4016`)
 
 ### Subsystem Snapshot
 
 | Subsystem | Line | Branch |
 | --- | ---: | ---: |
-| `Main` | `86.60%` | `83.33%` |
-| `Navigation` | `82.55%` | `75.71%` |
-| `Pathing` | `82.77%` | `69.84%` |
+| `Main` | `93.98%` | `84.72%` |
+| `Navigation` | `90.81%` | `83.88%` |
+| `Pathing` | `91.11%` | `80.37%` |
 | `Serialization` | `82.00%` | `67.65%` |
-| `Support` | `85.19%` | `70.00%` |
+| `Support` | `93.83%` | `80.00%` |
 
 ### Biggest File Gaps By Missed Lines
 
@@ -49,16 +49,16 @@ These are the highest-value files to target first.
 
 | File | Line | Branch | Missed Lines | Missed Branches |
 | --- | ---: | ---: | ---: | ---: |
-| `Pathing/PathManager.cs` | `87.63%` | `76.53%` | `148` | `123` |
-| `Navigation/Support/NavigatorPathRequestFactory.cs` | `53.38%` | `37.50%` | `145` | `45` |
-| `Pathing/Search/Hybrid/HybridPathRequest.cs` | `30.95%` | `26.56%` | `116` | `47` |
-| `Navigation/Motor/Locomotion/LocomotionHandler.cs` | `55.33%` | `38.28%` | `88` | `79` |
-| `Pathing/Search/Hybrid/HybridGuide.cs` | `0.00%` | `0.00%` | `76` | `42` |
-| `Pathing/Search/FlowField/FlowFieldGuide.cs` | `58.86%` | `43.14%` | `72` | `58` |
-| `Pathing/Search/AStar/AStarGuide.cs` | `32.14%` | `38.64%` | `57` | `27` |
-| `Pathing/Search/Volume/VolumeGuide.cs` | `29.87%` | `27.78%` | `54` | `26` |
-| `Navigation/Support/GuidedVolumeExitPlanner.cs` | `74.27%` | `54.69%` | `53` | `29` |
-| `Pathing/Search/PathGuideFactory.cs` | `80.38%` | `67.16%` | `51` | `44` |
+| `Pathing/PathManager.cs` | `91.22%` | `81.48%` | `105` | `97` |
+| `Navigation/Support/NavigatorPathRequestFactory.cs` | `68.48%` | `50.00%` | `98` | `36` |
+| `Navigation/Steering/NavSteering.cs` | `89.60%` | `82.50%` | `61` | `35` |
+| `Navigation/Motor/NavMotor.cs` | `93.07%` | `85.60%` | `39` | `72` |
+| `Pathing/Search/PathGuideFactory.cs` | `85.76%` | `76.11%` | `37` | `32` |
+| `Pathing/Search/Hybrid/HybridRoutePlanner.cs` | `88.95%` | `72.91%` | `37` | `26` |
+| `Serialization/PathRequestRecord.cs` | `82.00%` | `67.64%` | `36` | `22` |
+| `Navigation/Support/GuidedVolumeExitPlanner.cs` | `83.98%` | `64.06%` | `33` | `23` |
+| `Main/Navigator.cs` | `92.50%` | `84.55%` | `30` | `21` |
+| `Pathing/Transition/TraversalTransitionRegistry.cs` | `94.12%` | `88.54%` | `29` | `22` |
 
 ### Highest Observed CRAP Hotspots
 
@@ -68,21 +68,18 @@ publish CRAP directly.
 
 | Method | Approx. CRAP | Notes |
 | --- | ---: | --- |
-| `LocomotionHandler.SetLocomotion` | `1406` | zero coverage and very high complexity |
-| `NavigatorPathRequestFactory.TryCreateGasLandingHandoff` | `156` | zero coverage |
-| `FlowFieldGuide.TryGetFallbackDirection` | `156` | zero coverage |
-| `FlowFieldGuide.TryGetStagedFallbackDirection` | `156` | zero coverage |
-| `NavigatorPathRequestFactory.TryCreate` | `132` | zero coverage |
-| `LocomotionProfile.get_InstalledKinds` | `110` | zero coverage |
-| `FlowFieldSurveyor.TryGetNearestFlowAnchor` | `110` | zero coverage |
-| `HybridGuide.TryGetFallbackDirection` | `110` | zero coverage |
-| `LocomotionHandler.GetLocomotion` | `95` | partially covered, high complexity |
-| `NavSteering.GetHeading` | `94.4` | already important runtime hotspot |
-| `NavigatorPathRequestFactory.TryCreateVolumeExitHandoffIfNeeded` | `64.48` | low coverage, medium-high complexity |
-| `HybridGuide.TryGetStagedMovementDirection` | `56.04` | large guide gap |
-| `TraversalAuthoringMap.ParseCell` | `49.08` | parser branch saturation gap |
-| `PathManager.TryApplyChartCellUpdate` | `48.11` | critical pathing mutation branch matrix |
-| `VolumePathRequest.TrySetOrigin` / `TrySetDestination` | `44.81` | request validation gaps |
+| `NavigatorPathRequestFactory.TryCreateGasLandingHandoff` | `156` | still completely uncovered |
+| `TraversalAuthoringMapExtensions.PrintXZPlane` | `110` | zero-coverage helper; likely Phase 5 triage material |
+| `NavSteering.GetHeading` | `94.4` | still a major runtime hotspot |
+| `PathManager.SuppressAllManagedGeneratedTransitions` | `72` | currently uncovered and looks dead-path adjacent |
+| `PathGuideFactory.AddChartKeys` | `72` | uncovered helper inside an otherwise improved factory |
+| `NavigatorPathRequestFactory.TryGetDirectVolumePathCost` | `72` | uncovered routing logic |
+| `NavMotor.get_StateChanged` | `72` | zero-coverage event helper |
+| `NavigatorPathRequestFactory.TryCreateVolumeExitHandoffIfNeeded` | `64.48` | still a high-value factory branch target |
+| `FlowFieldGuide.TryGetStagedMovementDirection` | `48.34` | branch-heavy guide logic remains |
+| `NavMotor.MaxHoritzontalSpeedInDirection` | `48.21` | still a meaningful motor branch hotspot |
+| `PathManager.TryApplyChartCellUpdate` | `48.11` | critical pathing mutation branch matrix remains worth pinning |
+| `PathRequestRecord.RestoreWaypointIndex` | `42` | serialization branch gap that Phase 5 may surface |
 
 ## Phased Plan
 
@@ -237,24 +234,25 @@ CRAP overlap:
 
 ### Phase 4. Core Pathing Branch Saturation
 
-Status: first pass landed.
+Status: second pass landed.
 
 Current results from this pass:
 
 - `TraversalAuthoringMap.cs`: `92.30%` line, `89.13%` branch
 - `SolidChartPartition.cs`: `95.93%` line, `81.03%` branch
-- `PathManager.cs`: `88.71%` line, `78.05%` branch
-- `FlowFieldSurveyor.cs`: `94.68%` line, `86.79%` branch
+- `PathManager.cs`: `91.22%` line, `81.48%` branch
+- `FlowFieldSurveyor.cs`: `96.61%` line, `90.56%` branch
 - `VolumeSurveyor.cs`: `92.71%` line, `88.23%` branch
 - `TraversalTransitionRegistry.cs`: `94.12%` line, `88.54%` branch
 
 Notes:
 
-- this pass moved the heaviest branch debt meaningfully without touching runtime code
+- the second pass pushed `PathManager` over 91% line coverage and brought `FlowFieldSurveyor`
+  above 90% branch coverage without touching runtime code
 - `VolumeSurveyor`, `TraversalTransitionRegistry`, and `TraversalAuthoringMap` benefited the most
   from direct edge-case coverage
-- the remaining Phase 4 debt is now centered much more narrowly in `PathManager` and selective
-  `FlowFieldSurveyor` branch matrices than in the authoring or registry surfaces
+- the remaining Phase 4 debt is now much more concentrated in selective `PathManager` lifecycle
+  helpers and dead-looking defensive branches than in the surveyors or registry surfaces
 
 This phase is the heavier pathing pass. It should come after the simpler guide/request/runtime
 surfaces above.
@@ -325,10 +323,10 @@ The goal is near-total confidence, not artificial tests that make the suite hard
 
 Recommended immediate order:
 
-1. fix the coverage workflow misconfiguration
-2. cover `HybridGuide`, `HybridPathRequest`, `AStarGuide`, `FlowFieldGuide`, and `VolumeGuide`
-3. move into `NavigatorPathRequestFactory` and `GuidedVolumeExitPlanner`
-4. attack `LocomotionHandler.SetLocomotion` before any broad refactor there
+1. finish the remaining `NavigatorPathRequestFactory` and `GuidedVolumeExitPlanner` coverage debt
+2. decide whether any remaining `PathManager` dead-looking defensive branches should be tested or
+   retired in Phase 5
+3. move into the final gap-closure and exclusion-audit phase with the updated hotspot list
 
-That sequence should improve both raw totals and the highest CRAP hotspots quickly without jumping
-straight into the deepest `PathManager` branch matrix.
+That sequence should keep us moving toward near-total coverage without inflating the suite around
+branches that may no longer represent real runtime behavior.

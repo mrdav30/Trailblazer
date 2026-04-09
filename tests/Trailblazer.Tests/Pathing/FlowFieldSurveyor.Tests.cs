@@ -251,6 +251,37 @@ public class FlowFieldSurveyorTests : IDisposable
     }
 
     [Fact]
+    public void TryGetNearestFlowAnchor_ShouldReturnFalse_ForNullAndStaleFields()
+    {
+        FlowFieldSurveyor.TryGetNearestFlowAnchor(
+            Vector3d.Zero,
+            null!,
+            Fixed64.One,
+            out Voxel nullAnchor).Should().BeFalse();
+        nullAnchor.Should().BeNull();
+
+        bool[,,] data = new bool[1, 2, 1];
+        data[0, 0, 0] = true;
+        data[0, 1, 0] = true;
+
+        PathTestFactory.RegisterFromData("StaleFlowAnchor", data, Vector3d.Zero);
+        FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out FlowFieldPathRequest request);
+        FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+
+        GlobalGridManager.Reset();
+
+        FlowFieldSurveyor.TryGetNearestFlowAnchor(
+            Vector3d.Zero,
+            result.Fields,
+            Fixed64.One,
+            out Voxel staleAnchor).Should().BeFalse();
+        staleAnchor.Should().BeNull();
+
+        GlobalGridManager.Setup();
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)), out _);
+    }
+
+    [Fact]
     public void FlowField_ShouldRejectDiagonalCornerCutting()
     {
         bool[,,] data = new bool[1, 2, 2];
@@ -270,6 +301,28 @@ public class FlowFieldSurveyorTests : IDisposable
         result.Fields.Should().BeNull();
 
         PathManager.UnloadChart("FlowDiagonalBlocked");
+    }
+
+    [Fact]
+    public void FlowField_ShouldRejectVerticalDiagonalCornerCutting()
+    {
+        bool[,,] data = new bool[2, 2, 1];
+        data[0, 0, 0] = true;
+        data[1, 1, 0] = true;
+
+        PathTestFactory.RegisterFromData("FlowVerticalDiagonalBlocked", data, Vector3d.Zero);
+
+        FlowFieldPathRequest.TryCreate(
+            new Vector3d(0, 0, 0),
+            new Vector3d(1, 1, 0),
+            out FlowFieldPathRequest request).Should().BeTrue();
+
+        FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+
+        result.HasPath.Should().BeFalse();
+        result.Fields.Should().BeNull();
+
+        PathManager.UnloadChart("FlowVerticalDiagonalBlocked");
     }
 
     [Fact]
@@ -563,6 +616,29 @@ public class FlowFieldSurveyorTests : IDisposable
         field1.Direction.Should().NotBe(field2.Direction);
 
         PathManager.UnloadChart("DifferentGoals");
+    }
+
+    [Fact]
+    public void GetFlowField_ShouldReturnDefault_WhenPositionIsMissingFromTheResult()
+    {
+        bool[,,] data = new bool[1, 2, 1];
+        data[0, 0, 0] = true;
+        data[0, 1, 0] = true;
+
+        PathTestFactory.RegisterFromData("MissingFlowFieldLookup", data, Vector3d.Zero);
+
+        FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out FlowFieldPathRequest request);
+        FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+
+        FlowField found = FlowFieldSurveyor.GetFlowField(Vector3d.Zero, result.Fields);
+        FlowField missing = FlowFieldSurveyor.GetFlowField(new Vector3d(4, 0, 0), result.Fields);
+
+        found.GlobalIndex.Should().NotBe(default(GlobalVoxelIndex));
+        missing.GlobalIndex.Should().Be(default(GlobalVoxelIndex));
+        missing.Direction.Should().Be(Vector3d.Zero);
+        missing.PathCost.Should().Be(0);
+
+        PathManager.UnloadChart("MissingFlowFieldLookup");
     }
 
     [Fact]

@@ -46,6 +46,11 @@ This is the main active follow-up track.
   media on non-traversable authored cells, but `TraversalLegendEntry` already rejects that state at
   construction time. That guard appears unreachable now and may be worth simplifying or
   documenting explicitly.
+- `PathManager.RebuildInitializedChartsAgainstCurrentGrids()` still has a private parameterless
+  rebuild path, plus `ClearLiveGridStatePreservingRegistrations()` and
+  `SuppressAllManagedGeneratedTransitions()`, that now appear orphaned after the bounds-targeted
+  external grid bridge work. Coverage surfaced them as effectively dead code candidates worth
+  pruning or reconnecting explicitly.
 
 ### 3. Optional Runtime Follow-Ups
 

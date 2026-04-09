@@ -3,6 +3,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using System;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor;
@@ -95,6 +96,44 @@ public class FlyLocomotionTests : IDisposable
 
         agent.Motor.Handler.Fly.IsFlying.Should().BeFalse();
         agent.Motor.Handler.Fall.IsFalling.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FlyLocomotion_WhenDisabled_ShouldClearTransientState()
+    {
+        var fly = new FlyLocomotion();
+        fly.IsFlying = true;
+        fly.IsEnabled.Should().BeTrue();
+
+        fly.IsEnabled = false;
+
+        fly.IsEnabled.Should().BeFalse();
+        fly.IsFlying.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RoundTrip_FlyLocomotion_WhenDisabledOnLoad_ShouldClearIsFlying(bool useMemoryPack)
+    {
+        var source = MockMotorAgentTestFactory.CreateMockAgent(
+            startPosition: new Vector3d(0, 10, 0),
+            startingMedium: TraversalMedium.Gas);
+
+        // Mark as flying and then disable before serializing.
+        source.Motor.Handler.Fly.IsFlying = true;
+        source.Motor.Handler.Fly.IsEnabled = false;
+
+        object payload = SerializeRecord(source.Motor, useMemoryPack);
+
+        var target = MockMotorAgentTestFactory.CreateMockAgent(
+            startPosition: Vector3d.Zero,
+            startingMedium: TraversalMedium.Solid);
+        target.Motor.Handler.Fly.IsEnabled = true;
+        PopulateRecord(target.Motor, payload, useMemoryPack);
+
+        target.Motor.Handler.Fly.IsEnabled.Should().BeFalse();
+        target.Motor.Handler.Fly.IsFlying.Should().BeFalse();
     }
 
     [Fact]

@@ -367,6 +367,52 @@ Why fifth:
 Near-100% coverage usually stalls on tiny helpers, debug utilities, or defensive branches that are
 hard to hit naturally. This phase is for disciplined cleanup, not denominator gaming.
 
+Status: first pass landed.
+
+Current results from this pass:
+
+- overall snapshot: `94.04%` line, `84.32%` branch
+- `MotorOutput.cs`: `0%` → `100%` line, `100%` branch
+- `NavigationChartCell.cs`: `70%` → `100%` line, `100%` branch
+- `VolumeMediumRules.cs`: `80.9%` → `100%` line, `100%` branch
+- `ChartOwnerUtility.cs`: `83.3%` → `100%` line, `100%` branch
+- `ManagedChartTransitionState.cs`: `85.7%` → `100%` line, `100%` branch
+- `FlyLocomotion.cs`: `82.9%` → `100%` line, `100%` branch
+- `TraversalTransitionAnchor.cs`: `81.5%` → `93.8%` line, `90.0%` branch
+- `TraversalTransitionOrdering.cs`: `75.9%` → `93.1%` line, `87.5%` branch
+- `PathHeap.cs`: `84.8%` → `91.3%` line, `85.7%` branch
+- `FlowFieldGuide.cs`: `90.0%` → `90.0%` line, `74.5%` → `77.3%` branch
+- `NavSteering.cs`: `91.8%` line, `83.2%` branch (RecordData idle/no-request branches covered)
+- `NavigatorPathRequestFactory.cs`: `86.2%` line, `70.8%` branch (unchanged; existing tests cover primary paths)
+- `HybridRoutePlanner.cs`: `89.0%` line, `72.9%` branch (unchanged; FlowField step already covered by CreateFromFlowField path)
+
+Notes:
+
+- the zero-coverage `MotorOutput` struct was covered immediately with a single constructor test
+- `NavigationChartCell`, `VolumeMediumRules`, `ChartOwnerUtility`, and `ManagedChartTransitionState`
+  all reached 100% through targeted coverage of their argument validation and factory branches
+- `FlyLocomotion` reached 100% after adding the `IsEnabled=false` setter path and the disabled-state
+  load path in RecordData
+- `TraversalTransitionAnchor` improved with GlobalVoxelIndex factory methods and TryGetVolumeMedium
+  branch coverage
+- `TraversalTransitionOrdering` improved with Y/Z axis comparison branch tests
+- `NavSteering.RecordData` loading branches are now covered: the reset block (when TryCreateRequest
+  fails due to unloaded chart), and the else-if path (when guide state was not serialized)
+- `NavSteering` line and branch rates did not move materially because the remaining gaps
+  (lines 638-679, 759-816) are in GetHeading/CheckStuckStatus interior branches that require
+  specific locomotion+path+simulation state combinations
+- `FlowFieldGuide` null-FlowMap branches for `FlowFieldContainsPosition` and `TryGetFallbackDirection`
+  are now covered; remaining gaps are in staged multi-guide logic
+- 47 new tests added this session (470 → 517 total)
+
+Remaining known gaps after Phase 6:
+
+- `ITransient.Extensions.cs`: 50% — one extension method is non-runtime debug output
+- `HybridRoutePlanner.cs`: 89% — `TryCreateGuide` failure branch, `GetBetterPlan` second candidate path
+- `NavigatorPathRequestFactory.cs`: 86.2% — `TryGetDirectVolumePathCost` ZeroDisplacement path, one GasLandingHandoff return false edge
+- `NavSteering.cs`: 91.8% — remaining gaps in `GetHeading` and `CheckStuckStatus` require multi-step simulation state
+- `PathManager.cs`: 94.6% — minor lifecycle helpers
+
 Targets:
 
 - small public/internal helpers still below threshold after Phases 1-5

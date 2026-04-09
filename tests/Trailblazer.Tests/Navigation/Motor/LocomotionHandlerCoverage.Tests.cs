@@ -271,6 +271,20 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Swim.UnderwaterTimer.Should().Be(Fixed64.Zero);
     }
 
+    [Fact]
+    public void MotorOutput_Constructor_ShouldSetAllFields()
+    {
+        var velocityDelta = new Vector3d(1, 0, 0);
+        var positionDelta = new Vector3d(0, 2, 0);
+        var rotationDelta = FixedQuaternion.Identity;
+
+        var output = new MotorOutput(velocityDelta, positionDelta, rotationDelta);
+
+        output.VelocityDelta.Should().Be(velocityDelta);
+        output.PositionDelta.Should().Be(positionDelta);
+        output.RotationDelta.Should().Be(rotationDelta);
+    }
+
     private sealed class CustomLocomotion : ILocomotion
     {
         public bool IsEnabled { get; set; } = true;

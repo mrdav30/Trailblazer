@@ -111,6 +111,122 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
         TraversalTransitionOrdering.Compare(left, right).Should().BeLessThan(0);
     }
 
+    [Fact]
+    public void TraversalTransitionOrdering_ShouldCompare_ByDestinationVoxelYAndZ()
+    {
+        // Two transitions with same id, type, source, and dest X — differ on dest Y.
+        var leftDestY = new TraversalTransition(
+            "cmp",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+        var rightDestY = new TraversalTransition(
+            "cmp",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(new Vector3d(1, 1, 0)));
+
+        TraversalTransitionOrdering.Compare(leftDestY, rightDestY).Should().NotBe(0);
+
+        // Differ on dest Z only (same X and Y).
+        var leftDestZ = new TraversalTransition(
+            "cmp",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+        var rightDestZ = new TraversalTransition(
+            "cmp",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 1)));
+
+        TraversalTransitionOrdering.Compare(leftDestZ, rightDestZ).Should().NotBe(0);
+    }
+
+    [Fact]
+    public void TraversalTransitionOrdering_ShouldCompare_BySourceVoxelYAndZ()
+    {
+        // Two transitions with same id and type — differ on source Y.
+        var leftSrcY = new TraversalTransition(
+            "src",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(new Vector3d(0, 0, 0)),
+            TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)));
+        var rightSrcY = new TraversalTransition(
+            "src",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(new Vector3d(0, 1, 0)),
+            TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)));
+
+        TraversalTransitionOrdering.Compare(leftSrcY, rightSrcY).Should().NotBe(0);
+
+        // Differ on source Z only.
+        var leftSrcZ = new TraversalTransition(
+            "src",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(new Vector3d(0, 0, 0)),
+            TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)));
+        var rightSrcZ = new TraversalTransition(
+            "src",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(new Vector3d(0, 0, 1)),
+            TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)));
+
+        TraversalTransitionOrdering.Compare(leftSrcZ, rightSrcZ).Should().NotBe(0);
+    }
+
+    [Fact]
+    public void TraversalTransitionOrdering_ShouldReturnZero_WhenTransitionsAreEqual()
+    {
+        var a = CreateTransition("eq", Vector3d.Zero, new Vector3d(1, 0, 0), pathCostModifier: 5, isBidirectional: false);
+        var b = CreateTransition("eq", Vector3d.Zero, new Vector3d(1, 0, 0), pathCostModifier: 5, isBidirectional: false);
+
+        TraversalTransitionOrdering.Compare(a, b).Should().Be(0);
+    }
+
+    [Fact]
+    public void TraversalTransitionOrdering_ShouldCompare_ByBidirectionalFlag()
+    {
+        var nonBidi = CreateTransition("bi", Vector3d.Zero, new Vector3d(1, 0, 0), pathCostModifier: 1, isBidirectional: false);
+        var bidi = CreateTransition("bi", Vector3d.Zero, new Vector3d(1, 0, 0), pathCostModifier: 1, isBidirectional: true);
+
+        TraversalTransitionOrdering.Compare(nonBidi, bidi).Should().NotBe(0);
+    }
+
+    [Fact]
+    public void TraversalTransitionOrdering_ShouldCompare_ByPointOverridePosition()
+    {
+        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel destVoxel).Should().BeTrue();
+
+        // Same dest voxel, but one has a point override with different Y.
+        var left = new TraversalTransition(
+            "po",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(destVoxel.GlobalIndex, new Vector3d(1.1, 0, 0)));
+        var right = new TraversalTransition(
+            "po",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(destVoxel.GlobalIndex, new Vector3d(1.1, 0.1, 0)));
+
+        TraversalTransitionOrdering.Compare(left, right).Should().NotBe(0);
+
+        // Same dest voxel, point override same X and Y but different Z.
+        var leftZ = new TraversalTransition(
+            "po",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(destVoxel.GlobalIndex, new Vector3d(1.1, 0, 0)));
+        var rightZ = new TraversalTransition(
+            "po",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(destVoxel.GlobalIndex, new Vector3d(1.1, 0, 0.1)));
+
+        TraversalTransitionOrdering.Compare(leftZ, rightZ).Should().NotBe(0);
+    }
+
     private static TraversalTransition CreateTransition(
         string id,
         Vector3d source,

@@ -41,6 +41,8 @@ public sealed class FlowFieldGuideTests : IDisposable
         var guide = new FlowFieldGuide();
         guide.Initialize(FlowFieldSurveyResult.Empty).Should().BeFalse();
         guide.TryGetMovementDirection(Vector3d.Zero, out _).Should().BeFalse();
+        guide.FlowFieldContainsPosition(Vector3d.Zero).Should().BeFalse();
+        guide.TryGetFallbackDirection(Vector3d.Zero, out _).Should().BeFalse();
 
         FlowFieldSurveyResult survey = CreateSurveyResult(
             (Vector3d.Zero, new Vector3d(1, 0, 0), 2, false),

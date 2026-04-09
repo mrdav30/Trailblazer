@@ -1,4 +1,5 @@
-﻿using FixedMathSharp;
+﻿using Chronicler;
+using FixedMathSharp;
 using FluentAssertions;
 using GridForge;
 using GridForge.Configuration;
@@ -849,6 +850,100 @@ public class NavSteeringTests : IDisposable
         PathManager.UnloadChart("MovementGroupReset");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RoundTrip_ShouldResetToIdleState_WhenRequestCannotBeRebuilt(bool useMemoryPack)
+    {
+        // Arrange: register a chart and give the NavSteering an active request
+        var data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        var start = new Vector3d(0, 0, 0);
+        var end = new Vector3d(2, 0, 0);
+        PathTestFactory.RegisterFromData("RecordDataIdleChart", data, start);
+
+        var source = new NavSteering();
+        var agent = new MockSteerAgent(start);
+        source.OnInitialize(agent.Radius);
+        AStarPathRequest.TryCreate(start, end, out AStarPathRequest request);
+        source.ApplyPathRequest(request);
+
+        TrailblazerManager.Simulate();
+        source.GetHeading(agent);
+
+        source.ShouldMove.Should().BeTrue();
+
+        object payload = SerializeRecord(source, useMemoryPack);
+
+        // Unload chart so TryCreateRequest will fail to rebuild the AStar request
+        PathManager.UnloadChart("RecordDataIdleChart");
+
+        // Act: populate into a fresh NavSteering — request factory returns null → reset branch
+        var target = new NavSteering();
+        target.OnInitialize(agent.Radius);
+        PopulateRecord(target, payload, useMemoryPack);
+
+        // Assert: steering reset to idle
+        target.ShouldMove.Should().BeFalse();
+        target.IsStuck.Should().BeFalse();
+        target.HasLineOfSightPath.Should().BeFalse();
+        target.Destination.Should().Be(Vector3d.Zero);
+        target.TargetDirection.Should().Be(Vector3d.Zero);
+        target.CurrentRequest.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RoundTrip_ShouldScheduleRepath_WhenRequestLoadedWithoutGuide(bool useMemoryPack)
+    {
+        // Arrange: register a chart and give the NavSteering an active request WITHOUT simulating
+        // (so no guide has been assigned yet — HasGuide will be false in the record)
+        var data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+
+        var start = new Vector3d(0, 0, 0);
+        var end = new Vector3d(2, 0, 0);
+        PathTestFactory.RegisterFromData("RecordDataNoGuideChart", data, start);
+
+        var source = new NavSteering();
+        var agent = new MockSteerAgent(start);
+        source.OnInitialize(agent.Radius);
+        AStarPathRequest.TryCreate(start, end, out AStarPathRequest request);
+        source.ApplyPathRequest(request);
+
+        // ShouldMove = true, _currentRequest != null, no guide, no LOS
+        source.ShouldMove.Should().BeTrue();
+        source.TrailGuide.Should().BeNull();
+
+        object payload = SerializeRecord(source, useMemoryPack);
+
+        // Act: populate — Kind=AStar, HasGuide=false → else-if branch sets _shouldRequestPathThisFrame=true
+        var target = new NavSteering();
+        target.OnInitialize(agent.Radius);
+        PopulateRecord(target, payload, useMemoryPack);
+
+        // Assert: request rebuilt, repath scheduled
+        target.ShouldMove.Should().BeTrue();
+        target.CurrentRequest.Should().NotBeNull();
+        target.TrailGuide.Should().BeNull();
+
+        PathManager.UnloadChart("RecordDataNoGuideChart");
+    }
+
     private static void AddObstacle(Vector3d position)
     {
         GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
@@ -865,5 +960,23 @@ public class NavSteeringTests : IDisposable
     private static void AddOpen(Vector3d position)
     {
         PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "NavSteeringOpen");
+    }
+
+    private static object SerializeRecord(IRecordable record, bool useMemoryPack)
+    {
+        return useMemoryPack
+            ? MemoryPackRecordSerializer.Serialize(record)
+            : JsonRecordSerializer.Serialize(record, writeIndented: true);
+    }
+
+    private static void PopulateRecord(IRecordable target, object payload, bool useMemoryPack)
+    {
+        if (useMemoryPack)
+        {
+            MemoryPackRecordSerializer.Populate(target, (byte[])payload);
+            return;
+        }
+
+        JsonRecordSerializer.Populate(target, (string)payload);
     }
 }

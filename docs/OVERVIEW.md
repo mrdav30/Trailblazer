@@ -84,7 +84,8 @@ All guide requests implement `IPathRequest`. Shared request state includes:
 
 Shared request behavior is provided by `PathRequest`:
 
-- `UpdateRequest(origin, destination, unitSize)` resolves start/end voxels and computes validation state
+- `UpdateRequest(origin, destination, unitSize)` resolves start/end voxels, computes validation
+  state, and clears `MaxPathSearchRange` when the new endpoints cannot be resolved
 - `TrySetOrigin(...)` and `TrySetDestination(...)` update endpoints without recreating the request
 - `TrySetUnitSize(...)` revalidates the request for a different agent footprint
 - successful creation or endpoint reset derives `MaxPathSearchRange` using `PathManager.TryGetMaxSearchSize(...)`
@@ -316,6 +317,7 @@ Important maintenance rule:
 
 - when a subsystem needs frame-step, reset, or frame-rate-change maintenance, register an ordered internal `TrailblazerManager` lifecycle hook instead of hard-wiring that subsystem into the manager
 - hosts should prefer explicit `TrailblazerManager.Initialize()` during startup rather than relying on lazy first-use initialization
+- `TrailblazerManager.SetFrameRate(...)` requires a positive frame rate; zero or negative values are rejected
 - if a value depends on `TrailblazerManager.FrameRate`, do not freeze it in a one-time snapshot unless the code also refreshes it from the frame-rate-change hook; prefer reading the manager live or recomputing from stored inputs
 
 ## 8. Direct Pathing Without Navigator

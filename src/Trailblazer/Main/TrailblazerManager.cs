@@ -98,8 +98,19 @@ public static class TrailblazerManager
     /// Updates the simulation frame rate, recalculates the delta time, and notifies ordered frame-rate hooks.
     /// </summary>
     /// <param name="frameRate">The new frame rate value.</param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="frameRate"/> is less than or equal to zero.
+    /// </exception>
     public static void SetFrameRate(int frameRate)
     {
+        if (frameRate <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(frameRate),
+                frameRate,
+                "Frame rate must be greater than zero.");
+        }
+
         EnsureInitialized();
         FrameRate = frameRate;
         DeltaTime = Fixed64.One / (Fixed64)FrameRate;

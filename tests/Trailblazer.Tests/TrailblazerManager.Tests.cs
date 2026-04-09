@@ -101,6 +101,21 @@ public class TrailblazerManagerTests : IDisposable
         turning.TargetReached.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void SetFrameRate_ShouldRejectNonPositiveValues_AndPreserveCurrentTiming(int invalidFrameRate)
+    {
+        TrailblazerManager.SetFrameRate(DefaultFrameRate);
+
+        Action act = () => TrailblazerManager.SetFrameRate(invalidFrameRate);
+
+        act.Should().Throw<ArgumentOutOfRangeException>()
+            .WithParameterName("frameRate");
+        TrailblazerManager.FrameRate.Should().Be(DefaultFrameRate);
+        TrailblazerManager.DeltaTime.Should().Be(Fixed64.One / (Fixed64)DefaultFrameRate);
+    }
+
     [Fact]
     public void LateSimulateAndVisualize_ShouldInvokeHooks_AndTrackAccumulation()
     {

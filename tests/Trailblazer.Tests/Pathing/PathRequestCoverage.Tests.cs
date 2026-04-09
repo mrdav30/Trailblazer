@@ -65,12 +65,14 @@ public sealed class PathRequestCoverageTests : IDisposable
     {
         var request = new TestPathRequest();
         request.UpdateRequest(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One).Should().BeTrue();
+        request.MaxPathSearchRange.Should().BeGreaterThan(0);
 
         request.UpdateRequest(new Vector3d(-20, 0, 0), new Vector3d(-18, 0, 0), Fixed64.One).Should().BeFalse();
         request.HasValidEndpoints.Should().BeFalse();
         request.IsValid.Should().BeFalse();
         request.StartNode.Should().BeNull();
         request.EndNode.Should().BeNull();
+        request.MaxPathSearchRange.Should().Be(0);
     }
 
     [Fact]

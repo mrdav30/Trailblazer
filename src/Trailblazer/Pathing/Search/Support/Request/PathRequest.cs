@@ -57,6 +57,7 @@ public abstract class PathRequest : IPathRequest
         StartNode = startVoxel;
         EndNode = endVoxel;
         UnitSize = unitSize ?? GlobalGridManager.VoxelSize;
+        MaxPathSearchRange = 0;
 
         if (!success)
             return false;

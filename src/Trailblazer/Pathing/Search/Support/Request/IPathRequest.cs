@@ -81,7 +81,9 @@ public interface IPathRequest
 
     /// <summary>
     /// Updates the request with new origin and destination positions, along with an optional unit size.
-    /// Returns true if the update was successful and the request is now valid, or false if the new parameters resulted in an invalid request (e.g. no valid start/end voxels could be found
+    /// Returns true if the update was successful and the request is now valid, or false if the new
+    /// parameters resulted in an invalid request. Failed updates clear the resolved endpoints and
+    /// reset <see cref="MaxPathSearchRange"/> to zero.
     /// </summary>
     /// <param name="origin"></param>
     /// <param name="destination"></param>

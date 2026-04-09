@@ -233,6 +233,46 @@ public class FlowFieldSurveyorTests : IDisposable
     }
 
     [Fact]
+    public void FlowField_ShouldReturnEmpty_ForNullAndUnresolvedRequests()
+    {
+        FlowFieldSurveyor.Shared.FindPath(null).HasPath.Should().BeFalse();
+
+        bool[,,] data = new bool[1, 1, 1];
+        data[0, 0, 0] = true;
+        PathTestFactory.RegisterFromData("FlowInvalidRequest", data, Vector3d.Zero);
+
+        FlowFieldPathRequest.TryCreate(Vector3d.Zero, Vector3d.Zero, out FlowFieldPathRequest request).Should().BeTrue();
+        FlowFieldSurveyor.Shared.FindPath(request).HasPath.Should().BeFalse();
+
+        request.UpdateRequest(new Vector3d(64, 0, 0), Vector3d.Zero, Fixed64.One).Should().BeFalse();
+        FlowFieldSurveyor.Shared.FindPath(request).HasPath.Should().BeFalse();
+
+        PathManager.UnloadChart("FlowInvalidRequest");
+    }
+
+    [Fact]
+    public void FlowField_ShouldRejectDiagonalCornerCutting()
+    {
+        bool[,,] data = new bool[1, 2, 2];
+        data[0, 0, 0] = true;
+        data[0, 1, 1] = true;
+
+        PathTestFactory.RegisterFromData("FlowDiagonalBlocked", data, Vector3d.Zero);
+
+        FlowFieldPathRequest.TryCreate(
+            new Vector3d(0, 0, 0),
+            new Vector3d(1, 0, 1),
+            out FlowFieldPathRequest request).Should().BeTrue();
+
+        FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+
+        result.HasPath.Should().BeFalse();
+        result.Fields.Should().BeNull();
+
+        PathManager.UnloadChart("FlowDiagonalBlocked");
+    }
+
+    [Fact]
     public void FlowFieldGuide_ShouldReturnCorrectIndexAndDirection()
     {
         bool[,,] data = new bool[1, 3, 1];

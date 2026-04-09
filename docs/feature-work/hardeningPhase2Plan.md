@@ -42,6 +42,10 @@ This is the main active follow-up track.
 - `TrailblazerManager.SetFrameRate(...)` currently accepts non-positive values without validation,
   which can produce invalid `DeltaTime` / `InvDeltaTime` state. Coverage can document current
   behavior, but input guarding is still a separate hardening decision.
+- `TraversalAuthoringMap.ParseCell(...)` still carries a defensive branch for solid transition
+  media on non-traversable authored cells, but `TraversalLegendEntry` already rejects that state at
+  construction time. That guard appears unreachable now and may be worth simplifying or
+  documenting explicitly.
 
 ### 3. Optional Runtime Follow-Ups
 

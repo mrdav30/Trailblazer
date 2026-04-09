@@ -291,4 +291,56 @@ public class TraversalAuthoringMapTests : IDisposable
 
         Assert.Throws<ArgumentException>(() => authoringMap.Build());
     }
+
+    [Fact]
+    public void Build_ShouldTreatNullTokensAsSkippedCells()
+    {
+        string[,,] map =
+        {
+            {
+                { null! }
+            }
+        };
+
+        var authoringMap = new TraversalAuthoringMap(
+            chartName: "NullToken",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One);
+
+        TraversalBuildResult result = authoringMap.Build();
+
+        Assert.True(result.Chart.TryGetCell(Vector3d.Zero, out NavigationChartCell cell));
+        Assert.False(cell.HasTraversalData);
+        Assert.Empty(result.GeneratedTransitions);
+    }
+
+    [Theory]
+    [InlineData("!")]
+    [InlineData("S!!")]
+    [InlineData("S!G")]
+    public void Build_ShouldRejectMalformedTransitionMarkers(string token)
+    {
+        string[,,] map =
+        {
+            {
+                { token }
+            }
+        };
+
+        var authoringMap = new TraversalAuthoringMap(
+            chartName: "MalformedMarker",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One);
+
+        Assert.Throws<ArgumentException>(() => authoringMap.Build());
+    }
+
+    [Fact]
+    public void LegendEntry_ShouldRejectTransitionMediaOutsideAuthoredTraversalKinds()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new TraversalLegendEntry(NavigationChartCell.Empty, TraversalMedia.Solid));
+    }
 }

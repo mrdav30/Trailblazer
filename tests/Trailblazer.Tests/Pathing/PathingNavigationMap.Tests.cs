@@ -63,6 +63,27 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void AllCharts_ShouldReturnEmptyAndRegisteredSnapshots()
+    {
+        Assert.Empty(PathManager.AllCharts);
+
+        var first = PathTestFactory.BuildSinglePointMap("SnapshotA", Vector3d.Zero);
+        var second = PathTestFactory.BuildSinglePointMap("SnapshotB", new Vector3d(2, 0, 0));
+
+        Assert.True(PathManager.Register(first, initializeChart: false));
+        Assert.True(PathManager.Register(second, initializeChart: false));
+
+        NavigationChart[] snapshot = new System.Collections.Generic.List<NavigationChart>(PathManager.AllCharts).ToArray();
+
+        Assert.Equal(2, snapshot.Length);
+        Assert.Contains(snapshot, chart => chart.Name == "SnapshotA");
+        Assert.Contains(snapshot, chart => chart.Name == "SnapshotB");
+
+        PathManager.UnloadChart("SnapshotA");
+        PathManager.UnloadChart("SnapshotB");
+    }
+
+    [Fact]
     public void UnloadMap_RemovesOnlyItsPartition()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
@@ -153,6 +174,17 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.False(PathManager.TryGetEffectiveCell(new Vector3d(3, 0, 3), out _));
         Assert.False(PathManager.TryGetEffectiveChartOwner(new Vector3d(3, 0, 3), out _));
+    }
+
+    [Fact]
+    public void TryGetEffectiveCell_ByVoxelIndex_ShouldReturnFalse_WhenVoxelHasNoResolvedState()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+        Assert.False(PathManager.TryGetEffectiveCell(voxel.GlobalIndex, out _));
+        Assert.False(PathManager.TryGetEffectiveChartOwner(voxel.GlobalIndex, out _));
     }
 
     [Fact]

@@ -353,4 +353,62 @@ public class TraversalTransitionRegistryTests : IDisposable
         Assert.False(TraversalTransitionRegistry.IsRegistered("reset-check"));
         Assert.Empty(TraversalTransitionRegistry.AllTransitions);
     }
+
+    [Fact]
+    public void RegisterGeneratedRange_ShouldValidateInputAndRollbackOnFailure()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            TraversalTransitionRegistry.RegisterGeneratedRange(null!, priority: 0));
+
+        Assert.True(TraversalTransitionRegistry.RegisterGeneratedRange(Array.Empty<TraversalTransition>(), priority: 0));
+
+        var unresolved = new TraversalTransition(
+            id: "generated-invalid",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(default(GlobalVoxelIndex)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        Assert.False(TraversalTransitionRegistry.RegisterGeneratedRange(new[] { unresolved }, priority: 0));
+        Assert.False(TraversalTransitionRegistry.IsRegistered("generated-invalid"));
+
+        var preexisting = new TraversalTransition(
+            id: "generated-existing",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+        var rolledBack = new TraversalTransition(
+            id: "generated-rolled-back",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.RegisterGenerated(preexisting));
+        Assert.False(TraversalTransitionRegistry.RegisterGeneratedRange(
+            new[] { rolledBack, preexisting },
+            priority: 0));
+        Assert.True(TraversalTransitionRegistry.IsRegistered("generated-existing"));
+        Assert.False(TraversalTransitionRegistry.IsRegistered("generated-rolled-back"));
+    }
+
+    [Fact]
+    public void GetActiveTransitionsTouchingGrid_ShouldDeduplicateTransitionsReferencedByBothEndpoints()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryGridSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryGridDestination", new Vector3d(1, 0, 0));
+
+        var transition = new TraversalTransition(
+            id: "same-grid",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.Register(transition));
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+
+        TraversalTransition[] touching = TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(voxel.GridIndex);
+
+        Assert.Single(touching);
+        Assert.Equal("same-grid", touching[0].Id);
+        Assert.Empty(TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(99));
+    }
 }

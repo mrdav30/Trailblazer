@@ -30,8 +30,8 @@ dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj \
 
 Current Trailblazer snapshot:
 
-- line coverage: `88.35%` (`8655 / 9796`)
-- branch coverage: `77.61%` (`3117 / 4016`)
+- line coverage: `90.64%` (`8880 / 9796`)
+- branch coverage: `80.90%` (`3249 / 4016`)
 
 ### Subsystem Snapshot
 
@@ -196,6 +196,22 @@ CRAP overlap:
 
 ### Phase 3. Locomotion And Runtime State Coverage
 
+Status: first pass landed.
+
+Current results from this pass:
+
+- `LocomotionHandler.cs`: `100.00%` line, `96.09%` branch
+- `LocomotionProfile.cs`: `100.00%` line, `100.00%` branch
+- `LocomotionProfileBuilder.cs`: `100.00%` line, `100.00%` branch
+- `NavMotor.cs`: `93.07%` line, `85.60%` branch
+
+Notes:
+
+- the dedicated locomotion composition surfaces are no longer meaningful coverage hotspots after
+  this pass
+- the remaining Phase 3 debt is almost entirely `NavMotor` branch saturation rather than profile or
+  handler composition behavior
+
 This phase targets the navigation runtime branch matrix where complexity is high and under-testing is
 still visible.
 
@@ -220,6 +236,25 @@ CRAP overlap:
 - `LocomotionProfile.get_InstalledKinds`
 
 ### Phase 4. Core Pathing Branch Saturation
+
+Status: first pass landed.
+
+Current results from this pass:
+
+- `TraversalAuthoringMap.cs`: `92.30%` line, `89.13%` branch
+- `SolidChartPartition.cs`: `95.93%` line, `81.03%` branch
+- `PathManager.cs`: `88.71%` line, `78.05%` branch
+- `FlowFieldSurveyor.cs`: `94.68%` line, `86.79%` branch
+- `VolumeSurveyor.cs`: `92.71%` line, `88.23%` branch
+- `TraversalTransitionRegistry.cs`: `94.12%` line, `88.54%` branch
+
+Notes:
+
+- this pass moved the heaviest branch debt meaningfully without touching runtime code
+- `VolumeSurveyor`, `TraversalTransitionRegistry`, and `TraversalAuthoringMap` benefited the most
+  from direct edge-case coverage
+- the remaining Phase 4 debt is now centered much more narrowly in `PathManager` and selective
+  `FlowFieldSurveyor` branch matrices than in the authoring or registry surfaces
 
 This phase is the heavier pathing pass. It should come after the simpler guide/request/runtime
 surfaces above.

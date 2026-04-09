@@ -3,7 +3,6 @@ using GridForge.Configuration;
 using GridForge.Grids;
 using System;
 using Trailblazer.Pathing;
-using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing;

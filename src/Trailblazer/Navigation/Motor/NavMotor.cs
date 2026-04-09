@@ -1,7 +1,7 @@
-﻿using FixedMathSharp;
+﻿using Chronicler;
+using FixedMathSharp;
 using SwiftCollections;
 using System;
-using Trailblazer.Serialization;
 
 #if DEBUG
 using System.Diagnostics;
@@ -175,11 +175,10 @@ public class NavMotor : IRecordable
     /// </summary>
     public void SetLocomotionProfile(LocomotionProfile profile)
     {
-        if (profile == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(profile));
+        SwiftThrowHelper.ThrowIfNull(profile, nameof(profile));
 
         if (TraversalInProgress)
-            ThrowHelper.ThrowInvalidOperationException("Cannot change locomotion composition while a traversal frame is in progress.");
+            throw new InvalidOperationException("Cannot change locomotion composition while a traversal frame is in progress.");
 
         Handler.ApplyProfile(profile);
 
@@ -192,8 +191,7 @@ public class NavMotor : IRecordable
     /// </summary>
     public void ConfigureLocomotions(Action<LocomotionProfileBuilder> configure)
     {
-        if (configure == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(configure));
+        SwiftThrowHelper.ThrowIfNull(configure, nameof(configure));
 
         var builder = LocomotionProfile.CreateBuilder(Handler);
         configure(builder);
@@ -234,7 +232,7 @@ public class NavMotor : IRecordable
         {
             if (TrailblazerManager.FrameCount != _pendingTraversalFrame)
             {
-                ThrowHelper.ThrowInvalidOperationException(
+                throw new InvalidOperationException(
                     $"NavMotor traversal from frame {_pendingTraversalFrame} was never finalized or aborted before frame {TrailblazerManager.FrameCount}. Call FinalizeTraversal(...) or AbortTraversalFrame() in the same frame that opened traversal.");
             }
 
@@ -755,7 +753,7 @@ public class NavMotor : IRecordable
 
         if (TrailblazerManager.FrameCount != _pendingTraversalFrame)
         {
-            ThrowHelper.ThrowInvalidOperationException(
+            throw new InvalidOperationException(
                 $"NavMotor traversal opened on frame {_pendingTraversalFrame} cannot be finalized on frame {TrailblazerManager.FrameCount}. Call AbortTraversalFrame() to discard stale traversal state before starting a new frame.");
         }
 

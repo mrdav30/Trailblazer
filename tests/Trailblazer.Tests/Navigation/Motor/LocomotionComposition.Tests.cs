@@ -1,9 +1,9 @@
+using Chronicler;
 using FixedMathSharp;
 using FluentAssertions;
 using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
-using Trailblazer.Serialization;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor;

@@ -1,7 +1,7 @@
-﻿using FixedMathSharp;
+﻿using Chronicler;
+using FixedMathSharp;
 using System;
 using System.Text.Json.Serialization;
-using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Motor;
 

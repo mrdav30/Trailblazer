@@ -1,10 +1,8 @@
-﻿using FixedMathSharp;
+﻿using Chronicler;
+using FixedMathSharp;
 using GridForge;
 using GridForge.Grids;
-using GridForge.Spatial;
-using SwiftCollections;
 using System;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Animation;
@@ -12,7 +10,6 @@ using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
-using Trailblazer.Serialization;
 
 namespace Trailblazer;
 
@@ -167,8 +164,6 @@ public abstract class Navigator : INavigate, IRecordable
 
     public byte OccupantGroupId { get; set; } = 1;
 
-    public SwiftDictionary<GlobalVoxelIndex, int> OccupyingIndexMap { get; protected set; } = new();
-
     #endregion
 
     #region Animation
@@ -253,16 +248,7 @@ public abstract class Navigator : INavigate, IRecordable
         IsGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
 
-        // store copy since this will mutate the collection
-        foreach (var idx in OccupyingIndexMap.Keys.ToArray())
-        {
-            if (!GlobalGridManager.TryGetGrid(idx.GridIndex, out VoxelGrid grid))
-                continue;
-
-            grid.TryRemoveVoxelOccupant(idx.VoxelIndex, this);
-        }
-
-        OccupyingIndexMap.Clear();
+        GridOccupantManager.TryDeregister(this);
 
         _isSet = false;
         _isInitialized = false;
@@ -462,7 +448,7 @@ public abstract class Navigator : INavigate, IRecordable
     public virtual void Simulate()
     {
         if (!IsActive)
-            ThrowHelper.ThrowInvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
+            throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
         TryActivatePendingGuidedVolumeExitHandoff();
 
@@ -508,7 +494,7 @@ public abstract class Navigator : INavigate, IRecordable
     public virtual void CommitFrameMotion()
     {
         if (!IsActive)
-            ThrowHelper.ThrowInvalidOperationException("Navigator must be Setup and Initialized before CommitFrameMotion().");
+            throw new InvalidOperationException("Navigator must be Setup and Initialized before CommitFrameMotion().");
 
         LastPosition = Position;
         Position += _positionDelta + _velocityDelta;
@@ -791,10 +777,11 @@ public abstract class Navigator : INavigate, IRecordable
             out Voxel curVoxel);
         if (!voxelFound) return;
 
-        bool wasEmpty = OccupyingIndexMap.Count == 0;
-        if (curGrid.TryAddVoxelOccupant(curVoxel, this))
-            if (wasEmpty)
-                return;  // assume agent has not occupied another voxel
+        if (!curGrid.TryAddVoxelOccupant(curVoxel, this))
+        {
+            GridForgeLogger.Warn($"Navigator {GlobalId} failed to register occupancy in voxel {curVoxel.Index} of grid {curGrid} at position {Position}.");
+            return;
+        }
 
         bool lastVoxelFound = GlobalGridManager.TryGetGridAndVoxel(
             LastPosition,
@@ -806,18 +793,6 @@ public abstract class Navigator : INavigate, IRecordable
             return;
 
         lastGrid.TryRemoveVoxelOccupant(lastVoxel, this);
-    }
-
-    public virtual void SetOccupancy(GlobalVoxelIndex index, int ticket)
-    {
-        if (!IsActive) return;
-        OccupyingIndexMap[index] = ticket;
-    }
-
-    public virtual void RemoveOccupancy(GlobalVoxelIndex index)
-    {
-        if (!IsActive) return;
-        OccupyingIndexMap.Remove(index);
     }
 
     #endregion
@@ -928,7 +903,6 @@ public abstract class Navigator : INavigate, IRecordable
 
             Turning?.OnInitialize(Radius);
 
-            OccupyingIndexMap.Clear();
             CheckVoxelOccupancy(true);
         }
     }

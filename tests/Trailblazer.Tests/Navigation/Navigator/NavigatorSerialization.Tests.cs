@@ -1,3 +1,4 @@
+using Chronicler;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge;
@@ -9,7 +10,6 @@ using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
-using Trailblazer.Serialization;
 using Trailblazer.Tests;
 using Trailblazer.Tests.Navigation.Motor;
 using Xunit;

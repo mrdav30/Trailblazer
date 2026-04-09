@@ -1,6 +1,6 @@
+using Chronicler;
 using FixedMathSharp;
 using Trailblazer.Pathing;
-using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation;
 

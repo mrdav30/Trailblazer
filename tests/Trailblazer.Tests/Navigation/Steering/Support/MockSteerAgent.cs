@@ -20,9 +20,6 @@ public class MockSteerAgent : ISteer
     public Fixed64 Radius => Size * Fixed64.Half;
 
     public byte OccupantGroupId { get; set; } = 1;
-    public SwiftDictionary<GlobalVoxelIndex, int> OccupyingIndexMap { get; private set; } = new();
 
     public MockSteerAgent(Vector3d pos = default) => Position = pos;
-    public void SetOccupancy(GlobalVoxelIndex index, int ticket) => OccupyingIndexMap[index] = ticket;
-    public void RemoveOccupancy(GlobalVoxelIndex index) => OccupyingIndexMap.Remove(index);
 }

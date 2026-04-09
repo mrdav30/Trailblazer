@@ -2,7 +2,6 @@
 using FluentAssertions;
 using System;
 using Trailblazer.Navigation;
-using Trailblazer.Navigation.Motor;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation.Motor;

@@ -2,7 +2,6 @@
 using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
-using Trailblazer.Navigation;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Support;

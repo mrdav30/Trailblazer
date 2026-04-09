@@ -105,11 +105,11 @@ public class NavigationChart
     /// <param name="interval">Distance between adjacent grid points.</param>
     /// <param name="medium">The authored traversal medium emitted for each <c>true</c> cell.</param>
     /// <param name="priority">The authored precedence used when this chart overlaps another chart on the same voxel.</param>
-     /// <exception cref="ArgumentNullException">Thrown when <paramref name="map"/> is null.</exception>
-     /// <exception cref="ArgumentOutOfRangeException">
-     /// Thrown when <paramref name="medium"/> is not <see cref="TraversalMedium.Solid"/>,
-     /// <see cref="TraversalMedium.Gas"/>, or <see cref="TraversalMedium.Liquid"/>.
-     /// </exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="map"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="medium"/> is not <see cref="TraversalMedium.Solid"/>,
+    /// <see cref="TraversalMedium.Gas"/>, or <see cref="TraversalMedium.Liquid"/>.
+    /// </exception>
     public NavigationChart(
         string name,
         bool[] map,
@@ -302,8 +302,7 @@ public class NavigationChart
         TraversalMedium medium = TraversalMedium.Solid,
         int priority = 0)
     {
-        if (sourceMap == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(sourceMap));
+        SwiftThrowHelper.ThrowIfNull(sourceMap, nameof(sourceMap));
 
         int sizeY = sourceMap.GetLength(0);
         int sizeX = sourceMap.GetLength(1);
@@ -349,8 +348,7 @@ public class NavigationChart
         Fixed64 interval,
         int priority = 0)
     {
-        if (sourceMap == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(sourceMap));
+        SwiftThrowHelper.ThrowIfNull(sourceMap, nameof(sourceMap));
 
         int sizeY = sourceMap.GetLength(0);
         int sizeX = sourceMap.GetLength(1);
@@ -537,8 +535,7 @@ public class NavigationChart
 
     private static NavigationChartCell[] CreateCells(bool[] map, TraversalMedium medium)
     {
-        if (map == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(map));
+        SwiftThrowHelper.ThrowIfNull(map, nameof(map));
 
         NavigationChartCell traversableCell = medium switch
         {

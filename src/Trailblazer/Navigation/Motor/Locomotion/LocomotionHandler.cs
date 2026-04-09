@@ -1,8 +1,8 @@
-﻿using SwiftCollections;
+﻿using Chronicler;
+using SwiftCollections;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -146,8 +146,7 @@ public class LocomotionHandler : IRecordable
     /// </summary>
     public void Replace<T>(T locomotion) where T : class, ILocomotion
     {
-        if (locomotion == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(locomotion));
+        SwiftThrowHelper.ThrowIfNull(locomotion, nameof(locomotion));
 
         SetLocomotion(typeof(T), locomotion);
         RefreshInstalledKinds();
@@ -178,8 +177,7 @@ public class LocomotionHandler : IRecordable
     /// </summary>
     public void ApplyProfile(LocomotionProfile profile)
     {
-        if (profile == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(profile));
+        SwiftThrowHelper.ThrowIfNull(profile, nameof(profile));
 
         ClearReplacedLocomotion(Move, profile.Move);
         ClearReplacedLocomotion(Fall, profile.Fall);

@@ -10,7 +10,7 @@ public class PathingFixture : IDisposable
 {
     public PathingFixture()
     {
-        GridForgeLogger.Verbosity = GridForgeLogger.LogLevel.Error;
+        GridForgeLogger.MinimumLevel = SwiftCollections.Diagnostics.DiagnosticLevel.Error;
         GlobalGridManager.Setup();
     }
 

@@ -20,8 +20,10 @@ public static class PathManager
 {
     static PathManager()
     {
+        // TODO: we should probably unregister these events at some point
         GlobalGridManager.OnReset += HandleExternalGridReset;
-        GlobalGridManager.OnActiveGridChange += HandleExternalGridChange;
+        GlobalGridManager.OnActiveGridAdded += HandleExternalGridChange;
+        GlobalGridManager.OnActiveGridRemoved += HandleExternalGridChange;
     }
 
     #region Pools
@@ -125,11 +127,8 @@ public static class PathManager
         Reset();
     }
 
-    private static void HandleExternalGridChange(GridChange change, uint _)
+    private static void HandleExternalGridChange(GridEventInfo eventInfo)
     {
-        if (change != GridChange.Add && change != GridChange.Remove)
-            return;
-
         RebuildInitializedChartsAgainstCurrentGrids();
     }
 
@@ -192,8 +191,7 @@ public static class PathManager
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="chart"/> is null.</exception>
     public static bool Register(NavigationChart chart, bool initializeChart = true)
     {
-        if (chart == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(chart));
+        SwiftThrowHelper.ThrowIfNull(chart, nameof(chart));
 
         return RegisterChartInternal(
             chart,
@@ -211,8 +209,7 @@ public static class PathManager
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="buildResult"/> is null.</exception>
     public static bool Register(TraversalBuildResult buildResult, bool initializeChart = true)
     {
-        if (buildResult == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(buildResult));
+        SwiftThrowHelper.ThrowIfNull(buildResult, nameof(buildResult));
 
         return RegisterChartInternal(
             buildResult.Chart,
@@ -478,8 +475,7 @@ public static class PathManager
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="updates"/> is null.</exception>
     public static int ApplyChartUpdates(string chartName, IReadOnlyList<NavigationChartCellUpdate> updates)
     {
-        if (updates == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(updates));
+        SwiftThrowHelper.ThrowIfNull(updates, nameof(updates));
 
         if (updates.Count == 0 || !TryGetNavigationChart(chartName, out NavigationChart chart))
             return 0;

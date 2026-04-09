@@ -67,15 +67,16 @@
 	</PropertyGroup>
 	<!-- Dependencies and Package References -->
 	<ItemGroup>	
-		<PackageReference Include="FixedMathSharp" Version="2.1.0">
+		<PackageReference Include="Chronicler.Core" Version="0.1.0" />	
+		<PackageReference Include="FixedMathSharp" Version="2.1.1">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="GridForge" Version="3.0.0">
+		<PackageReference Include="GridForge" Version="4.0.0">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="SwiftCollections" Version="2.0.0">
+		<PackageReference Include="SwiftCollections" Version="3.0.0">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>compile</IncludeAssets>
 		</PackageReference>

@@ -195,8 +195,7 @@ public sealed class LocomotionProfileBuilder
 
     internal static LocomotionProfileBuilder FromHandler(LocomotionHandler handler)
     {
-        if (handler == null)
-            ThrowHelper.ThrowArgumentNullException(nameof(handler));
+        SwiftThrowHelper.ThrowIfNull(handler, nameof(handler));
 
         return new LocomotionProfileBuilder(includeOptionalLocomotions: false)
             .WithMove(handler.Move)

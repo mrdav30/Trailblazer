@@ -127,7 +127,8 @@ public class SolidChartPartition : IVoxelPartition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnAddToVoxel(Voxel voxel)
     {
-        voxel.OnObstacleChange += HandleChange;
+        voxel.OnObstacleAdded += HandleChange;
+        voxel.OnObstacleRemoved += HandleChange;
 
         GlobalIndex = voxel.GlobalIndex;
         VoxelPosition = voxel.WorldPosition;
@@ -149,7 +150,9 @@ public class SolidChartPartition : IVoxelPartition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnRemoveFromVoxel(Voxel voxel)
     {
-        voxel.OnObstacleChange -= HandleChange;
+        voxel.OnObstacleAdded -= HandleChange;
+        voxel.OnObstacleRemoved -= HandleChange;
+
         PathManager.PartitionPool.Release(this);
     }
 
@@ -183,11 +186,11 @@ public class SolidChartPartition : IVoxelPartition
     /// Handles any obstacle changes on the associated voxel and invalidates clearance as needed.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void HandleChange(GridChange changeType, Voxel voxel)
+    public void HandleChange(ObstacleEventInfo eventInfo)
     {
         // regardless of change type, we need to update clearance
 
-        IsWalkable = voxel != null && !voxel.IsBlocked;
+        IsWalkable = eventInfo.VoxelIndex != default && eventInfo.ObstacleCount == 0;
         _clearanceRadiusInVoxels = DefaultDegreeCap;
         _isClearanceValid = false;
     }

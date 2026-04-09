@@ -66,16 +66,3 @@ public interface ITransient
         }
     }
 }
-
-/// <summary>
-/// Extension methods for ITransient to allow calling without casting to the interface.
-/// This is purely for convenience and does not change the underlying behavior.
-/// </summary>
-public static class ITransientExtensions
-{
-    public static void SyncTransientState(this ITransient instance, ITransient other)
-        => instance.SyncTransientState(other);
-
-    public static void ClearTransientState(this ITransient instance)
-        => instance.ClearTransientState();
-}

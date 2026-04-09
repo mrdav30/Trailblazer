@@ -1,7 +1,7 @@
-﻿using FixedMathSharp;
+﻿using Chronicler;
+using FixedMathSharp;
 using System;
 using System.Runtime.CompilerServices;
-using Trailblazer.Serialization;
 
 namespace Trailblazer.Navigation.Turning;
 

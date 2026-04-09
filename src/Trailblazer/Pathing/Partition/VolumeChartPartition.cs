@@ -64,7 +64,9 @@ public sealed class VolumeChartPartition : IVoxelPartition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnAddToVoxel(Voxel voxel)
     {
-        voxel.OnObstacleChange += HandleChange;
+        voxel.OnObstacleAdded += HandleChange;
+        voxel.OnObstacleRemoved += HandleChange;
+
         GlobalIndex = voxel.GlobalIndex;
         VoxelPosition = voxel.WorldPosition;
         IsWalkable = !voxel.IsBlocked;
@@ -73,14 +75,16 @@ public sealed class VolumeChartPartition : IVoxelPartition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnRemoveFromVoxel(Voxel voxel)
     {
-        voxel.OnObstacleChange -= HandleChange;
+        voxel.OnObstacleAdded -= HandleChange;
+        voxel.OnObstacleRemoved -= HandleChange;
+
         PathManager.VolumeChartPartitionPool.Release(this);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void HandleChange(GridChange changeType, Voxel voxel)
+    public void HandleChange(ObstacleEventInfo eventInfo)
     {
-        IsWalkable = voxel != null && !voxel.IsBlocked;
+        IsWalkable = eventInfo.VoxelIndex != default && eventInfo.ObstacleCount == 0;
     }
 
     /// <summary>

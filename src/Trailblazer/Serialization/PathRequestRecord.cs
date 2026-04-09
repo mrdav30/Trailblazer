@@ -1,3 +1,4 @@
+using Chronicler;
 using FixedMathSharp;
 using System;
 using Trailblazer.Pathing;

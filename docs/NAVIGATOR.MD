@@ -98,8 +98,6 @@ The main entry points are:
 - `ApplyRotationDelta(...)`
 - `AddVelocityDelta(...)`
 - `GetFootPosition()`
-- `SetOccupancy(...)`
-- `RemoveOccupancy(...)`
 
 Important public state includes:
 
@@ -127,7 +125,6 @@ Important public state includes:
 - `GuidedFlowFieldExtraFloodRange`
 - `GlobalId`
 - `OccupantGroupId`
-- `OccupyingIndexMap`
 - `IsLockedOn`
 - `AnimDampTime`
 
@@ -203,7 +200,6 @@ These are created in `Initialize(...)`.
 
 - `GlobalId`
 - `OccupantGroupId`
-- `OccupyingIndexMap`
 
 This is what makes the navigator visible to scan-based steering and voxel-occupancy systems.
 
@@ -261,7 +257,6 @@ It:
 - resets `_frameRequest`
 - sets `IsGuideded = false`
 - removes the navigator from occupied voxels
-- clears `OccupyingIndexMap`
 - marks the navigator inactive
 
 After `Reset()`, the instance must go through `Setup(...)` and `Initialize(...)` again before reuse.
@@ -512,10 +507,6 @@ This internal helper:
 - removes old occupancy when the navigator crosses voxel boundaries
 
 This is what makes nearby-occupant scans work for `NavSteering.ComputeCombinedSteering(...)`.
-
-### 11.2 SetOccupancy(...) and RemoveOccupancy(...)
-
-These are called by the grid occupancy system to keep `OccupyingIndexMap` in sync.
 
 ### 11.3 Reset Cleanup
 

@@ -1,5 +1,5 @@
-﻿using FixedMathSharp;
-using Trailblazer.Serialization;
+﻿using Chronicler;
+using FixedMathSharp;
 using Trailblazer.Support;
 
 namespace Trailblazer.Navigation.Motor;

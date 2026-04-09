@@ -1,4 +1,4 @@
-﻿using Trailblazer.Serialization;
+﻿using Chronicler;
 using Trailblazer.Support;
 
 namespace Trailblazer.Navigation.Motor;

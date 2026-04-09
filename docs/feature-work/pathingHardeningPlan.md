@@ -349,7 +349,72 @@ Current note:
   transitions, rebuilds previously initialized charts in registration order, then reevaluates
   managed transitions against the rebuilt world
 
-### Track 5. Coverage And Documentation Hardening
+### Track 5. Reset And Live-State Tightening
+
+Status: planned.
+
+Now that external grid lifecycle hardening is in place, the next cleanup pass should tighten the
+two internal clear paths that currently overlap:
+
+- `PathManager.Reset()`
+- `PathManager.ClearLiveGridStatePreservingRegistrations()`
+
+Primary targets:
+
+- remove duplicated live-partition stripping logic where possible
+- clarify the difference between a true hard reset and a live-state-only rebuild clear
+- avoid unnecessary allocations or extra snapshots in the hard-reset path
+- keep chart instance state correct for host-held chart references that may be reused later
+
+Implementation direction:
+
+- preserve the current contract that a hard `PathManager.Reset()` fully tears pathing down
+- keep `NavigationChart.IsInitialized` truthful after both full reset and rebuild-only clear paths
+- prefer one shared low-level “strip live voxel-backed state” helper if that reduces duplication
+  without obscuring the different contracts of the two callers
+- do not broaden this into a larger lifecycle redesign; this is a tightening pass, not another
+  behavior refactor
+
+Acceptance criteria:
+
+- hard reset and rebuild-only clear still leave no stale live partitions behind
+- chart instance reuse remains safe after reset
+- reset no longer does obvious extra work beyond what is needed to preserve correct post-reset
+  object state
+
+### Track 6. Transition Query And Hybrid Candidate Hardening
+
+Status: planned.
+
+The current closest-transition query is correct and deterministic, but the underlying transition
+discovery still falls back to broad linear scans in places that matter for both host queries and
+hybrid route planning.
+
+Primary targets:
+
+- tighten `TraversalTransitionQuery` so closest-transition lookup and hybrid planning share a better
+  candidate-discovery layer
+- reduce reliance on world-wide active-transition scans for common cases
+- keep the public closest-transition API simple while improving the internals it depends on
+
+Implementation direction:
+
+- do not build hybrid planning around “nearest transition wins”; keep total route quality as the
+  planner authority
+- prefer narrower typed and grid-scoped candidate caches before introducing a heavier spatial index
+- let `PathManager.TryGetClosestActiveTransition(...)` reuse the same narrowed query path that
+  hybrid planning uses
+- treat any broader spatial indexing as a second step only if the lighter narrowing still leaves a
+  real hotspot
+
+Acceptance criteria:
+
+- closest-transition queries avoid unnecessary world-wide scans in common cases
+- hybrid single-transition and transition-pair fallback paths consume the tightened shared query
+  infrastructure instead of ad hoc global snapshots
+- behavior stays deterministic and route quality does not regress
+
+### Track 7. Coverage And Documentation Hardening
 
 Status: continuous.
 
@@ -363,6 +428,8 @@ Coverage still worth adding as the above tracks land:
 - larger multi-chart overlap cases
 - transition lifecycle coverage when precedence changes without chart unload
 - focused regression coverage around generated-transition refresh boundaries
+- reset versus rebuild-only live-state clearing coverage
+- hybrid fallback candidate-selection coverage as transition-query narrowing evolves
 
 Documentation should stay aligned in:
 
@@ -378,8 +445,12 @@ Documentation should stay aligned in:
 2. Add the public query contract after Track 1 stabilizes, especially the closest-transition query.
 3. Run the focused runtime optimization pass around chart-index reuse and resolved overlap state.
 4. Harden external `GlobalGridManager` reset and add/remove lifecycle handling.
-5. Expand tests and docs around whichever of the above lands.
-6. Revisit override convenience only if the query and ownership work still leave a real gap.
+5. Tighten `PathManager.Reset()` and the rebuild-only live-state clear path now that external grid
+   lifecycle handling is in place.
+6. Harden transition discovery so closest-transition queries and hybrid planning share better
+   candidate narrowing before considering heavier spatial indexing.
+7. Expand tests and docs around whichever of the above lands.
+8. Revisit override convenience only if the query and ownership work still leave a real gap.
 
 ## Current Decisions
 
@@ -419,9 +490,9 @@ Documentation should stay aligned in:
 - Public query APIs will likely remove pressure to expose internal owner bookkeeping directly.
 - Transition discovery may be more useful to hosts than resolved-cell inspection, so it should not
   be treated as a minor follow-up.
-- The new closest-transition query is correct and deterministic, but it still scans the active
-  directed transitions for the requested type. If hosts start calling it at high frequency, a
-  tighter spatial index may be worth adding later.
+- The new closest-transition query is correct and deterministic, but the deeper opportunity is
+  shared transition candidate narrowing for both host queries and hybrid planning, not just making
+  the public helper faster in isolation.
 - If overlap masking should deactivate managed transitions, that should be enforced by explicit
   lifecycle ownership and dependency rules, not by broad transition heuristics or partition flags
   alone.

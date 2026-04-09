@@ -3,7 +3,7 @@
 This document is the Trailblazer-specific reference for how the runtime currently uses the Chronicler serialization layer.
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
-If you need the reusable Chronicler API details, transport behavior, or stable-link design, read [`../src/Trailblazer/Serialization/README.md`](../src/Trailblazer/Serialization/README.md).
+If you need the reusable Chronicler API details, check out that library's [`README.md`](https://github.com/mrdav30/Chronicler/blob/main/README.md).
 If you need the runtime systems currently covered by this Trailblazer implementation, read:
 
 - `NAVIGATOR.MD`

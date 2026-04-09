@@ -30,8 +30,8 @@ dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj \
 
 Current Trailblazer snapshot:
 
-- line coverage: `82.91%` (`8122 / 9796`)
-- branch coverage: `72.23%` (`2901 / 4016`)
+- line coverage: `88.35%` (`8655 / 9796`)
+- branch coverage: `77.61%` (`3117 / 4016`)
 
 ### Subsystem Snapshot
 
@@ -104,6 +104,26 @@ Exit criteria:
 
 ### Phase 1. Low-Coverage Leaf Types And Request/Guide Objects
 
+Status: first pass landed.
+
+Current results from this pass:
+
+- `AStarGuide.cs`: `94.04%` line, `77.27%` branch
+- `FlowFieldGuide.cs`: `86.85%` line, `75.49%` branch
+- `HybridGuide.cs`: `89.47%` line, `69.04%` branch
+- `HybridPathRequest.cs`: `94.64%` line, `73.43%` branch
+- `PathRequest.cs`: `85.36%` line, `68.18%` branch
+- `VolumeGuide.cs`: `92.20%` line, `77.77%` branch
+- `VolumePathRequest.cs`: `92.30%` line, `66.12%` branch
+- `TraversalTransitionOrdering.cs`: `75.86%` line, `71.87%` branch
+
+Notes:
+
+- the biggest remaining Phase 1 leaf gaps are now concentrated in branch-only cleanup for
+  `HybridGuide`, `PathRequest`, `VolumePathRequest`, and `TraversalTransitionOrdering`
+- `HybridPathRequest` moved from a major file gap into a much healthier state, so it no longer
+  needs to anchor the next coverage pass
+
 These files are low-risk and currently under-covered enough to move totals quickly.
 
 Primary targets:
@@ -132,6 +152,25 @@ CRAP overlap:
 - `VolumePathRequest.TrySetDestination`
 
 ### Phase 2. Planner Entry Points And Request Factories
+
+Status: first pass landed.
+
+Current results from this pass:
+
+- `NavigatorPathRequestFactory.cs`: `68.48%` line, `50.00%` branch
+- `GuidedVolumeExitPlanner.cs`: `83.98%` line, `64.06%` branch
+- `PathGuideFactory.cs`: `85.76%` line, `76.11%` branch
+- `TrailblazerManager.cs`: `98.90%` line, `87.50%` branch
+
+Notes:
+
+- `TrailblazerManager` is effectively out of the Phase 2 danger zone after direct lifecycle-hook
+  coverage
+- `GuidedVolumeExitPlanner` and `PathGuideFactory` both moved into healthier territory, but still
+  have branch debt left in transition-aware fallback paths
+- `NavigatorPathRequestFactory` improved meaningfully, but it remains the biggest orchestration gap
+  inside this phase and may warrant a second branch-focused cleanup pass before moving too far past
+  navigation support
 
 These are high-value orchestration seams that affect multiple runtime paths.
 

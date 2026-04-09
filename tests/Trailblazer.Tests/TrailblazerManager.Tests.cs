@@ -101,6 +101,78 @@ public class TrailblazerManagerTests : IDisposable
         turning.TargetReached.Should().BeFalse();
     }
 
+    [Fact]
+    public void LateSimulateAndVisualize_ShouldInvokeHooks_AndTrackAccumulation()
+    {
+        TrailblazerManager.Reset();
+
+        int lateCalls = 0;
+        int visualizeCalls = 0;
+
+        using var late = TrailblazerManager.RegisterOnLateSimulate(
+            owner: "TrailblazerManagerTests.Late",
+            order: 0,
+            callback: () => lateCalls++);
+        using var visualize = TrailblazerManager.RegisterOnVisualize(
+            owner: "TrailblazerManagerTests.Visualize",
+            order: 0,
+            callback: () => visualizeCalls++);
+
+        TrailblazerManager.LateSimulate();
+
+        lateCalls.Should().Be(1);
+        TrailblazerManager.ResetAccumulation.Should().BeTrue();
+
+        TrailblazerManager.Visualize();
+        TrailblazerManager.Visualize();
+
+        visualizeCalls.Should().Be(2);
+        TrailblazerManager.ResetAccumulation.Should().BeFalse();
+        TrailblazerManager.AccumulatedTime.Should().Be(TrailblazerManager.DeltaTime * 2);
+        TrailblazerManager.ExpectedAccumulation.Should().Be((Fixed64)2);
+    }
+
+    [Fact]
+    public void ResetAndFrameRateChanged_ShouldInvokeRegisteredHooks()
+    {
+        TrailblazerManager.Reset();
+
+        int resetCalls = 0;
+        int frameRateCalls = 0;
+
+        using var reset = TrailblazerManager.RegisterOnReset(
+            owner: "TrailblazerManagerTests.Reset",
+            order: 0,
+            callback: () => resetCalls++);
+        using var frameRate = TrailblazerManager.RegisterOnFrameRateChanged(
+            owner: "TrailblazerManagerTests.FrameRate",
+            order: 0,
+            callback: () => frameRateCalls++);
+
+        TrailblazerManager.Simulate();
+        TrailblazerManager.SetFrameRate(48);
+
+        frameRateCalls.Should().Be(1);
+        TrailblazerManager.FrameRate.Should().Be(48);
+        TrailblazerManager.DeltaTime.Should().Be(Fixed64.One / (Fixed64)48);
+
+        TrailblazerManager.Reset();
+
+        resetCalls.Should().Be(1);
+        TrailblazerManager.FrameCount.Should().Be(0);
+        TrailblazerManager.TotalTime.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void GetFrameFromTime_ShouldUseCurrentInverseDeltaTime()
+    {
+        TrailblazerManager.SetFrameRate(10);
+
+        Fixed64 timestamp = (TrailblazerManager.DeltaTime * 3) + (TrailblazerManager.DeltaTime / 2);
+
+        TrailblazerManager.GetFrameFromTime(timestamp).Should().Be(3);
+    }
+
     private static int GetLifecycleHookCount(string fieldName)
     {
         FieldInfo field = typeof(TrailblazerManager).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static)

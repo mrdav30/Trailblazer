@@ -1,0 +1,155 @@
+using FixedMathSharp;
+using FluentAssertions;
+using GridForge.Configuration;
+using GridForge.Grids;
+using System;
+using Trailblazer.Navigation;
+using Trailblazer.Pathing;
+using Xunit;
+
+namespace Trailblazer.Tests.Navigation;
+
+[Collection("PathingCollection")]
+public sealed class GuidedVolumeExitPlannerTests : IDisposable
+{
+    public GuidedVolumeExitPlannerTests()
+    {
+        if (GlobalGridManager.IsActive)
+            GlobalGridManager.Reset();
+        else
+            GlobalGridManager.Setup();
+
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+    }
+
+    public void Dispose()
+    {
+        PathManager.Reset();
+        GlobalGridManager.Reset();
+        TrailblazerManager.Reset();
+        GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public void TryPlan_ShouldRejectUnsupportedChartModes()
+    {
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene("GuidedPlannerRejectMode");
+
+        GuidedVolumeExitPlanner.TryPlan(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            TraversalMedium.Liquid,
+            GuidedPathMode.Swim,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 0,
+            out VolumePathRequest request,
+            out GuidedVolumeExitHandoff handoff,
+            out int totalCost).Should().BeFalse();
+
+        request.Should().BeNull();
+        handoff.Should().BeNull();
+        totalCost.Should().Be(0);
+    }
+
+    [Fact]
+    public void TryPlan_ShouldCreateAStarExitPlan_ForLocalSwimExit()
+    {
+        const string sceneKey = "GuidedPlannerAStar";
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+
+        GuidedVolumeExitPlanner.TryPlan(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            TraversalMedium.Liquid,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: (Fixed64)2,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            out VolumePathRequest request,
+            out GuidedVolumeExitHandoff handoff,
+            out int totalCost).Should().BeTrue();
+
+        request.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().NotBeNull();
+        handoff.TransitionId.Should().Be($"{sceneKey}-exit");
+        handoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+        totalCost.Should().BeGreaterThan(0);
+
+        handoff.TryCreateFollowupRequest(new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest followup).Should().BeTrue();
+        followup.Should().BeOfType<AStarPathRequest>();
+    }
+
+    [Fact]
+    public void TryPlan_ShouldCreateFlowFieldExitPlan_ForLocalSwimExit()
+    {
+        const string sceneKey = "GuidedPlannerFlow";
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+
+        GuidedVolumeExitPlanner.TryPlan(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            TraversalMedium.Liquid,
+            GuidedPathMode.FlowField,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: (Fixed64)2,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 8,
+            out VolumePathRequest request,
+            out GuidedVolumeExitHandoff handoff,
+            out int totalCost).Should().BeTrue();
+
+        request.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().NotBeNull();
+        handoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
+        handoff.FlowFieldExtraFloodRange.Should().Be(8);
+        totalCost.Should().BeGreaterThan(0);
+
+        handoff.TryCreateFollowupRequest(new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest followup).Should().BeTrue();
+        followup.Should().BeOfType<FlowFieldPathRequest>();
+    }
+
+    [Fact]
+    public void TryPlan_ShouldFail_WhenNoTransitionsCanExitVolume()
+    {
+        RegisterSolidTargetLine("GuidedPlannerNoTransition", new Vector3d(2, 0, 0), 3);
+        GuidedPathTestScene.AddWater(Vector3d.Zero);
+        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
+
+        GuidedVolumeExitPlanner.TryPlan(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            TraversalMedium.Liquid,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 0,
+            out VolumePathRequest request,
+            out GuidedVolumeExitHandoff handoff,
+            out int totalCost).Should().BeFalse();
+
+        request.Should().BeNull();
+        handoff.Should().BeNull();
+        totalCost.Should().Be(0);
+    }
+
+    private static void RegisterSolidTargetLine(string chartKey, Vector3d minBounds, int length)
+    {
+        var data = new bool[1, length, 1];
+        for (int i = 0; i < length; i++)
+            data[0, i, 0] = true;
+
+        PathTestFactory.RegisterFromData(chartKey, data, minBounds);
+    }
+}

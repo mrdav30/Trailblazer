@@ -56,13 +56,12 @@ internal static class GuidedVolumeExitPlanner
         VolumePathRequest bestRequest = null;
         int bestTotalCost = int.MaxValue;
 
-        TraversalTransition[] localTransitions = GetLocalDirectedTransitions(targetPosition);
+        TraversalTransition[] localTransitions = GetLocalDirectedTransitions(targetPosition, medium);
         if (TryPlanWithTransitions(
             localTransitions,
             origin,
             targetPosition,
             unitSize,
-            medium,
             chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
@@ -88,11 +87,10 @@ internal static class GuidedVolumeExitPlanner
         }
 
         if (!TryPlanWithTransitions(
-            TraversalTransitionQuery.GetDirectedTransitions(),
+            TraversalTransitionQuery.GetDirectedTransitions(medium, TraversalMedium.Solid),
             origin,
             targetPosition,
             unitSize,
-            medium,
             chartPathMode,
             allowUnwalkableEndpoints,
             allowTraversalTransitions,
@@ -125,7 +123,6 @@ internal static class GuidedVolumeExitPlanner
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        TraversalMedium medium,
         GuidedPathMode chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
@@ -144,20 +141,13 @@ internal static class GuidedVolumeExitPlanner
         for (int i = 0; i < transitions.Length; i++)
         {
             TraversalTransition transition = transitions[i];
-            if (!transition.Source.TryGetVolumeMedium(out TraversalMedium transitionMedium)
-                || transition.Destination.Medium != TraversalMedium.Solid
-                || transitionMedium != medium)
-            {
-                continue;
-            }
-
             VolumePathRequest volumeRequest = VolumePathRequest.Create(
                 origin,
                 transition.Source.Position,
                 unitSize,
                 aStarHeuristic,
                 allowUnwalkableEndpoints,
-                medium);
+                transition.Source.Medium);
             if (volumeRequest == null)
                 continue;
 
@@ -199,12 +189,17 @@ internal static class GuidedVolumeExitPlanner
         return foundPlan;
     }
 
-    private static TraversalTransition[] GetLocalDirectedTransitions(Vector3d targetPosition)
+    private static TraversalTransition[] GetLocalDirectedTransitions(
+        Vector3d targetPosition,
+        TraversalMedium medium)
     {
         if (!GlobalGridManager.TryGetVoxel(targetPosition, out Voxel targetVoxel))
             return Array.Empty<TraversalTransition>();
 
-        return TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(targetVoxel.GridIndex);
+        return TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(
+            targetVoxel.GridIndex,
+            medium,
+            TraversalMedium.Solid);
     }
 
     private static GuidedVolumeExitHandoff CreateHandoff(

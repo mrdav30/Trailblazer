@@ -28,21 +28,26 @@ internal static class TraversalTransitionQuery
 
     private static readonly SwiftDictionary<TraversalTransitionType, TraversalTransition[]> _directedTransitionsByType = new();
 
+    private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsByMediumPair = new();
+
     private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsFromSourceGrid = new();
 
+    private static readonly SwiftDictionary<long, TraversalTransition[]> _directedTransitionsFromSourceGridByType = new();
+
+    private static readonly SwiftDictionary<long, TraversalTransition[]> _directedTransitionsFromSourceGridByMediumPair = new();
+
     private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsToDestinationGrid = new();
+
+    private static readonly SwiftDictionary<long, TraversalTransition[]> _directedTransitionsToDestinationGridByMediumPair = new();
+
+    private static readonly SwiftDictionary<TraversalTransitionType, int[]> _sourceGridIndicesByType = new();
 
     public static TraversalTransition[] GetDirectedTransitions()
     {
         lock (_cacheLock)
         {
             EnsureCacheVersion();
-            if (_hasAllDirectedTransitions)
-                return _allDirectedTransitions;
-
-            _allDirectedTransitions = BuildAllDirectedTransitions(TraversalTransitionRegistry.GetActiveTransitions());
-            _hasAllDirectedTransitions = true;
-            return _allDirectedTransitions;
+            return GetOrBuildAllDirectedTransitions_NoLock();
         }
     }
 
@@ -54,14 +59,30 @@ internal static class TraversalTransitionQuery
             if (_directedTransitionsByType.TryGetValue(type, out TraversalTransition[] cached))
                 return cached;
 
-            if (!_hasAllDirectedTransitions)
-            {
-                _allDirectedTransitions = BuildAllDirectedTransitions(TraversalTransitionRegistry.GetActiveTransitions());
-                _hasAllDirectedTransitions = true;
-            }
-
-            TraversalTransition[] filtered = FilterDirectedTransitionsByType(_allDirectedTransitions, type);
+            TraversalTransition[] filtered = FilterDirectedTransitionsByType(
+                GetOrBuildAllDirectedTransitions_NoLock(),
+                type);
             _directedTransitionsByType[type] = filtered;
+            return filtered;
+        }
+    }
+
+    public static TraversalTransition[] GetDirectedTransitions(
+        TraversalMedium sourceMedium,
+        TraversalMedium destinationMedium)
+    {
+        lock (_cacheLock)
+        {
+            EnsureCacheVersion();
+            int key = MakeMediumPairKey(sourceMedium, destinationMedium);
+            if (_directedTransitionsByMediumPair.TryGetValue(key, out TraversalTransition[] cached))
+                return cached;
+
+            TraversalTransition[] filtered = FilterDirectedTransitionsByMediumPair(
+                GetOrBuildAllDirectedTransitions_NoLock(),
+                sourceMedium,
+                destinationMedium);
+            _directedTransitionsByMediumPair[key] = filtered;
             return filtered;
         }
     }
@@ -71,15 +92,47 @@ internal static class TraversalTransitionQuery
         lock (_cacheLock)
         {
             EnsureCacheVersion();
-            if (_directedTransitionsFromSourceGrid.TryGetValue(sourceGridIndex, out TraversalTransition[] cached))
+            return GetOrBuildDirectedTransitionsFromSourceGrid_NoLock(sourceGridIndex);
+        }
+    }
+
+    public static TraversalTransition[] GetDirectedTransitionsFromSourceGrid(
+        int sourceGridIndex,
+        TraversalTransitionType type)
+    {
+        lock (_cacheLock)
+        {
+            EnsureCacheVersion();
+            long key = MakeGridTypeKey(sourceGridIndex, type);
+            if (_directedTransitionsFromSourceGridByType.TryGetValue(key, out TraversalTransition[] cached))
                 return cached;
 
-            TraversalTransition[] directed = BuildDirectedTransitionsForGrid(
-                TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(sourceGridIndex),
-                sourceGridIndex,
-                GridMatchAxis.Source);
-            _directedTransitionsFromSourceGrid[sourceGridIndex] = directed;
-            return directed;
+            TraversalTransition[] filtered = FilterDirectedTransitionsByType(
+                GetOrBuildDirectedTransitionsFromSourceGrid_NoLock(sourceGridIndex),
+                type);
+            _directedTransitionsFromSourceGridByType[key] = filtered;
+            return filtered;
+        }
+    }
+
+    public static TraversalTransition[] GetDirectedTransitionsFromSourceGrid(
+        int sourceGridIndex,
+        TraversalMedium sourceMedium,
+        TraversalMedium destinationMedium)
+    {
+        lock (_cacheLock)
+        {
+            EnsureCacheVersion();
+            long key = MakeGridMediumPairKey(sourceGridIndex, sourceMedium, destinationMedium);
+            if (_directedTransitionsFromSourceGridByMediumPair.TryGetValue(key, out TraversalTransition[] cached))
+                return cached;
+
+            TraversalTransition[] filtered = FilterDirectedTransitionsByMediumPair(
+                GetOrBuildDirectedTransitionsFromSourceGrid_NoLock(sourceGridIndex),
+                sourceMedium,
+                destinationMedium);
+            _directedTransitionsFromSourceGridByMediumPair[key] = filtered;
+            return filtered;
         }
     }
 
@@ -88,15 +141,42 @@ internal static class TraversalTransitionQuery
         lock (_cacheLock)
         {
             EnsureCacheVersion();
-            if (_directedTransitionsToDestinationGrid.TryGetValue(destinationGridIndex, out TraversalTransition[] cached))
+            return GetOrBuildDirectedTransitionsToDestinationGrid_NoLock(destinationGridIndex);
+        }
+    }
+
+    public static TraversalTransition[] GetDirectedTransitionsToDestinationGrid(
+        int destinationGridIndex,
+        TraversalMedium sourceMedium,
+        TraversalMedium destinationMedium)
+    {
+        lock (_cacheLock)
+        {
+            EnsureCacheVersion();
+            long key = MakeGridMediumPairKey(destinationGridIndex, sourceMedium, destinationMedium);
+            if (_directedTransitionsToDestinationGridByMediumPair.TryGetValue(key, out TraversalTransition[] cached))
                 return cached;
 
-            TraversalTransition[] directed = BuildDirectedTransitionsForGrid(
-                TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(destinationGridIndex),
-                destinationGridIndex,
-                GridMatchAxis.Destination);
-            _directedTransitionsToDestinationGrid[destinationGridIndex] = directed;
-            return directed;
+            TraversalTransition[] filtered = FilterDirectedTransitionsByMediumPair(
+                GetOrBuildDirectedTransitionsToDestinationGrid_NoLock(destinationGridIndex),
+                sourceMedium,
+                destinationMedium);
+            _directedTransitionsToDestinationGridByMediumPair[key] = filtered;
+            return filtered;
+        }
+    }
+
+    internal static int[] GetSourceGridIndices(TraversalTransitionType type)
+    {
+        lock (_cacheLock)
+        {
+            EnsureCacheVersion();
+            if (_sourceGridIndicesByType.TryGetValue(type, out int[] cached))
+                return cached;
+
+            int[] sourceGridIndices = BuildSourceGridIndices(GetDirectedTransitions(type));
+            _sourceGridIndicesByType[type] = sourceGridIndices;
+            return sourceGridIndices;
         }
     }
 
@@ -109,8 +189,13 @@ internal static class TraversalTransitionQuery
         _allDirectedTransitions = Array.Empty<TraversalTransition>();
         _hasAllDirectedTransitions = false;
         _directedTransitionsByType.Clear();
+        _directedTransitionsByMediumPair.Clear();
         _directedTransitionsFromSourceGrid.Clear();
+        _directedTransitionsFromSourceGridByType.Clear();
+        _directedTransitionsFromSourceGridByMediumPair.Clear();
         _directedTransitionsToDestinationGrid.Clear();
+        _directedTransitionsToDestinationGridByMediumPair.Clear();
+        _sourceGridIndicesByType.Clear();
         _cachedRegistryVersion = registryVersion;
     }
 
@@ -131,6 +216,66 @@ internal static class TraversalTransitionQuery
         return filtered.Count == 0
             ? Array.Empty<TraversalTransition>()
             : filtered.ToArray();
+    }
+
+    private static TraversalTransition[] FilterDirectedTransitionsByMediumPair(
+        TraversalTransition[] transitions,
+        TraversalMedium sourceMedium,
+        TraversalMedium destinationMedium)
+    {
+        if (transitions.Length == 0)
+            return Array.Empty<TraversalTransition>();
+
+        SwiftList<TraversalTransition> filtered = new();
+        for (int i = 0; i < transitions.Length; i++)
+        {
+            TraversalTransition transition = transitions[i];
+            if (transition.Source.Medium == sourceMedium
+                && transition.Destination.Medium == destinationMedium)
+            {
+                filtered.Add(transition);
+            }
+        }
+
+        return filtered.Count == 0
+            ? Array.Empty<TraversalTransition>()
+            : filtered.ToArray();
+    }
+
+    private static TraversalTransition[] GetOrBuildAllDirectedTransitions_NoLock()
+    {
+        if (_hasAllDirectedTransitions)
+            return _allDirectedTransitions;
+
+        _allDirectedTransitions = BuildAllDirectedTransitions(TraversalTransitionRegistry.GetActiveTransitions());
+        _hasAllDirectedTransitions = true;
+        return _allDirectedTransitions;
+    }
+
+    private static TraversalTransition[] GetOrBuildDirectedTransitionsFromSourceGrid_NoLock(int sourceGridIndex)
+    {
+        if (_directedTransitionsFromSourceGrid.TryGetValue(sourceGridIndex, out TraversalTransition[] cached))
+            return cached;
+
+        TraversalTransition[] directed = BuildDirectedTransitionsForGrid(
+            TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(sourceGridIndex),
+            sourceGridIndex,
+            GridMatchAxis.Source);
+        _directedTransitionsFromSourceGrid[sourceGridIndex] = directed;
+        return directed;
+    }
+
+    private static TraversalTransition[] GetOrBuildDirectedTransitionsToDestinationGrid_NoLock(int destinationGridIndex)
+    {
+        if (_directedTransitionsToDestinationGrid.TryGetValue(destinationGridIndex, out TraversalTransition[] cached))
+            return cached;
+
+        TraversalTransition[] directed = BuildDirectedTransitionsForGrid(
+            TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(destinationGridIndex),
+            destinationGridIndex,
+            GridMatchAxis.Destination);
+        _directedTransitionsToDestinationGrid[destinationGridIndex] = directed;
+        return directed;
     }
 
     private static TraversalTransition[] BuildAllDirectedTransitions(
@@ -164,6 +309,25 @@ internal static class TraversalTransitionQuery
         }
 
         return SortTransitions(directed);
+    }
+
+    private static int[] BuildSourceGridIndices(TraversalTransition[] transitions)
+    {
+        if (transitions.Length == 0)
+            return Array.Empty<int>();
+
+        SwiftHashSet<int> uniqueGridIndices = new();
+        SwiftList<int> orderedGridIndices = new();
+        for (int i = 0; i < transitions.Length; i++)
+        {
+            int gridIndex = transitions[i].Source.VoxelIndex.GridIndex;
+            if (uniqueGridIndices.Add(gridIndex))
+                orderedGridIndices.Add(gridIndex);
+        }
+
+        int[] result = orderedGridIndices.ToArray();
+        Array.Sort(result);
+        return result;
     }
 
     private static bool MatchesGrid(
@@ -209,5 +373,25 @@ internal static class TraversalTransitionQuery
         TraversalTransition[] ordered = directed.ToArray();
         TraversalTransitionOrdering.Sort(ordered);
         return ordered;
+    }
+
+    private static int MakeMediumPairKey(
+        TraversalMedium sourceMedium,
+        TraversalMedium destinationMedium)
+    {
+        return ((int)sourceMedium << 16) | (int)destinationMedium;
+    }
+
+    private static long MakeGridTypeKey(int gridIndex, TraversalTransitionType type)
+    {
+        return ((long)(uint)gridIndex << 32) | (uint)type;
+    }
+
+    private static long MakeGridMediumPairKey(
+        int gridIndex,
+        TraversalMedium sourceMedium,
+        TraversalMedium destinationMedium)
+    {
+        return ((long)(uint)gridIndex << 32) | (uint)MakeMediumPairKey(sourceMedium, destinationMedium);
     }
 }

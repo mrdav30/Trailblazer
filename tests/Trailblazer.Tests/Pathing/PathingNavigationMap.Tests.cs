@@ -257,6 +257,40 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void TryGetClosestActiveTransition_ShouldStillReturnCloserNeighborGridTransition()
+    {
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            out _));
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(4, -4, -4), new Vector3d(12, 4, 4)),
+            out _));
+
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestLocalSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestLocalDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestNeighborSource", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint("ClosestNeighborDestination", new Vector3d(5, 0, 0));
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "closest-local-grid",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)))));
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "closest-neighbor-grid",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(5, 0, 0)))));
+
+        Assert.True(PathManager.TryGetClosestActiveTransition(
+            new Vector3d(3, 0, 0),
+            TraversalTransitionType.Jump,
+            out TraversalTransition closest));
+        Assert.Equal("closest-neighbor-grid", closest.Id);
+        Assert.Equal(new Vector3d(4, 0, 0), closest.Source.Position);
+    }
+
+    [Fact]
     public void UnloadChart_ShouldClearInitializationStateSoChartCanBeRegisteredAgain()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));

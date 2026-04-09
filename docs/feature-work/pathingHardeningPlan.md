@@ -395,7 +395,7 @@ Current note:
 
 ### Track 6. Transition Query And Hybrid Candidate Hardening
 
-Status: planned.
+Status: landed.
 
 The current closest-transition query is correct and deterministic, but the underlying transition
 discovery still falls back to broad linear scans in places that matter for both host queries and
@@ -424,6 +424,20 @@ Acceptance criteria:
 - hybrid single-transition and transition-pair fallback paths consume the tightened shared query
   infrastructure instead of ad hoc global snapshots
 - behavior stays deterministic and route quality does not regress
+
+Current note:
+
+- `TraversalTransitionQuery` now caches filtered directed snapshots by medium pair, by source grid
+  plus type, and by source/destination grid plus medium pair instead of relying only on
+  unfiltered global or grid-scoped snapshots
+- `PathManager.TryGetClosestActiveTransition(...)` now scans the local source grid first and uses
+  source-grid bounds to skip typed candidate grids whose bounds cannot beat the current best source
+  distance
+- `HybridRoutePlanner` now consumes shared solid-to-solid, solid-to-volume, and volume-to-solid
+  candidate caches for both local and global fallback planning instead of scanning
+  `GetDirectedTransitions()` world-wide
+- `GuidedVolumeExitPlanner` now uses the same medium-pair query narrowing for chart handoff
+  discovery so its global fallback no longer depends on the full directed-transition snapshot
 
 ### Track 7. Coverage And Documentation Hardening
 

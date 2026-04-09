@@ -346,27 +346,54 @@ public static class PathManager
         TraversalTransitionType transitionType,
         out TraversalTransition transition)
     {
-        TraversalTransition[] candidates = TraversalTransitionQuery.GetDirectedTransitions(transitionType);
-        if (candidates.Length == 0)
+        int[] sourceGridIndices = TraversalTransitionQuery.GetSourceGridIndices(transitionType);
+        if (sourceGridIndices.Length == 0)
         {
             transition = default;
             return false;
         }
 
-        int closestIndex = 0;
-        Fixed64 closestDistanceSq = (candidates[0].Source.Position - worldPosition).SqrMagnitude;
-        for (int i = 1; i < candidates.Length; i++)
+        bool found = false;
+        transition = default;
+        Fixed64 closestDistanceSq = Fixed64.Zero;
+        int originGridIndex = -1;
+
+        if (GlobalGridManager.TryGetGrid(worldPosition, out VoxelGrid originGrid))
         {
-            Fixed64 candidateDistanceSq = (candidates[i].Source.Position - worldPosition).SqrMagnitude;
-            if (candidateDistanceSq < closestDistanceSq)
-            {
-                closestDistanceSq = candidateDistanceSq;
-                closestIndex = i;
-            }
+            originGridIndex = originGrid.GlobalIndex;
+            EvaluateClosestTransitionCandidates(
+                TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(originGridIndex, transitionType),
+                worldPosition,
+                ref found,
+                ref transition,
+                ref closestDistanceSq);
+
+            if (found && closestDistanceSq == Fixed64.Zero)
+                return true;
         }
 
-        transition = candidates[closestIndex];
-        return true;
+        for (int i = 0; i < sourceGridIndices.Length; i++)
+        {
+            int sourceGridIndex = sourceGridIndices[i];
+            if (sourceGridIndex == originGridIndex
+                || !GlobalGridManager.TryGetGrid(sourceGridIndex, out VoxelGrid sourceGrid)
+                || (found && GetBoundsDistanceSq(worldPosition, sourceGrid.BoundsMin, sourceGrid.BoundsMax) >= closestDistanceSq))
+            {
+                continue;
+            }
+
+            EvaluateClosestTransitionCandidates(
+                TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(sourceGridIndex, transitionType),
+                worldPosition,
+                ref found,
+                ref transition,
+                ref closestDistanceSq);
+
+            if (found && closestDistanceSq == Fixed64.Zero)
+                break;
+        }
+
+        return found;
     }
 
     /// <summary>
@@ -376,6 +403,47 @@ public static class PathManager
     {
         foreach (NavigationChart chart in AllCharts)
             InitializeChart(chart.Name);
+    }
+
+    private static void EvaluateClosestTransitionCandidates(
+        TraversalTransition[] candidates,
+        Vector3d worldPosition,
+        ref bool found,
+        ref TraversalTransition closestTransition,
+        ref Fixed64 closestDistanceSq)
+    {
+        for (int i = 0; i < candidates.Length; i++)
+        {
+            Fixed64 candidateDistanceSq = (candidates[i].Source.Position - worldPosition).SqrMagnitude;
+            if (!found || candidateDistanceSq < closestDistanceSq)
+            {
+                found = true;
+                closestDistanceSq = candidateDistanceSq;
+                closestTransition = candidates[i];
+            }
+        }
+    }
+
+    private static Fixed64 GetBoundsDistanceSq(
+        Vector3d worldPosition,
+        Vector3d boundsMin,
+        Vector3d boundsMax)
+    {
+        Fixed64 xDistance = GetAxisDistanceToBounds(worldPosition.x, boundsMin.x, boundsMax.x);
+        Fixed64 yDistance = GetAxisDistanceToBounds(worldPosition.y, boundsMin.y, boundsMax.y);
+        Fixed64 zDistance = GetAxisDistanceToBounds(worldPosition.z, boundsMin.z, boundsMax.z);
+        return xDistance * xDistance + yDistance * yDistance + zDistance * zDistance;
+    }
+
+    private static Fixed64 GetAxisDistanceToBounds(Fixed64 value, Fixed64 boundsMin, Fixed64 boundsMax)
+    {
+        if (value < boundsMin)
+            return boundsMin - value;
+
+        if (value > boundsMax)
+            return value - boundsMax;
+
+        return Fixed64.Zero;
     }
 
     /// <summary>

@@ -106,6 +106,91 @@ public class TraversalTransitionQueryTests : IDisposable
     }
 
     [Fact]
+    public void FilteredDirectedQueries_ShouldReturnOnlyRequestedTypeAndMediumPairViews()
+    {
+        Vector3d solidSource = Vector3d.Zero;
+        Vector3d liquidPoint = new(1, 0, 0);
+        Vector3d solidDestination = new(2, 0, 0);
+
+        PathTestFactory.RegisterSingleWalkablePoint("QueryFilteredSolidSource", solidSource);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryFilteredSolidDestination", solidDestination);
+        PathTestFactory.RegisterGeneratedVolumePoint(liquidPoint, TraversalMedium.Liquid, "QueryFilteredLiquid");
+
+        Assert.True(GlobalGridManager.TryGetVoxel(solidSource, out Voxel sourceVoxel));
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "filtered-swim",
+            type: TraversalTransitionType.SwimEntry,
+            source: TraversalTransitionAnchor.Solid(solidSource),
+            destination: TraversalTransitionAnchor.Liquid(liquidPoint),
+            isBidirectional: true)));
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "filtered-jump",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(solidSource),
+            destination: TraversalTransitionAnchor.Solid(solidDestination))));
+
+        TraversalTransition[] jumpTransitions = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
+            sourceVoxel.GridIndex,
+            TraversalTransitionType.Jump);
+        TraversalTransition[] solidToLiquid = TraversalTransitionQuery.GetDirectedTransitions(
+            TraversalMedium.Solid,
+            TraversalMedium.Liquid);
+        TraversalTransition[] liquidToSolid = TraversalTransitionQuery.GetDirectedTransitions(
+            TraversalMedium.Liquid,
+            TraversalMedium.Solid);
+
+        Assert.Single(jumpTransitions);
+        Assert.Equal("filtered-jump", jumpTransitions[0].Id);
+
+        Assert.Single(solidToLiquid);
+        Assert.Equal("filtered-swim", solidToLiquid[0].Id);
+        Assert.Equal(TraversalMedium.Solid, solidToLiquid[0].Source.Medium);
+        Assert.Equal(TraversalMedium.Liquid, solidToLiquid[0].Destination.Medium);
+
+        Assert.Single(liquidToSolid);
+        Assert.Equal("filtered-swim", liquidToSolid[0].Id);
+        Assert.Equal(TraversalMedium.Liquid, liquidToSolid[0].Source.Medium);
+        Assert.Equal(TraversalMedium.Solid, liquidToSolid[0].Destination.Medium);
+    }
+
+    [Fact]
+    public void FilteredGridQueries_ShouldRefreshWhenRegistryVersionChanges()
+    {
+        Vector3d source = Vector3d.Zero;
+        Vector3d mid = new(1, 0, 0);
+        Vector3d end = new(2, 0, 0);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryFilteredRefreshSource", source);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryFilteredRefreshMid", mid);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryFilteredRefreshEnd", end);
+
+        Assert.True(GlobalGridManager.TryGetVoxel(source, out Voxel sourceVoxel));
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "filtered-refresh-a",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(source),
+            destination: TraversalTransitionAnchor.Solid(mid))));
+
+        TraversalTransition[] before = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
+            sourceVoxel.GridIndex,
+            TraversalTransitionType.Jump);
+        Assert.Single(before);
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "filtered-refresh-b",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(mid),
+            destination: TraversalTransitionAnchor.Solid(end))));
+
+        TraversalTransition[] after = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
+            sourceVoxel.GridIndex,
+            TraversalTransitionType.Jump);
+        Assert.Equal(2, after.Length);
+    }
+
+    [Fact]
     public void DirectedQueries_ShouldOnlyUseActiveTransitions_WhenManualOverrideChanges()
     {
         Vector3d source = Vector3d.Zero;

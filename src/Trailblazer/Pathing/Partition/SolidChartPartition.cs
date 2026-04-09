@@ -261,61 +261,100 @@ public class SolidChartPartition : IVoxelPartition
         if (Neighbors == null)
             throw new InvalidOperationException("Must call BindNeighbors() before clearance.");
 
-        if (_isClearanceValid) return;
+        if (_isClearanceValid)
+            return;
+
         _isClearanceValid = true;
 
-        if (!GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out Voxel origin)
-         || !IsWalkable)
+        if (!TryGetClearanceOrigin(out Voxel origin))
         {
             _clearanceRadiusInVoxels = origin?.IsBlocked == true ? (byte)0 : DefaultDegreeCap;
             return;
         }
 
+        _clearanceRadiusInVoxels = ComputeClearanceRadius();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool TryGetClearanceOrigin(out Voxel origin)
+    {
+        return GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out origin)
+            && IsWalkable;
+    }
+
+    private byte ComputeClearanceRadius()
+    {
         // BFS from this voxel until we hit any blocked-or-missing neighbor
         byte best = DefaultDegreeCap;
         SwiftQueue<(SolidChartPartition v, byte dist)> q = ClearanceQueuePool.Rent();
         SwiftHashSet<SolidChartPartition> visited = PathManager.PartitionSetPool.Rent();
 
-        q.Enqueue((this, 0));
-        visited.Add(this);
-
-        // stop BFS either when queue empty or we’ve already found best=1
-        while (q.Count > 0 && best > 1)
+        try
         {
-            (SolidChartPartition part, byte dist) = q.Dequeue();
+            q.Enqueue((this, 0));
+            visited.Add(this);
 
-            // any neighbor that’s missing or blocked → candidate = dist+1
-            for (int i = 0; i < part.Neighbors.Length; i++)
+            // stop BFS either when queue empty or we’ve already found best=1
+            while (q.Count > 0 && best > 1)
             {
-                byte nextDist = (byte)(dist + 1);
-                SolidChartPartition nPart = part.Neighbors[i];
-
-                // 1) missing or blocked → candidate radius = nextDist
-                if (nPart == null || !nPart.IsWalkable)
-                {
-                    // skip above, below, or any above/below diagonals
-                    if (i == 4 || i == 5 || i >= 10)
-                        continue;
-
-                    best = Math.Min(best, nextDist);
-                    continue;
-                }
-
-                // 2) otherwise, keep exploring *only* up to your cap
-                if (nextDist < best
-                 && nextDist < DefaultDegreeCap
-                 && visited.Add(nPart))
-                {
-                    q.Enqueue((nPart, nextDist));
-                }
+                (SolidChartPartition part, byte dist) = q.Dequeue();
+                ExploreClearanceNeighbors(part, dist, visited, q, ref best);
             }
+
+            // clamp to cap so you never return > DefaultDegreeCap
+            return Math.Min(best, DefaultDegreeCap);
         }
+        finally
+        {
+            ClearanceQueuePool.Release(q);
+            PathManager.PartitionSetPool.Release(visited);
+        }
+    }
 
-        // clamp to cap so you never return > DefaultDegreeCap
-        _clearanceRadiusInVoxels = Math.Min(best, DefaultDegreeCap);
+    private void ExploreClearanceNeighbors(
+        SolidChartPartition part,
+        byte dist,
+        SwiftHashSet<SolidChartPartition> visited,
+        SwiftQueue<(SolidChartPartition v, byte dist)> queue,
+        ref byte best)
+    {
+        for (int i = 0; i < part.Neighbors.Length; i++)
+        {
+            byte nextDist = (byte)(dist + 1);
+            SolidChartPartition neighbor = part.Neighbors[i];
 
-        ClearanceQueuePool.Release(q);
-        PathManager.PartitionSetPool.Release(visited);
+            if (IsClearanceBoundary(i, neighbor))
+            {
+                best = Math.Min(best, nextDist);
+                continue;
+            }
+
+            if (ShouldExpandClearanceSearch(nextDist, best, neighbor, visited))
+                queue.Enqueue((neighbor, nextDist));
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsClearanceBoundary(int neighborIndex, SolidChartPartition neighbor)
+    {
+        if (neighbor != null && neighbor.IsWalkable)
+            return false;
+
+        // skip above, below, or any above/below diagonals
+        return neighborIndex != 4 && neighborIndex != 5 && neighborIndex < 10;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool ShouldExpandClearanceSearch(
+        byte nextDist,
+        byte best,
+        SolidChartPartition neighbor,
+        SwiftHashSet<SolidChartPartition> visited)
+    {
+        return neighbor != null
+            && nextDist < best
+            && nextDist < DefaultDegreeCap
+            && visited.Add(neighbor);
     }
 
     #region NavigationChart Management

@@ -1625,35 +1625,26 @@ public static class PathManager
         if (chart == null || !chart.TrySetCell(x, y, z, cell, out _))
             return false;
 
-        managedChartsToRefresh?.Add(chart.Name);
+        TrackManagedChartRefresh(chart, managedChartsToRefresh);
 
         if (!chart.IsInitialized)
             return true;
 
-        Vector3d position = chart.GetWorldPosition(x, y, z);
-        if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
+        if (!TryGetChartUpdateVoxelContext(
+            chart,
+            x,
+            y,
+            z,
+            managedChartsToRefresh,
+            out Voxel voxel,
+            out ResolvedChartVoxelState state,
+            out NavigationChartCell previousEffectiveCell,
+            out string previousEffectiveOwner))
+        {
             return true;
-
-        _resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state);
-        if (state != null && state.HasAnyOwners)
-            state.AddChartOwnersTo(managedChartsToRefresh);
-
-        NavigationChartCell previousEffectiveCell = state?.EffectiveCell ?? NavigationChartCell.Empty;
-        string previousEffectiveOwner = state?.EffectiveChartOwner;
-
-        if (cell.HasTraversalData)
-        {
-            state ??= new ResolvedChartVoxelState();
-            state.AddOwner(chart.Name, cell, chart.Priority, chart.RegistrationOrder);
-            _resolvedChartVoxelStates[voxel.GlobalIndex] = state;
         }
-        else if (state != null && state.ContainsOwner(chart.Name))
-        {
-            state.RemoveOwner(chart.Name);
-            if (!state.HasAnyOwners)
-                _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
-        }
-        else
+
+        if (!TryUpdateResolvedVoxelStateForChartCell(chart, cell, voxel.GlobalIndex, ref state))
             return true;
 
         ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
@@ -1665,6 +1656,69 @@ public static class PathManager
             invalidatedChartKeys);
         if (state != null && state.HasAnyOwners)
             state.AddChartOwnersTo(managedChartsToRefresh);
+
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void TrackManagedChartRefresh(
+        NavigationChart chart,
+        SwiftHashSet<string> managedChartsToRefresh)
+    {
+        managedChartsToRefresh?.Add(chart.Name);
+    }
+
+    private static bool TryGetChartUpdateVoxelContext(
+        NavigationChart chart,
+        int x,
+        int y,
+        int z,
+        SwiftHashSet<string> managedChartsToRefresh,
+        out Voxel voxel,
+        out ResolvedChartVoxelState state,
+        out NavigationChartCell previousEffectiveCell,
+        out string previousEffectiveOwner)
+    {
+        voxel = null;
+        state = null;
+        previousEffectiveCell = NavigationChartCell.Empty;
+        previousEffectiveOwner = null;
+
+        Vector3d position = chart.GetWorldPosition(x, y, z);
+        if (!GlobalGridManager.TryGetVoxel(position, out voxel))
+            return false;
+
+        _resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out state);
+        if (state != null && state.HasAnyOwners)
+        {
+            state.AddChartOwnersTo(managedChartsToRefresh);
+            previousEffectiveCell = state.EffectiveCell;
+            previousEffectiveOwner = state.EffectiveChartOwner;
+        }
+
+        return true;
+    }
+
+    private static bool TryUpdateResolvedVoxelStateForChartCell(
+        NavigationChart chart,
+        NavigationChartCell cell,
+        GlobalVoxelIndex voxelIndex,
+        ref ResolvedChartVoxelState state)
+    {
+        if (cell.HasTraversalData)
+        {
+            state ??= new ResolvedChartVoxelState();
+            state.AddOwner(chart.Name, cell, chart.Priority, chart.RegistrationOrder);
+            _resolvedChartVoxelStates[voxelIndex] = state;
+            return true;
+        }
+
+        if (state == null || !state.ContainsOwner(chart.Name))
+            return false;
+
+        state.RemoveOwner(chart.Name);
+        if (!state.HasAnyOwners)
+            _resolvedChartVoxelStates.Remove(voxelIndex);
 
         return true;
     }

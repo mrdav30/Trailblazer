@@ -1,5 +1,6 @@
 ﻿using Chronicler;
 using FixedMathSharp;
+using System.Runtime.CompilerServices;
 using Trailblazer.Support;
 
 namespace Trailblazer.Navigation.Motor;
@@ -238,38 +239,13 @@ public class PlatformLocomotion : ILocomotion
         // Clear it to avoid double-applying next frame
         FramePlatformVelocity = Vector3d.Zero;
         PlatformSnapshot? refreshedPlatform = NormalizeKinematicPlatform(condition?.Platform);
-        MovementTransfer = refreshedPlatform?.SupportsKinematicMotion == true
-            ? condition?.MotionTransferState ?? MotionTransfer.None
-            : MotionTransfer.None;
+        MovementTransfer = ResolveMovementTransfer(refreshedPlatform, condition);
+        ClearHoldPlatformIfInactive(refreshedPlatform);
 
-        if (refreshedPlatform?.SupportsKinematicMotion != true)
-        {
-            HoldPlatform = null;
-            HoldPlatformFrames = 0;
-        }
-
-        if (!DidPlatformChange(refreshedPlatform))
-        {
-            bool hasTransformRefresh = ActivePlatform?.SupportsKinematicMotion == true
-                && refreshedPlatform?.SupportsKinematicMotion == true
-                && !ActivePlatform.Value.Transform.Equals(refreshedPlatform.Value.Transform);
-
-            if (hasTransformRefresh)
-                PreviousPlatform = ActivePlatform;
-
-            // Same platform id, newer transform: refresh the snapshot without marking a platform swap.
-            ActivePlatform = refreshedPlatform;
-            _preservePreviousTransformForAttachment = hasTransformRefresh;
+        if (TryRefreshExistingPlatform(refreshedPlatform))
             return;
-        }
 
-        PreviousPlatform = ActivePlatform?.SupportsKinematicMotion != true
-            ? refreshedPlatform
-            : ActivePlatform;
-        ActivePlatform = refreshedPlatform;
-
-        IsNewPlatform = refreshedPlatform?.SupportsKinematicMotion == true;
-        _preservePreviousTransformForAttachment = false;
+        SwapActivePlatform(refreshedPlatform);
     }
 
     /// <summary>
@@ -284,6 +260,53 @@ public class PlatformLocomotion : ILocomotion
         return platform?.SupportsKinematicMotion == true
             ? platform
             : null;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static MotionTransfer ResolveMovementTransfer(PlatformSnapshot? refreshedPlatform, GroundCondition? condition)
+    {
+        return refreshedPlatform?.SupportsKinematicMotion == true
+            ? condition?.MotionTransferState ?? MotionTransfer.None
+            : MotionTransfer.None;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ClearHoldPlatformIfInactive(PlatformSnapshot? refreshedPlatform)
+    {
+        if (refreshedPlatform?.SupportsKinematicMotion == true)
+            return;
+
+        HoldPlatform = null;
+        HoldPlatformFrames = 0;
+    }
+
+    private bool TryRefreshExistingPlatform(PlatformSnapshot? refreshedPlatform)
+    {
+        if (DidPlatformChange(refreshedPlatform))
+            return false;
+
+        bool hasTransformRefresh = ActivePlatform?.SupportsKinematicMotion == true
+            && refreshedPlatform?.SupportsKinematicMotion == true
+            && !ActivePlatform.Value.Transform.Equals(refreshedPlatform.Value.Transform);
+
+        if (hasTransformRefresh)
+            PreviousPlatform = ActivePlatform;
+
+        // Same platform id, newer transform: refresh the snapshot without marking a platform swap.
+        ActivePlatform = refreshedPlatform;
+        _preservePreviousTransformForAttachment = hasTransformRefresh;
+        return true;
+    }
+
+    private void SwapActivePlatform(PlatformSnapshot? refreshedPlatform)
+    {
+        PreviousPlatform = ActivePlatform?.SupportsKinematicMotion != true
+            ? refreshedPlatform
+            : ActivePlatform;
+        ActivePlatform = refreshedPlatform;
+
+        IsNewPlatform = refreshedPlatform?.SupportsKinematicMotion == true;
+        _preservePreviousTransformForAttachment = false;
     }
 
     /// <summary>

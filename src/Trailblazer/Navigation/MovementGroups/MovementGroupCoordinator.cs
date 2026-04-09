@@ -63,85 +63,20 @@ internal static class MovementGroupCoordinator
         if (session.GroupId < 0)
             return new(MovementGroupTravelMode.None, requestedDestination);
 
-        if (!_movementGroups.TryGetValue(session.GroupId, out MovementGroupState group))
-        {
-            group = new();
-            _movementGroups[session.GroupId] = group;
-        }
-
-        if (!group.Members.TryGetValue(session.GroupIndex, out MovementGroupMember self))
-        {
-            self = new();
-            session.GroupIndex = group.Members.Add(self);
-            resetFormationOffset = true;
-        }
+        MovementGroupState group = GetOrCreateGroup(session.GroupId);
+        MovementGroupMember self = GetOrCreateMember(session, group, ref resetFormationOffset);
 
         if (self.RequestedDestination != requestedDestination)
             resetFormationOffset = true;
 
-        self.Position = position;
-        self.Radius = radius;
-        self.RequestedDestination = requestedDestination;
-        self.LastSeenFrame = TrailblazerManager.FrameCount;
+        UpdateMemberState(self, requestedDestination, position, radius, resetFormationOffset);
+        UpdateMembership(session, self, requestedDestination);
 
-        if (resetFormationOffset)
-            self.HasFormationOffset = false;
-
-        if (session.HasOwnerId)
-        {
-            if (self.HasOccupantId && self.OccupantId != session.OwnerId)
-                _movementGroupMemberships.Remove(self.OccupantId);
-
-            self.OccupantId = session.OwnerId;
-            self.HasOccupantId = true;
-
-            _movementGroupMemberships[session.OwnerId] = new MovementGroupMembership
-            {
-                GroupId = session.GroupId,
-                RequestedDestination = requestedDestination,
-                LastSeenFrame = self.LastSeenFrame
-            };
-        }
-
-        Vector3d groupCenter = Vector3d.Zero;
-        Fixed64 averageRadius = Fixed64.Zero;
-        int groupCount = 0;
         int minFrame = TrailblazerManager.FrameCount - MovementGroupHistoryFrames;
-
-        foreach (MovementGroupMember member in group.Members)
-        {
-            if (member.LastSeenFrame < minFrame || member.RequestedDestination != requestedDestination)
-                continue;
-
-            groupCenter += member.Position;
-            averageRadius += member.Radius;
-            groupCount++;
-        }
-
-        if (groupCount < MinMovementGroupSize)
+        if (!TryGetFormationMetrics(group, requestedDestination, minFrame, out Vector3d groupCenter, out Fixed64 averageRadius, out int groupCount))
             return new(MovementGroupTravelMode.Individual, requestedDestination);
 
-        groupCenter /= groupCount;
-        averageRadius = (averageRadius / groupCount) + (GlobalGridManager.VoxelSize * Fixed64.Half);
-
-        Fixed64 maxSpreadSq = Fixed64.Zero;
-        foreach (MovementGroupMember member in group.Members)
-        {
-            if (member.LastSeenFrame < minFrame || member.RequestedDestination != requestedDestination)
-                continue;
-
-            Vector3d formationOffset = member.Position - groupCenter;
-            if (!member.HasFormationOffset)
-            {
-                member.FormationOffset = formationOffset;
-                member.HasFormationOffset = true;
-            }
-
-            Fixed64 spreadSq = formationOffset.SqrMagnitude;
-            if (spreadSq > maxSpreadSq)
-                maxSpreadSq = spreadSq;
-        }
-
+        Fixed64 maxSpreadSq = UpdateFormationOffsets(group, requestedDestination, minFrame, groupCenter);
         Fixed64 allowedSpreadSq = averageRadius * averageRadius * (Fixed64)(groupCount * 2);
         Fixed64 distanceToSharedDestinationSq = (requestedDestination - groupCenter).SqrMagnitude;
         if (maxSpreadSq > allowedSpreadSq || distanceToSharedDestinationSq <= maxSpreadSq)
@@ -191,5 +126,133 @@ internal static class MovementGroupCoordinator
     {
         _movementGroups.Clear();
         _movementGroupMemberships.Clear();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static MovementGroupState GetOrCreateGroup(int groupId)
+    {
+        if (_movementGroups.TryGetValue(groupId, out MovementGroupState group))
+            return group;
+
+        group = new();
+        _movementGroups[groupId] = group;
+        return group;
+    }
+
+    private static MovementGroupMember GetOrCreateMember(
+        MovementGroupSession session,
+        MovementGroupState group,
+        ref bool resetFormationOffset)
+    {
+        if (group.Members.TryGetValue(session.GroupIndex, out MovementGroupMember self))
+            return self;
+
+        self = new();
+        session.GroupIndex = group.Members.Add(self);
+        resetFormationOffset = true;
+        return self;
+    }
+
+    private static void UpdateMemberState(
+        MovementGroupMember self,
+        Vector3d requestedDestination,
+        Vector3d position,
+        Fixed64 radius,
+        bool resetFormationOffset)
+    {
+        self.Position = position;
+        self.Radius = radius;
+        self.RequestedDestination = requestedDestination;
+        self.LastSeenFrame = TrailblazerManager.FrameCount;
+
+        if (resetFormationOffset)
+            self.HasFormationOffset = false;
+    }
+
+    private static void UpdateMembership(
+        MovementGroupSession session,
+        MovementGroupMember self,
+        Vector3d requestedDestination)
+    {
+        if (!session.HasOwnerId)
+            return;
+
+        if (self.HasOccupantId && self.OccupantId != session.OwnerId)
+            _movementGroupMemberships.Remove(self.OccupantId);
+
+        self.OccupantId = session.OwnerId;
+        self.HasOccupantId = true;
+
+        _movementGroupMemberships[session.OwnerId] = new MovementGroupMembership
+        {
+            GroupId = session.GroupId,
+            RequestedDestination = requestedDestination,
+            LastSeenFrame = self.LastSeenFrame
+        };
+    }
+
+    private static bool TryGetFormationMetrics(
+        MovementGroupState group,
+        Vector3d requestedDestination,
+        int minFrame,
+        out Vector3d groupCenter,
+        out Fixed64 averageRadius,
+        out int groupCount)
+    {
+        groupCenter = Vector3d.Zero;
+        averageRadius = Fixed64.Zero;
+        groupCount = 0;
+
+        foreach (MovementGroupMember member in group.Members)
+        {
+            if (!IsEligibleGroupMember(member, requestedDestination, minFrame))
+                continue;
+
+            groupCenter += member.Position;
+            averageRadius += member.Radius;
+            groupCount++;
+        }
+
+        if (groupCount < MinMovementGroupSize)
+            return false;
+
+        groupCenter /= groupCount;
+        averageRadius = (averageRadius / groupCount) + (GlobalGridManager.VoxelSize * Fixed64.Half);
+        return true;
+    }
+
+    private static Fixed64 UpdateFormationOffsets(
+        MovementGroupState group,
+        Vector3d requestedDestination,
+        int minFrame,
+        Vector3d groupCenter)
+    {
+        Fixed64 maxSpreadSq = Fixed64.Zero;
+
+        foreach (MovementGroupMember member in group.Members)
+        {
+            if (!IsEligibleGroupMember(member, requestedDestination, minFrame))
+                continue;
+
+            Vector3d formationOffset = member.Position - groupCenter;
+            if (!member.HasFormationOffset)
+            {
+                member.FormationOffset = formationOffset;
+                member.HasFormationOffset = true;
+            }
+
+            Fixed64 spreadSq = formationOffset.SqrMagnitude;
+            if (spreadSq > maxSpreadSq)
+                maxSpreadSq = spreadSq;
+        }
+
+        return maxSpreadSq;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsEligibleGroupMember(MovementGroupMember member, Vector3d requestedDestination, int minFrame)
+    {
+        return member.LastSeenFrame >= minFrame
+            && member.RequestedDestination == requestedDestination;
     }
 }

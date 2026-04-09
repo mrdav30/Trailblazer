@@ -97,6 +97,21 @@ public class FlyLocomotionTests : IDisposable
         agent.Motor.Handler.Fall.IsFalling.Should().BeTrue();
     }
 
+    [Fact]
+    public void Given_FlyingAgent_When_QueryingHorizontalFlightSpeed_Then_ShouldUseFlightSpeedLimits()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(
+            startPosition: new Vector3d(0, 10, 0),
+            startingMedium: TraversalMedium.Gas);
+
+        agent.Motor.Handler.Fly.IsFlying = true;
+        agent.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)7;
+
+        Fixed64 speed = agent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast);
+
+        speed.Should().Be((Fixed64)7);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

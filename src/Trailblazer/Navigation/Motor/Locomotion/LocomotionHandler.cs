@@ -40,6 +40,10 @@ public class LocomotionHandler : IRecordable
 
     #region Locomotions
 
+    // TODO: instead of seperate properties, store this in a SwiftBucket<ILocomotion> or similar for more dynamic access and iteration. 
+    // The current properties are more convenient but less flexible.
+    // This should also allow us to reduce some of the boilerplate in the composition or lookup methods and make it easier to add new locomotion types without modifying the handler.
+
     /// <summary>
     /// Handles general movement, including speed limits, acceleration, and velocity calculations.
     /// </summary>
@@ -259,16 +263,25 @@ public class LocomotionHandler : IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ILocomotion GetLocomotion(Type type)
     {
-        return type.Name switch
+        if (!TryResolveLocomotionSlot(type, out LocomotionSlot slot))
+            return null;
+
+        return GetLocomotion(slot);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private ILocomotion GetLocomotion(LocomotionSlot slot)
+    {
+        return slot switch
         {
-            nameof(MoveLocomotion) => Move,
-            nameof(PlatformLocomotion) => Platform,
-            nameof(JumpLocomotion) => Jump,
-            nameof(FallLocomotion) => Fall,
-            nameof(SlideLocomotion) => Slide,
-            nameof(SwimLocomotion) => Swim,
-            nameof(FlyLocomotion) => Fly,
-            _ => null,
+            LocomotionSlot.Move => Move,
+            LocomotionSlot.Platform => Platform,
+            LocomotionSlot.Jump => Jump,
+            LocomotionSlot.Fall => Fall,
+            LocomotionSlot.Slide => Slide,
+            LocomotionSlot.Swim => Swim,
+            LocomotionSlot.Fly => Fly,
+            _ => null
         };
     }
 
@@ -299,47 +312,41 @@ public class LocomotionHandler : IRecordable
 
     private void SetLocomotion(Type type, ILocomotion locomotion)
     {
-        switch (type.Name)
+        if (!TryResolveLocomotionSlot(type, out LocomotionSlot slot))
+            throw new NotSupportedException($"Unsupported locomotion type '{type.Name}'.");
+
+        SetLocomotion(slot, locomotion);
+    }
+
+    private void SetLocomotion(LocomotionSlot slot, ILocomotion locomotion)
+    {
+        switch (slot)
         {
-            case nameof(MoveLocomotion):
-                {
-                    Move = locomotion as MoveLocomotion
-                        ?? throw new InvalidOperationException("Move locomotion cannot be removed.");
-                    return;
-                }
-            case nameof(PlatformLocomotion):
-                {
-                    Platform = locomotion as PlatformLocomotion;
-                    return;
-                }
-            case nameof(JumpLocomotion):
-                {
-                    Jump = locomotion as JumpLocomotion;
-                    return;
-                }
-            case nameof(FallLocomotion):
-                {
-                    Fall = locomotion as FallLocomotion
-                        ?? throw new InvalidOperationException("Fall locomotion cannot be removed.");
-                    return;
-                }
-            case nameof(SlideLocomotion):
-                {
-                    Slide = locomotion as SlideLocomotion;
-                    return;
-                }
-            case nameof(SwimLocomotion):
-                {
-                    Swim = locomotion as SwimLocomotion;
-                    return;
-                }
-            case nameof(FlyLocomotion):
-                {
-                    Fly = locomotion as FlyLocomotion;
-                    return;
-                }
+            case LocomotionSlot.Move:
+                Move = locomotion as MoveLocomotion
+                    ?? throw new InvalidOperationException("Move locomotion cannot be removed.");
+                return;
+            case LocomotionSlot.Platform:
+                Platform = locomotion as PlatformLocomotion;
+                return;
+            case LocomotionSlot.Jump:
+                Jump = locomotion as JumpLocomotion;
+                return;
+            case LocomotionSlot.Fall:
+                Fall = locomotion as FallLocomotion
+                    ?? throw new InvalidOperationException("Fall locomotion cannot be removed.");
+                return;
+            case LocomotionSlot.Slide:
+                Slide = locomotion as SlideLocomotion;
+                return;
+            case LocomotionSlot.Swim:
+                Swim = locomotion as SwimLocomotion;
+                return;
+            case LocomotionSlot.Fly:
+                Fly = locomotion as FlyLocomotion;
+                return;
             default:
-                throw new NotSupportedException($"Unsupported locomotion type '{type.Name}'.");
+                throw new NotSupportedException($"Unsupported locomotion slot '{slot}'.");
         }
     }
 
@@ -446,4 +453,63 @@ public class LocomotionHandler : IRecordable
     }
 
     #endregion
+
+    private static bool TryResolveLocomotionSlot(Type type, out LocomotionSlot slot)
+    {
+        if (type == typeof(MoveLocomotion))
+        {
+            slot = LocomotionSlot.Move;
+            return true;
+        }
+
+        if (type == typeof(PlatformLocomotion))
+        {
+            slot = LocomotionSlot.Platform;
+            return true;
+        }
+
+        if (type == typeof(JumpLocomotion))
+        {
+            slot = LocomotionSlot.Jump;
+            return true;
+        }
+
+        if (type == typeof(FallLocomotion))
+        {
+            slot = LocomotionSlot.Fall;
+            return true;
+        }
+
+        if (type == typeof(SlideLocomotion))
+        {
+            slot = LocomotionSlot.Slide;
+            return true;
+        }
+
+        if (type == typeof(SwimLocomotion))
+        {
+            slot = LocomotionSlot.Swim;
+            return true;
+        }
+
+        if (type == typeof(FlyLocomotion))
+        {
+            slot = LocomotionSlot.Fly;
+            return true;
+        }
+
+        slot = default;
+        return false;
+    }
+
+    private enum LocomotionSlot
+    {
+        Move,
+        Platform,
+        Jump,
+        Fall,
+        Slide,
+        Swim,
+        Fly
+    }
 }

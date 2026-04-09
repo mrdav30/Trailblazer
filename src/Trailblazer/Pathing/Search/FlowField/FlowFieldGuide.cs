@@ -187,32 +187,32 @@ public class FlowFieldGuide : IGuide
             switch (currentStep.Kind)
             {
                 case HybridRouteStepKind.Waypoint:
-                    direction = (currentStep.WaypointPosition - origin).Normalize();
+                    if (!TryGetWaypointStageMovementDirection(
+                        origin,
+                        currentStep,
+                        ref remainingStageAdvances,
+                        out direction))
+                    {
+                        return false;
+                    }
+
                     if (direction != Vector3d.Zero)
                         return true;
-
-                    if (!TryAdvanceStage(ref remainingStageAdvances))
-                        return false;
 
                     break;
 
                 case HybridRouteStepKind.PathSegment:
-                    if (!TryGetOrCreateActiveStageGuide(currentStep, out IGuide activeGuide))
-                        return false;
-
-                    if (activeGuide is IWaypointGuide waypointGuide)
-                        direction = waypointGuide.GetCurrentWaypointDirection(origin);
-                    else
-                        activeGuide.TryGetMovementDirection(origin, out direction);
-
-                    if (direction != Vector3d.Zero)
-                        return true;
-
-                    if (!IsStageTargetReached(origin, currentStep)
-                        || !TryAdvanceStage(ref remainingStageAdvances))
+                    if (!TryGetSegmentStageMovementDirection(
+                        origin,
+                        currentStep,
+                        ref remainingStageAdvances,
+                        out direction))
                     {
                         return false;
                     }
+
+                    if (direction != Vector3d.Zero)
+                        return true;
 
                     break;
 
@@ -222,6 +222,36 @@ public class FlowFieldGuide : IGuide
         }
 
         return false;
+    }
+
+    private bool TryGetWaypointStageMovementDirection(
+        Vector3d origin,
+        HybridRouteStep currentStep,
+        ref int remainingStageAdvances,
+        out Vector3d direction)
+    {
+        direction = (currentStep.WaypointPosition - origin).Normalize();
+        return direction != Vector3d.Zero || TryAdvanceStage(ref remainingStageAdvances);
+    }
+
+    private bool TryGetSegmentStageMovementDirection(
+        Vector3d origin,
+        HybridRouteStep currentStep,
+        ref int remainingStageAdvances,
+        out Vector3d direction)
+    {
+        direction = Vector3d.Zero;
+        if (!TryGetOrCreateActiveStageGuide(currentStep, out IGuide activeGuide))
+            return false;
+
+        if (activeGuide is IWaypointGuide waypointGuide)
+            direction = waypointGuide.GetCurrentWaypointDirection(origin);
+        else
+            activeGuide.TryGetMovementDirection(origin, out direction);
+
+        return direction != Vector3d.Zero
+            || (IsStageTargetReached(origin, currentStep)
+                && TryAdvanceStage(ref remainingStageAdvances));
     }
 
     /// <summary>

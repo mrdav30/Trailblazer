@@ -449,124 +449,36 @@ public class NavSteering : IRecordable
         if (!CanMove)
             return Vector3d.Zero;
 
-        if (ShouldMove && !IsAtDestination)
+        if (!ShouldMove || IsAtDestination)
+            return FinalizeIdleHeading(navigator.Speed);
+
+        if (!TryEnsureCurrentRequest(out Vector3d heading))
+            return heading;
+
+        bool usesVolumeGuidance = UsesVolumeGuidance();
+        UpdateMovementGroupState(navigator.Position);
+
+        if (!TryPrepareMovementPathForHeading(navigator.Position, usesVolumeGuidance))
+            return Vector3d.Zero;
+
+        UpdateTargetDirection(navigator);
+        if (ShouldArriveWithoutTrailGuide())
         {
-            if (_currentRequest == null)
-            {
-                Arrive();
-                return TargetDirection;
-            }
-
-            bool usesVolumeGuidance = UsesVolumeGuidance();
-            UpdateMovementGroupState(navigator.Position);
-
-            // check if agent has to pathfind, otherwise straight path to rely on destination
-            if (CanPathfind || usesVolumeGuidance)
-            {
-                if (!ValidateMovementPath(navigator.Position))
-                {
-#if DEBUG
-                    Debug.WriteLine("Invalid path detected!");
-#endif
-                    Events.OnInvalidPath?.Invoke();
-                    Arrive();
-                    return Vector3d.Zero;
-                }
-            }
-
-            if (_pathCheckCooldown <= 0)
-            {
-                if (_currentRequest is VolumePathRequest volumeRequest)
-                {
-                    HasLineOfSightPath = IsVolumeDestinationInSight(
-                        navigator.Position,
-                        Destination,
-                        _currentRequest.UnitSize,
-                        _currentRequest.AllowUnwalkableEndpoints,
-                        volumeRequest.Medium,
-                        _currentRequest.StartNode,
-                        _currentRequest.EndNode);
-
-                    if (HasLineOfSightPath)
-                        ReleaseTrailGuide();
-                }
-                else
-                {
-                    HasLineOfSightPath = IsDestinationInSight(
-                        navigator.Position,
-                        Destination,
-                        _currentRequest.UnitSize,
-                        _currentRequest.AllowUnwalkableEndpoints);
-                }
-
-                _pathCheckCooldown = PathRecheckCooldownFrames;
-            }
-
-            if (usesVolumeGuidance && !HasLineOfSightPath && !HasTrailGuide)
-            {
-                if (!ValidateMovementPath(navigator.Position))
-                {
-#if DEBUG
-                    Debug.WriteLine("Invalid volume path detected!");
-#endif
-                    Events.OnInvalidPath?.Invoke();
-                    Arrive();
-                    return Vector3d.Zero;
-                }
-            }
-
-            LastTargetDirection = TargetDirection;
-            TargetDirection = FindTargetDirection(navigator.Position);
-
-            // Calculate steering, flocking, and avoidance forces
-            TargetDirection += ComputeCombinedSteering(
-                navigator.Position,
-                navigator.Velocity,
-                navigator.Speed,
-                navigator.Radius,
-                navigator.GlobalId);
-
-            // Check if we're close enough to stop moving
-            Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.Magnitude);
-            bool reachedTarget = _distanceToTarget < _closingDistance * GetActiveStopMultiplier();
-            bool noInput = moveAmount == Fixed64.Zero;
-            if (!HasTrailGuide && (reachedTarget || (!IsStuck && noInput)))
-            {
-                Arrive();
-                return Vector3d.Zero;
-            }
-
-            if (!CheckStuckStatus(navigator.Position, navigator.Speed, navigator.StuckThresholdSpeed))
-            {
-#if DEBUG
-                Debug.WriteLine("Stuck agent arriving!");
-#endif
-                Arrive();
-                return Vector3d.Zero;
-            }
-
-            if (TargetDirection != Vector3d.Zero)
-            {
-                if (_trailGuide is IWaypointGuide waypointGuide && ShouldAdvanceToNextWaypoint())
-                    waypointGuide.AdvanceWaypoint();
-
-                if (HasTrailGuide)
-                    SetDeceleration(navigator.Acceleration, navigator.Speed);
-            }
-        }
-        else
-        {
-            TargetDirection = Vector3d.Zero;
-
-            if (navigator.Speed <= Fixed64.Epsilon)
-                StoppedFrameCount++;
+            Arrive();
+            return Vector3d.Zero;
         }
 
-        _autoStopFrameCount--;
-        _pathCheckCooldown--;
+        if (!CheckStuckStatus(navigator.Position, navigator.Speed, navigator.StuckThresholdSpeed))
+        {
+#if DEBUG
+            Debug.WriteLine("Stuck agent arriving!");
+#endif
+            Arrive();
+            return Vector3d.Zero;
+        }
 
-        Events.OnStartTraversal?.Invoke(TargetDirection);
-        return TargetDirection;
+        UpdateTrailGuideProgress(navigator.Acceleration, navigator.Speed);
+        return FinalizeHeadingFrame();
     }
 
     /// <summary>
@@ -694,67 +606,199 @@ public class NavSteering : IRecordable
         if (!CanAutoStop)
             return true;
 
-        // If unit has not moved stuckThreshold in a frame, it's stuck
-        if (stuckThreshold > Fixed64.Zero && speed < stuckThreshold)
+        if (stuckThreshold <= Fixed64.Zero || speed >= stuckThreshold)
+            return ResetStuckStatus();
+
+        _stuckFrameCount++;
+        if (_stuckFrameCount <= StuckFrameThreshold)
+            return true;
+
+        return _repathTries < StuckRepathTries
+            ? TryRecoverFromStuck(position)
+            : DeclareHardStuck();
+    }
+
+    private Vector3d FinalizeIdleHeading(Fixed64 speed)
+    {
+        TargetDirection = Vector3d.Zero;
+        if (speed <= Fixed64.Epsilon)
+            StoppedFrameCount++;
+
+        return FinalizeHeadingFrame();
+    }
+
+    private bool TryEnsureCurrentRequest(out Vector3d heading)
+    {
+        if (_currentRequest != null)
         {
-            _stuckFrameCount++;
-
-            if (_stuckFrameCount > StuckFrameThreshold)
-            {
-                if (_repathTries < StuckRepathTries)
-                {
-                    HasLineOfSightPath = false;
-
-                    if (IsInGroup)
-                        LeaveMovementGroup();  // Attempt to repath agent by themselves
-
-                    if (HasTrailGuide && _trailGuide.TryGetFallbackDirection(position, out Vector3d fallback))
-                    {
-                        TargetDirection = fallback;
-                        _repathTries++;
-                        _stuckFrameCount = 0;
-                        return true;
-                    }
-
-                    // Attempt to find another path on the next frame
-                    TargetDirection = Vector3d.Zero;
-                    _shouldRequestPathThisFrame = true;
-
-                    // Reset the guide and have them try a new path (don't pool a bad path)
-                    if (_trailGuide != null)
-                    {
-                        PathGuideFactory.ReturnGuide(_trailGuide, true);
-                        _trailGuide = null;
-                    }
-
-                    _repathTries++;
-                    return true;
-                }
-
-                // we've tried to many times, we stuck stuck
-                IsStuck = true;
-                // Reset the guide and have them try a new path (don't pool a bad path)
-                if (_trailGuide != null)
-                {
-                    PathGuideFactory.ReturnGuide(_trailGuide, true);
-                    _trailGuide = null;
-                }
-
-                Events.OnIsStuck?.Invoke();
-
-                return false;
-            }
-
-            // Keep trying
+            heading = Vector3d.Zero;
             return true;
         }
 
-        // agent isn't stuck
+        Arrive();
+        heading = TargetDirection;
+        return false;
+    }
+
+    private bool TryPrepareMovementPathForHeading(Vector3d position, bool usesVolumeGuidance)
+    {
+        if ((CanPathfind || usesVolumeGuidance) && !ValidateMovementPath(position))
+        {
+            HandleInvalidPath("Invalid path detected!");
+            return false;
+        }
+
+        RefreshLineOfSightState(position);
+        if (usesVolumeGuidance && !HasLineOfSightPath && !HasTrailGuide && !ValidateMovementPath(position))
+        {
+            HandleInvalidPath("Invalid volume path detected!");
+            return false;
+        }
+
+        return true;
+    }
+
+    private void RefreshLineOfSightState(Vector3d position)
+    {
+        if (_pathCheckCooldown > 0)
+            return;
+
+        if (_currentRequest is VolumePathRequest volumeRequest)
+        {
+            HasLineOfSightPath = IsVolumeDestinationInSight(
+                position,
+                Destination,
+                _currentRequest.UnitSize,
+                _currentRequest.AllowUnwalkableEndpoints,
+                volumeRequest.Medium,
+                _currentRequest.StartNode,
+                _currentRequest.EndNode);
+
+            if (HasLineOfSightPath)
+                ReleaseTrailGuide();
+        }
+        else
+        {
+            HasLineOfSightPath = IsDestinationInSight(
+                position,
+                Destination,
+                _currentRequest.UnitSize,
+                _currentRequest.AllowUnwalkableEndpoints);
+        }
+
+        _pathCheckCooldown = PathRecheckCooldownFrames;
+    }
+
+    private void HandleInvalidPath(string debugMessage)
+    {
+#if DEBUG
+        Debug.WriteLine(debugMessage);
+#endif
+        Events.OnInvalidPath?.Invoke();
+        Arrive();
+    }
+
+    private void UpdateTargetDirection(ISteer navigator)
+    {
+        LastTargetDirection = TargetDirection;
+        TargetDirection = FindTargetDirection(navigator.Position);
+        TargetDirection += ComputeCombinedSteering(
+            navigator.Position,
+            navigator.Velocity,
+            navigator.Speed,
+            navigator.Radius,
+            navigator.GlobalId);
+    }
+
+    private bool ShouldArriveWithoutTrailGuide()
+    {
+        if (HasTrailGuide)
+            return false;
+
+        Fixed64 moveAmount = FixedMath.Clamp01(TargetDirection.Magnitude);
+        bool reachedTarget = _distanceToTarget < _closingDistance * GetActiveStopMultiplier();
+        bool noInput = moveAmount == Fixed64.Zero;
+        return reachedTarget || (!IsStuck && noInput);
+    }
+
+    private void UpdateTrailGuideProgress(Vector3d acceleration, Fixed64 speed)
+    {
+        if (TargetDirection == Vector3d.Zero)
+            return;
+
+        if (_trailGuide is IWaypointGuide waypointGuide && ShouldAdvanceToNextWaypoint())
+            waypointGuide.AdvanceWaypoint();
+
+        if (HasTrailGuide)
+            SetDeceleration(acceleration, speed);
+    }
+
+    private Vector3d FinalizeHeadingFrame()
+    {
+        _autoStopFrameCount--;
+        _pathCheckCooldown--;
+
+        Events.OnStartTraversal?.Invoke(TargetDirection);
+        return TargetDirection;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool ResetStuckStatus()
+    {
         IsStuck = false;
         _stuckFrameCount = 0;
         _repathTries = 0;
-
         return true;
+    }
+
+    private bool TryRecoverFromStuck(Vector3d position)
+    {
+        HasLineOfSightPath = false;
+
+        if (IsInGroup)
+            LeaveMovementGroup();
+
+        if (TryApplyFallbackDirection(position))
+            return true;
+
+        PreparePathRetry();
+        _repathTries++;
+        return true;
+    }
+
+    private bool TryApplyFallbackDirection(Vector3d position)
+    {
+        if (!HasTrailGuide || !_trailGuide.TryGetFallbackDirection(position, out Vector3d fallback))
+            return false;
+
+        TargetDirection = fallback;
+        _repathTries++;
+        _stuckFrameCount = 0;
+        return true;
+    }
+
+    private void PreparePathRetry()
+    {
+        TargetDirection = Vector3d.Zero;
+        _shouldRequestPathThisFrame = true;
+        DisposeCurrentTrailGuide();
+    }
+
+    private bool DeclareHardStuck()
+    {
+        IsStuck = true;
+        DisposeCurrentTrailGuide();
+        Events.OnIsStuck?.Invoke();
+        return false;
+    }
+
+    private void DisposeCurrentTrailGuide()
+    {
+        if (_trailGuide == null)
+            return;
+
+        PathGuideFactory.ReturnGuide(_trailGuide, true);
+        _trailGuide = null;
     }
 
     protected virtual void SetDeceleration(Vector3d acceleration, Fixed64 speed)

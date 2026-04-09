@@ -25,21 +25,21 @@ Command used:
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj \
   --configuration Debug \
   --collect:"XPlat Code Coverage" \
-  --results-directory artifacts/coverage-current
+  --results-directory artifacts/coverage-phase5
 ```
 
 Current Trailblazer snapshot:
 
-- line coverage: `93.06%` (`9088 / 9766`)
-- branch coverage: `83.66%` (`3348 / 4002`)
+- line coverage: `93.36%` (`9363 / 10028`)
+- branch coverage: `83.54%` (`3315 / 3968`)
 
 ### Subsystem Snapshot
 
 | Subsystem | Line | Branch |
 | --- | ---: | ---: |
 | `Main` | `94.05%` | `84.93%` |
-| `Navigation` | `93.08%` | `86.06%` |
-| `Pathing` | `92.85%` | `82.09%` |
+| `Navigation` | `94.05%` | `85.94%` |
+| `Pathing` | `92.86%` | `82.01%` |
 | `Serialization` | `96.00%` | `91.18%` |
 | `Support` | `93.83%` | `80.00%` |
 
@@ -49,16 +49,17 @@ These are the highest-value files to target first.
 
 | File | Line | Branch | Missed Lines | Missed Branches |
 | --- | ---: | ---: | ---: | ---: |
-| `Pathing/PathManager.cs` | `94.62%` | `83.73%` | `62` | `83` |
-| `Navigation/Steering/NavSteering.cs` | `89.61%` | `82.50%` | `61` | `35` |
+| `Pathing/PathManager.cs` | `94.58%` | `83.33%` | `64` | `85` |
+| `Navigation/Steering/NavSteering.cs` | `91.77%` | `83.17%` | `51` | `34` |
 | `Navigation/Support/NavigatorPathRequestFactory.cs` | `86.17%` | `70.83%` | `43` | `21` |
 | `Pathing/Search/Hybrid/HybridRoutePlanner.cs` | `88.96%` | `72.92%` | `37` | `26` |
-| `Navigation/Motor/NavMotor.cs` | `93.61%` | `86.80%` | `36` | `66` |
+| `Pathing/Transition/TraversalTransitionRegistry.cs` | `93.32%` | `88.02%` | `33` | `23` |
+| `Navigation/Motor/NavMotor.cs` | `95.31%` | `87.20%` | `31` | `63` |
 | `Main/Navigator.cs` | `92.50%` | `84.56%` | `30` | `21` |
-| `Pathing/Transition/TraversalTransitionRegistry.cs` | `94.13%` | `88.54%` | `29` | `22` |
 | `Navigation/Support/GuidedVolumeExitPlanner.cs` | `88.83%` | `76.56%` | `23` | `15` |
-| `Pathing/Search/FlowField/FlowFieldGuide.cs` | `88.04%` | `73.58%` | `22` | `28` |
 | `Pathing/Search/Support/PathHeap.cs` | `84.78%` | `83.33%` | `21` | `7` |
+| `Pathing/Search/FlowField/FlowFieldGuide.cs` | `90.05%` | `74.55%` | `20` | `28` |
+| `Pathing/Search/Volume/VolumeSurveyor.cs` | `92.72%` | `88.24%` | `15` | `12` |
 
 ### Highest Observed CRAP Hotspots
 
@@ -68,17 +69,16 @@ publish CRAP directly.
 
 | Method | Approx. CRAP | Notes |
 | --- | ---: | --- |
-| `NavSteering.GetHeading` | `94.38` | still the dominant runtime hotspot after the easy CRAP cleanup landed |
-| `FlowFieldGuide.TryGetStagedMovementDirection` | `52.98` | staged-plan progression still carries the biggest remaining guide overlap |
-| `NavMotor.MaxHoritzontalSpeedInDirection` | `48.20` | flight/motor rate logic remains branch-heavy |
-| `PathManager.TryApplyChartCellUpdate` | `48.09` | chart mutation validation matrix is still the main pathing hotspot |
-| `NavMotor.GetDesiredVelocity` | `46.26` | still dense despite high line coverage |
-| `NavMotor.ComputeMovementForces` | `44.03` | complexity is now the main driver rather than missing lines |
-| `NavMotor.HandleFallState` | `42.26` | still sits above goal line on complexity alone |
-| `NavSteering.CheckStuckStatus` | `39.93` | lower than `GetHeading`, but still worth treating as part of the same steering cluster |
-| `MovementGroupCoordinator.UpdateTarget` | `38.10` | almost entirely a complexity issue now |
-| `NavMotor.GetFlightSpeedMultiplier` | `31.60` | small but still just above the Phase 5 target line |
-| `NavAnimationUpdater.UpdateAnimationParameters` | `30.68` | barely above target; likely a Phase 6 cleanup decision |
+| `PathRequest.TrySetDestination` | `28.85` | now the highest remaining approximate hotspot, but already below the Phase 5 threshold |
+| `NavMotor.HandlePlatformTransitions` | `26.97` | still the densest remaining motor helper after the grouped cleanup pass |
+| `NavSteering.RecordData` | `26.00` | serialization branch matrix is now the top steering holdout |
+| `NavMotor.GetMaxAcceleration` | `24.21` | still branchy, but no longer near the danger zone |
+| `NavSteering.ComputeCombinedSteering` | `24.05` | movement-group filtering remains the main steering branch cluster |
+| `TraversalTransitionRegistry.SetManagedTransitionsSuppressed` | `22.95` | managed transition lifecycle is now well below the previous hotspot line |
+| `FlowFieldGuide.TryGetStagedMovementDirection` | `21.70` | staged guide progression dropped under the Phase 5 target after the extraction pass |
+| `PathManager.TryGetClosestActiveTransition` | `22.01` | query complexity is now moderate rather than hotspot-level |
+| `HybridRoutePlanner.TryPlan` | `21.95` | still worth watching in Phase 6 if hybrid planning gets more branching |
+| `PathManager.UnloadChart` | `20.08` | chart unload lifecycle no longer stands out as CRAP-heavy |
 
 ## Phased Plan
 
@@ -281,11 +281,11 @@ CRAP overlap:
 
 ### Phase 5. CRAP Hotspot Reduction And Complexity Cleanup
 
-Status: first pass landed.
+Status: completed.
 
 Current results from this pass:
 
-- overall snapshot: `93.06%` line, `83.66%` branch
+- overall snapshot: `93.36%` line, `83.54%` branch
 - `NavigatorPathRequestFactory.cs`: `86.17%` line, `70.83%` branch
 - `GuidedVolumeExitPlanner.cs`: `88.83%` line, `76.56%` branch
 - `PathGuideFactory.cs`: `93.12%` line, `82.56%` branch
@@ -293,16 +293,22 @@ Current results from this pass:
 - `HybridWaypointFlattener.cs` (new internal extraction): `94.17%` line, `89.58%` branch
 - `TraversalAuthoringMap.Extensions.cs`: `100.00%` line, `90.00%` branch
 - `NavigationChart.Extensions.cs`: `100.00%` line, `100.00%` branch
+- `NavSteering.cs`: `91.77%` line, `83.17%` branch
+- `NavMotor.cs`: `95.31%` line, `87.20%` branch
+- `FlowFieldGuide.cs`: `90.05%` line, `74.55%` branch
+- `PathManager.cs`: `94.58%` line, `83.33%` branch
+- `MovementGroupCoordinator.cs`: `93.83%` line, `90.90%` branch
 
 Notes:
 
 - the first Phase 5 pass removed the zero-coverage hotspot cluster around
   `NavigatorPathRequestFactory`, `PathGuideFactory.AddChartKeys`, `PathRequestRecord`,
   `NavMotor.StateChanged`, and the print helpers
-- the remaining CRAP debt is now concentrated in the real runtime heavyweights rather than small
-  uncovered helpers
-- the next Phase 5 pass should stay focused on `NavSteering`, staged `FlowFieldGuide` logic,
-  selective `NavMotor` helpers, and `PathManager.TryApplyChartCellUpdate`
+- the second Phase 5 pass split the remaining heavy runtime methods into smaller traversal,
+  finalize, locomotion-slot, movement-group, and animation helpers without broad subsystem churn
+- the fresh approximate hotspot list no longer has any method above `30`, so the Phase 5 CRAP
+  target is satisfied
+- the remaining high-value work is now coverage-gap cleanup rather than hotspot reduction
 
 This phase sits between broad coverage expansion and the final exclusion audit. Its purpose is to
 drive down the highest remaining CRAP scores by combining targeted coverage with small, disciplined
@@ -345,6 +351,10 @@ Exit criteria:
 - each tracked hotspot is below `30`, or
 - the remaining exceptions are explicitly documented with why pushing below `30` would require
   disproportionate ceremony, artificial tests, or runtime churn
+
+Outcome:
+
+- satisfied in the current snapshot; no approximate hotspot remains above `30`
 
 Why fifth:
 
@@ -395,12 +405,10 @@ The goal is near-total confidence, not artificial tests that make the suite hard
 
 Recommended immediate order:
 
-1. continue Phase 5 with the concentrated runtime hotspots in `NavSteering`, `FlowFieldGuide`,
-   `NavMotor`, and `PathManager`
-2. prefer grouped helper extraction when those classes start accumulating same-purpose logic rather
-   than forcing more branch-only tests into already large files
-3. move into the final Phase 6 gap-closure and exclusion-audit pass only after the remaining CRAP
-   exceptions are clearly understood
+1. move into Phase 6 with the remaining line/branch gaps in `PathManager`, `NavSteering`,
+   `NavigatorPathRequestFactory`, `HybridRoutePlanner`, and `FlowFieldGuide`
+2. keep favoring focused tests over new runtime churn now that the CRAP target is met
+3. only revisit complexity cleanup if a newly exposed Phase 6 holdout rises back above the target
 
 That sequence should keep us moving toward near-total coverage without inflating the suite around
 branches that may no longer represent real runtime behavior.

@@ -86,6 +86,23 @@ internal static class GuidedPathTestScene
             pathCostModifier: 2)).Should().BeTrue();
     }
 
+    public static void RegisterAerialLandingChoiceScene(string sceneKey)
+    {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleTraversalPoint(
+            $"{sceneKey}-Target",
+            new Vector3d(2, 0, 0),
+            TraversalMedia.Solid | TraversalMedia.Gas);
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{sceneKey}-landing",
+            type: TraversalTransitionType.Landing,
+            source: TraversalTransitionAnchor.Gas(new Vector3d(2, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
+    }
+
     public static void RegisterVolumeExitHandoffScene(string chartKey)
     {
         NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1]
@@ -108,5 +125,16 @@ internal static class GuidedPathTestScene
             source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
+    }
+
+    public static void RegisterChartBackedSwimTargetScene(string chartKey)
+    {
+        PathTestFactory.RegisterSingleTraversalPoint(
+            $"{chartKey}-Target",
+            new Vector3d(2, 0, 0),
+            TraversalMedia.Solid | TraversalMedia.Liquid);
+
+        AddWater(Vector3d.Zero);
+        AddWater(new Vector3d(1, 0, 0));
     }
 }

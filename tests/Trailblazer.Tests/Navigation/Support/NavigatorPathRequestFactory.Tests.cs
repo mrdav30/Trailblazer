@@ -165,6 +165,80 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     }
 
     [Fact]
+    public void TryCreate_WithAerialMode_ShouldNormalizeUnsupportedFallbackModesToAStar()
+    {
+        const string sceneKey = "NavigatorFactoryAerialNormalize";
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.Swim,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: (Fixed64)2,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out _,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        handoff.Should().NotBeNull();
+        handoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+    }
+
+    [Fact]
+    public void TryCreate_WithAerialMode_ShouldKeepDirectRequest_WhenTargetIsNotChartBacked()
+    {
+        RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryDirectGas");
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryCreate_WithAerialMode_ShouldKeepDirectRequest_WhenDirectFlightIsCheaperThanLanding()
+    {
+        const string sceneKey = "NavigatorFactoryAerialDirectPreferred";
+        GuidedPathTestScene.RegisterAerialLandingChoiceScene(sceneKey);
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().BeNull();
+    }
+
+    [Fact]
     public void TryCreate_WithSwimMode_ShouldBuildExitHandoff_WhenSolidTargetRequiresOne()
     {
         const string sceneKey = "NavigatorFactorySwimHandoff";
@@ -191,6 +265,31 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         handoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
         handoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
         handoff.FlowFieldExtraFloodRange.Should().Be(12);
+    }
+
+    [Fact]
+    public void TryCreate_WithSwimMode_ShouldKeepDirectRequest_WhenTargetSupportsLiquid()
+    {
+        const string sceneKey = "NavigatorFactorySwimDirect";
+        GuidedPathTestScene.RegisterChartBackedSwimTargetScene(sceneKey);
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Swim,
+            GuidedPathMode.FlowField,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 7,
+            traversalMedium: TraversalMedium.Liquid,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().BeNull();
     }
 
     [Fact]

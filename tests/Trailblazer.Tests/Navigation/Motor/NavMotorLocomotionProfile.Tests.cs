@@ -65,4 +65,21 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
         agent.Motor.Handler.Slide.Should().BeNull();
         agent.Motor.Handler.Swim.Should().BeNull();
     }
+
+    [Fact]
+    public void StateChanged_ShouldOnlyReportKnownMediumTransitions()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
+
+        agent.Motor.StateChanged.Should().BeFalse();
+
+        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        agent.Motor.StateChanged.Should().BeTrue();
+
+        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        agent.Motor.StateChanged.Should().BeFalse();
+
+        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Unknown });
+        agent.Motor.StateChanged.Should().BeFalse();
+    }
 }

@@ -39,6 +39,11 @@ Track any smaller follow-up issues that are straightforward to execute and don't
 
 These are valid future hardening items, but they should stay demand-driven rather than automatic.
 
+- Phase 5 coverage work showed that the remaining CRAP overlap is now concentrated in
+  `NavSteering.GetHeading`, `FlowFieldGuide.TryGetStagedMovementDirection`, and clustered
+  `NavMotor` helpers. If those do not drop below target through natural branch coverage, prefer
+  extracting grouped steering/staged-guide/motor support logic over piling more helper branches
+  into the existing classes.
 - If profiling shows the current closest-transition lookup is still hot inside large single-grid
   transition sets, add a more granular spatial index instead of relying only on filtered caches and
   grid-bounds pruning.

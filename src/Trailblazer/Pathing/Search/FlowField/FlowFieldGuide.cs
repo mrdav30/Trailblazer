@@ -181,49 +181,47 @@ public class FlowFieldGuide : IGuide
         if (_stagedPlan == null)
             return false;
 
-        // TODO: this seems dangerous - we could get stuck in this loop if the stage targets are never reached for some reason. We should probably add some kind of safety check or max iteration count to prevent infinite looping here.
-        while (TryAdvanceCompletedStages(origin)) { }
-
-        if (!TryGetCurrentStage(out HybridRouteStep currentStep))
-            return false;
-
-        switch (currentStep.Kind)
+        int remainingStageAdvances = _stagedPlan.Steps.Length;
+        while (TryGetPreparedStage(origin, ref remainingStageAdvances, out HybridRouteStep currentStep))
         {
-            case HybridRouteStepKind.Waypoint:
-                direction = (currentStep.WaypointPosition - origin).Normalize();
-                if (direction == Vector3d.Zero)
-                {
-                    AdvanceStage(dispose: false);
-                    return TryGetStagedMovementDirection(origin, out direction);
-                }
+            switch (currentStep.Kind)
+            {
+                case HybridRouteStepKind.Waypoint:
+                    direction = (currentStep.WaypointPosition - origin).Normalize();
+                    if (direction != Vector3d.Zero)
+                        return true;
 
-                return true;
+                    if (!TryAdvanceStage(ref remainingStageAdvances))
+                        return false;
 
-            case HybridRouteStepKind.PathSegment:
-                if (!TryGetOrCreateActiveStageGuide(currentStep, out IGuide activeGuide))
-                    return false;
+                    break;
 
-                if (activeGuide is IWaypointGuide waypointGuide)
-                    direction = waypointGuide.GetCurrentWaypointDirection(origin);
-                else
-                    activeGuide.TryGetMovementDirection(origin, out direction);
+                case HybridRouteStepKind.PathSegment:
+                    if (!TryGetOrCreateActiveStageGuide(currentStep, out IGuide activeGuide))
+                        return false;
 
-                if (direction == Vector3d.Zero)
-                {
-                    if (IsStageTargetReached(origin, currentStep))
+                    if (activeGuide is IWaypointGuide waypointGuide)
+                        direction = waypointGuide.GetCurrentWaypointDirection(origin);
+                    else
+                        activeGuide.TryGetMovementDirection(origin, out direction);
+
+                    if (direction != Vector3d.Zero)
+                        return true;
+
+                    if (!IsStageTargetReached(origin, currentStep)
+                        || !TryAdvanceStage(ref remainingStageAdvances))
                     {
-                        AdvanceStage(dispose: false);
-                        return TryGetStagedMovementDirection(origin, out direction);
+                        return false;
                     }
 
+                    break;
+
+                default:
                     return false;
-                }
-
-                return true;
-
-            default:
-                return false;
+            }
         }
+
+        return false;
     }
 
     /// <summary>
@@ -239,11 +237,8 @@ public class FlowFieldGuide : IGuide
         if (_stagedPlan == null)
             return false;
 
-        while (TryAdvanceCompletedStages(origin))
-        {
-        }
-
-        if (!TryGetCurrentStage(out HybridRouteStep currentStep))
+        int remainingStageAdvances = _stagedPlan.Steps.Length;
+        if (!TryGetPreparedStage(origin, ref remainingStageAdvances, out HybridRouteStep currentStep))
             return false;
 
         switch (currentStep.Kind)
@@ -259,6 +254,28 @@ public class FlowFieldGuide : IGuide
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Advances through already-completed stages with a bounded budget so malformed staged plans cannot
+    /// recurse or spin indefinitely while trying to find the next actionable step.
+    /// </summary>
+    private bool TryGetPreparedStage(
+        Vector3d origin,
+        ref int remainingStageAdvances,
+        out HybridRouteStep currentStep)
+    {
+        while (TryGetCurrentStage(out currentStep))
+        {
+            if (!IsStageTargetReached(origin, currentStep))
+                return true;
+
+            if (!TryAdvanceStage(ref remainingStageAdvances))
+                break;
+        }
+
+        currentStep = null;
+        return false;
     }
 
     /// <summary>
@@ -280,19 +297,12 @@ public class FlowFieldGuide : IGuide
         return currentStep != null;
     }
 
-    /// <summary>
-    /// Checks if the current stage's target has been reached based on the agent's position, and if so, advances to the next stage in the plan. This is used to automatically progress through stages in the plan as the agent reaches each stage's target, ensuring that the guide provides directions for the correct stage based on the agent's current position and progression through the route.
-    /// </summary>
-    /// <param name="origin">The position from which to check if the stage's target has been reached.</param>
-    /// <returns>True if the stage's target has been reached and the stage was advanced; otherwise, false.</returns>
-    private bool TryAdvanceCompletedStages(Vector3d origin)
+    private bool TryAdvanceStage(ref int remainingStageAdvances)
     {
-        if (!TryGetCurrentStage(out HybridRouteStep currentStep))
+        if (remainingStageAdvances <= 0)
             return false;
 
-        if (!IsStageTargetReached(origin, currentStep))
-            return false;
-
+        remainingStageAdvances--;
         AdvanceStage(dispose: false);
         return true;
     }

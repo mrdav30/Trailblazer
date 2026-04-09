@@ -95,6 +95,22 @@ public sealed class FlowFieldGuideTests : IDisposable
     }
 
     [Fact]
+    public void FlowFieldGuide_ShouldBoundCompletedWaypointStageAdvances()
+    {
+        HybridRouteStep[] steps = new HybridRouteStep[64];
+        for (int i = 0; i < steps.Length; i++)
+            steps[i] = HybridRouteStep.Waypoint(Vector3d.Zero);
+
+        var plan = new HybridRoutePlan(steps, Array.Empty<TraversalTransition>(), 0);
+        var guide = new FlowFieldGuide();
+
+        guide.InitializeStaged(plan).Should().BeTrue();
+        guide.TryGetMovementDirection(Vector3d.Zero, out _).Should().BeFalse();
+        guide.TryGetFallbackDirection(Vector3d.Zero, out _).Should().BeFalse();
+        guide.ReleaseStagedResources(dispose: false);
+    }
+
+    [Fact]
     public void FlowFieldGuide_ShouldUseFlowFieldSubGuide_ForStagedSegments()
     {
         RegisterLineChart("FlowFieldStageLine", Vector3d.Zero, 3);

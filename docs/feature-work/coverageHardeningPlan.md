@@ -367,9 +367,47 @@ Why fifth:
 Near-100% coverage usually stalls on tiny helpers, debug utilities, or defensive branches that are
 hard to hit naturally. This phase is for disciplined cleanup, not denominator gaming.
 
-Status: first pass landed.
+Status: second pass landed.
 
-Current results from this pass:
+Current results from second pass:
+
+- overall snapshot: `94.27%` line, `85.39%` branch
+- `HybridRoutePlanner.cs`: `89.0%` → `94.8%` line, `72.9%` → `80.2%` branch
+- `FlowFieldGuide.cs`: `90.0%` → `92.8%` line, `74.5%` → `85.4%` branch
+- `NavigatorPathRequestFactory.cs`: `86.2%` → `89.5%` line, `70.8%` → `75.0%` branch
+- `TraversalTransitionAnchor.cs`: `93.8%` → `91.8%` line (TraversalTransitionRegistry.Reset cleanup)
+- `TraversalTransitionOrdering.cs`: `93.1%` → `91.8%` line (ditto)
+- 528 total tests (517 → 528, +11 new tests)
+
+Notes:
+
+- `HybridRoutePlanner` received dedicated FlowField-kind, Liquid-pair, and Gas-pair tests that
+  exercise `TryCreateFlowFieldStep`, `TryCreateVolumeStep`, and `TryCreateAStarStep` zero-displacement
+  path — the three previously uncovered private methods
+- `FlowFieldGuide` got two new tests: goal-position zero-direction (covers `direction == Vector3d.Zero`
+  branch in `TryGetMovementDirection`) and staged-AStarGuide `FlowFieldContainsPosition` (covers the
+  non-`FlowFieldGuide` staged cast path)
+- `NavigatorPathRequestFactory` got null-chart tests for both the simple and internal `TryCreate`
+  overloads covering AStar null, FlowField null, Aerial null, and Swim null paths, plus a dedicated
+  Swim / `TryCreateGasLandingHandoff` medium!=Gas early-return test
+- `ITransient.Extensions.cs` was evaluated for dead-code removal; the `ClearTransientState` extension
+  IS called from concrete locomotion types via `this.ClearTransientState()` (default interface methods
+  are not accessible without casting), so the file was retained — only the `SyncTransientState`
+  extension is currently uncovered (no concrete type calls it directly)
+
+Remaining known gaps after Phase 6 second pass:
+
+- `ITransient.Extensions.cs`: 50% — `SyncTransientState` extension is public API surface but not
+  called from any concrete type today; `ClearTransientState` extension is live and covered
+- `NavigatorPathRequestFactory.cs`: 89.5% — `TryGetDirectVolumePathCost` ZeroDisplacement and null
+  branches remain; both require contrived VolumePathRequest state
+- `NavSteering.cs`: 92.0% — remaining gaps in `GetHeading` and `CheckStuckStatus` require
+  multi-step simulation state
+- `PathManager.cs`: 94.7% — minor lifecycle helpers
+- `EndpointVoxelResolver.cs`: 81.4% — new entrant; interior voxel-resolution fallbacks
+- `SolidVoxelFinder.cs`: 83.9% — branch-heavy spatial lookup helpers
+
+First pass results (preserved):
 
 - overall snapshot: `94.04%` line, `84.32%` branch
 - `MotorOutput.cs`: `0%` → `100%` line, `100%` branch
@@ -381,37 +419,8 @@ Current results from this pass:
 - `TraversalTransitionAnchor.cs`: `81.5%` → `93.8%` line, `90.0%` branch
 - `TraversalTransitionOrdering.cs`: `75.9%` → `93.1%` line, `87.5%` branch
 - `PathHeap.cs`: `84.8%` → `91.3%` line, `85.7%` branch
-- `FlowFieldGuide.cs`: `90.0%` → `90.0%` line, `74.5%` → `77.3%` branch
 - `NavSteering.cs`: `91.8%` line, `83.2%` branch (RecordData idle/no-request branches covered)
-- `NavigatorPathRequestFactory.cs`: `86.2%` line, `70.8%` branch (unchanged; existing tests cover primary paths)
-- `HybridRoutePlanner.cs`: `89.0%` line, `72.9%` branch (unchanged; FlowField step already covered by CreateFromFlowField path)
-
-Notes:
-
-- the zero-coverage `MotorOutput` struct was covered immediately with a single constructor test
-- `NavigationChartCell`, `VolumeMediumRules`, `ChartOwnerUtility`, and `ManagedChartTransitionState`
-  all reached 100% through targeted coverage of their argument validation and factory branches
-- `FlyLocomotion` reached 100% after adding the `IsEnabled=false` setter path and the disabled-state
-  load path in RecordData
-- `TraversalTransitionAnchor` improved with GlobalVoxelIndex factory methods and TryGetVolumeMedium
-  branch coverage
-- `TraversalTransitionOrdering` improved with Y/Z axis comparison branch tests
-- `NavSteering.RecordData` loading branches are now covered: the reset block (when TryCreateRequest
-  fails due to unloaded chart), and the else-if path (when guide state was not serialized)
-- `NavSteering` line and branch rates did not move materially because the remaining gaps
-  (lines 638-679, 759-816) are in GetHeading/CheckStuckStatus interior branches that require
-  specific locomotion+path+simulation state combinations
-- `FlowFieldGuide` null-FlowMap branches for `FlowFieldContainsPosition` and `TryGetFallbackDirection`
-  are now covered; remaining gaps are in staged multi-guide logic
-- 47 new tests added this session (470 → 517 total)
-
-Remaining known gaps after Phase 6:
-
-- `ITransient.Extensions.cs`: 50% — one extension method is non-runtime debug output
-- `HybridRoutePlanner.cs`: 89% — `TryCreateGuide` failure branch, `GetBetterPlan` second candidate path
-- `NavigatorPathRequestFactory.cs`: 86.2% — `TryGetDirectVolumePathCost` ZeroDisplacement path, one GasLandingHandoff return false edge
-- `NavSteering.cs`: 91.8% — remaining gaps in `GetHeading` and `CheckStuckStatus` require multi-step simulation state
-- `PathManager.cs`: 94.6% — minor lifecycle helpers
+- 47 new tests added first pass (470 → 517 total)
 
 Targets:
 

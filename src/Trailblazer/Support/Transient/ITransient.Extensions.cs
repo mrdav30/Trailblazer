@@ -1,4 +1,4 @@
-﻿namespace Trailblazer.Support;
+namespace Trailblazer.Support;
 
 /// <summary>
 /// Extension methods for ITransient to allow calling without casting to the interface.

@@ -317,6 +317,158 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         handoff.Should().BeNull();
     }
 
+    /// <summary>
+    /// Covers the null-request early-exit in both overloads of TryCreate for AStar and FlowField modes.
+    /// When origin and destination are inside the grid but on no registered chart, request creation returns
+    /// null and both methods return false.
+    /// </summary>
+    [Fact]
+    public void TryCreate_ShouldReturnFalse_WhenNoChartCoversOriginOrDestination()
+    {
+        // No chart registered — positions are inside the grid but unreachable
+        NavigatorPathRequestFactory.TryCreate(
+            new Vector3d(-6, -6, -6),
+            new Vector3d(-5, -6, -6),
+            Fixed64.One,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Solid,
+            out IPathRequest aStarRequest).Should().BeFalse();
+
+        aStarRequest.Should().BeNull();
+
+        NavigatorPathRequestFactory.TryCreate(
+            new Vector3d(-6, -6, -6),
+            new Vector3d(-5, -6, -6),
+            Fixed64.One,
+            GuidedPathMode.FlowField,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Solid,
+            out IPathRequest flowFieldRequest).Should().BeFalse();
+
+        flowFieldRequest.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Covers the null FlowField path in the internal TryCreate overload (with handoff parameter).
+    /// When neither endpoint is on a chart and no transition plan can be built, the method returns false.
+    /// </summary>
+    [Fact]
+    public void TryCreate_Internal_FlowField_ShouldReturnFalse_WhenNoChartCoversEndpoints()
+    {
+        NavigatorPathRequestFactory.TryCreate(
+            new Vector3d(-6, -6, -6),
+            new Vector3d(-5, -6, -6),
+            Fixed64.One,
+            GuidedPathMode.FlowField,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Solid,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeFalse();
+
+        request.Should().BeNull();
+        handoff.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Covers the Aerial null-volume path in the internal TryCreate overload: when the origin is not in
+    /// a gas volume and no transition plan can be built, the method returns false.
+    /// </summary>
+    [Fact]
+    public void TryCreate_Internal_Aerial_ShouldReturnFalse_WhenNotInGasVolumeAndNoHandoff()
+    {
+        // No gas volume registered — VolumePathRequest.Create returns null.
+        // allowTraversalTransitions=false prevents the fallback handoff succeeding.
+        NavigatorPathRequestFactory.TryCreate(
+            new Vector3d(-6, -6, -6),
+            new Vector3d(-5, -6, -6),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeFalse();
+
+        request.Should().BeNull();
+        handoff.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Covers the Swim null-volume path in the internal TryCreate overload: when the origin is not in
+    /// a liquid volume and no transition plan can be built, the method returns false.
+    /// </summary>
+    [Fact]
+    public void TryCreate_Internal_Swim_ShouldReturnFalse_WhenNotInLiquidVolumeAndNoHandoff()
+    {
+        NavigatorPathRequestFactory.TryCreate(
+            new Vector3d(-6, -6, -6),
+            new Vector3d(-5, -6, -6),
+            Fixed64.One,
+            GuidedPathMode.Swim,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Liquid,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeFalse();
+
+        request.Should().BeNull();
+        handoff.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Covers TryCreateGasLandingHandoff returning false when medium is Liquid (not Gas).
+    /// When the swim target has a solid partition that supports liquid, TryCreateGasLandingHandoff is
+    /// invoked with TraversalMedium.Liquid and returns false immediately — causing the direct swim
+    /// request to be kept with no handoff.
+    /// </summary>
+    [Fact]
+    public void TryCreate_Internal_Swim_ShouldKeepDirectRequest_WhenTargetSupportsMedium_GasLandingHandoffSkipped()
+    {
+        const string sceneKey = "NavigatorFactorySwimGasLanding";
+        GuidedPathTestScene.RegisterChartBackedSwimTargetScene(sceneKey);
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Swim,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Liquid,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        // TryCreateGasLandingHandoff returns false for Liquid medium → direct request kept
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().BeNull();
+    }
+
     private static void RegisterLineChart(string chartName, Vector3d minBounds, int length)
     {
         var data = new bool[1, length, 1];

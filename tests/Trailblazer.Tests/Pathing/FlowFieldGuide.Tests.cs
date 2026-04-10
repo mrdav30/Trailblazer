@@ -142,6 +142,60 @@ public sealed class FlowFieldGuideTests : IDisposable
         guide.FlowFieldContainsPosition(Vector3d.Zero).Should().BeFalse();
     }
 
+    /// <summary>
+    /// Covers the <c>direction == Vector3d.Zero</c> branch in TryGetMovementDirection for non-staged guides.
+    /// At the goal voxel the stored flow vector is Zero, so sampling it returns false.
+    /// </summary>
+    [Fact]
+    public void FlowFieldGuide_TryGetMovementDirection_ShouldReturnFalse_WhenFlowVectorAtPositionIsZero()
+    {
+        RegisterLineChart("FlowFieldGuideZeroDir", Vector3d.Zero, 3);
+
+        FlowFieldSurveyResult survey = CreateSurveyResult(
+            (Vector3d.Zero, new Vector3d(1, 0, 0), 2, false),
+            (new Vector3d(1, 0, 0), new Vector3d(1, 0, 0), 1, false),
+            (new Vector3d(2, 0, 0), Vector3d.Zero, 0, true));
+
+        var guide = new FlowFieldGuide();
+        guide.Initialize(survey).Should().BeTrue();
+
+        // Position (2,0,0) is the goal — its stored direction is Zero, so TryGetMovementDirection returns false
+        guide.TryGetMovementDirection(new Vector3d(2, 0, 0), out Vector3d dir).Should().BeFalse();
+        dir.Should().Be(Vector3d.Zero);
+    }
+
+    /// <summary>
+    /// Covers the staged FlowFieldContainsPosition path where the active stage guide is not a FlowFieldGuide.
+    /// When the active stage is backed by an AStarGuide, the cast to FlowFieldGuide fails and the method
+    /// short-circuits to false without delegating to the inner guide.
+    /// </summary>
+    [Fact]
+    public void FlowFieldGuide_StagedWithAStarSegment_FlowFieldContainsPosition_ShouldReturnFalse()
+    {
+        RegisterLineChart("FlowFieldGuideStagedAStar", Vector3d.Zero, 3);
+
+        var aStarRequest = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One);
+        aStarRequest.Should().NotBeNull();
+
+        var plan = new HybridRoutePlan(
+            new[] { HybridRouteStep.Segment(aStarRequest) },
+            Array.Empty<TraversalTransition>(),
+            0);
+
+        var guide = new FlowFieldGuide();
+        guide.InitializeStaged(plan).Should().BeTrue();
+
+        // Prime the active stage guide by requesting a movement direction first
+        guide.TryGetMovementDirection(Vector3d.Zero, out _);
+
+        // Active stage guide is AStarGuide, not FlowFieldGuide — returns false
+        guide.FlowFieldContainsPosition(Vector3d.Zero).Should().BeFalse();
+        guide.ReleaseStagedResources(dispose: true);
+    }
+
     private static FlowFieldSurveyResult CreateSurveyResult(params (Vector3d position, Vector3d direction, int cost, bool isGoal)[] cells)
     {
         var fields = new SwiftDictionary<GlobalVoxelIndex, FlowField>(cells.Length);

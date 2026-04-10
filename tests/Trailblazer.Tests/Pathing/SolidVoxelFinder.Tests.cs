@@ -187,6 +187,48 @@ public class SolidVoxelFinderTests : IDisposable
     }
 
     [Fact]
+    public void StarCast_ShouldReturnFalse_WhenNoAlternativeVoxelExistsInsideGrid()
+    {
+        SolidVoxelFinder.StarCast(Vector3d.Zero, out Voxel targetVoxel, Fixed64.One).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryGetPathEdgeVoxels_ShouldUseDefaultUnitSize_WhenUnitSizeIsOmitted()
+    {
+        RegisterTwoPointChart("DefaultUnitSizePathEdges");
+
+        SolidVoxelFinder.TryGetPathEdgeVoxels(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            out Voxel originVoxel,
+            out Voxel targetVoxel,
+            allowUnwalkableEndpoints: false).Should().BeTrue();
+
+        originVoxel.WorldPosition.Should().Be(Vector3d.Zero);
+        targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+    }
+
+    [Fact]
+    public void GetStartAndEndVoxel_ShouldUseDefaultUnitSize_WhenUnitSizeIsOmitted()
+    {
+        RegisterTwoPointChart("DefaultUnitSizeEndpoints");
+
+        SolidVoxelFinder.GetStartVoxel(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            out Voxel originVoxel,
+            allowUnwalkableEndpoints: false).Should().BeTrue();
+        SolidVoxelFinder.GetEndVoxel(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            out Voxel targetVoxel,
+            allowUnwalkableEndpoints: false).Should().BeTrue();
+
+        originVoxel.WorldPosition.Should().Be(Vector3d.Zero);
+        targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+    }
+
+    [Fact]
     public void GetClosestVoxelForSize_ShouldResolveUsingPublicWrapper()
     {
         RegisterTwoPointChart("ClosestVoxelForSize");
@@ -199,6 +241,21 @@ public class SolidVoxelFinderTests : IDisposable
             allowUnwalkableEndpoints: false).Should().BeTrue();
 
         targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+    }
+
+    [Fact]
+    public void GetClosestVoxelForSize_ShouldReturnFalse_WhenTargetIsOutsideAnyGrid()
+    {
+        RegisterTwoPointChart("ClosestVoxelForSizeOutsideGrid");
+
+        SolidVoxelFinder.GetClosestVoxelForSize(
+            Vector3d.Zero,
+            new Vector3d(20, 0, 0),
+            Fixed64.One,
+            out Voxel targetVoxel,
+            allowUnwalkableEndpoints: false).Should().BeFalse();
+
+        targetVoxel.Should().BeNull();
     }
 
     [Fact]

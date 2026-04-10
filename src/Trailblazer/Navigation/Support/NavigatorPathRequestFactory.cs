@@ -315,7 +315,7 @@ public static class NavigatorPathRequestFactory
             out VolumePathRequest volumeRequest,
             out handoff,
             out totalPathCost)
-            && TryAssignRequest(volumeRequest, out request);
+            && (request = volumeRequest) != null;
     }
 
     private static bool TryCreateVolumeExitHandoffIfNeeded(
@@ -459,13 +459,5 @@ public static class NavigatorPathRequestFactory
         return result.HasPath && result.Waypoints.Length > 0
             ? result.Waypoints[^1].PathCost
             : int.MaxValue;
-    }
-
-    private static bool TryAssignRequest(
-        VolumePathRequest volumeRequest,
-        out IPathRequest request)
-    {
-        request = volumeRequest;
-        return request != null;
     }
 }

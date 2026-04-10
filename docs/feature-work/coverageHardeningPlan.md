@@ -24,24 +24,23 @@ Command used:
 ```bash
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj \
   --configuration Debug \
-  --collect:"XPlat Code Coverage" \
-  --results-directory artifacts/coverage-phase5
+  --collect:"XPlat Code Coverage"
 ```
 
 Current Trailblazer snapshot:
 
-- line coverage: `93.36%` (`9363 / 10028`)
-- branch coverage: `83.54%` (`3315 / 3968`)
+- line coverage: `94.65%` (`9482 / 10017`)
+- branch coverage: `85.47%` (`3383 / 3958`)
 
 ### Subsystem Snapshot
 
 | Subsystem | Line | Branch |
 | --- | ---: | ---: |
 | `Main` | `94.05%` | `84.93%` |
-| `Navigation` | `94.05%` | `85.94%` |
-| `Pathing` | `92.86%` | `82.01%` |
+| `Navigation` | `95.31%` | `87.11%` |
+| `Pathing` | `94.29%` | `84.44%` |
 | `Serialization` | `96.00%` | `91.18%` |
-| `Support` | `93.83%` | `80.00%` |
+| `Support` | `96.59%` | `90.00%` |
 
 ### Biggest File Gaps By Missed Lines
 
@@ -51,15 +50,15 @@ These are the highest-value files to target first.
 | --- | ---: | ---: | ---: | ---: |
 | `Pathing/PathManager.cs` | `94.58%` | `83.33%` | `64` | `85` |
 | `Navigation/Steering/NavSteering.cs` | `91.77%` | `83.17%` | `51` | `34` |
-| `Navigation/Support/NavigatorPathRequestFactory.cs` | `86.17%` | `70.83%` | `43` | `21` |
-| `Pathing/Search/Hybrid/HybridRoutePlanner.cs` | `88.96%` | `72.92%` | `37` | `26` |
-| `Pathing/Transition/TraversalTransitionRegistry.cs` | `93.32%` | `88.02%` | `33` | `23` |
+| `Pathing/Search/Hybrid/HybridRoutePlanner.cs` | `89.85%` | `73.96%` | `34` | `25` |
 | `Navigation/Motor/NavMotor.cs` | `95.31%` | `87.20%` | `31` | `63` |
 | `Main/Navigator.cs` | `92.50%` | `84.56%` | `30` | `21` |
+| `Pathing/Transition/TraversalTransitionRegistry.cs` | `94.13%` | `88.54%` | `29` | `22` |
 | `Navigation/Support/GuidedVolumeExitPlanner.cs` | `88.83%` | `76.56%` | `23` | `15` |
-| `Pathing/Search/Support/PathHeap.cs` | `84.78%` | `83.33%` | `21` | `7` |
-| `Pathing/Search/FlowField/FlowFieldGuide.cs` | `90.05%` | `74.55%` | `20` | `28` |
+| `Pathing/Search/FlowField/FlowFieldGuide.cs` | `91.54%` | `81.82%` | `17` | `20` |
+| `Pathing/Search/Support/PathHeap.cs` | `91.30%` | `85.71%` | `16` | `6` |
 | `Pathing/Search/Volume/VolumeSurveyor.cs` | `92.72%` | `88.24%` | `15` | `12` |
+| `Navigation/Support/NavigatorPathRequestFactory.cs` | `95.64%` | `87.88%` | `13` | `8` |
 
 ### Highest Observed CRAP Hotspots
 
@@ -367,7 +366,19 @@ Why fifth:
 Near-100% coverage usually stalls on tiny helpers, debug utilities, or defensive branches that are
 hard to hit naturally. This phase is for disciplined cleanup, not denominator gaming.
 
-Status: third pass landed.
+Status: fourth pass landed.
+
+Current results from fourth pass:
+
+- overall snapshot: `94.65%` line, `85.47%` branch
+- `NavigatorPathRequestFactory.cs`: `89.1%` → `95.6%` line, `77.3%` → `87.9%` branch
+- `SolidVoxelFinder.cs`: `98.8%` line, `80.0%` → `90.0%` branch
+- `ParsedTraversalCell.cs`: `100.0%` line, `50.0%` → `100.0%` branch
+- `TraversalBuildResult.cs`: `100.0%` line, `50.0%` → `100.0%` branch
+- `TraversalLegend.cs`: `89.3%` → `100.0%` line, `50.0%` → `100.0%` branch
+- `HybridRoutePlan.cs`: `100.0%` line, `50.0%` → `100.0%` branch
+- `FlowFieldPathRequest.cs`: `95.1%` → `100.0%` line, `64.3%` → `85.7%` branch
+- 558 total tests (539 → 558, +19 new tests)
 
 Current results from third pass:
 
@@ -390,6 +401,16 @@ Current results from second pass:
 
 Notes:
 
+- the fourth pass combined one more targeted cleanup pass with direct value-object coverage rather
+  than forcing heavy new steering/path-manager harnesses
+- `NavigatorPathRequestFactory` dropped the now-unnecessary `TryAssignRequest(...)` helper and got
+  dedicated snapped-endpoint handoff coverage for aerial and swim orchestration branches
+- `TraversalLegend` shed an actually dead private `allowEmpty` branch in token normalization, then
+  got direct null-token normalization tests so the simplified behavior is still pinned
+- the smaller support/pathing types (`ParsedTraversalCell`, `TraversalBuildResult`,
+  `HybridRoutePlan`) are no longer carrying low-value branch debt
+- `FlowFieldPathRequest` now has direct factory/equality coverage rather than relying only on
+  indirect surveyor/navigation tests
 - the third pass moved transient reflection/caching into a focused internal
   `TransientStateUtility`, then routed both the interface default methods and public extension API
   through that shared implementation
@@ -413,17 +434,28 @@ Notes:
   are not accessible without casting), so the file was retained — only the `SyncTransientState`
   extension is currently uncovered (no concrete type calls it directly)
 
-Remaining known gaps after Phase 6 third pass:
+Remaining known gaps after Phase 6 fourth pass:
 
-- `NavigatorPathRequestFactory.cs`: 89.1% — the remaining misses are real handoff/orchestration
-  branches in `TryCreateVolumeExitHandoffIfNeeded(...)` and `TryCreateGasLandingHandoff(...)`, not
-  dead null handling anymore
-- `NavSteering.cs`: 91.8% — the remaining gaps are still concentrated in `GetHeading(...)`,
-  line-of-sight refresh, and stuck-recovery branches that require multi-step simulation state
-- `PathManager.cs`: 94.6% — the remaining misses are narrow lifecycle/update helpers rather than
-  broad chart ownership or overlap logic
-- `SolidVoxelFinder.cs`: 98.8% line / 80.0% branch — mostly shallow wrapper branches remain in
-  `GetStartVoxel(...)`, `GetEndVoxel(...)`, `TryGetPathEdgeVoxels(...)`, and `StarCast(...)`
+- `PathManager.cs`: `94.6%` line / `83.3%` branch — still the single biggest remaining gap, but it
+  is now almost entirely narrow lifecycle/update helper coverage rather than broad ownership or
+  overlap behavior
+- `NavSteering.cs`: `91.8%` line / `83.2%` branch — the remaining misses are still concentrated in
+  `GetHeading(...)`, line-of-sight refresh, stuck recovery, and other multi-step simulation-state
+  branches
+- `NavigatorPathRequestFactory.cs`: `95.6%` line / `87.9%` branch — remaining misses are limited to
+  a small set of fallback/cost-comparison branches inside `TryCreateGasLandingHandoff(...)` plus the
+  internal invalid-mode default case
+- `SolidVoxelFinder.cs`: `98.8%` line / `90.0%` branch — wrapper coverage is mostly closed; the
+  notable remaining uncovered line is the `AlternativeVoxelFinder` no-candidate path inside the
+  private `StarCast(...)` helper
+
+Newly resolved from the previous gap list:
+
+- `ParsedTraversalCell.cs`: now fully covered
+- `TraversalBuildResult.cs`: now fully covered
+- `TraversalLegend.cs`: now fully covered after removing the dead normalization branch
+- `HybridRoutePlan.cs`: now fully covered
+- `FlowFieldPathRequest.cs`: no longer a meaningful final-gap candidate
 
 Resolved from the previous gap list:
 
@@ -483,10 +515,12 @@ The goal is near-total confidence, not artificial tests that make the suite hard
 
 Recommended immediate order:
 
-1. move into Phase 6 with the remaining line/branch gaps in `PathManager`, `NavSteering`,
-   `NavigatorPathRequestFactory`, `HybridRoutePlanner`, and `FlowFieldGuide`
-2. keep favoring focused tests over new runtime churn now that the CRAP target is met
-3. only revisit complexity cleanup if a newly exposed Phase 6 holdout rises back above the target
+1. keep Phase 6 focused on the genuinely scenario-heavy holdouts: `PathManager`, `NavSteering`,
+   `Navigator`, `HybridRoutePlanner`, and the remaining `NavigatorPathRequestFactory` fallbacks
+2. only add more runtime cleanup when a remaining gap is clearly dead or structurally unreachable,
+   like the `TraversalLegend` normalization branch that was removed in the fourth pass
+3. if the remaining misses shrink down to tiny private/default paths, make an explicit keep-vs-exclude
+   call instead of forcing high-ceremony tests around them
 
 That sequence should keep us moving toward near-total coverage without inflating the suite around
 branches that may no longer represent real runtime behavior.

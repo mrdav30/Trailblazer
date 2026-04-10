@@ -317,6 +317,114 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         handoff.Should().BeNull();
     }
 
+    [Fact]
+    public void TryCreate_Internal_Aerial_ShouldKeepDirectRequest_WhenTargetIsOutsideGridButEndpointSnaps()
+    {
+        RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryOutsideGrid");
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(12, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: true,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        VolumePathRequest volumeRequest = request.Should().BeOfType<VolumePathRequest>().Subject;
+        volumeRequest.TargetPosition.Should().Be(new Vector3d(12, 0, 0));
+        volumeRequest.EndNode.WorldPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryCreate_Internal_Aerial_ShouldKeepDirectRequest_WhenNoLandingHandoffCanBePlanned()
+    {
+        RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryNoLandingGas");
+        PathTestFactory.RegisterSingleTraversalPoint(
+            "NavigatorFactoryNoLandingTarget",
+            new Vector3d(2, 0, 0),
+            TraversalMedia.Solid | TraversalMedia.Gas);
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryCreate_Internal_Aerial_ShouldBuildLandingHandoff_WhenDirectRequestSnapsFromSolidTarget()
+    {
+        const string sceneKey = "NavigatorFactorySnappedAerialHandoff";
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: true,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
+        handoff.Should().NotBeNull();
+        handoff.TransitionId.Should().Be($"{sceneKey}-landing");
+        handoff.ChartOriginPosition.Should().Be(new Vector3d(1, 0, 0));
+    }
+
+    [Fact]
+    public void TryCreate_Internal_Swim_ShouldBuildExitHandoff_WhenDirectRequestSnapsFromSolidTarget()
+    {
+        const string sceneKey = "NavigatorFactorySnappedSwimHandoff";
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Swim,
+            GuidedPathMode.FlowField,
+            allowUnwalkableEndpoints: true,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 4,
+            traversalMedium: TraversalMedium.Liquid,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().NotBeNull();
+        handoff.TransitionId.Should().Be($"{sceneKey}-exit");
+        handoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
+    }
+
     /// <summary>
     /// Covers the null-request early-exit in both overloads of TryCreate for AStar and FlowField modes.
     /// When origin and destination are inside the grid but on no registered chart, request creation returns

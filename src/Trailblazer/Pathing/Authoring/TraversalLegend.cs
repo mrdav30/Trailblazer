@@ -45,7 +45,7 @@ public sealed class TraversalLegend
     /// <exception cref="ArgumentException">Thrown if the token contains invalid characters.</exception>
     public bool Register(string token, TraversalLegendEntry entry)
     {
-        string normalizedToken = NormalizeToken(token, allowEmpty: true);
+        string normalizedToken = NormalizeToken(token);
         if (normalizedToken.Contains('!'))
             throw new ArgumentException("Legend tokens cannot include transition marker characters.", nameof(token));
 
@@ -64,14 +64,8 @@ public sealed class TraversalLegend
     /// <returns>True if the token was found in the legend; otherwise, false.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetEntry(string token, out TraversalLegendEntry entry) =>
-            _entries.TryGetValue(NormalizeToken(token, allowEmpty: true), out entry);
+            _entries.TryGetValue(NormalizeToken(token), out entry);
 
-    private static string NormalizeToken(string token, bool allowEmpty)
-    {
-        string normalized = token?.Trim() ?? string.Empty;
-        if (!allowEmpty && string.IsNullOrEmpty(normalized))
-            throw new ArgumentException("Token cannot be null, empty, or whitespace.", nameof(token));
-
-        return normalized;
-    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static string NormalizeToken(string token) => token?.Trim() ?? string.Empty;
 }

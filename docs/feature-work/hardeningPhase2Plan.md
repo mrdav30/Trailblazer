@@ -35,6 +35,11 @@ This is the main active follow-up track.
 
 Track any smaller follow-up issues that are straightforward to execute and don't require significant design or profiling work here:
 
+- `SolidVoxelFinder.StarCast(...)` and similar endpoint-search false paths can leave the `out Voxel`
+  parameter pointing at the last inspected candidate instead of resetting it to `null`. Decide
+  whether that should be normalized for failed calls or explicitly documented as the current
+  contract.
+
 ### 3. Optional Runtime Follow-Ups
 
 These are valid future hardening items, but they should stay demand-driven rather than automatic.

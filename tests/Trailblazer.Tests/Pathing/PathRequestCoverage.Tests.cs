@@ -104,6 +104,36 @@ public sealed class PathRequestCoverageTests : IDisposable
     }
 
     [Fact]
+    public void FlowFieldPathRequest_ShouldCoverFactoryHelpers_Equality_AndInvalidRequests()
+    {
+        FlowFieldPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            out FlowFieldPathRequest request).Should().BeTrue();
+
+        FlowFieldPathRequest actualRequest = request ?? throw new InvalidOperationException("Expected valid FlowField request.");
+        FlowFieldPathRequest? missingRequest = null;
+        object unrelatedObject = new();
+        actualRequest.ExtraFloodRange.Should().Be(FlowFieldPathRequest.DefaultExtraFloodRange);
+        actualRequest.Equals(actualRequest).Should().BeTrue();
+        actualRequest.Equals(missingRequest).Should().BeFalse();
+        actualRequest.Equals(unrelatedObject).Should().BeFalse();
+
+        FlowFieldPathRequest.TryCreate(
+            new Vector3d(-20, 0, 0),
+            new Vector3d(-18, 0, 0),
+            out FlowFieldPathRequest invalidDefault).Should().BeFalse();
+        invalidDefault.Should().BeNull();
+
+        FlowFieldPathRequest.TryCreateWithSize(
+            new Vector3d(-20, 0, 0),
+            new Vector3d(-18, 0, 0),
+            Fixed64.Two,
+            out FlowFieldPathRequest invalidSized).Should().BeFalse();
+        invalidSized.Should().BeNull();
+    }
+
+    [Fact]
     public void HybridPathRequest_ShouldCreateFromChartRequests_AndClearRouteWhenInvalidated()
     {
         AStarPathRequest aStar = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One);

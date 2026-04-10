@@ -936,12 +936,6 @@ public static class PathManager
         if (ReferenceEquals(left, right))
             return 0;
 
-        if (left == null)
-            return right == null ? 0 : -1;
-
-        if (right == null)
-            return 1;
-
         if (left.RegistrationOrder != right.RegistrationOrder)
             return left.RegistrationOrder.CompareTo(right.RegistrationOrder);
 
@@ -1622,7 +1616,7 @@ public static class PathManager
         SwiftHashSet<string> invalidatedChartKeys,
         SwiftHashSet<string> managedChartsToRefresh)
     {
-        if (chart == null || !chart.TrySetCell(x, y, z, cell, out _))
+        if (!chart.TrySetCell(x, y, z, cell, out _))
             return false;
 
         TrackManagedChartRefresh(chart, managedChartsToRefresh);
@@ -1644,8 +1638,7 @@ public static class PathManager
             return true;
         }
 
-        if (!TryUpdateResolvedVoxelStateForChartCell(chart, cell, voxel.GlobalIndex, ref state))
-            return true;
+        TryUpdateResolvedVoxelStateForChartCell(chart, cell, voxel.GlobalIndex, ref state);
 
         ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
         CollectEffectiveStateInvalidations(
@@ -1699,7 +1692,7 @@ public static class PathManager
         return true;
     }
 
-    private static bool TryUpdateResolvedVoxelStateForChartCell(
+    private static void TryUpdateResolvedVoxelStateForChartCell(
         NavigationChart chart,
         NavigationChartCell cell,
         GlobalVoxelIndex voxelIndex,
@@ -1710,17 +1703,15 @@ public static class PathManager
             state ??= new ResolvedChartVoxelState();
             state.AddOwner(chart.Name, cell, chart.Priority, chart.RegistrationOrder);
             _resolvedChartVoxelStates[voxelIndex] = state;
-            return true;
+            return;
         }
 
         if (state == null || !state.ContainsOwner(chart.Name))
-            return false;
+            return;
 
         state.RemoveOwner(chart.Name);
         if (!state.HasAnyOwners)
             _resolvedChartVoxelStates.Remove(voxelIndex);
-
-        return true;
     }
 
     private static void RebindAndInvalidate(

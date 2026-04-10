@@ -810,6 +810,50 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void TryUpdateChartCell_ShouldReturnFalse_WhenCellIsUnchanged()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 1, 1];
+        data[0, 0, 0] = NavigationChartCell.Solid;
+
+        var chart = NavigationChart.From3D("NoOpUpdateChart", data, Vector3d.Zero, Fixed64.One);
+        Assert.True(PathManager.Register(chart));
+
+        Assert.False(PathManager.TryUpdateChartCell(chart.Name, 0, 0, 0, NavigationChartCell.Solid));
+        Assert.False(PathManager.TryUpdateChartCell(chart.Name, Vector3d.Zero, NavigationChartCell.Solid));
+        Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell cell));
+        Assert.True(cell.HasSolid);
+
+        PathManager.UnloadChart(chart.Name);
+    }
+
+    [Fact]
+    public void TryUpdateChartCell_ShouldRemoveResolvedState_WhenLastOwnerBecomesEmpty()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 1, 1];
+        data[0, 0, 0] = NavigationChartCell.Solid;
+
+        var chart = NavigationChart.From3D("EmptyRemovalChart", data, Vector3d.Zero, Fixed64.One);
+        Assert.True(PathManager.Register(chart));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
+
+        Assert.True(PathManager.TryUpdateChartCell(chart.Name, 0, 0, 0, NavigationChartCell.Empty));
+
+        Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
+        Assert.False(PathManager.TryGetEffectiveChartOwner(Vector3d.Zero, out _));
+        Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.False(voxel.TryGetPartition<VolumeChartPartition>(out _));
+
+        PathManager.UnloadChart(chart.Name);
+    }
+
+    [Fact]
     public void RegisterTraversalBuildResult_ShouldRegisterTransitionsAndInitializeChart()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
@@ -1868,6 +1912,59 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.TryGetEffectiveCell(new Vector3d(10, 0, 0), out NavigationChartCell rightCell));
         Assert.True(rightCell.HasSolid);
         Assert.Equal(leftGridIndex, leftVoxel.GridIndex);
+    }
+
+    [Fact]
+    public void GlobalGridChange_ShouldIgnoreBoundsWithoutIntersectingCharts()
+    {
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            out _));
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)),
+            out ushort farGridIndex));
+
+        NavigationChart leftChart = PathTestFactory.RegisterSingleWalkablePoint("UnchangedChart", Vector3d.Zero);
+
+        Assert.True(leftChart.IsInitialized);
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel leftVoxel));
+        Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
+
+        GlobalGridManager.IncrementGridVersion(farGridIndex, false);
+
+        Assert.True(leftChart.IsInitialized);
+        Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell cell));
+        Assert.True(cell.HasSolid);
+    }
+
+    [Fact]
+    public void TryUpdateChartCell_ShouldPersistChangesWhileGridIsMissing_AndApplyThemWhenGridReturns()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
+
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 1, 1];
+        data[0, 0, 0] = NavigationChartCell.Solid;
+
+        var chart = NavigationChart.From3D("DeferredGridUpdateChart", data, Vector3d.Zero, Fixed64.One);
+        Assert.True(PathManager.Register(chart));
+        Assert.True(chart.IsInitialized);
+
+        Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+        Assert.True(chart.IsInitialized);
+        Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
+
+        Assert.True(PathManager.TryUpdateChartCell(chart.Name, 0, 0, 0, NavigationChartCell.Liquid));
+
+        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell restoredCell));
+        Assert.False(restoredCell.HasSolid);
+        Assert.True(restoredCell.SupportsMedium(TraversalMedium.Liquid));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel rebuiltVoxel));
+        Assert.False(rebuiltVoxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.True(rebuiltVoxel.TryGetPartition(out VolumeChartPartition volumePartition));
+        Assert.True(volumePartition.SupportsMedium(TraversalMedium.Liquid));
     }
 
     private static bool[,,] CreateThreeVoxelLine()

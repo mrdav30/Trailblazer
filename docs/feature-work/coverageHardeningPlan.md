@@ -401,6 +401,28 @@ Current results from second pass:
 
 Notes:
 
+- the fifth pass focused on the remaining real branch families in `NavigatorPathRequestFactory`,
+  `PathManager`, and `NavSteering` instead of widening scope again
+- `NavigatorPathRequestFactory` is now fully covered after adding direct tests for the internal
+  invalid-mode default, missing-target-voxel fallback, precise target / snapped-endpoint landing
+  choice, cheaper gas-landing choice, and zero-displacement direct-cost branch
+- `PathManager` got a small cleanup pass while adding coverage: dead private null checks were
+  removed from `CompareChartsByRegistrationOrder(...)` and `TryApplyChartCellUpdate(...)`, and the
+  resolved-state update helper now treats "nothing to remove" as a true no-op instead of a special
+  false return
+- the new `PathManager` tests pin no-op chart updates, last-owner removal to empty, deferred chart
+  mutation while the backing grid is missing, and non-intersecting grid-version changes
+- `NavSteering` picked up two cheap-but-real scenario dents: `CanMove == false` early return and
+  the `TryEnsureCurrentRequest(...)` arrival path when movement is requested without a live request
+
+Current results from fifth pass:
+
+- overall snapshot: `94.94%` line, `86.06%` branch
+- `NavigatorPathRequestFactory.cs`: `95.6%` → `100.0%` line, `87.9%` → `100.0%` branch
+- `PathManager.cs`: `94.6%` → `95.5%` line, `83.3%` → `85.8%` branch
+- `NavSteering.cs`: `91.8%` → `92.6%` line, `83.2%` → `84.7%` branch
+- 570 total tests (558 → 570, +12 new tests)
+
 - the fourth pass combined one more targeted cleanup pass with direct value-object coverage rather
   than forcing heavy new steering/path-manager harnesses
 - `NavigatorPathRequestFactory` dropped the now-unnecessary `TryAssignRequest(...)` helper and got
@@ -434,20 +456,19 @@ Notes:
   are not accessible without casting), so the file was retained — only the `SyncTransientState`
   extension is currently uncovered (no concrete type calls it directly)
 
-Remaining known gaps after Phase 6 fourth pass:
+Remaining known gaps after Phase 6 fifth pass:
 
-- `PathManager.cs`: `94.6%` line / `83.3%` branch — still the single biggest remaining gap, but it
-  is now almost entirely narrow lifecycle/update helper coverage rather than broad ownership or
-  overlap behavior
-- `NavSteering.cs`: `91.8%` line / `83.2%` branch — the remaining misses are still concentrated in
-  `GetHeading(...)`, line-of-sight refresh, stuck recovery, and other multi-step simulation-state
-  branches
-- `NavigatorPathRequestFactory.cs`: `95.6%` line / `87.9%` branch — remaining misses are limited to
-  a small set of fallback/cost-comparison branches inside `TryCreateGasLandingHandoff(...)` plus the
-  internal invalid-mode default case
-- `SolidVoxelFinder.cs`: `98.8%` line / `90.0%` branch — wrapper coverage is mostly closed; the
-  notable remaining uncovered line is the `AlternativeVoxelFinder` no-candidate path inside the
-  private `StarCast(...)` helper
+- `PathManager.cs`: `95.5%` line / `85.8%` branch — now mostly narrow mutation/invalidation helper
+  combinations rather than any broad chart-lifecycle holes
+- `NavSteering.cs`: `92.6%` line / `84.7%` branch — the remaining misses are concentrated in
+  line-of-sight refresh, stuck recovery, fallback-direction handling, and other multi-step
+  simulation-state branches
+- `SolidVoxelFinder.cs`: `98.8%` line / `90.0%` branch — no longer an urgent holdout, but the
+  remaining branch debt is still inside the private `StarCast(...)` fallback path
+
+Newly resolved from the previous gap list:
+
+- `NavigatorPathRequestFactory.cs`: now fully covered
 
 Newly resolved from the previous gap list:
 
@@ -516,7 +537,9 @@ The goal is near-total confidence, not artificial tests that make the suite hard
 Recommended immediate order:
 
 1. keep Phase 6 focused on the genuinely scenario-heavy holdouts: `PathManager`, `NavSteering`,
-   `Navigator`, `HybridRoutePlanner`, and the remaining `NavigatorPathRequestFactory` fallbacks
+   `Navigator`, and `HybridRoutePlanner`
+2. treat `SolidVoxelFinder` as optional polish only if we can close the remaining private `StarCast`
+   fallback branch without adding brittle harness code
 2. only add more runtime cleanup when a remaining gap is clearly dead or structurally unreachable,
    like the `TraversalLegend` normalization branch that was removed in the fourth pass
 3. if the remaining misses shrink down to tiny private/default paths, make an explicit keep-vs-exclude

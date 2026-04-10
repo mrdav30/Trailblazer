@@ -50,6 +50,50 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void GetHeading_ShouldReturnZero_WhenMovementIsDisabled()
+    {
+        var data = new bool[1, 2, 1]
+        {
+            {
+                { true },
+                { true }
+            }
+        };
+
+        PathTestFactory.RegisterFromData("MovementDisabledChart", data, Vector3d.Zero);
+
+        var start = Vector3d.Zero;
+        var end = new Vector3d(1, 0, 0);
+        var steer = new NavSteering();
+        var agent = new MockSteerAgent(start);
+        steer.OnInitialize(agent.Radius);
+        AStarPathRequest.TryCreate(start, end, out AStarPathRequest request);
+        steer.ApplyPathRequest(request);
+        steer.CanMove = false;
+
+        steer.GetHeading(agent).Should().Be(Vector3d.Zero);
+        steer.ShouldMove.Should().BeTrue();
+
+        PathManager.UnloadChart("MovementDisabledChart");
+    }
+
+    [Fact]
+    public void GetHeading_ShouldArrive_WhenMovementIsRequestedWithoutAValidCurrentRequest()
+    {
+        var steer = new TestableNavSteering();
+        var agent = new MockSteerAgent(Vector3d.Zero);
+        steer.OnInitialize(agent.Radius);
+        steer.ForceMissingRequestState(new Vector3d(2, 0, 0));
+
+        Vector3d heading = steer.GetHeading(agent);
+
+        heading.Should().Be(Vector3d.Zero);
+        steer.ShouldMove.Should().BeFalse();
+        steer.IsAtDestination.Should().BeTrue();
+        steer.CurrentRequest.Should().BeNull();
+    }
+
+    [Fact]
     public void NavSteering_Should_ApplyRequest_And_SetupPath()
     {
         var data = new bool[1, 3, 1]
@@ -978,5 +1022,16 @@ public class NavSteeringTests : IDisposable
         }
 
         JsonRecordSerializer.Populate(target, (string)payload);
+    }
+
+    private sealed class TestableNavSteering : NavSteering
+    {
+        public void ForceMissingRequestState(Vector3d destination)
+        {
+            Destination = destination;
+            TargetDirection = new Vector3d(1, 0, 0);
+            ShouldMove = true;
+            IsAtDestination = false;
+        }
     }
 }

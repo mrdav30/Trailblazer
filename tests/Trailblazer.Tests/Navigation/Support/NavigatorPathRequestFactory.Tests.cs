@@ -577,6 +577,133 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         handoff.Should().BeNull();
     }
 
+    [Fact]
+    public void TryCreate_Internal_ShouldRejectInvalidModes()
+    {
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            (GuidedPathMode)123,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Solid,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeFalse();
+
+        request.Should().BeNull();
+        handoff.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryCreate_Internal_Aerial_ShouldKeepDirectRequest_WhenTargetVoxelDoesNotExist()
+    {
+        RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryFarOutsideGrid");
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(64, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: true,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        VolumePathRequest volumeRequest = request.Should().BeOfType<VolumePathRequest>().Subject;
+        volumeRequest.EndNode.WorldPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryCreate_Internal_Aerial_ShouldPreferLandingHandoff_WhenTargetSharesGasVoxelButPositionDiffers()
+    {
+        const string sceneKey = "NavigatorFactoryPreciseLanding";
+        RegisterGasLandingChoiceTargetScene(sceneKey, new Vector3d(2, 0, 0), authoredGasLength: 2);
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(2.25f, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().NotBeNull();
+        handoff.TransitionId.Should().Be($"{sceneKey}-landing");
+        handoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
+    }
+
+    [Fact]
+    public void TryCreate_Internal_Aerial_ShouldPreferLandingHandoff_WhenLandingIsCheaperThanDirectFlight()
+    {
+        const string sceneKey = "NavigatorFactoryCheaperLanding";
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        VolumeMediumRules.SetGasVoxelRule(static voxel =>
+            voxel != null && voxel.WorldPosition == new Vector3d(4, 0, 0));
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
+        handoff.Should().NotBeNull();
+        handoff.TransitionId.Should().Be($"{sceneKey}-landing");
+    }
+
+    [Fact]
+    public void TryCreate_Internal_Aerial_ShouldKeepDirectRequest_WhenZeroDisplacementIsCheaperThanLanding()
+    {
+        const string sceneKey = "NavigatorFactoryZeroDisplacementLanding";
+        RegisterGasLandingChoiceTargetScene(sceneKey, Vector3d.Zero, authoredGasLength: 0);
+
+        NavigatorPathRequestFactory.TryCreate(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            Fixed64.One,
+            GuidedPathMode.Aerial,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            traversalMedium: TraversalMedium.Gas,
+            out IPathRequest request,
+            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+
+        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(Vector3d.Zero);
+        handoff.Should().BeNull();
+    }
+
     private static void RegisterLineChart(string chartName, Vector3d minBounds, int length)
     {
         var data = new bool[1, length, 1];
@@ -595,5 +722,23 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
                 medium,
                 chartNamePrefix);
         }
+    }
+
+    private static void RegisterGasLandingChoiceTargetScene(string sceneKey, Vector3d targetPosition, int authoredGasLength)
+    {
+        if (authoredGasLength > 0)
+            RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, authoredGasLength, $"{sceneKey}-Gas");
+
+        PathTestFactory.RegisterSingleTraversalPoint(
+            $"{sceneKey}-Target",
+            targetPosition,
+            TraversalMedia.Solid | TraversalMedia.Gas);
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{sceneKey}-landing",
+            type: TraversalTransitionType.Landing,
+            source: TraversalTransitionAnchor.Gas(targetPosition),
+            destination: TraversalTransitionAnchor.Solid(targetPosition),
+            pathCostModifier: 1)).Should().BeTrue();
     }
 }

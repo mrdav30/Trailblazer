@@ -158,8 +158,8 @@ public static class SolidVoxelFinder
         bool allowUnwalkableEndpoints = false)
     {
         return EndpointVoxelResolver.TryGetEndpointVoxel(
-            origin,
             target,
+            origin,
             out targetVoxel,
             allowUnwalkableEndpoints,
             unitSize,

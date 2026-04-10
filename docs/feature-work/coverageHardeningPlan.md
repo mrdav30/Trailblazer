@@ -367,7 +367,16 @@ Why fifth:
 Near-100% coverage usually stalls on tiny helpers, debug utilities, or defensive branches that are
 hard to hit naturally. This phase is for disciplined cleanup, not denominator gaming.
 
-Status: second pass landed.
+Status: third pass landed.
+
+Current results from third pass:
+
+- overall snapshot: `94.39%` line, `84.80%` branch
+- `ITransient.Extensions.cs`: `50.0%` → `100.0%` line, `100.0%` branch
+- `EndpointVoxelResolver.cs`: `81.4%` → `95.2%` line, `92.1%` branch
+- `SolidVoxelFinder.cs`: `83.9%` → `98.8%` line, `80.0%` branch
+- `NavigatorPathRequestFactory.cs`: `89.5%` → `89.1%` line, `75.0%` → `77.3%` branch
+- 539 total tests (528 → 539, +11 new tests)
 
 Current results from second pass:
 
@@ -381,6 +390,15 @@ Current results from second pass:
 
 Notes:
 
+- the third pass moved transient reflection/caching into a focused internal
+  `TransientStateUtility`, then routed both the interface default methods and public extension API
+  through that shared implementation
+- `ITransientExtensions.SyncTransientState(...)` now has a direct public-API test, so the file is no
+  longer carrying uncovered convenience surface
+- `NavigatorPathRequestFactory` had the dead-looking null branch removed from direct volume-cost
+  evaluation, leaving the remaining gap concentrated in real handoff orchestration branches
+- the pass also exposed and fixed a correctness bug in `SolidVoxelFinder.GetClosestVoxelForSize(...)`
+  where the wrapper was resolving from `origin` instead of `target`
 - `HybridRoutePlanner` received dedicated FlowField-kind, Liquid-pair, and Gas-pair tests that
   exercise `TryCreateFlowFieldStep`, `TryCreateVolumeStep`, and `TryCreateAStarStep` zero-displacement
   path — the three previously uncovered private methods
@@ -395,17 +413,22 @@ Notes:
   are not accessible without casting), so the file was retained — only the `SyncTransientState`
   extension is currently uncovered (no concrete type calls it directly)
 
-Remaining known gaps after Phase 6 second pass:
+Remaining known gaps after Phase 6 third pass:
 
-- `ITransient.Extensions.cs`: 50% — `SyncTransientState` extension is public API surface but not
-  called from any concrete type today; `ClearTransientState` extension is live and covered
-- `NavigatorPathRequestFactory.cs`: 89.5% — `TryGetDirectVolumePathCost` ZeroDisplacement and null
-  branches remain; both require contrived VolumePathRequest state
-- `NavSteering.cs`: 92.0% — remaining gaps in `GetHeading` and `CheckStuckStatus` require
-  multi-step simulation state
-- `PathManager.cs`: 94.7% — minor lifecycle helpers
-- `EndpointVoxelResolver.cs`: 81.4% — new entrant; interior voxel-resolution fallbacks
-- `SolidVoxelFinder.cs`: 83.9% — branch-heavy spatial lookup helpers
+- `NavigatorPathRequestFactory.cs`: 89.1% — the remaining misses are real handoff/orchestration
+  branches in `TryCreateVolumeExitHandoffIfNeeded(...)` and `TryCreateGasLandingHandoff(...)`, not
+  dead null handling anymore
+- `NavSteering.cs`: 91.8% — the remaining gaps are still concentrated in `GetHeading(...)`,
+  line-of-sight refresh, and stuck-recovery branches that require multi-step simulation state
+- `PathManager.cs`: 94.6% — the remaining misses are narrow lifecycle/update helpers rather than
+  broad chart ownership or overlap logic
+- `SolidVoxelFinder.cs`: 98.8% line / 80.0% branch — mostly shallow wrapper branches remain in
+  `GetStartVoxel(...)`, `GetEndVoxel(...)`, `TryGetPathEdgeVoxels(...)`, and `StarCast(...)`
+
+Resolved from the previous gap list:
+
+- `ITransient.Extensions.cs`: now fully covered
+- `EndpointVoxelResolver.cs`: no longer a notable gap after dedicated policy/fallback tests
 
 First pass results (preserved):
 

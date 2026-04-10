@@ -179,6 +179,37 @@ public class SolidVoxelFinderTests : IDisposable
         targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
+    [Fact]
+    public void StarCast_ShouldReturnFalse_WhenQueryIsOutsideAnyGrid()
+    {
+        SolidVoxelFinder.StarCast(new Vector3d(20, 0, 0), out Voxel targetVoxel).Should().BeFalse();
+        targetVoxel.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetClosestVoxelForSize_ShouldResolveUsingPublicWrapper()
+    {
+        RegisterTwoPointChart("ClosestVoxelForSize");
+
+        SolidVoxelFinder.GetClosestVoxelForSize(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            out Voxel targetVoxel,
+            allowUnwalkableEndpoints: false).Should().BeTrue();
+
+        targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+    }
+
+    [Fact]
+    public void TryGetClosestWalkableVoxel_ShouldReturnFalse_WhenNoNeighborIsTraversable()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("NoNeighborWalkable", Vector3d.Zero);
+        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
+
+        SolidVoxelFinder.TryGetClosestWalkableVoxel(voxel, out Voxel closestNeighbor).Should().BeFalse();
+    }
+
     private static void RegisterTwoPointChart(string chartName)
     {
         bool[,,] data = new bool[1, 2, 1];

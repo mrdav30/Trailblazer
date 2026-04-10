@@ -315,7 +315,7 @@ public static class NavigatorPathRequestFactory
             out VolumePathRequest volumeRequest,
             out handoff,
             out totalPathCost)
-            && TryAssignPlannedRequest(volumeRequest, out request);
+            && TryAssignRequest(volumeRequest, out request);
     }
 
     private static bool TryCreateVolumeExitHandoffIfNeeded(
@@ -433,16 +433,14 @@ public static class NavigatorPathRequestFactory
             return false;
         }
 
-        if (directRequest.EndNode == null
-            || directRequest.EndNode.WorldPosition != targetPosition)
+        if (directRequest.EndNode.WorldPosition != targetPosition)
         {
             request = plannedRequest;
             handoff = plannedHandoff;
             return true;
         }
 
-        if (!TryGetDirectVolumePathCost(directRequest, out int directPathCost)
-            || handoffPathCost < directPathCost)
+        if (handoffPathCost < GetDirectVolumePathCost(directRequest))
         {
             request = plannedRequest;
             handoff = plannedHandoff;
@@ -452,31 +450,18 @@ public static class NavigatorPathRequestFactory
         return false;
     }
 
-    private static bool TryGetDirectVolumePathCost(
-        VolumePathRequest request,
-        out int pathCost)
+    private static int GetDirectVolumePathCost(VolumePathRequest request)
     {
-        pathCost = 0;
-
-        if (request == null)
-            return false;
-
         if (request.HasZeroDisplacement)
-            return true;
+            return 0;
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
-        return result.HasPath
-            && result.Waypoints.Length > 0
-            && TryAssignPathCost(result.Waypoints[^1].PathCost, out pathCost);
+        return result.HasPath && result.Waypoints.Length > 0
+            ? result.Waypoints[^1].PathCost
+            : int.MaxValue;
     }
 
-    private static bool TryAssignPathCost(int cost, out int pathCost)
-    {
-        pathCost = cost;
-        return true;
-    }
-
-    private static bool TryAssignPlannedRequest(
+    private static bool TryAssignRequest(
         VolumePathRequest volumeRequest,
         out IPathRequest request)
     {

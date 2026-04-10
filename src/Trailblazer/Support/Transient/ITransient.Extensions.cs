@@ -8,9 +8,9 @@ public static class ITransientExtensions
 {
     /// <inheritdoc cref="ITransient.SyncTransientState"/>
     public static void SyncTransientState(this ITransient instance, ITransient other)
-        => instance.SyncTransientState(other);
+        => TransientStateUtility.Sync(instance, other);
 
     /// <inheritdoc cref="ITransient.ClearTransientState"/>
     public static void ClearTransientState(this ITransient instance)
-        => instance.ClearTransientState();
+        => TransientStateUtility.Clear(instance);
 }

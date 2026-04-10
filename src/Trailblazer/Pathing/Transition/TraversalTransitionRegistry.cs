@@ -567,7 +567,6 @@ public static class TraversalTransitionRegistry
                 activeByIdentity.Add(registered);
             else if (ShouldPromote(registered, current))
             {
-                // TODO: this will do until we add an indexer to SwiftHashSet or switch to a different data structure that allows updating values in-place.
                 activeByIdentity.Remove(current);
                 activeByIdentity.Add(registered);
             }

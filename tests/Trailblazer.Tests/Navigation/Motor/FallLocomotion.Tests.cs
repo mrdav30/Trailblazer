@@ -1,4 +1,5 @@
 ﻿using FixedMathSharp;
+using FixedMathSharp.Assertions;
 using FluentAssertions;
 using System;
 using Trailblazer.Navigation;

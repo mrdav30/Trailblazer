@@ -127,6 +127,21 @@ public sealed class EndpointVoxelResolverTests : IDisposable
         voxel.WorldPosition.Should().Be(new Vector3d(1, 0, 1));
     }
 
+    [Fact]
+    public void TryGetClosestTraversableVoxel_ShouldClearOutVoxel_WhenNoNeighborIsTraversable()
+    {
+        Voxel origin = GetVoxel(Vector3d.Zero);
+
+        bool resolved = EndpointVoxelResolver.TryGetClosestTraversableVoxel(
+            origin,
+            out Voxel voxel,
+            Fixed64.One,
+            new TestEndpointPolicy());
+
+        resolved.Should().BeFalse();
+        voxel.Should().BeNull();
+    }
+
     private static Voxel GetVoxel(Vector3d position)
     {
         GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();

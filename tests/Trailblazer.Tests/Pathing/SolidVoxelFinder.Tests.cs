@@ -190,6 +190,7 @@ public class SolidVoxelFinderTests : IDisposable
     public void StarCast_ShouldReturnFalse_WhenNoAlternativeVoxelExistsInsideGrid()
     {
         SolidVoxelFinder.StarCast(Vector3d.Zero, out Voxel targetVoxel, Fixed64.One).Should().BeFalse();
+        targetVoxel.Should().BeNull();
     }
 
     [Fact]
@@ -265,6 +266,7 @@ public class SolidVoxelFinderTests : IDisposable
         GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
 
         SolidVoxelFinder.TryGetClosestWalkableVoxel(voxel, out Voxel closestNeighbor).Should().BeFalse();
+        closestNeighbor.Should().BeNull();
     }
 
     private static void RegisterTwoPointChart(string chartName)

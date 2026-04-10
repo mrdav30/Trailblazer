@@ -92,23 +92,25 @@ internal static class EndpointVoxelResolver
 
         foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
         {
-            if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
-                || !policy.IsTraversable(closestNeighbor, unitSize))
+            if (!voxel.TryGetNeighborFromDirection(dir, out Voxel candidate)
+                || !policy.IsTraversable(candidate, unitSize))
             {
                 continue;
             }
 
+            closestNeighbor = candidate;
             return true;
         }
 
         foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
         {
-            if (!voxel.TryGetNeighborFromDirection(dir, out closestNeighbor)
-                || !policy.IsTraversable(closestNeighbor, unitSize))
+            if (!voxel.TryGetNeighborFromDirection(dir, out Voxel candidate)
+                || !policy.IsTraversable(candidate, unitSize))
             {
                 continue;
             }
 
+            closestNeighbor = candidate;
             return true;
         }
 

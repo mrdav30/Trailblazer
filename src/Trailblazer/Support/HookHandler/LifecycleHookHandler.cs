@@ -2,8 +2,6 @@ using SwiftCollections;
 using System;
 using System.Collections.Generic;
 
-// TODO: these should be in a seperate utility project
-
 namespace Trailblazer.Support;
 
 /// <summary>

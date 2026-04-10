@@ -578,8 +578,6 @@ public class NavSteeringTests : IDisposable
         request.TrySetUnitSize((Fixed64)2);
         steer.GetHeading(agent);
 
-        // TODO: this is a false positive, the CurrentRequest mutates based on the change we make here,
-        // but doesn't trigger a new path.  Revise this test to better verify that a new path is being requested when the unit size changes, and that the new path is valid for the new size.
         steer.CurrentRequest.UnitSize.Should().Be((Fixed64)2);
 
         PathManager.UnloadChart("RepathUnitSize");

@@ -121,8 +121,6 @@ public class AStarSurveyor
             AStarWaypoint[] waypoints = _waypoints.ToArray();
             string[] chartKeys = _chartKeys.ToArray();
             return AStarSurveyResult.Create(waypoints, chartKeys, request.RequestCacheKey);
-
-            // TODO: should we also clear collections at the end for GC?  maybe flag to determine if dirty?
         }
     }
 

@@ -20,7 +20,11 @@ public static class PathManager
 {
     static PathManager()
     {
-        // TODO: we should probably unregister these events at some point
+        // Subscribe once for the AppDomain lifetime. Both PathManager and GlobalGridManager are static
+        // classes, so these subscriptions share that lifetime and never need to be torn down.
+        // PathManager.Reset() is data-only and does not affect the subscriptions. The handlers are
+        // safe on clean state: HandleExternalGridReset is idempotent, and HandleExternalGridChange
+        // returns early when the chart map is empty, so no stale references can accumulate.
         GlobalGridManager.OnReset += HandleExternalGridReset;
         GlobalGridManager.OnActiveGridAdded += HandleExternalGridChange;
         GlobalGridManager.OnActiveGridRemoved += HandleExternalGridChange;
@@ -684,7 +688,6 @@ public static class PathManager
                     _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
             }
 
-            // TODO: why aren't we doing this for volumes...?  I think this may be behavior that was missed as this is mainly used for clearance checks based on the navigators unit size
             foreach (SolidChartPartition part in partitionsToRebind)
                 part.BindNeighbors();
 

@@ -4,8 +4,6 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
 
-// TODO: clean this up, remove code duplication
-
 /// <summary>
 /// Creates built-in path requests for navigators from host-facing guided travel commands.
 /// </summary>

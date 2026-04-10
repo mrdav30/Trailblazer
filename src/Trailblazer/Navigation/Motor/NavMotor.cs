@@ -700,7 +700,6 @@ public class NavMotor : IRecordable
         PlatformModule.HandlePlatformMovement(position, rotation);
     }
 
-    // TODO: make sure we can't ever go past ceiling level by any means, including external forces or platform movement
     private void CheckJumpStatus(Vector3d position)
     {
         // Make sure we aren't hitting the ceiling

@@ -40,10 +40,6 @@ public class LocomotionHandler : IRecordable
 
     #region Locomotions
 
-    // TODO: instead of seperate properties, store this in a SwiftBucket<ILocomotion> or similar for more dynamic access and iteration. 
-    // The current properties are more convenient but less flexible.
-    // This should also allow us to reduce some of the boilerplate in the composition or lookup methods and make it easier to add new locomotion types without modifying the handler.
-
     /// <summary>
     /// Handles general movement, including speed limits, acceleration, and velocity calculations.
     /// </summary>

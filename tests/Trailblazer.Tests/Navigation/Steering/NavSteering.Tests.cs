@@ -572,13 +572,25 @@ public class NavSteeringTests : IDisposable
         request.IsValid.Should().BeTrue();
 
         steer.ApplyPathRequest(request);
-        steer.GetHeading(agent);  // simulate one frame normally
+        steer.GetHeading(agent);  // frame 1: UnitSize=1, LOS path found
 
-        // simulate a size change mid-path
+        steer.HasLineOfSightPath.Should().BeTrue("unit size 1 fits the 1-wide corridor directly");
+        steer.ShouldMove.Should().BeTrue();
+
+        // Increase unit size to 2 mid-path. The 1-wide corridor is impassable for UnitSize=2,
+        // so the repath should fail and trigger arrival.
+        bool invalidPathFired = false;
+        steer.Events.OnInvalidPath += () => invalidPathFired = true;
+
         request.TrySetUnitSize((Fixed64)2);
-        steer.GetHeading(agent);
+        steer.GetHeading(agent);  // frame 2: detects size change, reruns path validation
 
-        steer.CurrentRequest.UnitSize.Should().Be((Fixed64)2);
+        // Repath ran: the invalid-path event must have fired because UnitSize=2 cannot
+        // fit through the 1-voxel-wide corridor, proving validation executed with the new size.
+        invalidPathFired.Should().BeTrue("the repath with UnitSize=2 should fail on a 1-wide corridor");
+        steer.ShouldMove.Should().BeFalse();
+        steer.IsAtDestination.Should().BeTrue();
+        steer.TrailGuide.Should().BeNull();
 
         PathManager.UnloadChart("RepathUnitSize");
     }

@@ -487,16 +487,18 @@ public class NavSteering : IRecordable
     /// </summary>
     protected virtual bool ValidateMovementPath(Vector3d origin)
     {
-        if (!_shouldRequestPathThisFrame)
-            return true;
-        _shouldRequestPathThisFrame = false;
-
-        // detect size-change
+        // Unit-size change detection must run before the shouldRequestPath gate. Without this,
+        // external TrySetUnitSize calls between frames are silently ignored when
+        // _shouldRequestPathThisFrame is already false, and no repath ever triggers.
         if (_currentRequest.UnitSize != _lastUnitSize)
         {
             _lastUnitSize = _currentRequest.UnitSize;
             _shouldRequestPathThisFrame = true;
         }
+
+        if (!_shouldRequestPathThisFrame)
+            return true;
+        _shouldRequestPathThisFrame = false;
 
         // update origin
         bool ok = _currentRequest.TrySetOrigin(origin);

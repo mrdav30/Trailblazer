@@ -100,11 +100,7 @@ public class AStarSurveyor
 
             _request = request;
 
-            _heap.FastClear();
-            _meta.Clear();
-            _rawPath.FastClear();
-            _waypoints.FastClear();
-            _chartKeys.Clear();
+            ClearWorkingState();
             // Trace path from the start to the end
             _meta[_request.StartNode] = new AStarVoxelMeta
             {
@@ -113,14 +109,19 @@ public class AStarSurveyor
             _heap.Add(startPartition, pathCost: 0);
 
             if (!TracePath())
+            {
+                ClearWorkingState();
                 return AStarSurveyResult.Empty;
+            }
 
             BuildRawPath();
             BuildWaypoints();
 
             AStarWaypoint[] waypoints = _waypoints.ToArray();
             string[] chartKeys = _chartKeys.ToArray();
-            return AStarSurveyResult.Create(waypoints, chartKeys, request.RequestCacheKey);
+            AStarSurveyResult result = AStarSurveyResult.Create(waypoints, chartKeys, request.RequestCacheKey);
+            ClearWorkingState();
+            return result;
         }
     }
 
@@ -368,6 +369,15 @@ public class AStarSurveyor
         return _meta.TryGetValue(voxel, out AStarVoxelMeta data)
             ? data.PathCost
             : int.MaxValue;
+    }
+
+    private void ClearWorkingState()
+    {
+        _heap.FastClear();
+        _meta.Clear();
+        _rawPath.FastClear();
+        _waypoints.FastClear();
+        _chartKeys.Clear();
     }
 
     /// <summary>

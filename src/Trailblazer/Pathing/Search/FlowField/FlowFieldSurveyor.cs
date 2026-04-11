@@ -54,18 +54,22 @@ public class FlowFieldSurveyor
 
             _request = request;
 
-            _heap.FastClear();
-            _chartKeys.Clear();
+            ClearWorkingState();
             // Start from the end and move towards the start voxel
             _heap.Add(targetPart, pathCost: 0);
             ChartOwnerUtility.AddOwners(_chartKeys, targetPart.ChartOwners);
 
             if (!FloodPath())
+            {
+                ClearWorkingState();
                 return FlowFieldSurveyResult.Empty;
+            }
 
             SwiftDictionary<GlobalVoxelIndex, FlowField> flowFields = GenerateFlowFields();
             string[] chartsUsed = _chartKeys.ToArray();
-            return FlowFieldSurveyResult.Create(flowFields, chartsUsed, request.RequestCacheKey);
+            FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(flowFields, chartsUsed, request.RequestCacheKey);
+            ClearWorkingState();
+            return result;
         }
     }
 
@@ -266,6 +270,12 @@ public class FlowFieldSurveyor
         return pathCost == int.MaxValue
             ? int.MaxValue
             : pathCost + partition.PathCostModifier;
+    }
+
+    private void ClearWorkingState()
+    {
+        _heap.FastClear();
+        _chartKeys.Clear();
     }
 
     /// <summary>

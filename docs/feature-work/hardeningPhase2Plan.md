@@ -45,18 +45,7 @@ These are TODOs found across the source and test files, ordered by estimated imp
 references the file where the TODO lived and includes enough context to act on it without re-reading
 the original comment.
 
-2. **Surveyor post-search collection clearing for GC**
-   (`src/Trailblazer/Pathing/Search/AStar/AStarSurveyor.cs`,
-   `src/Trailblazer/Pathing/Search/FlowField/FlowFieldSurveyor.cs`,
-   `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyor.cs`)
-   All three surveyor types leave their working collections populated after returning a result. If
-   surveyor instances are pooled or long-lived, clearing at the end of each pass is the safer
-   default to avoid retaining stale node data between surveys. If they are allocated per-survey the
-   cost is deferred to GC anyway. Evaluate the actual lifetime model, apply a consistent clear
-   policy across all three surveyors, and consider adding a `dirty` flag to distinguish an
-   in-progress search from a freshly reset instance if clearing up-front proves cheaper.
-
-3. **`LocomotionHandler`: consolidate locomotion properties into `SwiftBucket<ILocomotion>`**
+2. **`LocomotionHandler`: consolidate locomotion properties into `SwiftBucket<ILocomotion>`**
    (`src/Trailblazer/Navigation/Motor/Locomotion/LocomotionHandler.cs`)
    Each locomotion type is currently exposed as a named property (`Move`, `Platform`, `Jump`,
    `Fall`, `Slide`, etc.). Replacing these with a `SwiftBucket<ILocomotion>` would allow dynamic
@@ -65,14 +54,14 @@ the original comment.
    convenient for current call sites; weigh that convenience cost against the flexibility gain,
    especially if new locomotion types are anticipated before or during alpha.
 
-4. **`NavigatorPathRequestFactory` code duplication**
+3. **`NavigatorPathRequestFactory` code duplication**
    (`src/Trailblazer/Navigation/Support/NavigatorPathRequestFactory.cs`)
    The `TryCreate` switch repeats a nearly identical null-check, configuration, and
    out-parameter-assignment pattern for each `GuidedPathMode` case. Extract the shared
    post-creation configuration step (e.g. setting `MaxClimbHeight`, returning false on null) into a
    small private helper to reduce the risk of a future case diverging silently.
 
-5. **`ITransient` and `LifecycleHookHandler` placement**
+4. **`ITransient` and `LifecycleHookHandler` placement**
    (`src/Trailblazer/Support/Transient/ITransient.cs`,
    `src/Trailblazer/Support/HookHandler/LifecycleHookHandler.cs`)
    Both types are general-purpose utilities with no hard dependency on the navigation runtime and
@@ -81,14 +70,14 @@ the original comment.
    on these interfaces through non-public surface area, and decide whether the Chronicler project is
    the right home or whether a dedicated `Trailblazer.Support` NuGet boundary is more appropriate.
 
-6. **`AlternativeVoxelFinder` static singleton: make lazy disposable**
+5. **`AlternativeVoxelFinder` static singleton: make lazy disposable**
    (`src/Trailblazer/Pathing/Search/Support/VoxelFinder/AlternativeVoxelFinder.cs`)
    `AlternativeVoxelFinder.Instance` is a plain static field. Implement as a `Lazy<T>` property if
    deferred construction matters, or document why eager static allocation is intentional and leave
    the field as-is. The type has no unmanaged resources so full `IDisposable` teardown is only
    needed if the instance must be replaced or reset between test runs.
 
-7. **`NavigationChart` layout: evaluate single-layer-high XZ design**
+6. **`NavigationChart` layout: evaluate single-layer-high XZ design**
     (`src/Trailblazer/Pathing/Chart/NavigationChart.cs`)
     The comment raises whether restricting charts to one layer high (using the Y axis only for
     vertical stacking rather than as a primary index dimension) would yield a more cache-friendly

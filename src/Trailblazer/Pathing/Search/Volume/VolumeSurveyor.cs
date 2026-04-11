@@ -47,25 +47,26 @@ public sealed class VolumeSurveyor
 
             _request = request;
 
-            _heap.FastClear();
-            _meta.Clear();
-            _rawPath.FastClear();
-            _waypoints.FastClear();
-            _chartKeys.Clear();
+            ClearWorkingState();
 
             _meta[_request.StartNode] = new VolumeVoxelMeta();
             _heap.Add(_request.StartNode, 0);
 
             if (!TracePath())
+            {
+                ClearWorkingState();
                 return VolumeSurveyResult.Empty;
+            }
 
             BuildRawPath();
             TrackRawPathChartOwners();
             BuildWaypoints();
 
-            return _waypoints.Count > 0
+            VolumeSurveyResult result = _waypoints.Count > 0
                 ? VolumeSurveyResult.Create(_waypoints.ToArray(), _chartKeys.ToArray(), request.RequestCacheKey)
                 : VolumeSurveyResult.Empty;
+            ClearWorkingState();
+            return result;
         }
     }
 
@@ -321,5 +322,14 @@ public sealed class VolumeSurveyor
         return voxel != null && voxel.TryGetPartition(out VolumeChartPartition volumePartition)
             ? volumePartition.PathCostModifier
             : 0;
+    }
+
+    private void ClearWorkingState()
+    {
+        _heap.FastClear();
+        _meta.Clear();
+        _rawPath.FastClear();
+        _waypoints.FastClear();
+        _chartKeys.Clear();
     }
 }

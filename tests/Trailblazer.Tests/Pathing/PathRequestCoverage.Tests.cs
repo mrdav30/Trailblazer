@@ -223,6 +223,39 @@ public sealed class PathRequestCoverageTests : IDisposable
         request.Should().BeNull();
     }
 
+    [Fact]
+    public void PathRequest_TrySetDestination_ShouldUpdateEndNode_WhenDestinationChanges()
+    {
+        var request = new TestPathRequest();
+        request.UpdateRequest(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One).Should().BeTrue();
+
+        // Changing to a different voxel on the same chart exercises the full update path.
+        request.TrySetDestination(new Vector3d(1, 0, 0)).Should().BeTrue();
+        request.EndNode.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+
+        // resetSearchRange: true exercises the search-range recompute block.
+        request.TrySetDestination(new Vector3d(2, 0, 0), resetSearchRange: true).Should().BeTrue();
+        request.EndNode.WorldPosition.Should().Be(new Vector3d(2, 0, 0));
+        request.MaxPathSearchRange.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void AStarPathRequest_Equals_ShouldSupportObjectAndTypedOverloads()
+    {
+        AStarPathRequest a = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One)
+            ?? throw new InvalidOperationException("Expected valid AStar request.");
+        AStarPathRequest b = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One)
+            ?? throw new InvalidOperationException("Expected valid AStar request.");
+        AStarPathRequest c = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One)
+            ?? throw new InvalidOperationException("Expected valid AStar request.");
+
+        a.Equals((object)b).Should().BeTrue();
+        a.Equals((object)c).Should().BeFalse();
+        a.Equals(new object()).Should().BeFalse();
+        a.Equals(b).Should().BeTrue();
+        a.Equals(c).Should().BeFalse();
+    }
+
     private static void RegisterLineChart(string chartName, Vector3d minBounds, int length)
     {
         var data = new bool[1, length, 1];

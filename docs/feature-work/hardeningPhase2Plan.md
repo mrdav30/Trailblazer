@@ -37,24 +37,7 @@ Track any smaller follow-up issues that are straightforward to execute and don't
 
 - None at the moment
 
-## 3. Remaining TODO Items
-
-### 3.1 In-Code TODO Items
-
-These are TODOs found across the source and test files, ordered by estimated importance. Each entry
-references the file where the TODO lived and includes enough context to act on it without re-reading
-the original comment.
-
-2. **`NavigationChart` layout: evaluate single-layer-high XZ design**
-    (`src/Trailblazer/Pathing/Chart/NavigationChart.cs`)
-    The comment raises whether restricting charts to one layer high (using the Y axis only for
-    vertical stacking rather than as a primary index dimension) would yield a more cache-friendly
-    XZ-first layout and simplify indexing for typical game scenarios. This is a significant
-    data-layout decision that affects the entire chart and partition system. Treat as a post-alpha
-    architectural investigation; revisit only if profiling data or host feedback indicates the
-    current layout is a real hotspot.
-
-### 3.2 Optional Runtime Follow-Ups
+### 3. Optional Runtime Follow-Ups
 
 These are valid future hardening items, but they should stay demand-driven rather than automatic.
 

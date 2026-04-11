@@ -212,3 +212,66 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         PathTestFactory.RegisterFromData(chartKey, data, minBounds);
     }
 }
+
+/// <summary>
+/// Standalone tests for <see cref="GuidedVolumeExitHandoff"/> failure paths that do not require
+/// a live chart or transition infrastructure.
+/// </summary>
+[Collection("PathingCollection")]
+public sealed class GuidedVolumeExitHandoffTests : IDisposable
+{
+    public GuidedVolumeExitHandoffTests()
+    {
+        if (GlobalGridManager.IsActive)
+            GlobalGridManager.Reset();
+        else
+            GlobalGridManager.Setup();
+
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+    }
+
+    public void Dispose()
+    {
+        PathManager.Reset();
+        GlobalGridManager.Reset();
+        TrailblazerManager.Reset();
+        GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public void TryCreateFollowupRequest_ShouldFail_WhenHandoffIsInvalid()
+    {
+        // Default TransitionId is null, so IsValid == false; the early-return branch is exercised.
+        var handoff = new GuidedVolumeExitHandoff();
+        handoff.TryCreateFollowupRequest(Vector3d.Zero, Fixed64.One, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryCreateFollowupRequest_ShouldFail_WhenAStarCreateReturnsNull()
+    {
+        // Positions far outside any grid make AStarPathRequest.Create return null,
+        // exercising the create-failure return in the AStar case branch.
+        var handoff = new GuidedVolumeExitHandoff
+        {
+            TransitionId = "test-transition",
+            ChartPathMode = GuidedPathMode.AStar,
+            ChartOriginPosition = new Vector3d(1000, 0, 0),
+            TargetPosition = new Vector3d(1001, 0, 0),
+        };
+        handoff.TryCreateFollowupRequest(Vector3d.Zero, Fixed64.One, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryCreateFollowupRequest_ShouldFail_WhenFlowFieldCreateReturnsNull()
+    {
+        // Same as above but for the FlowField case branch.
+        var handoff = new GuidedVolumeExitHandoff
+        {
+            TransitionId = "test-transition",
+            ChartPathMode = GuidedPathMode.FlowField,
+            ChartOriginPosition = new Vector3d(1000, 0, 0),
+            TargetPosition = new Vector3d(1001, 0, 0),
+        };
+        handoff.TryCreateFollowupRequest(Vector3d.Zero, Fixed64.One, out _).Should().BeFalse();
+    }
+}

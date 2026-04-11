@@ -367,7 +367,18 @@ Near-100% coverage usually stalls on tiny helpers, debug utilities, or defensive
 hard to hit naturally. This phase is for disciplined cleanup, not denominator gaming.
 
 Status: fourth pass landed.
+Current results from sixth pass:
 
+- overall snapshot: `95.38%` line, `87.03%` branch
+- `VolumeChartPartition.cs`: new test file — `87.0%` → `98.1%` line, `50.0%` → `88.9%` branch
+- `PathRequest.cs`: `85.5%` → `97.6%` line, `70.4%` → `86.4%` branch
+- `AStarPathRequest.cs`: `95.9%` → `100.0%` line, `71.4%` → `85.7%` branch
+- `MoveLocomotion.cs`: `92.3%` → (above threshold) line, `66.7%` → (above threshold) branch
+- `TransientStateUtility.cs`: `93.5%` → (above threshold) line, `75.0%` → (above threshold) branch
+- `GuidedVolumeExitHandoff.cs`: `94.5%` → (above threshold) line, `70.0%` → (above threshold) branch
+- `HybridGuide.cs`: `90.8%` → (above threshold) line, `69.0%` → (above threshold) branch
+- `AlternativeVoxelFinder.cs`: `89.3%` → `92.8%` line, `76.2%` → `83.3%` branch (partial improvement)
+- 586 total tests (570 → 586, +16 new tests)
 Current results from fourth pass:
 
 - overall snapshot: `94.65%` line, `85.47%` branch
@@ -455,6 +466,24 @@ Current results from fifth pass:
   IS called from concrete locomotion types via `this.ClearTransientState()` (default interface methods
   are not accessible without casting), so the file was retained — only the `SyncTransientState`
   extension is currently uncovered (no concrete type calls it directly)
+
+Remaining known gaps after Phase 6 sixth pass:
+
+- `PathManager.cs`: `95.5%` line / `85.8%` branch — narrow mutation/invalidation helper combinations
+- `NavSteering.cs`: `93.7%` line / `86.1%` branch — remaining misses in line-of-sight refresh, stuck recovery, and fallback-direction handling
+- `AlternativeVoxelFinder.cs`: `92.8%` line / `83.3%` branch — the 500-iteration overflow guard and some AdvanceRotation rotation-tracking branches are structurally impractical to hit in tests
+- `GuidedVolumeExitPlanner.cs`: `88.8%` line / `76.6%` branch — transition-aware cost evaluation branches remain the main gap
+- `HybridRoutePlanner.cs`: `89.8%` line / `74.0%` branch — complex multi-mode plan routing paths
+
+Newly resolved from the previous gap list:
+
+- `VolumeChartPartition.cs`: line and branch coverage now above threshold; new test file covers HasAnyOwners, HandleChange, SupportsMedium default arm, BelongsTo, and ApplyAuthoredState
+- `PathRequest.cs`: TrySetDestination success path now covered after adding a destination-change test
+- `AStarPathRequest.cs`: Equals(object) and Equals(AStarPathRequest) overloads now fully covered
+- `MoveLocomotion.cs`: IsEnabled setter ClearTransientState path now covered
+- `TransientStateUtility.cs`: empty-delegate fast path (no transient properties) and static-property default lookup now covered
+- `GuidedVolumeExitHandoff.cs`: IsValid=false early return, AStar-null create failure, and FlowField-null create failure branches now covered
+- `HybridGuide.cs`: null/empty ActiveWaypoints guards and exhausted-index return now covered
 
 Remaining known gaps after Phase 6 fifth pass:
 

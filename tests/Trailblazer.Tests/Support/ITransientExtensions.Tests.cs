@@ -58,6 +58,27 @@ public sealed class ITransientExtensionsTests
         target.NonTransient.Should().Be(42);
     }
 
+    [Fact]
+    public void SyncAndClearTransientState_ShouldBeNoOp_WhenTypeHasNoTransientProperties()
+    {
+        var instance = new NoTransientProps { Value = 5 };
+        var other = new NoTransientProps { Value = 10 };
+
+        ((ITransient)instance).SyncTransientState(other);
+        instance.Value.Should().Be(5);
+
+        ((ITransient)instance).ClearTransientState();
+        instance.Value.Should().Be(5);
+    }
+
+    [Fact]
+    public void ClearTransientState_ShouldUseStaticPropertyDefault_WhenAttributeSpecifiesPropertyMember()
+    {
+        var instance = new PropDefaultTransient { Direction = Vector3d.Up };
+        instance.ClearTransientState();
+        instance.Direction.Should().Be(Vector3d.Forward);
+    }
+
     private sealed class TestTransient : ITransient
     {
         [Transient]
@@ -73,5 +94,21 @@ public sealed class ITransientExtensionsTests
         public FixedQuaternion Rotation { get; set; }
 
         public int NonTransient { get; set; }
+    }
+
+    // No [Transient] properties — exercises the empty-delegate fast path in TransientStateUtility.
+    private sealed class NoTransientProps : ITransient
+    {
+        public int Value { get; set; }
+    }
+
+    // Uses a static *property* (not a field) as the clear default — exercises the property-member
+    // lookup path in TransientStateUtility.GetStaticMemberExpression.
+    private sealed class PropDefaultTransient : ITransient
+    {
+        public static Vector3d ForwardDefault => Vector3d.Forward;
+
+        [Transient(typeof(PropDefaultTransient), nameof(ForwardDefault))]
+        public Vector3d Direction { get; set; }
     }
 }

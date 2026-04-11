@@ -155,6 +155,32 @@ public sealed class WaypointGuideTests : IDisposable
         guide.TryGetWaypointAt(99, out _).Should().BeFalse();
     }
 
+    [Fact]
+    public void HybridGuide_ShouldReturnFalseAndZero_WhenActiveWaypointsAreNullOrExhausted()
+    {
+        // Before initialization ActiveWaypoints is null — covers the null/empty guards in
+        // TryGetMovementDirection, GetCurrentWaypointDirection, and TryGetFallbackDirection.
+        var fresh = new HybridGuide();
+        fresh.TryGetMovementDirection(Vector3d.Zero, out _).Should().BeFalse();
+        fresh.TryGetFallbackDirection(Vector3d.Zero, out _).Should().BeFalse();
+        fresh.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero);
+
+        // A single-waypoint guide whose only waypoint is at Vector3d.Zero:
+        // CurrentWaypointIndex stays 0, and waypoint == Zero triggers the zero-direction guard.
+        var zeroGuide = new HybridGuide();
+        zeroGuide.Initialize(BuildWaypoints(Vector3d.Zero)).Should().BeTrue();
+        zeroGuide.GetCurrentWaypointDirection(new Vector3d(1, 0, 0)).Should().Be(Vector3d.Zero);
+
+        // Advancing past the end of the waypoint list exhausts the index, triggering the
+        // out-of-range guard in GetCurrentWaypointDirection.
+        var guide = new HybridGuide();
+        guide.Initialize(BuildWaypoints(new Vector3d(1, 0, 0), new Vector3d(2, 0, 0))).Should().BeTrue();
+        guide.AdvanceWaypoint();
+        guide.AdvanceWaypoint();
+        guide.AdvanceWaypoint();
+        guide.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero);
+    }
+
     private static AStarWaypoint[] BuildWaypoints(params Vector3d[] positions)
     {
         var waypoints = new AStarWaypoint[positions.Length];

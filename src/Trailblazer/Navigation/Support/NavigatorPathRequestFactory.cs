@@ -25,40 +25,16 @@ public static class NavigatorPathRequestFactory
         switch (pathMode)
         {
             case GuidedPathMode.AStar:
-                var aStar = AStarPathRequest.Create(
-                    origin,
-                    targetPosition,
-                    unitSize,
-                    aStarHeuristic,
-                    allowUnwalkableEndpoints,
-                    allowTraversalTransitions);
-                if (aStar == null)
-                {
-                    request = null;
-                    return false;
-                }
-
-                aStar.MaxClimbHeight = maxClimbHeight;
-                request = aStar;
-                return true;
+                return TryCreateAStarRequest(
+                    origin, targetPosition, unitSize,
+                    aStarHeuristic, allowUnwalkableEndpoints, allowTraversalTransitions,
+                    maxClimbHeight, out request);
 
             case GuidedPathMode.FlowField:
-                var flowField = FlowFieldPathRequest.Create(
-                    origin,
-                    targetPosition,
-                    unitSize,
-                    allowUnwalkableEndpoints,
-                    allowTraversalTransitions);
-                if (flowField == null)
-                {
-                    request = null;
-                    return false;
-                }
-
-                flowField.MaxClimbHeight = maxClimbHeight;
-                flowField.ExtraFloodRange = flowFieldExtraFloodRange;
-                request = flowField;
-                return true;
+                return TryCreateFlowFieldRequest(
+                    origin, targetPosition, unitSize,
+                    allowUnwalkableEndpoints, allowTraversalTransitions,
+                    maxClimbHeight, flowFieldExtraFloodRange, out request);
 
             case GuidedPathMode.Aerial:
                 request = VolumePathRequest.Create(
@@ -112,40 +88,16 @@ public static class NavigatorPathRequestFactory
         switch (pathMode)
         {
             case GuidedPathMode.AStar:
-                var aStar = AStarPathRequest.Create(
-                    origin,
-                    targetPosition,
-                    unitSize,
-                    aStarHeuristic,
-                    allowUnwalkableEndpoints,
-                    allowTraversalTransitions);
-                if (aStar == null)
-                {
-                    request = null;
-                    return false;
-                }
-
-                aStar.MaxClimbHeight = maxClimbHeight;
-                request = aStar;
-                return true;
+                return TryCreateAStarRequest(
+                    origin, targetPosition, unitSize,
+                    aStarHeuristic, allowUnwalkableEndpoints, allowTraversalTransitions,
+                    maxClimbHeight, out request);
 
             case GuidedPathMode.FlowField:
-                var flowField = FlowFieldPathRequest.Create(
-                    origin,
-                    targetPosition,
-                    unitSize,
-                    allowUnwalkableEndpoints,
-                    allowTraversalTransitions);
-                if (flowField == null)
-                {
-                    request = null;
-                    return false;
-                }
-
-                flowField.MaxClimbHeight = maxClimbHeight;
-                flowField.ExtraFloodRange = flowFieldExtraFloodRange;
-                request = flowField;
-                return true;
+                return TryCreateFlowFieldRequest(
+                    origin, targetPosition, unitSize,
+                    allowUnwalkableEndpoints, allowTraversalTransitions,
+                    maxClimbHeight, flowFieldExtraFloodRange, out request);
 
             case GuidedPathMode.Aerial:
                 var volume = VolumePathRequest.Create(
@@ -446,6 +398,62 @@ public static class NavigatorPathRequestFactory
         }
 
         return false;
+    }
+
+    private static bool TryCreateAStarRequest(
+        Vector3d origin,
+        Vector3d targetPosition,
+        Fixed64 unitSize,
+        HeuristicMethod heuristic,
+        bool allowUnwalkableEndpoints,
+        bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
+        out IPathRequest request)
+    {
+        AStarPathRequest aStar = AStarPathRequest.Create(
+            origin,
+            targetPosition,
+            unitSize,
+            heuristic,
+            allowUnwalkableEndpoints,
+            allowTraversalTransitions);
+        if (aStar == null)
+        {
+            request = null;
+            return false;
+        }
+
+        aStar.MaxClimbHeight = maxClimbHeight;
+        request = aStar;
+        return true;
+    }
+
+    private static bool TryCreateFlowFieldRequest(
+        Vector3d origin,
+        Vector3d targetPosition,
+        Fixed64 unitSize,
+        bool allowUnwalkableEndpoints,
+        bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
+        int flowFieldExtraFloodRange,
+        out IPathRequest request)
+    {
+        FlowFieldPathRequest flowField = FlowFieldPathRequest.Create(
+            origin,
+            targetPosition,
+            unitSize,
+            allowUnwalkableEndpoints,
+            allowTraversalTransitions);
+        if (flowField == null)
+        {
+            request = null;
+            return false;
+        }
+
+        flowField.MaxClimbHeight = maxClimbHeight;
+        flowField.ExtraFloodRange = flowFieldExtraFloodRange;
+        request = flowField;
+        return true;
     }
 
     private static int GetDirectVolumePathCost(VolumePathRequest request)

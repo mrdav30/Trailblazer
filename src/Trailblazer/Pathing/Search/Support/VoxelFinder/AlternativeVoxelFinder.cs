@@ -10,7 +10,7 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public class AlternativeVoxelFinder
 {
-    public static AlternativeVoxelFinder Instance = new();
+    public static readonly AlternativeVoxelFinder Instance = new();
 
     private Vector3d _worldPos;
 

@@ -45,14 +45,7 @@ These are TODOs found across the source and test files, ordered by estimated imp
 references the file where the TODO lived and includes enough context to act on it without re-reading
 the original comment.
 
-2. **`AlternativeVoxelFinder` static singleton: make lazy disposable**
-   (`src/Trailblazer/Pathing/Search/Support/VoxelFinder/AlternativeVoxelFinder.cs`)
-   `AlternativeVoxelFinder.Instance` is a plain static field. Implement as a `Lazy<T>` property if
-   deferred construction matters, or document why eager static allocation is intentional and leave
-   the field as-is. The type has no unmanaged resources so full `IDisposable` teardown is only
-   needed if the instance must be replaced or reset between test runs.
-
-3. **`NavigationChart` layout: evaluate single-layer-high XZ design**
+2. **`NavigationChart` layout: evaluate single-layer-high XZ design**
     (`src/Trailblazer/Pathing/Chart/NavigationChart.cs`)
     The comment raises whether restricting charts to one layer high (using the Y axis only for
     vertical stacking rather than as a primary index dimension) would yield a more cache-friendly

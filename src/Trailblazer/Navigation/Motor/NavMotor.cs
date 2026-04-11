@@ -658,10 +658,12 @@ public class NavMotor : IRecordable
         Handler.Move.FrameVelocity = (newPosition - lastPosition) * TrailblazerManager.InvDeltaTime;
 
         CurrentState.Update(conditonRefresh, CurrentState.ToTrekCondition());
-        CheckJumpStatus(newPosition);
 
         PlatformModule?.HandlePlatformChange(CurrentState.GroundState);
         HandlePlatformTransitions();
+
+        // Ceiling check runs last so platform inertia inherited this frame cannot bypass the clamp.
+        CheckJumpStatus(newPosition);
     }
 
     private void HandleTraversalTransitions()

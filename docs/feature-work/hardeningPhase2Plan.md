@@ -45,16 +45,7 @@ These are TODOs found across the source and test files, ordered by estimated imp
 references the file where the TODO lived and includes enough context to act on it without re-reading
 the original comment.
 
-1. **`NavMotor` ceiling-level bypass via external forces or platform movement**
-   (`src/Trailblazer/Navigation/Motor/NavMotor.cs`)
-   `CheckJumpStatus` guards against exceeding `CeilingLevel` when upward velocity is detected, but
-   external forces and platform movement go through separate code paths (`FinalizePlatformMovement`
-   and whatever drives `FrameVelocity` externally) that do not pass through this check. Before
-   alpha, verify whether any of those paths can put the navigator above `CeilingLevel` without
-   triggering the clamp, and either route them through the existing ceiling-check helper or add
-   equivalent guards at the affected sites.
-
-2. **`PathManager.UnloadChart` missing volume partition neighbor rebinding**
+1. **`PathManager.UnloadChart` missing volume partition neighbor rebinding**
    (`src/Trailblazer/Pathing/PathManager.cs`)
    During chart unload, `SolidChartPartition` neighbors are rebound after voxel state is removed,
    but the equivalent rebind is not performed for `VolumeChartPartition`. The original comment notes
@@ -63,7 +54,7 @@ the original comment.
    partitions require the same rebind step for correctness, and either add it or document why it is
    intentionally omitted.
 
-3. **`NavSteering` test false positive on unit-size repath**
+2. **`NavSteering` test false positive on unit-size repath**
    (`tests/Trailblazer.Tests/Navigation/Steering/NavSteering.Tests.cs`)
    The test for mid-path unit-size change only asserts that `CurrentRequest.UnitSize` was updated,
    but `CurrentRequest` mutates in-place when `TrySetUnitSize` is called, so the assertion does not

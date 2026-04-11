@@ -106,7 +106,7 @@ public class PlatformLocomotion : ILocomotion
     /// <summary>
     /// The local rotation of the scout relative to the platform.
     /// </summary>
-    [Transient]
+    [Transient(typeof(FixedQuaternion), nameof(FixedQuaternion.Identity))]
     public FixedQuaternion ScoutLocalRotation { get; set; } = FixedQuaternion.Identity;
 
     /// <summary>

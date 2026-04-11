@@ -45,23 +45,14 @@ These are TODOs found across the source and test files, ordered by estimated imp
 references the file where the TODO lived and includes enough context to act on it without re-reading
 the original comment.
 
-2. **`ITransient` and `LifecycleHookHandler` placement**
-   (`src/Trailblazer/Support/Transient/ITransient.cs`,
-   `src/Trailblazer/Support/HookHandler/LifecycleHookHandler.cs`)
-   Both types are general-purpose utilities with no hard dependency on the navigation runtime and
-   were flagged as candidates for extraction into a separate utility project (potentially alongside
-   or within Chronicler). Before extracting, confirm whether any Trailblazer-internal types depend
-   on these interfaces through non-public surface area, and decide whether the Chronicler project is
-   the right home or whether a dedicated `Trailblazer.Support` NuGet boundary is more appropriate.
-
-3. **`AlternativeVoxelFinder` static singleton: make lazy disposable**
+2. **`AlternativeVoxelFinder` static singleton: make lazy disposable**
    (`src/Trailblazer/Pathing/Search/Support/VoxelFinder/AlternativeVoxelFinder.cs`)
    `AlternativeVoxelFinder.Instance` is a plain static field. Implement as a `Lazy<T>` property if
    deferred construction matters, or document why eager static allocation is intentional and leave
    the field as-is. The type has no unmanaged resources so full `IDisposable` teardown is only
    needed if the instance must be replaced or reset between test runs.
 
-4. **`NavigationChart` layout: evaluate single-layer-high XZ design**
+3. **`NavigationChart` layout: evaluate single-layer-high XZ design**
     (`src/Trailblazer/Pathing/Chart/NavigationChart.cs`)
     The comment raises whether restricting charts to one layer high (using the Y axis only for
     vertical stacking rather than as a primary index dimension) would yield a more cache-friendly

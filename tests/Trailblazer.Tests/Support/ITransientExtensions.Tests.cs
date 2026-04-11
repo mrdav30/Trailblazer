@@ -66,10 +66,10 @@ public sealed class ITransientExtensionsTests
         [Transient]
         public string? Label { get; set; }
 
-        [Transient]
+        [Transient(typeof(Fixed4x4), nameof(Fixed4x4.Identity))]
         public Fixed4x4 Matrix { get; set; }
 
-        [Transient]
+        [Transient(typeof(FixedQuaternion), nameof(FixedQuaternion.Identity))]
         public FixedQuaternion Rotation { get; set; }
 
         public int NonTransient { get; set; }

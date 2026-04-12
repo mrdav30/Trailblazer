@@ -868,6 +868,86 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void TryUpdateChartCell_ShouldReevaluateManagedManualTransitions_WhenLocalTraversalSupportChanges()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        bool[,,] data = new bool[1, 2, 1]
+        {
+            {
+                { true },
+                { true }
+            }
+        };
+
+        var chart = NavigationChart.From3D("MutableManualTransitionChart", data, Vector3d.Zero, Fixed64.One);
+        Assert.True(PathManager.Register(chart));
+
+        var manual = new TraversalTransition(
+            id: "mutable-manual-link",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.Register(manual));
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+
+        Assert.True(PathManager.TryUpdateChartCell(chart.Name, 1, 0, 0, NavigationChartCell.Liquid));
+
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.False(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.Empty(TraversalTransitionRegistry.GetIncomingTransitions(new Vector3d(1, 0, 0)));
+
+        Assert.True(PathManager.TryUpdateChartCell(chart.Name, 1, 0, 0, NavigationChartCell.Solid));
+
+        Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.Single(TraversalTransitionRegistry.GetIncomingTransitions(new Vector3d(1, 0, 0)));
+
+        PathManager.UnloadChart(chart.Name);
+    }
+
+    [Fact]
+    public void TryUpdateChartCell_ShouldPreserveEffectiveTraversalWhenWinningOwnerFallsBackToEquivalentCell()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        GlobalGridManager.TryAddGrid(config, out _);
+
+        NavigationChart lowPriorityChart = BuildSingleTraversalPointChart(
+            "FallbackOwnerLow",
+            Vector3d.Zero,
+            TraversalMedia.Solid,
+            priority: 0);
+        NavigationChart highPriorityChart = BuildSingleTraversalPointChart(
+            "FallbackOwnerHigh",
+            Vector3d.Zero,
+            TraversalMedia.Solid,
+            priority: 1);
+
+        Assert.True(PathManager.Register(lowPriorityChart));
+        Assert.True(PathManager.Register(highPriorityChart));
+        Assert.True(PathManager.TryGetEffectiveChartOwner(Vector3d.Zero, out string winningOwnerBeforeUpdate));
+        Assert.Equal("FallbackOwnerHigh", winningOwnerBeforeUpdate);
+
+        Assert.True(PathManager.TryUpdateChartCell(highPriorityChart.Name, 1, 1, 1, NavigationChartCell.Empty));
+
+        Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell effectiveCell));
+        Assert.True(PathManager.TryGetEffectiveChartOwner(Vector3d.Zero, out string winningOwnerAfterUpdate));
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(voxel.TryGetPartition(out SolidChartPartition partition));
+
+        Assert.True(effectiveCell.HasSolid);
+        Assert.False(effectiveCell.HasVolume);
+        Assert.Equal("FallbackOwnerLow", winningOwnerAfterUpdate);
+        Assert.Equal("FallbackOwnerLow", partition.EffectiveChartOwner);
+
+        PathManager.UnloadChart(highPriorityChart.Name);
+        PathManager.UnloadChart(lowPriorityChart.Name);
+    }
+
+    [Fact]
     public void RegisterTraversalBuildResult_ShouldRegisterTransitionsAndInitializeChart()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));

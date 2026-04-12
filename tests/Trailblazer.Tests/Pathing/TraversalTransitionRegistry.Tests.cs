@@ -156,6 +156,30 @@ public class TraversalTransitionRegistryTests : IDisposable
     }
 
     [Fact]
+    public void LookupAndMutationApis_ShouldGracefullyIgnoreMissingTransitionsAndNoOpRequests()
+    {
+        int versionBefore = TraversalTransitionRegistry.RegistryVersion;
+
+        Assert.False(TraversalTransitionRegistry.TryGet("missing-transition", out _));
+        Assert.False(TraversalTransitionRegistry.TryGetResolvedEndpoints(
+            "missing-transition",
+            out _,
+            out _));
+        Assert.False(TraversalTransitionRegistry.Unregister("missing-transition"));
+        Assert.Empty(TraversalTransitionRegistry.GetIncomingTransitions(new Vector3d(64, 0, 0)));
+
+        TraversalTransitionRegistry.UnregisterRange(new[] { "missing-transition" }, count: 0);
+        TraversalTransitionRegistry.UnregisterRange(new[] { "missing-transition" }, count: 4);
+        TraversalTransitionRegistry.SetManagedTransitionsSuppressed(Array.Empty<string>(), suppressed: true);
+        TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+            new[] { "missing-transition" },
+            suppressed: true,
+            count: 0);
+
+        Assert.Equal(versionBefore, TraversalTransitionRegistry.RegistryVersion);
+    }
+
+    [Fact]
     public void Register_ShouldRejectDuplicateManualTransitions_WhenEffectiveSemanticsMatch()
     {
         PathTestFactory.RegisterSingleWalkablePoint("RegistryDuplicateSource", Vector3d.Zero);
@@ -218,6 +242,26 @@ public class TraversalTransitionRegistryTests : IDisposable
         Assert.Equal(2, outgoing.Length);
         Assert.Contains(outgoing, transition => transition.Id == "point-default");
         Assert.Contains(outgoing, transition => transition.Id == "point-offset");
+    }
+
+    [Fact]
+    public void Register_ShouldRejectTransition_WhenDestinationGridIsRemovedAfterAnchorCreation()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryRemovedGridSource", Vector3d.Zero);
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(14, 4, 4)),
+            out ushort removedGridIndex));
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryRemovedGridDestination", new Vector3d(10, 0, 0));
+
+        var transition = new TraversalTransition(
+            id: "removed-grid-destination",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(10, 0, 0)));
+
+        Assert.True(GlobalGridManager.TryRemoveGrid(removedGridIndex));
+        Assert.False(TraversalTransitionRegistry.Register(transition));
+        Assert.False(TraversalTransitionRegistry.IsRegistered("removed-grid-destination"));
     }
 
     [Fact]
@@ -334,6 +378,42 @@ public class TraversalTransitionRegistryTests : IDisposable
     }
 
     [Fact]
+    public void SetManagedTransitionsSuppressed_ShouldIgnoreInvalidIdsAndCountOverflow()
+    {
+        var generated = new TraversalTransition(
+            id: "generated-noop-suppression",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.RegisterGenerated(generated));
+        int versionBeforeSuppression = TraversalTransitionRegistry.RegistryVersion;
+
+        TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+            new[] { string.Empty, "missing-transition", generated.Id },
+            suppressed: true,
+            count: 6);
+
+        Assert.True(TraversalTransitionRegistry.IsRegistered(generated.Id));
+        Assert.False(TraversalTransitionRegistry.IsActive(generated.Id));
+        Assert.True(TraversalTransitionRegistry.RegistryVersion > versionBeforeSuppression);
+
+        int versionBeforeNoOp = TraversalTransitionRegistry.RegistryVersion;
+        TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+            new[] { generated.Id },
+            suppressed: true,
+            count: 4);
+        Assert.Equal(versionBeforeNoOp, TraversalTransitionRegistry.RegistryVersion);
+
+        TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+            new[] { string.Empty, "missing-transition", generated.Id },
+            suppressed: false,
+            count: 6);
+
+        Assert.True(TraversalTransitionRegistry.IsActive(generated.Id));
+    }
+
+    [Fact]
     public void PathManagerReset_ShouldClearTransitionRegistry()
     {
         PathTestFactory.RegisterSingleWalkablePoint("RegistryResetSource", Vector3d.Zero);
@@ -388,6 +468,36 @@ public class TraversalTransitionRegistryTests : IDisposable
             priority: 0));
         Assert.True(TraversalTransitionRegistry.IsRegistered("generated-existing"));
         Assert.False(TraversalTransitionRegistry.IsRegistered("generated-rolled-back"));
+    }
+
+    [Fact]
+    public void RegisterAndUnregister_ShouldSupportSameVoxelManualTransitions()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("RegistryLoopPoint", Vector3d.Zero);
+
+        var transition = new TraversalTransition(
+            id: "loop-link",
+            type: TraversalTransitionType.Custom,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(Vector3d.Zero));
+
+        Assert.True(TraversalTransitionRegistry.Register(transition));
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+
+        TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
+        TraversalTransition[] incoming = TraversalTransitionRegistry.GetIncomingTransitions(Vector3d.Zero);
+        TraversalTransition[] touching = TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(voxel.GridIndex);
+
+        Assert.Single(outgoing);
+        Assert.Single(incoming);
+        Assert.Single(touching);
+        Assert.Equal("loop-link", outgoing[0].Id);
+        Assert.Equal("loop-link", incoming[0].Id);
+        Assert.Equal("loop-link", touching[0].Id);
+
+        Assert.True(TraversalTransitionRegistry.Unregister("loop-link"));
+        Assert.Empty(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
+        Assert.Empty(TraversalTransitionRegistry.GetIncomingTransitions(Vector3d.Zero));
     }
 
     [Fact]

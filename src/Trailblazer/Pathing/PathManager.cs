@@ -909,13 +909,7 @@ public static class PathManager
 
     private static int CompareChartsByRegistrationOrder(NavigationChart left, NavigationChart right)
     {
-        if (ReferenceEquals(left, right))
-            return 0;
-
-        if (left.RegistrationOrder != right.RegistrationOrder)
-            return left.RegistrationOrder.CompareTo(right.RegistrationOrder);
-
-        return string.CompareOrdinal(left.Name, right.Name);
+        return left.RegistrationOrder.CompareTo(right.RegistrationOrder);
     }
 
     private static readonly (int Dx, int Dy, int Dz)[] ManagedGeneratedNeighborOffsets =
@@ -942,7 +936,7 @@ public static class PathManager
     {
         TraversalTransition[] generatedTransitions = precomputedGeneratedTransitions
             ?? GeneratedTraversalTransitionBuilder.BuildTransitions(chart, transitionIdPrefix);
-        int transitionCount = generatedTransitions?.Length ?? 0;
+        int transitionCount = generatedTransitions.Length;
         if (transitionCount > 0
             && !TraversalTransitionRegistry.RegisterGeneratedRange(
                 generatedTransitions,
@@ -1789,9 +1783,6 @@ public static class PathManager
         Voxel voxel,
         SwiftHashSet<SolidChartPartition> partitionsToRebind)
     {
-        if (voxel == null || partitionsToRebind == null)
-            return;
-
         if (voxel.TryGetPartition(out SolidChartPartition currentPartition))
             partitionsToRebind.Add(currentPartition);
 

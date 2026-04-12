@@ -301,9 +301,7 @@ public static class TraversalTransitionRegistry
             if (!_transitions.TryGetValue(id, out RegisteredTraversalTransition registered))
                 return false;
 
-            if (!_transitions.Remove(id))
-                return false;
-
+            _transitions.Remove(id);
             RemoveManagedManualDependencyIndexes_NoLock(registered);
             _suppressedManagedTransitionIds.Remove(id);
             RebuildActiveState_NoLock();
@@ -732,9 +730,6 @@ public static class TraversalTransitionRegistry
 
     private static void AddManagedManualDependencyIndexes_NoLock(RegisteredTraversalTransition registered)
     {
-        if (registered.OwnershipKind != TraversalTransitionOwnershipKind.ManagedManual)
-            return;
-
         AddIndexValue(_managedManualTransitionIdsByVoxel, registered.SourceVoxelIndex, registered.Transition.Id);
         if (!registered.SourceVoxelIndex.Equals(registered.DestinationVoxelIndex))
             AddIndexValue(_managedManualTransitionIdsByVoxel, registered.DestinationVoxelIndex, registered.Transition.Id);
@@ -742,9 +737,6 @@ public static class TraversalTransitionRegistry
 
     private static void RemoveManagedManualDependencyIndexes_NoLock(RegisteredTraversalTransition registered)
     {
-        if (registered.OwnershipKind != TraversalTransitionOwnershipKind.ManagedManual)
-            return;
-
         RemoveIndexValue(_managedManualTransitionIdsByVoxel, registered.SourceVoxelIndex, registered.Transition.Id);
         if (!registered.SourceVoxelIndex.Equals(registered.DestinationVoxelIndex))
             RemoveIndexValue(_managedManualTransitionIdsByVoxel, registered.DestinationVoxelIndex, registered.Transition.Id);

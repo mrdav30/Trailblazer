@@ -3,6 +3,7 @@ using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
+using System.Reflection;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -279,6 +280,36 @@ public sealed class HybridRoutePlannerTests : IDisposable
             .Which.Medium.Should().Be(TraversalMedium.Liquid);
     }
 
+    [Fact]
+    public void TryPlan_ShouldUseLocalDestinationGridQuery_WhenSourceAndDestinationAreInDifferentGrids()
+    {
+        GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(20, -8, -8), new Vector3d(16, 16, 16)),
+            out _).Should().BeTrue();
+
+        RegisterLineChart("HybridPlannerCrossGridStart", Vector3d.Zero, 2);
+        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerCrossGridEnd", new Vector3d(20, 0, 0));
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "hybridplanner-cross-grid-hop",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(20, 0, 0)),
+            pathCostModifier: 2)).Should().BeTrue();
+
+        HybridPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(20, 0, 0),
+            Fixed64.One,
+            out HybridPathRequest hybridRequest).Should().BeTrue();
+
+        hybridRequest.Should().NotBeNull();
+        hybridRequest.StartNode.GridIndex.Should().NotBe(hybridRequest.EndNode.GridIndex);
+        hybridRequest.RoutePlan.Should().NotBeNull();
+        hybridRequest.RoutePlan.DirectedTransitions.Should().ContainSingle();
+        hybridRequest.RoutePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-cross-grid-hop");
+    }
+
     /// <summary>
     /// Exercises TryCreateFlowFieldStep with zero displacement: when origin == destination, the step
     /// becomes a waypoint rather than a path segment.
@@ -306,6 +337,141 @@ public sealed class HybridRoutePlannerTests : IDisposable
     }
 
     [Fact]
+    public void TryCreateAStarStep_ShouldReturnFalse_WhenChartRequestCannotResolve()
+    {
+        RegisterLineChart("HybridPlannerAStarInvalid", Vector3d.Zero, 2);
+
+        HybridPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            out HybridPathRequest request).Should().BeTrue();
+
+        object[] args =
+        {
+            new Vector3d(64, 0, 0),
+            new Vector3d(65, 0, 0),
+            request,
+            null!,
+            0
+        };
+
+        InvokePrivate<bool>("TryCreateAStarStep", args).Should().BeFalse();
+        args[3].Should().BeNull();
+        args[4].Should().Be(0);
+    }
+
+    [Fact]
+    public void TryCreateFlowFieldStep_ShouldReturnFalse_WhenChartRequestCannotResolve()
+    {
+        RegisterLineChart("HybridPlannerFlowInvalid", Vector3d.Zero, 2);
+
+        FlowFieldPathRequest flowFieldRequest = FlowFieldPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One);
+        flowFieldRequest.Should().NotBeNull();
+
+        HybridPathRequest request = HybridPathRequest.CreateFromFlowField(flowFieldRequest);
+        request.Should().NotBeNull();
+
+        object[] args =
+        {
+            new Vector3d(64, 0, 0),
+            new Vector3d(65, 0, 0),
+            request,
+            null!,
+            0
+        };
+
+        InvokePrivate<bool>("TryCreateFlowFieldStep", args).Should().BeFalse();
+        args[3].Should().BeNull();
+        args[4].Should().Be(0);
+    }
+
+    [Fact]
+    public void TryCreateVolumeStep_ShouldReturnFalse_WhenVolumeRequestCannotResolve()
+    {
+        RegisterLineChart("HybridPlannerVolumeInvalid", Vector3d.Zero, 2);
+
+        HybridPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            out HybridPathRequest request).Should().BeTrue();
+
+        object[] args =
+        {
+            new Vector3d(64, 0, 0),
+            new Vector3d(65, 0, 0),
+            request,
+            TraversalMedium.Gas,
+            null!,
+            0
+        };
+
+        InvokePrivate<bool>("TryCreateVolumeStep", args).Should().BeFalse();
+        args[4].Should().BeNull();
+        args[5].Should().Be(0);
+    }
+
+    [Fact]
+    public void TryCreateVolumeStep_ShouldReturnWaypoint_WhenOriginMatchesDestination()
+    {
+        RegisterLineChart("HybridPlannerVolumeZeroSolid", Vector3d.Zero, 2);
+        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeZeroGas");
+
+        HybridPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            out HybridPathRequest request).Should().BeTrue();
+
+        object[] args =
+        {
+            new Vector3d(4, 0, 0),
+            new Vector3d(4, 0, 0),
+            request,
+            TraversalMedium.Gas,
+            null!,
+            0
+        };
+
+        InvokePrivate<bool>("TryCreateVolumeStep", args).Should().BeTrue();
+        args[4].Should().BeOfType<HybridRouteStep>()
+            .Which.Kind.Should().Be(HybridRouteStepKind.Waypoint);
+        args[5].Should().Be(0);
+    }
+
+    [Fact]
+    public void TryCreateVolumeStep_ShouldReturnFalse_WhenVolumeSurveyFindsNoPath()
+    {
+        RegisterLineChart("HybridPlannerVolumeMissSolid", Vector3d.Zero, 2);
+        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasA");
+        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(6, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasB");
+
+        HybridPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One,
+            out HybridPathRequest request).Should().BeTrue();
+
+        object[] args =
+        {
+            new Vector3d(4, 0, 0),
+            new Vector3d(6, 0, 0),
+            request,
+            TraversalMedium.Gas,
+            null!,
+            0
+        };
+
+        InvokePrivate<bool>("TryCreateVolumeStep", args).Should().BeFalse();
+        args[4].Should().BeNull();
+        args[5].Should().Be(0);
+    }
+
+    [Fact]
     public void TryPlan_ShouldRejectNullRequests()
     {
         HybridRoutePlanner.TryPlan(null, out HybridRoutePlan plan).Should().BeFalse();
@@ -319,5 +485,12 @@ public sealed class HybridRoutePlannerTests : IDisposable
             data[0, i, 0] = true;
 
         PathTestFactory.RegisterFromData(chartName, data, minBounds);
+    }
+
+    private static TReturn InvokePrivate<TReturn>(string methodName, params object[] arguments)
+    {
+        MethodInfo method = typeof(HybridRoutePlanner).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Method '{methodName}' was not found on {nameof(HybridRoutePlanner)}.");
+        return (TReturn)method.Invoke(null, arguments)!;
     }
 }

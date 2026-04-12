@@ -100,6 +100,138 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
         chartKeys.Should().BeEmpty();
     }
 
+    [Fact]
+    public void TryBuild_ShouldReturnFalse_ForNullRoutePlan()
+    {
+        HybridWaypointFlattener.TryBuild(
+            null,
+            out AStarWaypoint[] waypoints,
+            out string[] chartKeys).Should().BeFalse();
+
+        waypoints.Should().BeNull();
+        chartKeys.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TryBuild_ShouldSucceed_WithVolumeSegmentStep()
+    {
+        // Register a gas corridor for the volume step and a solid point for the surrounding segments.
+        RegisterLineChart("HybridFlattenVolStart", Vector3d.Zero, 2);
+        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 0), TraversalMedium.Gas, "HybridFlattenGas");
+        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(3, 0, 0), TraversalMedium.Gas, "HybridFlattenGas");
+        RegisterLineChart("HybridFlattenVolEnd", new Vector3d(4, 0, 0), 2);
+
+        GlobalGridManager.TryGetVoxel(new Vector3d(2, 0, 0), out Voxel volStart).Should().BeTrue();
+        GlobalGridManager.TryGetVoxel(new Vector3d(3, 0, 0), out Voxel volEnd).Should().BeTrue();
+
+        VolumePathRequest volRequest = VolumePathRequest.Create(
+            new Vector3d(2, 0, 0),
+            new Vector3d(3, 0, 0),
+            Fixed64.One,
+            medium: TraversalMedium.Gas);
+        volRequest.Should().NotBeNull();
+
+        AStarPathRequest leadUp = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            Fixed64.One);
+
+        HybridRoutePlan plan = new(
+            new[]
+            {
+                HybridRouteStep.Segment(leadUp),
+                HybridRouteStep.Segment(volRequest),
+            },
+            Array.Empty<TraversalTransition>(),
+            0);
+
+        bool success = HybridWaypointFlattener.TryBuild(
+            plan,
+            out AStarWaypoint[] flattenedWaypoints,
+            out string[] chartKeys);
+
+        success.Should().BeTrue();
+        flattenedWaypoints.Should().NotBeNull();
+        flattenedWaypoints.Length.Should().BeGreaterThan(0);
+        flattenedWaypoints[^1].IsGoal.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryBuild_ShouldFlattenWaypointSteps_IntoOutput()
+    {
+        // Exercises the HybridRouteStepKind.Waypoint case in the flattener loop.
+        // A plan built entirely from explicit waypoint steps should produce a non-empty
+        // flattened array with the last waypoint marked as goal.
+        HybridRoutePlan plan = new(
+            new[]
+            {
+                HybridRouteStep.Waypoint(new Vector3d(0, 0, 0), additionalCost: 0),
+                HybridRouteStep.Waypoint(new Vector3d(1, 0, 0), additionalCost: 1),
+                HybridRouteStep.Waypoint(new Vector3d(2, 0, 0), additionalCost: 1)
+            },
+            Array.Empty<TraversalTransition>(),
+            0);
+
+        HybridWaypointFlattener.TryBuild(
+            plan,
+            out AStarWaypoint[] flattenedWaypoints,
+            out string[] chartKeys).Should().BeTrue();
+
+        flattenedWaypoints.Should().NotBeNull();
+        flattenedWaypoints.Length.Should().Be(3);
+        flattenedWaypoints[0].Position.Should().Be(Vector3d.Zero);
+        flattenedWaypoints[^1].IsGoal.Should().BeTrue();
+        chartKeys.Should().BeEmpty("waypoint steps carry no chart keys");
+    }
+
+    [Fact]
+    public void TryBuild_ShouldReturnFalse_WhenAStarGuideIsNull()
+    {
+        // Exercises the aStarGuide == null early-return branch in TryAppendSegmentWaypoints.
+        // Two isolated single-cell charts have no partition neighbors, so A* produces no path
+        // and RequestAStar returns null.
+        PathTestFactory.RegisterSingleWalkablePoint("HybridFlattenIsolatedA", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("HybridFlattenIsolatedB", new Vector3d(7, 0, 0));
+
+        AStarPathRequest request = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(7, 0, 0),
+            Fixed64.One);
+
+        // Both endpoints are walkable so the request itself is valid.
+        request.Should().NotBeNull();
+
+        HybridRoutePlan plan = new(
+            new[] { HybridRouteStep.Segment(request) },
+            Array.Empty<TraversalTransition>(),
+            0);
+
+        HybridWaypointFlattener.TryBuild(
+            plan,
+            out AStarWaypoint[] flattenedWaypoints,
+            out string[] chartKeys).Should().BeFalse();
+
+        flattenedWaypoints.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryBuild_ShouldReturnFalse_WhenRouteHasNoSteps()
+    {
+        // Exercises the waypoints.Count == 0 guard: an empty steps array produces no
+        // waypoints and TryBuild returns false.
+        HybridRoutePlan plan = new(
+            Array.Empty<HybridRouteStep>(),
+            Array.Empty<TraversalTransition>(),
+            0);
+
+        HybridWaypointFlattener.TryBuild(
+            plan,
+            out AStarWaypoint[] flattenedWaypoints,
+            out string[] chartKeys).Should().BeFalse();
+
+        flattenedWaypoints.Should().BeNull();
+    }
+
     private static void RegisterLineChart(string chartName, Vector3d minBounds, int length)
     {
         bool[,,] data = new bool[1, length, 1];

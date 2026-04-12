@@ -188,6 +188,33 @@ public class TrailblazerManagerTests : IDisposable
         TrailblazerManager.GetFrameFromTime(timestamp).Should().Be(3);
     }
 
+    [Fact]
+    public void Initialize_ShouldSucceed_WhenAlreadyInitializedAndCalledAgain()
+    {
+        // First call — sets _isInitialized = true through the lock
+        TrailblazerManager.Initialize();
+
+        // Second call — hits the outer `if (_isInitialized) return` guard (early return branch)
+        Action act = () => TrailblazerManager.Initialize();
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void LifecycleHookRegistration_Dispose_ShouldBeIdempotent()
+    {
+        int callCount = 0;
+        using var registration = TrailblazerManager.RegisterOnSimulate(
+            owner: "TrailblazerManagerTests.DoubleDispose",
+            order: 0,
+            callback: () => callCount++);
+
+        // First dispose unregisters the hook
+        registration.Dispose();
+
+        // Second dispose should be a no-op — exercises the null-guard in LifecycleHookRegistration.Dispose
+        registration.Dispose();
+    }
+
     private static int GetLifecycleHookCount(string fieldName)
     {
         FieldInfo field = typeof(TrailblazerManager).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static)

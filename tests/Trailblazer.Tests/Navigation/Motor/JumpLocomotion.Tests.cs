@@ -483,4 +483,24 @@ public class JumpLocomotionTests : IDisposable
 
         speed.Should().Be(Fixed64.Zero);
     }
+
+    [Fact]
+    public void Given_ScoutInCooldown_When_CooldownNotExpired_Then_CooldownTimerShouldAdvanceButRemainCooling()
+    {
+        // Arrange — trigger a jump so IsCoolingDown = true
+        var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
+        scout.Motor.Handler.Jump.CooldownTime = (Fixed64)100; // very long cooldown so it never expires
+
+        scout.FrameRequest.IsRequestingJump = true;
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        // Let one frame pass so UpdateCooldown runs, but timer < CooldownTime
+        TrailblazerManager.Simulate();
+        scout.Simulate();
+
+        // IsCoolingDown should still be true (the false branch of CooldownTimer >= CooldownTime)
+        scout.Motor.Handler.Jump.IsCoolingDown.Should().BeTrue();
+        scout.Motor.Handler.Jump.CooldownTimer.Should().BeGreaterThan(Fixed64.Zero);
+    }
 }

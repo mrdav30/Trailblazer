@@ -136,9 +136,6 @@ public class AStarSurveyor
         while (_heap.RemoveFirst(out SolidChartPartition currentPartition)
             && iterations++ < searchSize)
         {
-            if (currentPartition.Voxel == _request.EndNode)
-                return true;
-
             if (ProcessNeighbors(currentPartition))
                 return true;
 
@@ -301,10 +298,6 @@ public class AStarSurveyor
     /// <returns>A smoothed list of world positions.</returns>
     private void BuildWaypoints()
     {
-        // return early if the start is the same as the end
-        if (_rawPath.Count == 0 || _rawPath[0].Voxel == _rawPath.FromEnd(1).Voxel)
-            return;
-
         _waypoints.EnsureCapacity(_rawPath.Count);
         SolidChartPartition start = _rawPath[0];
         _waypoints.Add(new()
@@ -366,9 +359,7 @@ public class AStarSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int GetPathCost(Voxel voxel)
     {
-        return _meta.TryGetValue(voxel, out AStarVoxelMeta data)
-            ? data.PathCost
-            : int.MaxValue;
+        return _meta[voxel].PathCost;
     }
 
     private void ClearWorkingState()

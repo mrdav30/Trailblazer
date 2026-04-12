@@ -6,6 +6,7 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using System;
 using System.Linq;
+using System.Reflection;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -853,6 +854,125 @@ public class FlowFieldSurveyorTests : IDisposable
     }
 
     [Fact]
+    public void FlowFieldSurveyor_TryProcessDirection_ShouldUpdateExistingNeighbor_WhenLowerCostIsFound()
+    {
+        bool[,,] data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("FlowHelperUpdate", data, Vector3d.Zero);
+
+        GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
+        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel neighborVoxel).Should().BeTrue();
+        currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
+        neighborVoxel.TryGetPartition(out SolidChartPartition neighbor).Should().BeTrue();
+
+        FlowFieldPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            out FlowFieldPathRequest request).Should().BeTrue();
+
+        FlowFieldSurveyor surveyor = new();
+        SetPrivateField(surveyor, "_request", request);
+
+        PathHeap<SolidChartPartition> heap = GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        heap.Add(neighbor, 9);
+
+        SpatialDirection positiveX = FindDirection(1, 0, 0);
+        InvokePrivate<object?>(surveyor, "TryProcessDirection", current, new[] { positiveX }, 1, false);
+
+        heap.TryGetPathCost(neighbor, out int updatedPathCost).Should().BeTrue();
+        updatedPathCost.Should().Be(2);
+
+        PathManager.UnloadChart("FlowHelperUpdate");
+    }
+
+    [Fact]
+    public void FlowFieldSurveyor_HasValidDiagonalLegs_ShouldAcceptPositiveVerticalDiagonal_WhenRequiredLegsAreClosed()
+    {
+        bool[,,] data = new bool[3, 3, 3];
+        for (int y = 0; y < 3; y++)
+            for (int x = 0; x < 3; x++)
+                for (int z = 0; z < 3; z++)
+                    data[y, x, z] = true;
+
+        PathTestFactory.RegisterFromData("FlowDiagLegsPositive", data, Vector3d.Zero);
+
+        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 1, 1), out _, out Voxel currentVoxel).Should().BeTrue();
+        currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
+
+        FlowFieldPathRequest.TryCreate(
+            new Vector3d(1, 1, 1),
+            new Vector3d(2, 2, 1),
+            out FlowFieldPathRequest request).Should().BeTrue();
+
+        FlowFieldSurveyor surveyor = new();
+        SetPrivateField(surveyor, "_request", request);
+
+        PathHeap<SolidChartPartition> heap = GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        SpatialDirection upwardDiagonal = SpatialAwareness.DiagonalDirections
+            .First(direction => SpatialAwareness.DirectionOffsets[(int)direction].y > 0);
+
+        MarkRequiredLegsClosed(current, upwardDiagonal, heap, closeVerticalLeg: true);
+
+        InvokePrivate<bool>(surveyor, "HasValidDiagonalLegs", current, upwardDiagonal).Should().BeTrue();
+
+        PathManager.UnloadChart("FlowDiagLegsPositive");
+    }
+
+    [Fact]
+    public void FlowFieldSurveyor_HasValidDiagonalLegs_ShouldRejectNegativeVerticalDiagonal_WhenBelowLegIsNotClosed()
+    {
+        bool[,,] data = new bool[3, 3, 3];
+        for (int y = 0; y < 3; y++)
+            for (int x = 0; x < 3; x++)
+                for (int z = 0; z < 3; z++)
+                    data[y, x, z] = true;
+
+        PathTestFactory.RegisterFromData("FlowDiagLegsNegative", data, Vector3d.Zero);
+
+        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 1, 1), out _, out Voxel currentVoxel).Should().BeTrue();
+        currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
+
+        FlowFieldPathRequest.TryCreate(
+            new Vector3d(1, 1, 1),
+            new Vector3d(2, 0, 1),
+            out FlowFieldPathRequest request).Should().BeTrue();
+
+        FlowFieldSurveyor surveyor = new();
+        SetPrivateField(surveyor, "_request", request);
+
+        PathHeap<SolidChartPartition> heap = GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        SpatialDirection downwardDiagonal = SpatialAwareness.DiagonalDirections
+            .First(direction => SpatialAwareness.DirectionOffsets[(int)direction].y < 0);
+
+        MarkRequiredLegsClosed(current, downwardDiagonal, heap, closeVerticalLeg: false);
+
+        InvokePrivate<bool>(surveyor, "HasValidDiagonalLegs", current, downwardDiagonal).Should().BeFalse();
+
+        PathManager.UnloadChart("FlowDiagLegsNegative");
+    }
+
+    [Fact]
+    public void FlowFieldSurveyor_GetPathCostTotal_ShouldReturnMaxValue_WhenPartitionIsNotTracked()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("FlowMissingCost", Vector3d.Zero);
+
+        GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel).Should().BeTrue();
+        voxel.TryGetPartition(out SolidChartPartition partition).Should().BeTrue();
+
+        FlowFieldSurveyor surveyor = new();
+
+        InvokePrivate<int>(surveyor, "GetPathCostTotal", partition).Should().Be(int.MaxValue);
+
+        PathManager.UnloadChart("FlowMissingCost");
+    }
+
+    [Fact]
     public void FlowField_ShouldHandle_ZigZagStairs()
     {
         bool[,,] data = new bool[3, 3, 3];  // y, x, z
@@ -879,5 +999,76 @@ public class FlowFieldSurveyorTests : IDisposable
         dir2.Should().Be(Vector3d.Up, "final step should go up");
 
         PathManager.UnloadChart("ZigZagStairs");
+    }
+
+    /// <summary>
+    /// Covers the <c>chartsUtilized ?? Array.Empty&lt;string&gt;()</c> null-coalescing branch
+    /// in <c>FlowFieldSurveyResult.Create</c> when the caller passes <c>null</c>.
+    /// </summary>
+    [Fact]
+    public void FlowFieldSurveyResult_Create_ShouldUseFallbackEmptyArray_WhenChartsUtilizedIsNull()
+    {
+        var fields = new SwiftCollections.SwiftDictionary<GridForge.Spatial.GlobalVoxelIndex, FlowField>();
+        FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(fields, null, key: 1);
+
+        result.ChartsUtilized.Should().NotBeNull();
+        result.ChartsUtilized.Should().BeEmpty();
+    }
+
+    private static SpatialDirection FindDirection(int dx, int dy, int dz)
+    {
+        return SpatialAwareness.AllDirections.First(direction =>
+        {
+            (int offsetX, int offsetY, int offsetZ) = SpatialAwareness.DirectionOffsets[(int)direction];
+            return offsetX == dx && offsetY == dy && offsetZ == dz;
+        });
+    }
+
+    private static T GetPrivateField<T>(object instance, string fieldName)
+    {
+        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
+        return (T)field.GetValue(instance)!;
+    }
+
+    private static void SetPrivateField<T>(object instance, string fieldName, T value)
+    {
+        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
+        field.SetValue(instance, value);
+    }
+
+    private static TReturn InvokePrivate<TReturn>(object instance, string methodName, params object[] arguments)
+    {
+        MethodInfo method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Method '{methodName}' was not found on {instance.GetType().Name}.");
+        return (TReturn)method.Invoke(instance, arguments)!;
+    }
+
+    private static void MarkRequiredLegsClosed(
+        SolidChartPartition current,
+        SpatialDirection diagonal,
+        PathHeap<SolidChartPartition> heap,
+        bool closeVerticalLeg)
+    {
+        SolidChartPartition?[] neighbors = current.Neighbors
+            ?? throw new InvalidOperationException("Expected the current partition to have bound neighbors.");
+        (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
+
+        if (dx != 0)
+            CloseLeg(neighbors[(int)(dx > 0 ? SpatialDirection.North : SpatialDirection.West)], heap);
+
+        if (dy != 0 && closeVerticalLeg)
+            CloseLeg(neighbors[(int)(dy > 0 ? SpatialDirection.Above : SpatialDirection.Below)], heap);
+
+        if (dz != 0)
+            CloseLeg(neighbors[(int)(dz > 0 ? SpatialDirection.East : SpatialDirection.South)], heap);
+    }
+
+    private static void CloseLeg(SolidChartPartition? leg, PathHeap<SolidChartPartition> heap)
+    {
+        leg.Should().NotBeNull();
+        heap.Add(leg, 0);
+        heap.SetClosed(leg);
     }
 }

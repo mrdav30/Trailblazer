@@ -52,7 +52,7 @@ public sealed class VolumeGuide : IWaypointGuide
     {
         direction = Vector3d.Zero;
 
-        if (!TrailMap.HasPath)
+        if (TrailMap == null || !TrailMap.HasPath)
             return false;
 
         int closestIndex = GetIndex(origin);
@@ -65,7 +65,8 @@ public sealed class VolumeGuide : IWaypointGuide
 
     public Vector3d GetCurrentWaypointDirection(Vector3d origin)
     {
-        if (!TrailMap.HasPath
+        if (TrailMap == null
+            || !TrailMap.HasPath
             || CurrentWaypointIndex < 0
             || CurrentWaypointIndex >= ActiveWaypoints.Length)
         {
@@ -83,7 +84,7 @@ public sealed class VolumeGuide : IWaypointGuide
     {
         fallbackDirection = Vector3d.Zero;
 
-        if (ActiveWaypoints.Length == 0)
+        if (TrailMap == null || ActiveWaypoints.Length == 0)
             return false;
 
         int searchStart = FixedMath.Clamp(_lastTriedIndex, 0, ActiveWaypoints.Length - 1);
@@ -110,7 +111,7 @@ public sealed class VolumeGuide : IWaypointGuide
 
     public bool TryGetWaypointAt(int index, out AStarWaypoint waypoint)
     {
-        if (!TrailMap.HasPath || index < 0 || index >= ActiveWaypoints.Length)
+        if (TrailMap == null || !TrailMap.HasPath || index < 0 || index >= ActiveWaypoints.Length)
         {
             waypoint = default;
             return false;

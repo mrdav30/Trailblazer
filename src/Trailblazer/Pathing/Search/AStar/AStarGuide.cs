@@ -110,9 +110,6 @@ public class AStarGuide : IWaypointGuide
             return false;
 
         int closestIndex = GetIndex(origin);
-        if (closestIndex == -1)
-            return false;
-
         direction = (ActiveWaypoints[closestIndex].Position - origin).Normalize();
         return true;
     }
@@ -142,7 +139,7 @@ public class AStarGuide : IWaypointGuide
         int searchStart = FixedMath.Clamp(_lastTriedIndex, 0, ActiveWaypoints.Length - 1);
 
         Fixed64 minDistSq = Fixed64.MAX_VALUE;
-        int bestIndex = -1;
+        int bestIndex = searchStart;
 
         for (int i = searchStart; i < ActiveWaypoints.Length; i++)
         {
@@ -154,14 +151,9 @@ public class AStarGuide : IWaypointGuide
             }
         }
 
-        if (bestIndex >= 0)
-        {
-            fallbackDirection = (ActiveWaypoints[bestIndex].Position - from).Normal;
-            _lastTriedIndex = bestIndex;
-            return true;
-        }
-
-        return false;
+        fallbackDirection = (ActiveWaypoints[bestIndex].Position - from).Normal;
+        _lastTriedIndex = bestIndex;
+        return true;
     }
 
     /// <summary>

@@ -321,4 +321,20 @@ public class SwimLocomotionTests : IDisposable
         agent.Motor.Handler.Swim.IsSwimming.Should().BeTrue();
         stopBreach.Should().BeTrue();
     }
+
+    [Fact]
+    public void Given_SwimmingScout_When_SwimIsDisabled_Then_ShouldClearTransientState()
+    {
+        var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.One);
+        var swim = agent.Motor.Handler.Swim;
+        swim.IsEnabled = true;
+        swim.IsSwimming = true;
+        swim.IsDiving = true;
+
+        // Disabling swim should clear transient state (exercises the !_isEnabled branch at IsEnabled set)
+        swim.IsEnabled = false;
+
+        swim.IsSwimming.Should().BeFalse();
+        swim.IsDiving.Should().BeFalse();
+    }
 }

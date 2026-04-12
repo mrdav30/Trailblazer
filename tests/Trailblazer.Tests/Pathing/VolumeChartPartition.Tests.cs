@@ -107,4 +107,22 @@ public sealed class VolumeChartPartitionTests : IDisposable
         partition.HasAnyOwners.Should().BeFalse();
         partition.EffectiveChartOwner.Should().BeNull();
     }
+
+    [Fact]
+    public void Reset_ShouldBeNoOp_WhenChartOwnersHasNotBeenInitialized()
+    {
+        // A partition whose ChartOwners is still null hits the ?. null-conditional branch in Reset.
+        var partition = new VolumeChartPartition();
+        partition.HasAnyOwners.Should().BeFalse();
+
+        // Reset without ever calling ApplyAuthoredState — ChartOwners is null.
+        Action act = () =>
+        {
+            typeof(VolumeChartPartition)
+                .GetMethod("Reset", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(partition, null);
+        };
+        act.Should().NotThrow();
+        partition.HasAnyOwners.Should().BeFalse();
+    }
 }

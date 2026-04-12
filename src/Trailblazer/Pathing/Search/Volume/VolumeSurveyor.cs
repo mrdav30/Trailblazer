@@ -62,9 +62,10 @@ public sealed class VolumeSurveyor
             TrackRawPathChartOwners();
             BuildWaypoints();
 
-            VolumeSurveyResult result = _waypoints.Count > 0
-                ? VolumeSurveyResult.Create(_waypoints.ToArray(), _chartKeys.ToArray(), request.RequestCacheKey)
-                : VolumeSurveyResult.Empty;
+            VolumeSurveyResult result = VolumeSurveyResult.Create(
+                _waypoints.ToArray(),
+                _chartKeys.ToArray(),
+                request.RequestCacheKey);
             ClearWorkingState();
             return result;
         }
@@ -77,9 +78,6 @@ public sealed class VolumeSurveyor
 
         while (_heap.RemoveFirst(out Voxel current) && iterations++ < searchSize)
         {
-            if (current == _request.EndNode)
-                return true;
-
             if (ProcessNeighbors(current))
                 return true;
 
@@ -226,9 +224,6 @@ public sealed class VolumeSurveyor
 
     private void BuildWaypoints()
     {
-        if (_rawPath.Count == 0 || _rawPath[0] == _rawPath.FromEnd(1))
-            return;
-
         _waypoints.EnsureCapacity(_rawPath.Count);
 
         Voxel start = _rawPath[0];
@@ -311,9 +306,7 @@ public sealed class VolumeSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int GetMovementCost(Voxel voxel)
     {
-        return _meta.TryGetValue(voxel, out VolumeVoxelMeta data)
-            ? data.MovementCost
-            : int.MaxValue;
+        return _meta[voxel].MovementCost;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

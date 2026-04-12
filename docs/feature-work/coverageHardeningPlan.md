@@ -9,9 +9,9 @@ invariants, and removing dead code where coverage-only tests would be dishonest.
 
 Current branch budget:
 
-- current branch coverage: `90.16%` (`3513 / 3896`)
-- branches needed to reach `92%`: `+72`
-- branches needed to reach `100%`: `+383`
+- current branch coverage: `92.04%` (`3573 / 3882`)
+- immediate `> 92%` milestone: reached
+- branches needed to reach `100%`: `+309`
 
 ## Fresh Baseline
 
@@ -39,99 +39,70 @@ Fresh run result:
 
 ## Latest Snapshot
 
-Phase 1 refresh captured on April 12, 2026 after the first request/cache/helper pass.
+Phase 2 refresh captured on April 12, 2026 after the surveyor/resolver sweep.
 
 Refresh workflow:
 
 ```bash
 dotnet test Trailblazer.sln --configuration Release
-dotnet test Trailblazer.sln --configuration Release --no-build \
+dotnet test Trailblazer.sln --configuration Release \
   --collect:"XPlat Code Coverage" \
-  --results-directory artifacts/coverage/phase1-current
+  --results-directory artifacts/coverage/phase2-final-2026-04-12-c
 ```
 
 Refresh artifact:
 
-- [coverage.cobertura.xml](../../artifacts/coverage/phase1-current/015d344c-0f57-4c33-ad15-0d35d7258753/coverage.cobertura.xml)
+- [coverage.cobertura.xml](../../artifacts/coverage/phase2-final-2026-04-12-c/a64dd8af-3495-4b58-ad33-88caef41a516/coverage.cobertura.xml)
 
 Refresh result:
 
-- test result: `626` passed, `0` failed, `0` skipped
-- line coverage: `96.69%` (`7724 / 7988`)
-- branch coverage: `90.16%` (`3513 / 3896`)
-- branch gain from baseline: `+49`
+- test result: `703` passed, `0` failed, `0` skipped
+- line coverage: `97.37%` (`7765 / 7974`)
+- branch coverage: `92.04%` (`3573 / 3882`)
+- branch gain from phase 1 refresh: `+60`
+- branch gain from baseline: `+109`
 
 ## What The Numbers Say
 
-### Subsystem Snapshot
-
-| Subsystem | Line | Branch |
-| --- | ---: | ---: |
-| `Main` | `93.78%` | `81.51%` |
-| `Navigation` | `97.45%` | `90.45%` |
-| `Pathing` | `95.78%` | `88.64%` |
-| `Serialization` | `95.56%` | `86.76%` |
-| `Support` | `97.03%` | `85.71%` |
-
 ### Biggest File Gaps By Missed Branches
 
-These are the highest-value files to target first. The top five files alone account for
-`174 / 432` missed branches, or about `40.3%` of the remaining branch gap.
+These are the highest-value files after Phase 2. The top five files now account for
+`174 / 309` missed branches, or about `56.3%` of the remaining branch gap.
 
 | File | Line | Branch | Missed Lines | Missed Branches |
 | --- | ---: | ---: | ---: | ---: |
-| `Navigation/Motor/NavMotor.cs` | `94.52%` | `87.20%` | `29` | `63` |
-| `Pathing/PathManager.cs` | `97.41%` | `90.47%` | `23` | `45` |
-| `Main/Navigator.cs` | `92.42%` | `80.88%` | `27` | `26` |
+| `Navigation/Motor/NavMotor.cs` | `94.51%` | `87.19%` | `29` | `63` |
+| `Pathing/PathManager.cs` | `97.40%` | `90.46%` | `23` | `45` |
+| `Main/Navigator.cs` | `92.41%` | `80.88%` | `27` | `26` |
+| `Navigation/Steering/NavSteering.cs` | `96.47%` | `90.09%` | `18` | `20` |
 | `Pathing/Transition/TraversalTransitionRegistry.cs` | `94.68%` | `89.58%` | `20` | `20` |
-| `Navigation/Steering/NavSteering.cs` | `96.48%` | `90.10%` | `18` | `20` |
 | `Navigation/Motor/Locomotion/PlatformLocomotion.cs` | `98.58%` | `85.59%` | `2` | `17` |
-| `Pathing/Search/FlowField/FlowFieldGuide.cs` | `92.81%` | `85.45%` | `11` | `16` |
-| `Pathing/Search/Hybrid/HybridPathRequest.cs` | `95.00%` | `75.00%` | `7` | `16` |
-| `Pathing/Search/PathGuideFactory.cs` | `94.40%` | `81.40%` | `7` | `16` |
-| `Pathing/Search/Volume/VolumePathRequest.cs` | `92.37%` | `79.03%` | `9` | `13` |
-| `Pathing/Search/AStar/AStarSurveyor.cs` | `95.81%` | `87.76%` | `8` | `12` |
-| `Pathing/Search/Volume/VolumeSurveyor.cs` | `93.83%` | `88.24%` | `10` | `12` |
-| `Pathing/Partition/SolidChartPartition.cs` | `96.23%` | `81.67%` | `4` | `11` |
-| `Serialization/PathRequestRecord.cs` | `95.56%` | `86.76%` | `8` | `9` |
-| `Pathing/Search/Support/Survey/ReusableSurveyResultCache.cs` | `92.86%` | `83.93%` | `6` | `9` |
+| `Pathing/Search/FlowField/FlowFieldGuide.cs` | `94.11%` | `89.09%` | `9` | `12` |
+| `Pathing/Search/PathGuideFactory.cs` | `96.80%` | `90.47%` | `4` | `8` |
+| `Navigation/MovementGroups/MovementGroupCoordinator.cs` | `94.69%` | `89.39%` | `6` | `7` |
+| `Navigation/Motor/Locomotion/LocomotionHandler.cs` | `98.92%` | `93.75%` | `2` | `6` |
+| `Pathing/Transition/GeneratedTraversalTransitionBuilder.cs` | `97.76%` | `83.33%` | `4` | `6` |
+| `Pathing/Search/Hybrid/HybridPathRequest.cs` | `98.57%` | `92.18%` | `2` | `5` |
+| `Pathing/Search/Volume/VolumePathRequest.cs` | `98.29%` | `92.18%` | `2` | `5` |
+| `Pathing/Search/Support/Request/PathRequest.cs` | `97.01%` | `88.63%` | `2` | `5` |
+| `Pathing/Search/AStar/AStarSurveyor.cs` | `98.91%` | `95.55%` | `2` | `4` |
+| `Pathing/Transition/TraversalTransitionQuery.cs` | `97.90%` | `93.33%` | `2` | `4` |
 
 ### Coverage Review Notes
 
-- The fastest path to `> 92%` branch does not require starting with the riskiest runtime files.
-  The current branch gap in request/cache/helper and surveyor/resolver files is about `161`
-  branches, which is enough on paper to move the project from `88.91%` to about `93.04%`
-  before we take on the heaviest navigation-runtime work.
-- `Pathing/Search/Support/PathHeap.cs` still has an unhit `Resize(...)` path even though it
-  already has a dedicated test file. That is a strong sign of a low-ceremony branch win.
-- `Pathing/Search/Support/Survey/ReusableSurveyResultCache.cs` appears to have no dedicated
-  test file today. Cache hit, eviction, in-use, and dispose behavior should be tested directly
-  instead of waiting for incidental coverage through `PathGuideFactory`.
-- `Pathing/Search/Volume/VolumeSurveyor.cs` currently has only a few focused tests, which lines
-  up with the remaining branch debt in neighbor rejection, waypoint building, and chart-owner
-  collection logic.
-- `PathManager` and `TraversalTransitionRegistry` branch gaps cluster around managed generated
-  transition lifecycle code. Those are correctness-sensitive areas; they deserve small refactors
-  or isolated diff helpers if the current shape makes coverage awkward.
-- `NavMotor.GetMaxAcceleration()` still ends in a fallback path that returns `Fixed64.MAX_VALUE`
-  with a comment that it "should never be hit." That branch should be audited before we spend
-  time manufacturing artificial tests around it.
-
-### Highest Observed CRAP Hotspots
-
-These are approximate CRAP candidates derived from Cobertura method complexity and method
-line coverage. They are useful prioritization signals, but not all of them are equally urgent.
-
-| Method | Approx. CRAP | Current Coverage | Why It Matters |
-| --- | ---: | --- | --- |
-| `NavMotor.HandlePlatformTransitions` | `27.31` | `77.78%` line / `86.36%` branch | High complexity and real runtime-state combinations still missing. |
-| `NavMotor.GetMaxAcceleration` | `24.33` | `91.67%` line / `66.67%` branch | Strong dead-code-or-missing-matrix candidate. |
-| `TraversalTransitionRegistry.SetManagedTransitionsSuppressed` | `22.25` | `92.00%` line / `77.27%` branch | Managed transition lifecycle logic is still under-exercised. |
-| `PathRequestRecord.TryCreateRequest` | `22.16` | `93.10%` line / `81.82%` branch | Serialization restore permutations still have gaps. |
-| `VolumeVoxelFinder.IsDirectPathClear` | `20.78` | `87.50%` line / `85.00%` branch | Core direct-travel clearance logic still needs matrix tests. |
-| `TraversalTransitionRegistry.UnregisterRange` | `20.23` | `91.67%` line / `80.00%` branch | Mixed registered/unregistered range handling remains thin. |
-| `PathHeap.Resize` | `20.00` | `0.00%` line / `0.00%` branch | Very cheap branch debt to retire early. |
-| `NavSteering.RecordData` | `26.00` | `99.12%` line / `96.15%` branch | High complexity, but only a small residual gap. Lower priority than the rows above. |
+- Phase 2 succeeded by retiring most of the local surveyor/resolver debt before touching the
+  heaviest runtime files. The remaining branch budget is now dominated by runtime and
+  transition-lifecycle code, not by small pathing helpers.
+- `Pathing/Search/FlowField/FlowFieldSurveyor.cs` is effectively retired as a hotspot at
+  `99.05%` branch, and `Pathing/Search/Hybrid/HybridRoutePlanner.cs` is now at `100%`.
+- `Pathing/Search/AStar/AStarGuide.cs`, `Pathing/Search/Volume/VolumeSurveyor.cs`,
+  `Pathing/Search/Support/VoxelFinder/VolumeVoxelFinder.cs`, and
+  `Pathing/Partition/SolidChartPartition.cs` all moved out of the "fastest branch win" tier.
+- The next decisive branch gains are now clearly in Phase 3 and Phase 4 targets:
+  `PathManager`, `TraversalTransitionRegistry`, `NavMotor`, `Navigator`, `NavSteering`,
+  and `PlatformLocomotion`.
+- `FlowFieldGuide` and `PathGuideFactory` still offer worthwhile local cleanup value, but they
+  no longer gate milestone planning the way the surveyor/resolver cluster did.
 
 ## Phased Battle Plan
 
@@ -208,6 +179,30 @@ Expected outcome:
 
 Current branch budget in this phase: about `75` missed branches.
 
+Status on April 12, 2026:
+
+- phase result: landed, full `Release` suite green, coverage moved from `90.16%` to `92.04%`
+- immediate milestone: cleared the planned `> 92%` branch target
+- branch gain in this phase: `+60`
+- branch gain from baseline: `+109`
+- remaining branches to `100%`: `+309`
+- this phase mixed focused helper-level tests with small invariant cleanups so we did not need
+  oversized scene scaffolding for branches that were really local decision logic
+
+Phase 2 file movement from the latest coverage snapshot:
+
+| File | Phase 1 Branch | Current Branch |
+| --- | ---: | ---: |
+| `Pathing/Search/AStar/AStarSurveyor.cs` | `87.75%` | `95.55%` |
+| `Pathing/Search/Volume/VolumeSurveyor.cs` | `88.23%` | `98.91%` |
+| `Pathing/Search/Support/VoxelFinder/VolumeVoxelFinder.cs` | `87.14%` | `95.71%` |
+| `Pathing/Search/AStar/AStarGuide.cs` | `81.81%` | `100.00%` |
+| `Pathing/Search/FlowField/FlowFieldSurveyor.cs` | `92.45%` | `99.05%` |
+| `Pathing/Partition/SolidChartPartition.cs` | `81.66%` | `96.66%` |
+| `Pathing/Chart/NavigationChart.cs` | `97.22%` | `98.61%` |
+| `Pathing/Search/Hybrid/Support/HybridWaypointFlattener.cs` | `87.50%` | `93.75%` |
+| `Pathing/Search/Hybrid/HybridRoutePlanner.cs` | `91.02%` | `100.00%` |
+
 Targets:
 
 - `Pathing/Search/AStar/AStarSurveyor.cs`
@@ -251,7 +246,7 @@ Refactor checks:
 
 Expected outcome:
 
-- this is the planned phase boundary for getting branch coverage above `92%`
+- achieved: this phase was the planned boundary for getting branch coverage above `92%`
 
 ### Phase 3. Managed Transition Lifecycle Hardening
 

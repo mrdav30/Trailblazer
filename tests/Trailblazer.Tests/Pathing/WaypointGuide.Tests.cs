@@ -128,6 +128,49 @@ public sealed class WaypointGuideTests : IDisposable
     }
 
     [Fact]
+    public void VolumeGuide_ShouldReturnDefaults_WhenInitializationFailed()
+    {
+        // Exercises the TrailMap == null guard in TryGetMovementDirection,
+        // GetCurrentWaypointDirection, TryGetFallbackDirection, and TryGetWaypointAt,
+        // reached when Initialize was never called or failed.
+        var guide = new VolumeGuide();
+        guide.Initialize(VolumeSurveyResult.Empty).Should().BeFalse();
+
+        // TrailMap is null after a failed init — all queries should return defaults safely.
+        guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d dir).Should().BeFalse();
+        dir.Should().Be(Vector3d.Zero);
+
+        guide.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero);
+
+        guide.TryGetFallbackDirection(Vector3d.Zero, out Vector3d fallback).Should().BeFalse();
+        fallback.Should().Be(Vector3d.Zero);
+
+        guide.TryGetWaypointAt(0, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void VolumeGuide_GetCurrentWaypointDirection_ShouldReturnZero_WhenIndexOutOfRange()
+    {
+        // Exercises the CurrentWaypointIndex >= ActiveWaypoints.Length guard in
+        // GetCurrentWaypointDirection by advancing the index past the last waypoint.
+        VolumeSurveyResult survey = VolumeSurveyResult.Create(
+            BuildWaypoints(new Vector3d(1, 0, 0), new Vector3d(2, 0, 0)),
+            Array.Empty<string>(),
+            5);
+
+        var guide = new VolumeGuide();
+        guide.Initialize(survey).Should().BeTrue();
+
+        // Advance past the last waypoint.
+        for (int i = 0; i < survey.Waypoints.Length; i++)
+            guide.AdvanceWaypoint();
+
+        guide.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero,
+            "index past end triggers the out-of-range guard");
+    }
+
+
+    [Fact]
     public void HybridGuide_ShouldHandleInitializationAndWaypointQueries()
     {
         var guide = new HybridGuide();

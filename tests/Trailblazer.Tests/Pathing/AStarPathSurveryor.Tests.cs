@@ -6,6 +6,7 @@ using SwiftCollections;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -619,5 +620,427 @@ public class AStarSurveryorTests : IDisposable
 
         PathGuideFactory.ReturnGuide(guide);
         PathManager.UnloadChart("ModifierBias");
+    }
+
+    [Fact]
+    public void AStar_ProcessNeighbors_ShouldReturnFalse_WhenCurrentPartitionHasNoRecordedMeta()
+    {
+        bool[,,] data = new bool[1, 2, 1]
+        {
+            {
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("AStarMissingMeta", data, Vector3d.Zero);
+
+        GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
+        currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out AStarPathRequest request).Should().BeTrue();
+
+        AStarSurveyor surveyor = new();
+        SetPrivateField(surveyor, "_request", request);
+
+        InvokePrivate<bool>(surveyor, "ProcessNeighbors", current).Should().BeFalse();
+
+        PathManager.UnloadChart("AStarMissingMeta");
+    }
+
+    [Fact]
+    public void AStar_ProcessNeighbor_ShouldUpdateOpenNeighbor_WhenLowerMovementCostIsProvided()
+    {
+        bool[,,] data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("AStarHelperUpdate", data, Vector3d.Zero);
+
+        GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
+        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel neighborVoxel).Should().BeTrue();
+        currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
+        neighborVoxel.TryGetPartition(out SolidChartPartition neighbor).Should().BeTrue();
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest request).Should().BeTrue();
+
+        AStarSurveyor surveyor = new();
+        SetPrivateField(surveyor, "_request", request);
+
+        PathHeap<SolidChartPartition> heap = GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        SwiftDictionary<Voxel, AStarVoxelMeta> meta = GetPrivateField<SwiftDictionary<Voxel, AStarVoxelMeta>>(surveyor, "_meta");
+
+        meta[neighbor.Voxel] = new AStarVoxelMeta
+        {
+            MovementCost = 300,
+            NextTrailIndex = current.GlobalIndex,
+            PathCost = 999
+        };
+        heap.Add(neighbor, 999);
+
+        InvokePrivate<bool>(surveyor, "ProcessNeighbor", current, neighbor, 200).Should().BeFalse();
+
+        meta[neighbor.Voxel].MovementCost.Should().Be(200);
+        meta[neighbor.Voxel].NextTrailIndex.Should().Be(current.GlobalIndex);
+        heap.TryGetPathCost(neighbor, out int updatedPathCost).Should().BeTrue();
+        updatedPathCost.Should().Be(
+            neighbor.PathCostModifier
+            + 200
+            + AStarSurveyor.CalculateHeuristic(
+                neighbor.VoxelPosition,
+                request.EndNode.WorldPosition,
+                request.Heuristic));
+
+        PathManager.UnloadChart("AStarHelperUpdate");
+    }
+
+    // -----------------------------------------------------------------
+    // AStarSurveyor static helpers
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void CalculateHeuristic_ShouldReturnMaxValue_ForUndefinedHeuristicMethod()
+    {
+        const HeuristicMethod undefinedHeuristic = (HeuristicMethod)(-1);
+
+        int result = AStarSurveyor.CalculateHeuristic(
+            Vector3d.Zero,
+            new Vector3d(1, 0, 0),
+            undefinedHeuristic);
+
+        result.Should().Be(Fixed64.MAX_VALUE.CeilToInt());
+    }
+
+    /// <summary>
+    /// Covers the <c>chartsUtilized ?? Array.Empty&lt;string&gt;()</c> null-coalescing branch
+    /// in <c>AStarSurveyResult.Create</c> when the caller passes <c>null</c>.
+    /// </summary>
+    [Fact]
+    public void AStarSurveyResult_Create_ShouldUseFallbackEmptyArray_WhenChartsUtilizedIsNull()
+    {
+        var waypoints = new[] { new AStarWaypoint { Position = Vector3d.Zero, IsGoal = true } };
+        AStarSurveyResult result = AStarSurveyResult.Create(waypoints, null, key: 1);
+
+        result.ChartsUtilized.Should().NotBeNull();
+        result.ChartsUtilized.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Covers the <c>return true</c> branch in <c>TryProcessDirection(DiagonalDirections)</c>
+    /// (AStarSurveyor line 162) by placing the end node diagonally adjacent to the start, so the
+    /// surveyor reaches the end node on the first diagonal sweep of the start voxel.
+    /// </summary>
+    [Fact]
+    public void AStar_ShouldFindDirectDiagonalPath_WhenEndNodeIsDiagonallyAdjacentToStart()
+    {
+        // 2×2 XZ grid — all four corners walkable so the diagonal legs are clear.
+        var data = new bool[1, 2, 2]
+        {
+            {
+                { true, true },
+                { true, true }
+            }
+        };
+        PathTestFactory.RegisterFromData("DiagonalEndNode", data, Vector3d.Zero);
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 1), out AStarPathRequest request);
+        bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+        success.Should().BeTrue();
+        guide.Should().NotBeNull();
+        guide.ActiveWaypoints.First().Position.Should().Be(Vector3d.Zero);
+        guide.ActiveWaypoints.Last().Position.Should().Be(new Vector3d(1, 0, 1));
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("DiagonalEndNode");
+    }
+
+    /// <summary>
+    /// Covers the <c>OnHeightLimitViolated?.Invoke</c> null-callback branch (AStarSurveyor line 223)
+    /// by running a height-restricted path with no callback registered.
+    /// </summary>
+    [Fact]
+    public void AStar_ShouldNotThrow_WhenHeightLimitCallbackIsNullAndViolationsOccur()
+    {
+        AStarSurveyor.OnHeightLimitViolated = null;
+
+        bool[,,] data = new bool[6, 6, 6];
+        for (int y = 0; y < 6; y++)
+            for (int x = 0; x < 6; x++)
+                data[y, x, 0] = true;
+
+        var map = NavigationChart.From3D("HeightNullCallback", data, Vector3d.Zero, Fixed64.One);
+        PathManager.Register(map);
+        PathManager.InitializeChart("HeightNullCallback");
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(5, 5, 0), out AStarPathRequest request);
+        request.MaxClimbHeight = Fixed64.Half;
+
+        Action act = () => PathGuideFactory.RequestGuide(request, out _);
+        act.Should().NotThrow("the null-conditional on OnHeightLimitViolated must not crash");
+
+        PathManager.UnloadChart("HeightNullCallback");
+    }
+
+    [Fact]
+    public void CatmullSmooth_ShouldReturnInputUnchanged_WhenFewerThanFourWaypoints()
+    {
+        AStarWaypoint[] three = new AStarWaypoint[]
+        {
+            new() { Position = Vector3d.Zero },
+            new() { Position = new Vector3d(1, 0, 0) },
+            new() { Position = new Vector3d(2, 0, 0) },
+        };
+
+        AStarWaypoint[] result = AStarSurveyor.CatmullSmooth(three);
+
+        result.Should().BeSameAs(three);
+    }
+
+    // -----------------------------------------------------------------
+    // AStarGuide runtime behaviour
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void AStarGuide_GetCurrentWaypointDirection_ShouldReturnZero_WhenFirstWaypointIsAtOrigin()
+    {
+        // A path starting at (0,0,0) places the first waypoint at the world origin.
+        // GetCurrentWaypointDirection returns zero when the waypoint position equals Vector3d.Zero.
+        var data = new bool[1, 3, 1]
+        {
+            { { true }, { true }, { true } }
+        };
+        PathTestFactory.RegisterFromData("GuideOriginWaypoint", data, Vector3d.Zero);
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest request);
+        bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+        success.Should().BeTrue();
+        guide.Should().NotBeNull();
+
+        // Index 0 is at (0,0,0) = Vector3d.Zero → movementDirection == Zero → return Zero.
+        Vector3d dir = guide.GetCurrentWaypointDirection(new Vector3d(1, 0, 0));
+        dir.Should().Be(Vector3d.Zero);
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("GuideOriginWaypoint");
+    }
+
+    [Fact]
+    public void AStarGuide_GetCurrentWaypointDirection_ShouldReturnDirection_WhenWaypointIsOffOrigin()
+    {
+        // After advancing the waypoint index past the origin, the direction should be non-zero.
+        var data = new bool[1, 3, 1]
+        {
+            { { true }, { true }, { true } }
+        };
+        PathTestFactory.RegisterFromData("GuideOffOriginDir", data, Vector3d.Zero);
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest request);
+        bool success = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+        success.Should().BeTrue();
+        guide.Should().NotBeNull();
+
+        // Advance to a waypoint that is not at the origin so the branch is taken.
+        guide.AdvanceWaypoint();
+
+        Vector3d dir = guide.GetCurrentWaypointDirection(Vector3d.Zero);
+        dir.Should().NotBe(Vector3d.Zero);
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("GuideOffOriginDir");
+    }
+
+    [Fact]
+    public void AStarGuide_TryGetWaypointAt_ShouldReturnFalse_WhenIndexIsOutOfRange()
+    {
+        var data = new bool[1, 2, 1]
+        {
+            { { true }, { true } }
+        };
+        PathTestFactory.RegisterFromData("GuideOutOfRange", data, Vector3d.Zero);
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out AStarPathRequest request);
+        PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+        guide.Should().NotBeNull();
+
+        guide.TryGetWaypointAt(-1, out _).Should().BeFalse();
+        guide.TryGetWaypointAt(999, out _).Should().BeFalse();
+        guide.TryGetWaypointAt(0, out AStarWaypoint first).Should().BeTrue();
+        first.Position.Should().Be(Vector3d.Zero);
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("GuideOutOfRange");
+    }
+
+    [Fact]
+    public void AStarGuide_TryGetFallbackDirection_ShouldReturnTrue_AndAdvanceSearchForward()
+    {
+        // Exercises the forward-search loop in TryGetFallbackDirection.
+        // Sample from a position between waypoints so the nearest waypoint is ahead of
+        // from, producing a non-zero direction.
+        var data = new bool[1, 3, 1]
+        {
+            { { true }, { true }, { true } }
+        };
+        PathTestFactory.RegisterFromData("GuideWaypointFallback", data, Vector3d.Zero);
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest request);
+        PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+        guide.Should().NotBeNull();
+
+        // Sample from halfway between the first and second waypoints so the nearest
+        // ahead waypoint is (1,0,0) and the resulting direction is non-zero.
+        bool ok = guide.TryGetFallbackDirection(new Vector3d(Fixed64.Half, Fixed64.Zero, Fixed64.Zero), out Vector3d fallback);
+        ok.Should().BeTrue();
+        fallback.Should().NotBe(Vector3d.Zero);
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("GuideWaypointFallback");
+    }
+
+    [Fact]
+    public void AStarGuide_HasArrived_ShouldReturnTrue_WhenAtLastWaypoint()
+    {
+        // Exercises the true branch of HasArrived: CurrentWaypointIndex == Length - 1.
+        var data = new bool[1, 3, 1]
+        {
+            { { true }, { true }, { true } }
+        };
+        PathTestFactory.RegisterFromData("GuideHasArrived", data, Vector3d.Zero);
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest request);
+        PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+        guide.Should().NotBeNull();
+        guide.HasArrived().Should().BeFalse("guide starts at index 0, not the last waypoint");
+
+        // Advance to the last waypoint.
+        for (int i = 0; i < guide.ActiveWaypoints.Length - 1; i++)
+            guide.AdvanceWaypoint();
+
+        guide.HasArrived().Should().BeTrue("index is now at the last waypoint");
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("GuideHasArrived");
+    }
+
+    [Fact]
+    public void AStarGuide_ShouldReturnSafeDefaults_WhenTrailMapHasNoPath()
+    {
+        AStarGuide guide = new();
+        SetPrivateField(guide, "<TrailMap>k__BackingField", AStarSurveyResult.Create(Array.Empty<AStarWaypoint>(), Array.Empty<string>(), 0));
+
+        guide.HasArrived().Should().BeFalse();
+        guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d movementDirection).Should().BeFalse();
+        movementDirection.Should().Be(Vector3d.Zero);
+        guide.TryGetFallbackDirection(Vector3d.Zero, out Vector3d fallbackDirection).Should().BeFalse();
+        fallbackDirection.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void AStarGuide_GetCurrentWaypointDirection_ShouldReturnZero_WhenIndexOutOfRange()
+    {
+        // Exercises the early-return guard when CurrentWaypointIndex >= ActiveWaypoints.Length.
+        var data = new bool[1, 3, 1]
+        {
+            { { true }, { true }, { true } }
+        };
+        PathTestFactory.RegisterFromData("GuideOutOfRangeDir", data, Vector3d.Zero);
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest request);
+        PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+        guide.Should().NotBeNull();
+
+        // Advance past the end so CurrentWaypointIndex >= Length.
+        for (int i = 0; i < guide.ActiveWaypoints.Length; i++)
+            guide.AdvanceWaypoint();
+
+        guide.GetCurrentWaypointDirection(new Vector3d(1, 0, 0)).Should().Be(Vector3d.Zero,
+            "index out of range triggers the early-return guard");
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("GuideOutOfRangeDir");
+    }
+
+    [Fact]
+    public void AStarGuide_GetCurrentWaypointDirection_ShouldReturnZero_WhenWaypointPositionIsOrigin()
+    {
+        // Exercises the movementDirection == Vector3d.Zero guard.
+        // When CurrentWaypointIndex == 0 and the first waypoint is at world origin (0,0,0),
+        // the position-as-direction check returns Zero early.
+        var data = new bool[1, 3, 1]
+        {
+            { { true }, { true }, { true } }
+        };
+        PathTestFactory.RegisterFromData("GuideZeroPos", data, Vector3d.Zero);
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest request);
+        PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+        guide.Should().NotBeNull();
+
+        // Index 0 waypoint position is (0,0,0) — the zero-position guard fires.
+        guide.GetCurrentWaypointDirection(new Vector3d(1, 0, 0)).Should().Be(Vector3d.Zero,
+            "first waypoint is at world origin so the position-as-direction check yields Zero");
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("GuideZeroPos");
+    }
+
+    [Fact]
+    public void AStarGuide_UseSplineSmoothing_ShouldReturnSmoothedWaypoints_WhenPathIsLongEnough()
+    {
+        // Exercises UseSplineSmoothing = true with at least 4 waypoints (CatmullSmooth path).
+        // Creates a path long enough (4+ waypoints) so the smoothed waypoints cache is populated.
+        var data = new bool[1, 5, 1]
+        {
+            { { true }, { true }, { true }, { true }, { true } }
+        };
+        PathTestFactory.RegisterFromData("GuideSpline", data, Vector3d.Zero);
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(4, 0, 0), out AStarPathRequest request);
+        PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+
+        guide.Should().NotBeNull();
+        guide.UseSplineSmoothing = true;
+
+        // First access builds the smoothed cache when Length >= 4.
+        AStarWaypoint[] smoothed = guide.ActiveWaypoints;
+        smoothed.Should().NotBeNull();
+
+        // Second access uses the cached smoothed waypoints.
+        guide.ActiveWaypoints.Should().BeSameAs(smoothed, "cache is not rebuilt on second access");
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("GuideSpline");
+    }
+
+    private static T GetPrivateField<T>(object instance, string fieldName)
+    {
+        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
+        return (T)field.GetValue(instance)!;
+    }
+
+    private static void SetPrivateField<T>(object instance, string fieldName, T value)
+    {
+        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
+        field.SetValue(instance, value);
+    }
+
+    private static TReturn InvokePrivate<TReturn>(object instance, string methodName, params object[] arguments)
+    {
+        MethodInfo method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Method '{methodName}' was not found on {instance.GetType().Name}.");
+        return (TReturn)method.Invoke(instance, arguments)!;
     }
 }

@@ -217,11 +217,10 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
 
     public bool TrySetUnitSize(Fixed64 unitSize)
     {
-        if (UnitSize == unitSize)
+        if (UnitSize == unitSize || !HasValidEndpoints)
             return false;
 
-        UnitSize = unitSize;
-        return HasValidEndpoints;
+        return UpdateRequest(Origin, TargetPosition, unitSize);
     }
 
     public override bool Equals(object obj) =>

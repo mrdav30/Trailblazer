@@ -196,6 +196,27 @@ public sealed class FlowFieldGuideTests : IDisposable
         guide.ReleaseStagedResources(dispose: true);
     }
 
+    [Fact]
+    public void FlowFieldGuide_ShouldFailGracefully_WhenStagedSegmentCannotCreateAnInnerGuide()
+    {
+        RegisterLineChart("FlowFieldGuideUnsupportedSegment", Vector3d.Zero, 2);
+
+        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
+        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
+
+        var plan = new HybridRoutePlan(
+            new[] { HybridRouteStep.Segment(new UnsupportedRequest(start, end)) },
+            Array.Empty<TraversalTransition>(),
+            0);
+
+        var guide = new FlowFieldGuide();
+        guide.InitializeStaged(plan).Should().BeTrue();
+
+        guide.TryGetMovementDirection(Vector3d.Zero, out _).Should().BeFalse();
+        guide.TryGetFallbackDirection(Vector3d.Zero, out _).Should().BeFalse();
+        guide.ReleaseStagedResources(dispose: true);
+    }
+
     private static FlowFieldSurveyResult CreateSurveyResult(params (Vector3d position, Vector3d direction, int cost, bool isGoal)[] cells)
     {
         var fields = new SwiftDictionary<GlobalVoxelIndex, FlowField>(cells.Length);
@@ -222,5 +243,50 @@ public sealed class FlowFieldGuideTests : IDisposable
             data[0, i, 0] = true;
 
         PathTestFactory.RegisterFromData(chartName, data, minBounds);
+    }
+
+    private sealed class UnsupportedRequest : IPathRequest
+    {
+        public UnsupportedRequest(Voxel start, Voxel end)
+        {
+            Origin = start.WorldPosition;
+            StartNode = start;
+            TargetPosition = end.WorldPosition;
+            EndNode = end;
+        }
+
+        public Vector3d Origin { get; }
+
+        public Voxel StartNode { get; }
+
+        public Vector3d TargetPosition { get; }
+
+        public Voxel EndNode { get; }
+
+        public Fixed64 UnitSize => Fixed64.One;
+
+        public bool HasZeroDisplacement => StartNode == EndNode;
+
+        public bool AllowUnwalkableEndpoints => false;
+
+        public int MaxPathSearchRange { get; set; } = 1;
+
+        public bool HasOrigin => true;
+
+        public bool HasDestination => true;
+
+        public bool HasValidEndpoints => true;
+
+        public bool IsValid => true;
+
+        public int RequestCacheKey => 314;
+
+        public bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize) => false;
+
+        public bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false) => false;
+
+        public bool TrySetDestination(Vector3d destination, bool resetSearchRange = false) => false;
+
+        public bool TrySetUnitSize(Fixed64 unitSize) => false;
     }
 }

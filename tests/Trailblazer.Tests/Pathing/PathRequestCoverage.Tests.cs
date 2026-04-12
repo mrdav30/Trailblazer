@@ -104,6 +104,76 @@ public sealed class PathRequestCoverageTests : IDisposable
     }
 
     [Fact]
+    public void VolumePathRequest_ShouldHandleFailedSetters_AndRevalidateUnitSizeChanges()
+    {
+        VolumePathRequest request = VolumePathRequest.Create(
+            new Vector3d(0, 0, 2),
+            new Vector3d(2, 0, 2),
+            Fixed64.One,
+            medium: TraversalMedium.Gas)
+            ?? throw new InvalidOperationException("Expected valid Volume request.");
+
+        int originalRange = request.MaxPathSearchRange;
+
+        request.TrySetOrigin(new Vector3d(1, 0, 2)).Should().BeTrue();
+        request.MaxPathSearchRange.Should().Be(originalRange);
+
+        request.TrySetDestination(new Vector3d(1, 0, 2)).Should().BeTrue();
+        request.MaxPathSearchRange.Should().Be(originalRange);
+
+        request.TrySetOrigin(new Vector3d(-20, 0, 2)).Should().BeFalse();
+        request.TrySetDestination(new Vector3d(20, 0, 2)).Should().BeFalse();
+
+        request.UpdateRequest(new Vector3d(-20, 0, 2), new Vector3d(-18, 0, 2), Fixed64.One).Should().BeFalse();
+        request.TrySetOrigin(new Vector3d(0, 0, 2)).Should().BeFalse();
+        request.TrySetDestination(new Vector3d(2, 0, 2)).Should().BeFalse();
+
+        Vector3d boundaryPoint = new(-4, -4, -4);
+        PathTestFactory.RegisterGeneratedVolumePoint(boundaryPoint, TraversalMedium.Gas, "VolumeUnitSizeSingle");
+        VolumePathRequest sizeSensitive = VolumePathRequest.Create(
+            boundaryPoint,
+            boundaryPoint,
+            Fixed64.One,
+            medium: TraversalMedium.Gas)
+            ?? throw new InvalidOperationException("Expected valid boundary Volume request.");
+
+        sizeSensitive.TrySetUnitSize(Fixed64.Two).Should().BeFalse();
+        sizeSensitive.HasValidEndpoints.Should().BeFalse();
+        sizeSensitive.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public void VolumePathRequest_Equals_ShouldSupportObjectAndTypedOverloads()
+    {
+        VolumePathRequest a = VolumePathRequest.Create(
+            new Vector3d(0, 0, 2),
+            new Vector3d(2, 0, 2),
+            Fixed64.One,
+            medium: TraversalMedium.Gas)
+            ?? throw new InvalidOperationException("Expected valid Volume request.");
+        VolumePathRequest b = VolumePathRequest.Create(
+            new Vector3d(0, 0, 2),
+            new Vector3d(2, 0, 2),
+            Fixed64.One,
+            medium: TraversalMedium.Gas)
+            ?? throw new InvalidOperationException("Expected valid Volume request.");
+        VolumePathRequest c = VolumePathRequest.Create(
+            new Vector3d(1, 0, 2),
+            new Vector3d(2, 0, 2),
+            Fixed64.One,
+            medium: TraversalMedium.Gas)
+            ?? throw new InvalidOperationException("Expected valid Volume request.");
+        VolumePathRequest? missing = null;
+
+        a.Equals((object)b).Should().BeTrue();
+        a.Equals((object)c).Should().BeFalse();
+        a.Equals(new object()).Should().BeFalse();
+        a.Equals(missing).Should().BeFalse();
+        a.Equals(b).Should().BeTrue();
+        a.Equals(c).Should().BeFalse();
+    }
+
+    [Fact]
     public void FlowFieldPathRequest_ShouldCoverFactoryHelpers_Equality_AndInvalidRequests()
     {
         FlowFieldPathRequest.TryCreate(
@@ -160,6 +230,67 @@ public sealed class PathRequestCoverageTests : IDisposable
         aStarHybrid.HasValidEndpoints.Should().BeFalse();
         aStarHybrid.TrySetOrigin(Vector3d.Zero).Should().BeFalse();
         aStarHybrid.TrySetDestination(Vector3d.Zero).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HybridPathRequest_ShouldReturnNull_WhenNoRouteExists_AndCoverEqualityAndSetterFailures()
+    {
+        HybridPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One).Should().BeNull();
+
+        AStarPathRequest disconnected = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One)
+            ?? throw new InvalidOperationException("Expected endpoints to resolve for disconnected AStar request.");
+        HybridPathRequest.CreateFromAStar(disconnected).Should().BeNull();
+
+        HybridPathRequest hybrid = HybridPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One)
+            ?? throw new InvalidOperationException("Expected valid Hybrid request.");
+        HybridPathRequest other = HybridPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One)
+            ?? throw new InvalidOperationException("Expected valid Hybrid request.");
+        HybridPathRequest? missing = null;
+
+        hybrid.Equals((object)other).Should().BeTrue();
+        hybrid.Equals(new object()).Should().BeFalse();
+        hybrid.Equals(missing).Should().BeFalse();
+
+        hybrid.MaxPathSearchRange = 0;
+        hybrid.IsValid.Should().BeFalse();
+        hybrid.HasZeroDisplacement.Should().BeTrue();
+
+        hybrid.RebuildPlan().Should().BeTrue();
+        hybrid.TrySetOrigin(new Vector3d(-20, 0, 0)).Should().BeFalse();
+        hybrid.RoutePlan.Should().NotBeNull();
+        hybrid.IsValid.Should().BeTrue();
+
+        bool[,,] roomyChart = new bool[1, 3, 3]
+        {
+            {
+                { true, true, true },
+                { true, true, true },
+                { true, true, true }
+            }
+        };
+        PathTestFactory.RegisterFromData("HybridUnitSizeRoomy", roomyChart, new Vector3d(-3, 0, -3));
+
+        HybridPathRequest roomyHybrid = HybridPathRequest.Create(
+            new Vector3d(-3, 0, -3),
+            new Vector3d(-1, 0, -1),
+            Fixed64.One)
+            ?? throw new InvalidOperationException("Expected roomy Hybrid request.");
+
+        roomyHybrid.TrySetUnitSize(Fixed64.Two).Should().BeTrue();
+        roomyHybrid.RoutePlan.Should().NotBeNull();
+        roomyHybrid.IsValid.Should().BeTrue();
     }
 
     [Fact]

@@ -183,6 +183,25 @@ public class PathHeapTests : IDisposable
         Assert.Equal(0u, heap.HeapCount);
     }
 
+    [Fact]
+    public void Heap_Add_ShouldIgnoreDuplicates_AndResizePastDefaultCapacity()
+    {
+        var heap = new PathHeap<HeapNode>();
+        int originalCapacity = heap.Capacity;
+
+        HeapNode duplicate = new("duplicate");
+        heap.Add(duplicate, pathCost: 1);
+        heap.Add(duplicate, pathCost: 0);
+
+        Assert.Equal(1u, heap.HeapCount);
+
+        for (int i = 0; i < PathHeap<HeapNode>.DefaultCapacity; i++)
+            heap.Add(new HeapNode($"node-{i}"), pathCost: i + 2);
+
+        Assert.Equal((uint)PathHeap<HeapNode>.DefaultCapacity + 1u, heap.HeapCount);
+        Assert.True(heap.Capacity > originalCapacity);
+    }
+
     private static SolidChartPartition CreateAttachedPartition(Vector3d position)
     {
         Assert.True(GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel));
@@ -191,5 +210,15 @@ public class PathHeapTests : IDisposable
 
         partition.OnAddToVoxel(voxel);
         return partition;
+    }
+
+    private sealed class HeapNode
+    {
+        public HeapNode(string name)
+        {
+            Name = name;
+        }
+
+        public string Name { get; }
     }
 }

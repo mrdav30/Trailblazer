@@ -161,6 +161,9 @@ public static class PathGuideFactory
             return guide;
         }
 
+        if (pathFound)
+            _cachedFlowResults.Return(result, dispose: false);
+
         if (!request.AllowTraversalTransitions)
             return null;
 
@@ -191,9 +194,6 @@ public static class PathGuideFactory
     /// </summary>
     private static HybridGuide RequestHybrid(HybridPathRequest request)
     {
-        if (request?.RoutePlan == null)
-            return null;
-
         if (!HybridWaypointFlattener.TryBuild(
             request.RoutePlan,
             out AStarWaypoint[] flattened,

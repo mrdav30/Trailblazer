@@ -134,6 +134,75 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         PathGuideFactory.ActiveVolumeGuideCount.Should().Be(0);
     }
 
+    [Fact]
+    public void PathGuideFactory_ShouldIgnoreEmptyChartInvalidations()
+    {
+        RegisterSolidLine("GuideFactoryEmptyInvalidate", Vector3d.Zero, 3);
+
+        AStarPathRequest request = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One);
+        request.Should().NotBeNull();
+
+        PathGuideFactory.RequestGuide(request, out AStarGuide guide).Should().BeTrue();
+        PathGuideFactory.ReturnGuide(guide);
+        PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
+
+        PathGuideFactory.InvalidateCacheFor(string.Empty);
+        PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
+
+        PathGuideFactory.InvalidateCacheFor(null!);
+        PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void PathGuideFactory_ShouldReturnFalse_ForDisconnectedVolumeRequests()
+    {
+        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(0, 0, 4), TraversalMedium.Gas, "GuideFactoryVolumeGap");
+        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 4), TraversalMedium.Gas, "GuideFactoryVolumeGap");
+
+        VolumePathRequest request = VolumePathRequest.Create(
+            new Vector3d(0, 0, 4),
+            new Vector3d(2, 0, 4),
+            Fixed64.One,
+            medium: TraversalMedium.Gas);
+        request.Should().NotBeNull();
+
+        PathGuideFactory.RequestGuide(request, out VolumeGuide guide).Should().BeFalse();
+        guide.Should().BeNull();
+        PathGuideFactory.ActiveVolumeGuideCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void PathGuideFactory_ShouldReleaseBorrowedFlowResults_WhenSharedFieldDoesNotContainTheNewStart()
+    {
+        RegisterSolidLine("GuideFactoryFlowFieldConnected", Vector3d.Zero, 3);
+        PathTestFactory.RegisterSingleWalkablePoint("GuideFactoryFlowFieldDisconnected", new Vector3d(4, 0, 0));
+
+        FlowFieldPathRequest cachedRequest = FlowFieldPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One);
+        FlowFieldPathRequest disconnectedRequest = FlowFieldPathRequest.Create(
+            new Vector3d(4, 0, 0),
+            new Vector3d(2, 0, 0),
+            Fixed64.One);
+
+        cachedRequest.Should().NotBeNull();
+        disconnectedRequest.Should().NotBeNull();
+
+        PathGuideFactory.RequestGuide(cachedRequest, out FlowFieldGuide cachedGuide).Should().BeTrue();
+        PathGuideFactory.ReturnGuide(cachedGuide);
+        PathGuideFactory.ActiveFlowGuideCount.Should().Be(1);
+        PathGuideFactory.AnyInUse.Should().BeFalse();
+
+        PathGuideFactory.RequestGuide(disconnectedRequest, out FlowFieldGuide disconnectedGuide).Should().BeFalse();
+        disconnectedGuide.Should().BeNull();
+        PathGuideFactory.ActiveFlowGuideCount.Should().Be(1);
+        PathGuideFactory.AnyInUse.Should().BeFalse();
+    }
+
     private static void RegisterSolidLine(string chartName, Vector3d minBounds, int length)
     {
         var data = new bool[1, length, 1];

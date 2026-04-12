@@ -51,7 +51,12 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
             if (_cache.TryGetValue(key, out result) && result.HasPath)
             {
                 _lock.EnterWriteLock();
-                try { CountInUse++; } finally { _lock.ExitWriteLock(); }
+                try
+                {
+                    result.Checkout();
+                    CountInUse++;
+                }
+                finally { _lock.ExitWriteLock(); }
                 return true;
             }
 

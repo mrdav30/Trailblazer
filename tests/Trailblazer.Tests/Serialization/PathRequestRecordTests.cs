@@ -183,6 +183,76 @@ public sealed class PathRequestRecordTests : IDisposable
         record.WaypointIndex.Should().Be(-1);
     }
 
+    [Fact]
+    public void TryCreateRequest_ShouldRejectUnsupportedKinds_AndFailedRecreationPaths()
+    {
+        PathRequestRecord record = new();
+
+        record.Kind = (PathRequestRecordKind)999;
+        record.TryCreateRequest(out IPathRequest unsupportedKind).Should().BeFalse();
+        unsupportedKind.Should().BeNull();
+
+        record.Reset();
+        record.Kind = PathRequestRecordKind.FlowField;
+        record.Origin = new Vector3d(-20, 0, 0);
+        record.TargetPosition = new Vector3d(-18, 0, 0);
+        record.TryCreateRequest(out IPathRequest failedFlowField).Should().BeFalse();
+        failedFlowField.Should().BeNull();
+
+        record.Reset();
+        record.Kind = PathRequestRecordKind.Volume;
+        record.Origin = new Vector3d(-20, 0, 2);
+        record.TargetPosition = new Vector3d(-18, 0, 2);
+        record.Medium = TraversalMedium.Gas;
+        record.TryCreateRequest(out IPathRequest failedVolume).Should().BeFalse();
+        failedVolume.Should().BeNull();
+
+        record.Reset();
+        record.Kind = PathRequestRecordKind.Hybrid;
+        record.Origin = Vector3d.Zero;
+        record.TargetPosition = new Vector3d(4, 0, 0);
+        record.TryCreateRequest(out IPathRequest failedHybrid).Should().BeFalse();
+        failedHybrid.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryCreateGuide_ShouldReturnFalse_WhenGuideCannotBeRecreated()
+    {
+        RegisterLineChart("PathRecordFlowField", new Vector3d(0, 4, 0), 3);
+
+        FlowFieldPathRequest flowField = FlowFieldPathRequest.Create(
+            new Vector3d(0, 4, 0),
+            new Vector3d(2, 4, 0),
+            Fixed64.One);
+        flowField.Should().NotBeNull();
+
+        PathGuideFactory.RequestGuide(flowField, out FlowFieldGuide flowGuide).Should().BeTrue();
+        PathRequestRecord flowRecord = new();
+        flowRecord.Capture(flowField, flowGuide);
+        flowRecord.TryCreateGuide(flowField, out IGuide recreatedFlowGuide).Should().BeTrue();
+        recreatedFlowGuide.Should().BeOfType<FlowFieldGuide>();
+
+        PathGuideFactory.ReturnGuide(recreatedFlowGuide, dispose: true);
+        PathGuideFactory.ReturnGuide(flowGuide, dispose: true);
+
+        PathTestFactory.RegisterSingleWalkablePoint("PathRecordDisconnectedStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("PathRecordDisconnectedEnd", new Vector3d(4, 0, 0));
+
+        PathRequestRecord failureRecord = new()
+        {
+            HasGuide = true
+        };
+        AStarPathRequest disconnected = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            allowTraversalTransitions: true)
+            ?? throw new InvalidOperationException("Expected disconnected AStar request to resolve endpoints.");
+
+        failureRecord.TryCreateGuide(disconnected, out IGuide failedGuide).Should().BeFalse();
+        failedGuide.Should().BeNull();
+    }
+
     private static void AssertRoundTrip(
         IPathRequest request,
         PathRequestRecordKind expectedKind,

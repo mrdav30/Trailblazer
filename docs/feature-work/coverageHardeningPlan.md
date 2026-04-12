@@ -366,7 +366,27 @@ Why fifth:
 Near-100% coverage usually stalls on tiny helpers, debug utilities, or defensive branches that are
 hard to hit naturally. This phase is for disciplined cleanup, not denominator gaming.
 
-Status: seventh pass landed.
+Status: eighth pass landed.
+Current results from eighth pass:
+
+- overall snapshot: `96.11%` line, `88.62%` branch
+- `AlternativeVoxelFinder.cs`: `95.5%` → `100.0%` line, `85.7%` → `97.6%` branch
+- `GuidedVolumeExitPlanner.cs`: `99.4%` → `99.4%` line, `89.1%` → `98.3%` branch
+- `PathManager.cs`: `95.8%` → `96.5%` line, `87.4%` → `88.1%` branch
+- 605 total tests (597 → 605, +8 new tests)
+
+- the eighth pass stayed disciplined around the two remaining branch-heavy holdouts instead of
+  opening a new front
+- `AlternativeVoxelFinder` now covers the positive-X and positive-Z ring-advance branches plus the
+  bounded search exhaustion return, leaving only the structurally awkward null-short-circuit on the
+  local candidate check uncovered
+- `GuidedVolumeExitPlanner` now routes both request-type wrappers through one shared
+  transition-aware chart-cost helper, then directly pins the null, zero-transition, and
+  transition-present helper cases in tests
+- `PathManager` shed another dead defensive branch in `AllCharts`, and direct tests now pin the
+  public null-chart unload no-op plus the unsupported-medium default arm in
+  `HasAuthoredVolumeMedium(...)`
+
 Current results from seventh pass:
 
 - overall snapshot: `96.00%` line, `88.26%` branch
@@ -486,17 +506,16 @@ Current results from fifth pass:
   are not accessible without casting), so the file was retained — only the `SyncTransientState`
   extension is currently uncovered (no concrete type calls it directly)
 
-Remaining known gaps after Phase 6 seventh pass:
+Remaining known gaps after Phase 6 eighth pass:
 
-- `PathManager.cs`: `95.8%` line / `87.4%` branch — narrow mutation/invalidation helper
-  combinations are still the most worthwhile remaining runtime gap
-- `AlternativeVoxelFinder.cs`: `95.5%` line / `85.7%` branch — the 500-iteration overflow guard
-  and a few rotation-tracking branches still look structurally awkward to test naturally
-- `GuidedVolumeExitPlanner.cs`: `99.4%` line / `89.1%` branch — only a thin layer of
-  transition-aware chart-cost failure branches remains after the planner pass
+- `PathManager.cs`: `96.5%` line / `88.1%` branch — the remaining debt is now concentrated in
+  narrow mutation/invalidation helper combinations rather than chart lifecycle or defensive guards
 
 Newly resolved from the previous gap list:
 
+- `AlternativeVoxelFinder.cs`: now above threshold after saturating the ring-advance and
+  search-exhaustion branches
+- `GuidedVolumeExitPlanner.cs`: now above threshold after the shared transition-aware helper pass
 - `HybridRoutePlanner.cs`: now above threshold after the focused planner pass and helper cleanup
 - `NavSteering.cs`: now above threshold after direct LOS refresh and stuck fallback coverage
 

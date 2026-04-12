@@ -71,19 +71,8 @@ public static class PathManager
                 NavigationChart[] charts = new NavigationChart[_navigationChartMap.Count];
                 int index = 0;
                 foreach (NavigationChart chart in _navigationChartMap.Values)
-                {
-                    if (index >= charts.Length)
-                        break;
-
                     charts[index++] = chart;
-                }
-
-                if (index == charts.Length)
-                    return charts;
-
-                NavigationChart[] trimmed = new NavigationChart[index];
-                Array.Copy(charts, trimmed, index);
-                return trimmed;
+                return charts;
             }
             finally { _navigationChartMapLock.ExitReadLock(); }
         }

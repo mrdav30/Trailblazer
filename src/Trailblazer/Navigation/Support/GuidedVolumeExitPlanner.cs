@@ -302,24 +302,26 @@ internal static class GuidedVolumeExitPlanner
         AStarPathRequest request,
         out int chartCost)
     {
-        chartCost = 0;
-
-        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromAStar(request);
-        return hybridRequest?.RoutePlan != null
-            && hybridRequest.RoutePlan.DirectedTransitions.Length > 0
-            && TryAssignChartCost(hybridRequest.RoutePlan.TotalPathCost, out chartCost);
+        return TryGetTransitionAwareChartCost(HybridPathRequest.CreateFromAStar(request), out chartCost);
     }
 
     private static bool TryGetTransitionAwareChartCost(
         FlowFieldPathRequest request,
         out int chartCost)
     {
+        return TryGetTransitionAwareChartCost(HybridPathRequest.CreateFromFlowField(request), out chartCost);
+    }
+
+    internal static bool TryGetTransitionAwareChartCost(
+        HybridPathRequest hybridRequest,
+        out int chartCost)
+    {
         chartCost = 0;
 
-        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromFlowField(request);
-        return hybridRequest?.RoutePlan != null
-            && hybridRequest.RoutePlan.DirectedTransitions.Length > 0
-            && TryAssignChartCost(hybridRequest.RoutePlan.TotalPathCost, out chartCost);
+        HybridRoutePlan routePlan = hybridRequest?.RoutePlan;
+        return routePlan != null
+            && routePlan.DirectedTransitions.Length > 0
+            && TryAssignChartCost(routePlan.TotalPathCost, out chartCost);
     }
 
     private static bool TryAssignChartCost(int cost, out int chartCost)

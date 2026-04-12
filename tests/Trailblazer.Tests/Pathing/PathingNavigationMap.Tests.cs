@@ -103,6 +103,14 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void UnloadChart_ShouldIgnoreNullChart()
+    {
+        PathManager.UnloadChart((NavigationChart)null!);
+
+        Assert.Empty(PathManager.AllCharts);
+    }
+
+    [Fact]
     public void InitializeAllCharts_ShouldInitializeDeferredCharts()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(6, 0, 4));
@@ -127,6 +135,12 @@ public class PathingNavigationMapTests : IDisposable
 
         PathManager.UnloadChart("DeferredA");
         PathManager.UnloadChart("DeferredB");
+    }
+
+    [Fact]
+    public void HasAuthoredVolumeMedium_ShouldReturnFalse_ForUnsupportedMedium()
+    {
+        Assert.False(PathManager.HasAuthoredVolumeMedium(TraversalMedium.Solid));
     }
 
     [Fact]

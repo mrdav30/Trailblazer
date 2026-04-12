@@ -70,6 +70,49 @@ public class AlternativeVoxelFinderTests : IDisposable
     }
 
     [Fact]
+    public void GetVoxel_ShouldAdvancePositiveXLayer_WhenTheFirstRingIsBlocked()
+    {
+        Fixed64 quarter = GlobalGridManager.VoxelSize / 4;
+        Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
+        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        BlockFirstRing(query);
+
+        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
+
+        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeTrue();
+        voxel.WorldPosition.Should().Be(new Vector3d(2, 0, 0));
+    }
+
+    [Fact]
+    public void GetVoxel_ShouldAdvancePositiveZLayer_WhenTheFirstRingIsBlocked()
+    {
+        Fixed64 halfVoxel = GlobalGridManager.VoxelSize / 2;
+        Fixed64 quarter = GlobalGridManager.VoxelSize / 4;
+        Fixed64 eighth = GlobalGridManager.VoxelSize / 8;
+        Vector3d query = new(halfVoxel - eighth, Fixed64.Zero, halfVoxel + quarter);
+        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        BlockFirstRing(query);
+
+        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
+
+        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeTrue();
+        voxel.WorldPosition.Should().Be(new Vector3d(0, 0, 2));
+    }
+
+    [Fact]
+    public void GetVoxel_ShouldReturnFalse_WhenSearchRadiusIsExhausted()
+    {
+        Vector3d query = Vector3d.Zero;
+        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        BlockFirstRing(query);
+
+        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 1);
+
+        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeFalse();
+        voxel.Should().BeNull();
+    }
+
+    [Fact]
     public void GetVoxel_ShouldBiasInNegativeZDirection_AndAdvanceLayer_WhenFirstRingIsBlocked()
     {
         // Placing the query at (halfVoxel, 0, 0) makes zOffsetFromCenter dominate (xOffset = 0)

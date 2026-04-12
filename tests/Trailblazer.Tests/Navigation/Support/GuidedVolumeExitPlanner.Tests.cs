@@ -312,6 +312,60 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         totalCost.Should().Be(0);
     }
 
+    [Fact]
+    public void TryGetTransitionAwareChartCost_ShouldReturnFalse_WhenHybridRequestIsNull()
+    {
+        GuidedVolumeExitPlanner.TryGetTransitionAwareChartCost((HybridPathRequest)null!, out int chartCost).Should().BeFalse();
+        chartCost.Should().Be(0);
+    }
+
+    [Fact]
+    public void TryGetTransitionAwareChartCost_ShouldReturnFalse_WhenRouteHasNoDirectedTransitions()
+    {
+        RegisterSolidTargetLine("GuidedPlannerDirectHybrid", Vector3d.Zero, 3);
+
+        AStarPathRequest request = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            allowTraversalTransitions: true);
+
+        request.Should().NotBeNull();
+
+        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromAStar(request);
+
+        hybridRequest.Should().NotBeNull();
+        hybridRequest.RoutePlan.Should().NotBeNull();
+        hybridRequest.RoutePlan.DirectedTransitions.Should().BeEmpty();
+
+        GuidedVolumeExitPlanner.TryGetTransitionAwareChartCost(hybridRequest, out int chartCost).Should().BeFalse();
+        chartCost.Should().Be(0);
+    }
+
+    [Fact]
+    public void TryGetTransitionAwareChartCost_ShouldAssignCost_WhenRouteUsesDirectedTransitions()
+    {
+        const string sceneKey = "GuidedPlannerTransitionAwareHelper";
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+
+        AStarPathRequest request = AStarPathRequest.Create(
+            new Vector3d(1, 0, 0),
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            allowTraversalTransitions: true);
+
+        request.Should().NotBeNull();
+
+        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromAStar(request);
+
+        hybridRequest.Should().NotBeNull();
+        hybridRequest.RoutePlan.Should().NotBeNull();
+        hybridRequest.RoutePlan.DirectedTransitions.Should().NotBeEmpty();
+
+        GuidedVolumeExitPlanner.TryGetTransitionAwareChartCost(hybridRequest, out int chartCost).Should().BeTrue();
+        chartCost.Should().Be(hybridRequest.RoutePlan.TotalPathCost);
+    }
+
     private static void RegisterSolidTargetLine(string chartKey, Vector3d minBounds, int length)
     {
         var data = new bool[1, length, 1];

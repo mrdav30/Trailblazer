@@ -720,9 +720,6 @@ public static class PathManager
 
     private static void RebuildInitializedChartsAgainstCurrentGrids(NavigationChart[] chartsToRebuild)
     {
-        if (chartsToRebuild == null || chartsToRebuild.Length == 0)
-            return;
-
         SuppressManagedGeneratedTransitionsForCharts(chartsToRebuild);
 
         for (int i = 0; i < chartsToRebuild.Length; i++)
@@ -737,9 +734,6 @@ public static class PathManager
 
     private static void SuppressManagedGeneratedTransitionsForCharts(NavigationChart[] charts)
     {
-        if (charts == null || charts.Length == 0)
-            return;
-
         SwiftList<string> transitionIds = new();
         _navigationChartMapLock.EnterReadLock();
         try
@@ -747,8 +741,7 @@ public static class PathManager
             for (int i = 0; i < charts.Length; i++)
             {
                 NavigationChart chart = charts[i];
-                if (chart == null
-                    || !_managedGeneratedTransitionsByChart.TryGetValue(chart.Name, out ManagedChartTransitionState state)
+                if (!_managedGeneratedTransitionsByChart.TryGetValue(chart.Name, out ManagedChartTransitionState state)
                     || state.TransitionIds.Count == 0)
                 {
                     continue;
@@ -786,9 +779,6 @@ public static class PathManager
                     initializedCharts.Add(chart);
             }
 
-            if (initializedCharts.Count == 0)
-                return Array.Empty<NavigationChart>();
-
             NavigationChart[] snapshot = initializedCharts.ToArray();
             Array.Sort(snapshot, CompareChartsByRegistrationOrder);
             return snapshot;
@@ -821,9 +811,6 @@ public static class PathManager
                 initializedCharts.Add(chart);
             }
 
-            if (initializedCharts.Count == 0)
-                return Array.Empty<NavigationChart>();
-
             NavigationChart[] snapshot = initializedCharts.ToArray();
             Array.Sort(snapshot, CompareChartsByRegistrationOrder);
             return snapshot;
@@ -836,9 +823,6 @@ public static class PathManager
 
     private static void ClearInitializedChartLiveStatePreservingRegistration(NavigationChart chart)
     {
-        if (chart == null || !chart.IsInitialized)
-            return;
-
         PathGuideFactory.InvalidateCacheFor(chart.Name);
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
@@ -1046,17 +1030,11 @@ public static class PathManager
 
     private static void RefreshManagedGeneratedTransitionsForCharts(NavigationChart[] charts)
     {
-        if (charts == null || charts.Length == 0)
-            return;
-
         SwiftHashSet<string> chartNames = SwiftHashSetPool<string>.Shared.Rent();
         try
         {
             for (int i = 0; i < charts.Length; i++)
-            {
-                if (charts[i] != null)
-                    chartNames.Add(charts[i].Name);
-            }
+                chartNames.Add(charts[i].Name);
 
             RefreshManagedGeneratedTransitionsForCharts(chartNames);
         }

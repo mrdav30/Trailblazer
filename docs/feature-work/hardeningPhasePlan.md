@@ -1,23 +1,8 @@
-# Hardening Phase 2 Plan
+# Hardening Phase Plan
 
 ## Purpose
 
-The original pathing hardening pass is complete. This document captures the remaining follow-up
-work so the completed Phase 1 plan can be retired cleanly.
-
-## Completed In Phase 1
-
-The completed hardening work covered:
-
-- managed transition lifecycle hardening
-- resolved-cell and closest-transition public queries
-- overlap and chart-state optimization
-- external `GlobalGridManager` lifecycle hardening
-- reset/live-state tightening
-- shared transition-query and hybrid-candidate narrowing
-
-Those tracks are now part of the runtime baseline and should no longer be treated as open planning
-work.
+This document captures the remaining follow-up work so we can release to alpha.
 
 ## Remaining Follow-Up
 
@@ -57,8 +42,3 @@ These are valid future hardening items, but they should stay demand-driven rathe
 1. Execute the phased coverage plan.
 2. Keep docs aligned as coverage work lands.
 3. Revisit the optional runtime follow-ups only if profiling or host usage shows a real need.
-
-## Retirement Note
-
-The original `pathingHardeningPlan.md` is intentionally retired after this handoff to avoid keeping
-two competing “active” hardening plans around at once.

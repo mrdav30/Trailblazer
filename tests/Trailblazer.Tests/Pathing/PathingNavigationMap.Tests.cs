@@ -1953,6 +1953,27 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void GlobalGridChange_ShouldNotInitializeDeferredIntersectingCharts()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
+
+        NavigationChart deferredChart = PathTestFactory.BuildSinglePointMap("DeferredGridChangeChart", Vector3d.Zero);
+        Assert.True(PathManager.Register(deferredChart, initializeChart: false));
+        Assert.False(deferredChart.IsInitialized);
+        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
+
+        GlobalGridManager.IncrementGridVersion(gridIndex, false);
+
+        Assert.False(deferredChart.IsInitialized);
+        Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
+        Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
+
+        PathManager.UnloadChart(deferredChart);
+    }
+
+    [Fact]
     public void TryUpdateChartCell_ShouldPersistChangesWhileGridIsMissing_AndApplyThemWhenGridReturns()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
@@ -1979,6 +2000,87 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(rebuiltVoxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(rebuiltVoxel.TryGetPartition(out VolumeChartPartition volumePartition));
         Assert.True(volumePartition.SupportsMedium(TraversalMedium.Liquid));
+    }
+
+    [Fact]
+    public void TryGetMaxSearchSize_ShouldReturnGridSize_WhenBothVoxelsShareAGrid()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4));
+        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start));
+        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end));
+        Assert.True(GlobalGridManager.TryGetGrid(start.GridIndex, out VoxelGrid grid));
+
+        Assert.True(PathManager.TryGetMaxSearchSize(start, end, out int maxSearchSize));
+        Assert.Equal(grid.Size, maxSearchSize);
+    }
+
+    [Fact]
+    public void TryGetMaxSearchSize_ShouldReturnCombinedSize_WhenVoxelsSpanDifferentGrids()
+    {
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            out _));
+        Assert.True(GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(18, 4, 4)),
+            out _));
+
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start));
+        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(10, 0, 0), out Voxel end));
+        Assert.True(GlobalGridManager.TryGetGrid(start.GridIndex, out VoxelGrid startGrid));
+        Assert.True(GlobalGridManager.TryGetGrid(end.GridIndex, out VoxelGrid endGrid));
+
+        Assert.True(PathManager.TryGetMaxSearchSize(start, end, out int maxSearchSize));
+        Assert.Equal(startGrid.Size + endGrid.Size, maxSearchSize);
+    }
+
+    [Fact]
+    public void TryGetMaxSearchSize_ShouldReturnFalse_WhenEitherVoxelGridIsMissing()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4));
+        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start));
+        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end));
+
+        Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+
+        Assert.False(PathManager.TryGetMaxSearchSize(start, end, out int maxSearchSize));
+        Assert.Equal(0, maxSearchSize);
+    }
+
+    [Fact]
+    public void NeedsPath_ShouldReturnTrue_WhenLineCrossesUnpartitionedVoxels()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+
+        Assert.True(PathManager.NeedsPath(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+    }
+
+    [Fact]
+    public void NeedsPath_ShouldReturnFalse_WhenLineIsCoveredByWalkableSurface()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+
+        PathTestFactory.RegisterFromData("NeedsPathWalkableChart", CreateThreeVoxelLine(), Vector3d.Zero);
+
+        Assert.False(PathManager.NeedsPath(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+
+        PathManager.UnloadChart("NeedsPathWalkableChart");
+    }
+
+    [Fact]
+    public void NeedsPath_ShouldReturnTrue_WhenUnitSizeExceedsPartitionClearance()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+
+        PathTestFactory.RegisterFromData("NeedsPathImpassableChart", CreateThreeVoxelLine(), Vector3d.Zero);
+
+        Assert.True(PathManager.NeedsPath(Vector3d.Zero, new Vector3d(2, 0, 0), (Fixed64)10));
+
+        PathManager.UnloadChart("NeedsPathImpassableChart");
     }
 
     private static bool[,,] CreateThreeVoxelLine()

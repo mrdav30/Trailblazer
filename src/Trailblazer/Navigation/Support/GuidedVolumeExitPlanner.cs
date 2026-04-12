@@ -56,50 +56,34 @@ internal static class GuidedVolumeExitPlanner
         VolumePathRequest bestRequest = null;
         int bestTotalCost = int.MaxValue;
 
-        TraversalTransition[] localTransitions = GetLocalDirectedTransitions(targetPosition, medium);
-        if (TryPlanWithTransitions(
-            localTransitions,
-            origin,
-            targetPosition,
-            unitSize,
-            chartPathMode,
-            allowUnwalkableEndpoints,
-            allowTraversalTransitions,
-            maxClimbHeight,
-            aStarHeuristic,
-            flowFieldExtraFloodRange,
-            ref bestTransition,
-            ref bestRequest,
-            ref bestTotalCost))
-        {
-            request = bestRequest;
-            totalPathCost = bestTotalCost;
-            handoff = CreateHandoff(
-                bestTransition,
+        if (!TryPlanWithTransitions(
+                GetLocalDirectedTransitions(targetPosition, medium),
+                origin,
                 targetPosition,
+                unitSize,
                 chartPathMode,
                 allowUnwalkableEndpoints,
                 allowTraversalTransitions,
                 maxClimbHeight,
                 aStarHeuristic,
-                flowFieldExtraFloodRange);
-            return true;
-        }
-
-        if (!TryPlanWithTransitions(
-            TraversalTransitionQuery.GetDirectedTransitions(medium, TraversalMedium.Solid),
-            origin,
-            targetPosition,
-            unitSize,
-            chartPathMode,
-            allowUnwalkableEndpoints,
-            allowTraversalTransitions,
-            maxClimbHeight,
-            aStarHeuristic,
-            flowFieldExtraFloodRange,
-            ref bestTransition,
-            ref bestRequest,
-            ref bestTotalCost))
+                flowFieldExtraFloodRange,
+                ref bestTransition,
+                ref bestRequest,
+                ref bestTotalCost)
+            && !TryPlanWithTransitions(
+                TraversalTransitionQuery.GetDirectedTransitions(medium, TraversalMedium.Solid),
+                origin,
+                targetPosition,
+                unitSize,
+                chartPathMode,
+                allowUnwalkableEndpoints,
+                allowTraversalTransitions,
+                maxClimbHeight,
+                aStarHeuristic,
+                flowFieldExtraFloodRange,
+                ref bestTransition,
+                ref bestRequest,
+                ref bestTotalCost))
         {
             return false;
         }

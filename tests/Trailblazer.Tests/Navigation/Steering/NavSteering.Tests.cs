@@ -239,6 +239,91 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void NavSteering_ShouldReleaseVolumeGuide_WhenLineOfSightReturns()
+    {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(0, 1, 0));
+        AddOpen(new Vector3d(1, 0, 0));
+        AddOpen(new Vector3d(1, 1, 0));
+        AddOpen(new Vector3d(2, 1, 0));
+        AddOpen(new Vector3d(2, 0, 0));
+
+        Vector3d obstaclePosition = new(1, 0, 0);
+        GlobalGridManager.TryGetVoxel(obstaclePosition, out Voxel obstacleVoxel).Should().BeTrue();
+        var obstacleKey = new BoundsKey(obstaclePosition, obstaclePosition);
+        GridObstacleManager.TryAddObstacle(obstacleVoxel.GlobalIndex, obstacleKey).Should().BeTrue();
+
+        var steer = new NavSteering
+        {
+            PathRecheckCooldownFrames = 1
+        };
+        var agent = new MockSteerAgent(Vector3d.Zero);
+        steer.OnInitialize(agent.Radius);
+
+        VolumePathRequest.TryCreate(
+            agent.Position,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            out VolumePathRequest request).Should().BeTrue();
+
+        steer.ApplyPathRequest(request);
+
+        steer.GetHeading(agent);
+        steer.HasLineOfSightPath.Should().BeFalse();
+        steer.TrailGuide.Should().BeOfType<VolumeGuide>();
+
+        GridObstacleManager.TryRemoveObstacle(obstacleVoxel.GlobalIndex, obstacleKey).Should().BeTrue();
+
+        steer.GetHeading(agent);
+
+        steer.HasLineOfSightPath.Should().BeTrue();
+        steer.TrailGuide.Should().BeNull();
+    }
+
+    [Fact]
+    public void NavSteering_ShouldUseGuideFallback_WhenRecoveringFromStuck()
+    {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(0, 1, 0));
+        AddOpen(new Vector3d(1, 1, 0));
+        AddOpen(new Vector3d(2, 1, 0));
+        AddOpen(new Vector3d(2, 0, 0));
+        AddObstacle(new Vector3d(1, 0, 0));
+
+        Vector3d movementDirection = new(1, 0, 0);
+        Vector3d fallbackDirection = new(0, 0, 1);
+
+        var steer = new FallbackNavSteering(movementDirection);
+        var agent = new MockSteerAgent(Vector3d.Zero)
+        {
+            Speed = Fixed64.Zero
+        };
+
+        steer.OnInitialize(agent.Radius);
+        VolumePathRequest.TryCreate(
+            agent.Position,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            out VolumePathRequest request).Should().BeTrue();
+        steer.ApplyPathRequest(request);
+        steer.SetTrailGuide(new StubGuide(movementDirection, fallbackDirection));
+
+        bool usedFallback = false;
+        for (int i = 0; i < 64; i++)
+        {
+            Vector3d heading = steer.GetHeading(agent);
+            if (heading == fallbackDirection)
+            {
+                usedFallback = true;
+                break;
+            }
+        }
+
+        usedFallback.Should().BeTrue();
+        steer.IsStuck.Should().BeFalse();
+    }
+
+    [Fact]
     public void NavSteering_Should_Arrive_WhenCloseEnough()
     {
         var data = new bool[1, 1, 1] { { { true } } };
@@ -1042,6 +1127,44 @@ public class NavSteeringTests : IDisposable
             TargetDirection = new Vector3d(1, 0, 0);
             ShouldMove = true;
             IsAtDestination = false;
+        }
+    }
+
+    private sealed class FallbackNavSteering : NavSteering
+    {
+        private readonly Vector3d _movementDirection;
+
+        public FallbackNavSteering(Vector3d movementDirection)
+        {
+            _movementDirection = movementDirection;
+        }
+
+        protected override bool ValidateMovementPath(Vector3d origin) => true;
+
+        protected override Vector3d FindTargetDirection(Vector3d position) => _movementDirection;
+    }
+
+    private sealed class StubGuide : IGuide
+    {
+        private readonly Vector3d _movementDirection;
+        private readonly Vector3d _fallbackDirection;
+
+        public StubGuide(Vector3d movementDirection, Vector3d fallbackDirection)
+        {
+            _movementDirection = movementDirection;
+            _fallbackDirection = fallbackDirection;
+        }
+
+        public bool TryGetMovementDirection(Vector3d origin, out Vector3d direction)
+        {
+            direction = _movementDirection;
+            return true;
+        }
+
+        public bool TryGetFallbackDirection(Vector3d from, out Vector3d fallbackDirection)
+        {
+            fallbackDirection = _fallbackDirection;
+            return true;
         }
     }
 }

@@ -33,6 +33,28 @@ public sealed class HybridRoutePlannerTests : IDisposable
     }
 
     /// <summary>
+    /// Exercises the direct A* chart path branch in TryPlanDirect/TryCreateAStarStep.
+    /// </summary>
+    [Fact]
+    public void TryPlan_AStarKind_ShouldBuildDirectPlanWithAStarSegment()
+    {
+        RegisterLineChart("HybridPlannerAStar", Vector3d.Zero, 3);
+
+        HybridPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            out HybridPathRequest hybridRequest).Should().BeTrue();
+
+        hybridRequest.Should().NotBeNull();
+        hybridRequest.RoutePlan.Should().NotBeNull();
+        hybridRequest.RoutePlan.DirectedTransitions.Should().BeEmpty();
+        hybridRequest.RoutePlan.Steps.Should().HaveCount(1);
+        hybridRequest.RoutePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.PathSegment);
+        hybridRequest.RoutePlan.Steps[0].SegmentRequest.Should().BeOfType<AStarPathRequest>();
+    }
+
+    /// <summary>
     /// Exercises TryCreateFlowFieldStep via HybridPathRequest.CreateFromFlowField. When a FlowFieldPathRequest
     /// is converted to a HybridPathRequest, TryPlan routes chart steps through TryCreateFlowFieldStep
     /// instead of the A* path.
@@ -54,6 +76,39 @@ public sealed class HybridRoutePlannerTests : IDisposable
         hybridRequest.RoutePlan.Steps.Should().HaveCount(1);
         hybridRequest.RoutePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.PathSegment);
         hybridRequest.RoutePlan.Steps[0].SegmentRequest.Should().BeOfType<FlowFieldPathRequest>();
+    }
+
+    /// <summary>
+    /// Exercises the single-transition solid->solid route when direct chart travel is impossible.
+    /// This covers the main TryPlanSingleTransition success path.
+    /// </summary>
+    [Fact]
+    public void TryPlan_SolidTransition_ShouldBuildSingleTransitionPlan()
+    {
+        RegisterLineChart("HybridPlannerSolidStart", Vector3d.Zero, 2);
+        RegisterLineChart("HybridPlannerSolidEnd", new Vector3d(4, 0, 0), 2);
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "hybridplanner-solid-hop",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
+            pathCostModifier: 2)).Should().BeTrue();
+
+        HybridPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(5, 0, 0),
+            Fixed64.One,
+            out HybridPathRequest hybridRequest).Should().BeTrue();
+
+        hybridRequest.Should().NotBeNull();
+        hybridRequest.RoutePlan.Should().NotBeNull();
+        hybridRequest.RoutePlan.DirectedTransitions.Should().ContainSingle();
+        hybridRequest.RoutePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-solid-hop");
+        hybridRequest.RoutePlan.Steps.Should().HaveCount(3);
+        hybridRequest.RoutePlan.Steps[0].SegmentRequest.Should().BeOfType<AStarPathRequest>();
+        hybridRequest.RoutePlan.Steps[1].Kind.Should().Be(HybridRouteStepKind.Waypoint);
+        hybridRequest.RoutePlan.Steps[2].SegmentRequest.Should().BeOfType<AStarPathRequest>();
     }
 
     /// <summary>
@@ -162,6 +217,69 @@ public sealed class HybridRoutePlannerTests : IDisposable
     }
 
     /// <summary>
+    /// Exercises the branch that compares both local gas and liquid transition-pair plans and keeps
+    /// the cheaper candidate through GetBetterPlan.
+    /// </summary>
+    [Fact]
+    public void TryPlan_ShouldPreferCheaperLiquidTransitionPair_WhenGasAndLiquidRoutesBothExist()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerDualStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerDualEnd", new Vector3d(6, 0, 0));
+
+        for (int x = 1; x <= 5; x++)
+            PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(x, 0, 0), TraversalMedium.Gas, "HybridPlannerDualGas");
+
+        for (int x = 1; x <= 5; x++)
+            PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(x, 0, 1), TraversalMedium.Liquid, "HybridPlannerDualLiquid");
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "hybridplanner-dual-gas-entry",
+            type: TraversalTransitionType.Takeoff,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)),
+            pathCostModifier: 6)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "hybridplanner-dual-gas-exit",
+            type: TraversalTransitionType.Landing,
+            source: TraversalTransitionAnchor.Gas(new Vector3d(5, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(6, 0, 0)),
+            pathCostModifier: 6)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "hybridplanner-dual-liquid-entry",
+            type: TraversalTransitionType.SwimEntry,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Liquid(new Vector3d(1, 0, 1)),
+            pathCostModifier: 1)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "hybridplanner-dual-liquid-exit",
+            type: TraversalTransitionType.SwimExit,
+            source: TraversalTransitionAnchor.Liquid(new Vector3d(5, 0, 1)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(6, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
+
+        HybridPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(6, 0, 0),
+            Fixed64.One,
+            out HybridPathRequest hybridRequest).Should().BeTrue();
+
+        hybridRequest.Should().NotBeNull();
+        hybridRequest.RoutePlan.Should().NotBeNull();
+        hybridRequest.RoutePlan.DirectedTransitions.Should().HaveCount(2);
+        hybridRequest.RoutePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-dual-liquid-entry");
+        hybridRequest.RoutePlan.DirectedTransitions[1].Id.Should().Be("hybridplanner-dual-liquid-exit");
+
+        HybridRouteStep volumeStep = hybridRequest.RoutePlan.Steps.Should().ContainSingle(
+            step => step.Kind == HybridRouteStepKind.PathSegment
+                && step.SegmentRequest is VolumePathRequest).Subject;
+        volumeStep.SegmentRequest.Should().BeOfType<VolumePathRequest>()
+            .Which.Medium.Should().Be(TraversalMedium.Liquid);
+    }
+
+    /// <summary>
     /// Exercises TryCreateFlowFieldStep with zero displacement: when origin == destination, the step
     /// becomes a waypoint rather than a path segment.
     /// </summary>
@@ -185,6 +303,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
         {
             hybridRequest.RoutePlan.Should().NotBeNull();
         }
+    }
+
+    [Fact]
+    public void TryPlan_ShouldRejectNullRequests()
+    {
+        HybridRoutePlanner.TryPlan(null, out HybridRoutePlan plan).Should().BeFalse();
+        plan.Should().BeNull();
     }
 
     private static void RegisterLineChart(string chartName, Vector3d minBounds, int length)

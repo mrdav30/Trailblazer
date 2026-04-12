@@ -17,55 +17,18 @@ internal static class HybridRoutePlanner
             return true;
         }
 
-        HybridRoutePlan singleTransitionPlan = TryPlanSingleTransitionLocally(request);
-        if (singleTransitionPlan == null
-            && TryPlanSingleTransition(
-                request,
-                TraversalTransitionQuery.GetDirectedTransitions(
-                    TraversalMedium.Solid,
-                    TraversalMedium.Solid),
-                out HybridRoutePlan globalSingleTransitionPlan))
-        {
-            singleTransitionPlan = globalSingleTransitionPlan;
-        }
-
+        HybridRoutePlan singleTransitionPlan = GetBetterPlan(
+            TryPlanSingleTransitionLocally(request),
+            TryPlanSingleTransitionGlobal(request));
         if (singleTransitionPlan != null)
         {
             plan = singleTransitionPlan;
             return true;
         }
 
-        HybridRoutePlan transitionPairPlan = TryPlanTransitionPairLocally(request);
-        if (transitionPairPlan == null)
-        {
-            if (TryPlanTransitionPairForMedium(
-                request,
-                TraversalMedium.Gas,
-                TraversalTransitionQuery.GetDirectedTransitions(
-                    TraversalMedium.Solid,
-                    TraversalMedium.Gas),
-                TraversalTransitionQuery.GetDirectedTransitions(
-                    TraversalMedium.Gas,
-                    TraversalMedium.Solid),
-                out HybridRoutePlan gasTransitionPairPlan))
-            {
-                transitionPairPlan = gasTransitionPairPlan;
-            }
-
-            if (TryPlanTransitionPairForMedium(
-                    request,
-                    TraversalMedium.Liquid,
-                    TraversalTransitionQuery.GetDirectedTransitions(
-                        TraversalMedium.Solid,
-                        TraversalMedium.Liquid),
-                    TraversalTransitionQuery.GetDirectedTransitions(
-                        TraversalMedium.Liquid,
-                        TraversalMedium.Solid),
-                    out HybridRoutePlan liquidTransitionPairPlan))
-            {
-                transitionPairPlan = GetBetterPlan(transitionPairPlan, liquidTransitionPairPlan);
-            }
-        }
+        HybridRoutePlan transitionPairPlan = GetBetterPlan(
+            TryPlanTransitionPairLocally(request),
+            TryPlanGlobalTransitionPairs(request));
 
         if (transitionPairPlan != null)
         {
@@ -126,6 +89,18 @@ internal static class HybridRoutePlanner
         return bestPlan;
     }
 
+    private static HybridRoutePlan TryPlanSingleTransitionGlobal(HybridPathRequest request)
+    {
+        return TryPlanSingleTransition(
+            request,
+            TraversalTransitionQuery.GetDirectedTransitions(
+                TraversalMedium.Solid,
+                TraversalMedium.Solid),
+            out HybridRoutePlan plan)
+            ? plan
+            : null;
+    }
+
     private static bool TryPlanSingleTransition(
         HybridPathRequest request,
         TraversalTransition[] transitions,
@@ -180,7 +155,7 @@ internal static class HybridRoutePlanner
     {
         HybridRoutePlan bestPlan = null;
 
-        if (TryPlanTransitionPairForMedium(
+        HybridRoutePlan gasPlan = TryPlanTransitionPairForMedium(
             request,
             TraversalMedium.Gas,
             TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
@@ -190,48 +165,65 @@ internal static class HybridRoutePlanner
             TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(
                 request.EndNode.GridIndex,
                 TraversalMedium.Gas,
-                TraversalMedium.Solid),
-            out HybridRoutePlan gasPlan))
-        {
-            bestPlan = gasPlan;
-        }
+                TraversalMedium.Solid));
+        bestPlan = GetBetterPlan(bestPlan, gasPlan);
 
-        if (TryPlanTransitionPairForMedium(
-                request,
+        HybridRoutePlan liquidPlan = TryPlanTransitionPairForMedium(
+            request,
+            TraversalMedium.Liquid,
+            TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
+                request.StartNode.GridIndex,
+                TraversalMedium.Solid,
+                TraversalMedium.Liquid),
+            TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(
+                request.EndNode.GridIndex,
                 TraversalMedium.Liquid,
-                TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
-                    request.StartNode.GridIndex,
-                    TraversalMedium.Solid,
-                    TraversalMedium.Liquid),
-                TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(
-                    request.EndNode.GridIndex,
-                    TraversalMedium.Liquid,
-                    TraversalMedium.Solid),
-                out HybridRoutePlan liquidPlan))
-        {
-            bestPlan = GetBetterPlan(bestPlan, liquidPlan);
-        }
+                TraversalMedium.Solid));
+        bestPlan = GetBetterPlan(bestPlan, liquidPlan);
 
         return bestPlan;
     }
 
-    private static bool TryPlanTransitionPairForMedium(
+    private static HybridRoutePlan TryPlanGlobalTransitionPairs(HybridPathRequest request)
+    {
+        HybridRoutePlan bestPlan = null;
+
+        bestPlan = GetBetterPlan(
+            bestPlan,
+            TryPlanTransitionPairForMedium(
+                request,
+                TraversalMedium.Gas,
+                TraversalTransitionQuery.GetDirectedTransitions(
+                    TraversalMedium.Solid,
+                    TraversalMedium.Gas),
+                TraversalTransitionQuery.GetDirectedTransitions(
+                    TraversalMedium.Gas,
+                    TraversalMedium.Solid)));
+
+        bestPlan = GetBetterPlan(
+            bestPlan,
+            TryPlanTransitionPairForMedium(
+                request,
+                TraversalMedium.Liquid,
+                TraversalTransitionQuery.GetDirectedTransitions(
+                    TraversalMedium.Solid,
+                    TraversalMedium.Liquid),
+                TraversalTransitionQuery.GetDirectedTransitions(
+                    TraversalMedium.Liquid,
+                    TraversalMedium.Solid)));
+
+        return bestPlan;
+    }
+
+    private static HybridRoutePlan TryPlanTransitionPairForMedium(
         HybridPathRequest request,
         TraversalMedium volumeMedium,
         TraversalTransition[] entries,
-        TraversalTransition[] exits,
-        out HybridRoutePlan plan)
+        TraversalTransition[] exits)
     {
-        if (entries == null
-            || exits == null
-            || entries.Length == 0
-            || exits.Length == 0)
-        {
-            plan = null;
-            return false;
-        }
-
-        return TryPlanTransitionPair(request, volumeMedium, entries, exits, out plan);
+        return TryPlanTransitionPair(request, volumeMedium, entries, exits, out HybridRoutePlan plan)
+            ? plan
+            : null;
     }
 
     private static bool TryPlanTransitionPair(
@@ -318,21 +310,22 @@ internal static class HybridRoutePlanner
         step = null;
         pathCost = 0;
 
-        return request.ChartRequestKind switch
+        if (request.ChartRequestKind == HybridChartRequestKind.FlowField)
         {
-            HybridChartRequestKind.FlowField => TryCreateFlowFieldStep(
+            return TryCreateFlowFieldStep(
                 origin,
                 destination,
                 request,
                 out step,
-                out pathCost),
-            _ => TryCreateAStarStep(
-                origin,
-                destination,
-                request,
-                out step,
-                out pathCost),
-        };
+                out pathCost);
+        }
+
+        return TryCreateAStarStep(
+            origin,
+            destination,
+            request,
+            out step,
+            out pathCost);
     }
 
     private static bool TryCreateAStarStep(

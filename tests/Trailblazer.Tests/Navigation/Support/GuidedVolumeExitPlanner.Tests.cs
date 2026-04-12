@@ -177,6 +177,115 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     }
 
     [Fact]
+    public void TryPlan_ShouldFail_WhenAStarChartLegNeedsTransitionsButFallbackIsDisabled()
+    {
+        const string sceneKey = "GuidedPlannerAerialAStarDisabled";
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+
+        GuidedVolumeExitPlanner.TryPlan(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            TraversalMedium.Gas,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 0,
+            out VolumePathRequest request,
+            out GuidedVolumeExitHandoff handoff,
+            out int totalCost).Should().BeFalse();
+
+        request.Should().BeNull();
+        handoff.Should().BeNull();
+        totalCost.Should().Be(0);
+    }
+
+    [Fact]
+    public void TryPlan_ShouldFail_WhenFlowFieldChartLegNeedsTransitionsButFallbackIsDisabled()
+    {
+        const string sceneKey = "GuidedPlannerAerialFlowDisabled";
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+
+        GuidedVolumeExitPlanner.TryPlan(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            TraversalMedium.Gas,
+            GuidedPathMode.FlowField,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 4,
+            out VolumePathRequest request,
+            out GuidedVolumeExitHandoff handoff,
+            out int totalCost).Should().BeFalse();
+
+        request.Should().BeNull();
+        handoff.Should().BeNull();
+        totalCost.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(GuidedPathMode.AStar)]
+    [InlineData(GuidedPathMode.FlowField)]
+    public void TryPlan_ShouldAllowZeroDisplacementChartLeg(GuidedPathMode chartPathMode)
+    {
+        const string sceneKey = "GuidedPlannerZeroChartLeg";
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+
+        GuidedVolumeExitPlanner.TryPlan(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            TraversalMedium.Liquid,
+            chartPathMode,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 3,
+            out VolumePathRequest request,
+            out GuidedVolumeExitHandoff handoff,
+            out int totalCost).Should().BeTrue();
+
+        request.Should().NotBeNull();
+        request.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.Should().NotBeNull();
+        handoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
+        handoff.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        totalCost.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void TryPlan_ShouldFail_WhenTargetIsOutsideEveryActiveGrid()
+    {
+        const string sceneKey = "GuidedPlannerOutsideGrid";
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+
+        GuidedVolumeExitPlanner.TryPlan(
+            Vector3d.Zero,
+            new Vector3d(40, 0, 0),
+            Fixed64.One,
+            TraversalMedium.Liquid,
+            GuidedPathMode.AStar,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true,
+            maxClimbHeight: Fixed64.One,
+            aStarHeuristic: HeuristicMethod.Manhattan,
+            flowFieldExtraFloodRange: 0,
+            out VolumePathRequest request,
+            out GuidedVolumeExitHandoff handoff,
+            out int totalCost).Should().BeFalse();
+
+        request.Should().BeNull();
+        handoff.Should().BeNull();
+        totalCost.Should().Be(0);
+    }
+
+    [Fact]
     public void TryPlan_ShouldFail_WhenNoTransitionsCanExitVolume()
     {
         RegisterSolidTargetLine("GuidedPlannerNoTransition", new Vector3d(2, 0, 0), 3);

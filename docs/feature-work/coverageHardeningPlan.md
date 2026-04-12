@@ -366,7 +366,26 @@ Why fifth:
 Near-100% coverage usually stalls on tiny helpers, debug utilities, or defensive branches that are
 hard to hit naturally. This phase is for disciplined cleanup, not denominator gaming.
 
-Status: fourth pass landed.
+Status: seventh pass landed.
+Current results from seventh pass:
+
+- overall snapshot: `96.00%` line, `88.26%` branch
+- `HybridRoutePlanner.cs`: `89.8%` → `97.4%` line, `74.0%` → `91.0%` branch
+- `GuidedVolumeExitPlanner.cs`: `88.8%` → `99.4%` line, `76.6%` → `89.1%` branch
+- `NavSteering.cs`: `93.7%` → `96.5%` line, `86.1%` → `90.1%` branch
+- 597 total tests (586 → 597, +11 new tests)
+
+- the seventh pass concentrated on the two remaining scenario-heavy planner holdouts instead of
+  widening scope again
+- `HybridRoutePlanner` now has direct A* plan coverage, single solid-transition coverage, and a
+  dual-medium chooser test that proves the cheaper local transition-pair plan wins
+- `GuidedVolumeExitPlanner` now covers zero-displacement chart legs, out-of-grid target failure,
+  and the disabled transition-aware fallback path for both A* and FlowField chart legs
+- `NavSteering` picked up real multi-step runtime coverage for reacquiring direct volume
+  line-of-sight and using guide-provided fallback directions during stuck recovery
+- both planner files received small branch-reducing cleanups that collapse duplicate local/global
+  success handling without changing routing behavior
+
 Current results from sixth pass:
 
 - overall snapshot: `95.38%` line, `87.03%` branch
@@ -467,15 +486,21 @@ Current results from fifth pass:
   are not accessible without casting), so the file was retained — only the `SyncTransientState`
   extension is currently uncovered (no concrete type calls it directly)
 
-Remaining known gaps after Phase 6 sixth pass:
+Remaining known gaps after Phase 6 seventh pass:
 
-- `PathManager.cs`: `95.5%` line / `85.8%` branch — narrow mutation/invalidation helper combinations
-- `NavSteering.cs`: `93.7%` line / `86.1%` branch — remaining misses in line-of-sight refresh, stuck recovery, and fallback-direction handling
-- `AlternativeVoxelFinder.cs`: `92.8%` line / `83.3%` branch — the 500-iteration overflow guard and some AdvanceRotation rotation-tracking branches are structurally impractical to hit in tests
-- `GuidedVolumeExitPlanner.cs`: `88.8%` line / `76.6%` branch — transition-aware cost evaluation branches remain the main gap
-- `HybridRoutePlanner.cs`: `89.8%` line / `74.0%` branch — complex multi-mode plan routing paths
+- `PathManager.cs`: `95.8%` line / `87.4%` branch — narrow mutation/invalidation helper
+  combinations are still the most worthwhile remaining runtime gap
+- `AlternativeVoxelFinder.cs`: `95.5%` line / `85.7%` branch — the 500-iteration overflow guard
+  and a few rotation-tracking branches still look structurally awkward to test naturally
+- `GuidedVolumeExitPlanner.cs`: `99.4%` line / `89.1%` branch — only a thin layer of
+  transition-aware chart-cost failure branches remains after the planner pass
 
 Newly resolved from the previous gap list:
+
+- `HybridRoutePlanner.cs`: now above threshold after the focused planner pass and helper cleanup
+- `NavSteering.cs`: now above threshold after direct LOS refresh and stuck fallback coverage
+
+Previously resolved from the gap list:
 
 - `VolumeChartPartition.cs`: line and branch coverage now above threshold; new test file covers HasAnyOwners, HandleChange, SupportsMedium default arm, BelongsTo, and ApplyAuthoredState
 - `PathRequest.cs`: TrySetDestination success path now covered after adding a destination-change test

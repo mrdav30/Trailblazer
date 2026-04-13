@@ -1161,7 +1161,7 @@ public class NavMotor : IRecordable
     {
         TrekRate.Slow => Handler.Move.MaxSlowSpeed / maxFastSpeed,
         TrekRate.Moderate => Handler.Move.MaxModerateSpeed / maxFastSpeed,
-        TrekRate.Fast => Fixed64.One,
+        // Fast never reaches this helper because GetFlightSpeedMultiplier(...) short-circuits it to one.
         _ => Fixed64.Zero
     };
 

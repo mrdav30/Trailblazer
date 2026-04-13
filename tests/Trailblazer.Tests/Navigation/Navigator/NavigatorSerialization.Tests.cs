@@ -489,6 +489,27 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RoundTrip_ShouldLoadSetupOnlyNavigatorWithoutControllers(bool useMemoryPack)
+    {
+        var source = new TestNavigator();
+        source.Setup(new Vector3d(1, 0, 1), size: Fixed64.One);
+
+        var target = new TestNavigator();
+        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        target.Position.Should().Be(new Vector3d(1, 0, 1));
+        target.LastPosition.Should().Be(new Vector3d(1, 0, 1));
+        target.Rotation.Should().Be(FixedQuaternion.Identity);
+        target.Forward.Should().Be(Vector3d.Forward);
+        target.Steering.Should().BeNull();
+        target.Turning.Should().BeNull();
+        target.Motor.Should().BeNull();
+        target.IsActive.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RoundTrip_ShouldUseBackwardCompatibleDefaults_WhenPayloadOmitsNewerFields(bool useMemoryPack)
     {
         RegisterGuidedPathChart("NavigatorSerializationLegacyDefaults");

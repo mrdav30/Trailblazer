@@ -750,8 +750,7 @@ public abstract class Navigator : INavigate, IRecordable
             return;
         }
 
-        if (!_pendingGuidedVolumeExitHandoff.TryCreateFollowupRequest(Position, Size, out IPathRequest followupRequest)
-            || followupRequest == null)
+        if (!_pendingGuidedVolumeExitHandoff.TryCreateFollowupRequest(Position, Size, out IPathRequest followupRequest))
         {
             return;
         }

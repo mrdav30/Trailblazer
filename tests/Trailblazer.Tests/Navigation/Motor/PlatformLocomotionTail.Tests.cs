@@ -154,4 +154,70 @@ public sealed class PlatformLocomotionTailTests : IDisposable
         locomotion.MovementTransfer.Should().Be(MotionTransfer.None);
         locomotion.HoldPlatformFrames.Should().Be(0);
     }
+
+    [Fact]
+    public void GetPlatformInfluence_AndHandlePlatformMovement_ShouldUseIdentityFallback_WhenNoActivePlatformExists()
+    {
+        var locomotion = new PlatformLocomotion
+        {
+            HeightAdjust = Fixed64.Half
+        };
+
+        locomotion.GetPlatformInfluence(
+            new Vector3d(1, 2, 3),
+            FixedQuaternion.Identity,
+            out Vector3d positionDelta,
+            out FixedQuaternion rotationDelta);
+
+        rotationDelta.Should().Be(FixedQuaternion.Identity);
+        positionDelta.Should().Be(new Vector3d(-(Fixed64)1, -(Fixed64)2.5f, -(Fixed64)3));
+
+        locomotion.HandlePlatformMovement(new Vector3d(1, 2, 3), FixedQuaternion.Identity);
+
+        locomotion.ScoutLocalPoint.Should().Be(new Vector3d((Fixed64)1, (Fixed64)2.5f, (Fixed64)3));
+        locomotion.ScoutLocalRotation.Should().Be(FixedQuaternion.Identity);
+    }
+
+    [Fact]
+    public void UpdatePlatformVelocity_ShouldUseWorldOrigin_WhenPreviousPlatformIsMissing()
+    {
+        var locomotion = new PlatformLocomotion
+        {
+            ActivePlatform = new PlatformSnapshot(1, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(2, 0, 0))),
+            PreviousPlatform = null,
+            ScoutLocalPoint = Vector3d.Zero,
+            IsNewPlatform = false
+        };
+
+        locomotion.UpdatePlatformVelocity();
+
+        locomotion.PlatformVelocity.Should().Be(new Vector3d((Fixed64)2 * TrailblazerManager.InvDeltaTime, Fixed64.Zero, Fixed64.Zero));
+        locomotion.PreviousPlatform.Should().Be(locomotion.ActivePlatform);
+        locomotion.IsNewPlatform.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TickHoldOnPlatform_AndHandlePlatformChange_ShouldRespectNoHoldAndDisabledEarlyReturn()
+    {
+        PlatformSnapshot activePlatform = new(1, MockMotorAgentTestFactory.CreatePlatformTransform());
+        var locomotion = new PlatformLocomotion
+        {
+            ActivePlatform = activePlatform,
+            FramePlatformVelocity = Vector3d.Right
+        };
+
+        locomotion.TickHoldOnPlatform().Should().BeFalse();
+
+        locomotion.IsEnabled = false;
+        locomotion.ActivePlatform = activePlatform;
+        locomotion.FramePlatformVelocity = Vector3d.Right;
+        locomotion.HandlePlatformChange(new GroundCondition
+        {
+            Platform = new PlatformSnapshot(2, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(5, 0, 0))),
+            MotionTransferState = MotionTransfer.PermaTransfer
+        });
+
+        locomotion.ActivePlatform.Should().Be(activePlatform);
+        locomotion.FramePlatformVelocity.Should().Be(Vector3d.Right);
+    }
 }

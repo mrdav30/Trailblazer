@@ -531,6 +531,16 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void BindAnimationHandler_ShouldRejectNull()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.Invoking(n => n.BindAnimationHandler(null!))
+            .Should().Throw<ArgumentNullException>()
+            .WithParameterName("handler");
+    }
+
+    [Fact]
     public void UnbindAnimationHandler_ShouldStopForwardingAnimationUpdates()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -606,6 +616,21 @@ public class NavigatorTests : IDisposable
 
         navigator.FrameRequest.Direction.Should().Be(Vector3d.Backward);
         navigator.FrameRequest.FacingDirection.Should().Be(Vector3d.Forward);
+    }
+
+    [Fact]
+    public void ApplyInputTrekRequest_ShouldUseDefaults_WhenArgumentsAreOmitted()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyInputTrekRequest();
+
+        navigator.IsGuideded.Should().BeFalse();
+        navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Stationary);
+        navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.FacingDirection.Should().BeNull();
     }
 
     [Fact]
@@ -930,6 +955,68 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void SetTrekCondition_ShouldPreserveExistingSurfaceState_WhenOptionalArgumentsAreOmitted()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        var snapshot = new PlatformSnapshot(
+            12,
+            Fixed4x4.CreateTransform(new Vector3d(2, 0, 2), FixedQuaternion.Identity, Vector3d.One));
+
+        navigator.SetGroundContact(
+            surfaceLevel: (Fixed64)3,
+            platform: snapshot,
+            surfaceFriction: (Fixed64)0.4f,
+            motionTransfer: MotionTransfer.PermaLocked,
+            ceilingLevel: (Fixed64)8,
+            updateMotorState: false);
+
+        navigator.SetTrekCondition(medium: TraversalMedium.Gas, updateMotorState: false);
+
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Gas);
+        navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)3);
+        navigator.FrameCondition.CeilingLevel.Should().Be((Fixed64)8);
+        navigator.FrameCondition.GroundState.Should().NotBeNull();
+        navigator.FrameCondition.GroundState.Value.Platform.Should().Be(snapshot);
+        navigator.FrameCondition.GroundState.Value.SurfaceFriction.Should().Be((Fixed64)0.4f);
+        navigator.FrameCondition.GroundState.Value.MotionTransferState.Should().Be(MotionTransfer.PermaLocked);
+    }
+
+    [Fact]
+    public void Simulate_ShouldIgnoreInvalidPendingGuidedVolumeExitHandoff()
+    {
+        RegisterVolumeExitHandoffScene("NavigatorInvalidPendingHandoff");
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.GuidedPathMode = GuidedPathMode.FlowField;
+        navigator.GuidedAllowTraversalTransitions = true;
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: GuidedPathMode.Swim,
+            rate: TrekRate.Fast,
+            groupId: 5);
+
+        navigator.SetTestPosition(new Vector3d(2, 0, 0));
+        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.Steering.Arrive();
+
+        GuidedVolumeExitHandoff handoff = GetPrivateField<GuidedVolumeExitHandoff>(
+            navigator,
+            "_pendingGuidedVolumeExitHandoff");
+        handoff.TransitionId = null;
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.Steering.CurrentRequest.Should().BeNull();
+        navigator.Steering.ShouldMove.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+
+        PathManager.UnloadChart("NavigatorInvalidPendingHandoff");
+    }
+
+    [Fact]
     public void DeltaHelpers_ShouldIgnoreZeroInputs_AndApplyQueuedMotionOnCommit()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -949,6 +1036,18 @@ public class NavigatorTests : IDisposable
         navigator.Forward.Should().Be(quarterTurn.Rotate(Vector3d.Forward));
         navigator.Speed.Should().BeGreaterThan(Fixed64.Zero);
         navigator.Acceleration.Should().NotBe(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void CommitFrameMotion_ShouldReportZeroSpeed_WhenNoMovementOccurred()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.CommitFrameMotion();
+
+        navigator.Speed.Should().Be(Fixed64.Zero);
+        navigator.StuckThresholdSpeed.Should().Be(Fixed64.Zero);
+        navigator.Acceleration.Should().Be(Vector3d.Zero);
     }
 
     private static TestNavigator CreateNavigator(Vector3d position, FixedQuaternion? rotation = null)
@@ -1099,5 +1198,13 @@ public class NavigatorTests : IDisposable
         public void ApplyRootMotion(Vector3d deltaPosition, Fixed64 forceMultiplier)
         {
         }
+    }
+
+    private static T GetPrivateField<T>(object instance, string fieldName)
+    {
+        var field = instance.GetType().BaseType!.GetField(
+            fieldName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        return (T)field.GetValue(instance)!;
     }
 }

@@ -159,7 +159,7 @@ public class PlatformLocomotion : ILocomotion
 
         if (!IsNewPlatform)
         {
-            Vector3d currentPoint = ActivePlatform?.Transform.TransformPoint(ScoutLocalPoint) ?? Vector3d.Zero;
+            Vector3d currentPoint = ActivePlatform.Value.Transform.TransformPoint(ScoutLocalPoint);
             Vector3d previousPoint = PreviousPlatform?.Transform.TransformPoint(ScoutLocalPoint) ?? Vector3d.Zero;
 
             // Store platform velocity to use as a canceling force
@@ -266,7 +266,8 @@ public class PlatformLocomotion : ILocomotion
     private static MotionTransfer ResolveMovementTransfer(PlatformSnapshot? refreshedPlatform, GroundCondition? condition)
     {
         return refreshedPlatform?.SupportsKinematicMotion == true
-            ? condition?.MotionTransferState ?? MotionTransfer.None
+            // refreshedPlatform comes from condition.Platform, so a kinematic snapshot implies condition exists.
+            ? condition!.Value.MotionTransferState
             : MotionTransfer.None;
     }
 

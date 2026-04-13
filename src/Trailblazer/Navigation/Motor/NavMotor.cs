@@ -450,6 +450,9 @@ public class NavMotor : IRecordable
     /// <returns>The acceleration limit depending on whether the navigator is grounded, airborne, or swimming.</returns>
     public Fixed64 GetMaxAcceleration()
     {
+        if (CurrentState == null)
+            throw new InvalidOperationException("NavMotor must be initialized before querying max acceleration.");
+
         if (IsInLiquid)
             return SwimModule?.IsEnabled == true && SwimModule.CanSwim
                 ? SwimModule.MaxSwimAcceleration
@@ -465,7 +468,8 @@ public class NavMotor : IRecordable
         if (IsJumping || IsFalling || IsInGas)
             return Handler.Move.MaxAirAcceleration;
 
-        return Fixed64.MAX_VALUE; // fallback, should never be hit
+        throw new InvalidOperationException(
+            $"Cannot resolve max acceleration while traversal medium is {CurrentState.Medium}. NavMotor requires a known traversal medium before movement forces are evaluated.");
     }
 
     /// <summary>

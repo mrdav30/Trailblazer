@@ -1,6 +1,7 @@
 using FixedMathSharp;
 using FluentAssertions;
 using System;
+using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Xunit;
 
@@ -81,5 +82,60 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
 
         agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Unknown });
         agent.Motor.StateChanged.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetMaxAcceleration_ShouldSelectTraversalSpecificAcceleration_AndRejectUnknownState()
+    {
+        var groundedAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
+        groundedAgent.Motor.GetMaxAcceleration().Should().Be(groundedAgent.Motor.Handler.Move.MaxGroundAcceleration);
+
+        var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent();
+        swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Swim!.MaxSwimAcceleration);
+        swimmingAgent.Motor.Handler.Swim.CanSwim = false;
+        swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Move.MaxAirAcceleration);
+
+        var flyingAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        flyingAgent.Motor.Handler.Fly!.IsFlying = true;
+        flyingAgent.Motor.GetMaxAcceleration().Should().Be(flyingAgent.Motor.Handler.Fly.MaxFlyAcceleration);
+        flyingAgent.Motor.Handler.Fly.CanFly = false;
+        flyingAgent.Motor.GetMaxAcceleration().Should().Be(flyingAgent.Motor.Handler.Move.MaxAirAcceleration);
+
+        var jumpingAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        jumpingAgent.Motor.Handler.Jump!.IsJumping = true;
+        jumpingAgent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        jumpingAgent.Motor.GetMaxAcceleration().Should().Be(jumpingAgent.Motor.Handler.Move.MaxAirAcceleration);
+
+        var unknownAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
+        unknownAgent.Invoking(agent => agent.Motor.GetMaxAcceleration())
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*Unknown*");
+    }
+
+    [Fact]
+    public void FlightSpeedScalingAndJumpSpeed_ShouldRespectInstalledLocomotionState()
+    {
+        var flyingAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        flyingAgent.Motor.Handler.Fly!.IsFlying = true;
+        flyingAgent.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)10;
+        flyingAgent.Motor.Handler.Move.MaxSlowSpeed = (Fixed64)2;
+        flyingAgent.Motor.Handler.Move.MaxModerateSpeed = (Fixed64)5;
+        flyingAgent.Motor.Handler.Move.MaxFastSpeed = (Fixed64)10;
+
+        flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Stationary).Should().Be(Fixed64.Zero);
+        (flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Slow) - (Fixed64)2).Abs().Should().BeLessThan((Fixed64)0.0001f);
+        (flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Moderate) - (Fixed64)5).Abs().Should().BeLessThan((Fixed64)0.0001f);
+        (flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast) - (Fixed64)10).Abs().Should().BeLessThan((Fixed64)0.0001f);
+
+        flyingAgent.Motor.Handler.Move.MaxFastSpeed = Fixed64.Zero;
+        (flyingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Moderate) - (Fixed64)10).Abs().Should().BeLessThan((Fixed64)0.0001f);
+
+        var jumpLessAgent = MockMotorAgentTestFactory.CreateMockAgent(
+            startingMedium: TraversalMedium.Solid,
+            profile: LocomotionProfile.CreateMoveAndFallOnly());
+        jumpLessAgent.Motor.GetVerticalJumpSpeed().Should().Be(Fixed64.Zero);
+
+        var jumpAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        jumpAgent.Motor.GetVerticalJumpSpeed().Should().BeGreaterThan(Fixed64.Zero);
     }
 }

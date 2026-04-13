@@ -818,6 +818,139 @@ public class NavigatorTests : IDisposable
         motorCondition.GroundState.Should().BeNull();
     }
 
+    [Fact]
+    public void InactiveNavigator_ShouldThrowForPrewarmSimulateAndCommit()
+    {
+        var navigator = new TestNavigator();
+
+        navigator.Invoking(n => n.PrewarmMovementGroup())
+            .Should().Throw<InvalidOperationException>();
+        navigator.Invoking(n => n.Simulate())
+            .Should().Throw<InvalidOperationException>();
+        navigator.Invoking(n => n.CommitFrameMotion())
+            .Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void InactiveNavigator_ShouldIgnoreRequestConditionAndCollisionUpdates()
+    {
+        var navigator = new TestNavigator();
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Right,
+            TrekRate.Fast,
+            isRequestingJump: true,
+            isRequestingFlight: true,
+            facingDirection: Vector3d.Forward);
+        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), pathMode: GuidedPathMode.FlowField, rate: TrekRate.Fast, isRequestingJump: true, groupId: 7);
+        navigator.SetTrekCondition(
+            medium: TraversalMedium.Liquid,
+            surfaceLevel: (Fixed64)3,
+            surfaceCondition: new GroundCondition(),
+            ceilingLevel: (Fixed64)6,
+            updateMotorState: true);
+        navigator.NotifyCollision();
+
+        navigator.IsGuideded.Should().BeFalse();
+        navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Stationary);
+        navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.FacingDirection.Should().BeNull();
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Unknown);
+        navigator.FrameCondition.SurfaceLevel.Should().Be(Fixed64.Zero);
+        navigator.FrameCondition.GroundState.Should().BeNull();
+        navigator.FrameCondition.CeilingLevel.Should().Be(Fixed64.MAX_VALUE);
+    }
+
+    [Fact]
+    public void GuidedRequestSetters_ShouldUpdateFrameRequestState()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ToggleGuidedJump(true);
+        navigator.ToggleGuidedFlight(true);
+        navigator.SetGuidedTrekRate(TrekRate.Moderate);
+
+        navigator.FrameRequest.IsRequestingJump.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
+    }
+
+    [Fact]
+    public void ReplaceAndSetTrekCondition_ShouldCloneState_AndOnlyUpdateMotorWhenRequested()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        TrekCondition replacement = new()
+        {
+            Medium = TraversalMedium.Gas,
+            SurfaceLevel = (Fixed64)4,
+            CeilingLevel = (Fixed64)8
+        };
+
+        navigator.ReplaceTrekCondition(replacement, updateMotorState: false);
+        replacement.Medium = TraversalMedium.Liquid;
+        replacement.SurfaceLevel = (Fixed64)9;
+
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Gas);
+        navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)4);
+        navigator.Motor.CurrentState.Medium.Should().Be(TraversalMedium.Solid);
+
+        navigator.ReplaceTrekCondition(new TrekCondition
+        {
+            Medium = TraversalMedium.Liquid,
+            SurfaceLevel = (Fixed64)2,
+            GroundState = null,
+            CeilingLevel = (Fixed64)5
+        }, updateMotorState: true);
+
+        navigator.Motor.CurrentState.Medium.Should().Be(TraversalMedium.Liquid);
+        navigator.Motor.CurrentState.SurfaceLevel.Should().Be((Fixed64)2);
+
+        GroundCondition updatedGround = new()
+        {
+            SurfaceFriction = (Fixed64)0.25f
+        };
+        navigator.SetTrekCondition(
+            surfaceLevel: (Fixed64)6,
+            surfaceCondition: updatedGround,
+            ceilingLevel: (Fixed64)7,
+            updateMotorState: true);
+
+        updatedGround.SurfaceFriction = Fixed64.Zero;
+
+        navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Liquid);
+        navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)6);
+        navigator.FrameCondition.GroundState.Should().NotBeNull();
+        navigator.FrameCondition.GroundState.Value.SurfaceFriction.Should().Be((Fixed64)0.25f);
+        navigator.FrameCondition.CeilingLevel.Should().Be((Fixed64)7);
+        navigator.Motor.CurrentState.SurfaceLevel.Should().Be((Fixed64)6);
+        navigator.Motor.CurrentState.GroundState.Should().NotBeNull();
+        navigator.Motor.CurrentState.GroundState.Value.SurfaceFriction.Should().Be((Fixed64)0.25f);
+    }
+
+    [Fact]
+    public void DeltaHelpers_ShouldIgnoreZeroInputs_AndApplyQueuedMotionOnCommit()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        FixedQuaternion quarterTurn = FixedQuaternion.FromAxisAngle(Vector3d.Up, (Fixed64)0.5f);
+
+        navigator.AddPositionDelta(Vector3d.Zero);
+        navigator.ApplyRotationDelta(FixedQuaternion.Identity);
+        navigator.AddVelocityDelta(Vector3d.Zero);
+        navigator.AddPositionDelta(Vector3d.Right);
+        navigator.ApplyRotationDelta(quarterTurn);
+        navigator.AddVelocityDelta(Vector3d.Forward);
+
+        navigator.CommitFrameMotion();
+
+        navigator.Position.Should().Be(new Vector3d(1, 0, 1));
+        navigator.Rotation.Should().Be(quarterTurn);
+        navigator.Forward.Should().Be(quarterTurn.Rotate(Vector3d.Forward));
+        navigator.Speed.Should().BeGreaterThan(Fixed64.Zero);
+        navigator.Acceleration.Should().NotBe(Vector3d.Zero);
+    }
+
     private static TestNavigator CreateNavigator(Vector3d position, FixedQuaternion? rotation = null)
     {
         var navigator = new TestNavigator();

@@ -7,6 +7,7 @@ using GridForge.Grids;
 using Moq;
 using System;
 using Trailblazer.Navigation;
+using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 using Trailblazer.Tests;
@@ -1081,6 +1082,63 @@ public class NavSteeringTests : IDisposable
         target.TrailGuide.Should().BeNull();
 
         PathManager.UnloadChart("RecordDataNoGuideChart");
+    }
+
+    [Fact]
+    public void ApplyPathRequest_ShouldTreatNullRequestAsArrival()
+    {
+        var steer = new NavSteering(Fixed64.One);
+
+        steer.ApplyPathRequest(null);
+
+        steer.ShouldMove.Should().BeFalse();
+        steer.IsAtDestination.Should().BeTrue();
+        steer.CurrentRequest.Should().BeNull();
+        steer.TargetDirection.Should().Be(Vector3d.Zero);
+        steer.Destination.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void PrewarmMovementGroup_ShouldThrowForNullOwner()
+    {
+        var steer = new NavSteering(Fixed64.One);
+
+        steer.Invoking(s => s.PrewarmMovementGroup(null!))
+            .Should().Throw<ArgumentNullException>()
+            .WithParameterName("navigator");
+    }
+
+    [Fact]
+    public void PrewarmMovementGroup_ShouldSeedCoordinatorMembershipForGroupedRequests()
+    {
+        bool[,,] data = new bool[1, 6, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("PrewarmMovementGroup", data, Vector3d.Zero);
+
+        var owner = new MockSteerAgent(Vector3d.Zero);
+        var steer = new NavSteering(owner.Radius);
+        AStarPathRequest.TryCreate(owner.Position, new Vector3d(4, 0, 0), out AStarPathRequest request);
+
+        steer.ApplyPathRequest(request, groupId: 12);
+        steer.PrewarmMovementGroup(owner);
+
+        MovementGroupCoordinator.IsNeighbor(
+                new MovementGroupSession { GroupId = 12 },
+                owner.GlobalId,
+                request.TargetPosition,
+                TrailblazerManager.FrameCount)
+            .Should().BeTrue();
+
+        PathManager.UnloadChart("PrewarmMovementGroup");
     }
 
     private static void AddObstacle(Vector3d position)

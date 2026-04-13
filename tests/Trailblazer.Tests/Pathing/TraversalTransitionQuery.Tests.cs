@@ -255,4 +255,41 @@ public class TraversalTransitionQueryTests : IDisposable
         Assert.Null(exception);
         Assert.Empty(TraversalTransitionQuery.GetDirectedTransitions());
     }
+
+    [Fact]
+    public void QueryCaches_ShouldReuseComputedViews_AndSupportEmptySnapshots()
+    {
+        TraversalTransition[] emptyFirst = TraversalTransitionQuery.GetDirectedTransitions(TraversalTransitionType.Jump);
+        TraversalTransition[] emptySecond = TraversalTransitionQuery.GetDirectedTransitions(TraversalTransitionType.Jump);
+
+        Assert.Empty(emptyFirst);
+        Assert.Same(emptyFirst, emptySecond);
+
+        PathTestFactory.RegisterSingleWalkablePoint("QueryCachedSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("QueryCachedDestination", new Vector3d(1, 0, 0));
+        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel sourceVoxel));
+
+        Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "cached-jump",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)))));
+
+        TraversalTransition[] byTypeFirst = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
+            sourceVoxel.GridIndex,
+            TraversalTransitionType.Jump);
+        TraversalTransition[] byTypeSecond = TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
+            sourceVoxel.GridIndex,
+            TraversalTransitionType.Jump);
+
+        Assert.Single(byTypeFirst);
+        Assert.Same(byTypeFirst, byTypeSecond);
+
+        int[] sourceGridIndicesFirst = TraversalTransitionQuery.GetSourceGridIndices(TraversalTransitionType.Jump);
+        int[] sourceGridIndicesSecond = TraversalTransitionQuery.GetSourceGridIndices(TraversalTransitionType.Jump);
+
+        Assert.Single(sourceGridIndicesFirst);
+        Assert.Same(sourceGridIndicesFirst, sourceGridIndicesSecond);
+        Assert.Equal(sourceVoxel.GridIndex, sourceGridIndicesFirst[0]);
+    }
 }

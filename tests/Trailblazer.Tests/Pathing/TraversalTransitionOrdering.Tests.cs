@@ -227,6 +227,69 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
         TraversalTransitionOrdering.Compare(leftZ, rightZ).Should().NotBe(0);
     }
 
+    [Fact]
+    public void TraversalTransitionOrdering_ShouldCompare_ByTypeCostGridAndPointOverrideX()
+    {
+        GlobalGridManager.TryAddGrid(
+            new GridConfiguration(new Vector3d(16, -4, -4), new Vector3d(24, 8, 8)),
+            out _).Should().BeTrue();
+
+        var jump = new TraversalTransition(
+            "cmp-type",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+        var swim = new TraversalTransition(
+            "cmp-type",
+            TraversalTransitionType.SwimEntry,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+
+        TraversalTransitionOrdering.Compare(jump, swim).Should().BeLessThan(0);
+
+        var lowCost = new TraversalTransition(
+            "cmp-cost",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            pathCostModifier: 1);
+        var highCost = new TraversalTransition(
+            "cmp-cost",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            pathCostModifier: 2);
+
+        TraversalTransitionOrdering.Compare(lowCost, highCost).Should().BeLessThan(0);
+
+        var firstGrid = new TraversalTransition(
+            "cmp-grid",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
+        var secondGrid = new TraversalTransition(
+            "cmp-grid",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(new Vector3d(16, 0, 0)),
+            TraversalTransitionAnchor.Solid(new Vector3d(17, 0, 0)));
+
+        TraversalTransitionOrdering.Compare(firstGrid, secondGrid).Should().BeLessThan(0);
+
+        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel destinationVoxel).Should().BeTrue();
+        var lowerOverrideX = new TraversalTransition(
+            "cmp-point",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(destinationVoxel.GlobalIndex, new Vector3d(1.1, 0, 0)));
+        var higherOverrideX = new TraversalTransition(
+            "cmp-point",
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            TraversalTransitionAnchor.Solid(destinationVoxel.GlobalIndex, new Vector3d(1.2, 0, 0)));
+
+        TraversalTransitionOrdering.Compare(lowerOverrideX, higherOverrideX).Should().BeLessThan(0);
+    }
+
     private static TraversalTransition CreateTransition(
         string id,
         Vector3d source,

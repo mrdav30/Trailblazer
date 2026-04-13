@@ -9,9 +9,9 @@ invariants, and removing dead code where coverage-only tests would be dishonest.
 
 Current branch budget:
 
-- current branch coverage: `94.15%` (`3640 / 3866`)
+- current branch coverage: `94.63%` (`3649 / 3856`)
 - immediate `> 92%` milestone: reached
-- branches needed to reach `100%`: `+226`
+- branches needed to reach `100%`: `+207`
 
 ## Fresh Baseline
 
@@ -39,7 +39,7 @@ Fresh run result:
 
 ## Latest Snapshot
 
-Phase 4 tail refresh captured on April 12, 2026 after the targeted navigation-runtime tail pass.
+Phase 5 pass refresh captured on April 12, 2026 after the targeted pathing-tail and dead-branch cleanup pass.
 
 Refresh workflow:
 
@@ -47,29 +47,29 @@ Refresh workflow:
 dotnet test Trailblazer.sln --configuration Release
 dotnet test Trailblazer.sln --configuration Release \
   --collect:"XPlat Code Coverage" \
-  --results-directory artifacts/coverage/phase4-tail-2026-04-12
+  --results-directory artifacts/coverage/phase5-pass-2026-04-12
 ```
 
 Refresh artifact:
 
-- [coverage.cobertura.xml](../../artifacts/coverage/phase4-tail-2026-04-12/75e7d64f-8d46-4dd2-9df2-4849bd284d28/coverage.cobertura.xml)
+- [coverage.cobertura.xml](../../artifacts/coverage/phase5-pass-2026-04-12/f6ffce62-1d03-44b2-8df1-4064ad83b4b1/coverage.cobertura.xml)
 
 Refresh result:
 
-- test result: `736` passed, `0` failed, `0` skipped
-- line coverage: `98.33%` (`7833 / 7966`)
-- branch coverage: `94.15%` (`3640 / 3866`)
-- branch gain from prior phase 4 refresh: `+17`
-- branch gain from phase 3 refresh: `+55`
-- branch gain from baseline: `+176`
-- remaining branches to `100%`: `+226`
+- test result: `744` passed, `0` failed, `0` skipped
+- line coverage: `98.50%` (`7837 / 7956`)
+- branch coverage: `94.63%` (`3649 / 3856`)
+- branch gain from prior phase 4 tail refresh: `+9`
+- branch gain from phase 3 refresh: `+64`
+- branch gain from baseline: `+185`
+- remaining branches to `100%`: `+207`
 
 ## What The Numbers Say
 
 ### Biggest File Gaps By Missed Branches
 
-These are the highest-value files after the Phase 4 tail pass. The top five files now account for
-`113 / 226` missed branches, or exactly `50.0%` of the remaining branch gap.
+These are the highest-value files after the Phase 5 pass. The top five files now account for
+`111 / 207` missed branches, or about `53.6%` of the remaining branch gap.
 
 | File | Line | Branch | Missed Lines | Missed Branches |
 | --- | ---: | ---: | ---: | ---: |
@@ -77,56 +77,38 @@ These are the highest-value files after the Phase 4 tail pass. The top five file
 | `Pathing/PathManager.cs` | `97.84%` | `92.64%` | `19` | `34` |
 | `Navigation/Steering/NavSteering.cs` | `97.45%` | `92.07%` | `13` | `16` |
 | `Navigation/Motor/Locomotion/PlatformLocomotion.cs` | `98.58%` | `88.98%` | `2` | `13` |
-| `Pathing/Search/FlowField/FlowFieldGuide.cs` | `94.11%` | `89.09%` | `9` | `12` |
-| `Main/Navigator.cs` | `99.71%` | `92.64%` | `1` | `10` |
-| `Pathing/Search/PathGuideFactory.cs` | `96.80%` | `90.47%` | `4` | `8` |
-| `Pathing/Transition/GeneratedTraversalTransitionBuilder.cs` | `97.76%` | `83.33%` | `4` | `6` |
+| `Main/Navigator.cs` | `99.71%` | `92.64%` | `0` | `10` |
+| `Pathing/Search/FlowField/FlowFieldGuide.cs` | `95.30%` | `90.56%` | `7` | `10` |
 | `Navigation/Motor/Locomotion/LocomotionHandler.cs` | `98.92%` | `93.75%` | `2` | `6` |
-| `Pathing/Search/Support/Request/PathRequest.cs` | `97.01%` | `88.63%` | `2` | `5` |
 | `Pathing/Search/Hybrid/HybridPathRequest.cs` | `98.57%` | `92.18%` | `2` | `5` |
+| `Pathing/Search/Support/Request/PathRequest.cs` | `97.01%` | `88.63%` | `2` | `5` |
 | `Pathing/Search/Volume/VolumePathRequest.cs` | `98.29%` | `92.18%` | `2` | `5` |
-| `Pathing/Search/AStar/AStarSurveyor.cs` | `98.91%` | `95.55%` | `2` | `4` |
 | `Pathing/Authoring/TraversalAuthoringMap.cs` | `95.45%` | `90.00%` | `3` | `4` |
-| `Pathing/Transition/TraversalTransitionQuery.cs` | `97.90%` | `93.33%` | `4` | `4` |
-| `Pathing/Transition/TraversalTransitionOrdering.cs` | `91.83%` | `87.50%` | `4` | `4` |
+| `Pathing/Search/AStar/AStarSurveyor.cs` | `98.91%` | `95.55%` | `2` | `4` |
 
 ### Coverage Review Notes
 
-- The Phase 4 tail pass landed cleanly. This follow-up retired another `17` missed branches from
-  the `Navigator` / `NavSteering` / `NavMotor` / `MovementGroupCoordinator` /
-  `PlatformLocomotion` cluster and moved overall branch coverage from `93.71%` to `94.15%`.
-- Across Phase 4 as a whole, the navigation-runtime pass now accounts for `+55` branch coverage
-  from the Phase 3 refresh and reduced the target runtime cluster from about `132` missed
-  branches to about `79`.
-- `Navigator.cs` moved from `80.88%` branch with `26` missed branches to `92.64%` branch with
-  `10` missed branches, so it is no longer one of the dominant hotspots.
-- `MovementGroupCoordinator.cs` is effectively retired as a hotspot at `96.96%` branch with only
-  `2` missed branches left.
-- `NavSteering.cs` improved from `90.10%` branch with `20` missed branches to `92.07%` branch
-  with `16` missed branches. The remaining debt is now mostly around stuck-recovery, disposal,
-  and request-validation tails rather than baseline group lifecycle.
-- `NavMotor.cs` improved again in the tail pass, moving from `89.63%` branch with `51` missed
-  branches to `92.27%` branch with `38` missed branches. It is still the largest single runtime
-  hotspot, but it is no longer sitting below the `90%` branch line.
-- `PlatformLocomotion.cs` finally moved materially in the tail pass, rising from `85.59%` branch
-  with `17` missed branches to `88.98%` branch with `13`. The direct helper coverage paid off,
-  but there is still a small attachment/refresh tail if we stay in the runtime cluster.
-- The managed-transition work from Phase 3 stayed intact. `TraversalTransitionRegistry.cs`
-  remains effectively retired as a hotspot at `98.92%` branch with only `2` missed branches left,
-  while the remaining transition-lifecycle debt is now concentrated in `PathManager`.
-- The remaining branch budget is now concentrated in `NavMotor`, `PathManager`,
-  `PlatformLocomotion`, `NavSteering`, and `FlowFieldGuide`, with `Navigator` and
-  movement-group coordination no longer gating the next pass.
-- `Pathing/Search/FlowField/FlowFieldSurveyor.cs` is effectively retired as a hotspot at
-  `99.05%` branch, and `Pathing/Search/Hybrid/HybridRoutePlanner.cs` is now at `100%`.
-- `Pathing/Search/AStar/AStarGuide.cs`, `Pathing/Search/Volume/VolumeSurveyor.cs`,
-  `Pathing/Search/Support/VoxelFinder/VolumeVoxelFinder.cs`, and
-  `Pathing/Partition/SolidChartPartition.cs` all moved out of the "fastest branch win" tier.
-- The next decisive branch gains are now split between the last meaningful `NavMotor` runtime
-  tail and the Phase 5 pathing tail: `PathManager`, `FlowFieldGuide`, `PathGuideFactory`, and
-  the remaining small transition helpers.
-- `FlowFieldGuide` and `PathGuideFactory` still offer worthwhile local cleanup value, but they
-  now sit in the same "good local win" tier as `LocomotionHandler` and the path-request helper tail.
+- The first Phase 5 tail pass landed cleanly. This follow-up moved overall branch coverage from
+  `94.15%` to `94.63%` while also deleting or tightening `10` dead branches, so the remaining
+  gap dropped from `226` to `207`.
+- `GeneratedTraversalTransitionBuilder.cs` moved from `83.33%` branch to `96.66%` branch and is
+  effectively retired as a hotspot with only `1` missed branch left.
+- `TraversalTransitionOrdering.cs` moved from `87.50%` branch to `100%`.
+- `TraversalTransitionQuery.cs` moved from `93.33%` branch to `100%`.
+- `PathGuideFactory.cs` moved from `90.47%` branch to `95.23%` and dropped to only `4` missed
+  branches, so it is no longer a meaningful gating file for the next pass.
+- `FlowFieldGuide.cs` moved from `89.09%` branch with `12` missed branches to `90.56%` branch
+  with `10`, helped by both direct staged-plan coverage and removal of private dead guards.
+- The remaining branch budget is now even more concentrated in the navigation-runtime cluster:
+  `NavMotor`, `PathManager`, `NavSteering`, `PlatformLocomotion`, and `Navigator` now dominate
+  the next honest gains.
+- `FlowFieldGuide` still offers some local cleanup value, but the transition helper cluster is
+  largely retired and no longer belongs in the top-gap list.
+- `TraversalTransitionRegistry.cs`, `TraversalTransitionOrdering.cs`, and `TraversalTransitionQuery.cs`
+  now look like stable, mostly-closed infrastructure rather than coverage hotspots.
+- If Phase 5 continues, the best return is no longer in the tiny helper files; it is in the last
+  runtime tails and a few remaining request/helper branches that still sit above the one-to-four
+  branch tier.
 
 ## Phased Battle Plan
 
@@ -386,18 +368,33 @@ Expected outcome:
 
 ### Phase 5. Tail Sweep To 100 Or Justified Exclusions
 
-Expected remaining branch budget after the current Phase 4 target cluster: about `147` branches,
-before any additional Phase 5 tail cleanup or invariant tightening.
+Current branch budget in this phase: `207` missed branches.
+
+Status on April 12, 2026:
+
+- phase result: first tail pass landed, full `Release` suite green, coverage moved from `94.15%` to `94.63%`
+- branch gain in this pass: `+9` covered branches, plus `10` dead branches removed or tightened
+- branch gain from baseline: `+185`
+- `GeneratedTraversalTransitionBuilder.cs` moved from `83.33%` branch to `96.66%`
+- `TraversalTransitionOrdering.cs` moved from `87.50%` branch to `100%`
+- `TraversalTransitionQuery.cs` moved from `93.33%` branch to `100%`
+- `PathGuideFactory.cs` moved from `90.47%` branch to `95.23%`
+- `FlowFieldGuide.cs` moved from `89.09%` branch to `90.56%`
+- remaining branches to `100%`: `+207`
 
 Likely tail files:
 
-- `Pathing/Search/Volume/VolumeGuide.cs`
 - `Pathing/PathManager.cs`
+- `Navigation/Motor/NavMotor.cs`
+- `Navigation/Steering/NavSteering.cs`
+- `Navigation/Motor/Locomotion/PlatformLocomotion.cs`
+- `Main/Navigator.cs`
+- `Pathing/Search/FlowField/FlowFieldGuide.cs`
 - `Navigation/Motor/Locomotion/LocomotionHandler.cs`
 - `Pathing/Search/Support/Request/PathRequest.cs`
-- `Pathing/Transition/GeneratedTraversalTransitionBuilder.cs`
-- `Pathing/Transition/TraversalTransitionOrdering.cs`
-- `Pathing/Transition/TraversalTransitionQuery.cs`
+- `Pathing/Search/Hybrid/HybridPathRequest.cs`
+- `Pathing/Search/Volume/VolumePathRequest.cs`
+- `Pathing/Authoring/TraversalAuthoringMap.cs`
 - `Main/TrailblazerManager.cs`
 - remaining one-to-four-branch helpers across support, transitions, and locomotion
 

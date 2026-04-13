@@ -178,9 +178,6 @@ public class FlowFieldGuide : IGuide
     private bool TryGetStagedMovementDirection(Vector3d origin, out Vector3d direction)
     {
         direction = Vector3d.Zero;
-        if (_stagedPlan == null)
-            return false;
-
         int remainingStageAdvances = _stagedPlan.Steps.Length;
         while (TryGetPreparedStage(origin, ref remainingStageAdvances, out HybridRouteStep currentStep))
         {
@@ -264,9 +261,6 @@ public class FlowFieldGuide : IGuide
     private bool TryGetStagedFallbackDirection(Vector3d origin, out Vector3d fallbackDirection)
     {
         fallbackDirection = Vector3d.Zero;
-        if (_stagedPlan == null)
-            return false;
-
         int remainingStageAdvances = _stagedPlan.Steps.Length;
         if (!TryGetPreparedStage(origin, ref remainingStageAdvances, out HybridRouteStep currentStep))
             return false;

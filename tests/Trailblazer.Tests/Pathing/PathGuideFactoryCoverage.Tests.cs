@@ -203,6 +203,24 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         PathGuideFactory.AnyInUse.Should().BeFalse();
     }
 
+    [Fact]
+    public void PathGuideFactory_ShouldReturnFalse_WhenFlowFallbackIsAllowedButNoTransitionRouteExists()
+    {
+        RegisterSolidLine("GuideFactoryFallbackStart", Vector3d.Zero, 2);
+        RegisterSolidLine("GuideFactoryFallbackEnd", new Vector3d(4, 0, 0), 2);
+
+        FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(5, 0, 0),
+            Fixed64.One,
+            allowTraversalTransitions: true);
+
+        request.Should().NotBeNull();
+        PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide).Should().BeFalse();
+        guide.Should().BeNull();
+        PathGuideFactory.ActiveFlowGuideCount.Should().Be(0);
+    }
+
     private static void RegisterSolidLine(string chartName, Vector3d minBounds, int length)
     {
         var data = new bool[1, length, 1];

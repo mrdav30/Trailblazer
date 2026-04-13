@@ -180,6 +180,7 @@ internal static class GeneratedTraversalTransitionBuilder
         TryAddChartVolumeCandidate(
             firstTransitionMedia,
             secondTransitionMedia,
+            TraversalMedia.Gas,
             TraversalMedium.Gas,
             firstPosition,
             secondPosition,
@@ -190,6 +191,7 @@ internal static class GeneratedTraversalTransitionBuilder
         TryAddChartVolumeCandidate(
             firstTransitionMedia,
             secondTransitionMedia,
+            TraversalMedia.Liquid,
             TraversalMedium.Liquid,
             firstPosition,
             secondPosition,
@@ -204,6 +206,7 @@ internal static class GeneratedTraversalTransitionBuilder
     private static void TryAddChartVolumeCandidate(
         TraversalMedia firstTransitionMedia,
         TraversalMedia secondTransitionMedia,
+        TraversalMedia candidateVolumeKind,
         TraversalMedium candidateVolumeMedium,
         Vector3d firstPosition,
         Vector3d secondPosition,
@@ -212,16 +215,6 @@ internal static class GeneratedTraversalTransitionBuilder
         ref Vector3d volumePosition,
         ref TraversalMedium volumeMedium)
     {
-        TraversalMedia candidateVolumeKind = candidateVolumeMedium switch
-        {
-            TraversalMedium.Gas => TraversalMedia.Gas,
-            TraversalMedium.Liquid => TraversalMedia.Liquid,
-            _ => TraversalMedia.None
-        };
-
-        if (candidateVolumeKind == TraversalMedia.None)
-            return;
-
         bool firstCanBeChart = (firstTransitionMedia & TraversalMedia.Solid) != 0;
         bool secondCanBeChart = (secondTransitionMedia & TraversalMedia.Solid) != 0;
         bool firstCanBeVolume = (firstTransitionMedia & candidateVolumeKind) != 0;

@@ -217,6 +217,20 @@ public sealed class FlowFieldGuideTests : IDisposable
         guide.ReleaseStagedResources(dispose: true);
     }
 
+    [Fact]
+    public void FlowFieldGuide_ShouldReturnFalse_WhenStagedPlanContainsNullSteps()
+    {
+        var guide = new FlowFieldGuide();
+        var plan = new HybridRoutePlan(
+            new HybridRouteStep[] { null! },
+            Array.Empty<TraversalTransition>(),
+            0);
+
+        guide.InitializeStaged(plan).Should().BeTrue();
+        guide.TryGetMovementDirection(Vector3d.Zero, out _).Should().BeFalse();
+        guide.TryGetFallbackDirection(Vector3d.Zero, out _).Should().BeFalse();
+    }
+
     private static FlowFieldSurveyResult CreateSurveyResult(params (Vector3d position, Vector3d direction, int cost, bool isGoal)[] cells)
     {
         var fields = new SwiftDictionary<GlobalVoxelIndex, FlowField>(cells.Length);

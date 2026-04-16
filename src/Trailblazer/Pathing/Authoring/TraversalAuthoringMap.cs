@@ -102,8 +102,19 @@ public sealed class TraversalAuthoringMap
     private static NavigationChartCell BuildChartCell(ParsedTraversalCell parsedCell)
     {
         NavigationChartCell chartCell = parsedCell.Entry.ChartCell;
+        int costModifier = parsedCell.PathCostModifier;
+
         if (!parsedCell.HasTransitionMarker || !parsedCell.CanGenerateTransition)
-            return chartCell;
+        {
+            if (costModifier == 0)
+                return chartCell;
+
+            return new NavigationChartCell(
+                chartCell.TraversalKinds,
+                costModifier,
+                chartCell.Flags,
+                chartCell.GeneratedTransitionMedia);
+        }
 
         NavigationChartCellFlags flags = chartCell.Flags;
         if (chartCell.HasSolid)
@@ -114,7 +125,7 @@ public sealed class TraversalAuthoringMap
 
         return new NavigationChartCell(
             chartCell.TraversalKinds,
-            chartCell.PathCostModifier,
+            costModifier != 0 ? costModifier : chartCell.PathCostModifier,
             flags,
             parsedCell.TransitionMedia);
     }
@@ -145,6 +156,20 @@ public sealed class TraversalAuthoringMap
             }
         }
 
+        // Parse an optional inline path cost modifier suffix: <token>_<int> (e.g. "S_60", "SL_45").
+        // The suffix is extracted after transition-marker stripping so "S_60!" is also valid.
+        int pathCostModifier = 0;
+        int underscoreIndex = normalizedToken.LastIndexOf('_');
+        if (underscoreIndex >= 0)
+        {
+            string costPart = normalizedToken[(underscoreIndex + 1)..];
+            if (int.TryParse(costPart, out int parsedCost))
+            {
+                pathCostModifier = parsedCost;
+                normalizedToken = normalizedToken[..underscoreIndex].TrimEnd();
+            }
+        }
+
         if (!Legend.TryGetEntry(normalizedToken, out TraversalLegendEntry entry))
         {
             throw new ArgumentException(
@@ -157,6 +182,10 @@ public sealed class TraversalAuthoringMap
                 $"Token '{rawToken}' at [{y}, {x}, {z}] cannot be marked for transition generation.");
         }
 
-        return new ParsedTraversalCell(entry, hasTransitionMarker);
+        // Ignore cost modifiers on skip cells; they contribute no traversal data.
+        if (!entry.ChartCell.HasTraversalData)
+            pathCostModifier = 0;
+
+        return new ParsedTraversalCell(entry, hasTransitionMarker, pathCostModifier);
     }
 }

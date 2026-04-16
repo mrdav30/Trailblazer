@@ -343,4 +343,88 @@ public class TraversalAuthoringMapTests : IDisposable
         Assert.Throws<ArgumentException>(() =>
             new TraversalLegendEntry(NavigationChartCell.Empty, TraversalMedia.Solid));
     }
+
+    [Theory]
+    [InlineData("S_60", 60)]
+    [InlineData("S_1", 1)]
+    [InlineData("S_0", 0)]
+    [InlineData("S", 0)]
+    public void Build_ShouldApplyInlineCostModifierToSolidCell(string token, int expectedCost)
+    {
+        string[,,] map = { { { token } } };
+
+        TraversalBuildResult result = new TraversalAuthoringMap(
+            chartName: "CostModSolid",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(result.Chart.TryGetCell(Vector3d.Zero, out NavigationChartCell cell));
+        Assert.True(cell.HasSolid);
+        Assert.Equal(expectedCost, cell.PathCostModifier);
+    }
+
+    [Theory]
+    [InlineData("SL_45", 45)]
+    [InlineData("SG_10", 10)]
+    [InlineData("L_99", 99)]
+    [InlineData("G_5", 5)]
+    public void Build_ShouldApplyInlineCostModifierToVolumeCells(string token, int expectedCost)
+    {
+        string[,,] map = { { { token } } };
+
+        TraversalBuildResult result = new TraversalAuthoringMap(
+            chartName: "CostModVolume",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(result.Chart.TryGetCell(Vector3d.Zero, out NavigationChartCell cell));
+        Assert.True(cell.HasTraversalData);
+        Assert.Equal(expectedCost, cell.PathCostModifier);
+    }
+
+    [Fact]
+    public void Build_ShouldApplyCostModifierWhenTransitionMarkerAlsoPresentSuffix()
+    {
+        // "S_60!" is the supported form: base token, then optional cost, then marker.
+        string[,,] map =
+        {
+            {
+                { "S_60!" },
+                { "L!" }
+            }
+        };
+
+        TraversalBuildResult result = new TraversalAuthoringMap(
+            chartName: "CostAndMarker",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(result.Chart.TryGetCell(Vector3d.Zero, out NavigationChartCell solidCell));
+        Assert.True(solidCell.HasSolid);
+        Assert.Equal(60, solidCell.PathCostModifier);
+        Assert.Equal(
+            NavigationChartCellFlags.TransitionSourceHint | NavigationChartCellFlags.TransitionDestinationHint,
+            solidCell.Flags);
+    }
+
+    [Theory]
+    [InlineData("X_10")]
+    [InlineData("._20")]
+    public void Build_ShouldIgnoreCostModifierOnSkipCells(string token)
+    {
+        string[,,] map = { { { token } } };
+
+        TraversalBuildResult result = new TraversalAuthoringMap(
+            chartName: "SkipCellCost",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(result.Chart.TryGetCell(Vector3d.Zero, out NavigationChartCell cell));
+        Assert.False(cell.HasTraversalData);
+        Assert.Equal(0, cell.PathCostModifier);
+    }
 }

@@ -7,15 +7,22 @@ namespace Trailblazer.Pathing;
 /// </summary>
 internal readonly struct ParsedTraversalCell
 {
-    public ParsedTraversalCell(TraversalLegendEntry entry, bool hasTransitionMarker)
+    public ParsedTraversalCell(TraversalLegendEntry entry, bool hasTransitionMarker, int pathCostModifier = 0)
     {
         Entry = entry;
         HasTransitionMarker = hasTransitionMarker;
+        PathCostModifier = pathCostModifier;
     }
 
     public TraversalLegendEntry Entry { get; }
 
     public bool HasTransitionMarker { get; }
+
+    /// <summary>
+    /// An inline path cost modifier parsed from the token suffix (e.g. <c>S_60</c> yields 60).
+    /// Zero when no suffix was present or when the entry is a skip cell.
+    /// </summary>
+    public int PathCostModifier { get; }
 
     public bool CanGenerateTransition => TransitionMedia != TraversalMedia.None;
 

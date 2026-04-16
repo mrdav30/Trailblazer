@@ -6,7 +6,6 @@ using SwiftCollections;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -640,9 +639,9 @@ public class AStarSurveryorTests : IDisposable
         AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out AStarPathRequest request).Should().BeTrue();
 
         AStarSurveyor surveyor = new();
-        SetPrivateField(surveyor, "_request", request);
+        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
-        InvokePrivate<bool>(surveyor, "ProcessNeighbors", current).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(surveyor, "ProcessNeighbors", current).Should().BeFalse();
 
         PathManager.UnloadChart("AStarMissingMeta");
     }
@@ -668,10 +667,10 @@ public class AStarSurveryorTests : IDisposable
         AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest request).Should().BeTrue();
 
         AStarSurveyor surveyor = new();
-        SetPrivateField(surveyor, "_request", request);
+        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
-        PathHeap<SolidChartPartition> heap = GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
-        SwiftDictionary<Voxel, AStarVoxelMeta> meta = GetPrivateField<SwiftDictionary<Voxel, AStarVoxelMeta>>(surveyor, "_meta");
+        PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        SwiftDictionary<Voxel, AStarVoxelMeta> meta = ReflectionUtility.GetPrivateField<SwiftDictionary<Voxel, AStarVoxelMeta>>(surveyor, "_meta");
 
         meta[neighbor.Voxel] = new AStarVoxelMeta
         {
@@ -681,7 +680,7 @@ public class AStarSurveryorTests : IDisposable
         };
         heap.Add(neighbor, 999);
 
-        InvokePrivate<bool>(surveyor, "ProcessNeighbor", current, neighbor, 200).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(surveyor, "ProcessNeighbor", current, neighbor, 200).Should().BeFalse();
 
         meta[neighbor.Voxel].MovementCost.Should().Be(200);
         meta[neighbor.Voxel].NextTrailIndex.Should().Be(current.GlobalIndex);
@@ -779,9 +778,11 @@ public class AStarSurveryorTests : IDisposable
         AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(5, 5, 0), out AStarPathRequest request);
         request.MaxClimbHeight = Fixed64.Half;
 
-        Action act = () => PathGuideFactory.RequestGuide(request, out _);
+        AStarGuide? guide = null;
+        Action act = () => PathGuideFactory.RequestGuide(request, out guide);
         act.Should().NotThrow("the null-conditional on OnHeightLimitViolated must not crash");
 
+        PathGuideFactory.ReturnGuide(guide);
         PathManager.UnloadChart("HeightNullCallback");
     }
 
@@ -935,7 +936,7 @@ public class AStarSurveryorTests : IDisposable
     public void AStarGuide_ShouldReturnSafeDefaults_WhenTrailMapHasNoPath()
     {
         AStarGuide guide = new();
-        SetPrivateField(guide, "<TrailMap>k__BackingField", AStarSurveyResult.Create(Array.Empty<AStarWaypoint>(), Array.Empty<string>(), 0));
+        ReflectionUtility.SetPrivateField(guide, "<TrailMap>k__BackingField", AStarSurveyResult.Create(Array.Empty<AStarWaypoint>(), Array.Empty<string>(), 0));
 
         guide.HasArrived().Should().BeFalse();
         guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d movementDirection).Should().BeFalse();
@@ -1021,26 +1022,5 @@ public class AStarSurveryorTests : IDisposable
 
         PathGuideFactory.ReturnGuide(guide);
         PathManager.UnloadChart("GuideSpline");
-    }
-
-    private static T GetPrivateField<T>(object instance, string fieldName)
-    {
-        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
-        return (T)field.GetValue(instance)!;
-    }
-
-    private static void SetPrivateField<T>(object instance, string fieldName, T value)
-    {
-        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
-        field.SetValue(instance, value);
-    }
-
-    private static TReturn InvokePrivate<TReturn>(object instance, string methodName, params object[] arguments)
-    {
-        MethodInfo method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Method '{methodName}' was not found on {instance.GetType().Name}.");
-        return (TReturn)method.Invoke(instance, arguments)!;
     }
 }

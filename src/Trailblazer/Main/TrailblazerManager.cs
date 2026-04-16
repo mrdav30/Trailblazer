@@ -2,6 +2,7 @@
 using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
+using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Support;
@@ -17,6 +18,8 @@ namespace Trailblazer;
 /// </remarks>
 public static class TrailblazerManager
 {
+    #region Hook Management Fields
+
     internal static readonly LifecycleHookHandler HookHandler = new();
 
     private static readonly object _initializationLock = new();
@@ -32,6 +35,10 @@ public static class TrailblazerManager
     private static readonly SwiftList<OrderedLifecycleHook> _frameRateChangedHooks = new();
 
     private static volatile bool _isInitialized;
+
+    #endregion
+
+    #region FrameRate and Time Properties
 
     /// <summary>
     /// The fixed simulation frame rate.
@@ -70,6 +77,10 @@ public static class TrailblazerManager
 
     public static Fixed64 ExpectedAccumulation { get; private set; }
 
+    #endregion
+
+    #region Lifecycle
+
     /// <summary>
     /// Initializes Trailblazer's internal subsystem lifecycle hooks.
     /// </summary>
@@ -94,27 +105,12 @@ public static class TrailblazerManager
         }
     }
 
-    /// <summary>
-    /// Updates the simulation frame rate, recalculates the delta time, and notifies ordered frame-rate hooks.
-    /// </summary>
-    /// <param name="frameRate">The new frame rate value.</param>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// Thrown when <paramref name="frameRate"/> is less than or equal to zero.
-    /// </exception>
-    public static void SetFrameRate(int frameRate)
+    internal static void EnsureInitialized()
     {
-        if (frameRate <= 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(frameRate),
-                frameRate,
-                "Frame rate must be greater than zero.");
-        }
+        if (_isInitialized)
+            return;
 
-        EnsureInitialized();
-        FrameRate = frameRate;
-        DeltaTime = Fixed64.One / (Fixed64)FrameRate;
-        HookHandler.InvokeHooks(_frameRateChangedHooks);
+        Initialize();
     }
 
     /// <summary>
@@ -163,19 +159,42 @@ public static class TrailblazerManager
         HookHandler.InvokeHooks(_resetHooks);
     }
 
+    #endregion
+
+    #region FrameRate Utilities
+
+    /// <summary>
+    /// Updates the simulation frame rate, recalculates the delta time, and notifies ordered frame-rate hooks.
+    /// </summary>
+    /// <param name="frameRate">The new frame rate value.</param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="frameRate"/> is less than or equal to zero.
+    /// </exception>
+    public static void SetFrameRate(int frameRate)
+    {
+        if (frameRate <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(frameRate),
+                frameRate,
+                "Frame rate must be greater than zero.");
+        }
+
+        EnsureInitialized();
+        FrameRate = frameRate;
+        DeltaTime = Fixed64.One / (Fixed64)FrameRate;
+        HookHandler.InvokeHooks(_frameRateChangedHooks);
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetFrameFromTime(Fixed64 timestamp)
     {
         return (timestamp * InvDeltaTime).FloorToInt();
     }
 
-    internal static void EnsureInitialized()
-    {
-        if (_isInitialized)
-            return;
+    #endregion
 
-        Initialize();
-    }
+    #region Hook Registration
 
     internal static IDisposable RegisterOnSimulate(string owner, int order, Action callback)
     {
@@ -221,4 +240,6 @@ public static class TrailblazerManager
 
     internal static IDisposable RegisterOnFrameRateChangedCore(string owner, int order, Action callback) =>
         HookHandler.RegisterHook(_frameRateChangedHooks, owner, order, callback);
+
+    #endregion
 }

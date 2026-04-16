@@ -78,22 +78,6 @@ public class MoveLocomotion : ILocomotion
         );
 
     /// <summary>
-    /// Represents a fixed-point acceleration force for gravity.
-    /// </summary>
-    /// <remarks>
-    /// The default value is approximately 9.8 m/s².
-    /// </remarks>
-    public static readonly Fixed64 DefaultGravityForce = Fixed64.FromRaw(0x9CCCCCCCDL); //  9.8f
-
-    /// <summary>
-    /// The maximum downward velocity a scout can reach due to gravity.
-    /// </summary>
-    /// <remarks>
-    /// Terminal velocity is roughly 53 m/s (190 km/h or ~120 mph).
-    /// </remarks>
-    public static readonly Fixed64 DefaultTerminalVelocity = (Fixed64)53f;
-
-    /// <summary>
     /// The default maximum slope angle before a surface is considered too steep for normal control.
     /// </summary>
     public static readonly Fixed64 DefaultSlopeLimit = Fixed64.FromRaw(0x2D00000000L); // 45f;
@@ -163,12 +147,6 @@ public class MoveLocomotion : ILocomotion
     /// </summary>
     public FixedCurve SlopeSpeedMultiplier = DefaultSlopeSpeedModifier;
 
-    /// <inheritdoc cref="DefaultGravityForce"/>
-    public Fixed64 GravityForce = DefaultGravityForce;
-
-    /// <inheritdoc cref="DefaultTerminalVelocity"/>
-    public Fixed64 TerminalVelocity = DefaultTerminalVelocity;
-
     /// <summary>
     /// The slope angle threshold at which a surface becomes too steep for normal movement control.
     /// </summary>
@@ -203,6 +181,8 @@ public class MoveLocomotion : ILocomotion
 
     #endregion
 
+    #region Serialization
+
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
@@ -217,8 +197,6 @@ public class MoveLocomotion : ILocomotion
         RecordValues.Look(chronicler, ref MoveSpeedMultiplier, "moveSpeedMultiplier", Fixed64.One);
         RecordValues.Look(chronicler, ref ModifySpeedOnSlope, "modifySpeedOnSlope", true);
         RecordValues.Look(chronicler, ref SlopeSpeedMultiplier, "slopeSpeedMultiplier", DefaultSlopeSpeedModifier);
-        RecordValues.Look(chronicler, ref GravityForce, "gravityForce", DefaultGravityForce);
-        RecordValues.Look(chronicler, ref TerminalVelocity, "terminalVelocity", DefaultTerminalVelocity);
         RecordValues.Look(chronicler, ref SlopeLimit, "slopeLimit", DefaultSlopeLimit);
         RecordValues.Look(chronicler, ref WaterDragFactor, "waterDragFactor", DefaultWaterDragFactor);
 
@@ -233,4 +211,6 @@ public class MoveLocomotion : ILocomotion
                 this.ClearTransientState();
         }
     }
+
+    #endregion
 }

@@ -477,7 +477,7 @@ public class NavMotor : IRecordable
     /// </summary>
     private void ApplyEnvironmentalForces()
     {
-        Fixed64 gravityStep = Handler.Move.GravityForce * TrailblazerManager.DeltaTime;
+        Fixed64 gravityStep = Handler.Forces.GravityForce * TrailblazerManager.DeltaTime;
 
         if (IsFlying)
         {
@@ -514,8 +514,8 @@ public class NavMotor : IRecordable
 
         // Ensure velocity does not exceed terminal fall speed
         Fixed64 terminalFallSpeed = Handler.Move.FrameVelocity.y + (_forceOutput.y * TrailblazerManager.DeltaTime);
-        if (terminalFallSpeed < -Handler.Move.TerminalVelocity)
-            _forceOutput.y = -Handler.Move.TerminalVelocity - Handler.Move.FrameVelocity.y;
+        if (terminalFallSpeed < -Handler.Forces.TerminalVelocity)
+            _forceOutput.y = -Handler.Forces.TerminalVelocity - Handler.Move.FrameVelocity.y;
 
         // When jumping up we don't apply gravity for some time when the user is holding the jump button.
         // This allows for more control over jump height by pressing the button longer.
@@ -1175,7 +1175,7 @@ public class NavMotor : IRecordable
     /// <returns>The initial vertical velocity needed for the jump.</returns>
     public Fixed64 GetVerticalJumpSpeed() => JumpModule == null
         ? Fixed64.Zero
-        : FixedMath.Sqrt(2 * JumpModule.BaseJumpHeight * Handler.Move.GravityForce);
+        : FixedMath.Sqrt(2 * JumpModule.BaseJumpHeight * Handler.Forces.GravityForce);
 
     /// <summary>
     /// Determines whether the current surface is too steep for normal movement.

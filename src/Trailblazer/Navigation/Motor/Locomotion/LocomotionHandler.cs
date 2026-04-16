@@ -38,6 +38,11 @@ public class LocomotionHandler : IRecordable
     /// </summary>
     public LocomotionKind InstalledKinds { get; private set; } = LocomotionKind.All;
 
+    private LocomotionForces _forces = new();
+
+    /// <inheritdoc cref="LocomotionForces"/>
+    public LocomotionForces Forces => _forces;
+
     #region Locomotions
 
     /// <summary>
@@ -419,6 +424,9 @@ public class LocomotionHandler : IRecordable
         if (chronicler.Mode == SerializationMode.Loading)
             ConfigureInstalledKinds((LocomotionKind)installedKinds);
 
+        RecordDeep.Look(chronicler, ref _forces, "forces");
+
+        // TODO: can we prevent doing this if the aren't getter/setter properties?
         MoveLocomotion move = Move;
         PlatformLocomotion platform = Platform;
         JumpLocomotion jump = Jump;

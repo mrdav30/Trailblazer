@@ -24,7 +24,7 @@ public class FallLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateFallingAgent();
 
         Vector3d expectedVelocity = Vector3d.Down;
-        expectedVelocity.y += -agent.Motor.Handler.Move.GravityForce
+        expectedVelocity.y += -agent.Motor.Handler.Forces.GravityForce
             * TrailblazerManager.DeltaTime;
 
         agent.FrameRequest.IsRequestingJump = true;
@@ -88,7 +88,7 @@ public class FallLocomotionTests : IDisposable
             agent.Simulate();
 
             // Calculate expected velocity update from gravity impulse
-            expectedVelocity.y += -agent.Motor.Handler.Move.GravityForce * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -agent.Motor.Handler.Forces.GravityForce * TrailblazerManager.DeltaTime;
         }
 
         // Assert

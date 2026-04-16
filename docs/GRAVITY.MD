@@ -12,11 +12,67 @@ The source of truth for the behavior described here is the code in:
 
 ## 1. Where Gravity Lives
 
-Gravity is configured on `MoveLocomotion`, not on `TrailblazerManager`.
+Gravity is configured through a two-level system in `LocomotionHandler.Forces`: a simulation-wide global and an optional per-instance override.
 
-That is intentional. Each `Navigator` owns a `NavMotor`, and each `NavMotor` owns its own `LocomotionHandler`, including its own `MoveLocomotion` instance. Keeping gravity on `MoveLocomotion` allows different navigators to run under different gravity values at the same time depending on where they are, what they are standing in, or what rules their local simulation needs.
+Each `Navigator` owns a `NavMotor`, and each `NavMotor` owns its own `LocomotionHandler`, including its own `Forces` instance.
 
-Relevant defaults:
+### 1.1 Global Gravity
+
+`LocomotionHandler.Forces` exposes a single static settings instance:
+
+```csharp
+LocomotionHandler.Forces.GlobalForces  // GlobalSettings
+```
+
+It holds two fields:
+
+- `GlobalForces.GravityForce` — the gravity magnitude applied to all navigators that do not carry a per-instance override.
+- `GlobalForces.TerminalVelocity` — the terminal fall speed cap applied to all such navigators.
+
+Both are initialized to the `GlobalForces` defaults. Call `GlobalForces.Reset()` to restore them.
+
+Changing either field takes effect for every unoverridden navigator on the very next frame:
+
+```csharp
+// Shift the entire simulation to moon gravity
+LocomotionHandler.Forces.GlobalForces.GravityForce = (Fixed64)1.6d;
+
+// Restore both to defaults
+LocomotionHandler.Forces.GlobalForces.Reset();
+```
+
+### 1.2 Per-Instance Override
+
+`LocomotionHandler.Forces.GravityForce` and `LocomotionHandler.Forces.TerminalVelocity` are properties that store a per-instance override. Reading them returns that override when one is present, or the current global value otherwise.
+
+```csharp
+// Pin one navigator to heavy gravity (e.g. a gravity-well zone)
+scout.Motor.Handler.Forces.GravityForce = (Fixed64)20.0d;
+
+// Remove the override — the navigator now tracks the global again
+scout.Motor.Handler.Forces.ClearGravityForceOverride();
+```
+
+The same pattern applies to terminal velocity:
+
+```csharp
+scout.Motor.Handler.Forces.TerminalVelocity = (Fixed64)10.0d;
+scout.Motor.Handler.Forces.ClearTerminalVelocityOverride();
+```
+
+You can inspect whether an override is currently active:
+
+```csharp
+bool pinned = scout.Motor.Handler.Forces.HasGravityForceOverride;
+```
+
+### 1.3 Priority and Serialization
+
+The per-instance override always wins over the global. The global is only consulted when no override is set.
+
+Serializing a `LocomotionHandler.Forces` instance records whether an override was active at save time. On load, the override is restored if it was present, so a navigator that was pinned stays pinned. A navigator that was tracking the global continues to track whatever the global is at runtime — the saved global value is not baked into the snapshot.
+
+### 1.4 Defaults
 
 - `MoveLocomotion.DefaultGravityForce = 9.8`
 - `MoveLocomotion.DefaultTerminalVelocity = 53`
@@ -25,7 +81,7 @@ Relevant defaults:
 - `SwimLocomotion.DefaultBouyancyFactor = 1`
 - `MoveLocomotion.DefaultWaterDragFactor = 0.0625`
 
-`TrailblazerManager` provides the fixed simulation timing through:
+`TrailblazerManager` provides the fixed simulation timing:
 
 - `TrailblazerManager.DeltaTime`
 - `TrailblazerManager.InvDeltaTime`
@@ -294,9 +350,9 @@ Higher values:
 
 ### "Gravity is configured on TrailblazerManager"
 
-It is not. The fixed timestep is on `TrailblazerManager`; the gravity magnitude is on `MoveLocomotion`.
+It is not. `TrailblazerManager` owns the fixed timestep. Gravity lives on `LocomotionHandler.Forces`.
 
-This is by design rather than omission. Gravity is per-motor configuration so separate navigators can carry different gravity values concurrently instead of sharing one global gravity constant.
+The simulation-wide defaults are on `LocomotionHandler.Forces.GlobalForces`. Per-instance overrides are stored directly on each locomotion instance. When an override is set it wins; when it is not, the instance reads from `GlobalForces`. This keeps per-navigator tuning intact while letting one assignment propagate to every unoverridden navigator at once.
 
 ### "Grounded means gravity is canceled"
 

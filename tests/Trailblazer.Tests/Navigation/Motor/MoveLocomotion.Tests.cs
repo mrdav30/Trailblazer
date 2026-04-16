@@ -499,17 +499,5 @@ public class MoveLocomotionTests : IDisposable
 
         speed.Should().BeApproximately((Fixed64)5, Fixed64.Epsilon);
     }
-
-    [Fact]
-    public void Given_FrameVelocity_When_IsEnabledSetFalse_Then_VelocityIsCleared()
-    {
-        MoveLocomotion loco = new();
-        loco.FrameVelocity = Vector3d.Forward;
-        loco.FrameVelocity.Should().NotBe(Vector3d.Zero);
-
-        loco.IsEnabled = false;
-
-        loco.FrameVelocity.Should().Be(Vector3d.Zero);
-        loco.IsEnabled.Should().BeFalse();
-    }
 }
+

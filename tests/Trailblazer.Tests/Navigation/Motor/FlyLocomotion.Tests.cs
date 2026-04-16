@@ -52,7 +52,7 @@ public class FlyLocomotionTests : IDisposable
 
         Vector3d expectedVelocity = new(
             Fixed64.Zero,
-            -(agent.Motor.Handler.Move.GravityForce * TrailblazerManager.DeltaTime * Fixed64.Half),
+            -(agent.Motor.Handler.Forces.GravityForce * TrailblazerManager.DeltaTime * Fixed64.Half),
             Fixed64.Zero);
 
         agent.Motor.Handler.Move.FrameVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);

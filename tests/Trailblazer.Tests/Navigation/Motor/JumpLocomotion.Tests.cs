@@ -47,7 +47,7 @@ public class JumpLocomotionTests : IDisposable
             startingMedium: TraversalMedium.Gas);
 
         Vector3d expectedVelocity = Vector3d.Down;
-        expectedVelocity.y += -scout.Motor.Handler.Move.GravityForce * TrailblazerManager.DeltaTime;
+        expectedVelocity.y += -scout.Motor.Handler.Forces.GravityForce * TrailblazerManager.DeltaTime;
 
         // Act
         scout.FrameRequest.IsRequestingJump = true;
@@ -151,7 +151,7 @@ public class JumpLocomotionTests : IDisposable
         }
 
         // Assert
-        var expected = previousVelocity.y - (scout.Motor.Handler.Move.GravityForce * TrailblazerManager.DeltaTime * 3);
+        var expected = previousVelocity.y - (scout.Motor.Handler.Forces.GravityForce * TrailblazerManager.DeltaTime * 3);
         scout.Motor.Handler.Move.FrameVelocity.y.Should().BeGreaterThan(expected);
     }
 

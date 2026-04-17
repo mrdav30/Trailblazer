@@ -5,7 +5,6 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
 using System;
-using System.Reflection;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -242,16 +241,12 @@ public sealed class FlowFieldGuideTests : IDisposable
         guide.InitializeStaged(plan).Should().BeTrue();
 
         object[] advanceArgs = { 0 };
-        InvokePrivate<bool>(guide, "TryAdvanceStage", advanceArgs).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(guide, "TryAdvanceStage", advanceArgs).Should().BeFalse();
         advanceArgs[0].Should().Be(0);
 
         object[] guideArgs = { waypoint, null! };
-        InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", guideArgs).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", guideArgs).Should().BeFalse();
         guideArgs[1].Should().BeNull();
-
-        object[] waypointArgs = { Vector3d.Zero, waypoint, 0, null! };
-        InvokePrivate<bool>(guide, "TryGetWaypointStageMovementDirection", waypointArgs).Should().BeFalse();
-        waypointArgs[3].Should().Be(Vector3d.Zero);
     }
 
     [Fact]
@@ -272,15 +267,15 @@ public sealed class FlowFieldGuideTests : IDisposable
             .BeTrue();
 
         object[] firstGuideArgs = { step, null! };
-        InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", firstGuideArgs).Should().BeTrue();
+        ReflectionUtility.InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", firstGuideArgs).Should().BeTrue();
         IGuide cachedGuide = (IGuide)firstGuideArgs[1];
 
         object[] secondGuideArgs = { step, null! };
-        InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", secondGuideArgs).Should().BeTrue();
+        ReflectionUtility.InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", secondGuideArgs).Should().BeTrue();
         secondGuideArgs[1].Should().BeSameAs(cachedGuide);
 
         object[] segmentArgs = { new Vector3d(2, 0, 0), step, 1, null! };
-        InvokePrivate<bool>(guide, "TryGetSegmentStageMovementDirection", segmentArgs).Should().BeTrue();
+        ReflectionUtility.InvokePrivate<bool>(guide, "TryGetSegmentStageMovementDirection", segmentArgs).Should().BeTrue();
         segmentArgs[2].Should().Be(0);
         segmentArgs[3].Should().Be(Vector3d.Zero);
 
@@ -315,14 +310,6 @@ public sealed class FlowFieldGuideTests : IDisposable
             data[0, i, 0] = true;
 
         PathTestFactory.RegisterFromData(chartName, data, minBounds);
-    }
-
-    private static T InvokePrivate<T>(object instance, string methodName, object[] arguments)
-    {
-        MethodInfo method = instance.GetType().GetMethod(
-            methodName,
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return (T)method.Invoke(instance, arguments)!;
     }
 
     private sealed class UnsupportedRequest : IPathRequest

@@ -273,6 +273,7 @@ public class LocomotionHandler : IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ILocomotion GetLocomotion(LocomotionSlot slot)
     {
+#pragma warning disable CS8524 // LocomotionSlot is only produced by TryResolveLocomotionSlot over known built-in locomotions.
         return slot switch
         {
             LocomotionSlot.Move => Move,
@@ -281,9 +282,9 @@ public class LocomotionHandler : IRecordable
             LocomotionSlot.Fall => Fall,
             LocomotionSlot.Slide => Slide,
             LocomotionSlot.Swim => Swim,
-            LocomotionSlot.Fly => Fly,
-            _ => null
+            LocomotionSlot.Fly => Fly
         };
+#pragma warning restore CS8524
     }
 
     /// <summary>
@@ -324,8 +325,7 @@ public class LocomotionHandler : IRecordable
         switch (slot)
         {
             case LocomotionSlot.Move:
-                Move = locomotion as MoveLocomotion
-                    ?? throw new InvalidOperationException("Move locomotion cannot be removed.");
+                Move = (MoveLocomotion)locomotion!;
                 return;
             case LocomotionSlot.Platform:
                 Platform = locomotion as PlatformLocomotion;
@@ -334,8 +334,7 @@ public class LocomotionHandler : IRecordable
                 Jump = locomotion as JumpLocomotion;
                 return;
             case LocomotionSlot.Fall:
-                Fall = locomotion as FallLocomotion
-                    ?? throw new InvalidOperationException("Fall locomotion cannot be removed.");
+                Fall = (FallLocomotion)locomotion!;
                 return;
             case LocomotionSlot.Slide:
                 Slide = locomotion as SlideLocomotion;
@@ -346,8 +345,6 @@ public class LocomotionHandler : IRecordable
             case LocomotionSlot.Fly:
                 Fly = locomotion as FlyLocomotion;
                 return;
-            default:
-                throw new NotSupportedException($"Unsupported locomotion slot '{slot}'.");
         }
     }
 

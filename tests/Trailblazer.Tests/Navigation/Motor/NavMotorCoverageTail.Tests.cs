@@ -124,7 +124,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         var platformAgent = MockMotorAgentTestFactory.CreatePlatformAgent(motionTransfer: MotionTransfer.PermaTransfer);
         platformAgent.Motor.Handler.Platform!.FramePlatformVelocity = new Vector3d(2, 3, 0);
 
-        InvokePrivate<Vector3d>(platformAgent.Motor, "ApplyPlatformTransferVelocity", Vector3d.Zero)
+        ReflectionUtility.InvokePrivate<Vector3d>(platformAgent.Motor, "ApplyPlatformTransferVelocity", Vector3d.Zero)
             .Should().Be(new Vector3d(2, 0, 0));
 
         var groundedAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
@@ -166,7 +166,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             Rate = (TrekRate)999
         };
 
-        InvokePrivate<Vector3d>(flyingAgent.Motor, "GetFlightVelocity", flightRequest)
+        ReflectionUtility.InvokePrivate<Vector3d>(flyingAgent.Motor, "GetFlightVelocity", flightRequest)
             .Should().Be(Vector3d.Zero);
 
         var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent();
@@ -410,6 +410,81 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     }
 
     [Fact]
+    public void PrivateForceHelpers_ShouldRespectGroundFriction_AndAirControlGuards()
+    {
+        var groundedAgent = MockMotorAgentTestFactory.CreatePlatformAgent(surfaceFriction: (Fixed64)0.25f);
+        ReflectionUtility.SetPrivateField(groundedAgent.Motor, "_forceOutput", new Vector3d(4, 0, 0));
+
+        ReflectionUtility.InvokePrivate<bool>(groundedAgent.Motor, "TryApplyStationaryGroundFriction", Vector3d.Zero)
+            .Should().BeTrue();
+        ReflectionUtility.GetPrivateField<Vector3d>(groundedAgent.Motor, "_forceOutput").Should().Be(new Vector3d(3, 0, 0));
+
+        var airborneAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        airborneAgent.Motor.Handler.IsInControl = false;
+        ReflectionUtility.SetPrivateField(airborneAgent.Motor, "_forceOutput", Vector3d.Zero);
+
+        ReflectionUtility.InvokePrivate<object>(airborneAgent.Motor, "ApplyDesiredVelocity", Vector3d.Right);
+
+        ReflectionUtility.GetPrivateField<Vector3d>(airborneAgent.Motor, "_forceOutput").Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void PrivateStateHandlers_ShouldRaiseDrowning_AndClearFallWhileFlying()
+    {
+        var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
+        swimmingAgent.Motor.Handler.Swim!.CanDrown = true;
+        swimmingAgent.Motor.Handler.Swim.HoldBreathTime = Fixed64.Zero;
+
+        Fixed64 drowningTime = Fixed64.Zero;
+        swimmingAgent.Motor.Events.OnDrowning += time => drowningTime = time;
+
+        ReflectionUtility.InvokePrivate<object>(swimmingAgent.Motor, "HandleSwimState", new Vector3d(0, -1, 0));
+
+        drowningTime.Should().BeGreaterThan(Fixed64.Zero);
+
+        var flyingAgent = MockMotorAgentTestFactory.CreateFallingAgent();
+        flyingAgent.Motor.Handler.Fly!.IsFlying = true;
+        flyingAgent.Motor.Handler.Fall.IsFalling = true;
+
+        ReflectionUtility.InvokePrivate<object>(flyingAgent.Motor, "HandleFlightState");
+
+        flyingAgent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PrivateJumpAndFlightHelpers_ShouldRejectWaterJumpWithoutBreach_AndPreserveHeadroom()
+    {
+        var waterAgent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
+        waterAgent.Motor.Handler.Swim!.CanBreachWater = false;
+
+        ReflectionUtility.InvokePrivate<bool>(waterAgent.Motor, "CanApplyJumpForce", true).Should().BeFalse();
+
+        var ceilingSafeAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        ceilingSafeAgent.Motor.Handler.Move.FrameVelocity = new Vector3d(0, 4, 0);
+        ceilingSafeAgent.Motor.Handler.Jump!.IsJumping = true;
+        ceilingSafeAgent.Motor.Handler.Jump.IsHoldingJump = true;
+        ceilingSafeAgent.Motor.UpdateTraversal(new TrekCondition
+        {
+            Medium = TraversalMedium.Gas,
+            CeilingLevel = (Fixed64)5
+        });
+
+        ReflectionUtility.InvokePrivate<object>(ceilingSafeAgent.Motor, "CheckJumpStatus", new Vector3d(0, 2, 0));
+
+        ceilingSafeAgent.Motor.Handler.Move.FrameVelocity.y.Should().Be((Fixed64)4);
+        ceilingSafeAgent.Motor.Handler.Jump.IsJumping.Should().BeTrue();
+
+        TrekRequest request = new()
+        {
+            IsRequestingFlight = true
+        };
+
+        var unknownMediumAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
+        ReflectionUtility.InvokePrivate<object>(unknownMediumAgent.Motor, "UpdateFlightState", request);
+        unknownMediumAgent.Motor.Handler.Fly!.IsFlying.Should().BeFalse();
+    }
+
+    [Fact]
     public void JsonRoundTrip_ShouldHydrateMissingCurrentState_ForUninitializedMotors()
     {
         var source = CreateUninitializedMotor();
@@ -445,13 +520,5 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             Type.EmptyTypes,
             modifiers: null)!;
         return (NavMotor)ctor.Invoke(null);
-    }
-
-    private static T InvokePrivate<T>(object instance, string methodName, params object[] arguments)
-    {
-        MethodInfo method = instance.GetType().GetMethod(
-            methodName,
-            BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return (T)method.Invoke(instance, arguments)!;
     }
 }

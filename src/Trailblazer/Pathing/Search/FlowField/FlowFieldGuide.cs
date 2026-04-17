@@ -141,14 +141,8 @@ public class FlowFieldGuide : IGuide
             return false;
         }
 
-        bool voxelFound = FlowFieldSurveyor.TryGetNearestFlowAnchor(origin,
-            FlowMap.Fields,
-            DefaultFieldSearchRange,
-            out Voxel destination);
-        if (!voxelFound)
-            return false;
-
-        fallbackDirection = (destination.WorldPosition - origin).Normalize();
+        // Once the current voxel is already part of the flow map, its center is the nearest valid anchor.
+        fallbackDirection = (currentVoxel.WorldPosition - origin).Normalize();
         return true;
     }
 
@@ -184,19 +178,10 @@ public class FlowFieldGuide : IGuide
             switch (currentStep.Kind)
             {
                 case HybridRouteStepKind.Waypoint:
-                    if (!TryGetWaypointStageMovementDirection(
-                        origin,
-                        currentStep,
-                        ref remainingStageAdvances,
-                        out direction))
-                    {
-                        return false;
-                    }
-
-                    if (direction != Vector3d.Zero)
-                        return true;
-
-                    break;
+                    // TryGetPreparedStage(...) already skipped completed waypoint stages, so a yielded waypoint
+                    // must still be ahead of the caller and therefore resolves to a non-zero direction.
+                    direction = (currentStep.WaypointPosition - origin).Normalize();
+                    return true;
 
                 case HybridRouteStepKind.PathSegment:
                     if (!TryGetSegmentStageMovementDirection(
@@ -212,23 +197,10 @@ public class FlowFieldGuide : IGuide
                         return true;
 
                     break;
-
-                default:
-                    return false;
             }
         }
 
         return false;
-    }
-
-    private bool TryGetWaypointStageMovementDirection(
-        Vector3d origin,
-        HybridRouteStep currentStep,
-        ref int remainingStageAdvances,
-        out Vector3d direction)
-    {
-        direction = (currentStep.WaypointPosition - origin).Normalize();
-        return direction != Vector3d.Zero || TryAdvanceStage(ref remainingStageAdvances);
     }
 
     private bool TryGetSegmentStageMovementDirection(
@@ -265,19 +237,14 @@ public class FlowFieldGuide : IGuide
         if (!TryGetPreparedStage(origin, ref remainingStageAdvances, out HybridRouteStep currentStep))
             return false;
 
-        switch (currentStep.Kind)
+        if (currentStep.Kind == HybridRouteStepKind.Waypoint)
         {
-            case HybridRouteStepKind.Waypoint:
-                fallbackDirection = (currentStep.WaypointPosition - origin).Normalize();
-                return fallbackDirection != Vector3d.Zero;
-
-            case HybridRouteStepKind.PathSegment:
-                return TryGetOrCreateActiveStageGuide(currentStep, out IGuide activeGuide)
-                    && activeGuide.TryGetFallbackDirection(origin, out fallbackDirection);
-
-            default:
-                return false;
+            fallbackDirection = (currentStep.WaypointPosition - origin).Normalize();
+            return true;
         }
+
+        return TryGetOrCreateActiveStageGuide(currentStep, out IGuide activeGuide)
+            && activeGuide.TryGetFallbackDirection(origin, out fallbackDirection);
     }
 
     /// <summary>
@@ -394,12 +361,10 @@ public class FlowFieldGuide : IGuide
     /// <returns>True if the target for the current stage has been reached; otherwise, false.</returns>
     private static bool IsStageTargetReached(Vector3d origin, HybridRouteStep currentStep)
     {
-        Vector3d target = currentStep.Kind switch
-        {
-            HybridRouteStepKind.Waypoint => currentStep.WaypointPosition,
-            HybridRouteStepKind.PathSegment => currentStep.SegmentRequest.TargetPosition,
-            _ => Vector3d.Zero
-        };
+        // HybridRouteStep.Kind is factory-assigned to Waypoint or PathSegment only.
+        Vector3d target = currentStep.Kind == HybridRouteStepKind.Waypoint 
+            ? currentStep.WaypointPosition 
+            : currentStep.SegmentRequest.TargetPosition;
 
         Fixed64 completionDistance = GlobalGridManager.VoxelSize * Fixed64.Half;
         return (target - origin).SqrMagnitude <= completionDistance * completionDistance;

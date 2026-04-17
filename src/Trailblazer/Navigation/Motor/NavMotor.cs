@@ -1016,12 +1016,21 @@ public class NavMotor : IRecordable
 
         desiredVelocity *= Fixed64.One - CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
 
+        // Flat or host-defined "solid but no sampled normal" surfaces should preserve the raw ground vector.
+        // Sliding also already produces a slope-aware direction, so re-projecting it here distorts the result.
+        if (CurrentState.SurfaceNormal == Vector3d.Zero
+            || CurrentState.SlopeAngle == Fixed64.Zero
+            || SlideModule?.IsSliding == true)
+        {
+            return desiredVelocity;
+        }
+
         Vector3d sideways = Vector3d.Cross(Vector3d.Up, desiredVelocity);
         Vector3d adjustedVelocity = Vector3d.Cross(sideways, CurrentState.SurfaceNormal).Normal * desiredVelocity.Magnitude;
         if (Fixed64.Sign(adjustedVelocity.y) != Fixed64.Sign(FrameSlopeAngle))
             adjustedVelocity.y *= -1;
 
-        return desiredVelocity;
+        return adjustedVelocity;
     }
 
     private Fixed64 GetFlightHorizontalSpeed(Vector3d desiredMovementDirection, TrekRate rate)

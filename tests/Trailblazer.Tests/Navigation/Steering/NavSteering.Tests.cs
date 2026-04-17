@@ -1099,6 +1099,32 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void ApplyPathRequest_ShouldExposeGroupIndexAndFireMoveRequestEvent()
+    {
+        bool[,,] data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("ApplyPathRequestEvents", data, Vector3d.Zero);
+
+        var steer = new TestableNavSteering();
+        bool fired = false;
+        steer.Events.OnMoveRequestApplied += () => fired = true;
+
+        AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest request);
+        steer.ApplyPathRequest(request, groupId: 3);
+
+        fired.Should().BeTrue();
+        steer.GetGroupIndex().Should().Be(0);
+
+        PathManager.UnloadChart("ApplyPathRequestEvents");
+    }
+
+    [Fact]
     public void PrewarmMovementGroup_ShouldThrowForNullOwner()
     {
         var steer = new NavSteering(Fixed64.One);
@@ -1139,6 +1165,169 @@ public class NavSteeringTests : IDisposable
             .Should().BeTrue();
 
         PathManager.UnloadChart("PrewarmMovementGroup");
+    }
+
+    [Fact]
+    public void PrewarmMovementGroup_ShouldNoOp_WhenSessionIsNotActive()
+    {
+        var owner = new MockSteerAgent(Vector3d.Zero);
+        var steer = new TestableNavSteering();
+        steer.OnInitialize(owner.Radius);
+
+        steer.PrewarmMovementGroup(owner);
+
+        MovementGroupCoordinator.IsNeighbor(
+                new MovementGroupSession { GroupId = 77 },
+                owner.GlobalId,
+                Vector3d.Zero,
+                TrailblazerManager.FrameCount)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetHeading_ShouldRaiseInvalidPath_WhenVolumeFallbackValidationFails()
+    {
+        AddOpen(Vector3d.Zero);
+        AddOpen(new Vector3d(0, 1, 0));
+        AddOpen(new Vector3d(1, 1, 0));
+        AddOpen(new Vector3d(2, 1, 0));
+        AddOpen(new Vector3d(2, 0, 0));
+        AddObstacle(new Vector3d(1, 0, 0));
+
+        var steer = new SequencedPathValidationNavSteering(true, false);
+        var agent = new MockSteerAgent(Vector3d.Zero);
+        steer.OnInitialize(agent.Radius);
+
+        VolumePathRequest.TryCreate(
+            agent.Position,
+            new Vector3d(2, 0, 0),
+            Fixed64.One,
+            out VolumePathRequest request).Should().BeTrue();
+        steer.ApplyPathRequest(request);
+
+        bool invalid = false;
+        steer.Events.OnInvalidPath += () => invalid = true;
+
+        steer.GetHeading(agent).Should().Be(Vector3d.Zero);
+        invalid.Should().BeTrue();
+        steer.ShouldMove.Should().BeFalse();
+        steer.IsAtDestination.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GetHeading_ShouldRaiseStartTraversalEvent_WhenIdle()
+    {
+        var steer = new NavSteering(Fixed64.One);
+        var agent = new MockSteerAgent(Vector3d.Zero);
+
+        Vector3d startedDirection = Vector3d.Zero;
+        steer.Events.OnStartTraversal += direction => startedDirection = direction;
+
+        steer.GetHeading(agent).Should().Be(Vector3d.Zero);
+        startedDirection.Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void SetDeceleration_ShouldUseBrakingPower_WhenAccelerationIsZero()
+    {
+        var steer = new TestableNavSteering();
+        steer.OnInitialize(Fixed64.Half);
+        steer.ForceHeadingState(new Vector3d(1, 0, 0), distanceToTarget: (Fixed64)0.1f);
+
+        steer.InvokeSetDeceleration(Vector3d.Zero, Fixed64.One);
+
+        steer.TargetDirection.Magnitude.Should().BeLessThan(Fixed64.One);
+    }
+
+    [Fact]
+    public void Arrive_ShouldRaiseEvent_EvenWhenAlreadyIdle()
+    {
+        var steer = new NavSteering(Fixed64.One);
+        bool arrived = false;
+        steer.Events.OnArrive += () => arrived = true;
+
+        steer.Arrive();
+
+        arrived.Should().BeTrue();
+        steer.IsAtDestination.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldUseRightSideDodge_WhenNeighborIsBehind()
+    {
+        var steer = new NavSteering();
+        var agent = new MockSteerAgent(new Vector3d(0, 0, 0))
+        {
+            Velocity = new Vector3d(1, 0, 0),
+            Speed = Fixed64.One
+        };
+        var neighbor = new MockSteerAgent(new Vector3d(-1, 0, 0))
+        {
+            Velocity = Vector3d.Zero
+        };
+
+        GlobalGridManager.TryGetGrid(neighbor.Position, out var grid);
+        grid.TryAddVoxelOccupant(neighbor);
+
+        Vector3d force = steer.ComputeCombinedSteering(
+            agent.Position,
+            agent.Velocity,
+            agent.Speed,
+            agent.Size,
+            agent.GlobalId);
+
+        force.z.Should().BeLessThan(Fixed64.Zero);
+
+        grid.TryRemoveVoxelOccupant(neighbor);
+    }
+
+    [Fact]
+    public void RoundTrip_ShouldScheduleRepath_WhenGuideRebuildFails()
+    {
+        var data = new bool[1, 3, 2]
+        {
+            {
+                { true, true },
+                { false, true },
+                { true, true }
+            }
+        };
+
+        var start = Vector3d.Zero;
+        var end = new Vector3d(2, 0, 0);
+        PathTestFactory.RegisterFromData("RecordDataGuideFailure", data, start);
+
+        var source = new NavSteering();
+        var agent = new MockSteerAgent(start);
+        source.OnInitialize(agent.Radius);
+        AStarPathRequest.TryCreate(start, end, out AStarPathRequest request);
+        source.ApplyPathRequest(request);
+        TrailblazerManager.Simulate();
+        source.GetHeading(agent);
+        source.TrailGuide.Should().NotBeNull();
+
+        string payload = JsonRecordSerializer.Serialize(source, writeIndented: true);
+
+        PathManager.UnloadChart("RecordDataGuideFailure");
+        bool[,,] blocked = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { false },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("RecordDataGuideFailure", blocked, start);
+
+        var target = new NavSteering();
+        target.OnInitialize(agent.Radius);
+        JsonRecordSerializer.Populate(target, payload);
+
+        target.ShouldMove.Should().BeTrue();
+        target.CurrentRequest.Should().NotBeNull();
+        target.TrailGuide.Should().BeNull();
+
+        PathManager.UnloadChart("RecordDataGuideFailure");
     }
 
     private static void AddObstacle(Vector3d position)
@@ -1186,6 +1375,20 @@ public class NavSteeringTests : IDisposable
             ShouldMove = true;
             IsAtDestination = false;
         }
+
+        public int GetGroupIndex() => GroupIndex;
+
+        public void ForceHeadingState(Vector3d targetDirection, Fixed64 distanceToTarget)
+        {
+            TargetDirection = targetDirection;
+            LastTargetDirection = targetDirection;
+            ShouldMove = true;
+            IsAtDestination = false;
+            HasLineOfSightPath = false;
+            _distanceToTarget = distanceToTarget;
+        }
+
+        public void InvokeSetDeceleration(Vector3d acceleration, Fixed64 speed) => SetDeceleration(acceleration, speed);
     }
 
     private sealed class FallbackNavSteering : NavSteering
@@ -1200,6 +1403,25 @@ public class NavSteeringTests : IDisposable
         protected override bool ValidateMovementPath(Vector3d origin) => true;
 
         protected override Vector3d FindTargetDirection(Vector3d position) => _movementDirection;
+    }
+
+    private sealed class SequencedPathValidationNavSteering : NavSteering
+    {
+        private readonly bool[] _results;
+        private int _index;
+
+        public SequencedPathValidationNavSteering(params bool[] results)
+        {
+            _results = results;
+        }
+
+        protected override bool ValidateMovementPath(Vector3d origin)
+        {
+            if (_index >= _results.Length)
+                return _results[^1];
+
+            return _results[_index++];
+        }
     }
 
     private sealed class StubGuide : IGuide

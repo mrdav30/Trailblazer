@@ -46,6 +46,26 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     }
 
     [Fact]
+    public void TryTraversal_ShouldReturnFalse_WhenMotorHasNotBeenInitialized()
+    {
+        var motor = CreateUninitializedMotor();
+        TrekRequest request = new()
+        {
+            Origin = Vector3d.Zero,
+            FootPosition = Vector3d.Zero,
+            Rotation = FixedQuaternion.Identity,
+            Direction = Vector3d.Right,
+            Rate = TrekRate.Moderate
+        };
+
+        motor.TryTraversal(request, out Vector3d velocityDelta, out Vector3d positionDelta, out FixedQuaternion rotationDelta)
+            .Should().BeFalse();
+        velocityDelta.Should().Be(Vector3d.Zero);
+        positionDelta.Should().Be(Vector3d.Zero);
+        rotationDelta.Should().Be(FixedQuaternion.Identity);
+    }
+
+    [Fact]
     public void StateAccessors_ShouldTrackPreviousMediumAndTransientFlags()
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
@@ -75,6 +95,27 @@ public sealed class NavMotorCoverageTailTests : IDisposable
 
         agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
         agent.Motor.WasInLiquid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void StateAccessors_ShouldHandleMissingLocomotions_AndPreviousNonMatchingMedia()
+    {
+        var moveAndFallOnly = MockMotorAgentTestFactory.CreateMockAgent(
+            startingMedium: TraversalMedium.Gas,
+            profile: LocomotionProfile.CreateMoveAndFallOnly());
+
+        moveAndFallOnly.Motor.IsJumping.Should().BeFalse();
+        moveAndFallOnly.Motor.IsFalling.Should().BeFalse();
+
+        moveAndFallOnly.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        moveAndFallOnly.Motor.WasOnSolid.Should().BeFalse();
+        moveAndFallOnly.Motor.WasInLiquid.Should().BeFalse();
+        moveAndFallOnly.Motor.StateChanged.Should().BeFalse();
+
+        var airborneAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        airborneAgent.Motor.Handler.Jump!.IsJumping = true;
+        airborneAgent.Motor.Handler.Fall.IsFalling = true;
+        airborneAgent.Motor.InLimbo.Should().BeFalse();
     }
 
     [Fact]
@@ -110,6 +151,48 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     }
 
     [Fact]
+    public void SpeedAndTraversalHelpers_ShouldCoverRemainingFlightLiquidAndTraversalBranches()
+    {
+        var flyingAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        flyingAgent.Motor.Handler.Fly!.IsFlying = true;
+        flyingAgent.Motor.Handler.Fly.CanFly = true;
+        flyingAgent.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)5;
+        flyingAgent.Motor.Handler.Move.MaxFastSpeed = (Fixed64)5;
+
+        TrekRequest flightRequest = new()
+        {
+            Rotation = FixedQuaternion.Identity,
+            Direction = Vector3d.Right,
+            Rate = (TrekRate)999
+        };
+
+        InvokePrivate<Vector3d>(flyingAgent.Motor, "GetFlightVelocity", flightRequest)
+            .Should().Be(Vector3d.Zero);
+
+        var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent();
+        swimmingAgent.Motor.Handler.Swim!.MaxSwimSidewaysSpeed = Fixed64.One;
+        swimmingAgent.Motor.Handler.Swim.MaxSwimSpeed = Fixed64.Zero;
+        swimmingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Moderate)
+            .Should().Be(Fixed64.Zero);
+
+        var fallbackProfileAgent = MockMotorAgentTestFactory.CreateMockAgent(
+            startingMedium: TraversalMedium.Gas,
+            profile: LocomotionProfile.CreateMoveAndFallOnly());
+        fallbackProfileAgent.Motor.SetLocomotionProfile(LocomotionProfile.CreateMoveAndFallOnly());
+
+        var staleTraversalAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        staleTraversalAgent.FrameRequest.Origin = staleTraversalAgent.Position;
+        staleTraversalAgent.FrameRequest.FootPosition = staleTraversalAgent.GetFootPosition();
+        staleTraversalAgent.FrameRequest.Rotation = staleTraversalAgent.Rotation;
+        staleTraversalAgent.Motor.TryTraversal(staleTraversalAgent.FrameRequest, out _, out _, out _).Should().BeTrue();
+        TrailblazerManager.Simulate();
+
+        staleTraversalAgent.Motor.Invoking(m => m.TryTraversal(staleTraversalAgent.FrameRequest, out _, out _, out _))
+            .Should().Throw<InvalidOperationException>()
+            .WithMessage("*never finalized*");
+    }
+
+    [Fact]
     public void FinalizeTraversal_ShouldClearFallingWithoutLandingEvent_WhenGasExitsIntoLiquid()
     {
         var agent = MockMotorAgentTestFactory.CreateFallingAgent(surfaceLevel: Fixed64.Zero);
@@ -132,6 +215,32 @@ public sealed class NavMotorCoverageTailTests : IDisposable
 
         landed.Should().BeFalse();
         agent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FinalizeTraversal_ShouldFireWaterBreachStop_WhenJumpingIntoLiquid()
+    {
+        var agent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        bool stoppedWaterBreach = false;
+        agent.Motor.Events.OnStopWaterBreach += () => stoppedWaterBreach = true;
+
+        OpenTraversal(agent);
+        agent.Motor.Handler.Jump!.IsJumping = true;
+        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+
+        agent.Motor.FinalizeTraversal(
+            agent.Position,
+            agent.LastPosition,
+            agent.Rotation,
+            new TrekCondition
+            {
+                Medium = TraversalMedium.Liquid,
+                SurfaceLevel = Fixed64.Zero,
+                CeilingLevel = Fixed64.MAX_VALUE
+            },
+            newFootPosition: null);
+
+        stoppedWaterBreach.Should().BeTrue();
     }
 
     [Fact]
@@ -162,6 +271,50 @@ public sealed class NavMotorCoverageTailTests : IDisposable
 
         agent.Motor.Handler.Move.FrameVelocity.x.Should().Be(-(Fixed64)2);
         agent.Motor.Handler.Platform.HoldPlatform.Should().BeNull();
+    }
+
+    [Fact]
+    public void FinalizeTraversal_ShouldHoldNewPlatform_WhenLandingOnDifferentPlatform()
+    {
+        Fixed4x4 priorPlatform = MockMotorAgentTestFactory.CreatePlatformTransform();
+        Fixed4x4 newPlatform = MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(4, 0, 0));
+        var agent = MockMotorAgentTestFactory.CreateFallingAgent(platformMatrix: priorPlatform);
+
+        OpenTraversal(agent);
+
+        agent.Motor.FinalizeTraversal(
+            agent.Position,
+            agent.LastPosition,
+            agent.Rotation,
+            new TrekCondition
+            {
+                Medium = TraversalMedium.Solid,
+                SurfaceLevel = Fixed64.Zero,
+                CeilingLevel = Fixed64.MAX_VALUE,
+                GroundState = new GroundCondition
+                {
+                    Platform = new PlatformSnapshot(2, newPlatform),
+                    MotionTransferState = MotionTransfer.InitTransfer
+                }
+            },
+            agent.GetFootPosition());
+
+        agent.Motor.Handler.Platform!.HoldPlatform.Should().Be(new PlatformSnapshot(2, newPlatform));
+    }
+
+    [Fact]
+    public void FinalizeTraversal_ShouldIgnoreCall_WhenMotorWasNeverInitialized()
+    {
+        var motor = CreateUninitializedMotor();
+
+        motor.FinalizeTraversal(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            FixedQuaternion.Identity,
+            new TrekCondition { Medium = TraversalMedium.Gas },
+            newFootPosition: null);
+
+        motor.TraversalInProgress.Should().BeFalse();
     }
 
     [Fact]

@@ -42,6 +42,11 @@ public class TransitState
     /// </summary>
     public TrekCondition? PreviousState { get; private set; }
 
+    /// <summary>
+    /// The previous traversal medium, treating a missing previous sample as <see cref="TraversalMedium.Unknown"/>.
+    /// </summary>
+    public TraversalMedium PreviousMedium => PreviousState?.Medium ?? TraversalMedium.Unknown;
+
     #endregion
 
     #region Constructors

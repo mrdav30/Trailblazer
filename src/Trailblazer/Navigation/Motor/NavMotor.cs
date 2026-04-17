@@ -80,9 +80,9 @@ public class NavMotor : IRecordable
     /// <summary>
     /// Indicates if the traversal medium has changed since the last frame.
     /// </summary>
-    public bool StateChanged => CurrentState.Medium != CurrentState.PreviousState?.Medium
+    public bool StateChanged => CurrentState.Medium != CurrentState.PreviousMedium
         && CurrentState.Medium != TraversalMedium.Unknown
-        && CurrentState.PreviousState?.Medium != TraversalMedium.Unknown;
+        && CurrentState.PreviousMedium != TraversalMedium.Unknown;
 
     /// <summary>
     /// Determines if the navigator is currently on the ground.
@@ -92,7 +92,7 @@ public class NavMotor : IRecordable
     /// <summary>
     /// Determines if the navigator was on the ground in the previous frame.
     /// </summary>
-    public bool WasOnSolid => CurrentState.PreviousState?.Medium == TraversalMedium.Solid;
+    public bool WasOnSolid => CurrentState.PreviousMedium == TraversalMedium.Solid;
 
     /// <summary>
     /// Determines if the navigator is currently in the air.
@@ -102,7 +102,7 @@ public class NavMotor : IRecordable
     /// <summary>
     /// Determines if the navigator was in the air in the previous frame.
     /// </summary>
-    public bool WasInGas => CurrentState.PreviousState?.Medium == TraversalMedium.Gas;
+    public bool WasInGas => CurrentState.PreviousMedium == TraversalMedium.Gas;
 
     /// <summary>
     /// Determines if the navigator is currently in water.
@@ -112,7 +112,7 @@ public class NavMotor : IRecordable
     /// <summary>
     /// Determines if the navigator was in water in the previous frame.
     /// </summary>
-    public bool WasInLiquid => CurrentState.PreviousState?.Medium == TraversalMedium.Liquid;
+    public bool WasInLiquid => CurrentState.PreviousMedium == TraversalMedium.Liquid;
 
     /// <summary>
     /// Determines if the navigator is currently under active flight control.

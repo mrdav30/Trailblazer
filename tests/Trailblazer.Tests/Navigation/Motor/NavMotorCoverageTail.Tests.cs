@@ -70,6 +70,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
 
+        agent.Motor.InLimbo.Should().BeTrue();
         agent.Motor.WasOnSolid.Should().BeFalse();
         agent.Motor.WasInLiquid.Should().BeFalse();
         agent.Motor.IsJumping.Should().BeFalse();
@@ -588,6 +589,163 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             TrekRate.Fast);
 
         horizontalSpeed.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void FlightAndAccelerationHelpers_ShouldCoverAscendAndStationaryBranches()
+    {
+        var flyingAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        flyingAgent.Motor.Handler.Fly!.IsFlying = true;
+        flyingAgent.Motor.Handler.Fly.CanFly = true;
+        flyingAgent.Motor.Handler.Fly.MaxAscendSpeed = (Fixed64)8;
+        flyingAgent.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)6;
+        flyingAgent.Motor.Handler.Move.MaxSlowSpeed = (Fixed64)3;
+        flyingAgent.Motor.Handler.Move.MaxFastSpeed = (Fixed64)6;
+
+        TrekRequest upwardRequest = new()
+        {
+            Rotation = FixedQuaternion.Identity,
+            Direction = Vector3d.Up,
+            Rate = TrekRate.Slow
+        };
+
+        ReflectionUtility.InvokePrivate<Vector3d>(flyingAgent.Motor, "GetFlightVelocity", upwardRequest).y
+            .Should().Be((Fixed64)4);
+
+        ReflectionUtility.InvokePrivate<Fixed64>(
+            flyingAgent.Motor,
+            "GetFlightHorizontalSpeed",
+            Vector3d.Right,
+            TrekRate.Stationary).Should().Be(Fixed64.Zero);
+
+        var airborneAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        airborneAgent.Motor.GetMaxAcceleration().Should().Be(airborneAgent.Motor.Handler.Move.MaxAirAcceleration);
+    }
+
+    [Fact]
+    public void FlightAndAccelerationHelpers_ShouldCoverDisabledHorizontalSpeed_AndFallingAcceleration()
+    {
+        var disabledFlightAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        disabledFlightAgent.Motor.Handler.Fly!.CanFly = false;
+
+        ReflectionUtility.InvokePrivate<Fixed64>(
+            disabledFlightAgent.Motor,
+            "GetFlightHorizontalSpeed",
+            Vector3d.Right,
+            TrekRate.Fast).Should().Be(Fixed64.Zero);
+
+        var fallingAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        fallingAgent.Motor.Handler.Fall.IsFalling = true;
+        fallingAgent.Motor.GetMaxAcceleration().Should().Be(fallingAgent.Motor.Handler.Move.MaxAirAcceleration);
+    }
+
+    [Fact]
+    public void JumpAndStateHelpers_ShouldCoverAffordabilityGuard_AndSteepJumpDirection()
+    {
+        var jumpAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        jumpAgent.Motor.Events.CanAffordJump = () => false;
+
+        ReflectionUtility.InvokePrivate<bool>(jumpAgent.Motor, "CanApplyJumpForce", true).Should().BeFalse();
+
+        Fixed4x4 steepPlatform = MockMotorAgentTestFactory.CreatePlatformTransform(
+            platformRotation: FixedQuaternion.FromEulerAngles((Fixed64)1.25f, Fixed64.Zero, Fixed64.Zero));
+        var steepAgent = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: steepPlatform);
+        steepAgent.Motor.Handler.Move.SlopeLimit = Fixed64.One;
+        steepAgent.Motor.Handler.Jump!.SteepPerpendicularJumpAmount = Fixed64.One;
+        ReflectionUtility.SetPrivateField(steepAgent.Motor, "<FrameSlopeAngle>k__BackingField", (Fixed64)2);
+
+        ReflectionUtility.InvokePrivate<object>(steepAgent.Motor, "EnsureJumpDirectionInitialized");
+
+        steepAgent.Motor.Handler.Jump.FrameJumpDirection.Should().Be(
+            Vector3d.Slerp(Vector3d.Up, steepAgent.Motor.CurrentState.SurfaceNormal, Fixed64.One));
+    }
+
+    [Fact]
+    public void JumpAndFlightHelpers_ShouldCoverIdleJumpRejection_AndLiquidFlightRejection()
+    {
+        var jumpAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+        ReflectionUtility.InvokePrivate<bool>(jumpAgent.Motor, "CanApplyJumpForce", false).Should().BeFalse();
+
+        var liquidAgent = MockMotorAgentTestFactory.CreateWaterAgent();
+        liquidAgent.Motor.Handler.Fly!.IsFlying = true;
+
+        ReflectionUtility.InvokePrivate<object>(liquidAgent.Motor, "UpdateFlightState", new TrekRequest
+        {
+            IsRequestingFlight = true
+        });
+
+        liquidAgent.Motor.Handler.Fly.IsFlying.Should().BeFalse();
+    }
+
+    [Fact]
+    public void EnvironmentalAndPlatformHelpers_ShouldCoverUnknownMediumNoOp_AndPlatformRelease()
+    {
+        var unknownAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
+        ReflectionUtility.SetPrivateField(unknownAgent.Motor, "_forceOutput", Vector3d.Right);
+
+        ReflectionUtility.InvokePrivate<object>(unknownAgent.Motor, "ApplyEnvironmentalForces");
+
+        ReflectionUtility.GetPrivateField<Vector3d>(unknownAgent.Motor, "_forceOutput").Should().Be(Vector3d.Right);
+
+        Fixed4x4 activePlatform = MockMotorAgentTestFactory.CreatePlatformTransform();
+        Fixed4x4 heldPlatform = MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(4, 0, 0));
+        var platformAgent = MockMotorAgentTestFactory.CreatePlatformAgent(
+            platformMatrix: activePlatform,
+            motionTransfer: MotionTransfer.InitTransfer);
+        platformAgent.Motor.Handler.Platform!.SetHoldPlatform(new PlatformSnapshot(2, heldPlatform));
+        platformAgent.Motor.Handler.Platform.PlatformVelocity = new Vector3d(2, 0, 0);
+        platformAgent.Motor.Handler.Move.FrameVelocity = Vector3d.Zero;
+
+        ReflectionUtility.InvokePrivate<object>(platformAgent.Motor, "HandlePlatformTransitions");
+        ReflectionUtility.InvokePrivate<object>(platformAgent.Motor, "HandlePlatformTransitions");
+
+        platformAgent.Motor.Handler.Move.FrameVelocity.Should().Be(new Vector3d(-2, 0, 0));
+    }
+
+    [Fact]
+    public void GasExitAndGroundFrictionHelpers_ShouldCoverLiquidNonJumpExit_AndFlyingFrictionBypass()
+    {
+        var liquidExitAgent = MockMotorAgentTestFactory.CreateWaterAgent();
+        bool landed = false;
+        liquidExitAgent.Motor.Events.OnLandedFall += () => landed = true;
+
+        ReflectionUtility.InvokePrivate<object>(liquidExitAgent.Motor, "HandleGasExitTransition");
+
+        landed.Should().BeFalse();
+
+        var flyingGroundAgent = MockMotorAgentTestFactory.CreatePlatformAgent(surfaceFriction: (Fixed64)0.25f);
+        flyingGroundAgent.Motor.Handler.Fly!.IsFlying = true;
+        ReflectionUtility.SetPrivateField(flyingGroundAgent.Motor, "_forceOutput", new Vector3d(4, 0, 0));
+
+        ReflectionUtility.InvokePrivate<bool>(flyingGroundAgent.Motor, "TryApplyStationaryGroundFriction", Vector3d.Zero)
+            .Should().BeFalse();
+        ReflectionUtility.GetPrivateField<Vector3d>(flyingGroundAgent.Motor, "_forceOutput").Should().Be(new Vector3d(4, 0, 0));
+    }
+
+    [Fact]
+    public void FallAndGroundHelpers_ShouldCoverSteepSurfaceStart_AndProjectedSlopeAdjustment()
+    {
+        Fixed4x4 steepPlatform = MockMotorAgentTestFactory.CreatePlatformTransform(
+            platformRotation: FixedQuaternion.FromEulerAngles((Fixed64)1.25f, Fixed64.Zero, Fixed64.Zero));
+        var steepAgent = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: steepPlatform);
+        steepAgent.Motor.Handler.Move.SlopeLimit = Fixed64.One;
+        ReflectionUtility.SetPrivateField(steepAgent.Motor, "<FrameSlopeAngle>k__BackingField", (Fixed64)2);
+        ReflectionUtility.SetPrivateField(steepAgent.Motor, "_forceOutput", Vector3d.Down);
+
+        ReflectionUtility.InvokePrivate<object>(steepAgent.Motor, "TryStartFall", steepAgent.Position);
+
+        steepAgent.Motor.Handler.Fall.IsFalling.Should().BeTrue();
+
+        var slopedAgent = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: steepPlatform);
+        ReflectionUtility.SetPrivateField(slopedAgent.Motor, "<FrameSlopeAngle>k__BackingField", -(Fixed64)2);
+
+        Vector3d adjustedVelocity = ReflectionUtility.InvokePrivate<Vector3d>(
+            slopedAgent.Motor,
+            "ApplyGroundVelocityConstraints",
+            Vector3d.Forward * (Fixed64)3);
+
+        adjustedVelocity.y.Should().BeLessThan(Fixed64.Zero);
     }
 
     [Fact]

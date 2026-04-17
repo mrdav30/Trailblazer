@@ -41,4 +41,34 @@ public static class ReflectionUtility
             ?? throw new InvalidOperationException($"Method '{methodName}' was not found on {type.Name}.");
         return (TReturn)method.Invoke(null, arguments)!;
     }
+
+    internal static TReturn InvokePrivateStatic<TReturn>(
+        Type type,
+        string methodName,
+        Type[] parameterTypes,
+        params object[] arguments)
+    {
+        MethodInfo method = type.GetMethod(
+            methodName,
+            BindingFlags.Static | BindingFlags.NonPublic,
+            binder: null,
+            types: parameterTypes,
+            modifiers: null)
+            ?? throw new InvalidOperationException($"Method '{methodName}' with the requested signature was not found on {type.Name}.");
+        return (TReturn)method.Invoke(null, arguments)!;
+    }
+
+    internal static T GetPrivateStaticField<T>(Type type, string fieldName)
+    {
+        FieldInfo field = type.GetField(fieldName, BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Static field '{fieldName}' was not found on {type.Name}.");
+        return (T)field.GetValue(null)!;
+    }
+
+    internal static void SetPrivateStaticField<T>(Type type, string fieldName, T value)
+    {
+        FieldInfo field = type.GetField(fieldName, BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Static field '{fieldName}' was not found on {type.Name}.");
+        field.SetValue(null, value);
+    }
 }

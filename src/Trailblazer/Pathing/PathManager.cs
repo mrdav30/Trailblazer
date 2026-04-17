@@ -1271,7 +1271,7 @@ public static class PathManager
         string[] potentialTransitionIds,
         TraversalTransition[] desiredTransitions)
     {
-        if (potentialTransitionIds == null || potentialTransitionIds.Length == 0)
+        if (potentialTransitionIds.Length == 0)
             return Array.Empty<string>();
 
         SwiftHashSet<string> desiredTransitionIds = SwiftHashSetPool<string>.Shared.Rent();
@@ -1305,7 +1305,7 @@ public static class PathManager
         ManagedChartTransitionState state,
         TraversalTransition[] desiredTransitions)
     {
-        if (desiredTransitions == null || desiredTransitions.Length == 0)
+        if (desiredTransitions.Length == 0)
             return Array.Empty<TraversalTransition>();
 
         SwiftList<TraversalTransition> missingTransitions = new();
@@ -1472,9 +1472,6 @@ public static class PathManager
         string chartName,
         TraversalTransition[] transitions)
     {
-        if (transitions == null || transitions.Length == 0)
-            return;
-
         _navigationChartMapLock.EnterWriteLock();
         try
         {
@@ -1491,9 +1488,6 @@ public static class PathManager
         string chartName,
         string[] transitionIds)
     {
-        if (transitionIds == null || transitionIds.Length == 0)
-            return;
-
         _navigationChartMapLock.EnterWriteLock();
         try
         {
@@ -1508,7 +1502,7 @@ public static class PathManager
 
     private static string[] CopyTransitionIds(SwiftHashSet<string> transitionIds)
     {
-        if (transitionIds == null || transitionIds.Count == 0)
+        if (transitionIds.Count == 0)
             return Array.Empty<string>();
 
         string[] copy = new string[transitionIds.Count];
@@ -1521,9 +1515,6 @@ public static class PathManager
 
     private static string[] CopyTransitionIds(TraversalTransition[] transitions)
     {
-        if (transitions == null || transitions.Length == 0)
-            return Array.Empty<string>();
-
         string[] ids = new string[transitions.Length];
         for (int i = 0; i < transitions.Length; i++)
             ids[i] = transitions[i].Id;
@@ -1622,7 +1613,7 @@ public static class PathManager
         NavigationChart chart,
         SwiftHashSet<string> managedChartsToRefresh)
     {
-        managedChartsToRefresh?.Add(chart.Name);
+        managedChartsToRefresh.Add(chart.Name);
     }
 
     private static bool TryGetChartUpdateVoxelContext(

@@ -192,8 +192,8 @@ public class LocomotionHandler : IRecordable
         ClearReplacedLocomotion(Swim, profile.Swim);
         ClearReplacedLocomotion(Fly, profile.Fly);
 
-        Move = profile.Move ?? throw new InvalidOperationException("Move locomotion is required.");
-        Fall = profile.Fall ?? throw new InvalidOperationException("Fall locomotion is required.");
+        Move = profile.Move;
+        Fall = profile.Fall;
         Platform = profile.Platform;
         Jump = profile.Jump;
         Slide = profile.Slide;

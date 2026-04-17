@@ -5,6 +5,7 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
 using System;
+using System.Reflection;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -231,6 +232,63 @@ public sealed class FlowFieldGuideTests : IDisposable
         guide.TryGetFallbackDirection(Vector3d.Zero, out _).Should().BeFalse();
     }
 
+    [Fact]
+    public void FlowFieldGuide_PrivateStageHelpers_ShouldBoundAdvanceWithoutBudget_AndRejectWaypointStageGuides()
+    {
+        var guide = new FlowFieldGuide();
+        var waypoint = HybridRouteStep.Waypoint(Vector3d.Zero);
+        var plan = new HybridRoutePlan(new[] { waypoint }, Array.Empty<TraversalTransition>(), 0);
+
+        guide.InitializeStaged(plan).Should().BeTrue();
+
+        object[] advanceArgs = { 0 };
+        InvokePrivate<bool>(guide, "TryAdvanceStage", advanceArgs).Should().BeFalse();
+        advanceArgs[0].Should().Be(0);
+
+        object[] guideArgs = { waypoint, null! };
+        InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", guideArgs).Should().BeFalse();
+        guideArgs[1].Should().BeNull();
+
+        object[] waypointArgs = { Vector3d.Zero, waypoint, 0, null! };
+        InvokePrivate<bool>(guide, "TryGetWaypointStageMovementDirection", waypointArgs).Should().BeFalse();
+        waypointArgs[3].Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void FlowFieldGuide_PrivateSegmentHelpers_ShouldReuseStageGuide_AndAdvanceCompletedSegment()
+    {
+        RegisterLineChart("FlowFieldGuidePrivateSegment", Vector3d.Zero, 3);
+
+        FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One);
+        request.Should().NotBeNull();
+
+        var step = HybridRouteStep.Segment(request);
+        var guide = new FlowFieldGuide();
+        guide.InitializeStaged(new HybridRoutePlan(new[] { step }, Array.Empty<TraversalTransition>(), 0))
+            .Should()
+            .BeTrue();
+
+        object[] firstGuideArgs = { step, null! };
+        InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", firstGuideArgs).Should().BeTrue();
+        IGuide cachedGuide = (IGuide)firstGuideArgs[1];
+
+        object[] secondGuideArgs = { step, null! };
+        InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", secondGuideArgs).Should().BeTrue();
+        secondGuideArgs[1].Should().BeSameAs(cachedGuide);
+
+        object[] segmentArgs = { new Vector3d(2, 0, 0), step, 1, null! };
+        InvokePrivate<bool>(guide, "TryGetSegmentStageMovementDirection", segmentArgs).Should().BeTrue();
+        segmentArgs[2].Should().Be(0);
+        segmentArgs[3].Should().Be(Vector3d.Zero);
+
+        guide.TryGetMovementDirection(new Vector3d(2, 0, 0), out _).Should().BeFalse();
+
+        PathManager.UnloadChart("FlowFieldGuidePrivateSegment");
+    }
+
     private static FlowFieldSurveyResult CreateSurveyResult(params (Vector3d position, Vector3d direction, int cost, bool isGoal)[] cells)
     {
         var fields = new SwiftDictionary<GlobalVoxelIndex, FlowField>(cells.Length);
@@ -257,6 +315,14 @@ public sealed class FlowFieldGuideTests : IDisposable
             data[0, i, 0] = true;
 
         PathTestFactory.RegisterFromData(chartName, data, minBounds);
+    }
+
+    private static T InvokePrivate<T>(object instance, string methodName, object[] arguments)
+    {
+        MethodInfo method = instance.GetType().GetMethod(
+            methodName,
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        return (T)method.Invoke(instance, arguments)!;
     }
 
     private sealed class UnsupportedRequest : IPathRequest

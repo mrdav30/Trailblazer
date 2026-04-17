@@ -193,6 +193,18 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     }
 
     [Fact]
+    public void SetLocomotionProfile_ShouldNotTouchPlatformState_WhenNavigatorIsNotGrounded()
+    {
+        var airborneAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        var profile = LocomotionProfile.CreateMoveAndFallOnly();
+
+        airborneAgent.Motor.SetLocomotionProfile(profile);
+
+        airborneAgent.Motor.Handler.Platform.Should().BeNull();
+        airborneAgent.Motor.IsInGas.Should().BeTrue();
+    }
+
+    [Fact]
     public void FinalizeTraversal_ShouldClearFallingWithoutLandingEvent_WhenGasExitsIntoLiquid()
     {
         var agent = MockMotorAgentTestFactory.CreateFallingAgent(surfaceLevel: Fixed64.Zero);
@@ -241,6 +253,59 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             newFootPosition: null);
 
         stoppedWaterBreach.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FinalizeTraversal_ShouldFireJumpAndLandingEvents_WhenExitingGasIntoSolid()
+    {
+        var jumpingAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+        bool stoppedJump = false;
+        jumpingAgent.Motor.Events.OnStopJump += () => stoppedJump = true;
+
+        OpenTraversal(jumpingAgent);
+        jumpingAgent.Motor.Handler.Jump!.IsJumping = true;
+        jumpingAgent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+
+        jumpingAgent.Motor.FinalizeTraversal(
+            jumpingAgent.Position,
+            jumpingAgent.LastPosition,
+            jumpingAgent.Rotation,
+            new TrekCondition
+            {
+                Medium = TraversalMedium.Solid,
+                SurfaceLevel = Fixed64.Zero,
+                CeilingLevel = Fixed64.MAX_VALUE,
+                GroundState = new GroundCondition
+                {
+                    Platform = new PlatformSnapshot(1, Fixed4x4.Identity)
+                }
+            },
+            jumpingAgent.GetFootPosition());
+
+        stoppedJump.Should().BeTrue();
+
+        var fallingAgent = MockMotorAgentTestFactory.CreateFallingAgent(surfaceLevel: Fixed64.Zero);
+        bool landed = false;
+        fallingAgent.Motor.Events.OnLandedFall += () => landed = true;
+
+        OpenTraversal(fallingAgent);
+        fallingAgent.Motor.FinalizeTraversal(
+            fallingAgent.Position,
+            fallingAgent.LastPosition,
+            fallingAgent.Rotation,
+            new TrekCondition
+            {
+                Medium = TraversalMedium.Solid,
+                SurfaceLevel = Fixed64.Zero,
+                CeilingLevel = Fixed64.MAX_VALUE,
+                GroundState = new GroundCondition
+                {
+                    Platform = new PlatformSnapshot(1, Fixed4x4.Identity)
+                }
+            },
+            fallingAgent.GetFootPosition());
+
+        landed.Should().BeTrue();
     }
 
     [Fact]
@@ -315,6 +380,33 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             newFootPosition: null);
 
         motor.TraversalInProgress.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FinalizeTraversal_ShouldClampJumpingVelocity_WhenCeilingIsReached()
+    {
+        var agent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
+
+        OpenTraversal(agent);
+        agent.Motor.Handler.Jump!.IsJumping = true;
+        agent.Motor.Handler.Jump.IsHoldingJump = true;
+        agent.Motor.Handler.Move.FrameVelocity = new Vector3d(0, 4, 0);
+
+        agent.Motor.FinalizeTraversal(
+            new Vector3d(0, 2, 0),
+            agent.LastPosition,
+            agent.Rotation,
+            new TrekCondition
+            {
+                Medium = TraversalMedium.Gas,
+                SurfaceLevel = Fixed64.Zero,
+                CeilingLevel = Fixed64.One
+            },
+            agent.GetFootPosition());
+
+        agent.Motor.Handler.Move.FrameVelocity.y.Should().Be(Fixed64.Zero);
+        agent.Motor.Handler.Jump.IsJumping.Should().BeFalse();
+        agent.Motor.Handler.Jump.IsHoldingJump.Should().BeFalse();
     }
 
     [Fact]

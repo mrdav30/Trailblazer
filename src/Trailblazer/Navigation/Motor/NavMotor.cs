@@ -1014,7 +1014,8 @@ public class NavMotor : IRecordable
         if (!IsOnSolid || desiredVelocity == Vector3d.Zero)
             return desiredVelocity;
 
-        desiredVelocity *= Fixed64.One - CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
+        Fixed64 surfaceFriction = CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
+        desiredVelocity *= Fixed64.One - surfaceFriction;
 
         // Flat or host-defined "solid but no sampled normal" surfaces should preserve the raw ground vector.
         // Sliding also already produces a slope-aware direction, so re-projecting it here distorts the result.

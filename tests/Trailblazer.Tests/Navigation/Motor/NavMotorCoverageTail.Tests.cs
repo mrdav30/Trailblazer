@@ -205,6 +205,20 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     }
 
     [Fact]
+    public void SetLocomotionProfile_ShouldNotRequirePlatformModule_WhenGroundedProfileOmitsPlatform()
+    {
+        var groundedAgent = MockMotorAgentTestFactory.CreateMockAgent(
+            startingMedium: TraversalMedium.Solid,
+            profile: LocomotionProfile.CreateMoveAndFallOnly());
+
+        groundedAgent.Motor.Invoking(motor => motor.SetLocomotionProfile(LocomotionProfile.CreateMoveAndFallOnly()))
+            .Should().NotThrow();
+
+        groundedAgent.Motor.IsOnSolid.Should().BeTrue();
+        groundedAgent.Motor.Handler.Platform.Should().BeNull();
+    }
+
+    [Fact]
     public void FinalizeTraversal_ShouldClearFallingWithoutLandingEvent_WhenGasExitsIntoLiquid()
     {
         var agent = MockMotorAgentTestFactory.CreateFallingAgent(surfaceLevel: Fixed64.Zero);
@@ -482,6 +496,98 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         var unknownMediumAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
         ReflectionUtility.InvokePrivate<object>(unknownMediumAgent.Motor, "UpdateFlightState", request);
         unknownMediumAgent.Motor.Handler.Fly!.IsFlying.Should().BeFalse();
+    }
+
+    [Fact]
+    public void StateAndFlightHelpers_ShouldCoverUnknownTransitions_AndDisabledFlightModules()
+    {
+        var unknownAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
+        unknownAgent.Motor.UpdateTraversal(new TrekCondition
+        {
+            Medium = TraversalMedium.Solid,
+            GroundState = new GroundCondition
+            {
+                Platform = new PlatformSnapshot(1, Fixed4x4.Identity)
+            }
+        });
+        unknownAgent.Motor.StateChanged.Should().BeFalse();
+
+        unknownAgent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        unknownAgent.Motor.StateChanged.Should().BeTrue();
+
+        var disabledFlightAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        disabledFlightAgent.Motor.Handler.Fly!.IsEnabled = false;
+        disabledFlightAgent.Motor.Handler.Fly.IsFlying = true;
+
+        TrekRequest request = new()
+        {
+            Rotation = FixedQuaternion.Identity,
+            Direction = Vector3d.Right,
+            Rate = TrekRate.Moderate
+        };
+
+        ReflectionUtility.InvokePrivate<Vector3d>(disabledFlightAgent.Motor, "GetFlightVelocity", request)
+            .Should().Be(Vector3d.Zero);
+        disabledFlightAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Moderate)
+            .Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void PrivateEnvironmentalAndFallHelpers_ShouldCoverDisabledSwim_AndFallEvents()
+    {
+        var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
+        swimmingAgent.Motor.Handler.Swim!.IsEnabled = false;
+        swimmingAgent.Motor.Handler.Move.FrameVelocity = new Vector3d(0, -2, 0);
+        ReflectionUtility.SetPrivateField(swimmingAgent.Motor, "_forceOutput", Vector3d.Zero);
+
+        ReflectionUtility.InvokePrivate<object>(swimmingAgent.Motor, "ApplyEnvironmentalForces");
+
+        ReflectionUtility.GetPrivateField<Vector3d>(swimmingAgent.Motor, "_forceOutput").y
+            .Should().BeLessThan((Fixed64)(-2));
+
+        var inactiveFallAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        inactiveFallAgent.Motor.Handler.Fall.IsFalling = false;
+        ReflectionUtility.InvokePrivate<object>(inactiveFallAgent.Motor, "ClearFallState");
+        inactiveFallAgent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
+
+        var activeFallAgent = MockMotorAgentTestFactory.CreateFallingAgent();
+        activeFallAgent.Motor.Handler.Fall.FallStart = (Fixed64)10;
+        activeFallAgent.Motor.Handler.Fall.MaxFallHeight = Fixed64.One;
+
+        bool maxFallTriggered = false;
+        bool startFallTriggered = false;
+        activeFallAgent.Motor.Events.OnMaxFallHeightReached += () => maxFallTriggered = true;
+        activeFallAgent.Motor.Events.OnStartFall += () => startFallTriggered = true;
+
+        ReflectionUtility.InvokePrivate<object>(activeFallAgent.Motor, "UpdateActiveFallState", new Vector3d(0, 0, 0));
+        maxFallTriggered.Should().BeTrue();
+
+        var startFallAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
+        ReflectionUtility.SetPrivateField(startFallAgent.Motor, "_forceOutput", Vector3d.Down);
+        startFallAgent.Motor.Events.OnStartFall += () => startFallTriggered = true;
+
+        ReflectionUtility.InvokePrivate<object>(startFallAgent.Motor, "TryStartFall", startFallAgent.Position);
+
+        startFallTriggered.Should().BeTrue();
+        startFallAgent.Motor.Handler.Fall.IsFalling.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ApplyGroundVelocityConstraints_ShouldPreserveVelocity_WhenSolidStateHasNoGroundSample()
+    {
+        var agent = MockMotorAgentTestFactory.CreatePlatformAgent();
+        agent.Motor.UpdateTraversal(new TrekCondition
+        {
+            Medium = TraversalMedium.Solid,
+            GroundState = null
+        });
+
+        Vector3d constrainedVelocity = ReflectionUtility.InvokePrivate<Vector3d>(
+            agent.Motor,
+            "ApplyGroundVelocityConstraints",
+            new Vector3d(3, 0, 4));
+
+        constrainedVelocity.Should().Be(new Vector3d(3, 0, 4));
     }
 
     [Fact]

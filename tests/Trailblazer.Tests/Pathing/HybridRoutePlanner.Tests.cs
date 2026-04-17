@@ -3,7 +3,6 @@ using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
-using System.Reflection;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -356,7 +355,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             0
         };
 
-        InvokePrivate<bool>("TryCreateAStarStep", args).Should().BeFalse();
+        ReflectionUtility.InvokePrivateStatic<bool>(typeof(HybridRoutePlanner), "TryCreateAStarStep", args).Should().BeFalse();
         args[3].Should().BeNull();
         args[4].Should().Be(0);
     }
@@ -384,7 +383,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             0
         };
 
-        InvokePrivate<bool>("TryCreateFlowFieldStep", args).Should().BeFalse();
+        ReflectionUtility.InvokePrivateStatic<bool>(typeof(HybridRoutePlanner), "TryCreateFlowFieldStep", args).Should().BeFalse();
         args[3].Should().BeNull();
         args[4].Should().Be(0);
     }
@@ -410,7 +409,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             0
         };
 
-        InvokePrivate<bool>("TryCreateVolumeStep", args).Should().BeFalse();
+        ReflectionUtility.InvokePrivateStatic<bool>(typeof(HybridRoutePlanner), "TryCreateVolumeStep", args).Should().BeFalse();
         args[4].Should().BeNull();
         args[5].Should().Be(0);
     }
@@ -437,7 +436,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             0
         };
 
-        InvokePrivate<bool>("TryCreateVolumeStep", args).Should().BeTrue();
+        ReflectionUtility.InvokePrivateStatic<bool>(typeof(HybridRoutePlanner), "TryCreateVolumeStep", args).Should().BeTrue();
         args[4].Should().BeOfType<HybridRouteStep>()
             .Which.Kind.Should().Be(HybridRouteStepKind.Waypoint);
         args[5].Should().Be(0);
@@ -466,7 +465,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             0
         };
 
-        InvokePrivate<bool>("TryCreateVolumeStep", args).Should().BeFalse();
+        ReflectionUtility.InvokePrivateStatic<bool>(typeof(HybridRoutePlanner), "TryCreateVolumeStep", args).Should().BeFalse();
         args[4].Should().BeNull();
         args[5].Should().Be(0);
     }
@@ -487,10 +486,4 @@ public sealed class HybridRoutePlannerTests : IDisposable
         PathTestFactory.RegisterFromData(chartName, data, minBounds);
     }
 
-    private static TReturn InvokePrivate<TReturn>(string methodName, params object[] arguments)
-    {
-        MethodInfo method = typeof(HybridRoutePlanner).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Method '{methodName}' was not found on {nameof(HybridRoutePlanner)}.");
-        return (TReturn)method.Invoke(null, arguments)!;
-    }
 }

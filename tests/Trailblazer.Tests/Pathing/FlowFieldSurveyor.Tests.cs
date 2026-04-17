@@ -6,7 +6,6 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using System;
 using System.Linq;
-using System.Reflection;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -877,13 +876,13 @@ public class FlowFieldSurveyorTests : IDisposable
             out FlowFieldPathRequest request).Should().BeTrue();
 
         FlowFieldSurveyor surveyor = new();
-        SetPrivateField(surveyor, "_request", request);
+        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
-        PathHeap<SolidChartPartition> heap = GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
         heap.Add(neighbor, 9);
 
         SpatialDirection positiveX = FindDirection(1, 0, 0);
-        InvokePrivate<object?>(surveyor, "TryProcessDirection", current, new[] { positiveX }, 1, false);
+        ReflectionUtility.InvokePrivate<object?>(surveyor, "TryProcessDirection", current, new[] { positiveX }, 1, false);
 
         heap.TryGetPathCost(neighbor, out int updatedPathCost).Should().BeTrue();
         updatedPathCost.Should().Be(2);
@@ -911,15 +910,15 @@ public class FlowFieldSurveyorTests : IDisposable
             out FlowFieldPathRequest request).Should().BeTrue();
 
         FlowFieldSurveyor surveyor = new();
-        SetPrivateField(surveyor, "_request", request);
+        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
-        PathHeap<SolidChartPartition> heap = GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
         SpatialDirection upwardDiagonal = SpatialAwareness.DiagonalDirections
             .First(direction => SpatialAwareness.DirectionOffsets[(int)direction].y > 0);
 
         MarkRequiredLegsClosed(current, upwardDiagonal, heap, closeVerticalLeg: true);
 
-        InvokePrivate<bool>(surveyor, "HasValidDiagonalLegs", current, upwardDiagonal).Should().BeTrue();
+        ReflectionUtility.InvokePrivate<bool>(surveyor, "HasValidDiagonalLegs", current, upwardDiagonal).Should().BeTrue();
 
         PathManager.UnloadChart("FlowDiagLegsPositive");
     }
@@ -944,15 +943,15 @@ public class FlowFieldSurveyorTests : IDisposable
             out FlowFieldPathRequest request).Should().BeTrue();
 
         FlowFieldSurveyor surveyor = new();
-        SetPrivateField(surveyor, "_request", request);
+        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
-        PathHeap<SolidChartPartition> heap = GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
         SpatialDirection downwardDiagonal = SpatialAwareness.DiagonalDirections
             .First(direction => SpatialAwareness.DirectionOffsets[(int)direction].y < 0);
 
         MarkRequiredLegsClosed(current, downwardDiagonal, heap, closeVerticalLeg: false);
 
-        InvokePrivate<bool>(surveyor, "HasValidDiagonalLegs", current, downwardDiagonal).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(surveyor, "HasValidDiagonalLegs", current, downwardDiagonal).Should().BeFalse();
 
         PathManager.UnloadChart("FlowDiagLegsNegative");
     }
@@ -967,7 +966,7 @@ public class FlowFieldSurveyorTests : IDisposable
 
         FlowFieldSurveyor surveyor = new();
 
-        InvokePrivate<int>(surveyor, "GetPathCostTotal", partition).Should().Be(int.MaxValue);
+        ReflectionUtility.InvokePrivate<int>(surveyor, "GetPathCostTotal", partition).Should().Be(int.MaxValue);
 
         PathManager.UnloadChart("FlowMissingCost");
     }
@@ -1022,27 +1021,6 @@ public class FlowFieldSurveyorTests : IDisposable
             (int offsetX, int offsetY, int offsetZ) = SpatialAwareness.DirectionOffsets[(int)direction];
             return offsetX == dx && offsetY == dy && offsetZ == dz;
         });
-    }
-
-    private static T GetPrivateField<T>(object instance, string fieldName)
-    {
-        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
-        return (T)field.GetValue(instance)!;
-    }
-
-    private static void SetPrivateField<T>(object instance, string fieldName, T value)
-    {
-        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
-        field.SetValue(instance, value);
-    }
-
-    private static TReturn InvokePrivate<TReturn>(object instance, string methodName, params object[] arguments)
-    {
-        MethodInfo method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Method '{methodName}' was not found on {instance.GetType().Name}.");
-        return (TReturn)method.Invoke(instance, arguments)!;
     }
 
     private static void MarkRequiredLegsClosed(

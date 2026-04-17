@@ -124,7 +124,7 @@ public class NavMotor : IRecordable
     /// </summary>
     public bool IsJumping => JumpModule?.IsJumping == true;
 
-    public bool IsFalling => Handler.Fall?.IsFalling == true;
+    public bool IsFalling => Handler.Fall.IsFalling;
 
     /// <summary>
     /// Checks if the navigator is in a state where it is airborne but not actively jumping, flying, or falling.

@@ -1001,7 +1001,7 @@ public class NavigatorTests : IDisposable
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         navigator.Steering.Arrive();
 
-        GuidedVolumeExitHandoff handoff = GetPrivateField<GuidedVolumeExitHandoff>(
+        GuidedVolumeExitHandoff handoff = ReflectionUtility.GetPrivateFieldFromBase<GuidedVolumeExitHandoff>(
             navigator,
             "_pendingGuidedVolumeExitHandoff");
         handoff.TransitionId = null;
@@ -1200,11 +1200,4 @@ public class NavigatorTests : IDisposable
         }
     }
 
-    private static T GetPrivateField<T>(object instance, string fieldName)
-    {
-        var field = instance.GetType().BaseType!.GetField(
-            fieldName,
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-        return (T)field.GetValue(instance)!;
-    }
 }

@@ -6,7 +6,6 @@ using GridForge.Grids;
 using SwiftCollections;
 using System;
 using System.Linq;
-using System.Reflection;
 using Trailblazer.Pathing;
 using Trailblazer.Tests;
 using Xunit;
@@ -276,9 +275,9 @@ public sealed class VolumeSurveyorTests : IDisposable
         GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel current).Should().BeTrue();
 
         VolumeSurveyor surveyor = new();
-        SetPrivateField(surveyor, "_request", request);
+        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
-        InvokePrivate<bool>(surveyor, "ProcessNeighbors", current).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(surveyor, "ProcessNeighbors", current).Should().BeFalse();
     }
 
     [Fact]
@@ -308,10 +307,10 @@ public sealed class VolumeSurveyorTests : IDisposable
         request.Should().NotBeNull();
 
         VolumeSurveyor surveyor = new();
-        SetPrivateField(surveyor, "_request", request);
+        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
-        PathHeap<Voxel> heap = GetPrivateField<PathHeap<Voxel>>(surveyor, "_heap");
-        SwiftDictionary<Voxel, VolumeVoxelMeta> meta = GetPrivateField<SwiftDictionary<Voxel, VolumeVoxelMeta>>(surveyor, "_meta");
+        PathHeap<Voxel> heap = ReflectionUtility.GetPrivateField<PathHeap<Voxel>>(surveyor, "_heap");
+        SwiftDictionary<Voxel, VolumeVoxelMeta> meta = ReflectionUtility.GetPrivateField<SwiftDictionary<Voxel, VolumeVoxelMeta>>(surveyor, "_meta");
 
         meta[neighbor] = new VolumeVoxelMeta
         {
@@ -320,7 +319,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         };
         heap.Add(neighbor, 999);
 
-        InvokePrivate<bool>(surveyor, "ProcessNeighbor", current, neighbor, 150).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(surveyor, "ProcessNeighbor", current, neighbor, 150).Should().BeFalse();
 
         meta[neighbor].MovementCost.Should().Be(175);
         meta[neighbor].NextTrailIndex.Should().Be(current.GlobalIndex);
@@ -380,10 +379,10 @@ public sealed class VolumeSurveyorTests : IDisposable
     {
         VolumeSurveyor surveyor = new();
 
-        Action act = () => InvokePrivate<object?>(surveyor, "AddVoxelChartOwners", new object[] { null! });
+        Action act = () => ReflectionUtility.InvokePrivate<object?>(surveyor, "AddVoxelChartOwners", new object[] { null! });
 
         act.Should().NotThrow();
-        GetPrivateField<SwiftHashSet<string>>(surveyor, "_chartKeys").Should().BeEmpty();
+        ReflectionUtility.GetPrivateField<SwiftHashSet<string>>(surveyor, "_chartKeys").Should().BeEmpty();
     }
 
     private static void AddOpen(Vector3d position)
@@ -391,24 +390,4 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "VolumeOpen");
     }
 
-    private static T GetPrivateField<T>(object instance, string fieldName)
-    {
-        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
-        return (T)field.GetValue(instance)!;
-    }
-
-    private static void SetPrivateField<T>(object instance, string fieldName, T value)
-    {
-        FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Field '{fieldName}' was not found on {instance.GetType().Name}.");
-        field.SetValue(instance, value);
-    }
-
-    private static TReturn InvokePrivate<TReturn>(object instance, string methodName, params object[] arguments)
-    {
-        MethodInfo method = instance.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Method '{methodName}' was not found on {instance.GetType().Name}.");
-        return (TReturn)method.Invoke(instance, arguments)!;
-    }
 }

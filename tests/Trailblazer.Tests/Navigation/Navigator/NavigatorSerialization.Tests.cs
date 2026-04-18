@@ -200,7 +200,7 @@ public class NavigatorSerializationTests : IDisposable
         source.Turning.TargetRotation.Should().NotBe(FixedQuaternion.Identity);
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.Turning.CanTurn.Should().Be(source.Turning.CanTurn);
         target.Turning.TurnRate.Should().Be(source.Turning.TurnRate);
@@ -247,7 +247,7 @@ public class NavigatorSerializationTests : IDisposable
         source.Steering.TrailGuide.Should().BeOfType<VolumeGuide>();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
@@ -279,7 +279,7 @@ public class NavigatorSerializationTests : IDisposable
         source.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
         target.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
@@ -318,7 +318,7 @@ public class NavigatorSerializationTests : IDisposable
             sourceGuide.AdvanceWaypoint();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.Steering.TrailGuide.Should().BeOfType<VolumeGuide>();
         ((VolumeGuide)target.Steering.TrailGuide).CurrentWaypointIndex.Should().Be(sourceGuide.CurrentWaypointIndex);
@@ -351,7 +351,7 @@ public class NavigatorSerializationTests : IDisposable
             groupId: 3);
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
@@ -390,7 +390,7 @@ public class NavigatorSerializationTests : IDisposable
         sourceRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
             .Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
@@ -435,7 +435,7 @@ public class NavigatorSerializationTests : IDisposable
         sourceRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
             .Which.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
@@ -467,12 +467,12 @@ public class NavigatorSerializationTests : IDisposable
     {
         var source = CreateConfiguredNavigator();
         source.OccupantGroupId = 9;
-        object payload = SerializeRecord(source, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
-        payload = RemovePayloadEntry(payload, useMemoryPack, "occupantGroupId");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "steering");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "turning");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "motor");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "occupantGroupId");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "turning");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "motor");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         target.OccupantGroupId = 9;
@@ -480,7 +480,7 @@ public class NavigatorSerializationTests : IDisposable
         target.Turning.TurnRate = (Fixed64)0.72f;
         target.Motor.Handler.Move.MaxFastSpeed = (Fixed64)8;
 
-        PopulateRecord(target, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
         target.Position.Should().Be(source.Position);
         // since we removed the occupantGroupId entry, it should fall back to the default value of 1
@@ -500,7 +500,7 @@ public class NavigatorSerializationTests : IDisposable
         source.Setup(new Vector3d(1, 0, 1), size: Fixed64.One);
 
         var target = new TestNavigator();
-        PopulateRecord(target, SerializeRecord(source, useMemoryPack), useMemoryPack);
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.Position.Should().Be(new Vector3d(1, 0, 1));
         target.LastPosition.Should().Be(new Vector3d(1, 0, 1));
@@ -520,17 +520,17 @@ public class NavigatorSerializationTests : IDisposable
         RegisterGuidedPathChart("NavigatorSerializationLegacyDefaults");
 
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.FlowField);
-        object payload = SerializeRecord(source, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
-        payload = RemovePayloadEntry(payload, useMemoryPack, "guidedAllowUnwalkableEndpoints");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "guidedAllowTraversalTransitions");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "guidedMaxClimbHeight");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "guidedFlowFieldExtraFloodRange");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRecheckCooldownFrames");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "steering", "stopMultiplier");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "steering", "brakingPower");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRequest", "maxClimbHeight");
-        payload = RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRequest", "flowFieldExtraFloodRange");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "guidedAllowUnwalkableEndpoints");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "guidedAllowTraversalTransitions");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "guidedMaxClimbHeight");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "guidedFlowFieldExtraFloodRange");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRecheckCooldownFrames");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "stopMultiplier");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "brakingPower");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRequest", "maxClimbHeight");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRequest", "flowFieldExtraFloodRange");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         bool expectedAllowUnwalkable = target.GuidedAllowUnwalkableEndpoints;
@@ -541,7 +541,7 @@ public class NavigatorSerializationTests : IDisposable
         Fixed64 expectedStopMultiplier = target.Steering.StopMultiplier;
         Fixed64 expectedBrakingPower = target.Steering.BrakingPower;
 
-        PopulateRecord(target, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
         target.IsGuideded.Should().BeTrue();
         target.GuidedAllowUnwalkableEndpoints.Should().Be(expectedAllowUnwalkable);
@@ -566,12 +566,12 @@ public class NavigatorSerializationTests : IDisposable
     public void RoundTrip_ShouldUseBackwardCompatibleDefaults_WhenPayloadOmitsFacingDirection(bool useMemoryPack)
     {
         var source = CreateConfiguredNavigator();
-        object payload = SerializeRecord(source, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
-        payload = RemovePayloadEntry(payload, useMemoryPack, "frameRequest", "FacingDirection");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "frameRequest", "FacingDirection");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        PopulateRecord(target, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
         target.FrameRequest.FacingDirection.Should().BeNull();
     }
@@ -586,8 +586,8 @@ public class NavigatorSerializationTests : IDisposable
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.AStar);
         source.GuidedAllowUnwalkableEndpoints = false;
         source.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject.AllowUnwalkableEndpoints = false;
-        object payload = SerializeRecord(source, useMemoryPack);
-        payload = SetPayloadValue(
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        payload = SerializationUtility.SetPayloadValue(
             payload,
             useMemoryPack,
             new Vector3d(512, 0, 512),
@@ -596,7 +596,7 @@ public class NavigatorSerializationTests : IDisposable
             "targetPosition");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
-        PopulateRecord(target, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
         target.Steering.CurrentRequest.Should().BeNull();
         target.Steering.TrailGuide.Should().BeNull();
@@ -620,20 +620,20 @@ public class NavigatorSerializationTests : IDisposable
     public void RoundTrip_ShouldClearTransientState_WhenLocomotionsLoadDisabled(bool useMemoryPack)
     {
         var source = CreateConfiguredMotorAgent();
-        object payload = SerializeRecord(source.Motor, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
 
-        payload = SetPayloadValue(payload, useMemoryPack, false, "handler", "move", "isEnabled");
-        payload = SetPayloadValue(payload, useMemoryPack, false, "handler", "platform", "isEnabled");
-        payload = SetPayloadValue(payload, useMemoryPack, false, "handler", "jump", "isEnabled");
-        payload = SetPayloadValue(payload, useMemoryPack, false, "handler", "fall", "isEnabled");
-        payload = SetPayloadValue(payload, useMemoryPack, false, "handler", "slide", "isEnabled");
-        payload = SetPayloadValue(payload, useMemoryPack, false, "handler", "swim", "isEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "move", "isEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "platform", "isEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "jump", "isEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "fall", "isEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "slide", "isEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "swim", "isEnabled");
 
         var target = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: new Vector3d(-2, 0, -2),
             platformMatrix: MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(-1, 0, -1)),
             motionTransfer: MotionTransfer.PermaLocked);
-        PopulateRecord(target.Motor, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
 
         target.Motor.Handler.Move.IsEnabled.Should().BeFalse();
         target.Motor.Handler.Move.FrameVelocity.Should().Be(Vector3d.Zero);
@@ -1046,38 +1046,6 @@ public class NavigatorSerializationTests : IDisposable
         };
 
         PathTestFactory.RegisterFromData(chartKey, data, Vector3d.Zero);
-    }
-
-    private static object SerializeRecord(IRecordable record, bool useMemoryPack)
-    {
-        return useMemoryPack
-            ? MemoryPackRecordSerializer.Serialize(record)
-            : JsonRecordSerializer.Serialize(record, writeIndented: true);
-    }
-
-    private static void PopulateRecord(IRecordable target, object payload, bool useMemoryPack)
-    {
-        if (useMemoryPack)
-        {
-            MemoryPackRecordSerializer.Populate(target, (byte[])payload);
-            return;
-        }
-
-        JsonRecordSerializer.Populate(target, (string)payload);
-    }
-
-    private static object RemovePayloadEntry(object payload, bool useMemoryPack, params string[] path)
-    {
-        return useMemoryPack
-            ? SerializationPayloadEditor.RemoveMemoryPackEntry((byte[])payload, path)
-            : SerializationPayloadEditor.RemoveJsonProperty((string)payload, path);
-    }
-
-    private static object SetPayloadValue<T>(object payload, bool useMemoryPack, T value, params string[] path)
-    {
-        return useMemoryPack
-            ? SerializationPayloadEditor.SetMemoryPackValue((byte[])payload, value, path)
-            : SerializationPayloadEditor.SetJsonValue((string)payload, value, path);
     }
 
     private static void AssertMotorStateMatches(NavMotor expected, NavMotor actual)

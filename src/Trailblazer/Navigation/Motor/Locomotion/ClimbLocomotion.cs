@@ -28,6 +28,11 @@ public class ClimbLocomotion : ILocomotion
     /// </summary>
     public static readonly Fixed64 DefaultGravityCompensationWhileClimbing = Fixed64.One;
 
+    /// <summary>
+    /// Default positional tolerance used when validating attachment continuity without a stable affordance id.
+    /// </summary>
+    public static readonly Fixed64 DefaultClimbStartTolerance = Fixed64.Half;
+
     private bool _isEnabled = true;
 
     /// <inheritdoc cref="ILocomotion.IsEnabled"/>
@@ -61,6 +66,11 @@ public class ClimbLocomotion : ILocomotion
     /// Amount of gravity canceled while actively climbing.
     /// </summary>
     public Fixed64 GravityCompensationWhileClimbing = DefaultGravityCompensationWhileClimbing;
+
+    /// <summary>
+    /// Positional tolerance used for initial attach and attachment continuity checks.
+    /// </summary>
+    public Fixed64 ClimbStartTolerance = DefaultClimbStartTolerance;
 
     /// <summary>
     /// Whether lateral traverse across a climb surface is allowed.
@@ -109,6 +119,40 @@ public class ClimbLocomotion : ILocomotion
     [Transient]
     public Vector3d AttachedUpDirection { get; set; }
 
+    /// <summary>
+    /// Whether lateral movement is allowed for the active frame snapshot.
+    /// </summary>
+    [Transient]
+    public bool ActiveAllowLateralTraverse { get; set; }
+
+    /// <summary>
+    /// Whether descent is allowed for the active frame snapshot.
+    /// </summary>
+    [Transient]
+    public bool ActiveAllowDescent { get; set; }
+
+    /// <summary>
+    /// Whether detaching via jump is allowed for the active frame snapshot.
+    /// </summary>
+    [Transient]
+    public bool ActiveAllowDetachJump { get; set; }
+
+    /// <summary>
+    /// Applies a climb affordance snapshot to update the active attachment state for the current frame.
+    /// </summary>
+    /// <param name="snapshot"></param>
+    public void ApplyClimbSnapshot(ClimbAffordanceSnapshot snapshot)
+    {
+        ActiveClimbKind = snapshot.Kind;
+        AttachmentId = snapshot.AffordanceId;
+        AttachmentPoint = snapshot.AttachmentPoint;
+        AttachedSurfaceNormal = snapshot.SurfaceNormal;
+        AttachedUpDirection = snapshot.UpDirection;
+        ActiveAllowLateralTraverse = snapshot.AllowLateralTraverse && AllowLateralTraverse;
+        ActiveAllowDescent = snapshot.AllowDescent;
+        ActiveAllowDetachJump = snapshot.AllowDetachJump;
+    }
+
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
@@ -117,6 +161,7 @@ public class ClimbLocomotion : ILocomotion
         RecordValues.Look(chronicler, ref MaxClimbSpeed, "maxClimbSpeed", DefaultMaxClimbSpeed);
         RecordValues.Look(chronicler, ref MaxClimbAcceleration, "maxClimbAcceleration", DefaultMaxClimbAcceleration);
         RecordValues.Look(chronicler, ref GravityCompensationWhileClimbing, "gravityCompensationWhileClimbing", DefaultGravityCompensationWhileClimbing);
+        RecordValues.Look(chronicler, ref ClimbStartTolerance, "climbStartTolerance", DefaultClimbStartTolerance);
         RecordValues.Look(chronicler, ref AllowLateralTraverse, "allowLateralTraverse", true);
 
         bool isClimbing = IsClimbing;
@@ -126,6 +171,9 @@ public class ClimbLocomotion : ILocomotion
         Vector3d attachmentPoint = AttachmentPoint;
         Vector3d attachedSurfaceNormal = AttachedSurfaceNormal;
         Vector3d attachedUpDirection = AttachedUpDirection;
+        bool activeAllowLateralTraverse = ActiveAllowLateralTraverse;
+        bool activeAllowDescent = ActiveAllowDescent;
+        bool activeAllowDetachJump = ActiveAllowDetachJump;
 
         RecordValues.Look(chronicler, ref isClimbing, "isClimbing", false);
         RecordValues.Look(chronicler, ref isMantling, "isMantling", false);
@@ -134,6 +182,9 @@ public class ClimbLocomotion : ILocomotion
         RecordValues.Look(chronicler, ref attachmentPoint, "attachmentPoint", Vector3d.Zero);
         RecordValues.Look(chronicler, ref attachedSurfaceNormal, "attachedSurfaceNormal", Vector3d.Zero);
         RecordValues.Look(chronicler, ref attachedUpDirection, "attachedUpDirection", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref activeAllowLateralTraverse, "activeAllowLateralTraverse", false);
+        RecordValues.Look(chronicler, ref activeAllowDescent, "activeAllowDescent", true);
+        RecordValues.Look(chronicler, ref activeAllowDetachJump, "activeAllowDetachJump", true);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
@@ -144,6 +195,9 @@ public class ClimbLocomotion : ILocomotion
             AttachmentPoint = attachmentPoint;
             AttachedSurfaceNormal = attachedSurfaceNormal;
             AttachedUpDirection = attachedUpDirection;
+            ActiveAllowLateralTraverse = activeAllowLateralTraverse;
+            ActiveAllowDescent = activeAllowDescent;
+            ActiveAllowDetachJump = activeAllowDetachJump;
 
             if (!_isEnabled)
                 this.ClearTransientState();

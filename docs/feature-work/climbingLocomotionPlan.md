@@ -5,6 +5,16 @@
 This document captures a phased plan for adding a new climbing locomotion type to Trailblazer's
 navigation stack without overfitting the feature to one game-specific model.
 
+## Status
+
+- Phase 1 complete on April 18, 2026.
+  Landed climb profile composition, climb intent in `TrekRequest`, navigator plumbing, the
+  dedicated resolver contract, climb events, and serialization coverage.
+- Phase 2 complete on April 18, 2026.
+  Landed deterministic attached climbing in `NavMotor` for ladder and simple wall-style
+  affordances, including attach/continue/detach flow, climb-relative movement, gravity
+  compensation, fall suppression, and focused `Release` test coverage.
+
 The immediate design target is broad enough to support:
 
 - simple ledge climbs

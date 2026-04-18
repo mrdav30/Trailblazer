@@ -132,10 +132,10 @@ public class LocomotionCompositionTests : IDisposable
             profile: LocomotionProfile.CreateMoveAndFallOnly());
         source.Motor.Handler.Move.MaxFastSpeed = (Fixed64)2;
         source.Motor.Handler.Fall.IsFalling = true;
-        object payload = SerializeRecord(source.Motor, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
 
         var target = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        PopulateRecord(target.Motor, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
 
         target.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
         target.Motor.Handler.Move.MaxFastSpeed.Should().Be((Fixed64)2);
@@ -154,11 +154,11 @@ public class LocomotionCompositionTests : IDisposable
     public void RoundTrip_DefaultProfile_ShouldLoadAllModules_WhenInstalledKindsUsesDeclaredDefault(bool useMemoryPack)
     {
         var source = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        object payload = SerializeRecord(source.Motor, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
 
         var target = MockMotorAgentTestFactory.CreateJumpReadyAgent(
             profile: LocomotionProfile.CreateMoveAndFallOnly());
-        PopulateRecord(target.Motor, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
 
         target.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.All);
         target.Motor.Handler.Jump.Should().NotBeNull();
@@ -167,24 +167,6 @@ public class LocomotionCompositionTests : IDisposable
         target.Motor.Handler.Swim.Should().NotBeNull();
         target.Motor.Handler.Fly.Should().NotBeNull();
         target.Motor.Handler.Climb.Should().NotBeNull();
-    }
-
-    private static object SerializeRecord(IRecordable record, bool useMemoryPack)
-    {
-        return useMemoryPack
-            ? MemoryPackRecordSerializer.Serialize(record)
-            : JsonRecordSerializer.Serialize(record, writeIndented: true);
-    }
-
-    private static void PopulateRecord(IRecordable target, object payload, bool useMemoryPack)
-    {
-        if (useMemoryPack)
-        {
-            MemoryPackRecordSerializer.Populate(target, (byte[])payload);
-            return;
-        }
-
-        JsonRecordSerializer.Populate(target, (string)payload);
     }
 
     private sealed class MinimalProfileNavigator : Navigator

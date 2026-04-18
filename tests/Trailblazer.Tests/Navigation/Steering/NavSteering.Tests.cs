@@ -1020,7 +1020,7 @@ public class NavSteeringTests : IDisposable
 
         source.ShouldMove.Should().BeTrue();
 
-        object payload = SerializeRecord(source, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
         // Unload chart so TryCreateRequest will fail to rebuild the AStar request
         PathManager.UnloadChart("RecordDataIdleChart");
@@ -1028,7 +1028,7 @@ public class NavSteeringTests : IDisposable
         // Act: populate into a fresh NavSteering — request factory returns null → reset branch
         var target = new NavSteering();
         target.OnInitialize(agent.Radius);
-        PopulateRecord(target, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
         // Assert: steering reset to idle
         target.ShouldMove.Should().BeFalse();
@@ -1069,12 +1069,12 @@ public class NavSteeringTests : IDisposable
         source.ShouldMove.Should().BeTrue();
         source.TrailGuide.Should().BeNull();
 
-        object payload = SerializeRecord(source, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
         // Act: populate — Kind=AStar, HasGuide=false → else-if branch sets _shouldRequestPathThisFrame=true
         var target = new NavSteering();
         target.OnInitialize(agent.Radius);
-        PopulateRecord(target, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
         // Assert: request rebuilt, repath scheduled
         target.ShouldMove.Should().BeTrue();
@@ -1346,24 +1346,6 @@ public class NavSteeringTests : IDisposable
     private static void AddOpen(Vector3d position)
     {
         PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "NavSteeringOpen");
-    }
-
-    private static object SerializeRecord(IRecordable record, bool useMemoryPack)
-    {
-        return useMemoryPack
-            ? MemoryPackRecordSerializer.Serialize(record)
-            : JsonRecordSerializer.Serialize(record, writeIndented: true);
-    }
-
-    private static void PopulateRecord(IRecordable target, object payload, bool useMemoryPack)
-    {
-        if (useMemoryPack)
-        {
-            MemoryPackRecordSerializer.Populate(target, (byte[])payload);
-            return;
-        }
-
-        JsonRecordSerializer.Populate(target, (string)payload);
     }
 
     private sealed class TestableNavSteering : NavSteering

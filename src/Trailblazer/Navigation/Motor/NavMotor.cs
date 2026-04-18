@@ -62,6 +62,8 @@ public class NavMotor : IRecordable
 
     private FlyLocomotion FlyModule => Handler.Fly;
 
+    private ClimbLocomotion ClimbModule => Handler.Climb;
+
     #region Cache
 
     /// <summary>
@@ -133,10 +135,15 @@ public class NavMotor : IRecordable
     public bool IsFalling => Handler.Fall.IsFalling;
 
     /// <summary>
+    /// Determines if the navigator is currently attached to a climb affordance.
+    /// </summary>
+    public bool IsClimbing => ClimbModule?.IsClimbing == true;
+
+    /// <summary>
     /// Checks if the navigator is in a state where it is airborne but not actively jumping, flying, or falling.
     /// </summary>
     public bool InLimbo => !IsOnSolid && !IsInGas && !IsInLiquid
-        || IsInGas && !IsFlying && !IsJumping && !IsFalling;
+        || IsInGas && !IsFlying && !IsJumping && !IsFalling && !IsClimbing;
 
     #endregion
 
@@ -298,6 +305,7 @@ public class NavMotor : IRecordable
         if (JumpModule?.IsCoolingDown == true)
             JumpModule.UpdateCooldown();
 
+        UpdateClimbState(request);
         UpdateFlightState(request);
     }
 
@@ -329,6 +337,7 @@ public class NavMotor : IRecordable
         // Do not apply platform movement if we just jumped or if the platform is not actively driving us.
         bool isMovingWithPlatform = PlatformModule?.IsActive == true
             && !IsFlying
+            && !IsClimbing
             && (IsOnSolid || PlatformModule.IsLockedToPlatform);
         if (!isMovingWithPlatform || IsJumping)
             return;
@@ -372,6 +381,9 @@ public class NavMotor : IRecordable
     {
         if (IsFlying)
             return GetFlightVelocity(frameRequest);
+
+        if (IsClimbing)
+            return GetClimbVelocity(frameRequest);
 
         Vector3d result = GetControlledSurfaceVelocity(frameRequest);
         if (IsInLiquid)
@@ -464,6 +476,11 @@ public class NavMotor : IRecordable
                 ? SwimModule.MaxSwimAcceleration
                 : Handler.Move.MaxAirAcceleration;
 
+        if (IsClimbing)
+            return ClimbModule?.IsEnabled == true && ClimbModule.CanClimb
+                ? ClimbModule.MaxClimbAcceleration
+                : Handler.Move.MaxAirAcceleration;
+
         if (IsFlying)
             return FlyModule?.IsEnabled == true && FlyModule.CanFly
                 ? FlyModule.MaxFlyAcceleration
@@ -489,6 +506,16 @@ public class NavMotor : IRecordable
         {
             Fixed64 gravityCompensation = FixedMath.Clamp(
                 FlyModule?.GravityCompensation ?? Fixed64.Zero,
+                Fixed64.Zero,
+                Fixed64.One);
+            _forceOutput.y -= gravityStep * (Fixed64.One - gravityCompensation);
+            return;
+        }
+
+        if (IsClimbing)
+        {
+            Fixed64 gravityCompensation = FixedMath.Clamp(
+                ClimbModule?.GravityCompensationWhileClimbing ?? Fixed64.Zero,
                 Fixed64.Zero,
                 Fixed64.One);
             _forceOutput.y -= gravityStep * (Fixed64.One - gravityCompensation);
@@ -564,7 +591,7 @@ public class NavMotor : IRecordable
             return false;
         }
 
-        if (IsFlying || IsFalling)
+        if (IsFlying || IsFalling || IsClimbing)
             return false;
 
         if (IsInLiquid && !(SwimModule?.CanBreachWater ?? false))
@@ -638,6 +665,7 @@ public class NavMotor : IRecordable
         ValidatePendingTraversalFrame();
         RefreshTraversalState(newPosition, lastPosition, conditonRefresh);
         HandleTraversalTransitions();
+        HandleClimbState();
         HandleSwimState(newPosition);
         HandleFlightState();
         HandleFallState(newPosition);
@@ -683,6 +711,15 @@ public class NavMotor : IRecordable
 
         if (SwimModule?.IsEnabled == true && !IsInLiquid && WasInLiquid)
             Handler.ClearTransientState<SwimLocomotion>();
+    }
+
+    private void HandleClimbState()
+    {
+        if (ClimbModule?.IsEnabled != true)
+            return;
+
+        if ((IsInLiquid || CurrentState.Medium == TraversalMedium.Unknown) && ClimbModule.IsClimbing)
+            StopClimb(wasForced: false);
     }
 
     private void HandleGasExitTransition()
@@ -817,7 +854,7 @@ public class NavMotor : IRecordable
         if (FlyModule?.IsEnabled != true)
             return;
 
-        if (!IsInGas)
+        if (!IsInGas || IsClimbing)
         {
             if (FlyModule.IsFlying)
                 Handler.ClearTransientState<FlyLocomotion>();
@@ -864,6 +901,7 @@ public class NavMotor : IRecordable
 
         bool shouldFly = request.IsRequestingFlight
             && FlyModule.CanFly
+            && !IsClimbing
             && !IsInLiquid
             && CurrentState.Medium != TraversalMedium.Unknown;
 
@@ -905,6 +943,13 @@ public class NavMotor : IRecordable
 
     private void UpdateControlState()
     {
+        if (IsClimbing)
+        {
+            SetSlidingState(false);
+            Handler.IsInControl = true;
+            return;
+        }
+
         if (IsOnSolid)
         {
             if (IsFlying)
@@ -935,8 +980,52 @@ public class NavMotor : IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void ResetDownwardMomentumIfNeeded()
     {
+        if (IsClimbing)
+        {
+            _forceOutput = Vector3d.Zero;
+            return;
+        }
+
         if ((!IsOnSolid || WasInGas) && !IsFlying)
             _forceOutput.y = Fixed64.Zero;
+    }
+
+    private Vector3d GetClimbVelocity(TrekRequest frameRequest)
+    {
+        if (ClimbModule?.IsEnabled != true
+            || !ClimbModule.CanClimb
+            || frameRequest.Rate == TrekRate.Stationary)
+        {
+            return Vector3d.Zero;
+        }
+
+        Vector3d upAxis = ClimbModule.AttachedUpDirection != Vector3d.Zero
+            ? ClimbModule.AttachedUpDirection.Normal
+            : Vector3d.Up;
+        Vector3d outwardNormal = ClimbModule.AttachedSurfaceNormal != Vector3d.Zero
+            ? ClimbModule.AttachedSurfaceNormal.Normal
+            : Vector3d.Backward;
+        Vector3d lateralAxis = Vector3d.Cross(upAxis, outwardNormal);
+        if (lateralAxis == Vector3d.Zero)
+            lateralAxis = Vector3d.Cross(Vector3d.Up, outwardNormal);
+        if (lateralAxis == Vector3d.Zero)
+            lateralAxis = Vector3d.Right;
+        lateralAxis = lateralAxis.Normal;
+
+        Fixed64 verticalAmount = Vector3d.Dot(frameRequest.Direction, upAxis);
+        if (!ClimbModule.ActiveAllowDescent && verticalAmount < Fixed64.Zero)
+            verticalAmount = Fixed64.Zero;
+
+        Fixed64 lateralAmount = ClimbModule.ActiveAllowLateralTraverse
+            ? Vector3d.Dot(frameRequest.Direction, lateralAxis)
+            : Fixed64.Zero;
+
+        Vector3d climbDirection = (upAxis * verticalAmount) + (lateralAxis * lateralAmount);
+        Fixed64 inputMagnitude = FixedMath.Clamp01(climbDirection.Magnitude);
+        if (inputMagnitude <= Fixed64.Zero)
+            return Vector3d.Zero;
+
+        return climbDirection.Normal * (ClimbModule.MaxClimbSpeed * inputMagnitude);
     }
 
     private bool TryApplyStationaryGroundFriction(Vector3d desiredDirection)
@@ -1128,7 +1217,7 @@ public class NavMotor : IRecordable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool ShouldClearActiveFallState() => IsInLiquid || IsFlying;
+    private bool ShouldClearActiveFallState() => IsInLiquid || IsFlying || IsClimbing;
 
     private void ClearFallState()
     {
@@ -1180,6 +1269,104 @@ public class NavMotor : IRecordable
         // Fast never reaches this helper because GetFlightSpeedMultiplier(...) short-circuits it to one.
         _ => Fixed64.Zero
     };
+
+    private void UpdateClimbState(TrekRequest request)
+    {
+        if (ClimbModule?.IsEnabled != true)
+            return;
+
+        bool canAttemptClimb = request.IsRequestingClimb
+            && ClimbModule.CanClimb
+            && !IsInLiquid
+            && CurrentState.Medium != TraversalMedium.Unknown;
+        if (!canAttemptClimb)
+        {
+            if (ClimbModule.IsClimbing)
+                StopClimb(wasForced: false);
+
+            return;
+        }
+
+        if (ClimbResolver == null
+            || !ClimbResolver.TryResolveClimbAffordance(request, CurrentState, out ClimbAffordanceSnapshot snapshot))
+        {
+            if (ClimbModule.IsClimbing)
+                StopClimb(wasForced: true);
+
+            return;
+        }
+
+        if (ClimbModule.IsClimbing)
+        {
+            bool canContinue = snapshot.CanContinueClimb
+                && Events.CanContinueClimb?.Invoke() != false
+                && IsCompatibleClimbAffordance(snapshot);
+            if (!canContinue)
+            {
+                StopClimb(wasForced: true);
+                return;
+            }
+
+            ClimbModule.ApplyClimbSnapshot(snapshot);
+            return;
+        }
+
+        bool canStart = snapshot.CanStartClimb
+            && Events.CanStartClimb?.Invoke() != false;
+        if (!canStart)
+            return;
+
+        StartClimb(snapshot);
+    }
+
+    private void StartClimb(ClimbAffordanceSnapshot snapshot)
+    {
+        ClimbModule.ApplyClimbSnapshot(snapshot);
+        ClimbModule.IsClimbing = true;
+        ClimbModule.IsMantling = false;
+
+        if (IsFalling)
+            Handler.ClearTransientState<FallLocomotion>();
+
+        if (JumpModule != null)
+        {
+            JumpModule.IsJumping = false;
+            JumpModule.IsHoldingJump = false;
+        }
+
+        if (FlyModule != null)
+            FlyModule.IsFlying = false;
+
+        if (SlideModule != null)
+            SlideModule.IsSliding = false;
+
+        Events.OnStartClimb?.Invoke(snapshot);
+    }
+
+    private void StopClimb(bool wasForced)
+    {
+        if (ClimbModule?.IsClimbing != true)
+            return;
+
+        Handler.ClearTransientState<ClimbLocomotion>();
+
+        if (wasForced)
+            Events.OnClimbSlip?.Invoke();
+
+        Events.OnStopClimb?.Invoke();
+    }
+
+    private bool IsCompatibleClimbAffordance(ClimbAffordanceSnapshot snapshot)
+    {
+        if (ClimbModule.AttachmentId.HasValue && snapshot.AffordanceId.HasValue)
+            return ClimbModule.AttachmentId.Value == snapshot.AffordanceId.Value;
+
+        if (snapshot.Kind != ClimbModule.ActiveClimbKind)
+            return false;
+
+        Fixed64 tolerance = ClimbModule.ClimbStartTolerance;
+        return (snapshot.AttachmentPoint - ClimbModule.AttachmentPoint).SqrMagnitude <= tolerance * tolerance;
+    }
 
     #endregion
 

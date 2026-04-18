@@ -125,13 +125,13 @@ public class FlyLocomotionTests : IDisposable
         source.Motor.Handler.Fly.IsFlying = true;
         source.Motor.Handler.Fly.IsEnabled = false;
 
-        object payload = SerializeRecord(source.Motor, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
 
         var target = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: Vector3d.Zero,
             startingMedium: TraversalMedium.Solid);
         target.Motor.Handler.Fly.IsEnabled = true;
-        PopulateRecord(target.Motor, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
 
         target.Motor.Handler.Fly.IsEnabled.Should().BeFalse();
         target.Motor.Handler.Fly.IsFlying.Should().BeFalse();
@@ -167,12 +167,12 @@ public class FlyLocomotionTests : IDisposable
         source.Motor.Handler.Fly.GravityCompensation = (Fixed64)0.75f;
         source.Motor.Handler.Fly.IsFlying = true;
 
-        object payload = SerializeRecord(source.Motor, useMemoryPack);
+        object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
 
         var target = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: Vector3d.Zero,
             startingMedium: TraversalMedium.Solid);
-        PopulateRecord(target.Motor, payload, useMemoryPack);
+        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
 
         target.Motor.Handler.Fly.Should().NotBeNull();
         target.Motor.Handler.Fly.MaxFlySpeed.Should().Be((Fixed64)3);
@@ -181,23 +181,5 @@ public class FlyLocomotionTests : IDisposable
         target.Motor.Handler.Fly.MaxFlyAcceleration.Should().Be((Fixed64)24);
         target.Motor.Handler.Fly.GravityCompensation.Should().Be((Fixed64)0.75f);
         target.Motor.Handler.Fly.IsFlying.Should().BeTrue();
-    }
-
-    private static object SerializeRecord(IRecordable record, bool useMemoryPack)
-    {
-        return useMemoryPack
-            ? MemoryPackRecordSerializer.Serialize(record)
-            : JsonRecordSerializer.Serialize(record, writeIndented: true);
-    }
-
-    private static void PopulateRecord(IRecordable target, object payload, bool useMemoryPack)
-    {
-        if (useMemoryPack)
-        {
-            MemoryPackRecordSerializer.Populate(target, (byte[])payload);
-            return;
-        }
-
-        JsonRecordSerializer.Populate(target, (string)payload);
     }
 }

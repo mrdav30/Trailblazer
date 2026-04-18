@@ -18,6 +18,12 @@ navigation stack without overfitting the feature to one game-specific model.
   Landed ledge-oriented mantle support through `ClimbAffordanceSnapshot` mantle targets,
   deterministic mantle entry/completion in `NavMotor`, climb-detach jump behavior, updated
   serialization coverage, and focused plus full-suite `Release` verification.
+- Phase 4 complete on April 18, 2026.
+  Hardened continuous-surface climbing by tolerating deterministic frame-to-frame attachment drift
+  and changing climb normals when snapshots remain compatible, while preserving strict slip/detach
+  behavior for flipped surfaces and host-forced detach cases. Added focused runtime coverage for
+  continuous free-climb traversal, detach-into-fall, and forced-detach outcomes, then revalidated
+  the broader motor and full `Release` suites.
 
 The immediate design target is broad enough to support:
 

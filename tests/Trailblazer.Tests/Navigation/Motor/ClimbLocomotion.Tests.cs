@@ -239,6 +239,45 @@ public sealed class ClimbLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void Given_ContinuousSurfaceSnapshots_When_NormalsAndAttachmentShift_Then_ClimbContinues()
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MutableClimbResolver
+        {
+            Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true)
+        };
+        int startedCount = 0;
+        agent.Motor.ClimbResolver = resolver;
+        agent.Motor.Events.OnStartClimb = _ => startedCount++;
+        agent.Motor.Handler.Climb!.MaxClimbSpeed = (Fixed64)3;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        resolver.Snapshot = CreateSurfaceSnapshot(
+            allowLateralTraverse: true,
+            attachmentPoint: new Vector3d(Fixed64.Zero, (Fixed64)0.25f, Fixed64.Zero),
+            surfaceNormal: new Vector3d((Fixed64)0.25f, Fixed64.Zero, -Fixed64.One).Normal,
+            upDirection: new Vector3d((Fixed64)0.1f, Fixed64.One, Fixed64.Zero).Normal,
+            affordanceId: null);
+
+        SimulateClimbFrame(agent, Vector3d.Up + Vector3d.Right, TrekRate.Fast);
+
+        resolver.Snapshot = CreateSurfaceSnapshot(
+            allowLateralTraverse: true,
+            attachmentPoint: new Vector3d((Fixed64)0.2f, (Fixed64)0.45f, Fixed64.Zero),
+            surfaceNormal: new Vector3d((Fixed64)0.4f, Fixed64.Zero, -Fixed64.One).Normal,
+            upDirection: new Vector3d((Fixed64)0.15f, Fixed64.One, Fixed64.Zero).Normal,
+            affordanceId: null);
+
+        SimulateClimbFrame(agent, Vector3d.Up + Vector3d.Right, TrekRate.Fast);
+
+        agent.Motor.IsClimbing.Should().BeTrue();
+        agent.Position.y.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Position.x.Should().BeGreaterThan(Fixed64.Zero);
+        startedCount.Should().Be(1);
+    }
+
+    [Fact]
     public void Given_LadderAffordance_When_DescentDisallowed_Then_DoesNotMoveDown()
     {
         var agent = CreateClimbingAgent(startPosition: new Vector3d(0, 2, 0));
@@ -252,6 +291,33 @@ public sealed class ClimbLocomotionTests : IDisposable
 
         agent.Motor.IsClimbing.Should().BeTrue();
         agent.Position.y.Should().Be((Fixed64)2);
+    }
+
+    [Fact]
+    public void Given_ContinuousSurfaceSnapshots_When_SurfaceFlipsAway_Then_SlipsAndStops()
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MutableClimbResolver
+        {
+            Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true, affordanceId: null)
+        };
+        int slipCount = 0;
+        agent.Motor.ClimbResolver = resolver;
+        agent.Motor.Events.OnClimbSlip = () => slipCount++;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        resolver.Snapshot = CreateSurfaceSnapshot(
+            allowLateralTraverse: true,
+            attachmentPoint: new Vector3d(Fixed64.Zero, (Fixed64)0.2f, Fixed64.Zero),
+            surfaceNormal: Vector3d.Forward,
+            upDirection: Vector3d.Up,
+            affordanceId: null);
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+        slipCount.Should().Be(1);
     }
 
     [Fact]
@@ -271,6 +337,26 @@ public sealed class ClimbLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void Given_ActiveClimb_When_HostContinueVetoes_Then_SlipsAndStops()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true)
+        };
+        int slipCount = 0;
+        agent.Motor.Events.OnClimbSlip = () => slipCount++;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        agent.Motor.Events.CanContinueClimb = () => false;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+        slipCount.Should().Be(1);
+    }
+
+    [Fact]
     public void Given_FallingAgent_When_ClimbAttaches_Then_GravityAndFallAreSuppressed()
     {
         var agent = MockMotorAgentTestFactory.CreateFallingAgent(startVelocity: new Vector3d(0, -4, 0));
@@ -287,6 +373,27 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.Motor.IsClimbing.Should().BeTrue();
         agent.Motor.IsFalling.Should().BeFalse();
         agent.Position.y.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void Given_ActiveClimb_When_RequestStopsInGas_Then_DetachesIntoFall()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true)
+        };
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        TrailblazerManager.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Zero;
+        agent.FrameRequest.Rate = TrekRate.Stationary;
+        agent.FrameRequest.IsRequestingClimb = false;
+        agent.Simulate();
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+        agent.Motor.IsFalling.Should().BeTrue();
     }
 
     [Fact]
@@ -465,14 +572,19 @@ public sealed class ClimbLocomotionTests : IDisposable
             allowDescent: allowDescent);
     }
 
-    private static ClimbAffordanceSnapshot CreateSurfaceSnapshot(bool allowLateralTraverse)
+    private static ClimbAffordanceSnapshot CreateSurfaceSnapshot(
+        bool allowLateralTraverse,
+        Vector3d? attachmentPoint = null,
+        Vector3d? surfaceNormal = null,
+        Vector3d? upDirection = null,
+        int? affordanceId = 2)
     {
         return new ClimbAffordanceSnapshot(
             kind: ClimbAffordanceKind.Surface,
-            attachmentPoint: Vector3d.Zero,
-            surfaceNormal: Vector3d.Backward,
-            upDirection: Vector3d.Up,
-            affordanceId: 2,
+            attachmentPoint: attachmentPoint ?? Vector3d.Zero,
+            surfaceNormal: surfaceNormal ?? Vector3d.Backward,
+            upDirection: upDirection ?? Vector3d.Up,
+            affordanceId: affordanceId,
             allowLateralTraverse: allowLateralTraverse,
             allowDescent: true);
     }

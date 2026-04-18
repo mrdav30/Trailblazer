@@ -1416,8 +1416,36 @@ public class NavMotor : IRecordable
         if (snapshot.Kind != ClimbModule.ActiveClimbKind)
             return false;
 
-        Fixed64 tolerance = ClimbModule.ClimbStartTolerance;
+        if (!HasCompatibleClimbAxes(snapshot))
+            return false;
+
+        Fixed64 tolerance = GetClimbContinuityTolerance();
         return (snapshot.AttachmentPoint - ClimbModule.AttachmentPoint).SqrMagnitude <= tolerance * tolerance;
+    }
+
+    private bool HasCompatibleClimbAxes(ClimbAffordanceSnapshot snapshot)
+    {
+        if (ClimbModule.AttachedSurfaceNormal != Vector3d.Zero
+            && snapshot.SurfaceNormal != Vector3d.Zero
+            && Vector3d.Dot(ClimbModule.AttachedSurfaceNormal.Normal, snapshot.SurfaceNormal.Normal) <= Fixed64.Zero)
+        {
+            return false;
+        }
+
+        if (ClimbModule.AttachedUpDirection != Vector3d.Zero
+            && snapshot.UpDirection != Vector3d.Zero
+            && Vector3d.Dot(ClimbModule.AttachedUpDirection.Normal, snapshot.UpDirection.Normal) <= Fixed64.Zero)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private Fixed64 GetClimbContinuityTolerance()
+    {
+        Fixed64 frameTravelAllowance = ClimbModule.MaxClimbSpeed * TrailblazerManager.DeltaTime;
+        return ClimbModule.ClimbStartTolerance + frameTravelAllowance;
     }
 
     private bool ShouldStartMantle(TrekRequest request, ClimbAffordanceSnapshot snapshot)

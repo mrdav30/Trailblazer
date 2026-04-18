@@ -36,6 +36,14 @@ These are valid future hardening items, but they should stay demand-driven rathe
   general managed transition dependency model.
 - If the new GridForge payload makes it worthwhile later, revisit whether external grid change
   rebuilds should become more precise than the current bounds-targeted chart rebuild path.
+- If climbing and other attached locomotions expose enough overlap after implementation, revisit
+  whether the motor should grow a generalized movement-mode abstraction for mutually exclusive
+  controlled modes such as swim, fly, and climb. Do not preemptively refactor toward this before
+  the climb runtime proves the real common shape.
+- If the climb affordance resolver pattern lands cleanly, revisit whether narrow capability events
+  such as `CanAffordJump` should move toward a more structured host query contract as well, so the
+  motor consumes deterministic frame snapshots instead of accumulating permission and environment
+  state through callback chains.
 
 ## Recommended Order
 

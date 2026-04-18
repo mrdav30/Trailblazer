@@ -382,6 +382,9 @@ public class NavMotor : IRecordable
         if (IsFlying)
             return GetFlightVelocity(frameRequest);
 
+        if (ClimbModule?.IsMantling == true)
+            return GetMantleVelocity(frameRequest.Origin);
+
         if (IsClimbing)
             return GetClimbVelocity(frameRequest);
 
@@ -578,7 +581,9 @@ public class NavMotor : IRecordable
 
         Vector3d jumpForce = IsInLiquid
             ? GetWaterBreachJumpForce()
-            : GetGroundJumpForce();
+            : IsClimbing
+                ? GetClimbDetachJumpForce()
+                : GetGroundJumpForce();
         CommitJumpForce(jumpForce);
     }
 
@@ -591,7 +596,10 @@ public class NavMotor : IRecordable
             return false;
         }
 
-        if (IsFlying || IsFalling || IsClimbing)
+        if (IsFlying || IsFalling)
+            return false;
+
+        if (IsClimbing && !(ClimbModule?.ActiveAllowDetachJump ?? false))
             return false;
 
         if (IsInLiquid && !(SwimModule?.CanBreachWater ?? false))
@@ -617,6 +625,19 @@ public class NavMotor : IRecordable
         return JumpModule.FrameJumpDirection * GetVerticalJumpSpeed();
     }
 
+    private Vector3d GetClimbDetachJumpForce()
+    {
+        Vector3d upward = ClimbModule.AttachedUpDirection != Vector3d.Zero
+            ? ClimbModule.AttachedUpDirection.Normal
+            : Vector3d.Up;
+        Vector3d outward = ClimbModule.AttachedSurfaceNormal != Vector3d.Zero
+            ? ClimbModule.AttachedSurfaceNormal.Normal
+            : Vector3d.Backward;
+        JumpModule.FrameJumpDirection = Vector3d.Slerp(upward, outward, JumpModule.PerpendicularJumpAmount);
+        Events.OnStartJump?.Invoke(JumpModule.AvoidGroundingTimer);
+        return JumpModule.FrameJumpDirection * GetVerticalJumpSpeed();
+    }
+
     private void EnsureJumpDirectionInitialized()
     {
         if (JumpModule.IsJumping)
@@ -634,6 +655,9 @@ public class NavMotor : IRecordable
 
     private void CommitJumpForce(Vector3d jumpForce)
     {
+        if (IsClimbing)
+            StopClimb(wasForced: false);
+
         JumpModule.RegisterJump();
 
         // Remove any existing downward force before the jump impulse is applied.
@@ -665,7 +689,7 @@ public class NavMotor : IRecordable
         ValidatePendingTraversalFrame();
         RefreshTraversalState(newPosition, lastPosition, conditonRefresh);
         HandleTraversalTransitions();
-        HandleClimbState();
+        HandleClimbState(newPosition);
         HandleSwimState(newPosition);
         HandleFlightState();
         HandleFallState(newPosition);
@@ -713,10 +737,24 @@ public class NavMotor : IRecordable
             Handler.ClearTransientState<SwimLocomotion>();
     }
 
-    private void HandleClimbState()
+    private void HandleClimbState(Vector3d position)
     {
         if (ClimbModule?.IsEnabled != true)
             return;
+
+        if (ClimbModule.IsMantling)
+        {
+            if (IsInLiquid || CurrentState.Medium == TraversalMedium.Unknown)
+            {
+                StopClimb(wasForced: true);
+                return;
+            }
+
+            if (ShouldCompleteMantle(position))
+                CompleteMantle();
+
+            return;
+        }
 
         if ((IsInLiquid || CurrentState.Medium == TraversalMedium.Unknown) && ClimbModule.IsClimbing)
             StopClimb(wasForced: false);
@@ -1275,6 +1313,9 @@ public class NavMotor : IRecordable
         if (ClimbModule?.IsEnabled != true)
             return;
 
+        if (ClimbModule.IsMantling)
+            return;
+
         bool canAttemptClimb = request.IsRequestingClimb
             && ClimbModule.CanClimb
             && !IsInLiquid
@@ -1308,6 +1349,10 @@ public class NavMotor : IRecordable
             }
 
             ClimbModule.ApplyClimbSnapshot(snapshot);
+
+            if (ShouldStartMantle(request, snapshot))
+                StartMantle(snapshot);
+
             return;
         }
 
@@ -1343,6 +1388,13 @@ public class NavMotor : IRecordable
         Events.OnStartClimb?.Invoke(snapshot);
     }
 
+    private void StartMantle(ClimbAffordanceSnapshot snapshot)
+    {
+        ClimbModule.ApplyClimbSnapshot(snapshot);
+        ClimbModule.IsMantling = true;
+        Events.OnStartMantle?.Invoke();
+    }
+
     private void StopClimb(bool wasForced)
     {
         if (ClimbModule?.IsClimbing != true)
@@ -1366,6 +1418,55 @@ public class NavMotor : IRecordable
 
         Fixed64 tolerance = ClimbModule.ClimbStartTolerance;
         return (snapshot.AttachmentPoint - ClimbModule.AttachmentPoint).SqrMagnitude <= tolerance * tolerance;
+    }
+
+    private bool ShouldStartMantle(TrekRequest request, ClimbAffordanceSnapshot snapshot)
+    {
+        if (snapshot.Kind != ClimbAffordanceKind.Ledge
+            || !ClimbModule.ActiveAllowMantle
+            || !ClimbModule.MantleTargetPosition.HasValue
+            || request.Rate == TrekRate.Stationary)
+        {
+            return false;
+        }
+
+        Vector3d upAxis = ClimbModule.AttachedUpDirection != Vector3d.Zero
+            ? ClimbModule.AttachedUpDirection.Normal
+            : Vector3d.Up;
+        return Vector3d.Dot(request.Direction, upAxis) > Fixed64.Zero;
+    }
+
+    private Vector3d GetMantleVelocity(Vector3d origin)
+    {
+        if (ClimbModule?.MantleTargetPosition.HasValue != true)
+            return Vector3d.Zero;
+
+        Vector3d toTarget = ClimbModule.MantleTargetPosition.Value - origin;
+        if (toTarget == Vector3d.Zero)
+            return Vector3d.Zero;
+
+        Fixed64 distance = toTarget.Magnitude;
+        if (distance <= ClimbModule.ClimbStartTolerance)
+            return Vector3d.Zero;
+
+        return toTarget.Normal * ClimbModule.MaxClimbSpeed;
+    }
+
+    private bool ShouldCompleteMantle(Vector3d position)
+    {
+        if (IsOnSolid)
+            return true;
+
+        if (ClimbModule?.MantleTargetPosition.HasValue != true)
+            return false;
+
+        Fixed64 tolerance = ClimbModule.ClimbStartTolerance;
+        return (ClimbModule.MantleTargetPosition.Value - position).SqrMagnitude <= tolerance * tolerance;
+    }
+
+    private void CompleteMantle()
+    {
+        StopClimb(wasForced: false);
     }
 
     #endregion

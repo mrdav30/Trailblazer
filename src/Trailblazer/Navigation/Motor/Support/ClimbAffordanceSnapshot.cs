@@ -21,7 +21,8 @@ public readonly struct ClimbAffordanceSnapshot
         bool allowLateralTraverse = true,
         bool allowDescent = true,
         bool allowMantle = false,
-        bool allowDetachJump = true)
+        bool allowDetachJump = true,
+        Vector3d? mantleTargetPosition = null)
     {
         Kind = kind;
         AttachmentPoint = attachmentPoint;
@@ -34,6 +35,7 @@ public readonly struct ClimbAffordanceSnapshot
         AllowDescent = allowDescent;
         AllowMantle = allowMantle;
         AllowDetachJump = allowDetachJump;
+        MantleTargetPosition = mantleTargetPosition;
     }
 
     public ClimbAffordanceKind Kind { get; }
@@ -57,4 +59,6 @@ public readonly struct ClimbAffordanceSnapshot
     public bool AllowMantle { get; }
 
     public bool AllowDetachJump { get; }
+
+    public Vector3d? MantleTargetPosition { get; }
 }

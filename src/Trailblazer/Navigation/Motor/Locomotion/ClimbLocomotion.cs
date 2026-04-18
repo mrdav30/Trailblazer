@@ -138,6 +138,18 @@ public class ClimbLocomotion : ILocomotion
     public bool ActiveAllowDetachJump { get; set; }
 
     /// <summary>
+    /// Whether mantling is allowed for the active frame snapshot.
+    /// </summary>
+    [Transient]
+    public bool ActiveAllowMantle { get; set; }
+
+    /// <summary>
+    /// Current mantle target when a ledge affordance supplies one.
+    /// </summary>
+    [Transient]
+    public Vector3d? MantleTargetPosition { get; set; }
+
+    /// <summary>
     /// Applies a climb affordance snapshot to update the active attachment state for the current frame.
     /// </summary>
     /// <param name="snapshot"></param>
@@ -151,6 +163,8 @@ public class ClimbLocomotion : ILocomotion
         ActiveAllowLateralTraverse = snapshot.AllowLateralTraverse && AllowLateralTraverse;
         ActiveAllowDescent = snapshot.AllowDescent;
         ActiveAllowDetachJump = snapshot.AllowDetachJump;
+        ActiveAllowMantle = snapshot.AllowMantle && snapshot.MantleTargetPosition.HasValue;
+        MantleTargetPosition = snapshot.MantleTargetPosition;
     }
 
     /// <inheritdoc />
@@ -174,6 +188,8 @@ public class ClimbLocomotion : ILocomotion
         bool activeAllowLateralTraverse = ActiveAllowLateralTraverse;
         bool activeAllowDescent = ActiveAllowDescent;
         bool activeAllowDetachJump = ActiveAllowDetachJump;
+        bool activeAllowMantle = ActiveAllowMantle;
+        Vector3d? mantleTargetPosition = MantleTargetPosition;
 
         RecordValues.Look(chronicler, ref isClimbing, "isClimbing", false);
         RecordValues.Look(chronicler, ref isMantling, "isMantling", false);
@@ -185,6 +201,8 @@ public class ClimbLocomotion : ILocomotion
         RecordValues.Look(chronicler, ref activeAllowLateralTraverse, "activeAllowLateralTraverse", false);
         RecordValues.Look(chronicler, ref activeAllowDescent, "activeAllowDescent", true);
         RecordValues.Look(chronicler, ref activeAllowDetachJump, "activeAllowDetachJump", true);
+        RecordValues.Look(chronicler, ref activeAllowMantle, "activeAllowMantle", false);
+        RecordValues.Look(chronicler, ref mantleTargetPosition, "mantleTargetPosition", null);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
@@ -198,6 +216,8 @@ public class ClimbLocomotion : ILocomotion
             ActiveAllowLateralTraverse = activeAllowLateralTraverse;
             ActiveAllowDescent = activeAllowDescent;
             ActiveAllowDetachJump = activeAllowDetachJump;
+            ActiveAllowMantle = activeAllowMantle;
+            MantleTargetPosition = mantleTargetPosition;
 
             if (!_isEnabled)
                 this.ClearTransientState();

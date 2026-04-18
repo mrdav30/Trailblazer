@@ -14,6 +14,10 @@ navigation stack without overfitting the feature to one game-specific model.
   Landed deterministic attached climbing in `NavMotor` for ladder and simple wall-style
   affordances, including attach/continue/detach flow, climb-relative movement, gravity
   compensation, fall suppression, and focused `Release` test coverage.
+- Phase 3 complete on April 18, 2026.
+  Landed ledge-oriented mantle support through `ClimbAffordanceSnapshot` mantle targets,
+  deterministic mantle entry/completion in `NavMotor`, climb-detach jump behavior, updated
+  serialization coverage, and focused plus full-suite `Release` verification.
 
 The immediate design target is broad enough to support:
 

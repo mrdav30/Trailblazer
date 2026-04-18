@@ -61,7 +61,9 @@ public sealed class ClimbLocomotionTests : IDisposable
             AttachmentId = 12,
             AttachmentPoint = new Vector3d(3, 4, 5),
             AttachedSurfaceNormal = Vector3d.Left,
-            AttachedUpDirection = Vector3d.Up
+            AttachedUpDirection = Vector3d.Up,
+            ActiveAllowMantle = true,
+            MantleTargetPosition = new Vector3d(4, 5, 6)
         };
 
         var target = new ClimbLocomotion();
@@ -80,6 +82,8 @@ public sealed class ClimbLocomotionTests : IDisposable
         target.AttachmentPoint.Should().Be(new Vector3d(3, 4, 5));
         target.AttachedSurfaceNormal.Should().Be(Vector3d.Left);
         target.AttachedUpDirection.Should().Be(Vector3d.Up);
+        target.ActiveAllowMantle.Should().BeTrue();
+        target.MantleTargetPosition.Should().Be(new Vector3d(4, 5, 6));
     }
 
     [Fact]
@@ -96,7 +100,8 @@ public sealed class ClimbLocomotionTests : IDisposable
             allowLateralTraverse: false,
             allowDescent: false,
             allowMantle: true,
-            allowDetachJump: false);
+            allowDetachJump: false,
+            mantleTargetPosition: new Vector3d(8, 9, 10));
 
         snapshot.Kind.Should().Be(ClimbAffordanceKind.Ladder);
         snapshot.AttachmentPoint.Should().Be(new Vector3d(1, 2, 3));
@@ -109,6 +114,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         snapshot.AllowDescent.Should().BeFalse();
         snapshot.AllowMantle.Should().BeTrue();
         snapshot.AllowDetachJump.Should().BeFalse();
+        snapshot.MantleTargetPosition.Should().Be(new Vector3d(8, 9, 10));
     }
 
     [Fact]
@@ -333,6 +339,102 @@ public sealed class ClimbLocomotionTests : IDisposable
         slippedCount.Should().Be(1);
     }
 
+    [Fact]
+    public void Given_LedgeAffordance_When_MovingUp_Then_StartsMantle()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateLedgeSnapshot()
+        };
+        int mantleCount = 0;
+        agent.Motor.Events.OnStartMantle = () => mantleCount++;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.Motor.Handler.Climb!.IsMantling.Should().BeTrue();
+        agent.Motor.Handler.Climb.MantleTargetPosition.Should().Be(new Vector3d(0, 2, 0));
+        mantleCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void Given_ActiveMantle_When_HostTransitionsToSolid_Then_CompletesMantleAndStopsClimbing()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateLedgeSnapshot()
+        };
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.FrameCondition.Medium = TraversalMedium.Solid;
+        agent.FrameCondition.SurfaceLevel = agent.Position.y;
+        agent.FrameCondition.GroundState = new GroundCondition();
+        agent.Motor.UpdateTraversal(agent.FrameCondition);
+
+        TrailblazerManager.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Zero;
+        agent.FrameRequest.Rate = TrekRate.Stationary;
+        agent.FrameRequest.IsRequestingClimb = false;
+        agent.Simulate();
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+        agent.Motor.Handler.Climb!.IsMantling.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Given_ActiveMantle_When_TraversalBecomesUnknown_Then_SlipsAndStops()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateLedgeSnapshot()
+        };
+        int slipCount = 0;
+        agent.Motor.Events.OnClimbSlip = () => slipCount++;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.FrameCondition.Medium = TraversalMedium.Unknown;
+        agent.FrameCondition.GroundState = null;
+
+        TrailblazerManager.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Zero;
+        agent.FrameRequest.Rate = TrekRate.Stationary;
+        agent.FrameRequest.IsRequestingClimb = false;
+        agent.Simulate();
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+        slipCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void Given_LedgeAffordance_When_JumpRequested_Then_DetachesWithJumpImpulse()
+    {
+        var agent = CreateClimbingAgent();
+        agent.Motor.ClimbResolver = new MutableClimbResolver
+        {
+            Snapshot = CreateLedgeSnapshot(allowDetachJump: true)
+        };
+
+        SimulateClimbFrame(agent, Vector3d.Zero, TrekRate.Fast);
+
+        TrailblazerManager.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Zero;
+        agent.FrameRequest.Rate = TrekRate.Fast;
+        agent.FrameRequest.IsRequestingClimb = true;
+        agent.FrameRequest.IsRequestingJump = true;
+        agent.Simulate();
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+        agent.Motor.IsJumping.Should().BeTrue();
+        agent.Position.y.Should().BeGreaterThan(Fixed64.Zero);
+    }
+
     private static MockMotorAgent CreateClimbingAgent(Vector3d? startPosition = null)
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
@@ -373,6 +475,21 @@ public sealed class ClimbLocomotionTests : IDisposable
             affordanceId: 2,
             allowLateralTraverse: allowLateralTraverse,
             allowDescent: true);
+    }
+
+    private static ClimbAffordanceSnapshot CreateLedgeSnapshot(bool allowDetachJump = true)
+    {
+        return new ClimbAffordanceSnapshot(
+            kind: ClimbAffordanceKind.Ledge,
+            attachmentPoint: Vector3d.Zero,
+            surfaceNormal: Vector3d.Backward,
+            upDirection: Vector3d.Up,
+            affordanceId: 3,
+            allowLateralTraverse: false,
+            allowDescent: false,
+            allowMantle: true,
+            allowDetachJump: allowDetachJump,
+            mantleTargetPosition: new Vector3d(0, 2, 0));
     }
 
     private sealed class StaticClimbResolver : IClimbAffordanceResolver

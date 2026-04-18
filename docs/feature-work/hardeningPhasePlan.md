@@ -20,7 +20,10 @@ This is the main active follow-up track.
 
 Track any smaller follow-up issues that are straightforward to execute and don't require significant design or profiling work here:
 
-- None at the moment
+- Revisit whether `NavMotor` should expose a clearer pre-traversal traversal-state sync for hosts
+  that learn about medium changes before simulation begins. The current mantle path is correct when
+  hosts call `UpdateTraversal(...)` as part of that handoff, but the seam is implicit and easy to
+  miss in tests or custom integrations.
 
 ### 3. Optional Runtime Follow-Ups
 

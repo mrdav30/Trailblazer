@@ -586,7 +586,7 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
-    public void ApplyInputTrekRequest_ShouldCaptureFlightIntent()
+    public void ApplyInputTrekRequest_ShouldCaptureFlightAndClimbIntent()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
 
@@ -594,12 +594,14 @@ public class NavigatorTests : IDisposable
             Vector3d.Up,
             TrekRate.Fast,
             isRequestingJump: false,
-            isRequestingFlight: true);
+            isRequestingFlight: true,
+            isRequestingClimb: true);
 
         navigator.FrameRequest.Direction.Should().Be(Vector3d.Up);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
     }
 
     [Fact]
@@ -630,6 +632,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Stationary);
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
         navigator.FrameRequest.FacingDirection.Should().BeNull();
     }
 
@@ -866,6 +869,7 @@ public class NavigatorTests : IDisposable
             TrekRate.Fast,
             isRequestingJump: true,
             isRequestingFlight: true,
+            isRequestingClimb: true,
             facingDirection: Vector3d.Forward);
         navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), pathMode: GuidedPathMode.FlowField, rate: TrekRate.Fast, isRequestingJump: true, groupId: 7);
         navigator.SetTrekCondition(
@@ -881,6 +885,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Stationary);
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
         navigator.FrameRequest.FacingDirection.Should().BeNull();
         navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Unknown);
         navigator.FrameCondition.SurfaceLevel.Should().Be(Fixed64.Zero);
@@ -895,10 +900,12 @@ public class NavigatorTests : IDisposable
 
         navigator.ToggleGuidedJump(true);
         navigator.ToggleGuidedFlight(true);
+        navigator.ToggleGuidedClimb(true);
         navigator.SetGuidedTrekRate(TrekRate.Moderate);
 
         navigator.FrameRequest.IsRequestingJump.Should().BeTrue();
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
     }
 

@@ -64,6 +64,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         profile.Slide.Should().NotBeNull();
         profile.Swim.Should().NotBeNull();
         profile.Fly.Should().NotBeNull();
+        profile.Climb.Should().NotBeNull();
     }
 
     [Fact]
@@ -73,6 +74,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         var fall = new FallLocomotion();
         var jump = new JumpLocomotion();
         var fly = new FlyLocomotion();
+        var climb = new ClimbLocomotion();
 
         var profile = new LocomotionProfileBuilder(includeOptionalLocomotions: false)
             .WithMove(move)
@@ -90,6 +92,9 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
             .WithFly(fly)
             .WithoutFly()
             .WithFly(fly)
+            .WithClimb(climb)
+            .WithoutClimb()
+            .WithClimb(climb)
             .Build();
 
         profile.Move.Should().BeSameAs(move);
@@ -99,7 +104,8 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         profile.Slide.Should().BeNull();
         profile.Swim.Should().BeNull();
         profile.Fly.Should().BeSameAs(fly);
-        profile.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Platform | LocomotionKind.Jump | LocomotionKind.Fly);
+        profile.Climb.Should().BeSameAs(climb);
+        profile.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Platform | LocomotionKind.Jump | LocomotionKind.Fly | LocomotionKind.Climb);
     }
 
     [Fact]
@@ -133,5 +139,6 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         profile.Slide.Should().BeNull();
         profile.Swim.Should().BeNull();
         profile.Fly.Should().BeSameAs(handler.Fly);
+        profile.Climb.Should().BeSameAs(handler.Climb);
     }
 }

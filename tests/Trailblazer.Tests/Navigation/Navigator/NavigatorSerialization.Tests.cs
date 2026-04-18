@@ -81,6 +81,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsLockedOn.Should().Be(source.IsLockedOn);
         target.AnimDampTime.Should().Be(source.AnimDampTime);
         target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
+        target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.IsGuideded.Should().BeFalse();
 
         AssertMotorStateMatches(source.Motor, target.Motor);
@@ -137,6 +138,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsLockedOn.Should().Be(source.IsLockedOn);
         target.AnimDampTime.Should().Be(source.AnimDampTime);
         target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
+        target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.IsGuideded.Should().BeFalse();
 
         AssertMotorStateMatches(source.Motor, target.Motor);
@@ -167,6 +169,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
         target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
+        target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
 
         AssertSteeringStateMatches(source.Steering, target.Steering);
@@ -222,6 +225,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
         target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
+        target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
 
         AssertSteeringStateMatches(source.Steering, target.Steering);
@@ -249,6 +253,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
         target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
+        target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
 
         AssertSteeringStateMatches(source.Steering, target.Steering);
@@ -781,6 +786,7 @@ public class NavigatorSerializationTests : IDisposable
             TrekRate.Moderate,
             isRequestingJump: true,
             isRequestingFlight: true,
+            isRequestingClimb: true,
             facingDirection: Vector3d.Forward);
         source.SetGroundContact(
             surfaceLevel: Fixed64.Zero,
@@ -809,6 +815,12 @@ public class NavigatorSerializationTests : IDisposable
         source.Motor.Handler.Fall.FallStart = (Fixed64)10;
         source.Motor.Handler.Fly.GravityCompensation = (Fixed64)0.8f;
         source.Motor.Handler.Fly.IsFlying = true;
+        source.Motor.Handler.Climb.IsClimbing = true;
+        source.Motor.Handler.Climb.ActiveClimbKind = ClimbAffordanceKind.Surface;
+        source.Motor.Handler.Climb.AttachmentId = 21;
+        source.Motor.Handler.Climb.AttachmentPoint = new Vector3d(2, 1, 2);
+        source.Motor.Handler.Climb.AttachedSurfaceNormal = Vector3d.Left;
+        source.Motor.Handler.Climb.AttachedUpDirection = Vector3d.Up;
         source.Turning.CanTurn = false;
         source.Turning.TurnRate = (Fixed64)0.35f;
 
@@ -1102,6 +1114,16 @@ public class NavigatorSerializationTests : IDisposable
         actual.Handler.Fly.MaxFlySpeed.Should().Be(expected.Handler.Fly.MaxFlySpeed);
         actual.Handler.Fly.GravityCompensation.Should().Be(expected.Handler.Fly.GravityCompensation);
         actual.Handler.Fly.IsFlying.Should().Be(expected.Handler.Fly.IsFlying);
+
+        actual.Handler.Climb.IsEnabled.Should().Be(expected.Handler.Climb.IsEnabled);
+        actual.Handler.Climb.CanClimb.Should().Be(expected.Handler.Climb.CanClimb);
+        actual.Handler.Climb.IsClimbing.Should().Be(expected.Handler.Climb.IsClimbing);
+        actual.Handler.Climb.IsMantling.Should().Be(expected.Handler.Climb.IsMantling);
+        actual.Handler.Climb.ActiveClimbKind.Should().Be(expected.Handler.Climb.ActiveClimbKind);
+        actual.Handler.Climb.AttachmentId.Should().Be(expected.Handler.Climb.AttachmentId);
+        actual.Handler.Climb.AttachmentPoint.Should().Be(expected.Handler.Climb.AttachmentPoint);
+        actual.Handler.Climb.AttachedSurfaceNormal.Should().Be(expected.Handler.Climb.AttachedSurfaceNormal);
+        actual.Handler.Climb.AttachedUpDirection.Should().Be(expected.Handler.Climb.AttachedUpDirection);
 
         actual.Handler.Platform.IsNewPlatform.Should().Be(expected.Handler.Platform.IsNewPlatform);
         actual.Handler.Platform.MovementTransfer.Should().Be(expected.Handler.Platform.MovementTransfer);

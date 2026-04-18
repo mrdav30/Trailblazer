@@ -47,6 +47,8 @@ public class MockMotorAgent
         Motor.SetVelocity(Velocity);
 
         Motor.Events.CanAffordJump = () => true;
+        Motor.Events.CanStartClimb = () => true;
+        Motor.Events.CanContinueClimb = () => true;
 
         CheckTrekCondition();
         Motor.UpdateTraversal(FrameCondition, true);

@@ -49,6 +49,11 @@ public enum LocomotionKind
     Fly = 1 << 6,
 
     /// <summary>
+    /// Attached climb behavior and runtime state.
+    /// </summary>
+    Climb = 1 << 7,
+
+    /// <summary>
     /// The required locomotion set used by all motors.
     /// </summary>
     Core = Move | Fall,
@@ -56,7 +61,7 @@ public enum LocomotionKind
     /// <summary>
     /// The optional locomotion set used by the built-in presets.
     /// </summary>
-    Optional = Platform | Jump | Slide | Swim | Fly,
+    Optional = Platform | Jump | Slide | Swim | Fly | Climb,
 
     /// <summary>
     /// The built-in locomotion set containing every shipped module.

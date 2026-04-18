@@ -26,6 +26,7 @@ public sealed class LocomotionProfileBuilder
             Slide = new SlideLocomotion();
             Swim = new SwimLocomotion();
             Fly = new FlyLocomotion();
+            Climb = new ClimbLocomotion();
         }
     }
 
@@ -67,6 +68,11 @@ public sealed class LocomotionProfileBuilder
     /// The optional fly locomotion to install.
     /// </summary>
     public FlyLocomotion Fly { get; private set; }
+
+    /// <summary>
+    /// The optional climb locomotion to install.
+    /// </summary>
+    public ClimbLocomotion Climb { get; private set; }
 
     #endregion
 
@@ -179,6 +185,24 @@ public sealed class LocomotionProfileBuilder
     }
 
     /// <summary>
+    /// Installs or replaces climb locomotion.
+    /// </summary>
+    public LocomotionProfileBuilder WithClimb(ClimbLocomotion climb = null)
+    {
+        Climb = climb ?? new ClimbLocomotion();
+        return this;
+    }
+
+    /// <summary>
+    /// Removes climb locomotion.
+    /// </summary>
+    public LocomotionProfileBuilder WithoutClimb()
+    {
+        Climb = null;
+        return this;
+    }
+
+    /// <summary>
     /// Builds the composed locomotion profile.
     /// </summary>
     public LocomotionProfile Build()
@@ -190,7 +214,8 @@ public sealed class LocomotionProfileBuilder
             Jump,
             Slide,
             Swim,
-            Fly);
+            Fly,
+            Climb);
     }
 
     internal static LocomotionProfileBuilder FromHandler(LocomotionHandler handler)
@@ -204,7 +229,8 @@ public sealed class LocomotionProfileBuilder
             .SetJump(handler.Jump)
             .SetSlide(handler.Slide)
             .SetSwim(handler.Swim)
-            .SetFly(handler.Fly);
+            .SetFly(handler.Fly)
+            .SetClimb(handler.Climb);
     }
 
     private LocomotionProfileBuilder SetPlatform(PlatformLocomotion platform)
@@ -234,6 +260,12 @@ public sealed class LocomotionProfileBuilder
     private LocomotionProfileBuilder SetFly(FlyLocomotion fly)
     {
         Fly = fly;
+        return this;
+    }
+
+    private LocomotionProfileBuilder SetClimb(ClimbLocomotion climb)
+    {
+        Climb = climb;
         return this;
     }
 }

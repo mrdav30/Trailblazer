@@ -28,6 +28,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         var slide = new SlideLocomotion();
         var swim = new SwimLocomotion();
         var fly = new FlyLocomotion();
+        var climb = new ClimbLocomotion();
 
         handler.Replace(move);
         handler.Replace(fall);
@@ -36,6 +37,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Replace(slide);
         handler.Replace(swim);
         handler.Replace(fly);
+        handler.Replace(climb);
 
         handler.Move.Should().BeSameAs(move);
         handler.Fall.Should().BeSameAs(fall);
@@ -44,6 +46,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Slide.Should().BeSameAs(slide);
         handler.Swim.Should().BeSameAs(swim);
         handler.Fly.Should().BeSameAs(fly);
+        handler.Climb.Should().BeSameAs(climb);
         handler.InstalledKinds.Should().Be(LocomotionKind.All);
     }
 
@@ -108,9 +111,11 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         var handler = new LocomotionHandler(LocomotionProfile.CreateMoveAndFallOnly());
         var jump = new JumpLocomotion();
         var swim = new SwimLocomotion();
+        var climb = new ClimbLocomotion();
 
         handler.Install(jump);
         handler.Install(swim);
+        handler.Install(climb);
 
         var profile = handler.ToProfile();
 
@@ -120,7 +125,8 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         profile.Fall.Should().BeSameAs(handler.Fall);
         profile.Jump.Should().BeSameAs(jump);
         profile.Swim.Should().BeSameAs(swim);
-        profile.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Swim);
+        profile.Climb.Should().BeSameAs(climb);
+        profile.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Swim | LocomotionKind.Climb);
     }
 
     [Fact]
@@ -134,6 +140,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         var originalSlide = handler.Slide!;
         var originalSwim = handler.Swim!;
         var originalFly = handler.Fly!;
+        var originalClimb = handler.Climb!;
 
         originalMove.FrameVelocity = Vector3d.Forward;
         originalFall.IsFalling = true;
@@ -144,6 +151,8 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         originalSwim.IsDiving = true;
         originalSwim.UnderwaterTimer = Fixed64.One;
         originalFly.IsFlying = true;
+        originalClimb.IsClimbing = true;
+        originalClimb.IsMantling = true;
 
         var sharedMove = new MoveLocomotion { FrameVelocity = Vector3d.Right };
         var sharedFall = new FallLocomotion { IsFalling = true };
@@ -161,6 +170,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Slide.Should().BeNull();
         handler.Swim.Should().BeNull();
         handler.Fly.Should().BeNull();
+        handler.Climb.Should().BeNull();
         handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump);
 
         originalMove.FrameVelocity.Should().Be(Vector3d.Zero);
@@ -172,6 +182,8 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         originalSwim.IsDiving.Should().BeFalse();
         originalSwim.UnderwaterTimer.Should().Be(Fixed64.Zero);
         originalFly.IsFlying.Should().BeFalse();
+        originalClimb.IsClimbing.Should().BeFalse();
+        originalClimb.IsMantling.Should().BeFalse();
         sharedMove.FrameVelocity.Should().Be(Vector3d.Right);
         sharedFall.IsFalling.Should().BeTrue();
     }
@@ -188,11 +200,16 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Slide.Should().BeNull();
         handler.Swim.Should().BeNull();
         handler.Fly.Should().BeNull();
+        handler.Climb.Should().BeNull();
 
         handler.ConfigureInstalledKinds(LocomotionKind.Platform | LocomotionKind.Fly);
         handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Platform | LocomotionKind.Fly);
         handler.Platform.Should().NotBeNull();
         handler.Fly.Should().NotBeNull();
+
+        handler.ConfigureInstalledKinds(LocomotionKind.Climb);
+        handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Climb);
+        handler.Climb.Should().NotBeNull();
     }
 
     [Fact]
@@ -210,6 +227,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
                 typeof(FallLocomotion),
                 typeof(SwimLocomotion),
                 typeof(FlyLocomotion),
+                typeof(ClimbLocomotion),
                 typeof(SlideLocomotion));
     }
 

@@ -31,6 +31,12 @@ public class NavMotor : IRecordable
     public NavMotorEvents Events = new();
 
     /// <summary>
+    /// Optional host-owned resolver that supplies deterministic climb affordance snapshots.
+    /// </summary>
+    [NonSerialized]
+    public IClimbAffordanceResolver ClimbResolver;
+
+    /// <summary>
     /// This stores the current <see cref="Navigator._frameCondition"/> for the frame.  
     /// </summary>
     /// <remarks>

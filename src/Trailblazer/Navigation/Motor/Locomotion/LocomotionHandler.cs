@@ -95,6 +95,11 @@ public class LocomotionHandler : IRecordable
     /// </summary>
     public FlyLocomotion Fly { get; private set; }
 
+    /// <summary>
+    /// Handles climb configuration and runtime attachment state.
+    /// </summary>
+    public ClimbLocomotion Climb { get; private set; }
+
     #endregion
 
     #region Composition
@@ -191,6 +196,7 @@ public class LocomotionHandler : IRecordable
         ClearReplacedLocomotion(Slide, profile.Slide);
         ClearReplacedLocomotion(Swim, profile.Swim);
         ClearReplacedLocomotion(Fly, profile.Fly);
+        ClearReplacedLocomotion(Climb, profile.Climb);
 
         Move = profile.Move;
         Fall = profile.Fall;
@@ -199,6 +205,7 @@ public class LocomotionHandler : IRecordable
         Slide = profile.Slide;
         Swim = profile.Swim;
         Fly = profile.Fly;
+        Climb = profile.Climb;
 
         RefreshInstalledKinds();
     }
@@ -215,7 +222,8 @@ public class LocomotionHandler : IRecordable
             Jump,
             Slide,
             Swim,
-            Fly);
+            Fly,
+            Climb);
     }
 
     internal void ConfigureInstalledKinds(LocomotionKind kinds)
@@ -238,6 +246,9 @@ public class LocomotionHandler : IRecordable
         if ((normalizedKinds & LocomotionKind.Fly) != 0)
             builder.WithFly();
 
+        if ((normalizedKinds & LocomotionKind.Climb) != 0)
+            builder.WithClimb();
+
         ApplyProfile(builder.Build());
     }
 
@@ -259,6 +270,9 @@ public class LocomotionHandler : IRecordable
 
         if (Fly != null)
             InstalledKinds |= LocomotionKind.Fly;
+
+        if (Climb != null)
+            InstalledKinds |= LocomotionKind.Climb;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -282,7 +296,8 @@ public class LocomotionHandler : IRecordable
             LocomotionSlot.Fall => Fall,
             LocomotionSlot.Slide => Slide,
             LocomotionSlot.Swim => Swim,
-            LocomotionSlot.Fly => Fly
+            LocomotionSlot.Fly => Fly,
+            LocomotionSlot.Climb => Climb
         };
 #pragma warning restore CS8524
     }
@@ -307,6 +322,9 @@ public class LocomotionHandler : IRecordable
 
         if (Fly != null)
             yield return Fly;
+
+        if (Climb != null)
+            yield return Climb;
 
         if (Slide != null)
             yield return Slide;
@@ -344,6 +362,9 @@ public class LocomotionHandler : IRecordable
                 return;
             case LocomotionSlot.Fly:
                 Fly = locomotion as FlyLocomotion;
+                return;
+            case LocomotionSlot.Climb:
+                Climb = locomotion as ClimbLocomotion;
                 return;
         }
     }
@@ -431,6 +452,7 @@ public class LocomotionHandler : IRecordable
         SlideLocomotion slide = Slide;
         SwimLocomotion swim = Swim;
         FlyLocomotion fly = Fly;
+        ClimbLocomotion climb = Climb;
 
         RecordDeep.Look(chronicler, ref move, "move");
         RecordDeep.Look(chronicler, ref platform, "platform");
@@ -439,6 +461,7 @@ public class LocomotionHandler : IRecordable
         RecordDeep.Look(chronicler, ref slide, "slide");
         RecordDeep.Look(chronicler, ref swim, "swim");
         RecordDeep.Look(chronicler, ref fly, "fly");
+        RecordDeep.Look(chronicler, ref climb, "climb");
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
@@ -449,7 +472,8 @@ public class LocomotionHandler : IRecordable
                 jump,
                 slide,
                 swim,
-                fly));
+                fly,
+                climb));
         }
     }
 
@@ -499,6 +523,12 @@ public class LocomotionHandler : IRecordable
             return true;
         }
 
+        if (type == typeof(ClimbLocomotion))
+        {
+            slot = LocomotionSlot.Climb;
+            return true;
+        }
+
         slot = default;
         return false;
     }
@@ -511,6 +541,7 @@ public class LocomotionHandler : IRecordable
         Fall,
         Slide,
         Swim,
-        Fly
+        Fly,
+        Climb
     }
 }

@@ -17,7 +17,8 @@ public sealed class LocomotionProfile
         JumpLocomotion jump = null,
         SlideLocomotion slide = null,
         SwimLocomotion swim = null,
-        FlyLocomotion fly = null)
+        FlyLocomotion fly = null,
+        ClimbLocomotion climb = null)
     {
         Move = move ?? throw new ArgumentNullException(nameof(move));
         Fall = fall ?? throw new ArgumentNullException(nameof(fall));
@@ -26,6 +27,7 @@ public sealed class LocomotionProfile
         Slide = slide;
         Swim = swim;
         Fly = fly;
+        Climb = climb;
     }
 
     /// <summary>
@@ -64,6 +66,11 @@ public sealed class LocomotionProfile
     public FlyLocomotion Fly { get; }
 
     /// <summary>
+    /// Optional climb locomotion.
+    /// </summary>
+    public ClimbLocomotion Climb { get; }
+
+    /// <summary>
     /// Gets the installed locomotion flags for this profile.
     /// </summary>
     public LocomotionKind InstalledKinds
@@ -86,6 +93,9 @@ public sealed class LocomotionProfile
 
             if (Fly != null)
                 result |= LocomotionKind.Fly;
+
+            if (Climb != null)
+                result |= LocomotionKind.Climb;
 
             return result;
         }

@@ -19,7 +19,8 @@ public class TrekRequestTests
             FacingDirection = Vector3d.Right,
             Rate = TrekRate.Fast,
             IsRequestingJump = true,
-            IsRequestingFlight = true
+            IsRequestingFlight = true,
+            IsRequestingClimb = true
         };
 
         TrekRequest clone = request.Clone();
@@ -33,6 +34,7 @@ public class TrekRequestTests
         clone.Rate.Should().Be(request.Rate);
         clone.IsRequestingJump.Should().Be(request.IsRequestingJump);
         clone.IsRequestingFlight.Should().Be(request.IsRequestingFlight);
+        clone.IsRequestingClimb.Should().Be(request.IsRequestingClimb);
     }
 
     [Fact]
@@ -47,6 +49,7 @@ public class TrekRequestTests
             Rate = TrekRate.Moderate,
             IsRequestingJump = true,
             IsRequestingFlight = true,
+            IsRequestingClimb = true,
             FootPosition = new Vector3d(1, 1, 3)
         };
 
@@ -60,6 +63,7 @@ public class TrekRequestTests
         request.Rate.Should().Be(TrekRate.Stationary);
         request.IsRequestingJump.Should().BeFalse();
         request.IsRequestingFlight.Should().BeFalse();
+        request.IsRequestingClimb.Should().BeFalse();
     }
 
     [Fact]
@@ -74,7 +78,8 @@ public class TrekRequestTests
             FacingDirection = Vector3d.Forward,
             Rate = TrekRate.Fast,
             IsRequestingJump = true,
-            IsRequestingFlight = true
+            IsRequestingFlight = true,
+            IsRequestingClimb = true
         };
 
         request.ResetTransient();
@@ -87,5 +92,6 @@ public class TrekRequestTests
         request.Rate.Should().Be(TrekRate.Fast);
         request.IsRequestingJump.Should().BeFalse();
         request.IsRequestingFlight.Should().BeTrue();
+        request.IsRequestingClimb.Should().BeFalse();
     }
 }

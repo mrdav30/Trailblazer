@@ -52,6 +52,11 @@ public struct TrekRequest : IRecordable
     /// </summary>
     public bool IsRequestingFlight;
 
+    /// <summary>
+    /// Indicates whether the scout is requesting climb engagement or continuation.
+    /// </summary>
+    public bool IsRequestingClimb;
+
     public TrekRequest() { }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -60,6 +65,7 @@ public struct TrekRequest : IRecordable
         TrekRate rate,
         bool isRequestingJump,
         bool isRequestingFlight,
+        bool isRequestingClimb,
         Vector3d? facingDirection = null)
     {
         Direction = direction;
@@ -69,6 +75,7 @@ public struct TrekRequest : IRecordable
         Rate = rate;
         IsRequestingJump = isRequestingJump;
         IsRequestingFlight = isRequestingFlight;
+        IsRequestingClimb = isRequestingClimb;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -101,6 +108,7 @@ public struct TrekRequest : IRecordable
         Rate = Rate,
         IsRequestingJump = IsRequestingJump,
         IsRequestingFlight = IsRequestingFlight,
+        IsRequestingClimb = IsRequestingClimb,
         FootPosition = FootPosition
     };
 
@@ -117,6 +125,7 @@ public struct TrekRequest : IRecordable
         IsRequestingJump = false;
         Rate = TrekRate.Stationary;
         IsRequestingFlight = false;
+        IsRequestingClimb = false;
     }
 
     /// <summary>
@@ -130,6 +139,7 @@ public struct TrekRequest : IRecordable
         Rotation = FixedQuaternion.Identity;
         Direction = Vector3d.Zero;
         IsRequestingJump = false;
+        IsRequestingClimb = false;
     }
 
     public void RecordData(IChronicler chronicler)
@@ -142,5 +152,6 @@ public struct TrekRequest : IRecordable
         RecordValues.Look(chronicler, ref Rate, nameof(Rate), TrekRate.Stationary);
         RecordValues.Look(chronicler, ref IsRequestingJump, nameof(IsRequestingJump), false);
         RecordValues.Look(chronicler, ref IsRequestingFlight, nameof(IsRequestingFlight), false);
+        RecordValues.Look(chronicler, ref IsRequestingClimb, nameof(IsRequestingClimb), false);
     }
 }

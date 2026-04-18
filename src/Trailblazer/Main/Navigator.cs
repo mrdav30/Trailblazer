@@ -301,12 +301,14 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="rate">Rate of travel (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the agent is requesting a jump action.</param>
     /// <param name="isRequestingFlight">Whether the agent is requesting controlled flight.</param>
+    /// <param name="isRequestingClimb">Whether the agent is requesting climb engagement or continuation.</param>
     /// <param name="facingDirection">Optional world-space facing direction to use instead of facing along the movement direction.</param>
     public virtual void ApplyInputTrekRequest(
         Vector3d? direction = null,
         TrekRate? rate = null,
         bool? isRequestingJump = null,
         bool? isRequestingFlight = null,
+        bool? isRequestingClimb = null,
         Vector3d? facingDirection = null)
     {
         if (!IsActive) return;
@@ -318,6 +320,7 @@ public abstract class Navigator : INavigate, IRecordable
                 rate: rate ?? TrekRate.Stationary,
                 isRequestingJump: isRequestingJump ?? false,
                 isRequestingFlight: isRequestingFlight ?? false,
+                isRequestingClimb: isRequestingClimb ?? false,
                 facingDirection: facingDirection
         );
     }
@@ -356,6 +359,7 @@ public abstract class Navigator : INavigate, IRecordable
                 rate: rate ?? TrekRate.Stationary,
                 isRequestingJump: isRequestingJump ?? false,
                 isRequestingFlight: selectedPathMode == GuidedPathMode.Aerial,
+                isRequestingClimb: false,
                 facingDirection: null
         );
 
@@ -404,6 +408,12 @@ public abstract class Navigator : INavigate, IRecordable
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void ToggleGuidedFlight(bool status) => _frameRequest.IsRequestingFlight = status;
+
+    /// <summary>
+    /// Called to toggle climb intent if supported by the installed locomotion profile.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void ToggleGuidedClimb(bool status) => _frameRequest.IsRequestingClimb = status;
 
     /// <summary>
     /// Changes the speed at which the navigator is currently traveling without altering direction.

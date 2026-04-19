@@ -141,6 +141,40 @@ public class FlowFieldTransitionFallbackTests : IDisposable
         guide.Should().BeNull();
     }
 
+    [Fact]
+    public void FlowFieldRequest_ShouldUseTransitionFallback_ForGeneratedClimbTopology()
+    {
+        RegisterAuthoredClimbRoute("FlowFieldClimbFallback");
+
+        FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(3, 0, 1),
+            Fixed64.One,
+            allowUnwalkableEndpoints: true);
+        request.Should().NotBeNull();
+        request.MaxClimbHeight = Fixed64.Zero;
+        request.AllowTraversalTransitions = true;
+
+        PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide).Should().BeTrue();
+        guide.Should().NotBeNull();
+        guide.IsStaged.Should().BeTrue();
+
+        guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d toSeam).Should().BeTrue();
+        toSeam.x.Should().BeGreaterThan(Fixed64.Zero);
+
+        guide.TryGetMovementDirection(new Vector3d(1, 0, 0), out Vector3d upWall).Should().BeTrue();
+        upWall.y.Should().BeGreaterThan(Fixed64.Zero);
+
+        guide.TryGetMovementDirection(new Vector3d(1, 1, 0), out Vector3d aroundCorner).Should().BeTrue();
+        aroundCorner.z.Should().BeGreaterThan(Fixed64.Zero);
+
+        guide.TryGetMovementDirection(new Vector3d(2, 1, 1), out Vector3d towardExit).Should().BeTrue();
+        towardExit.y.Should().BeLessThan(Fixed64.Zero);
+
+        guide.TryGetMovementDirection(new Vector3d(2, 0, 1), out Vector3d toGoal).Should().BeTrue();
+        toGoal.x.Should().BeGreaterThan(Fixed64.Zero);
+    }
+
     private static void RegisterTwoPointChart(string chartName, Vector3d minBounds)
     {
         bool[,,] data = new bool[1, 2, 1];
@@ -152,5 +186,24 @@ public class FlowFieldTransitionFallbackTests : IDisposable
     private static void AddWater(Vector3d position)
     {
         PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "FlowFieldFallbackWater");
+    }
+
+    private static void RegisterAuthoredClimbRoute(string chartName)
+    {
+        string[,,] map = new string[2, 4, 2];
+        map[0, 0, 0] = "S";
+        map[0, 1, 0] = "SC!";
+        map[1, 1, 0] = "SC";
+        map[1, 1, 1] = "SC";
+        map[1, 2, 1] = "SC!";
+        map[0, 2, 1] = "S";
+        map[0, 3, 1] = "S";
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName,
+            map,
+            Vector3d.Zero,
+            Fixed64.One).Build();
+        PathManager.Register(buildResult).Should().BeTrue();
     }
 }

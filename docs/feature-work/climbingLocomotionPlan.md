@@ -29,6 +29,10 @@ navigation stack without overfitting the feature to one game-specific model.
   requesting climb entry and follow-up persistence, guided handoff serialization/runtime restore,
   deterministic intent clearing when guided traversal completes, and focused plus full-suite
   `Release` verification.
+- Phase 6 complete on April 19, 2026.
+  Landed authored `SC` / `SC!` climb topology, generated climb transitions and seam handoffs,
+  chained hybrid climb-route planning for parkour-style authored routes, staged A* / flow-field
+  fallback coverage, and focused plus full-suite `Release` verification.
 
 The immediate design target is broad enough to support:
 

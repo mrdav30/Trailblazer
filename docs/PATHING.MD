@@ -35,7 +35,7 @@ It is responsible for:
 - endpoint resolution from world positions into voxels
 - chart-backed A* and flow-field requests
 - chart-optional raw-volume requests
-- staged transition-aware fallback between chart and volume segments
+- staged transition-aware fallback between chart, authored climb, and volume segments
 - reusable survey result caching through `PathGuideFactory`
 
 It is not responsible for:
@@ -133,6 +133,9 @@ Key configuration:
 - `AllowUnwalkableEndpoints`
 - `AllowTraversalTransitions`
 
+When `AllowTraversalTransitions` is enabled, authored climb topology generated from `SC` / `SC!`
+tokens participates in the same staged fallback surface as jump, swim, and aerial transitions.
+
 Use it when:
 
 - one agent or one route needs a specific trail
@@ -166,6 +169,9 @@ Key configuration:
 - `ExtraFloodRange`
 - `AllowUnwalkableEndpoints`
 - `AllowTraversalTransitions`
+
+As with `AStarPathRequest`, enabling `AllowTraversalTransitions` also allows staged fallback
+through authored climb topology when direct chart routing cannot complete the route.
 
 Use it when:
 
@@ -244,6 +250,7 @@ Current planned route shapes are:
 
 - chart direct
 - chart -> transition -> chart
+- chart -> one or more authored climb transitions -> chart
 - chart -> transition -> volume -> transition -> chart
 
 Important internal behavior:
@@ -291,6 +298,7 @@ That opt-in means:
 
 - direct A* or flow-field routing is tried first
 - if direct chart routing fails, `PathGuideFactory` can build a staged fallback using `HybridPathRequest`
+- that staged fallback may include authored climb transitions generated from explicit climb topology
 - the original public request type still describes the caller's intent
 
 Important distinctions:

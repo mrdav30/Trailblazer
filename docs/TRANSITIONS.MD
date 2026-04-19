@@ -274,6 +274,7 @@ Current staged route shapes are:
 
 - chart direct
 - chart -> transition -> chart
+- chart -> one or more authored `Climb` transitions -> chart
 - chart -> transition -> volume -> transition -> chart
 
 Important nuance:

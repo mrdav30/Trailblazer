@@ -8,6 +8,8 @@ namespace Trailblazer.Pathing;
 /// </summary>
 internal static class GeneratedTraversalTransitionBuilder
 {
+    private const int DefaultGeneratedClimbPathCost = 1;
+
     private static readonly (int Dx, int Dy, int Dz)[] PositivePerpendicularNeighborOffsets =
     {
         (1, 0, 0),
@@ -20,45 +22,30 @@ internal static class GeneratedTraversalTransitionBuilder
         string transitionIdPrefix)
     {
         SwiftList<TraversalTransition> transitions = new();
-        int[] generatedIndices = chart.GetGeneratedTransitionIndices();
-        for (int i = 0; i < generatedIndices.Length; i++)
-        {
-            int flatIndex = generatedIndices[i];
-            chart.DecodeIndex(flatIndex, out int x, out int y, out int z);
-            NavigationChartCell currentCell = chart.GetCell(x, y, z);
+        for (int y = 0; y < chart.SizeY; y++)
+            for (int x = 0; x < chart.SizeX; x++)
+                for (int z = 0; z < chart.SizeZ; z++)
+                    for (int neighborOffsetIndex = 0; neighborOffsetIndex < PositivePerpendicularNeighborOffsets.Length; neighborOffsetIndex++)
+                    {
+                        (int dx, int dy, int dz) = PositivePerpendicularNeighborOffsets[neighborOffsetIndex];
+                        int neighborX = x + dx;
+                        int neighborY = y + dy;
+                        int neighborZ = z + dz;
+                        if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
+                            continue;
 
-            for (int neighborOffsetIndex = 0; neighborOffsetIndex < PositivePerpendicularNeighborOffsets.Length; neighborOffsetIndex++)
-            {
-                (int dx, int dy, int dz) = PositivePerpendicularNeighborOffsets[neighborOffsetIndex];
-                int neighborX = x + dx;
-                int neighborY = y + dy;
-                int neighborZ = z + dz;
-                if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
-                    continue;
-
-                NavigationChartCell neighborCell = chart.GetCell(neighborX, neighborY, neighborZ);
-                if (!neighborCell.CanGenerateTransition)
-                    continue;
-
-                if (TryBuildTransitionsForPair(
-                    chart,
-                    transitionIdPrefix,
-                    x,
-                    y,
-                    z,
-                    currentCell,
-                    neighborX,
-                    neighborY,
-                    neighborZ,
-                    neighborCell,
-                    out TraversalTransition chartToVolumeTransition,
-                    out TraversalTransition volumeToChartTransition))
-                {
-                    transitions.Add(chartToVolumeTransition);
-                    transitions.Add(volumeToChartTransition);
-                }
-            }
-        }
+                        TraversalTransition[] pairTransitions = BuildTransitionsForPair(
+                            chart,
+                            transitionIdPrefix,
+                            x,
+                            y,
+                            z,
+                            neighborX,
+                            neighborY,
+                            neighborZ);
+                        for (int pairTransitionIndex = 0; pairTransitionIndex < pairTransitions.Length; pairTransitionIndex++)
+                            transitions.Add(pairTransitions[pairTransitionIndex]);
+                    }
 
         return transitions.ToArray();
     }
@@ -81,10 +68,9 @@ internal static class GeneratedTraversalTransitionBuilder
 
         NavigationChartCell firstCell = chart.GetCell(firstX, firstY, firstZ);
         NavigationChartCell secondCell = chart.GetCell(secondX, secondY, secondZ);
-        if (!firstCell.CanGenerateTransition || !secondCell.CanGenerateTransition)
-            return System.Array.Empty<TraversalTransition>();
+        SwiftList<TraversalTransition> transitions = new(4);
 
-        return TryBuildTransitionsForPair(
+        if (TryBuildTransitionsForPair(
             chart,
             transitionIdPrefix,
             firstX,
@@ -96,9 +82,28 @@ internal static class GeneratedTraversalTransitionBuilder
             secondZ,
             secondCell,
             out TraversalTransition chartToVolumeTransition,
-            out TraversalTransition volumeToChartTransition)
-            ? new[] { chartToVolumeTransition, volumeToChartTransition }
-            : System.Array.Empty<TraversalTransition>();
+            out TraversalTransition volumeToChartTransition))
+        {
+            transitions.Add(chartToVolumeTransition);
+            transitions.Add(volumeToChartTransition);
+        }
+
+        AddGeneratedClimbTransitionsForPair(
+            transitions,
+            chart,
+            transitionIdPrefix,
+            firstX,
+            firstY,
+            firstZ,
+            firstCell,
+            secondX,
+            secondY,
+            secondZ,
+            secondCell);
+
+        return transitions.Count == 0
+            ? System.Array.Empty<TraversalTransition>()
+            : transitions.ToArray();
     }
 
     internal static string[] GetPotentialTransitionIdsForPair(
@@ -119,8 +124,152 @@ internal static class GeneratedTraversalTransitionBuilder
             CreateGeneratedTransitionId(transitionIdPrefix, TraversalTransitionType.SwimEntry, firstX, firstY, firstZ, secondX, secondY, secondZ),
             CreateGeneratedTransitionId(transitionIdPrefix, TraversalTransitionType.SwimEntry, secondX, secondY, secondZ, firstX, firstY, firstZ),
             CreateGeneratedTransitionId(transitionIdPrefix, TraversalTransitionType.SwimExit, firstX, firstY, firstZ, secondX, secondY, secondZ),
-            CreateGeneratedTransitionId(transitionIdPrefix, TraversalTransitionType.SwimExit, secondX, secondY, secondZ, firstX, firstY, firstZ)
+            CreateGeneratedTransitionId(transitionIdPrefix, TraversalTransitionType.SwimExit, secondX, secondY, secondZ, firstX, firstY, firstZ),
+            CreateGeneratedTransitionId(transitionIdPrefix, TraversalTransitionType.Climb, firstX, firstY, firstZ, secondX, secondY, secondZ),
+            CreateGeneratedTransitionId(transitionIdPrefix, TraversalTransitionType.Climb, secondX, secondY, secondZ, firstX, firstY, firstZ)
         };
+    }
+
+    private static void AddGeneratedClimbTransitionsForPair(
+        SwiftList<TraversalTransition> transitions,
+        NavigationChart chart,
+        string transitionIdPrefix,
+        int firstX,
+        int firstY,
+        int firstZ,
+        NavigationChartCell firstCell,
+        int secondX,
+        int secondY,
+        int secondZ,
+        NavigationChartCell secondCell)
+    {
+        bool firstIsClimbSurface = IsClimbSurface(firstCell);
+        bool secondIsClimbSurface = IsClimbSurface(secondCell);
+        if (!firstIsClimbSurface && !secondIsClimbSurface)
+            return;
+
+        Vector3d firstPosition = chart.GetWorldPosition(firstX, firstY, firstZ);
+        Vector3d secondPosition = chart.GetWorldPosition(secondX, secondY, secondZ);
+
+        if (firstIsClimbSurface && secondIsClimbSurface)
+        {
+            transitions.Add(CreateClimbTransition(
+                transitionIdPrefix,
+                firstX,
+                firstY,
+                firstZ,
+                secondX,
+                secondY,
+                secondZ,
+                firstPosition,
+                secondPosition,
+                requestsClimbIntent: true));
+            transitions.Add(CreateClimbTransition(
+                transitionIdPrefix,
+                secondX,
+                secondY,
+                secondZ,
+                firstX,
+                firstY,
+                firstZ,
+                secondPosition,
+                firstPosition,
+                requestsClimbIntent: true));
+            return;
+        }
+
+        if (firstIsClimbSurface
+            && IsClimbTransitionSeam(firstCell)
+            && secondCell.HasSolid)
+        {
+            transitions.Add(CreateClimbTransition(
+                transitionIdPrefix,
+                secondX,
+                secondY,
+                secondZ,
+                firstX,
+                firstY,
+                firstZ,
+                secondPosition,
+                firstPosition,
+                requestsClimbIntent: true));
+            transitions.Add(CreateClimbTransition(
+                transitionIdPrefix,
+                firstX,
+                firstY,
+                firstZ,
+                secondX,
+                secondY,
+                secondZ,
+                firstPosition,
+                secondPosition,
+                requestsClimbIntent: false));
+            return;
+        }
+
+        if (secondIsClimbSurface
+            && IsClimbTransitionSeam(secondCell)
+            && firstCell.HasSolid)
+        {
+            transitions.Add(CreateClimbTransition(
+                transitionIdPrefix,
+                firstX,
+                firstY,
+                firstZ,
+                secondX,
+                secondY,
+                secondZ,
+                firstPosition,
+                secondPosition,
+                requestsClimbIntent: true));
+            transitions.Add(CreateClimbTransition(
+                transitionIdPrefix,
+                secondX,
+                secondY,
+                secondZ,
+                firstX,
+                firstY,
+                firstZ,
+                secondPosition,
+                firstPosition,
+                requestsClimbIntent: false));
+        }
+    }
+
+    private static bool IsClimbSurface(NavigationChartCell cell) =>
+        (cell.Flags & NavigationChartCellFlags.ClimbSurfaceHint) != 0;
+
+    private static bool IsClimbTransitionSeam(NavigationChartCell cell) =>
+        (cell.Flags & NavigationChartCellFlags.ClimbTransitionHint) != 0;
+
+    private static TraversalTransition CreateClimbTransition(
+        string transitionIdPrefix,
+        int sourceX,
+        int sourceY,
+        int sourceZ,
+        int destinationX,
+        int destinationY,
+        int destinationZ,
+        Vector3d sourcePosition,
+        Vector3d destinationPosition,
+        bool requestsClimbIntent)
+    {
+        return new TraversalTransition(
+            CreateGeneratedTransitionId(
+                transitionIdPrefix,
+                TraversalTransitionType.Climb,
+                sourceX,
+                sourceY,
+                sourceZ,
+                destinationX,
+                destinationY,
+                destinationZ),
+            TraversalTransitionType.Climb,
+            TraversalTransitionAnchor.Solid(sourcePosition),
+            TraversalTransitionAnchor.Solid(destinationPosition),
+            DefaultGeneratedClimbPathCost,
+            false,
+            requestsClimbIntent);
     }
 
     private static bool TryBuildTransitionsForPair(

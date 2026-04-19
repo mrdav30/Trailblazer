@@ -430,8 +430,8 @@ public class NavigationChart
         UpdateIndexMembership(
             _generatedTransitionCellIndices,
             index,
-            previousCell.CanGenerateTransition,
-            cell.CanGenerateTransition,
+            ShouldTrackGeneratedTransitionCell(previousCell),
+            ShouldTrackGeneratedTransitionCell(cell),
             ref _generatedTransitionCellIndicesDirty);
         return true;
     }
@@ -452,13 +452,20 @@ public class NavigationChart
             if (cell.HasSolid)
                 _surfaceCellIndices.Add(i);
 
-            if (cell.CanGenerateTransition)
+            if (ShouldTrackGeneratedTransitionCell(cell))
                 _generatedTransitionCellIndices.Add(i);
         }
 
         _authoredCellIndicesDirty = true;
         _surfaceCellIndicesDirty = true;
         _generatedTransitionCellIndicesDirty = true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool ShouldTrackGeneratedTransitionCell(NavigationChartCell cell)
+    {
+        return cell.CanGenerateTransition
+            || (cell.Flags & NavigationChartCellFlags.ClimbSurfaceHint) != 0;
     }
 
     private static void UpdateIndexMembership(

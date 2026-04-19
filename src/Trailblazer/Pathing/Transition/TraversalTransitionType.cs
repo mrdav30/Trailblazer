@@ -10,5 +10,6 @@ public enum TraversalTransitionType
     SwimEntry = 2,
     SwimExit = 3,
     Takeoff = 4,
-    Landing = 5
+    Landing = 5,
+    Climb = 6
 }

@@ -13,5 +13,7 @@ public enum NavigationChartCellFlags
 {
     None = 0,
     TransitionSourceHint = 1 << 0,
-    TransitionDestinationHint = 1 << 1
+    TransitionDestinationHint = 1 << 1,
+    ClimbSurfaceHint = 1 << 2,
+    ClimbTransitionHint = 1 << 3
 }

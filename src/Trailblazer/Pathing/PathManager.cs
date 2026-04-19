@@ -1096,33 +1096,31 @@ public static class PathManager
         SwiftHashSet<string> activeTransitionIds)
     {
         SwiftList<TraversalTransition> missingTransitions = new();
-        int[] generatedIndices = chart.GetGeneratedTransitionIndices();
-        for (int i = 0; i < generatedIndices.Length; i++)
-        {
-            chart.DecodeIndex(generatedIndices[i], out int x, out int y, out int z);
-            for (int neighborOffsetIndex = 0; neighborOffsetIndex < PositiveManagedGeneratedNeighborOffsets.Length; neighborOffsetIndex++)
-            {
-                (int dx, int dy, int dz) = PositiveManagedGeneratedNeighborOffsets[neighborOffsetIndex];
-                int neighborX = x + dx;
-                int neighborY = y + dy;
-                int neighborZ = z + dz;
-                if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
-                    continue;
+        for (int y = 0; y < chart.SizeY; y++)
+            for (int x = 0; x < chart.SizeX; x++)
+                for (int z = 0; z < chart.SizeZ; z++)
+                    for (int neighborOffsetIndex = 0; neighborOffsetIndex < PositiveManagedGeneratedNeighborOffsets.Length; neighborOffsetIndex++)
+                    {
+                        (int dx, int dy, int dz) = PositiveManagedGeneratedNeighborOffsets[neighborOffsetIndex];
+                        int neighborX = x + dx;
+                        int neighborY = y + dy;
+                        int neighborZ = z + dz;
+                        if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
+                            continue;
 
-                CollectManagedGeneratedTransitionsForPair(
-                    chart,
-                    state,
-                    x,
-                    y,
-                    z,
-                    neighborX,
-                    neighborY,
-                    neighborZ,
-                    desiredTransitionIds,
-                    activeTransitionIds,
-                    missingTransitions);
-            }
-        }
+                        CollectManagedGeneratedTransitionsForPair(
+                            chart,
+                            state,
+                            x,
+                            y,
+                            z,
+                            neighborX,
+                            neighborY,
+                            neighborZ,
+                            desiredTransitionIds,
+                            activeTransitionIds,
+                            missingTransitions);
+                    }
 
         return missingTransitions.Count == 0
             ? Array.Empty<TraversalTransition>()

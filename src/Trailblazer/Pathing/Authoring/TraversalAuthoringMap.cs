@@ -103,20 +103,35 @@ public sealed class TraversalAuthoringMap
     {
         NavigationChartCell chartCell = parsedCell.Entry.ChartCell;
         int costModifier = parsedCell.PathCostModifier;
+        NavigationChartCellFlags flags = chartCell.Flags;
+
+        if (parsedCell.HasTransitionMarker
+            && (flags & NavigationChartCellFlags.ClimbSurfaceHint) != 0)
+        {
+            flags |= NavigationChartCellFlags.ClimbTransitionHint;
+        }
 
         if (!parsedCell.HasTransitionMarker || !parsedCell.CanGenerateTransition)
         {
             if (costModifier == 0)
-                return chartCell;
+            {
+                if (flags == chartCell.Flags)
+                    return chartCell;
+
+                return new NavigationChartCell(
+                    chartCell.TraversalKinds,
+                    chartCell.PathCostModifier,
+                    flags,
+                    chartCell.GeneratedTransitionMedia);
+            }
 
             return new NavigationChartCell(
                 chartCell.TraversalKinds,
                 costModifier,
-                chartCell.Flags,
+                flags,
                 chartCell.GeneratedTransitionMedia);
         }
 
-        NavigationChartCellFlags flags = chartCell.Flags;
         if (chartCell.HasSolid)
         {
             flags |= NavigationChartCellFlags.TransitionSourceHint
@@ -176,7 +191,9 @@ public sealed class TraversalAuthoringMap
                 $"Unknown traversable-state token '{rawToken}' at [{y}, {x}, {z}].");
         }
 
-        if (hasTransitionMarker && !entry.HasTransitionMedia)
+        if (hasTransitionMarker
+            && !entry.HasTransitionMedia
+            && (entry.ChartCell.Flags & NavigationChartCellFlags.ClimbSurfaceHint) == 0)
         {
             throw new ArgumentException(
                 $"Token '{rawToken}' at [{y}, {x}, {z}] cannot be marked for transition generation.");

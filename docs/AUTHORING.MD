@@ -68,6 +68,7 @@ Registration is all-or-nothing. If any generated transition fails to register, t
 | `.` | skip this cell |
 | `X` | skip this cell |
 | `S` | authored solid traversal cell |
+| `SC` | authored climb-capable solid traversal cell |
 | `G` | authored gas-volume traversal cell |
 | `L` | authored liquid-volume traversal cell |
 | `SG` | authored solid-plus-gas traversal cell |
@@ -88,6 +89,7 @@ Append `!` to opt a token into generated transition authoring.
 Examples:
 
 - `S!`
+- `SC!`
 - `G!`
 - `L!`
 - `SG!`
@@ -97,9 +99,9 @@ Current marker behavior:
 
 - generation is opt-in only
 - only perpendicular neighbors are considered
-- only chart-to-volume pairs are generated
-- chart-to-chart auto-generation is not part of the current builder
+- chart-to-volume and authored climb chart-to-chart pairs are generated
 - `G!` / `L!` / `S!` / `SG!` / `SL!` still emit their authored chart cells; the marker only opts them into transition generation
+- `SC!` marks a climb seam cell so generated climb routing may explicitly enter or exit authored climb topology from neighboring solid cells
 - `SG!` and `SL!` keep mixed-media meaning narrow: they participate only when there is one unambiguous solid-to-volume boundary pair
 
 When a marked chart cell participates in generation, the builder also adds:
@@ -115,6 +117,8 @@ The built-in generator currently creates:
 - `SwimEntry` and `SwimExit` for `S!` next to `SL!`, or `SL!` next to `L!`
 - `Takeoff` and `Landing` for `S!` next to `G!`
 - `Takeoff` and `Landing` for `S!` next to `SG!`, or `SG!` next to `G!`
+- bidirectional `Climb` transitions for adjacent `SC` / `SC` and `SC` / `SC!` climb-surface pairs
+- climb entry and exit `Climb` transitions for `S` next to `SC!`
 
 Ambiguous mixed-to-mixed boundaries such as `SG!` next to `SL!` do not auto-generate transitions.
 
@@ -142,7 +146,7 @@ It does not automatically:
 
 - configure supplemental `VolumeMediumRules`
 - generate diagonal handoffs
-- generate chart-to-chart handoffs
+- infer climb routing from every solid cell
 - refresh generated transitions mid-simulation
 
 For the chart lifecycle, read `PATHMANAGER.MD`.

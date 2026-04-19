@@ -164,6 +164,75 @@ public sealed class GeneratedTraversalTransitionBuilderTests : IDisposable
         transitions[1].Destination.Medium.Should().Be(TraversalMedium.Solid);
     }
 
+    [Fact]
+    public void BuildTransitionsForPair_ShouldCreateBidirectionalClimbTransitions_ForAdjacentClimbSurfaces()
+    {
+        NavigationChart chart = CreateChart(
+            new NavigationChartCell[1, 2, 1]
+            {
+                {
+                    { new NavigationChartCell(TraversalMedia.Solid, flags: NavigationChartCellFlags.ClimbSurfaceHint) },
+                    { new NavigationChartCell(TraversalMedia.Solid, flags: NavigationChartCellFlags.ClimbSurfaceHint) }
+                }
+            });
+
+        TraversalTransition[] transitions = GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
+            chart,
+            "climb",
+            firstX: 0,
+            firstY: 0,
+            firstZ: 0,
+            secondX: 1,
+            secondY: 0,
+            secondZ: 0);
+
+        transitions.Should().HaveCount(2);
+        transitions[0].Type.Should().Be(TraversalTransitionType.Climb);
+        transitions[0].RequestsClimbIntent.Should().BeTrue();
+        transitions[1].Type.Should().Be(TraversalTransitionType.Climb);
+        transitions[1].RequestsClimbIntent.Should().BeTrue();
+
+        string[] potentialIds = GeneratedTraversalTransitionBuilder.GetPotentialTransitionIdsForPair(
+            "climb",
+            firstX: 0,
+            firstY: 0,
+            firstZ: 0,
+            secondX: 1,
+            secondY: 0,
+            secondZ: 0);
+        potentialIds.Should().Contain(transitions[0].Id);
+        potentialIds.Should().Contain(transitions[1].Id);
+    }
+
+    [Fact]
+    public void BuildTransitionsForPair_ShouldCreateEntryAndExitClimbTransitions_ForMarkedSeam()
+    {
+        NavigationChart chart = CreateChart(
+            new NavigationChartCell[1, 2, 1]
+            {
+                {
+                    { NavigationChartCell.Solid },
+                    { new NavigationChartCell(
+                        TraversalMedia.Solid,
+                        flags: NavigationChartCellFlags.ClimbSurfaceHint | NavigationChartCellFlags.ClimbTransitionHint) }
+                }
+            });
+
+        TraversalTransition[] transitions = GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
+            chart,
+            "climb-seam",
+            firstX: 0,
+            firstY: 0,
+            firstZ: 0,
+            secondX: 1,
+            secondY: 0,
+            secondZ: 0);
+
+        transitions.Should().HaveCount(2);
+        transitions.Should().ContainSingle(t => t.Type == TraversalTransitionType.Climb && t.RequestsClimbIntent);
+        transitions.Should().ContainSingle(t => t.Type == TraversalTransitionType.Climb && !t.RequestsClimbIntent);
+    }
+
     private static NavigationChart CreateChart(NavigationChartCell[,,] data)
     {
         return NavigationChart.From3D(

@@ -274,6 +274,69 @@ public class TraversalAuthoringMapTests : IDisposable
     }
 
     [Fact]
+    public void Build_ShouldMarkClimbSurfaceTokensAndGenerateClimbSeamTransitions()
+    {
+        string[,,] map =
+        {
+            {
+                { "S" },
+                { "SC!" }
+            }
+        };
+
+        TraversalBuildResult result = new TraversalAuthoringMap(
+            chartName: "ClimbSeamBoundary",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(result.Chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell climbCell));
+        Assert.True(climbCell.HasSolid);
+        Assert.Equal(
+            NavigationChartCellFlags.ClimbSurfaceHint | NavigationChartCellFlags.ClimbTransitionHint,
+            climbCell.Flags);
+
+        Assert.Equal(2, result.GeneratedTransitions.Length);
+        Assert.Contains(result.GeneratedTransitions, t =>
+            t.Type == TraversalTransitionType.Climb
+            && t.Source.Position == Vector3d.Zero
+            && t.Destination.Position == new Vector3d(1, 0, 0)
+            && t.RequestsClimbIntent);
+        Assert.Contains(result.GeneratedTransitions, t =>
+            t.Type == TraversalTransitionType.Climb
+            && t.Source.Position == new Vector3d(1, 0, 0)
+            && t.Destination.Position == Vector3d.Zero
+            && !t.RequestsClimbIntent);
+    }
+
+    [Fact]
+    public void Build_ShouldGenerateBidirectionalClimbTransitionsBetweenAdjacentClimbSurfaces()
+    {
+        string[,,] map =
+        {
+            {
+                { "SC" },
+                { "SC" }
+            }
+        };
+
+        TraversalBuildResult result = new TraversalAuthoringMap(
+            chartName: "ClimbSurfacePair",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.Equal(2, result.GeneratedTransitions.Length);
+        Assert.All(result.GeneratedTransitions, transition =>
+        {
+            Assert.Equal(TraversalTransitionType.Climb, transition.Type);
+            Assert.True(transition.RequestsClimbIntent);
+            Assert.Equal(TraversalMedium.Solid, transition.Source.Medium);
+            Assert.Equal(TraversalMedium.Solid, transition.Destination.Medium);
+        });
+    }
+
+    [Fact]
     public void Build_ShouldRejectInvalidMarkerUsage()
     {
         string[,,] map =

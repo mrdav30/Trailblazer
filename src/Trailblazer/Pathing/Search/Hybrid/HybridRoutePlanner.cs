@@ -1,4 +1,5 @@
 using FixedMathSharp;
+using SwiftCollections;
 using System;
 
 namespace Trailblazer.Pathing;
@@ -33,6 +34,13 @@ internal static class HybridRoutePlanner
         if (transitionPairPlan != null)
         {
             plan = transitionPairPlan;
+            return true;
+        }
+
+        HybridRoutePlan climbTransitionChainPlan = TryPlanChainedClimbTransitions(request);
+        if (climbTransitionChainPlan != null)
+        {
+            plan = climbTransitionChainPlan;
             return true;
         }
 
@@ -448,6 +456,184 @@ internal static class HybridRoutePlanner
             return candidate;
 
         return current;
+    }
+
+    private static HybridRoutePlan TryPlanChainedClimbTransitions(HybridPathRequest request)
+    {
+        TraversalTransition[] transitions = GetDirectedClimbTransitions(request);
+        if (transitions.Length == 0)
+            return null;
+
+        int[] bestCosts = new int[transitions.Length];
+        int[] previousIndices = new int[transitions.Length];
+        HybridRouteStep[] entrySteps = new HybridRouteStep[transitions.Length];
+        HybridRouteStep[] bridgeSteps = new HybridRouteStep[transitions.Length];
+        bool[] visited = new bool[transitions.Length];
+
+        for (int i = 0; i < transitions.Length; i++)
+        {
+            bestCosts[i] = int.MaxValue;
+            previousIndices[i] = -1;
+
+            if (!TryCreateChartStep(
+                request.Origin,
+                transitions[i].Source.Position,
+                request,
+                out HybridRouteStep entryStep,
+                out int entryCost))
+            {
+                continue;
+            }
+
+            entrySteps[i] = entryStep;
+            bestCosts[i] = entryCost + transitions[i].PathCostModifier;
+        }
+
+        int bestEndIndex = -1;
+        HybridRouteStep bestExitStep = null;
+        int bestTotalCost = int.MaxValue;
+
+        while (true)
+        {
+            int currentIndex = GetCheapestUnvisitedTransition(bestCosts, visited);
+            if (currentIndex < 0)
+                break;
+
+            visited[currentIndex] = true;
+            TraversalTransition currentTransition = transitions[currentIndex];
+            int currentCost = bestCosts[currentIndex];
+
+            if (TryCreateChartStep(
+                currentTransition.Destination.Position,
+                request.TargetPosition,
+                request,
+                out HybridRouteStep exitStep,
+                out int exitCost))
+            {
+                int totalCost = currentCost + exitCost;
+                if (totalCost < bestTotalCost)
+                {
+                    bestTotalCost = totalCost;
+                    bestEndIndex = currentIndex;
+                    bestExitStep = exitStep;
+                }
+            }
+
+            for (int nextIndex = 0; nextIndex < transitions.Length; nextIndex++)
+            {
+                if (visited[nextIndex])
+                    continue;
+
+                HybridRouteStep bridgeStep = null;
+                int bridgeCost = 0;
+                if (transitions[nextIndex].Source.Position != currentTransition.Destination.Position
+                    && !TryCreateChartStep(
+                        currentTransition.Destination.Position,
+                        transitions[nextIndex].Source.Position,
+                        request,
+                        out bridgeStep,
+                        out bridgeCost))
+                {
+                    continue;
+                }
+
+                int candidateCost = currentCost + bridgeCost + transitions[nextIndex].PathCostModifier;
+                if (candidateCost >= bestCosts[nextIndex])
+                    continue;
+
+                bestCosts[nextIndex] = candidateCost;
+                previousIndices[nextIndex] = currentIndex;
+                bridgeSteps[nextIndex] = bridgeStep;
+            }
+        }
+
+        if (bestEndIndex < 0 || bestExitStep == null)
+            return null;
+
+        return BuildChainedClimbPlan(
+            transitions,
+            previousIndices,
+            entrySteps,
+            bridgeSteps,
+            bestEndIndex,
+            bestExitStep,
+            bestTotalCost);
+    }
+
+    private static TraversalTransition[] GetDirectedClimbTransitions(HybridPathRequest request)
+    {
+        TraversalTransition[] solidTransitions = TraversalTransitionQuery.GetDirectedTransitions(
+            TraversalMedium.Solid,
+            TraversalMedium.Solid);
+        if (solidTransitions.Length == 0)
+            return Array.Empty<TraversalTransition>();
+
+        SwiftList<TraversalTransition> climbTransitions = new();
+        for (int i = 0; i < solidTransitions.Length; i++)
+        {
+            if (solidTransitions[i].Type == TraversalTransitionType.Climb)
+                climbTransitions.Add(solidTransitions[i]);
+        }
+
+        return climbTransitions.Count == 0
+            ? Array.Empty<TraversalTransition>()
+            : climbTransitions.ToArray();
+    }
+
+    private static int GetCheapestUnvisitedTransition(int[] bestCosts, bool[] visited)
+    {
+        int bestIndex = -1;
+        int bestCost = int.MaxValue;
+        for (int i = 0; i < bestCosts.Length; i++)
+        {
+            if (visited[i] || bestCosts[i] >= bestCost)
+                continue;
+
+            bestCost = bestCosts[i];
+            bestIndex = i;
+        }
+
+        return bestIndex;
+    }
+
+    private static HybridRoutePlan BuildChainedClimbPlan(
+        TraversalTransition[] transitions,
+        int[] previousIndices,
+        HybridRouteStep[] entrySteps,
+        HybridRouteStep[] bridgeSteps,
+        int endIndex,
+        HybridRouteStep exitStep,
+        int totalCost)
+    {
+        SwiftList<int> reversedTransitionIndices = new();
+        for (int index = endIndex; index >= 0; index = previousIndices[index])
+            reversedTransitionIndices.Add(index);
+
+        int transitionCount = reversedTransitionIndices.Count;
+        var orderedTransitions = new TraversalTransition[transitionCount];
+        var steps = new SwiftList<HybridRouteStep>();
+
+        int startTransitionIndex = reversedTransitionIndices[transitionCount - 1];
+        steps.Add(entrySteps[startTransitionIndex]);
+
+        int orderedIndex = 0;
+        for (int i = transitionCount - 1; i >= 0; i--)
+        {
+            int transitionIndex = reversedTransitionIndices[i];
+            TraversalTransition transition = transitions[transitionIndex];
+            orderedTransitions[orderedIndex] = transition;
+
+            if (orderedIndex > 0 && bridgeSteps[transitionIndex] != null)
+                steps.Add(bridgeSteps[transitionIndex]);
+
+            steps.Add(HybridRouteStep.Waypoint(
+                transition.Destination.Position,
+                transition.PathCostModifier));
+            orderedIndex++;
+        }
+
+        steps.Add(exitStep);
+        return new HybridRoutePlan(steps.ToArray(), orderedTransitions, totalCost);
     }
 
 }

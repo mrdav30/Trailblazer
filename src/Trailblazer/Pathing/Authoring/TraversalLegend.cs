@@ -24,6 +24,9 @@ public sealed class TraversalLegend
         legend.Register(".", TraversalLegendEntry.SkipCell());
         legend.Register("X", TraversalLegendEntry.SkipCell());
         legend.Register("S", TraversalLegendEntry.Solid(NavigationChartCell.Solid));
+        legend.Register("SC", new TraversalLegendEntry(new NavigationChartCell(
+            TraversalMedia.Solid,
+            flags: NavigationChartCellFlags.ClimbSurfaceHint)));
         legend.Register("G", TraversalLegendEntry.Gas());
         legend.Register("L", TraversalLegendEntry.Liquid());
         legend.Register("SG", new TraversalLegendEntry(

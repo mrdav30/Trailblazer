@@ -130,8 +130,53 @@ public class AStarTransitionFallbackTests : IDisposable
         guide.Should().BeNull();
     }
 
+    [Fact]
+    public void AStarRequest_ShouldUseTransitionFallback_ForGeneratedClimbTopology()
+    {
+        RegisterAuthoredClimbRoute("AStarClimbFallback");
+
+        AStarPathRequest request = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(3, 0, 1),
+            Fixed64.One,
+            HeuristicMethod.Euclidean,
+            allowUnwalkableEndpoints: true);
+        request.Should().NotBeNull();
+        request.MaxClimbHeight = Fixed64.Zero;
+        request.AllowTraversalTransitions = true;
+
+        PathGuideFactory.RequestGuide(request, out AStarGuide guide).Should().BeTrue();
+        guide.Should().NotBeNull();
+        guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(1, 0, 0));
+        guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(1, 1, 0));
+        guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(1, 1, 1));
+        guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(2, 1, 1));
+        guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(2, 0, 1));
+        guide.ActiveWaypoints[^1].Position.Should().Be(new Vector3d(3, 0, 1));
+        guide.ActiveWaypoints[^1].IsGoal.Should().BeTrue();
+    }
+
     private static void AddWater(Vector3d position)
     {
         PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "AStarFallbackWater");
+    }
+
+    private static void RegisterAuthoredClimbRoute(string chartName)
+    {
+        string[,,] map = new string[2, 4, 2];
+        map[0, 0, 0] = "S";
+        map[0, 1, 0] = "SC!";
+        map[1, 1, 0] = "SC";
+        map[1, 1, 1] = "SC";
+        map[1, 2, 1] = "SC!";
+        map[0, 2, 1] = "S";
+        map[0, 3, 1] = "S";
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName,
+            map,
+            Vector3d.Zero,
+            Fixed64.One).Build();
+        PathManager.Register(buildResult).Should().BeTrue();
     }
 }

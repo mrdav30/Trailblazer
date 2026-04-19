@@ -86,13 +86,12 @@ internal static class HybridWaypointFlattener
         switch (request)
         {
             case AStarPathRequest aStarRequest:
-                AStarGuide aStarGuide = PathGuideFactory.RequestAStar(aStarRequest);
-                if (aStarGuide == null)
+                AStarSurveyResult aStarResult = AStarSurveyor.Shared.FindPath(aStarRequest);
+                if (!aStarResult.HasPath)
                     return false;
 
-                borrowedGuides.Add(aStarGuide);
-                AddChartKeys(utilizedCharts, utilizedChartSet, aStarGuide.TrailMap.ChartsUtilized);
-                AppendWaypoints(destination, aStarGuide.ActiveWaypoints, ref pathCostOffset);
+                AddChartKeys(utilizedCharts, utilizedChartSet, aStarResult.ChartsUtilized);
+                AppendWaypoints(destination, aStarResult.Waypoints, ref pathCostOffset);
                 return true;
 
             case VolumePathRequest volumeRequest:

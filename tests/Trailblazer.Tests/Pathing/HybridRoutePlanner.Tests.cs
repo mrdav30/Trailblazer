@@ -309,6 +309,47 @@ public sealed class HybridRoutePlannerTests : IDisposable
         hybridRequest.RoutePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-cross-grid-hop");
     }
 
+    [Fact]
+    public void TryPlan_ShouldBuildChainedClimbRoute_ForAuthoredParkourTopology()
+    {
+        RegisterAuthoredClimbRoute("HybridPlannerClimbChain");
+
+        AStarPathRequest request = AStarPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(3, 0, 1),
+            Fixed64.One,
+            HeuristicMethod.Manhattan,
+            allowUnwalkableEndpoints: true);
+        request.Should().NotBeNull();
+        request.MaxClimbHeight = Fixed64.Zero;
+
+        HybridPathRequest.TryCreate(
+            Vector3d.Zero,
+            new Vector3d(3, 0, 1),
+            Fixed64.One,
+            out HybridPathRequest hybridRequest,
+            maxClimbHeight: Fixed64.Zero,
+            allowUnwalkableEndpoints: true).Should().BeTrue();
+
+        hybridRequest.Should().NotBeNull();
+        hybridRequest.RoutePlan.Should().NotBeNull();
+        hybridRequest.RoutePlan.DirectedTransitions.Should().HaveCount(5);
+        hybridRequest.RoutePlan.DirectedTransitions.Should().OnlyContain(t => t.Type == TraversalTransitionType.Climb);
+        hybridRequest.RoutePlan.DirectedTransitions[^1].RequestsClimbIntent.Should().BeFalse();
+        hybridRequest.RoutePlan.Steps.Should().HaveCount(7);
+        hybridRequest.RoutePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.Waypoint);
+        hybridRequest.RoutePlan.Steps[^1].Kind.Should().Be(HybridRouteStepKind.PathSegment);
+        hybridRequest.RoutePlan.Steps.Should().Contain(step =>
+            step.Kind == HybridRouteStepKind.Waypoint
+            && step.WaypointPosition == new Vector3d(1, 1, 0));
+        hybridRequest.RoutePlan.Steps.Should().Contain(step =>
+            step.Kind == HybridRouteStepKind.Waypoint
+            && step.WaypointPosition == new Vector3d(1, 1, 1));
+        hybridRequest.RoutePlan.Steps.Should().Contain(step =>
+            step.Kind == HybridRouteStepKind.Waypoint
+            && step.WaypointPosition == new Vector3d(2, 0, 1));
+    }
+
     /// <summary>
     /// Exercises TryCreateFlowFieldStep with zero displacement: when origin == destination, the step
     /// becomes a waypoint rather than a path segment.
@@ -484,6 +525,30 @@ public sealed class HybridRoutePlannerTests : IDisposable
             data[0, i, 0] = true;
 
         PathTestFactory.RegisterFromData(chartName, data, minBounds);
+    }
+
+    private static void RegisterAuthoredClimbRoute(string chartName)
+    {
+        string[,,] map = new string[2, 4, 2];
+        map[0, 0, 0] = "S";
+        map[0, 1, 0] = "SC!";
+        map[1, 1, 0] = "SC";
+        map[1, 1, 1] = "SC";
+        map[1, 2, 1] = "SC!";
+        map[0, 2, 1] = "S";
+        map[0, 3, 1] = "S";
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartName,
+            map,
+            Vector3d.Zero,
+            Fixed64.One).Build();
+        buildResult.GeneratedTransitions.Should().NotBeEmpty();
+        PathManager.Register(buildResult).Should().BeTrue();
+        TraversalTransitionRegistry.AllTransitions.Should().Contain(t => t.Type == TraversalTransitionType.Climb);
+        TraversalTransitionQuery.GetDirectedTransitions(TraversalMedium.Solid, TraversalMedium.Solid)
+            .Should()
+            .Contain(t => t.Type == TraversalTransitionType.Climb);
     }
 
 }

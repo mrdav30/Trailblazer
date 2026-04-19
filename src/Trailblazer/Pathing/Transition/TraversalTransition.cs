@@ -38,13 +38,25 @@ public readonly struct TraversalTransition
     /// </summary>
     public bool IsBidirectional { get; }
 
+    /// <summary>
+    /// Whether taking this transition should request climb intent for the active guided leg.
+    /// </summary>
+    public bool RequestsClimbIntent { get; }
+
+    /// <summary>
+    /// Whether climb intent should remain active after a guided handoff follows this transition.
+    /// </summary>
+    public bool PreserveClimbIntentOnFollowup { get; }
+
     public TraversalTransition(
         string id,
         TraversalTransitionType type,
         TraversalTransitionAnchor source,
         TraversalTransitionAnchor destination,
         int pathCostModifier = 0,
-        bool isBidirectional = false)
+        bool isBidirectional = false,
+        bool requestsClimbIntent = false,
+        bool preserveClimbIntentOnFollowup = false)
     {
         if (string.IsNullOrWhiteSpace(id))
             throw new ArgumentException("Transition id cannot be null or whitespace.", nameof(id));
@@ -55,5 +67,7 @@ public readonly struct TraversalTransition
         Destination = destination;
         PathCostModifier = pathCostModifier;
         IsBidirectional = isBidirectional;
+        RequestsClimbIntent = requestsClimbIntent;
+        PreserveClimbIntentOnFollowup = preserveClimbIntentOnFollowup;
     }
 }

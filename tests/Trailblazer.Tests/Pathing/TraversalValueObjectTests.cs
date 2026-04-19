@@ -168,7 +168,9 @@ public sealed class TraversalValueObjectTests : IDisposable
             source: TraversalTransitionAnchor.Gas(Vector3d.Zero),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 5,
-            isBidirectional: true);
+            isBidirectional: true,
+            requestsClimbIntent: true,
+            preserveClimbIntentOnFollowup: true);
 
         transition.Id.Should().Be("transition-id");
         transition.Type.Should().Be(TraversalTransitionType.Landing);
@@ -176,6 +178,8 @@ public sealed class TraversalValueObjectTests : IDisposable
         transition.Destination.Medium.Should().Be(TraversalMedium.Solid);
         transition.PathCostModifier.Should().Be(5);
         transition.IsBidirectional.Should().BeTrue();
+        transition.RequestsClimbIntent.Should().BeTrue();
+        transition.PreserveClimbIntentOnFollowup.Should().BeTrue();
     }
 
     [Fact]

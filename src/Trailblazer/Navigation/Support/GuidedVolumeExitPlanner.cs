@@ -206,7 +206,8 @@ internal static class GuidedVolumeExitPlanner
             AllowTraversalTransitions = allowTraversalTransitions,
             MaxClimbHeight = maxClimbHeight,
             AStarHeuristic = aStarHeuristic,
-            FlowFieldExtraFloodRange = flowFieldExtraFloodRange
+            FlowFieldExtraFloodRange = flowFieldExtraFloodRange,
+            IsRequestingClimb = transition.PreserveClimbIntentOnFollowup
         };
     }
 

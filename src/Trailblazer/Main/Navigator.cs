@@ -104,6 +104,8 @@ public abstract class Navigator : INavigate, IRecordable
 
     private GuidedVolumeExitHandoff _pendingGuidedVolumeExitHandoff;
 
+    private bool _guidedClimbIntent;
+
     #endregion
 
     #region Settings
@@ -247,6 +249,7 @@ public abstract class Navigator : INavigate, IRecordable
         _frameRequest.Reset();
         IsGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
+        _guidedClimbIntent = false;
 
         GridOccupantManager.TryDeregister(this);
 
@@ -315,6 +318,7 @@ public abstract class Navigator : INavigate, IRecordable
 
         IsGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
+        _guidedClimbIntent = false;
         _frameRequest.SetRequest(
                 direction: direction ?? Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
@@ -332,12 +336,14 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="pathMode">Optional override for the built-in path request mode. When omitted, <see cref="GuidedPathMode"/> is used.</param>
     /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the navigator intends to jump during traversal.</param>
+    /// <param name="isRequestingClimb">Whether the navigator intends to preserve climb engagement while guided travel is active.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between navigators.</param>
     public virtual void ApplyGuidedTrekRequest(
         Vector3d targetPosition,
         GuidedPathMode? pathMode = null,
         TrekRate? rate = null,
         bool? isRequestingJump = null,
+        bool? isRequestingClimb = null,
         int groupId = -1)
     {
         if (!IsActive) return;
@@ -353,13 +359,16 @@ public abstract class Navigator : INavigate, IRecordable
         if (_pendingGuidedVolumeExitHandoff != null)
             _pendingGuidedVolumeExitHandoff.MovementGroupId = groupId;
 
+        _guidedClimbIntent = isRequestingClimb
+            ?? ResolveGuidedClimbIntent(pathRequest, _pendingGuidedVolumeExitHandoff);
+
         IsGuideded = true;
         _frameRequest.SetRequest(
                 direction: Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
                 isRequestingJump: isRequestingJump ?? false,
                 isRequestingFlight: selectedPathMode == GuidedPathMode.Aerial,
-                isRequestingClimb: false,
+                isRequestingClimb: _guidedClimbIntent,
                 facingDirection: null
         );
 
@@ -413,7 +422,11 @@ public abstract class Navigator : INavigate, IRecordable
     /// Called to toggle climb intent if supported by the installed locomotion profile.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public virtual void ToggleGuidedClimb(bool status) => _frameRequest.IsRequestingClimb = status;
+    public virtual void ToggleGuidedClimb(bool status)
+    {
+        _guidedClimbIntent = status;
+        _frameRequest.IsRequestingClimb = status;
+    }
 
     /// <summary>
     /// Changes the speed at which the navigator is currently traveling without altering direction.
@@ -461,6 +474,7 @@ public abstract class Navigator : INavigate, IRecordable
             throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
         TryActivatePendingGuidedVolumeExitHandoff();
+        RefreshGuidedIntentState();
 
         _frameRequest.SetTransientState(
              origin: Position,
@@ -749,6 +763,22 @@ public abstract class Navigator : INavigate, IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected virtual Guid GenerateGUID() => NavigatorGlobalIdAllocator.Create();
 
+    private void RefreshGuidedIntentState()
+    {
+        if (!IsGuideded)
+            return;
+
+        if (Steering?.CurrentRequest == null
+            && _pendingGuidedVolumeExitHandoff == null)
+        {
+            _guidedClimbIntent = false;
+            _frameRequest.IsRequestingClimb = false;
+            return;
+        }
+
+        _frameRequest.IsRequestingClimb = _guidedClimbIntent;
+    }
+
     private void TryActivatePendingGuidedVolumeExitHandoff()
     {
         if (!IsGuideded
@@ -770,6 +800,42 @@ public abstract class Navigator : INavigate, IRecordable
 
         Steering.ApplyPathRequest(followupRequest, handoff.MovementGroupId);
         _frameRequest.IsRequestingFlight = false;
+        _guidedClimbIntent = handoff.IsRequestingClimb;
+        _frameRequest.IsRequestingClimb = _guidedClimbIntent;
+    }
+
+    private static bool ResolveGuidedClimbIntent(
+        IPathRequest pathRequest,
+        GuidedVolumeExitHandoff handoff)
+    {
+        if (handoff != null
+            && TraversalTransitionRegistry.TryGet(handoff.TransitionId, out TraversalTransition transition))
+        {
+            return transition.RequestsClimbIntent;
+        }
+
+        return pathRequest switch
+        {
+            AStarPathRequest aStar => RequestsClimbIntent(HybridPathRequest.CreateFromAStar(aStar)),
+            FlowFieldPathRequest flowField => RequestsClimbIntent(HybridPathRequest.CreateFromFlowField(flowField)),
+            HybridPathRequest hybrid => RequestsClimbIntent(hybrid),
+            _ => false
+        };
+    }
+
+    private static bool RequestsClimbIntent(HybridPathRequest request)
+    {
+        TraversalTransition[] directedTransitions = request?.RoutePlan?.DirectedTransitions;
+        if (directedTransitions == null)
+            return false;
+
+        for (int i = 0; i < directedTransitions.Length; i++)
+        {
+            if (directedTransitions[i].RequestsClimbIntent)
+                return true;
+        }
+
+        return false;
     }
 
     #endregion
@@ -831,6 +897,7 @@ public abstract class Navigator : INavigate, IRecordable
         Fixed64 animDampTime = AnimDampTime;
         Fixed64 stuckThresholdSpeed = StuckThresholdSpeed;
         bool isGuideded = IsGuideded;
+        bool guidedClimbIntent = _guidedClimbIntent;
         TrekCondition frameCondition = _frameCondition;
         TrekRequest frameRequest = _frameRequest;
         GuidedVolumeExitHandoff pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
@@ -860,6 +927,7 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref animDampTime, "animDampTime", (Fixed64)0.1f);
         RecordValues.Look(chronicler, ref stuckThresholdSpeed, "stuckThresholdSpeed", Fixed64.Zero);
         RecordValues.Look(chronicler, ref isGuideded, "isGuideded", false);
+        RecordValues.Look(chronicler, ref guidedClimbIntent, "guidedClimbIntent", false);
         RecordDeepStruct.Look(chronicler, ref frameCondition, "frameCondition");
         RecordDeepStruct.Look(chronicler, ref frameRequest, "frameRequest");
         RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff, "pendingGuidedVolumeExitHandoff");
@@ -889,6 +957,7 @@ public abstract class Navigator : INavigate, IRecordable
             AnimDampTime = animDampTime;
             StuckThresholdSpeed = stuckThresholdSpeed;
             IsGuideded = isGuideded;
+            _guidedClimbIntent = guidedClimbIntent;
             _frameCondition = frameCondition.Clone();
             _frameRequest = frameRequest.Clone();
             _pendingGuidedVolumeExitHandoff = pendingGuidedVolumeExitHandoff?.IsValid == true

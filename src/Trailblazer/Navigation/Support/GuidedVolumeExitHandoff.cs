@@ -29,6 +29,8 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
 
     public int MovementGroupId = -1;
 
+    public bool IsRequestingClimb;
+
     public bool IsValid =>
         !string.IsNullOrWhiteSpace(TransitionId)
         && (ChartPathMode == GuidedPathMode.AStar || ChartPathMode == GuidedPathMode.FlowField);
@@ -90,6 +92,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         HeuristicMethod aStarHeuristic = AStarHeuristic;
         int flowFieldExtraFloodRange = FlowFieldExtraFloodRange;
         int movementGroupId = MovementGroupId;
+        bool isRequestingClimb = IsRequestingClimb;
 
         RecordValues.Look(chronicler, ref transitionId, "transitionId", null);
         RecordValues.Look(chronicler, ref chartOriginPosition, "chartOriginPosition", Vector3d.Zero);
@@ -101,6 +104,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
         RecordValues.Look(chronicler, ref flowFieldExtraFloodRange, "flowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
         RecordValues.Look(chronicler, ref movementGroupId, "movementGroupId", -1);
+        RecordValues.Look(chronicler, ref isRequestingClimb, "isRequestingClimb", false);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
@@ -114,6 +118,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
             AStarHeuristic = aStarHeuristic;
             FlowFieldExtraFloodRange = flowFieldExtraFloodRange;
             MovementGroupId = movementGroupId;
+            IsRequestingClimb = isRequestingClimb;
         }
     }
 }

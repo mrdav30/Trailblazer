@@ -24,6 +24,11 @@ navigation stack without overfitting the feature to one game-specific model.
   behavior for flipped surfaces and host-forced detach cases. Added focused runtime coverage for
   continuous free-climb traversal, detach-into-fall, and forced-detach outcomes, then revalidated
   the broader motor and full `Release` suites.
+- Phase 5 complete on April 19, 2026.
+  Landed guided climb intent preservation for AI-driven requests, authored transition metadata for
+  requesting climb entry and follow-up persistence, guided handoff serialization/runtime restore,
+  deterministic intent clearing when guided traversal completes, and focused plus full-suite
+  `Release` verification.
 
 The immediate design target is broad enough to support:
 
@@ -411,27 +416,153 @@ Exit criteria:
 ### Phase 5. Guided Navigation And Pathing Follow-Up
 
 Goal:
-Decide how much Trailblazer itself should understand climbable routes.
+Allow AI-guided agents to intentionally use climb affordances without turning Trailblazer into a
+general climb-surface path planner.
 
-This phase should stay optional until the runtime locomotion proves stable.
+Scope:
 
-Potential work:
+- preserve climb intent while a guided request is active
+- allow authored traversal transitions to request climb entry and climb exit at the right time
+- keep free-climb surface selection host-owned rather than path-searched by Trailblazer
 
-- allow steering to preserve local climb intent while following a guided request
-- add authored traversal transitions that enter or exit climb affordances
-- evaluate whether chart/path requests need climb-aware fallback or a dedicated request family
-- evaluate whether a climb traversal representation belongs in authored chart data, transition data,
-  or host-only affordance logic
+Non-goals:
+
+- do not add path search over arbitrary climbable manifolds
+- do not add a new climb-specific chart representation in this phase
+- do not make `NavSteering` responsible for local affordance validation or climb runtime rules
+
+Tasks:
+
+- add guided-request plumbing so guided navigation can explicitly preserve `IsRequestingClimb`
+  across frames instead of relying only on local input helpers
+- define a narrow steering-to-motor handoff for "the current guided segment intends climb" versus
+  "the motor should decide locally whether to attach"
+- extend authored traversal transition handling so a transition can enter a climb interaction and
+  optionally request climb persistence until the exit handoff completes
+- ensure guided handoff back to non-climb travel is explicit, so agents can top out, detach, or
+  finish a climb transition without sticky climb intent
+- keep resolver ownership unchanged: hosts still decide whether a concrete climb affordance is
+  valid for the current frame
+- update navigator serialization coverage so guided climb intent and any transition-side climb flags
+  survive round-trip
+
+Tests:
+
+- guided request preserves climb intent while traversing a climb-authored segment
+- guided request does not spam start/stop events when climb intent remains active across frames
+- authored transition can enter climb, remain guided, and hand back to normal traversal on exit
+- guided climb intent clears correctly when the transition or request completes
+- navigator serialization restores guided climb intent and resumes deterministic behavior after load
+- steering remains stable when guided climb intent is active but the host resolver denies attach for
+  the current frame
+
+Exit criteria:
+
+- AI-guided agents can intentionally enter and exit climb interactions through authored routes
+- local affordance validation still lives in the host resolver and `NavMotor`
+- phase 5 lands without introducing arbitrary climb-surface path search or broad steering bloat
+
+Recommended execution slice:
+
+1. Preserve climb intent in guided navigator request assembly.
+2. Add the smallest authored transition hook needed to mark a segment as climb-capable.
+3. Keep `NavMotor` as the only owner of attach/continue/detach runtime semantics.
+4. Serialize the new guided climb state.
+5. Prove the flow with focused tests before considering broader climb-aware path request changes.
+
+### Phase 6. Authored Climb Topology And Routing
+
+Goal:
+Add authored climb-aware routing over marked climb surfaces so pathfinding can intentionally plan
+parkour-style climb traversal without inferring arbitrary climbability from all solid space.
+
+Scope:
+
+- support authored climb-capable solid surfaces
+- support explicit authored climb entry and exit seams
+- support distinct climb adjacency rules instead of reusing normal solid neighbor expansion
+- keep host-owned runtime affordance validation in place even when the path request is climb-aware
+
+Non-goals:
+
+- do not infer climb routing from every solid cell automatically
+- do not replace the host resolver with path-authored runtime attachment decisions
+- do not broaden this phase into full arbitrary manifold search over any geometric surface
+
+Recommended authoring direction:
+
+- extend chart authoring so legend entries can mark climb-capable solid topology explicitly
+- `SC` should mean a solid cell or surface that participates in climb routing
+- `SC!` should mean an authored climb transition or climb handoff seam
+- treat these as authored climb topology markers layered on top of solid-backed data, not as a new
+  traversal medium
+
+Recommended runtime and pathing direction:
+
+- build a distinct authored climb adjacency set from climb-capable solid data instead of modeling
+  climbing as a child of normal solid partition neighbors
+- allow path search to expand climb edges only when the request or agent capability permits climb
+  routing
+- track traversal mode in the search state when needed so enter-climb, remain-climbing, and
+  exit-climb edges can be validated and scored deterministically
+- keep `NavMotor` and the host resolver as the owners of local attach, continue, detach, mantle,
+  and slip semantics after the path has selected a climb-capable route
+
+Why this shape is preferred:
+
+- climb routing has different topology than ground routing
+- parkour-style climb paths may connect vertical, lateral, ledge, and corner transitions that
+  should not inherit standard solid adjacency rules
+- a distinct adjacency set keeps the existing medium model intact while giving pathing enough
+  structure to plan intentional climb routes
+
+Tasks:
+
+- extend authoring legend parsing to recognize climb-capable solid markers such as `SC`
+- add authored climb transition markers such as `SC!` for explicit entry and exit seams
+- generate climb-specific adjacency from authored climb topology rather than relying on default
+  solid partition neighbors
+- extend path request or search-state data so climb-capable routing is opt-in and locomotion mode
+  can be scored correctly
+- define deterministic edge costs for entering climb, traversing climb, and exiting climb
+- ensure guided and non-guided consumers can distinguish authored climb topology from host-only
+  opportunistic climb affordances
+
+Tests:
+
+- authored climb-capable topology produces climb-specific neighbors without polluting normal solid
+  neighbor expansion
+- path search can intentionally route across authored climb surfaces when climb routing is enabled
+- path search avoids authored climb surfaces when climb routing is disabled
+- authored climb entry and exit seams produce deterministic path transitions
+- parkour-style authored routes with vertical and corner climb segments rebuild consistently after
+  serialization or chart reload
+- runtime still rejects invalid local attach when the authored route says climb is possible but the
+  host resolver denies the current frame affordance
 
 Risks:
 
-- this is where scope can expand quickly into a full traversal-authoring system
-- path search over arbitrary climbable surfaces may require a very different representation than the
-  current chart-ground and volume-travel split
+- this is the point where locomotion-aware routing can start broadening into a larger traversal
+  authoring system
+- search-state expansion may grow if climb mode is modeled too loosely
+- authored climb topology must stay explicit enough that routing remains deterministic and readable
 
-Recommendation:
+Exit criteria:
 
-- do not begin this phase until phases 1 through 4 are proven and there is a concrete host use case
+- authored charts can mark climb-capable surfaces and climb transition seams explicitly
+- path search can intentionally route AI agents through climb-capable authored paths
+- the implementation supports parkour-style climb routing without requiring all solid space to be
+  treated as climbable
+- runtime attach and detach ownership remains split cleanly between authored routing and host-owned
+  frame validation
+
+Recommended execution slice:
+
+1. Add `SC` and `SC!` style legend support for authored climb topology.
+2. Generate a separate climb adjacency set from authored climb-capable solid data.
+3. Make climb-aware routing opt-in at the request level.
+4. Add the smallest traversal-mode state needed to score enter, remain, and exit climb edges.
+5. Prove the flow with one constrained authored parkour route before expanding the representation.
 
 ## Recommended First Execution Slice
 

@@ -184,6 +184,35 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RoundTrip_ShouldRestoreExplicitGuidedClimbIntent(bool useMemoryPack)
+    {
+        RegisterGuidedPathChart("NavigatorSerializationGuidedClimb");
+
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        source.GuidedPathMode = GuidedPathMode.AStar;
+        source.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            rate: TrekRate.Fast,
+            isRequestingClimb: true);
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        target.IsGuideded.Should().BeTrue();
+        target.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        TrailblazerManager.Simulate();
+        target.Simulate();
+
+        target.Steering.CurrentRequest.Should().NotBeNull();
+        target.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        PathManager.UnloadChart("NavigatorSerializationGuidedClimb");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RoundTrip_ShouldRebuildTurningRuntimeState_OnLoad(bool useMemoryPack)
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
@@ -458,6 +487,48 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
 
         UnloadAerialLandingHandoffScene(sceneKey);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RoundTrip_ShouldRestorePendingAerialClimbHandoff_AndPreserveClimbOnFollowup(bool useMemoryPack)
+    {
+        const string sceneKey = "NavigatorSerializationAerialClimbHandoff";
+        GuidedPathTestScene.RegisterAerialClimbHandoffScene(sceneKey);
+
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        source.GuidedPathMode = GuidedPathMode.AStar;
+        source.GuidedAllowTraversalTransitions = true;
+        source.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: GuidedPathMode.Aerial,
+            rate: TrekRate.Fast,
+            isRequestingJump: false,
+            groupId: 8);
+
+        source.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        target.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        target.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        target.SetTestPosition(new Vector3d(1, 0, 0));
+        target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        target.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        target.Simulate();
+
+        target.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
+        target.Steering.MovementGroupID.Should().Be(8);
+        target.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        target.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        PathManager.UnloadChart($"{sceneKey}-Landing");
+        PathManager.UnloadChart($"{sceneKey}-Target");
     }
 
     [Theory]

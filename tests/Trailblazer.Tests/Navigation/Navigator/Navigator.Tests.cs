@@ -282,6 +282,50 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void ApplyGuidedTrekRequest_ShouldCaptureExplicitClimbIntent()
+    {
+        var data = new bool[1, 4, 1]
+        {
+            {
+                { true },
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorGuidedClimbIntent", data, Vector3d.Zero);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.GuidedPathMode = GuidedPathMode.AStar;
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(3, 0, 0),
+            rate: TrekRate.Fast,
+            isRequestingClimb: true);
+
+        navigator.IsGuideded.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        PathManager.UnloadChart("NavigatorGuidedClimbIntent");
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_ShouldEnableClimb_WhenTransitionAwareRouteRequestsIt()
+    {
+        GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.GuidedPathMode = GuidedPathMode.AStar;
+        navigator.GuidedAllowTraversalTransitions = true;
+
+        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
+
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+        navigator.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>()
+            .Which.AllowTraversalTransitions.Should().BeTrue();
+    }
+
+    [Fact]
     public void ApplyGuidedTrekRequest_Should_CreateSwimRequest_WithoutFlight_WhenInWater()
     {
         AddWater(Vector3d.Zero);
@@ -302,6 +346,39 @@ public class NavigatorTests : IDisposable
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
         request.Medium.Should().Be(TraversalMedium.Liquid);
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_ShouldPreserveClimbAcrossGuidedHandoff_WhenTransitionRequestsIt()
+    {
+        const string sceneKey = "NavigatorAerialClimbHandoff";
+        GuidedPathTestScene.RegisterAerialClimbHandoffScene(sceneKey);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.GuidedPathMode = GuidedPathMode.AStar;
+        navigator.GuidedAllowTraversalTransitions = true;
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: GuidedPathMode.Aerial,
+            rate: TrekRate.Fast);
+
+        navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        navigator.SetTestPosition(new Vector3d(1, 0, 0));
+        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
+        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        PathManager.UnloadChart($"{sceneKey}-Landing");
+        PathManager.UnloadChart($"{sceneKey}-Target");
     }
 
     [Fact]
@@ -907,6 +984,36 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
+    }
+
+    [Fact]
+    public void Simulate_ShouldClearGuidedClimbIntent_WhenGuidedRequestCompletes()
+    {
+        var data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorGuidedClimbClear", data, Vector3d.Zero);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(2, 0, 0),
+            rate: TrekRate.Fast,
+            isRequestingClimb: true);
+
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+        navigator.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
+
+        PathManager.UnloadChart("NavigatorGuidedClimbClear");
     }
 
     [Fact]

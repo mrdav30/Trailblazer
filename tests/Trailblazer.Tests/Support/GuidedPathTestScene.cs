@@ -60,6 +60,31 @@ internal static class GuidedPathTestScene
             pathCostModifier: 1)).Should().BeTrue();
     }
 
+    public static void RegisterTransitionFallbackClimbScene()
+    {
+        PathTestFactory.RegisterSingleWalkablePoint("GuidedPathClimbTransitionStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint("GuidedPathClimbTransitionEnd", new Vector3d(4, 0, 0));
+
+        AddWater(new Vector3d(1, 0, 0));
+        AddWater(new Vector3d(2, 0, 0));
+        AddWater(new Vector3d(3, 0, 0));
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "guided-path-climb-transition-entry",
+            type: TraversalTransitionType.SwimEntry,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Liquid(new Vector3d(1, 0, 0)),
+            pathCostModifier: 2,
+            requestsClimbIntent: true)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "guided-path-climb-transition-exit",
+            type: TraversalTransitionType.SwimExit,
+            source: TraversalTransitionAnchor.Liquid(new Vector3d(3, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
+    }
+
     public static void RegisterAerialLandingHandoffScene(string sceneKey)
     {
         PathTestFactory.RegisterSingleTraversalPoint(
@@ -77,6 +102,34 @@ internal static class GuidedPathTestScene
             source: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{sceneKey}-chart-hop",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
+            pathCostModifier: 2)).Should().BeTrue();
+    }
+
+    public static void RegisterAerialClimbHandoffScene(string sceneKey)
+    {
+        PathTestFactory.RegisterSingleTraversalPoint(
+            $"{sceneKey}-Landing",
+            new Vector3d(1, 0, 0),
+            TraversalMedia.Solid | TraversalMedia.Gas);
+        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
+        AddOpen(Vector3d.Zero);
+
+        AddObstaclePlaneAtX(2);
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{sceneKey}-landing",
+            type: TraversalTransitionType.Landing,
+            source: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            pathCostModifier: 1,
+            requestsClimbIntent: true,
+            preserveClimbIntentOnFollowup: true)).Should().BeTrue();
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-chart-hop",

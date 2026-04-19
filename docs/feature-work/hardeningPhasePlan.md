@@ -24,6 +24,15 @@ Track any smaller follow-up issues that are straightforward to execute and don't
   that learn about medium changes before simulation begins. The current mantle path is correct when
   hosts call `UpdateTraversal(...)` as part of that handoff, but the seam is implicit and easy to
   miss in tests or custom integrations.
+- Revisit whether active mantle should optionally continue consulting the host affordance resolver
+  for cancellation signals such as lost clearance or invalidated top-out state. The current mantle
+  path intentionally becomes self-contained once it starts, which keeps the runtime simple and
+  deterministic, but some hosts may later need a stricter cancel-or-slip seam.
+- Revisit whether guided climb intent should be recomputed when steering repaths into a different
+  authored transition topology after the original guided request was created. Phase 5 resolves
+  guided climb intent at guided-request creation time and at explicit handoff activation time,
+  which is sufficient for the current slice, but it does not yet react to later transition-shape
+  changes caused by repath.
 
 ### 3. Optional Runtime Follow-Ups
 

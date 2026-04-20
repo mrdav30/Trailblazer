@@ -958,6 +958,31 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void SyncCurrentTrekConditionToMotor_ShouldPushCurrentFrameConditionImmediately()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+        TrekCondition replacement = new()
+        {
+            Medium = TraversalMedium.Liquid,
+            SurfaceLevel = (Fixed64)2,
+            GroundState = null,
+            CeilingLevel = (Fixed64)5
+        };
+
+        navigator.ReplaceTrekCondition(replacement, updateMotorState: false);
+
+        navigator.Motor.CurrentState.Medium.Should().Be(TraversalMedium.Solid);
+
+        navigator.SyncCurrentTrekConditionToMotor();
+
+        TrekCondition motorCondition = navigator.Motor.CurrentState.ToTrekCondition();
+        motorCondition.Medium.Should().Be(TraversalMedium.Liquid);
+        motorCondition.SurfaceLevel.Should().Be((Fixed64)2);
+        motorCondition.GroundState.Should().BeNull();
+        motorCondition.CeilingLevel.Should().Be((Fixed64)5);
+    }
+
+    [Fact]
     public void InactiveNavigator_ShouldThrowForPrewarmSimulateAndCommit()
     {
         var navigator = new TestNavigator();

@@ -79,6 +79,7 @@ The main entry points are:
 - `BindAnimationHandler(...)`
 - `UnbindAnimationHandler()`
 - `PrewarmMovementGroup()`
+- `SyncCurrentTrekConditionToMotor()`
 - `ReplaceTrekCondition(TrekCondition state)`
 - `Reset()`
 - `ApplyInputTrekRequest(...)`
@@ -450,12 +451,25 @@ It:
 
 - updates only the values you pass
 - leaves unspecified values unchanged
-- optionally pushes the updated condition immediately into the motor
+- optionally pushes the updated condition immediately into the motor through the explicit pre-traversal sync seam
 
-Use `updateMotorState: true` when the motor needs to see the new traversal state before the next `CommitFrameMotion()`.
+Use `updateMotorState: true` when the motor needs to see the new traversal state before the next traversal step.
 Prefer `SetGroundContact(...)`, `SetAirborne(...)`, or `SetWaterContact(...)` when the host is writing a fresh environment contact result.
 
-### 9.4 CheckTrekCondition()
+### 9.4 SyncCurrentTrekConditionToMotor()
+
+`SyncCurrentTrekConditionToMotor()` pushes the current `_frameCondition` snapshot into `NavMotor`
+immediately.
+
+Use it when:
+
+- the host has already updated `_frameCondition`
+- the motor must consume that new snapshot before the next `Simulate()` or `TryTraversal(...)`
+- the host wants an explicit lifecycle handoff instead of relying on a boolean flag on a setter
+
+This is the named navigator-level seam behind `updateMotorState: true`.
+
+### 9.5 CheckTrekCondition()
 
 `CheckTrekCondition()` is abstract.
 
@@ -467,11 +481,14 @@ Concrete navigator types implement it to:
 - set ceiling constraints
 - write the result into `_frameCondition`
 
-### 9.5 ReplaceTrekCondition(...)
+### 9.6 ReplaceTrekCondition(...)
 
 `ReplaceTrekCondition(...)` swaps `_frameCondition` wholesale.
 
-This is useful when a host already has a complete traversal snapshot and wants to replace the current one in a single call.
+This is useful when a host already has a complete traversal snapshot and wants to replace the current
+one in a single call.
+If the motor needs to see that replacement before the next traversal step, either pass
+`updateMotorState: true` or call `SyncCurrentTrekConditionToMotor()` immediately after the replace.
 
 ## 10. Delta APIs
 

@@ -51,7 +51,7 @@ public class MockMotorAgent
         Motor.Events.CanContinueClimb = () => true;
 
         CheckTrekCondition();
-        Motor.UpdateTraversal(FrameCondition, true);
+        Motor.SyncTraversalState(FrameCondition, true);
     }
 
     public void Simulate()

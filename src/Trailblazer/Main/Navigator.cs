@@ -657,8 +657,9 @@ public abstract class Navigator : INavigate, IRecordable
     /// Updates the scout’s traversal state, including its current medium and surface information.
     /// </summary>
     /// <remarks>
-    /// Make sure to update this before the next <see cref="CommitFrameMotion"/> so <see cref="NavMotor.FinalizeTraversal"/> can update it's state.
-    /// If intent is to update before next <see cref="Simulate"/>, ensure that <see cref="NavMotor.UpdateTraversal"/> is called to update state.
+    /// Make sure to update this before the next <see cref="CommitFrameMotion"/> so <see cref="NavMotor.FinalizeTraversal"/> can update its state.
+    /// If the motor must see the new snapshot before the next <see cref="Simulate"/>, either pass
+    /// <paramref name="updateMotorState"/> as <c>true</c> or call <see cref="SyncCurrentTrekConditionToMotor"/>.
     /// </remarks>
     /// <param name="medium">The traversal medium (e.g., ground, air, water).</param>
     /// <param name="surfaceLevel">The vertical surface level, if applicable.</param>
@@ -682,15 +683,29 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
+    /// Pushes the current traversal snapshot into the motor before the next traversal phase begins.
+    /// </summary>
+    public virtual void SyncCurrentTrekConditionToMotor()
+    {
+        if (!IsActive)
+            throw new InvalidOperationException("Navigator must be Setup and Initialized before syncing traversal state to the motor.");
+
+        Motor.SyncTraversalState(_frameCondition);
+    }
+
+    /// <summary>
     /// Replaces the current traversal state with the given one.
     /// </summary>
     /// <param name="state">The new traversal condition to apply.</param>
-    /// <param name="updateMotorState">Flags whether or not to update the motor's internal surface state.  Otherwise, it should be updated at the end of the frame.</param>
+    /// <param name="updateMotorState">Flags whether or not to immediately sync the new traversal snapshot into the motor before the next traversal step.</param>
     public virtual void ReplaceTrekCondition(TrekCondition state, bool updateMotorState)
     {
+        if (updateMotorState && !IsActive)
+            throw new InvalidOperationException("Navigator must be Setup and Initialized before syncing traversal state to the motor.");
+
         _frameCondition = state.Clone();
         if (updateMotorState)
-            Motor.UpdateTraversal(_frameCondition);
+            SyncCurrentTrekConditionToMotor();
     }
 
     /// <summary>
@@ -716,7 +731,7 @@ public abstract class Navigator : INavigate, IRecordable
         _frameCondition.CeilingLevel = ceilingLevel ?? _frameCondition.CeilingLevel;
 
         if (updateMotorState)
-            Motor.UpdateTraversal(_frameCondition);
+            SyncCurrentTrekConditionToMotor();
     }
 
     #endregion

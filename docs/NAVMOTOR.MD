@@ -56,7 +56,7 @@ The main entry points are:
 - `TryTraversal(TrekRequest request, out Vector3d velocityDelta, out Vector3d positionDelta, out FixedQuaternion rotationDelta)`
 - `FinalizeTraversal(Vector3d newPosition, Vector3d lastPosition, FixedQuaternion newRotation, TrekCondition conditionRefresh, Vector3d? newFootPosition = null)`
 - `AbortTraversalFrame()`
-- `UpdateTraversal(TrekCondition newCondition, bool isInitializing = false)`
+- `SyncTraversalState(TrekCondition newCondition, bool isInitializing = false)`
 - `SetVelocity(Vector3d velocity)`
 - `GetVerticalJumpSpeed()`
 - `IsTooSteep(Fixed64 angle)`
@@ -99,7 +99,10 @@ This is the expected contract around the two phases:
 4. Re-evaluate the environment and refresh `TrekCondition`.
 5. Call `FinalizeTraversal(...)` with the updated state snapshot.
 
-If the host needs to push a new traversal state into the motor before `FinalizeTraversal(...)`, it can call `UpdateTraversal(...)` directly. This is what helpers like `Navigator.SetGroundContact(..., updateMotorState: true)` or the lower-level `Navigator.SetTrekCondition(updateMotorState: true)` are for.
+If the host needs to push a new traversal state into the motor before the next traversal phase, it
+should use `SyncTraversalState(...)` directly or go through `Navigator.SyncCurrentTrekConditionToMotor()`.
+Helpers like `Navigator.SetGroundContact(..., updateMotorState: true)` and the lower-level
+`Navigator.SetTrekCondition(updateMotorState: true)` route through that same explicit seam.
 
 ## 5. Initialization and State Ownership
 

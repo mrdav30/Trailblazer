@@ -480,7 +480,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.FrameCondition.Medium = TraversalMedium.Solid;
         agent.FrameCondition.SurfaceLevel = agent.Position.y;
         agent.FrameCondition.GroundState = new GroundCondition();
-        agent.Motor.UpdateTraversal(agent.FrameCondition);
+        agent.Motor.SyncTraversalState(agent.FrameCondition);
 
         TrailblazerManager.Simulate();
         agent.FrameRequest.Direction = Vector3d.Zero;

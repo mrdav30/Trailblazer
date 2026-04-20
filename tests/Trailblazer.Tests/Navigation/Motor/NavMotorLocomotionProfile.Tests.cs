@@ -74,13 +74,13 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
 
         agent.Motor.StateChanged.Should().BeFalse();
 
-        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        agent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Gas });
         agent.Motor.StateChanged.Should().BeTrue();
 
-        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        agent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Gas });
         agent.Motor.StateChanged.Should().BeFalse();
 
-        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Unknown });
+        agent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Unknown });
         agent.Motor.StateChanged.Should().BeFalse();
     }
 
@@ -103,7 +103,7 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
 
         var jumpingAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
         jumpingAgent.Motor.Handler.Jump!.IsJumping = true;
-        jumpingAgent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        jumpingAgent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Gas });
         jumpingAgent.Motor.GetMaxAcceleration().Should().Be(jumpingAgent.Motor.Handler.Move.MaxAirAcceleration);
 
         var unknownAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);

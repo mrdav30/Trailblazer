@@ -66,6 +66,32 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     }
 
     [Fact]
+    public void SyncTraversalState_ShouldPreserveLegacyTraversalUpdateBehavior()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
+
+        agent.Motor.SyncTraversalState(new TrekCondition
+        {
+            Medium = TraversalMedium.Gas,
+            SurfaceLevel = (Fixed64)3,
+            CeilingLevel = (Fixed64)8
+        }, isInitializing: true);
+
+        agent.Motor.CurrentState.Medium.Should().Be(TraversalMedium.Gas);
+        agent.Motor.CurrentState.PreviousMedium.Should().Be(TraversalMedium.Gas);
+
+        agent.Motor.SyncTraversalState(new TrekCondition
+        {
+            Medium = TraversalMedium.Liquid,
+            SurfaceLevel = Fixed64.One
+        });
+
+        agent.Motor.CurrentState.Medium.Should().Be(TraversalMedium.Liquid);
+        agent.Motor.CurrentState.PreviousMedium.Should().Be(TraversalMedium.Gas);
+        agent.Motor.StateChanged.Should().BeTrue();
+    }
+
+    [Fact]
     public void StateAccessors_ShouldTrackPreviousMediumAndTransientFlags()
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
@@ -82,7 +108,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         agent.Motor.IsJumping.Should().BeTrue();
         agent.Motor.IsFalling.Should().BeTrue();
 
-        agent.Motor.UpdateTraversal(new TrekCondition
+        agent.Motor.SyncTraversalState(new TrekCondition
         {
             Medium = TraversalMedium.Solid,
             SurfaceLevel = Fixed64.Zero,
@@ -91,10 +117,10 @@ public sealed class NavMotorCoverageTailTests : IDisposable
                 Platform = new PlatformSnapshot(1, Fixed4x4.Identity)
             }
         });
-        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Liquid });
+        agent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Liquid });
         agent.Motor.WasOnSolid.Should().BeTrue();
 
-        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        agent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Gas });
         agent.Motor.WasInLiquid.Should().BeTrue();
     }
 
@@ -108,7 +134,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         moveAndFallOnly.Motor.IsJumping.Should().BeFalse();
         moveAndFallOnly.Motor.IsFalling.Should().BeFalse();
 
-        moveAndFallOnly.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        moveAndFallOnly.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Gas });
         moveAndFallOnly.Motor.WasOnSolid.Should().BeFalse();
         moveAndFallOnly.Motor.WasInLiquid.Should().BeFalse();
         moveAndFallOnly.Motor.StateChanged.Should().BeFalse();
@@ -275,7 +301,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
 
         OpenTraversal(agent);
         agent.Motor.Handler.Jump!.IsJumping = true;
-        agent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        agent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Gas });
 
         agent.Motor.FinalizeTraversal(
             agent.Position,
@@ -301,7 +327,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
 
         OpenTraversal(jumpingAgent);
         jumpingAgent.Motor.Handler.Jump!.IsJumping = true;
-        jumpingAgent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        jumpingAgent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Gas });
 
         jumpingAgent.Motor.FinalizeTraversal(
             jumpingAgent.Position,
@@ -500,7 +526,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         ceilingSafeAgent.Motor.Handler.Move.FrameVelocity = new Vector3d(0, 4, 0);
         ceilingSafeAgent.Motor.Handler.Jump!.IsJumping = true;
         ceilingSafeAgent.Motor.Handler.Jump.IsHoldingJump = true;
-        ceilingSafeAgent.Motor.UpdateTraversal(new TrekCondition
+        ceilingSafeAgent.Motor.SyncTraversalState(new TrekCondition
         {
             Medium = TraversalMedium.Gas,
             CeilingLevel = (Fixed64)5
@@ -543,7 +569,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     public void StateAndFlightHelpers_ShouldCoverUnknownTransitions_AndDisabledFlightModules()
     {
         var unknownAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Unknown);
-        unknownAgent.Motor.UpdateTraversal(new TrekCondition
+        unknownAgent.Motor.SyncTraversalState(new TrekCondition
         {
             Medium = TraversalMedium.Solid,
             GroundState = new GroundCondition
@@ -553,7 +579,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         });
         unknownAgent.Motor.StateChanged.Should().BeFalse();
 
-        unknownAgent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        unknownAgent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Gas });
         unknownAgent.Motor.StateChanged.Should().BeTrue();
 
         var disabledFlightAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
@@ -799,7 +825,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         fallingAgent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
 
         var jumpAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        jumpAgent.Motor.UpdateTraversal(new TrekCondition { Medium = TraversalMedium.Gas });
+        jumpAgent.Motor.SyncTraversalState(new TrekCondition { Medium = TraversalMedium.Gas });
         jumpAgent.Motor.Handler.Jump!.MaxJumpCount = 2;
         jumpAgent.Motor.Handler.Jump.RegisterJump();
         ReflectionUtility.SetPrivateField(jumpAgent.Motor, "_forceOutput", Vector3d.Down);
@@ -833,7 +859,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     public void ApplyGroundVelocityConstraints_ShouldPreserveVelocity_WhenSolidStateHasNoGroundSample()
     {
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent();
-        agent.Motor.UpdateTraversal(new TrekCondition
+        agent.Motor.SyncTraversalState(new TrekCondition
         {
             Medium = TraversalMedium.Solid,
             GroundState = null
@@ -854,7 +880,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         agent.Motor.Handler.Slide!.IsSliding = true;
         Fixed4x4 slopedPlatform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles((Fixed64)0.25f, Fixed64.Zero, Fixed64.Zero));
-        agent.Motor.UpdateTraversal(new TrekCondition
+        agent.Motor.SyncTraversalState(new TrekCondition
         {
             Medium = TraversalMedium.Solid,
             GroundState = new GroundCondition

@@ -40,8 +40,9 @@ public class NavMotor : IRecordable
     /// This stores the current <see cref="Navigator._frameCondition"/> for the frame.  
     /// </summary>
     /// <remarks>
-    /// This is only set on <see cref="OnInitialize"/>,
-    /// and updated at the end of the frame in <see cref="FinalizeTraversal"/>
+    /// This is set on <see cref="OnInitialize"/>, can be explicitly synchronized before traversal
+    /// through <see cref="SyncTraversalState(TrekCondition, bool)"/>, and is refreshed at the end of
+    /// the frame in <see cref="FinalizeTraversal"/>.
     /// </remarks>
     public TransitState CurrentState { get; private set; }
 
@@ -1542,7 +1543,14 @@ public class NavMotor : IRecordable
         Handler.Move.FrameVelocity = velocity;
     }
 
-    public void UpdateTraversal(TrekCondition newCondition, bool isInitializing = false)
+    /// <summary>
+    /// Pushes a traversal snapshot into the motor before the next traversal phase begins.
+    /// </summary>
+    /// <remarks>
+    /// This is the explicit pre-traversal sync seam for hosts that learn about medium or surface
+    /// changes before the next call to <see cref="TryTraversal(TrekRequest, out Vector3d, out Vector3d, out FixedQuaternion)"/>.
+    /// </remarks>
+    public void SyncTraversalState(TrekCondition newCondition, bool isInitializing = false)
     {
         if (isInitializing)
         {

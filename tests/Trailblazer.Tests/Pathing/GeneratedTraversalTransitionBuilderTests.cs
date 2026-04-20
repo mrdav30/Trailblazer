@@ -233,6 +233,41 @@ public sealed class GeneratedTraversalTransitionBuilderTests : IDisposable
         transitions.Should().ContainSingle(t => t.Type == TraversalTransitionType.Climb && !t.RequestsClimbIntent);
     }
 
+    [Fact]
+    public void BuildTransitionsForPair_ShouldCreateSwimExitThatRequestsClimb_ForLiquidClimbShoreline()
+    {
+        NavigationChart chart = CreateChart(
+            new NavigationChartCell[1, 2, 1]
+            {
+                {
+                    { new NavigationChartCell(TraversalMedia.Liquid, generatedTransitionMedia: TraversalMedia.Liquid) },
+                    { new NavigationChartCell(
+                        TraversalMedia.Solid | TraversalMedia.Liquid,
+                        flags: NavigationChartCellFlags.ClimbSurfaceHint | NavigationChartCellFlags.ClimbTransitionHint,
+                        generatedTransitionMedia: TraversalMedia.Solid | TraversalMedia.Liquid) }
+                }
+            });
+
+        TraversalTransition[] transitions = GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
+            chart,
+            "liquid-climb",
+            firstX: 0,
+            firstY: 0,
+            firstZ: 0,
+            secondX: 1,
+            secondY: 0,
+            secondZ: 0);
+
+        transitions.Should().ContainSingle(t =>
+            t.Type == TraversalTransitionType.SwimExit
+            && t.RequestsClimbIntent
+            && t.PreserveClimbIntentOnFollowup);
+        transitions.Should().ContainSingle(t =>
+            t.Type == TraversalTransitionType.SwimEntry
+            && !t.RequestsClimbIntent
+            && !t.PreserveClimbIntentOnFollowup);
+    }
+
     private static NavigationChart CreateChart(NavigationChartCell[,,] data)
     {
         return NavigationChart.From3D(

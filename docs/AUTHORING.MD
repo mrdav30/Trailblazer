@@ -71,6 +71,7 @@ Registration is all-or-nothing. If any generated transition fails to register, t
 | `SC` | authored climb-capable solid traversal cell |
 | `G` | authored gas-volume traversal cell |
 | `L` | authored liquid-volume traversal cell |
+| `LC` | authored climb-capable solid-plus-liquid shoreline cell |
 | `SG` | authored solid-plus-gas traversal cell |
 | `SL` | authored solid-plus-liquid traversal cell |
 
@@ -79,6 +80,8 @@ Important nuance:
 - `S` produces a solid cell that initializes a `SolidChartPartition`
 - empty / `.` / `X` contribute no chart-backed solid traversal and no transition anchor
 - `G` and `L` produce authored volume cells that initialize `VolumeChartPartition` state
+- `LC` produces a solid-plus-liquid cell that also advertises climb-surface support for authored
+  climb routing and liquid-exit climb intent
 - `SG` and `SL` are the built-in explicit mixed-media cells; overlap is not used to synthesize those combinations
 - `G` and `L` are the built-in way to author valid gas-volume and liquid-volume space; Trailblazer does not treat generic empty voxels as implicit volume by default
 
@@ -92,6 +95,7 @@ Examples:
 - `SC!`
 - `G!`
 - `L!`
+- `LC!`
 - `SG!`
 - `SL!`
 
@@ -102,6 +106,8 @@ Current marker behavior:
 - chart-to-volume and authored climb chart-to-chart pairs are generated
 - `G!` / `L!` / `S!` / `SG!` / `SL!` still emit their authored chart cells; the marker only opts them into transition generation
 - `SC!` marks a climb seam cell so generated climb routing may explicitly enter or exit authored climb topology from neighboring solid cells
+- `LC!` marks a liquid shoreline cell so generated `SwimExit` handoffs can request climb intent when
+  the exit lands on that shoreline
 - `SG!` and `SL!` keep mixed-media meaning narrow: they participate only when there is one unambiguous solid-to-volume boundary pair
 
 When a marked chart cell participates in generation, the builder also adds:
@@ -114,11 +120,18 @@ When a marked chart cell participates in generation, the builder also adds:
 The built-in generator currently creates:
 
 - `SwimEntry` and `SwimExit` for `S!` next to `L!`
+- `SwimEntry` and `SwimExit` for `L!` next to `LC!`, with the generated `SwimExit` requesting climb intent
 - `SwimEntry` and `SwimExit` for `S!` next to `SL!`, or `SL!` next to `L!`
 - `Takeoff` and `Landing` for `S!` next to `G!`
 - `Takeoff` and `Landing` for `S!` next to `SG!`, or `SG!` next to `G!`
 - bidirectional `Climb` transitions for adjacent `SC` / `SC` and `SC` / `SC!` climb-surface pairs
 - climb entry and exit `Climb` transitions for `S` next to `SC!`
+
+For authored liquid exits, the marker semantics stay narrow:
+
+- only generated `SwimExit` handoffs request climb intent
+- the paired `SwimEntry` remains a normal water-entry transition
+- `LC` still behaves like a regular solid-plus-liquid traversal cell for partition ownership and medium support
 
 Ambiguous mixed-to-mixed boundaries such as `SG!` next to `SL!` do not auto-generate transitions.
 

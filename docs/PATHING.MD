@@ -253,6 +253,10 @@ Current planned route shapes are:
 - chart -> one or more authored climb transitions -> chart
 - chart -> transition -> volume -> transition -> chart
 
+Marked liquid-climb shoreline cells such as `LC!` fit inside that existing shape. They do not add a new
+planner stage; they make the generated `SwimExit` back onto the chart request climb intent so navigation
+can continue with climb or mantle locomotion after the volume leg completes.
+
 Important internal behavior:
 
 - `HybridPathRequest.CreateFromAStar(...)` and `CreateFromFlowField(...)` preserve the caller's original intent

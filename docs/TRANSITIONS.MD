@@ -44,6 +44,10 @@ Without authored transitions, chart-backed pathing only knows about chart connec
 
 That is the job of `TraversalTransitionRegistry`.
 
+Generated transition authoring can also preserve narrow locomotion intent at the seam. A marked `LC!`
+shoreline still registers a normal `SwimExit` transition, but that generated exit is tagged so navigation
+can begin climb or mantle behavior as the agent leaves liquid.
+
 ## 2. Core Transition Model
 
 ### 2.1 `TraversalTransition`
@@ -73,6 +77,7 @@ Important nuance:
 - transition type is descriptive metadata for planning and host meaning
 - it does not by itself make a route valid
 - the route segments on both sides still have to resolve successfully
+- some transitions may also carry host-facing locomotion intent metadata in addition to their type
 
 ### 2.2 `TraversalTransitionAnchor`
 

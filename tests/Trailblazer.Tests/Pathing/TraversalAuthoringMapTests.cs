@@ -337,6 +337,47 @@ public class TraversalAuthoringMapTests : IDisposable
     }
 
     [Fact]
+    public void Build_ShouldGenerateLiquidExitThatRequestsClimb_WhenShorelineUsesMarkedLcToken()
+    {
+        string[,,] map =
+        {
+            {
+                { "L!" },
+                { "LC!" }
+            }
+        };
+
+        TraversalBuildResult result = new TraversalAuthoringMap(
+            chartName: "LiquidClimbBoundary",
+            sourceMap: map,
+            minBounds: Vector3d.Zero,
+            interval: Fixed64.One).Build();
+
+        Assert.True(result.Chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell shorelineCell));
+        Assert.True(shorelineCell.HasSolid);
+        Assert.True(shorelineCell.SupportsMedium(TraversalMedium.Liquid));
+        Assert.Equal(
+            NavigationChartCellFlags.ClimbSurfaceHint
+                | NavigationChartCellFlags.ClimbTransitionHint
+                | NavigationChartCellFlags.TransitionSourceHint
+                | NavigationChartCellFlags.TransitionDestinationHint,
+            shorelineCell.Flags);
+
+        Assert.Contains(result.GeneratedTransitions, t =>
+            t.Type == TraversalTransitionType.SwimExit
+            && t.Source.Medium == TraversalMedium.Liquid
+            && t.Destination.Medium == TraversalMedium.Solid
+            && t.RequestsClimbIntent
+            && t.PreserveClimbIntentOnFollowup);
+        Assert.Contains(result.GeneratedTransitions, t =>
+            t.Type == TraversalTransitionType.SwimEntry
+            && t.Source.Medium == TraversalMedium.Solid
+            && t.Destination.Medium == TraversalMedium.Liquid
+            && !t.RequestsClimbIntent
+            && !t.PreserveClimbIntentOnFollowup);
+    }
+
+    [Fact]
     public void Build_ShouldRejectInvalidMarkerUsage()
     {
         string[,,] map =

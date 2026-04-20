@@ -301,12 +301,17 @@ internal static class GeneratedTraversalTransitionBuilder
             return false;
         }
 
+        NavigationChartCell chartCell = chartPosition == chart.GetWorldPosition(firstX, firstY, firstZ)
+            ? firstCell
+            : secondCell;
+
         return TryBuildChartVolumeTransitionPair(
             chart,
             transitionIdPrefix,
             chartPosition,
             volumePosition,
             volumeMedium,
+            chartCell,
             out chartToVolumeTransition,
             out volumeToChartTransition);
     }
@@ -392,6 +397,7 @@ internal static class GeneratedTraversalTransitionBuilder
         Vector3d chartPosition,
         Vector3d volumePosition,
         TraversalMedium volumeMedium,
+        NavigationChartCell chartCell,
         out TraversalTransition chartToVolumeTransition,
         out TraversalTransition volumeToChartTransition)
     {
@@ -447,8 +453,19 @@ internal static class GeneratedTraversalTransitionBuilder
                 chartZ),
             exitType,
             volumeAnchor,
-            chartAnchor);
+            chartAnchor,
+            requestsClimbIntent: ShouldRequestClimbIntentOnLiquidExit(volumeMedium, chartCell),
+            preserveClimbIntentOnFollowup: ShouldRequestClimbIntentOnLiquidExit(volumeMedium, chartCell));
         return true;
+    }
+
+    private static bool ShouldRequestClimbIntentOnLiquidExit(
+        TraversalMedium volumeMedium,
+        NavigationChartCell chartCell)
+    {
+        return volumeMedium == TraversalMedium.Liquid
+            && IsClimbSurface(chartCell)
+            && chartCell.SupportsMedium(TraversalMedium.Liquid);
     }
 
     private static string CreateGeneratedTransitionId(

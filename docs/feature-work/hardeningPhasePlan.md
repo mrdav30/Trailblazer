@@ -33,6 +33,10 @@ Track any smaller follow-up issues that are straightforward to execute and don't
   guided climb intent at guided-request creation time and at explicit handoff activation time,
   which is sufficient for the current slice, but it does not yet react to later transition-shape
   changes caused by repath.
+- Revisit whether staged routing should support full liquid -> authored climb-chain -> chart plans.
+  The `LC!` fast follow supports climbing or mantling out of liquid by requesting climb intent on
+  generated `SwimExit` shorelines, but the hybrid planner still does not compose a volume segment
+  directly into a later multi-transition climb chain.
 
 ### 3. Optional Runtime Follow-Ups
 

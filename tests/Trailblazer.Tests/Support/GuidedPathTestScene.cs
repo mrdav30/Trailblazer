@@ -85,6 +85,28 @@ internal static class GuidedPathTestScene
             pathCostModifier: 1)).Should().BeTrue();
     }
 
+    public static void RegisterLiquidClimbExitScene(string chartKey)
+    {
+        string[,,] map = new string[1, 6, 1]
+        {
+            {
+                { "S!" },
+                { "L" },
+                { "L" },
+                { "L!" },
+                { "LC!" },
+                { "S" }
+            }
+        };
+
+        TraversalBuildResult buildResult = new TraversalAuthoringMap(
+            chartKey,
+            map,
+            Vector3d.Zero,
+            Fixed64.One).Build();
+        PathManager.Register(buildResult).Should().BeTrue();
+    }
+
     public static void RegisterAerialLandingHandoffScene(string sceneKey)
     {
         PathTestFactory.RegisterSingleTraversalPoint(

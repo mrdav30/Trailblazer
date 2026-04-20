@@ -326,6 +326,40 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void ApplyGuidedTrekRequest_ShouldPreserveClimbAcrossSwimExitHandoff_WhenGeneratedSwimExitTargetsLiquidClimbShoreline()
+    {
+        const string chartKey = "NavigatorLiquidClimbExit";
+        GuidedPathTestScene.RegisterLiquidClimbExitScene(chartKey);
+
+        var navigator = CreateNavigator(new Vector3d(1, 0, 0));
+        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.GuidedPathMode = GuidedPathMode.FlowField;
+        navigator.GuidedAllowTraversalTransitions = true;
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(5, 0, 0),
+            pathMode: GuidedPathMode.Swim,
+            rate: TrekRate.Fast);
+
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+        VolumePathRequest initialRequest = navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
+        initialRequest.TargetPosition.Should().Be(new Vector3d(3, 0, 0));
+
+        navigator.SetTestPosition(new Vector3d(4, 0, 0));
+        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>();
+        navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        PathManager.UnloadChart(chartKey);
+    }
+
+    [Fact]
     public void ApplyGuidedTrekRequest_Should_CreateSwimRequest_WithoutFlight_WhenInWater()
     {
         AddWater(Vector3d.Zero);

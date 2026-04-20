@@ -20,43 +20,50 @@ This is the main active follow-up track.
 
 Track any smaller follow-up issues that are straightforward to execute and don't require significant design or profiling work here:
 
-- Revisit whether `NavMotor` should expose a clearer pre-traversal traversal-state sync for hosts
-  that learn about medium changes before simulation begins. The current mantle path is correct when
-  hosts call `UpdateTraversal(...)` as part of that handoff, but the seam is implicit and easy to
-  miss in tests or custom integrations.
-- Revisit whether active mantle should optionally continue consulting the host affordance resolver
-  for cancellation signals such as lost clearance or invalidated top-out state. The current mantle
-  path intentionally becomes self-contained once it starts, which keeps the runtime simple and
-  deterministic, but some hosts may later need a stricter cancel-or-slip seam.
-- Revisit whether guided climb intent should be recomputed when steering repaths into a different
-  authored transition topology after the original guided request was created. Phase 5 resolves
-  guided climb intent at guided-request creation time and at explicit handoff activation time,
-  which is sufficient for the current slice, but it does not yet react to later transition-shape
-  changes caused by repath.
-- Revisit whether staged routing should support full liquid -> authored climb-chain -> chart plans.
-  The `LC!` fast follow supports climbing or mantling out of liquid by requesting climb intent on
-  generated `SwimExit` shorelines, but the hybrid planner still does not compose a volume segment
-  directly into a later multi-transition climb chain.
+1. Keep the pre-traversal traversal-state sync hardening item.
+  This is still necessary as an API clarity follow-up rather than a missing runtime capability.
+  Tracked here:
+  [preTraversalStateSyncPlan.md](./preTraversalStateSyncPlan.md)
+2. Keep the active mantle validation hardening item.
+  This is still necessary for hosts with dynamic ledges, blockers, or scripted top-out invalidation,
+  but it should remain opt-in so the current self-contained mantle path stays the default.
+  Tracked here:
+  [activeMantleValidationPlan.md](./activeMantleValidationPlan.md)
+3. Keep the guided climb intent recompute hardening item.
+  This is still necessary because `NavSteering` can repath into a different transition-aware route
+  without a new guided request being applied, and the hardening slice needs to preserve explicit
+  host climb intent while recomputing only the auto-derived case.
+  Tracked here:
+  [guidedClimbIntentRecomputePlan.md](./guidedClimbIntentRecomputePlan.md)
+4. Fold the staged liquid -> authored climb-chain follow-up concern into the guided climb intent
+  recompute item.
+  After review, the planner already selects liquid exits using transition-aware chart costs, and the
+  activated follow-up request can already execute authored climb chains when chart routing falls back
+  to hybrid topology.
+  The remaining gap is same-frame auto-intent sync when that follow-up route resolves to a
+  climb-requiring topology that was not fully described by the exit transition metadata.
+  Tracked here:
+  [guidedClimbIntentRecomputePlan.md](./guidedClimbIntentRecomputePlan.md)
 
 ### 3. Optional Runtime Follow-Ups
 
 These are valid future hardening items, but they should stay demand-driven rather than automatic.
 
-- If profiling shows the current closest-transition lookup is still hot inside large single-grid
+1. If profiling shows the current closest-transition lookup is still hot inside large single-grid
   transition sets, add a more granular spatial index instead of relying only on filtered caches and
   grid-bounds pruning.
-- If external grid churn becomes noisy, consider using `GridSpawnToken` and `GridVersion` for
+2. If external grid churn becomes noisy, consider using `GridSpawnToken` and `GridVersion` for
   stale-event guards or dedup in the `PathManager` grid bridge.
-- If hosts need richer automatic lifecycle behavior for manually registered transitions, revisit
+3. If hosts need richer automatic lifecycle behavior for manually registered transitions, revisit
   managed manual regeneration and whether `ManagedChartTransitionState` should broaden into a more
   general managed transition dependency model.
-- If the new GridForge payload makes it worthwhile later, revisit whether external grid change
+4. If the new GridForge payload makes it worthwhile later, revisit whether external grid change
   rebuilds should become more precise than the current bounds-targeted chart rebuild path.
-- If climbing and other attached locomotions expose enough overlap after implementation, revisit
+5. If climbing and other attached locomotions expose enough overlap after implementation, revisit
   whether the motor should grow a generalized movement-mode abstraction for mutually exclusive
   controlled modes such as swim, fly, and climb. Do not preemptively refactor toward this before
   the climb runtime proves the real common shape.
-- If the climb affordance resolver pattern lands cleanly, revisit whether narrow capability events
+6. If the climb affordance resolver pattern lands cleanly, revisit whether narrow capability events
   such as `CanAffordJump` should move toward a more structured host query contract as well, so the
   motor consumes deterministic frame snapshots instead of accumulating permission and environment
   state through callback chains.

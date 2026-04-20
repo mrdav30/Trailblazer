@@ -10,11 +10,14 @@ internal static class GeneratedTraversalTransitionBuilder
 {
     private const int DefaultGeneratedClimbPathCost = 1;
 
-    private static readonly (int Dx, int Dy, int Dz)[] PositivePerpendicularNeighborOffsets =
+    private static readonly (int Dx, int Dy, int Dz)[] PerpendicularNeighborOffsets =
     {
         (1, 0, 0),
+        (-1, 0, 0),
         (0, 1, 0),
-        (0, 0, 1)
+        (0, -1, 0),
+        (0, 0, 1),
+        (0, 0, -1)
     };
 
     internal static TraversalTransition[] BuildTransitions(
@@ -22,30 +25,45 @@ internal static class GeneratedTraversalTransitionBuilder
         string transitionIdPrefix)
     {
         SwiftList<TraversalTransition> transitions = new();
-        for (int y = 0; y < chart.SizeY; y++)
-            for (int x = 0; x < chart.SizeX; x++)
-                for (int z = 0; z < chart.SizeZ; z++)
-                    for (int neighborOffsetIndex = 0; neighborOffsetIndex < PositivePerpendicularNeighborOffsets.Length; neighborOffsetIndex++)
-                    {
-                        (int dx, int dy, int dz) = PositivePerpendicularNeighborOffsets[neighborOffsetIndex];
-                        int neighborX = x + dx;
-                        int neighborY = y + dy;
-                        int neighborZ = z + dz;
-                        if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
-                            continue;
+        int[] generatedIndices = chart.GetGeneratedTransitionIndices();
+        for (int i = 0; i < generatedIndices.Length; i++)
+        {
+            chart.DecodeIndex(generatedIndices[i], out int x, out int y, out int z);
+            for (int neighborOffsetIndex = 0; neighborOffsetIndex < PerpendicularNeighborOffsets.Length; neighborOffsetIndex++)
+            {
+                (int dx, int dy, int dz) = PerpendicularNeighborOffsets[neighborOffsetIndex];
+                int neighborX = x + dx;
+                int neighborY = y + dy;
+                int neighborZ = z + dz;
+                if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
+                    continue;
 
-                        TraversalTransition[] pairTransitions = BuildTransitionsForPair(
-                            chart,
-                            transitionIdPrefix,
-                            x,
-                            y,
-                            z,
-                            neighborX,
-                            neighborY,
-                            neighborZ);
-                        for (int pairTransitionIndex = 0; pairTransitionIndex < pairTransitions.Length; pairTransitionIndex++)
-                            transitions.Add(pairTransitions[pairTransitionIndex]);
-                    }
+                NavigationChartCell neighborCell = chart.GetCell(neighborX, neighborY, neighborZ);
+                if (!ShouldBuildCandidatePair(
+                    x,
+                    y,
+                    z,
+                    neighborX,
+                    neighborY,
+                    neighborZ,
+                    neighborCell))
+                {
+                    continue;
+                }
+
+                TraversalTransition[] pairTransitions = BuildTransitionsForPair(
+                    chart,
+                    transitionIdPrefix,
+                    x,
+                    y,
+                    z,
+                    neighborX,
+                    neighborY,
+                    neighborZ);
+                for (int pairTransitionIndex = 0; pairTransitionIndex < pairTransitions.Length; pairTransitionIndex++)
+                    transitions.Add(pairTransitions[pairTransitionIndex]);
+            }
+        }
 
         return transitions.ToArray();
     }
@@ -241,6 +259,43 @@ internal static class GeneratedTraversalTransitionBuilder
 
     private static bool IsClimbTransitionSeam(NavigationChartCell cell) =>
         (cell.Flags & NavigationChartCellFlags.ClimbTransitionHint) != 0;
+
+    private static bool IsGeneratedTransitionCandidate(NavigationChartCell cell) =>
+        cell.CanGenerateTransition || IsClimbSurface(cell);
+
+    private static bool ShouldBuildCandidatePair(
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ,
+        NavigationChartCell secondCell)
+    {
+        if (!IsGeneratedTransitionCandidate(secondCell))
+            return true;
+
+        return IsLexicographicallyBefore(
+            firstX,
+            firstY,
+            firstZ,
+            secondX,
+            secondY,
+            secondZ);
+    }
+
+    private static bool IsLexicographicallyBefore(
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ)
+    {
+        return firstX < secondX
+            || (firstX == secondX && firstY < secondY)
+            || (firstX == secondX && firstY == secondY && firstZ < secondZ);
+    }
 
     private static TraversalTransition CreateClimbTransition(
         string transitionIdPrefix,

@@ -7,10 +7,6 @@ namespace Trailblazer.Navigation.Motor;
 /// <summary>
 /// Stores climb locomotion configuration and runtime attachment state.
 /// </summary>
-/// <remarks>
-/// Phase 1 only introduces the profile and serialization surface for climbing.
-/// Runtime climb motion is intentionally deferred to a later implementation phase.
-/// </remarks>
 public class ClimbLocomotion : ILocomotion
 {
     /// <summary>

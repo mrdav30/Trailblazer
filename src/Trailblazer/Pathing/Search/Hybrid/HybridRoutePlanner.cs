@@ -37,7 +37,9 @@ internal static class HybridRoutePlanner
             return true;
         }
 
-        HybridRoutePlan climbTransitionChainPlan = TryPlanChainedClimbTransitions(request);
+        HybridRoutePlan climbTransitionChainPlan = GetBetterPlan(
+            TryPlanChainedClimbTransitions(request, GetLocalDirectedClimbTransitions(request)),
+            TryPlanChainedClimbTransitions(request, TraversalTransitionQuery.GetDirectedTransitions(TraversalTransitionType.Climb)));
         if (climbTransitionChainPlan != null)
         {
             plan = climbTransitionChainPlan;
@@ -458,10 +460,11 @@ internal static class HybridRoutePlanner
         return current;
     }
 
-    private static HybridRoutePlan TryPlanChainedClimbTransitions(HybridPathRequest request)
+    private static HybridRoutePlan TryPlanChainedClimbTransitions(
+        HybridPathRequest request,
+        TraversalTransition[] transitions)
     {
-        TraversalTransition[] transitions = GetDirectedClimbTransitions(request);
-        if (transitions.Length == 0)
+        if (transitions == null || transitions.Length == 0)
             return null;
 
         int[] bestCosts = new int[transitions.Length];
@@ -560,24 +563,81 @@ internal static class HybridRoutePlanner
             bestTotalCost);
     }
 
-    private static TraversalTransition[] GetDirectedClimbTransitions(HybridPathRequest request)
+    private static TraversalTransition[] GetLocalDirectedClimbTransitions(HybridPathRequest request)
     {
-        TraversalTransition[] solidTransitions = TraversalTransitionQuery.GetDirectedTransitions(
-            TraversalMedium.Solid,
-            TraversalMedium.Solid);
-        if (solidTransitions.Length == 0)
+        if (request?.StartNode == null || request.EndNode == null)
             return Array.Empty<TraversalTransition>();
 
+        int startGridIndex = request.StartNode.GridIndex;
+        int endGridIndex = request.EndNode.GridIndex;
         SwiftList<TraversalTransition> climbTransitions = new();
-        for (int i = 0; i < solidTransitions.Length; i++)
+        SwiftHashSet<string> seenTransitionIds = new();
+
+        AddTransitions(
+            climbTransitions,
+            seenTransitionIds,
+            TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
+                startGridIndex,
+                TraversalTransitionType.Climb));
+
+        TraversalTransition[] destinationTransitions = FilterTransitionsByType(
+            TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(endGridIndex),
+            TraversalTransitionType.Climb);
+        AddTransitions(climbTransitions, seenTransitionIds, destinationTransitions);
+
+        if (startGridIndex != endGridIndex)
         {
-            if (solidTransitions[i].Type == TraversalTransitionType.Climb)
-                climbTransitions.Add(solidTransitions[i]);
+            AddTransitions(
+                climbTransitions,
+                seenTransitionIds,
+                TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(
+                    endGridIndex,
+                    TraversalTransitionType.Climb));
+
+            TraversalTransition[] originDestinationTransitions = FilterTransitionsByType(
+                TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(startGridIndex),
+                TraversalTransitionType.Climb);
+            AddTransitions(climbTransitions, seenTransitionIds, originDestinationTransitions);
         }
 
         return climbTransitions.Count == 0
             ? Array.Empty<TraversalTransition>()
             : climbTransitions.ToArray();
+    }
+
+    private static TraversalTransition[] FilterTransitionsByType(
+        TraversalTransition[] transitions,
+        TraversalTransitionType type)
+    {
+        if (transitions == null || transitions.Length == 0)
+            return Array.Empty<TraversalTransition>();
+
+        SwiftList<TraversalTransition> climbTransitions = new();
+        for (int i = 0; i < transitions.Length; i++)
+        {
+            if (transitions[i].Type == type)
+                climbTransitions.Add(transitions[i]);
+        }
+
+        return climbTransitions.Count == 0
+            ? Array.Empty<TraversalTransition>()
+            : climbTransitions.ToArray();
+    }
+
+    private static void AddTransitions(
+        SwiftList<TraversalTransition> destination,
+        SwiftHashSet<string> seenTransitionIds,
+        TraversalTransition[] source)
+    {
+        if (source == null || source.Length == 0)
+            return;
+
+        for (int i = 0; i < source.Length; i++)
+        {
+            TraversalTransition transition = source[i];
+            if (seenTransitionIds.Add(transition.Id))
+                destination.Add(transition);
+        }
     }
 
     private static int GetCheapestUnvisitedTransition(int[] bestCosts, bool[] visited)

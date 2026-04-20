@@ -234,6 +234,27 @@ public sealed class GeneratedTraversalTransitionBuilderTests : IDisposable
     }
 
     [Fact]
+    public void BuildTransitions_ShouldCreateClimbTransitions_WhenOnlyHigherIndexedCellIsTrackedCandidate()
+    {
+        NavigationChart chart = CreateChart(
+            new NavigationChartCell[1, 2, 1]
+            {
+                {
+                    { NavigationChartCell.Solid },
+                    { new NavigationChartCell(
+                        TraversalMedia.Solid,
+                        flags: NavigationChartCellFlags.ClimbSurfaceHint | NavigationChartCellFlags.ClimbTransitionHint) }
+                }
+            });
+
+        TraversalTransition[] transitions = GeneratedTraversalTransitionBuilder.BuildTransitions(chart, "sparse-climb");
+
+        transitions.Should().HaveCount(2);
+        transitions.Should().ContainSingle(t => t.Type == TraversalTransitionType.Climb && t.RequestsClimbIntent);
+        transitions.Should().ContainSingle(t => t.Type == TraversalTransitionType.Climb && !t.RequestsClimbIntent);
+    }
+
+    [Fact]
     public void BuildTransitionsForPair_ShouldCreateSwimExitThatRequestsClimb_ForLiquidClimbShoreline()
     {
         NavigationChart chart = CreateChart(

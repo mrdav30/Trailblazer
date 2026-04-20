@@ -922,13 +922,6 @@ public static class PathManager
         (0, 0, -1)
     };
 
-    private static readonly (int Dx, int Dy, int Dz)[] PositiveManagedGeneratedNeighborOffsets =
-    {
-        (1, 0, 0),
-        (0, 1, 0),
-        (0, 0, 1)
-    };
-
     private static bool TryRegisterManagedGeneratedTransitions(
         NavigationChart chart,
         string transitionIdPrefix,
@@ -1096,31 +1089,47 @@ public static class PathManager
         SwiftHashSet<string> activeTransitionIds)
     {
         SwiftList<TraversalTransition> missingTransitions = new();
-        for (int y = 0; y < chart.SizeY; y++)
-            for (int x = 0; x < chart.SizeX; x++)
-                for (int z = 0; z < chart.SizeZ; z++)
-                    for (int neighborOffsetIndex = 0; neighborOffsetIndex < PositiveManagedGeneratedNeighborOffsets.Length; neighborOffsetIndex++)
-                    {
-                        (int dx, int dy, int dz) = PositiveManagedGeneratedNeighborOffsets[neighborOffsetIndex];
-                        int neighborX = x + dx;
-                        int neighborY = y + dy;
-                        int neighborZ = z + dz;
-                        if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
-                            continue;
+        int[] generatedIndices = chart.GetGeneratedTransitionIndices();
+        for (int i = 0; i < generatedIndices.Length; i++)
+        {
+            chart.DecodeIndex(generatedIndices[i], out int x, out int y, out int z);
+            for (int neighborOffsetIndex = 0; neighborOffsetIndex < ManagedGeneratedNeighborOffsets.Length; neighborOffsetIndex++)
+            {
+                (int dx, int dy, int dz) = ManagedGeneratedNeighborOffsets[neighborOffsetIndex];
+                int neighborX = x + dx;
+                int neighborY = y + dy;
+                int neighborZ = z + dz;
+                if (!chart.IsInBounds(neighborX, neighborY, neighborZ))
+                    continue;
 
-                        CollectManagedGeneratedTransitionsForPair(
-                            chart,
-                            state,
-                            x,
-                            y,
-                            z,
-                            neighborX,
-                            neighborY,
-                            neighborZ,
-                            desiredTransitionIds,
-                            activeTransitionIds,
-                            missingTransitions);
-                    }
+                NavigationChartCell neighborCell = chart.GetCell(neighborX, neighborY, neighborZ);
+                if (!ShouldCollectManagedGeneratedPair(
+                    chart,
+                    x,
+                    y,
+                    z,
+                    neighborX,
+                    neighborY,
+                    neighborZ,
+                    neighborCell))
+                {
+                    continue;
+                }
+
+                CollectManagedGeneratedTransitionsForPair(
+                    chart,
+                    state,
+                    x,
+                    y,
+                    z,
+                    neighborX,
+                    neighborY,
+                    neighborZ,
+                    desiredTransitionIds,
+                    activeTransitionIds,
+                    missingTransitions);
+            }
+        }
 
         return missingTransitions.Count == 0
             ? Array.Empty<TraversalTransition>()
@@ -1437,6 +1446,30 @@ public static class PathManager
             if (!state.TransitionIds.Contains(transition.Id))
                 missingTransitions.Add(transition);
         }
+    }
+
+    private static bool ShouldCollectManagedGeneratedPair(
+        NavigationChart chart,
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ,
+        NavigationChartCell secondCell)
+    {
+        if (!IsManagedGeneratedTransitionCandidate(secondCell))
+            return true;
+
+        return firstX < secondX
+            || (firstX == secondX && firstY < secondY)
+            || (firstX == secondX && firstY == secondY && firstZ < secondZ);
+    }
+
+    private static bool IsManagedGeneratedTransitionCandidate(NavigationChartCell cell)
+    {
+        return cell.CanGenerateTransition
+            || (cell.Flags & NavigationChartCellFlags.ClimbSurfaceHint) != 0;
     }
 
     private static bool IsManagedGeneratedPairActive(

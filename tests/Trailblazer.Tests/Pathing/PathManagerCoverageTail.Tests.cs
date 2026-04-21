@@ -87,7 +87,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)), out _);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("DiagnosticsNearChart", Vector3d.Zero)).Should().BeTrue();
-        PathManager.ResetExternalGridBridgeDiagnostics();
+        PathManagerExternalGridBridge.ResetDiagnostics();
 
         GridEventInfo intersectingChange = new(
             1,
@@ -100,10 +100,10 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)),
             9);
 
-        ReflectionUtility.InvokePrivateStatic<object>(typeof(PathManager), "HandleExternalGridChanged", intersectingChange);
-        ReflectionUtility.InvokePrivateStatic<object>(typeof(PathManager), "HandleExternalGridChanged", farChange);
+        PathManagerExternalGridBridge.HandleGridChanged(intersectingChange);
+        PathManagerExternalGridBridge.HandleGridChanged(farChange);
 
-        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManager.GetExternalGridBridgeDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
         snapshot.TotalGridEventsReceived.Should().Be(2);
         snapshot.AddedEventsReceived.Should().Be(0);
         snapshot.RemovedEventsReceived.Should().Be(0);
@@ -120,7 +120,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridgeDiagnostics_ShouldTrackDuplicateEventSignatures_PerKind()
     {
-        PathManager.ResetExternalGridBridgeDiagnostics();
+        PathManagerExternalGridBridge.ResetDiagnostics();
 
         GridEventInfo duplicateAdd = new(
             7,
@@ -128,10 +128,10 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             new GridConfiguration(new Vector3d(-2, -2, -2), new Vector3d(2, 2, 2)),
             3);
 
-        ReflectionUtility.InvokePrivateStatic<object>(typeof(PathManager), "HandleExternalGridAdded", duplicateAdd);
-        ReflectionUtility.InvokePrivateStatic<object>(typeof(PathManager), "HandleExternalGridAdded", duplicateAdd);
+        PathManagerExternalGridBridge.HandleGridAdded(duplicateAdd);
+        PathManagerExternalGridBridge.HandleGridAdded(duplicateAdd);
 
-        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManager.GetExternalGridBridgeDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
         snapshot.TotalGridEventsReceived.Should().Be(2);
         snapshot.AddedEventsReceived.Should().Be(2);
         snapshot.RemovedEventsReceived.Should().Be(0);

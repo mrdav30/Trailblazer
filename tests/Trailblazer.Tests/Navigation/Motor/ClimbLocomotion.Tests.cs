@@ -55,6 +55,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             GravityCompensationWhileClimbing = (Fixed64)0.75f,
             ClimbStartTolerance = (Fixed64)0.25f,
             AllowLateralTraverse = false,
+            ValidateActiveMantleWithHost = true,
             IsClimbing = true,
             IsMantling = true,
             ActiveClimbKind = ClimbAffordanceKind.Ledge,
@@ -75,6 +76,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         target.GravityCompensationWhileClimbing.Should().Be((Fixed64)0.75f);
         target.ClimbStartTolerance.Should().Be((Fixed64)0.25f);
         target.AllowLateralTraverse.Should().BeFalse();
+        target.ValidateActiveMantleWithHost.Should().BeTrue();
         target.IsClimbing.Should().BeTrue();
         target.IsMantling.Should().BeTrue();
         target.ActiveClimbKind.Should().Be(ClimbAffordanceKind.Ledge);
@@ -520,6 +522,129 @@ public sealed class ClimbLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void Given_ActiveMantleValidationDisabled_When_ValidatorWouldCancel_Then_DefaultMantlePathContinues()
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MantleValidatingClimbResolver
+        {
+            Snapshot = CreateLedgeSnapshot(),
+            ValidationSnapshot = MantleValidationSnapshot.Cancel
+        };
+        int slipCount = 0;
+        agent.Motor.ClimbResolver = resolver;
+        agent.Motor.Events.OnClimbSlip = () => slipCount++;
+        agent.Motor.Handler.Climb!.ValidateActiveMantleWithHost = false;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        TrailblazerManager.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Zero;
+        agent.FrameRequest.Rate = TrekRate.Stationary;
+        agent.FrameRequest.IsRequestingClimb = false;
+        agent.Simulate();
+
+        agent.Motor.Handler.Climb!.IsMantling.Should().BeTrue();
+        agent.Motor.IsClimbing.Should().BeTrue();
+        resolver.ValidationCallCount.Should().Be(0);
+        slipCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void Given_ActiveMantleValidationEnabled_When_ValidatorCancels_Then_SlipsAndStops()
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MantleValidatingClimbResolver
+        {
+            Snapshot = CreateLedgeSnapshot(),
+            ValidationSnapshot = MantleValidationSnapshot.Cancel
+        };
+        int slipCount = 0;
+        agent.Motor.ClimbResolver = resolver;
+        agent.Motor.Events.OnClimbSlip = () => slipCount++;
+        agent.Motor.Handler.Climb!.ValidateActiveMantleWithHost = true;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        TrailblazerManager.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Zero;
+        agent.FrameRequest.Rate = TrekRate.Stationary;
+        agent.FrameRequest.IsRequestingClimb = false;
+        agent.Simulate();
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+        resolver.ValidationCallCount.Should().Be(1);
+        slipCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void Given_ActiveMantleValidationEnabled_When_ValidatorAllows_Then_MantleContinues()
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MantleValidatingClimbResolver
+        {
+            Snapshot = CreateLedgeSnapshot(),
+            ValidationSnapshot = MantleValidationSnapshot.Continue
+        };
+        agent.Motor.ClimbResolver = resolver;
+        agent.Motor.Handler.Climb!.ValidateActiveMantleWithHost = true;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        TrailblazerManager.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Zero;
+        agent.FrameRequest.Rate = TrekRate.Stationary;
+        agent.FrameRequest.IsRequestingClimb = false;
+        agent.Simulate();
+
+        agent.Motor.Handler.Climb!.IsMantling.Should().BeTrue();
+        agent.Motor.IsClimbing.Should().BeTrue();
+        resolver.ValidationCallCount.Should().Be(2);
+        resolver.LastActiveMantle.Kind.Should().Be(ClimbAffordanceKind.Ledge);
+        resolver.LastActiveMantle.AffordanceId.Should().Be(3);
+        resolver.LastActiveMantle.AttachmentPoint.Should().Be(Vector3d.Zero);
+        resolver.LastActiveMantle.SurfaceNormal.Should().Be(Vector3d.Backward);
+        resolver.LastActiveMantle.UpDirection.Should().Be(Vector3d.Up);
+        resolver.LastActiveMantle.MantleTargetPosition.Should().Be(new Vector3d(0, 2, 0));
+    }
+
+    [Fact]
+    public void Given_ActiveMantleValidationEnabled_When_HostTransitionsToSolid_Then_CompletesMantleWithoutValidatorSlip()
+    {
+        var agent = CreateClimbingAgent();
+        var resolver = new MantleValidatingClimbResolver
+        {
+            Snapshot = CreateLedgeSnapshot(),
+            ValidationSnapshot = MantleValidationSnapshot.Continue
+        };
+        int slipCount = 0;
+        agent.Motor.ClimbResolver = resolver;
+        agent.Motor.Events.OnClimbSlip = () => slipCount++;
+        agent.Motor.Handler.Climb!.ValidateActiveMantleWithHost = true;
+
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+        SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
+
+        agent.FrameCondition.Medium = TraversalMedium.Solid;
+        agent.FrameCondition.SurfaceLevel = agent.Position.y;
+        agent.FrameCondition.GroundState = new GroundCondition();
+        agent.Motor.SyncTraversalState(agent.FrameCondition);
+
+        TrailblazerManager.Simulate();
+        agent.FrameRequest.Direction = Vector3d.Zero;
+        agent.FrameRequest.Rate = TrekRate.Stationary;
+        agent.FrameRequest.IsRequestingClimb = false;
+        agent.Simulate();
+
+        agent.Motor.IsClimbing.Should().BeFalse();
+        agent.Motor.Handler.Climb!.IsMantling.Should().BeFalse();
+        resolver.ValidationCallCount.Should().Be(1);
+        slipCount.Should().Be(0);
+    }
+
+    [Fact]
     public void Given_LedgeAffordance_When_JumpRequested_Then_DetachesWithJumpImpulse()
     {
         var agent = CreateClimbingAgent();
@@ -631,6 +756,41 @@ public sealed class ClimbLocomotionTests : IDisposable
             currentState.Should().NotBeNull();
             snapshot = Snapshot;
             return Resolve;
+        }
+    }
+
+    private sealed class MantleValidatingClimbResolver : IClimbAffordanceResolver, IActiveMantleValidator
+    {
+        public bool Resolve = true;
+
+        public ClimbAffordanceSnapshot Snapshot;
+
+        public bool ValidationResolve = true;
+
+        public MantleValidationSnapshot ValidationSnapshot = MantleValidationSnapshot.Continue;
+
+        public int ValidationCallCount;
+
+        public ActiveMantleState LastActiveMantle;
+
+        public bool TryResolveClimbAffordance(TrekRequest request, TransitState currentState, out ClimbAffordanceSnapshot snapshot)
+        {
+            request.IsRequestingClimb.Should().BeTrue();
+            currentState.Should().NotBeNull();
+            snapshot = Snapshot;
+            return Resolve;
+        }
+
+        public bool TryValidateActiveMantle(
+            TransitState currentState,
+            ActiveMantleState activeMantle,
+            out MantleValidationSnapshot snapshot)
+        {
+            currentState.Should().NotBeNull();
+            ValidationCallCount++;
+            LastActiveMantle = activeMantle;
+            snapshot = ValidationSnapshot;
+            return ValidationResolve;
         }
     }
 }

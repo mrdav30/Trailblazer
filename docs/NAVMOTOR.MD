@@ -66,6 +66,7 @@ Important public state includes:
 
 - `Handler`
 - `Events`
+- `ClimbResolver`
 - `CurrentState`
 - `FrameSlopeAngle`
 - `TraversalInProgress`
@@ -104,6 +105,29 @@ should use `SyncTraversalState(...)` directly or go through `Navigator.SyncCurre
 Helpers like `Navigator.SetGroundContact(..., updateMotorState: true)` and the lower-level
 `Navigator.SetTrekCondition(updateMotorState: true)` route through that same explicit seam.
 
+### 4.1 Climb Affordance And Mantle Validation
+
+Climb integration is host-owned.
+
+`NavMotor` does not probe climbable geometry itself. Instead:
+
+- `ClimbResolver` may provide climb affordance snapshots through `IClimbAffordanceResolver`
+- the host may still veto climb start or continuation through `Events.CanStartClimb` and
+  `Events.CanContinueClimb`
+
+Active mantle validation is a separate optional seam.
+
+When `Handler.Climb.ValidateActiveMantleWithHost` is `true` and `ClimbResolver` also implements
+`IActiveMantleValidator`, the motor will query that validator once per frame while mantle is active.
+That validation is cancel-only in the current slice:
+
+- returning failure from `TryValidateActiveMantle(...)` stops the climb with a forced slip
+- returning `CanContinueMantle = false` also stops the climb with a forced slip
+- successful validation keeps the originally latched mantle target and completion rules unchanged
+
+If the toggle is off, or the resolver does not implement `IActiveMantleValidator`, mantle keeps the
+default self-contained behavior.
+
 ## 5. Initialization and State Ownership
 
 `NavMotor` owns runtime locomotion state through `LocomotionHandler`.
@@ -117,8 +141,10 @@ By default the handler installs the built-in set:
 - `Slide`
 - `Swim`
 - `Fly`
+- `Climb`
 
-`Move` and `Fall` are the required core locomotions. `Platform`, `Jump`, `Slide`, `Swim`, and `Fly` are optional and can be installed or removed through a locomotion profile.
+`Move` and `Fall` are the required core locomotions. `Platform`, `Jump`, `Slide`, `Swim`, `Fly`,
+and `Climb` are optional and can be installed or removed through a locomotion profile.
 
 These locomotion objects are per-motor, not global. That means different navigators can run different movement parameters at the same time, and different navigator types can use different locomotion compositions entirely.
 

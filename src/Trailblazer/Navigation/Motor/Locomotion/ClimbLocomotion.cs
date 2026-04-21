@@ -74,6 +74,11 @@ public class ClimbLocomotion : ILocomotion
     public bool AllowLateralTraverse = true;
 
     /// <summary>
+    /// Whether active mantle should query an optional host validator each frame.
+    /// </summary>
+    public bool ValidateActiveMantleWithHost;
+
+    /// <summary>
     /// Whether active climb movement is currently attached to an affordance.
     /// </summary>
     [Transient]
@@ -163,6 +168,20 @@ public class ClimbLocomotion : ILocomotion
         MantleTargetPosition = snapshot.MantleTargetPosition;
     }
 
+    /// <summary>
+    /// Creates a readonly snapshot for optional active mantle validation.
+    /// </summary>
+    public ActiveMantleState CreateActiveMantleState()
+    {
+        return new ActiveMantleState(
+            ActiveClimbKind,
+            AttachmentId,
+            AttachmentPoint,
+            AttachedSurfaceNormal,
+            AttachedUpDirection,
+            MantleTargetPosition ?? AttachmentPoint);
+    }
+
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
@@ -173,6 +192,7 @@ public class ClimbLocomotion : ILocomotion
         RecordValues.Look(chronicler, ref GravityCompensationWhileClimbing, "gravityCompensationWhileClimbing", DefaultGravityCompensationWhileClimbing);
         RecordValues.Look(chronicler, ref ClimbStartTolerance, "climbStartTolerance", DefaultClimbStartTolerance);
         RecordValues.Look(chronicler, ref AllowLateralTraverse, "allowLateralTraverse", true);
+        RecordValues.Look(chronicler, ref ValidateActiveMantleWithHost, "validateActiveMantleWithHost", false);
 
         bool isClimbing = IsClimbing;
         bool isMantling = IsMantling;

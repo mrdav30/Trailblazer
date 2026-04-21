@@ -20,22 +20,13 @@ This is the main active follow-up track.
 
 Track any smaller follow-up issues that are straightforward to execute and don't require significant design or profiling work here:
 
-1. Keep the pre-traversal traversal-state sync hardening item.
-  This is still necessary as an API clarity follow-up rather than a missing runtime capability.
-  Tracked here:
-  [preTraversalStateSyncPlan.md](./preTraversalStateSyncPlan.md)
-2. Keep the active mantle validation hardening item.
-  This is still necessary for hosts with dynamic ledges, blockers, or scripted top-out invalidation,
-  but it should remain opt-in so the current self-contained mantle path stays the default.
-  Tracked here:
-  [activeMantleValidationPlan.md](./activeMantleValidationPlan.md)
-3. Keep the guided climb intent recompute hardening item.
+1. Keep the guided climb intent recompute hardening item.
   This is still necessary because `NavSteering` can repath into a different transition-aware route
   without a new guided request being applied, and the hardening slice needs to preserve explicit
   host climb intent while recomputing only the auto-derived case.
   Tracked here:
   [guidedClimbIntentRecomputePlan.md](./guidedClimbIntentRecomputePlan.md)
-4. Fold the staged liquid -> authored climb-chain follow-up concern into the guided climb intent
+2. Fold the staged liquid -> authored climb-chain follow-up concern into the guided climb intent
   recompute item.
   After review, the planner already selects liquid exits using transition-aware chart costs, and the
   activated follow-up request can already execute authored climb chains when chart routing falls back

@@ -751,7 +751,19 @@ public class NavMotor : IRecordable
                 return;
             }
 
-            if (ShouldCompleteMantle(position))
+            if (IsOnSolid)
+            {
+                CompleteMantle();
+                return;
+            }
+
+            if (!CanContinueActiveMantle())
+            {
+                StopClimb(wasForced: true);
+                return;
+            }
+
+            if (HasReachedMantleTarget(position))
                 CompleteMantle();
 
             return;
@@ -1481,11 +1493,23 @@ public class NavMotor : IRecordable
         return toTarget.Normal * ClimbModule.MaxClimbSpeed;
     }
 
-    private bool ShouldCompleteMantle(Vector3d position)
+    private bool CanContinueActiveMantle()
     {
-        if (IsOnSolid)
+        if (!ClimbModule.ValidateActiveMantleWithHost)
             return true;
 
+        if (ClimbResolver is not IActiveMantleValidator validator)
+            return true;
+
+        return validator.TryValidateActiveMantle(
+                CurrentState,
+                ClimbModule.CreateActiveMantleState(),
+                out MantleValidationSnapshot snapshot)
+            && snapshot.CanContinueMantle;
+    }
+
+    private bool HasReachedMantleTarget(Vector3d position)
+    {
         if (ClimbModule?.MantleTargetPosition.HasValue != true)
             return false;
 

@@ -5,6 +5,7 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using System;
 using System.Runtime.CompilerServices;
+using Trailblazer.Navigation;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
@@ -137,11 +138,25 @@ public class NavSteering : IRecordable
     public bool HasLineOfSightPath { get; protected set; }
 
     /// <summary>
+    /// Whether the currently resolved guide-backed route requires climb intent to remain engaged.
+    /// </summary>
+    public bool CurrentRouteRequestsClimbIntent { get; protected set; }
+
+    /// <summary>
+    /// Version token that changes when the resolved route state relevant to guided climb intent changes.
+    /// </summary>
+    public int CurrentRouteTopologyVersion { get; protected set; }
+
+    /// <summary>
     /// Current pathfinding search status.
     /// </summary>
     protected bool _shouldRequestPathThisFrame;
 
     protected int _pathCheckCooldown;
+
+    private bool _currentRouteHasResolvedTopology;
+
+    private bool _currentRouteUsesGuideTopology;
 
     /// <summary>
     /// How far we move each update
@@ -318,6 +333,7 @@ public class NavSteering : IRecordable
 
         _repathTries = 0;
         _shouldRequestPathThisFrame = true;
+        PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false, force: true);
 
         AddToMovementGroup(groupId);
         UpdateMovementGroupState(pathRequest.Origin, true);
@@ -430,6 +446,10 @@ public class NavSteering : IRecordable
         _requestedDestination = Vector3d.Zero;
         _movementGroupSession.Reset();
         _movementGroupMode = MovementGroupTravelMode.None;
+        _currentRouteHasResolvedTopology = false;
+        _currentRouteUsesGuideTopology = false;
+        CurrentRouteRequestsClimbIntent = false;
+        CurrentRouteTopologyVersion = 0;
     }
 
     internal virtual void UpdateOwnerRadius(Fixed64 radius)
@@ -504,6 +524,7 @@ public class NavSteering : IRecordable
         bool ok = _currentRequest.TrySetOrigin(origin);
         if (!ok || !_currentRequest.HasValidEndpoints)
         {
+            PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false);
 #if DEBUG
             Debug.WriteLine("Path request is using invalid endpoints!");
 #endif
@@ -512,7 +533,10 @@ public class NavSteering : IRecordable
 
         // shortcut if no path needed
         if (_currentRequest.HasZeroDisplacement)
+        {
+            PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
             return _repathTries == 0;
+        }
 
         if (_currentRequest is VolumePathRequest volumeRequest)
         {
@@ -529,6 +553,7 @@ public class NavSteering : IRecordable
             if (HasLineOfSightPath)
             {
                 ReleaseTrailGuide();
+                PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
                 return true;
             }
         }
@@ -540,7 +565,10 @@ public class NavSteering : IRecordable
                 _currentRequest.UnitSize,
                 _currentRequest.AllowUnwalkableEndpoints);
             if (HasLineOfSightPath)
+            {
+                PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
                 return true;  // no path required
+            }
         }
 
         // request guide
@@ -548,12 +576,17 @@ public class NavSteering : IRecordable
         _pathCheckCooldown = PathRecheckCooldownFrames;
         if (!_currentRequest.IsValid || !PathGuideFactory.RequestGuide(_currentRequest, out _trailGuide))
         {
+            PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false);
 #if DEBUG
             Debug.WriteLine($"Unable to retrieve a guide from {origin} to {Destination}");
 #endif
             return false;
         }
 
+        PublishRouteTopology(
+            hasResolvedTopology: true,
+            usesGuideTopology: true,
+            requestsClimbIntent: GuidedClimbIntentResolver.Resolve(_currentRequest));
         return true;
     }
 
@@ -677,7 +710,10 @@ public class NavSteering : IRecordable
                 _currentRequest.EndNode);
 
             if (HasLineOfSightPath)
+            {
                 ReleaseTrailGuide();
+                PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
+            }
         }
         else
         {
@@ -686,6 +722,9 @@ public class NavSteering : IRecordable
                 Destination,
                 _currentRequest.UnitSize,
                 _currentRequest.AllowUnwalkableEndpoints);
+
+            if (HasLineOfSightPath)
+                PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
         }
 
         _pathCheckCooldown = PathRecheckCooldownFrames;
@@ -851,6 +890,7 @@ public class NavSteering : IRecordable
         ShouldMove = false;
         _shouldRequestPathThisFrame = false;
         HasLineOfSightPath = false;
+        PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false, force: true);
         LeaveMovementGroup();
 
         Events.OnStopMove?.Invoke();
@@ -1040,6 +1080,29 @@ public class NavSteering : IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool UsesVolumeGuidance() => _currentRequest is VolumePathRequest;
 
+    private void PublishRouteTopology(
+        bool hasResolvedTopology,
+        bool usesGuideTopology,
+        bool requestsClimbIntent,
+        bool force = false)
+    {
+        if (!force
+            && _currentRouteHasResolvedTopology == hasResolvedTopology
+            && _currentRouteUsesGuideTopology == usesGuideTopology
+            && CurrentRouteRequestsClimbIntent == requestsClimbIntent)
+        {
+            return;
+        }
+
+        _currentRouteHasResolvedTopology = hasResolvedTopology;
+        _currentRouteUsesGuideTopology = usesGuideTopology;
+        CurrentRouteRequestsClimbIntent = requestsClimbIntent;
+        unchecked
+        {
+            CurrentRouteTopologyVersion++;
+        }
+    }
+
     #endregion
 
     #region Serialization
@@ -1057,6 +1120,10 @@ public class NavSteering : IRecordable
         bool shouldMove = ShouldMove;
         bool isStuck = IsStuck;
         bool hasLineOfSightPath = HasLineOfSightPath;
+        bool currentRouteHasResolvedTopology = _currentRouteHasResolvedTopology;
+        bool currentRouteUsesGuideTopology = _currentRouteUsesGuideTopology;
+        bool currentRouteRequestsClimbIntent = CurrentRouteRequestsClimbIntent;
+        int currentRouteTopologyVersion = CurrentRouteTopologyVersion;
         bool shouldRequestPathThisFrame = _shouldRequestPathThisFrame;
         int pathCheckCooldown = _pathCheckCooldown;
         Fixed64 distanceToTarget = _distanceToTarget;
@@ -1088,6 +1155,10 @@ public class NavSteering : IRecordable
         RecordValues.Look(chronicler, ref shouldMove, "shouldMove", false);
         RecordValues.Look(chronicler, ref isStuck, "isStuck", false);
         RecordValues.Look(chronicler, ref hasLineOfSightPath, "hasLineOfSightPath", false);
+        RecordValues.Look(chronicler, ref currentRouteHasResolvedTopology, "currentRouteHasResolvedTopology", false);
+        RecordValues.Look(chronicler, ref currentRouteUsesGuideTopology, "currentRouteUsesGuideTopology", false);
+        RecordValues.Look(chronicler, ref currentRouteRequestsClimbIntent, "currentRouteRequestsClimbIntent", false);
+        RecordValues.Look(chronicler, ref currentRouteTopologyVersion, "currentRouteTopologyVersion", 0);
         RecordValues.Look(chronicler, ref shouldRequestPathThisFrame, "shouldRequestPathThisFrame", false);
         RecordValues.Look(chronicler, ref pathCheckCooldown, "pathCheckCooldown", 0);
         RecordValues.Look(chronicler, ref distanceToTarget, "distanceToTarget", Fixed64.Zero);
@@ -1121,6 +1192,10 @@ public class NavSteering : IRecordable
             ShouldMove = shouldMove;
             IsStuck = isStuck;
             HasLineOfSightPath = hasLineOfSightPath;
+            _currentRouteHasResolvedTopology = currentRouteHasResolvedTopology;
+            _currentRouteUsesGuideTopology = currentRouteUsesGuideTopology;
+            CurrentRouteRequestsClimbIntent = currentRouteRequestsClimbIntent;
+            CurrentRouteTopologyVersion = currentRouteTopologyVersion;
             _shouldRequestPathThisFrame = shouldRequestPathThisFrame;
             _pathCheckCooldown = pathCheckCooldown;
             _distanceToTarget = distanceToTarget;

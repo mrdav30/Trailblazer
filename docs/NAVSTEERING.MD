@@ -87,6 +87,8 @@ Important public state includes:
 - `ShouldMove`
 - `IsStuck`
 - `HasLineOfSightPath`
+- `CurrentRouteRequestsClimbIntent`
+- `CurrentRouteTopologyVersion`
 - `DistanceToTarget`
 - `HasTrailGuide`
 - `IsAtDestination`
@@ -169,6 +171,22 @@ When transition-aware guided fallback is enabled, `AStarGuide` and `FlowFieldGui
 `GuidedPathMode.Aerial` and `GuidedPathMode.Swim` both use the raw-volume path flow. They stay guide-free while the direct corridor is clear, then allocate a `VolumeGuide` only when raw voxel blockers force a detour. `Swim` depends on a valid water medium, which may come from authored chart cells, `VolumeMediumRules`, or both.
 
 Guide lifetime is owned by `NavSteering` while the movement session is active.
+
+### 5.3 Route-Topology Metadata
+
+`NavSteering` also publishes a small piece of route state for guided climb sync:
+
+- `CurrentRouteRequestsClimbIntent`
+- `CurrentRouteTopologyVersion`
+
+This metadata is updated only when the effective route state relevant to guided climb intent changes:
+
+- unresolved or cleared route state
+- direct line-of-sight travel
+- guide-backed chart travel whose effective transition topology requests climb intent
+
+`Navigator` uses this after `GetHeading(...)` to keep auto-derived guided climb intent aligned with
+the live route without rebuilding hybrid topology every frame.
 
 ## 6. Request Lifecycle
 

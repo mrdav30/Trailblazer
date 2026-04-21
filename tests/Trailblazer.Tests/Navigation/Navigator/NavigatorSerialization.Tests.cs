@@ -213,6 +213,36 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RoundTrip_ShouldRestoreAutoGuidedClimbIntentTracking(bool useMemoryPack)
+    {
+        GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
+
+        var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        source.GuidedPathMode = GuidedPathMode.AStar;
+        source.GuidedAllowTraversalTransitions = true;
+        source.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
+
+        object sourceMode = ReflectionUtility.GetPrivateFieldFromBase<object>(source, "_guidedClimbIntentMode");
+        int sourceLastSeenVersion = ReflectionUtility.GetPrivateFieldFromBase<int>(source, "_lastSeenGuidedRouteTopologyVersion");
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        ReflectionUtility.GetPrivateFieldFromBase<object>(target, "_guidedClimbIntentMode")
+            .ToString().Should().Be(sourceMode.ToString());
+        ReflectionUtility.GetPrivateFieldFromBase<int>(target, "_lastSeenGuidedRouteTopologyVersion")
+            .Should().Be(sourceLastSeenVersion);
+
+        TrailblazerManager.Simulate();
+        target.Simulate();
+
+        target.FrameRequest.IsRequestingClimb.Should().BeTrue();
+        target.Steering.CurrentRouteRequestsClimbIntent.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RoundTrip_ShouldRebuildTurningRuntimeState_OnLoad(bool useMemoryPack)
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
@@ -1193,6 +1223,8 @@ public class NavigatorSerializationTests : IDisposable
         actual.ShouldMove.Should().Be(expected.ShouldMove);
         actual.IsStuck.Should().Be(expected.IsStuck);
         actual.HasLineOfSightPath.Should().Be(expected.HasLineOfSightPath);
+        actual.CurrentRouteRequestsClimbIntent.Should().Be(expected.CurrentRouteRequestsClimbIntent);
+        actual.CurrentRouteTopologyVersion.Should().Be(expected.CurrentRouteTopologyVersion);
         actual.DistanceToTarget.Should().Be(expected.DistanceToTarget);
         actual.IsAtDestination.Should().Be(expected.IsAtDestination);
         actual.CanMove.Should().Be(expected.CanMove);

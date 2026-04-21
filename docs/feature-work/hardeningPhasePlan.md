@@ -20,21 +20,7 @@ This is the main active follow-up track.
 
 Track any smaller follow-up issues that are straightforward to execute and don't require significant design or profiling work here:
 
-1. Keep the guided climb intent recompute hardening item.
-  This is still necessary because `NavSteering` can repath into a different transition-aware route
-  without a new guided request being applied, and the hardening slice needs to preserve explicit
-  host climb intent while recomputing only the auto-derived case.
-  Tracked here:
-  [guidedClimbIntentRecomputePlan.md](./guidedClimbIntentRecomputePlan.md)
-2. Fold the staged liquid -> authored climb-chain follow-up concern into the guided climb intent
-  recompute item.
-  After review, the planner already selects liquid exits using transition-aware chart costs, and the
-  activated follow-up request can already execute authored climb chains when chart routing falls back
-  to hybrid topology.
-  The remaining gap is same-frame auto-intent sync when that follow-up route resolves to a
-  climb-requiring topology that was not fully described by the exit transition metadata.
-  Tracked here:
-  [guidedClimbIntentRecomputePlan.md](./guidedClimbIntentRecomputePlan.md)
+- None at the moment, but this is the place to track any quick wins that come up during the hardening phase.
 
 ### 3. Optional Runtime Follow-Ups
 

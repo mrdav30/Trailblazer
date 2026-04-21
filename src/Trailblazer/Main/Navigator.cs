@@ -106,6 +106,10 @@ public abstract class Navigator : INavigate, IRecordable
 
     private bool _guidedClimbIntent;
 
+    private GuidedClimbIntentMode _guidedClimbIntentMode;
+
+    private int _lastSeenGuidedRouteTopologyVersion;
+
     #endregion
 
     #region Settings
@@ -249,7 +253,7 @@ public abstract class Navigator : INavigate, IRecordable
         _frameRequest.Reset();
         IsGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
-        _guidedClimbIntent = false;
+        ResetGuidedClimbIntentState();
 
         GridOccupantManager.TryDeregister(this);
 
@@ -318,7 +322,7 @@ public abstract class Navigator : INavigate, IRecordable
 
         IsGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
-        _guidedClimbIntent = false;
+        ResetGuidedClimbIntentState();
         _frameRequest.SetRequest(
                 direction: direction ?? Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
@@ -359,8 +363,11 @@ public abstract class Navigator : INavigate, IRecordable
         if (_pendingGuidedVolumeExitHandoff != null)
             _pendingGuidedVolumeExitHandoff.MovementGroupId = groupId;
 
-        _guidedClimbIntent = isRequestingClimb
-            ?? ResolveGuidedClimbIntent(pathRequest, _pendingGuidedVolumeExitHandoff);
+        SetGuidedClimbIntent(
+            isRequestingClimb ?? GuidedClimbIntentResolver.Resolve(pathRequest, _pendingGuidedVolumeExitHandoff),
+            isRequestingClimb.HasValue
+                ? GuidedClimbIntentMode.Explicit
+                : GuidedClimbIntentMode.Auto);
 
         IsGuideded = true;
         _frameRequest.SetRequest(
@@ -373,6 +380,7 @@ public abstract class Navigator : INavigate, IRecordable
         );
 
         Steering.ApplyPathRequest(pathRequest, groupId);
+        CaptureGuidedRouteTopologyVersion();
     }
 
     /// <summary>
@@ -424,8 +432,7 @@ public abstract class Navigator : INavigate, IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void ToggleGuidedClimb(bool status)
     {
-        _guidedClimbIntent = status;
-        _frameRequest.IsRequestingClimb = status;
+        SetGuidedClimbIntent(status, GuidedClimbIntentMode.Explicit);
     }
 
     /// <summary>
@@ -473,14 +480,21 @@ public abstract class Navigator : INavigate, IRecordable
         if (!IsActive)
             throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
-        TryActivatePendingGuidedVolumeExitHandoff();
-        RefreshGuidedIntentState();
+        bool activatedGuidedHandoff = TryActivatePendingGuidedVolumeExitHandoff(out bool handoffRequestedClimb);
+        PrepareGuidedIntentState();
+
+        Vector3d heading = Vector3d.Zero;
+        if (IsGuideded)
+        {
+            heading = Steering.GetHeading(this);
+            SyncGuidedIntentStateFromSteering(activatedGuidedHandoff, handoffRequestedClimb);
+        }
 
         _frameRequest.SetTransientState(
              origin: Position,
              footPosition: GetFootPosition(),
              rotation: Rotation,
-             direction: IsGuideded ? Steering.GetHeading(this) : null
+             direction: IsGuideded ? heading : null
         );
 
         if (TryGetTurnDirection(_frameRequest, out Vector3d turnDirection))
@@ -778,80 +792,107 @@ public abstract class Navigator : INavigate, IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected virtual Guid GenerateGUID() => NavigatorGlobalIdAllocator.Create();
 
-    private void RefreshGuidedIntentState()
+    private void PrepareGuidedIntentState()
     {
         if (!IsGuideded)
             return;
 
-        if (Steering?.CurrentRequest == null
-            && _pendingGuidedVolumeExitHandoff == null)
-        {
-            _guidedClimbIntent = false;
-            _frameRequest.IsRequestingClimb = false;
+        if (TryClearInactiveGuidedClimbIntent())
             return;
+
+        _frameRequest.IsRequestingClimb = _guidedClimbIntent;
+    }
+
+    private void SyncGuidedIntentStateFromSteering(bool activatedGuidedHandoff, bool handoffRequestedClimb)
+    {
+        if (!IsGuideded)
+            return;
+
+        if (TryClearInactiveGuidedClimbIntent())
+            return;
+
+        if (_guidedClimbIntentMode == GuidedClimbIntentMode.Auto
+            && Steering != null
+            && Steering.CurrentRouteTopologyVersion != _lastSeenGuidedRouteTopologyVersion)
+        {
+            bool resolvedRouteRequestsClimb = Steering.CurrentRouteRequestsClimbIntent;
+            bool shouldDeferHandoffBootstrapClear =
+                activatedGuidedHandoff
+                && handoffRequestedClimb
+                && !resolvedRouteRequestsClimb;
+            if (!shouldDeferHandoffBootstrapClear)
+            {
+                _guidedClimbIntent = resolvedRouteRequestsClimb;
+                _lastSeenGuidedRouteTopologyVersion = Steering.CurrentRouteTopologyVersion;
+            }
         }
 
         _frameRequest.IsRequestingClimb = _guidedClimbIntent;
     }
 
-    private void TryActivatePendingGuidedVolumeExitHandoff()
+    private bool TryClearInactiveGuidedClimbIntent()
     {
+        if (Steering?.CurrentRequest != null
+            || _pendingGuidedVolumeExitHandoff != null)
+        {
+            return false;
+        }
+
+        ResetGuidedClimbIntentState();
+        _frameRequest.IsRequestingClimb = false;
+        return true;
+    }
+
+    private bool TryActivatePendingGuidedVolumeExitHandoff(out bool handoffRequestedClimb)
+    {
+        handoffRequestedClimb = false;
         if (!IsGuideded
             || _pendingGuidedVolumeExitHandoff == null
             || Steering == null
             || Steering.ShouldMove
             || Steering.CurrentRequest != null)
         {
-            return;
+            return false;
         }
 
         if (!_pendingGuidedVolumeExitHandoff.TryCreateFollowupRequest(Position, Size, out IPathRequest followupRequest))
         {
-            return;
+            return false;
         }
 
         GuidedVolumeExitHandoff handoff = _pendingGuidedVolumeExitHandoff;
         _pendingGuidedVolumeExitHandoff = null;
 
         Steering.ApplyPathRequest(followupRequest, handoff.MovementGroupId);
+        CaptureGuidedRouteTopologyVersion();
         _frameRequest.IsRequestingFlight = false;
-        _guidedClimbIntent = handoff.IsRequestingClimb;
+        handoffRequestedClimb = handoff.IsRequestingClimb;
+        if (_guidedClimbIntentMode == GuidedClimbIntentMode.Auto)
+            _guidedClimbIntent = handoffRequestedClimb;
+
         _frameRequest.IsRequestingClimb = _guidedClimbIntent;
+        return true;
     }
 
-    private static bool ResolveGuidedClimbIntent(
-        IPathRequest pathRequest,
-        GuidedVolumeExitHandoff handoff)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void SetGuidedClimbIntent(bool status, GuidedClimbIntentMode mode)
     {
-        if (handoff != null
-            && TraversalTransitionRegistry.TryGet(handoff.TransitionId, out TraversalTransition transition))
-        {
-            return transition.RequestsClimbIntent;
-        }
-
-        return pathRequest switch
-        {
-            AStarPathRequest aStar => RequestsClimbIntent(HybridPathRequest.CreateFromAStar(aStar)),
-            FlowFieldPathRequest flowField => RequestsClimbIntent(HybridPathRequest.CreateFromFlowField(flowField)),
-            HybridPathRequest hybrid => RequestsClimbIntent(hybrid),
-            _ => false
-        };
+        _guidedClimbIntent = status;
+        _guidedClimbIntentMode = mode;
+        _frameRequest.IsRequestingClimb = status;
     }
 
-    private static bool RequestsClimbIntent(HybridPathRequest request)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ResetGuidedClimbIntentState()
     {
-        TraversalTransition[] directedTransitions = request?.RoutePlan?.DirectedTransitions;
-        if (directedTransitions == null)
-            return false;
-
-        for (int i = 0; i < directedTransitions.Length; i++)
-        {
-            if (directedTransitions[i].RequestsClimbIntent)
-                return true;
-        }
-
-        return false;
+        _guidedClimbIntent = false;
+        _guidedClimbIntentMode = GuidedClimbIntentMode.Auto;
+        _lastSeenGuidedRouteTopologyVersion = 0;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void CaptureGuidedRouteTopologyVersion() =>
+        _lastSeenGuidedRouteTopologyVersion = Steering?.CurrentRouteTopologyVersion ?? 0;
 
     #endregion
 
@@ -913,6 +954,8 @@ public abstract class Navigator : INavigate, IRecordable
         Fixed64 stuckThresholdSpeed = StuckThresholdSpeed;
         bool isGuideded = IsGuideded;
         bool guidedClimbIntent = _guidedClimbIntent;
+        GuidedClimbIntentMode guidedClimbIntentMode = _guidedClimbIntentMode;
+        int lastSeenGuidedRouteTopologyVersion = _lastSeenGuidedRouteTopologyVersion;
         TrekCondition frameCondition = _frameCondition;
         TrekRequest frameRequest = _frameRequest;
         GuidedVolumeExitHandoff pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
@@ -943,6 +986,8 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref stuckThresholdSpeed, "stuckThresholdSpeed", Fixed64.Zero);
         RecordValues.Look(chronicler, ref isGuideded, "isGuideded", false);
         RecordValues.Look(chronicler, ref guidedClimbIntent, "guidedClimbIntent", false);
+        RecordValues.Look(chronicler, ref guidedClimbIntentMode, "guidedClimbIntentMode", GuidedClimbIntentMode.Auto);
+        RecordValues.Look(chronicler, ref lastSeenGuidedRouteTopologyVersion, "lastSeenGuidedRouteTopologyVersion", 0);
         RecordDeepStruct.Look(chronicler, ref frameCondition, "frameCondition");
         RecordDeepStruct.Look(chronicler, ref frameRequest, "frameRequest");
         RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff, "pendingGuidedVolumeExitHandoff");
@@ -973,6 +1018,8 @@ public abstract class Navigator : INavigate, IRecordable
             StuckThresholdSpeed = stuckThresholdSpeed;
             IsGuideded = isGuideded;
             _guidedClimbIntent = guidedClimbIntent;
+            _guidedClimbIntentMode = guidedClimbIntentMode;
+            _lastSeenGuidedRouteTopologyVersion = lastSeenGuidedRouteTopologyVersion;
             _frameCondition = frameCondition.Clone();
             _frameRequest = frameRequest.Clone();
             _pendingGuidedVolumeExitHandoff = pendingGuidedVolumeExitHandoff?.IsValid == true

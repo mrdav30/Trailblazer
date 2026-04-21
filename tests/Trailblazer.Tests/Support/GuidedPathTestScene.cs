@@ -202,6 +202,38 @@ internal static class GuidedPathTestScene
             pathCostModifier: 1)).Should().BeTrue();
     }
 
+    public static void RegisterVolumeExitFollowupClimbScene(string chartKey)
+    {
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1]
+        {
+            {
+                { NavigationChartCell.SolidLiquid },
+                { default },
+                { NavigationChartCell.Solid }
+            }
+        };
+
+        PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One)).Should().BeTrue();
+
+        AddWater(Vector3d.Zero);
+        AddWater(new Vector3d(1, 0, 0));
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{chartKey}-exit",
+            type: TraversalTransitionType.SwimExit,
+            source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: $"{chartKey}-climb",
+            type: TraversalTransitionType.Climb,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
+            pathCostModifier: 1,
+            requestsClimbIntent: true)).Should().BeTrue();
+    }
+
     public static void RegisterChartBackedSwimTargetScene(string chartKey)
     {
         PathTestFactory.RegisterSingleTraversalPoint(

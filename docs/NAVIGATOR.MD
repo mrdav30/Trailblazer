@@ -185,6 +185,15 @@ In practice that means:
 `IsGuideded` is explicit navigator state.
 It is turned on by `ApplyGuidedTrekRequest(...)` and turned off by `ApplyInputTrekRequest(...)` or `Reset()`.
 
+Guided climb intent is internally split into two ownership modes:
+
+- `Explicit`, for host-authored `ApplyGuidedTrekRequest(... isRequestingClimb: ...)` and `ToggleGuidedClimb(...)`
+- `Auto`, for route-derived climb intent that follows steering-owned route topology metadata
+
+On bounded handoff activation frames, navigator-owned bootstrap climb intent still wins over an
+immediate same-frame `true -> false` clear, but steering can still promote `false -> true`
+immediately when the live follow-up route resolves into a climb-requiring topology.
+
 ### 5.4 Controller Instances
 
 `Navigator` owns and composes:
@@ -308,6 +317,8 @@ While guided movement remains active:
 - `Rate` persists until changed or replaced by a different request
 - `IsRequestingFlight` persists until changed or replaced by a different request
 - `IsRequestingJump` is still frame-scoped unless the host reissues it
+- explicit guided climb intent stays host-owned and sticky
+- auto-derived guided climb intent follows the current effective steering route topology after `Steering.GetHeading(...)`
 
 When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically. Steering may then travel directly through authored or explicitly configured gas volume, acquire a volume guide if blockers force a detour inside that space, or hand off into a chart-backed follow-up route through an authored landing transition when transition fallback is enabled and the landing route is preferable.
 

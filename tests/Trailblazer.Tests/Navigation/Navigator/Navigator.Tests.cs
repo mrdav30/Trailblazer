@@ -7,6 +7,7 @@ using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Animation;
 using Trailblazer.Navigation.Motor;
+using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 using Trailblazer.Tests;
 using Xunit;
@@ -416,6 +417,87 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
+    public void Simulate_ShouldSyncAutoGuidedClimbIntent_WhenSteeringPublishesClimbRouteTopology()
+    {
+        var data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorAutoGuidedClimbSync", data, Vector3d.Zero);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetTestSteering(new ScriptedRouteTopologySteering(
+            navigator.Radius,
+            new ScriptedRouteTopologyFrame(Vector3d.Right, RequestsClimbIntent: true)));
+
+        navigator.ApplyGuidedTrekRequest(new Vector3d(2, 0, 0), rate: TrekRate.Fast);
+        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        PathManager.UnloadChart("NavigatorAutoGuidedClimbSync");
+    }
+
+    [Fact]
+    public void Simulate_ShouldClearAutoGuidedClimbIntent_WhenSteeringPublishesNonClimbRouteTopology()
+    {
+        GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetTestSteering(new ScriptedRouteTopologySteering(
+            navigator.Radius,
+            new ScriptedRouteTopologyFrame(Vector3d.Right, RequestsClimbIntent: false)));
+        navigator.GuidedPathMode = GuidedPathMode.AStar;
+        navigator.GuidedAllowTraversalTransitions = true;
+
+        navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Simulate_ShouldPreserveExplicitGuidedClimbIntent_WhenSteeringPublishesDifferentRouteTopology()
+    {
+        var data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("NavigatorExplicitGuidedClimbSticky", data, Vector3d.Zero);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetTestSteering(new ScriptedRouteTopologySteering(
+            navigator.Radius,
+            new ScriptedRouteTopologyFrame(Vector3d.Right, RequestsClimbIntent: true)));
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(2, 0, 0),
+            rate: TrekRate.Fast,
+            isRequestingClimb: false);
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
+
+        PathManager.UnloadChart("NavigatorExplicitGuidedClimbSticky");
+    }
+
+    [Fact]
     public void ApplyGuidedTrekRequest_Should_CreateSwimExitHandoff_WhenTransitionOptInIsEnabled()
     {
         RegisterVolumeExitHandoffScene("NavigatorSwimExitHandoff");
@@ -453,6 +535,41 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.Direction.x.Should().BeGreaterThan(Fixed64.Zero);
 
         PathManager.UnloadChart("NavigatorSwimExitHandoff");
+    }
+
+    [Fact]
+    public void Simulate_ShouldRecomputeAutoGuidedClimbIntent_FromFollowupRouteTopology_AfterVolumeExitHandoff()
+    {
+        const string chartKey = "NavigatorVolumeExitFollowupClimb";
+        GuidedPathTestScene.RegisterVolumeExitFollowupClimbScene(chartKey);
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        navigator.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.GuidedPathMode = GuidedPathMode.AStar;
+        navigator.GuidedAllowTraversalTransitions = true;
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(4, 0, 0),
+            pathMode: GuidedPathMode.Swim,
+            rate: TrekRate.Fast);
+
+        navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
+        navigator.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
+            .Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+
+        navigator.SetTestPosition(new Vector3d(2, 0, 0));
+        navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
+        navigator.Steering.Arrive();
+
+        TrailblazerManager.Simulate();
+        navigator.Simulate();
+
+        navigator.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>()
+            .Which.AllowTraversalTransitions.Should().BeTrue();
+        navigator.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
+        navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
+
+        PathManager.UnloadChart(chartKey);
     }
 
     [Fact]
@@ -1370,6 +1487,37 @@ public class NavigatorTests : IDisposable
 
         public void ApplyRootMotion(Vector3d deltaPosition, Fixed64 forceMultiplier)
         {
+        }
+    }
+
+    private readonly record struct ScriptedRouteTopologyFrame(
+        Vector3d Heading,
+        bool? RequestsClimbIntent = null);
+
+    private sealed class ScriptedRouteTopologySteering : NavSteering
+    {
+        private readonly ScriptedRouteTopologyFrame[] _frames;
+        private int _frameIndex;
+
+        public ScriptedRouteTopologySteering(Fixed64 radius, params ScriptedRouteTopologyFrame[] frames)
+            : base(radius)
+        {
+            _frames = frames;
+        }
+
+        public override Vector3d GetHeading(ISteer navigator)
+        {
+            if (_frameIndex >= _frames.Length)
+                return Vector3d.Zero;
+
+            ScriptedRouteTopologyFrame frame = _frames[_frameIndex++];
+            if (frame.RequestsClimbIntent.HasValue)
+            {
+                CurrentRouteRequestsClimbIntent = frame.RequestsClimbIntent.Value;
+                CurrentRouteTopologyVersion++;
+            }
+
+            return frame.Heading;
         }
     }
 

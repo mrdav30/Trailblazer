@@ -151,6 +151,71 @@ public class NavSteeringTests : IDisposable
     }
 
     [Fact]
+    public void GetHeading_ShouldPublishDirectRouteTopologyMetadata_WhenLineOfSightPathIsUsed()
+    {
+        var data = new bool[1, 3, 1]
+        {
+            {
+                { true },
+                { true },
+                { true }
+            }
+        };
+        PathTestFactory.RegisterFromData("SteeringRouteTopologyDirect", data, Vector3d.Zero);
+
+        var start = Vector3d.Zero;
+        var end = new Vector3d(2, 0, 0);
+        var steer = new NavSteering();
+        var agent = new MockSteerAgent(start);
+        steer.OnInitialize(agent.Radius);
+        AStarPathRequest.TryCreate(start, end, out AStarPathRequest request);
+        steer.ApplyPathRequest(request);
+
+        steer.CurrentRouteTopologyVersion.Should().Be(1);
+
+        steer.GetHeading(agent);
+
+        steer.HasLineOfSightPath.Should().BeTrue();
+        steer.CurrentRouteRequestsClimbIntent.Should().BeFalse();
+        steer.CurrentRouteTopologyVersion.Should().Be(2);
+
+        PathManager.UnloadChart("SteeringRouteTopologyDirect");
+    }
+
+    [Fact]
+    public void GetHeading_ShouldPublishGuideBackedRouteTopologyMetadata_WhenTransitionAwareFallbackRequestsClimb()
+    {
+        GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
+
+        var steer = new NavSteering();
+        var agent = new MockSteerAgent(Vector3d.Zero);
+        steer.OnInitialize(agent.Radius);
+
+        AStarPathRequest request = AStarPathRequest.Create(
+            agent.Position,
+            new Vector3d(4, 0, 0),
+            agent.Size,
+            HeuristicMethod.Manhattan,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: true)!;
+
+        steer.ApplyPathRequest(request);
+        int versionAfterApply = steer.CurrentRouteTopologyVersion;
+
+        steer.GetHeading(agent);
+
+        steer.HasLineOfSightPath.Should().BeFalse();
+        steer.TrailGuide.Should().BeOfType<AStarGuide>();
+        steer.CurrentRouteRequestsClimbIntent.Should().BeTrue();
+        steer.CurrentRouteTopologyVersion.Should().BeGreaterThan(versionAfterApply);
+
+        int versionBeforeStop = steer.CurrentRouteTopologyVersion;
+        steer.StopMove();
+        steer.CurrentRouteRequestsClimbIntent.Should().BeFalse();
+        steer.CurrentRouteTopologyVersion.Should().BeGreaterThan(versionBeforeStop);
+    }
+
+    [Fact]
     public void NavSteering_Should_GuideAerialRequests_WithVerticalOnlyTargets()
     {
         AddOpen(Vector3d.Zero);

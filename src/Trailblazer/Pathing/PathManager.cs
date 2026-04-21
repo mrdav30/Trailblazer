@@ -26,9 +26,9 @@ public static class PathManager
         // safe on clean state: HandleExternalGridReset is idempotent, and HandleExternalGridChange
         // returns early when the chart map is empty, so no stale references can accumulate.
         GlobalGridManager.OnReset += HandleExternalGridReset;
-        GlobalGridManager.OnActiveGridAdded += HandleExternalGridChange;
-        GlobalGridManager.OnActiveGridRemoved += HandleExternalGridChange;
-        GlobalGridManager.OnActiveGridChange += HandleExternalGridChange;
+        GlobalGridManager.OnActiveGridAdded += HandleExternalGridAdded;
+        GlobalGridManager.OnActiveGridRemoved += HandleExternalGridRemoved;
+        GlobalGridManager.OnActiveGridChange += HandleExternalGridChanged;
     }
 
     #region Pools
@@ -87,6 +87,8 @@ public static class PathManager
 
     private static readonly SwiftDictionary<GlobalVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates = new();
 
+    private static readonly SwiftDictionary<ushort, ExternalGridEventObservation> _externalGridEventObservationsByGridIndex = new();
+
     /// <summary>
     /// Lock for managing concurrent access to <c>_navigationChartMap</c> operations.
     /// Ensures thread safety for read/write operations.
@@ -98,6 +100,34 @@ public static class PathManager
     private static int _activeAuthoredLiquidCellCount;
 
     private static int _nextChartRegistrationOrder;
+
+    private static int _externalGridEventsReceived;
+
+    private static int _externalGridAddEventsReceived;
+
+    private static int _externalGridRemoveEventsReceived;
+
+    private static int _externalGridChangeEventsReceived;
+
+    private static int _distinctObservedExternalGridSlots;
+
+    private static int _duplicateExternalGridEventSignaturesObserved;
+
+    private static int _duplicateExternalGridAddEventSignaturesObserved;
+
+    private static int _duplicateExternalGridRemoveEventSignaturesObserved;
+
+    private static int _duplicateExternalGridChangeEventSignaturesObserved;
+
+    private static int _maxExternalGridEventStreak;
+
+    private static int _externalGridRebuildPassesExecuted;
+
+    private static int _externalGridEventsIgnoredForNoIntersectingCharts;
+
+    private static int _totalChartsSelectedForExternalGridRebuild;
+
+    private static int _maxChartsSelectedForSingleExternalGridEvent;
 
     #endregion
 
@@ -121,9 +151,34 @@ public static class PathManager
         Reset();
     }
 
-    private static void HandleExternalGridChange(GridEventInfo eventInfo)
+    private static void HandleExternalGridAdded(GridEventInfo eventInfo)
     {
-        RebuildInitializedChartsAgainstCurrentGrids(eventInfo.BoundsMin, eventInfo.BoundsMax);
+        HandleExternalGridChange(eventInfo, ExternalGridEventKind.Added);
+    }
+
+    private static void HandleExternalGridRemoved(GridEventInfo eventInfo)
+    {
+        HandleExternalGridChange(eventInfo, ExternalGridEventKind.Removed);
+    }
+
+    private static void HandleExternalGridChanged(GridEventInfo eventInfo)
+    {
+        HandleExternalGridChange(eventInfo, ExternalGridEventKind.Changed);
+    }
+
+    private static void HandleExternalGridChange(GridEventInfo eventInfo, ExternalGridEventKind eventKind)
+    {
+        RecordExternalGridEvent(eventInfo, eventKind);
+
+        NavigationChart[] initializedCharts = GetInitializedChartsIntersectingBoundsSnapshot(
+            eventInfo.BoundsMin,
+            eventInfo.BoundsMax);
+        RecordExternalGridRebuildSelection(initializedCharts.Length);
+
+        if (initializedCharts.Length == 0)
+            return;
+
+        RebuildInitializedChartsAgainstCurrentGrids(initializedCharts);
     }
 
     /// <summary>
@@ -134,6 +189,7 @@ public static class PathManager
         VolumeMediumRules.Reset();
         TraversalTransitionRegistry.Reset();
         ClearLiveGridState();
+        ResetExternalGridBridgeDiagnostics();
 
         _navigationChartMapLock.EnterWriteLock();
         try
@@ -150,6 +206,50 @@ public static class PathManager
 
         if (PathGuideFactory.IsPooling)
             PathGuideFactory.FlushCache(true);
+    }
+
+    /// <summary>
+    /// Returns a point-in-time snapshot of the external-grid bridge diagnostics gathered by <see cref="PathManager"/>.
+    /// </summary>
+    internal static ExternalGridBridgeDiagnosticsSnapshot GetExternalGridBridgeDiagnosticsSnapshot()
+    {
+        return new ExternalGridBridgeDiagnosticsSnapshot(
+            totalGridEventsReceived: _externalGridEventsReceived,
+            addedEventsReceived: _externalGridAddEventsReceived,
+            removedEventsReceived: _externalGridRemoveEventsReceived,
+            changedEventsReceived: _externalGridChangeEventsReceived,
+            distinctGridSlotsObserved: _distinctObservedExternalGridSlots,
+            duplicateEventSignaturesObserved: _duplicateExternalGridEventSignaturesObserved,
+            duplicateAddEventSignaturesObserved: _duplicateExternalGridAddEventSignaturesObserved,
+            duplicateRemoveEventSignaturesObserved: _duplicateExternalGridRemoveEventSignaturesObserved,
+            duplicateChangeEventSignaturesObserved: _duplicateExternalGridChangeEventSignaturesObserved,
+            maxIdenticalEventStreak: _maxExternalGridEventStreak,
+            rebuildPassesExecuted: _externalGridRebuildPassesExecuted,
+            eventsIgnoredForNoIntersectingCharts: _externalGridEventsIgnoredForNoIntersectingCharts,
+            totalChartsSelectedForRebuild: _totalChartsSelectedForExternalGridRebuild,
+            maxChartsSelectedForSingleEvent: _maxChartsSelectedForSingleExternalGridEvent);
+    }
+
+    /// <summary>
+    /// Clears the external-grid bridge diagnostics counters without changing live chart or transition state.
+    /// </summary>
+    internal static void ResetExternalGridBridgeDiagnostics()
+    {
+        _externalGridEventObservationsByGridIndex.Clear();
+        _externalGridEventsReceived = 0;
+        _externalGridAddEventsReceived = 0;
+        _externalGridRemoveEventsReceived = 0;
+        _externalGridChangeEventsReceived = 0;
+        _distinctObservedExternalGridSlots = 0;
+        _duplicateExternalGridEventSignaturesObserved = 0;
+        _duplicateExternalGridAddEventSignaturesObserved = 0;
+        _duplicateExternalGridRemoveEventSignaturesObserved = 0;
+        _duplicateExternalGridChangeEventSignaturesObserved = 0;
+        _maxExternalGridEventStreak = 0;
+        _externalGridRebuildPassesExecuted = 0;
+        _externalGridEventsIgnoredForNoIntersectingCharts = 0;
+        _totalChartsSelectedForExternalGridRebuild = 0;
+        _maxChartsSelectedForSingleExternalGridEvent = 0;
     }
 
     #endregion
@@ -707,15 +807,78 @@ public static class PathManager
 
     #region Pathfinding Utilities
 
-    private static void RebuildInitializedChartsAgainstCurrentGrids(
-        Vector3d boundsMin,
-        Vector3d boundsMax)
+    private static void RecordExternalGridEvent(GridEventInfo eventInfo, ExternalGridEventKind eventKind)
     {
-        NavigationChart[] initializedCharts = GetInitializedChartsIntersectingBoundsSnapshot(boundsMin, boundsMax);
-        if (initializedCharts.Length == 0)
-            return;
+        _externalGridEventsReceived++;
 
-        RebuildInitializedChartsAgainstCurrentGrids(initializedCharts);
+        switch (eventKind)
+        {
+            case ExternalGridEventKind.Added:
+                _externalGridAddEventsReceived++;
+                break;
+            case ExternalGridEventKind.Removed:
+                _externalGridRemoveEventsReceived++;
+                break;
+            default:
+                _externalGridChangeEventsReceived++;
+                break;
+        }
+
+        ExternalGridEventSignature signature = new(
+            eventKind,
+            eventInfo.GridSpawnToken,
+            eventInfo.GridVersion,
+            eventInfo.BoundsMin,
+            eventInfo.BoundsMax);
+
+        if (_externalGridEventObservationsByGridIndex.TryGetValue(eventInfo.GridIndex, out ExternalGridEventObservation observation))
+        {
+            if (observation.Signature.Equals(signature))
+            {
+                _duplicateExternalGridEventSignaturesObserved++;
+                switch (eventKind)
+                {
+                    case ExternalGridEventKind.Added:
+                        _duplicateExternalGridAddEventSignaturesObserved++;
+                        break;
+                    case ExternalGridEventKind.Removed:
+                        _duplicateExternalGridRemoveEventSignaturesObserved++;
+                        break;
+                    default:
+                        _duplicateExternalGridChangeEventSignaturesObserved++;
+                        break;
+                }
+
+                observation = new ExternalGridEventObservation(signature, observation.IdenticalEventStreak + 1);
+            }
+            else
+            {
+                observation = new ExternalGridEventObservation(signature, identicalEventStreak: 1);
+            }
+        }
+        else
+        {
+            _distinctObservedExternalGridSlots++;
+            observation = new ExternalGridEventObservation(signature, identicalEventStreak: 1);
+        }
+
+        _externalGridEventObservationsByGridIndex[eventInfo.GridIndex] = observation;
+        if (observation.IdenticalEventStreak > _maxExternalGridEventStreak)
+            _maxExternalGridEventStreak = observation.IdenticalEventStreak;
+    }
+
+    private static void RecordExternalGridRebuildSelection(int chartCount)
+    {
+        if (chartCount <= 0)
+        {
+            _externalGridEventsIgnoredForNoIntersectingCharts++;
+            return;
+        }
+
+        _externalGridRebuildPassesExecuted++;
+        _totalChartsSelectedForExternalGridRebuild += chartCount;
+        if (chartCount > _maxChartsSelectedForSingleExternalGridEvent)
+            _maxChartsSelectedForSingleExternalGridEvent = chartCount;
     }
 
     private static void RebuildInitializedChartsAgainstCurrentGrids(NavigationChart[] chartsToRebuild)
@@ -910,6 +1073,64 @@ public static class PathManager
     private static int CompareChartsByRegistrationOrder(NavigationChart left, NavigationChart right)
     {
         return left.RegistrationOrder.CompareTo(right.RegistrationOrder);
+    }
+
+    private enum ExternalGridEventKind : byte
+    {
+        Added,
+        Removed,
+        Changed
+    }
+
+    private readonly struct ExternalGridEventSignature : IEquatable<ExternalGridEventSignature>
+    {
+        public ExternalGridEventSignature(
+            ExternalGridEventKind eventKind,
+            int gridSpawnToken,
+            uint gridVersion,
+            Vector3d boundsMin,
+            Vector3d boundsMax)
+        {
+            EventKind = eventKind;
+            GridSpawnToken = gridSpawnToken;
+            GridVersion = gridVersion;
+            BoundsMin = boundsMin;
+            BoundsMax = boundsMax;
+        }
+
+        public ExternalGridEventKind EventKind { get; }
+
+        public int GridSpawnToken { get; }
+
+        public uint GridVersion { get; }
+
+        public Vector3d BoundsMin { get; }
+
+        public Vector3d BoundsMax { get; }
+
+        public bool Equals(ExternalGridEventSignature other)
+        {
+            return EventKind == other.EventKind
+                && GridSpawnToken == other.GridSpawnToken
+                && GridVersion == other.GridVersion
+                && BoundsMin == other.BoundsMin
+                && BoundsMax == other.BoundsMax;
+        }
+    }
+
+    private readonly struct ExternalGridEventObservation
+    {
+        public ExternalGridEventObservation(
+            ExternalGridEventSignature signature,
+            int identicalEventStreak)
+        {
+            Signature = signature;
+            IdenticalEventStreak = identicalEventStreak;
+        }
+
+        public ExternalGridEventSignature Signature { get; }
+
+        public int IdenticalEventStreak { get; }
     }
 
     private static readonly (int Dx, int Dy, int Dz)[] ManagedGeneratedNeighborOffsets =

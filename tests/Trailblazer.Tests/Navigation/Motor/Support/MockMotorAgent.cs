@@ -46,7 +46,6 @@ public class MockMotorAgent
         Motor = NavMotor.CreateNew(FrameCondition, profile);
         Motor.SetVelocity(Velocity);
 
-        Motor.Events.CanAffordJump = () => true;
         Motor.Events.CanStartClimb = () => true;
         Motor.Events.CanContinueClimb = () => true;
 

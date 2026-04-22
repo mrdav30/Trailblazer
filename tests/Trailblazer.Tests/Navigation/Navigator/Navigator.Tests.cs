@@ -60,11 +60,12 @@ public class NavigatorTests : IDisposable
         navigator.GuidedMaxClimbHeight = (Fixed64)2;
 
         Vector3d target = new(4, 0, 0);
-        navigator.ApplyGuidedTrekRequest(target, rate: TrekRate.Moderate, groupId: 4);
+        navigator.ApplyGuidedTrekRequest(target, rate: TrekRate.Moderate, groupId: 4, canAffordJump: false);
 
         navigator.IsGuideded.Should().BeTrue();
         navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
+        navigator.FrameRequest.CanAffordJump.Should().BeFalse();
         navigator.Steering.MovementGroupID.Should().Be(4);
 
         var request = navigator.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
@@ -814,7 +815,7 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
-    public void ApplyInputTrekRequest_ShouldCaptureFlightAndClimbIntent()
+    public void ApplyInputTrekRequest_ShouldCaptureFlightClimbAndJumpAffordabilityIntent()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
 
@@ -823,11 +824,13 @@ public class NavigatorTests : IDisposable
             TrekRate.Fast,
             isRequestingJump: false,
             isRequestingFlight: true,
-            isRequestingClimb: true);
+            isRequestingClimb: true,
+            canAffordJump: false);
 
         navigator.FrameRequest.Direction.Should().Be(Vector3d.Up);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
+        navigator.FrameRequest.CanAffordJump.Should().BeFalse();
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
     }
@@ -859,6 +862,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.Direction.Should().Be(Vector3d.Zero);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Stationary);
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
+        navigator.FrameRequest.CanAffordJump.Should().BeTrue();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
         navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
         navigator.FrameRequest.FacingDirection.Should().BeNull();
@@ -1151,11 +1155,13 @@ public class NavigatorTests : IDisposable
     {
         var navigator = CreateNavigator(Vector3d.Zero);
 
+        navigator.SetFrameJumpAffordability(false);
         navigator.ToggleGuidedJump(true);
         navigator.ToggleGuidedFlight(true);
         navigator.ToggleGuidedClimb(true);
         navigator.SetGuidedTrekRate(TrekRate.Moderate);
 
+        navigator.FrameRequest.CanAffordJump.Should().BeFalse();
         navigator.FrameRequest.IsRequestingJump.Should().BeTrue();
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();

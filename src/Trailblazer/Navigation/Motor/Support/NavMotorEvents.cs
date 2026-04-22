@@ -4,25 +4,22 @@ using System;
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Defines event-driven interactions for the <see cref="NavMotor"/>, including movement, forces, and state transitions.
+/// Defines host interaction hooks for the <see cref="NavMotor"/>.
+/// Remaining query callbacks are climb-specific; the rest are state notifications.
 /// </summary>
 public class NavMotorEvents
 {
 #nullable enable
 
     /// <summary>
-    /// Function that determines if the scout can afford to perform a jump action.
-    /// </summary>
-    /// <returns>True if the scout has enough resources or conditions to jump, otherwise false.</returns>
-    public Func<bool>? CanAffordJump { get; set; } = null;
-
-    /// <summary>
-    /// Optional callback that performs a final host veto before a climb starts.
+    /// Optional callback that performs a final host veto before a climb starts
+    /// after the frame's climb affordance snapshot has already been resolved.
     /// </summary>
     public Func<bool>? CanStartClimb { get; set; } = null;
 
     /// <summary>
-    /// Optional callback that performs a final host veto before an active climb continues.
+    /// Optional callback that performs a final host veto before an active climb continues
+    /// after the frame's climb affordance snapshot has already been resolved.
     /// </summary>
     public Func<bool>? CanContinueClimb { get; set; } = null;
 

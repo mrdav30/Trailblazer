@@ -82,6 +82,7 @@ public class NavigatorSerializationTests : IDisposable
         target.AnimDampTime.Should().Be(source.AnimDampTime);
         target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
+        target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.IsGuideded.Should().BeFalse();
 
         AssertMotorStateMatches(source.Motor, target.Motor);
@@ -139,6 +140,7 @@ public class NavigatorSerializationTests : IDisposable
         target.AnimDampTime.Should().Be(source.AnimDampTime);
         target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
+        target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.IsGuideded.Should().BeFalse();
 
         AssertMotorStateMatches(source.Motor, target.Motor);
@@ -168,6 +170,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
+        target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
@@ -283,6 +286,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
+        target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
@@ -680,6 +684,22 @@ public class NavigatorSerializationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void RoundTrip_ShouldUseBackwardCompatibleDefaults_WhenPayloadOmitsJumpAffordability(bool useMemoryPack)
+    {
+        var source = CreateConfiguredNavigator();
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "frameRequest", "CanAffordJump");
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.FrameRequest.CanAffordJump.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void RoundTrip_ShouldClearSteeringSession_WhenRequestRehydrationFails(bool useMemoryPack)
     {
         RegisterGuidedPathChart("NavigatorSerializationInvalidRequest");
@@ -888,7 +908,8 @@ public class NavigatorSerializationTests : IDisposable
             isRequestingJump: true,
             isRequestingFlight: true,
             isRequestingClimb: true,
-            facingDirection: Vector3d.Forward);
+            facingDirection: Vector3d.Forward,
+            canAffordJump: false);
         source.SetGroundContact(
             surfaceLevel: Fixed64.Zero,
             platform: new PlatformSnapshot(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1))),

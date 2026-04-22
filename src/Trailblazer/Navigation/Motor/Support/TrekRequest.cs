@@ -7,7 +7,7 @@ namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
 /// Represents a movement request for a navigator to pass to <see cref="NavMotor"/>,
-/// containing the current origin, foot position, rotation, direction, speed, jump intent, and flight intent.
+/// containing the current origin, foot position, rotation, direction, speed, and frame-owned locomotion intent.
 /// </summary>
 [Serializable]
 public struct TrekRequest : IRecordable
@@ -48,6 +48,11 @@ public struct TrekRequest : IRecordable
     public bool IsRequestingJump;
 
     /// <summary>
+    /// Per-frame host query result that authoritatively answers whether jump may spend host-owned resources this frame.
+    /// </summary>
+    public bool CanAffordJump;
+
+    /// <summary>
     /// Indicates whether the scout is requesting controlled flight.
     /// </summary>
     public bool IsRequestingFlight;
@@ -57,7 +62,10 @@ public struct TrekRequest : IRecordable
     /// </summary>
     public bool IsRequestingClimb;
 
-    public TrekRequest() { }
+    public TrekRequest()
+    {
+        CanAffordJump = true;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetRequest(
@@ -66,7 +74,8 @@ public struct TrekRequest : IRecordable
         bool isRequestingJump,
         bool isRequestingFlight,
         bool isRequestingClimb,
-        Vector3d? facingDirection = null)
+        Vector3d? facingDirection = null,
+        bool canAffordJump = true)
     {
         Direction = direction;
         FacingDirection = facingDirection.HasValue && facingDirection.Value != Vector3d.Zero
@@ -74,6 +83,7 @@ public struct TrekRequest : IRecordable
             : null;
         Rate = rate;
         IsRequestingJump = isRequestingJump;
+        CanAffordJump = canAffordJump;
         IsRequestingFlight = isRequestingFlight;
         IsRequestingClimb = isRequestingClimb;
     }
@@ -107,6 +117,7 @@ public struct TrekRequest : IRecordable
         FacingDirection = FacingDirection,
         Rate = Rate,
         IsRequestingJump = IsRequestingJump,
+        CanAffordJump = CanAffordJump,
         IsRequestingFlight = IsRequestingFlight,
         IsRequestingClimb = IsRequestingClimb,
         FootPosition = FootPosition
@@ -123,6 +134,7 @@ public struct TrekRequest : IRecordable
         Direction = Vector3d.Zero;
         FacingDirection = null;
         IsRequestingJump = false;
+        CanAffordJump = true;
         Rate = TrekRate.Stationary;
         IsRequestingFlight = false;
         IsRequestingClimb = false;
@@ -139,6 +151,7 @@ public struct TrekRequest : IRecordable
         Rotation = FixedQuaternion.Identity;
         Direction = Vector3d.Zero;
         IsRequestingJump = false;
+        CanAffordJump = true;
         IsRequestingClimb = false;
     }
 
@@ -151,6 +164,7 @@ public struct TrekRequest : IRecordable
         RecordValues.Look(chronicler, ref FacingDirection, nameof(FacingDirection), null);
         RecordValues.Look(chronicler, ref Rate, nameof(Rate), TrekRate.Stationary);
         RecordValues.Look(chronicler, ref IsRequestingJump, nameof(IsRequestingJump), false);
+        RecordValues.Look(chronicler, ref CanAffordJump, nameof(CanAffordJump), true);
         RecordValues.Look(chronicler, ref IsRequestingFlight, nameof(IsRequestingFlight), false);
         RecordValues.Look(chronicler, ref IsRequestingClimb, nameof(IsRequestingClimb), false);
     }

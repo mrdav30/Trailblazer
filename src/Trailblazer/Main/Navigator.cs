@@ -310,13 +310,15 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="isRequestingFlight">Whether the agent is requesting controlled flight.</param>
     /// <param name="isRequestingClimb">Whether the agent is requesting climb engagement or continuation.</param>
     /// <param name="facingDirection">Optional world-space facing direction to use instead of facing along the movement direction.</param>
+    /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
     public virtual void ApplyInputTrekRequest(
         Vector3d? direction = null,
         TrekRate? rate = null,
         bool? isRequestingJump = null,
         bool? isRequestingFlight = null,
         bool? isRequestingClimb = null,
-        Vector3d? facingDirection = null)
+        Vector3d? facingDirection = null,
+        bool canAffordJump = true)
     {
         if (!IsActive) return;
 
@@ -329,7 +331,8 @@ public abstract class Navigator : INavigate, IRecordable
                 isRequestingJump: isRequestingJump ?? false,
                 isRequestingFlight: isRequestingFlight ?? false,
                 isRequestingClimb: isRequestingClimb ?? false,
-                facingDirection: facingDirection
+                facingDirection: facingDirection,
+                canAffordJump: canAffordJump
         );
     }
 
@@ -342,13 +345,15 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="isRequestingJump">Whether the navigator intends to jump during traversal.</param>
     /// <param name="isRequestingClimb">Whether the navigator intends to preserve climb engagement while guided travel is active.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between navigators.</param>
+    /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
     public virtual void ApplyGuidedTrekRequest(
         Vector3d targetPosition,
         GuidedPathMode? pathMode = null,
         TrekRate? rate = null,
         bool? isRequestingJump = null,
         bool? isRequestingClimb = null,
-        int groupId = -1)
+        int groupId = -1,
+        bool canAffordJump = true)
     {
         if (!IsActive) return;
 
@@ -376,7 +381,8 @@ public abstract class Navigator : INavigate, IRecordable
                 isRequestingJump: isRequestingJump ?? false,
                 isRequestingFlight: selectedPathMode == GuidedPathMode.Aerial,
                 isRequestingClimb: _guidedClimbIntent,
-                facingDirection: null
+                facingDirection: null,
+                canAffordJump: canAffordJump
         );
 
         Steering.ApplyPathRequest(pathRequest, groupId);
@@ -413,6 +419,12 @@ public abstract class Navigator : INavigate, IRecordable
 
         return success;
     }
+
+    /// <summary>
+    /// Sets the frame-owned jump affordability snapshot used by <see cref="NavMotor"/> on the next traversal step.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void SetFrameJumpAffordability(bool canAffordJump) => _frameRequest.CanAffordJump = canAffordJump;
 
     /// <summary>
     /// Called to make the agent jump if allowed and in a valid state.

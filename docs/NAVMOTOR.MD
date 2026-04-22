@@ -86,7 +86,7 @@ Important public state includes:
 
 `NavMotor` operates on snapshots rather than a host interface. The host must supply:
 
-- a populated `TrekRequest`
+- a populated `TrekRequest`, including any frame-owned query answers such as `CanAffordJump`
 - the current post-application position and last position
 - the current post-application rotation
 - the refreshed `TrekCondition`
@@ -104,6 +104,9 @@ If the host needs to push a new traversal state into the motor before the next t
 should use `SyncTraversalState(...)` directly or go through `Navigator.SyncCurrentTrekConditionToMotor()`.
 Helpers like `Navigator.SetGroundContact(..., updateMotorState: true)` and the lower-level
 `Navigator.SetTrekCondition(updateMotorState: true)` route through that same explicit seam.
+
+`NavMotorEvents` still contains a few climb-specific query callbacks, but jump affordability is not one of them.
+Hosts should answer jump affordability through `TrekRequest`.
 
 ### 4.1 Climb Affordance And Mantle Validation
 
@@ -244,7 +247,7 @@ If jumping is allowed this frame, `ApplyJumpForce()`:
 - validates jump eligibility
 - blocks jumping during active falls
 - checks water-breach rules
-- checks resource gating through `Events.CanAffordJump`
+- checks `TrekRequest.CanAffordJump` for host-owned jump resource gating
 - computes the jump direction
 - clears existing downward output
 - injects jump force
@@ -463,11 +466,11 @@ Owns:
 
 ## 9. Events
 
-`NavMotorEvents` exposes hooks for external systems and gameplay reactions.
+`NavMotorEvents` exposes climb-specific query callbacks and state-notification hooks for external
+systems.
 
 Jump and water events:
 
-- `CanAffordJump`
 - `OnStartJump`
 - `OnStopJump`
 - `OnStartWaterBreach`
@@ -480,8 +483,6 @@ Fall and survival events:
 - `OnStopFall`
 - `OnMaxFallHeightReached`
 - `OnDrowning`
-
-These events are not just cosmetic. Some of them affect whether behavior is allowed at all, such as `CanAffordJump`.
 
 ## 10. Common Integration Pattern
 

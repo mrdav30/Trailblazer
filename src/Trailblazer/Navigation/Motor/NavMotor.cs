@@ -319,7 +319,7 @@ public class NavMotor : IRecordable
             JumpModule.IsHoldingJump = false;
 
         ApplyEnvironmentalForces();
-        ApplyJumpForce(request.IsRequestingJump);
+        ApplyJumpForce(request);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -575,9 +575,9 @@ public class NavMotor : IRecordable
     /// This method validates jump conditions, determines the jump direction, and calculates the jump force.
     /// If the navigator is on a platform, its velocity is adjusted accordingly.
     /// </remarks>
-    private void ApplyJumpForce(bool requestJump)
+    private void ApplyJumpForce(TrekRequest request)
     {
-        if (!CanApplyJumpForce(requestJump))
+        if (!CanApplyJumpForce(request))
             return;
 
         Vector3d jumpForce = IsInLiquid
@@ -588,11 +588,11 @@ public class NavMotor : IRecordable
         CommitJumpForce(jumpForce);
     }
 
-    private bool CanApplyJumpForce(bool requestJump)
+    private bool CanApplyJumpForce(TrekRequest request)
     {
         if (!(JumpModule?.IsEnabled == true
             && Handler.IsInControl
-            && requestJump))
+            && request.IsRequestingJump))
         {
             return false;
         }
@@ -609,7 +609,7 @@ public class NavMotor : IRecordable
         if (!JumpModule.CanJump)
             return false;
 
-        return Events.CanAffordJump?.Invoke() != false;
+        return request.CanAffordJump;
     }
 
     private Vector3d GetWaterBreachJumpForce()

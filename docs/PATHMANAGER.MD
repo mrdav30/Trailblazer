@@ -283,6 +283,8 @@ Important nuance:
 
 - this is a deferred maintenance path, so hosts should apply external grid churn before the fixed
   simulation step when they expect Trailblazer to observe the new live state that same frame
+- explicit chart initialization flushes any queued external-grid maintenance first, so newly
+  activated charts do not miss earlier grid churn or pay a second stale replay afterward
 - a chart can remain registered and logically initialized even when no active grid currently
   materializes any of its authored voxels
 - in that state the chart simply contributes no live partitions and its managed transitions stay

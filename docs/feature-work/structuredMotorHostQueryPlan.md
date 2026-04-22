@@ -2,12 +2,13 @@
 
 ## Purpose
 
-This plan covers optional runtime follow-up item 5 from `hardeningPhasePlan.md`:
+This plan covers the remaining structured motor host-query follow-up from
+`hardeningPhasePlan.md`:
 
-> If the climb affordance resolver pattern lands cleanly, revisit whether narrow capability events
-> such as `CanAffordJump` should move toward a more structured host query contract as well, so the
-> motor consumes deterministic frame snapshots instead of accumulating permission and environment
-> state through callback chains.
+> Continue the structured motor host-query cleanup by collapsing the remaining climb veto callbacks
+> into authoritative frame snapshots when host integrations justify it. Jump affordability already
+> moved to `TrekRequest`, so the remaining value is in separating the last climb permission seams
+> from notification events without growing a monolithic host interface.
 
 The goal is to reduce host-side callback chaining and make motor permission inputs easier to reason
 about without replacing the existing notification events or introducing a broad catch-all host
@@ -18,26 +19,26 @@ interface.
 `NavMotor` already consumes most host state as snapshots:
 
 - `TrekRequest` provides the frame's intent
+- `TrekRequest.CanAffordJump` now carries the authoritative per-frame jump affordability answer
 - `FinalizeTraversal(...)` supplies the refreshed `TrekCondition`
 - climb affordances already come through `IClimbAffordanceResolver` as an immutable
   `ClimbAffordanceSnapshot`
 - active mantle validation already uses an immutable `MantleValidationSnapshot`
 
-The remaining host query seams are still callback-shaped:
+The remaining host query seams that still matter are callback-shaped:
 
-- `Events.CanAffordJump`
 - `Events.CanStartClimb`
 - `Events.CanContinueClimb`
 
 Important nuance:
 
-- jump affordability is still a late `Func<bool>` veto at the end of `CanApplyJumpForce(...)`
+- jump affordability is now sourced only from the frame snapshot
 - climb already has `CanStartClimb` and `CanContinueClimb` inside `ClimbAffordanceSnapshot`, but the
   motor still allows extra late veto callbacks on top of that snapshot
 - `NavMotorEvents` currently mixes notification hooks with behavior-gating queries
 
-This works today and the relevant jump and climb tests are green, but the host-facing contract is
-split across immutable frame snapshots and late callback decisions.
+The host-facing contract is cleaner than it was, but climb still straddles immutable frame
+snapshots and late callback decisions.
 
 ## Relevance Assessment
 
@@ -62,43 +63,30 @@ Recommendation:
 
 - keep this item active
 - do not build a large generalized motor host interface
-- start with the narrowest proven case: jump affordability
-- treat climb veto callbacks as compatibility seams, and only retire them if the climb snapshot
-  fully covers the real host needs
+- treat Phase 1 and Phase 2 as complete
+- focus the remaining work on climb veto ownership
+- remove duplicated climb permission seams instead of carrying both paths forward
 
 ## Phased Plan
 
 ### Phase 1. Separate Behavioral Queries From Notifications
 
-Before changing the runtime shape, explicitly inventory which `NavMotorEvents` members are true
-notifications and which ones are behavior gates.
+Completed.
 
-Deliverables:
+Outcome:
 
-- a short map of gating callbacks versus post-state notifications
-- a decision on which gating inputs are frame-owned and should be snapshot data
-- a decision on which callbacks remain action notifications and should stay in `NavMotorEvents`
-
-Important rule:
-
-- do not conflate "host needs to be notified" with "host needs to answer a question"
+- `NavMotorEvents` now documents climb query callbacks separately from notification hooks
+- jump affordability is treated as frame-owned query data rather than a notification concern
 
 ### Phase 2. Move Jump Affordability To A Frame Snapshot
 
-Handle the narrowest case first.
+Completed.
 
-Preferred direction:
+Outcome:
 
-- replace `Events.CanAffordJump` with data the host computes once for the frame
-- carry that result through a small immutable snapshot, preferably attached to `TrekRequest` or a
-  closely related frame-owned motor input type
-- keep the motor's internal jump checks intact; only the host-owned affordability decision moves
-
-Why this is the right first slice:
-
-- jump affordability is currently the cleanest standalone callback gate
-- it does not need geometry resolution the way climb does
-- it improves host usability without forcing a broader abstraction decision yet
+- `TrekRequest.CanAffordJump` carries the host-owned answer once per frame
+- `NavMotor` keeps its internal jump eligibility logic intact and consumes only the snapshot
+- the old jump callback path was removed instead of preserved as a second authority source
 
 ### Phase 3. Collapse Climb Vetoes Into The Affordance Snapshot When Possible
 
@@ -109,7 +97,7 @@ Preferred direction:
 
 - the climb resolver returns the final `CanStartClimb` and `CanContinueClimb` answers for the frame
 - the motor treats that snapshot as authoritative for climb permission
-- any remaining callback veto stays only as a temporary compatibility bridge
+- the old callback veto path is removed in the same slice instead of carried as a second path
 
 Important constraint:
 
@@ -135,8 +123,7 @@ What not to do:
 
 After any structured query work lands:
 
-- add focused tests for jump affordability through the new snapshot path
-- preserve compatibility coverage if legacy callback shims remain temporarily
+- preserve focused tests for jump affordability through the snapshot path
 - add or update climb tests if climb veto ownership moves fully into the resolver snapshot
 - update `docs/NAVMOTOR.MD` to distinguish notification hooks from host query inputs
 - link this plan from `docs/feature-work/hardeningPhasePlan.md`
@@ -148,17 +135,17 @@ Keep this work narrow and explicit.
 Specifically:
 
 - do not replace action notifications such as `OnStartJump` or `OnStartClimb`
-- do not turn one simple jump-affordability callback into a heavyweight host interface
+- do not turn the remaining climb veto cleanup into a heavyweight host interface
 - do not duplicate the same permission data in multiple live seams without one clear source of truth
 - do not add per-frame allocations to carry host query data
-- do not remove compatibility callbacks until the snapshot path has proven sufficient
+- do not keep deprecated callback paths alive once the snapshot path lands
 
 ## Risks
 
 Main failure modes to defend against:
 
 - over-engineering a broad query framework for only one or two simple inputs
-- creating conflicting authority between request snapshots, resolver snapshots, and compatibility
+- creating conflicting authority between request snapshots, resolver snapshots, and leftover
   callbacks
 - making host integration harder by moving too many concerns at once
 - blurring the line between deterministic frame data and imperative event notifications
@@ -168,8 +155,8 @@ Main failure modes to defend against:
 This item is ready to implement when all of the following are true:
 
 - at least one real host integration would benefit from replacing callback gates with frame-owned
-  query data
-- jump affordability or another narrow capability input can be represented cleanly as immutable
-  snapshot data
+  query data beyond the jump affordability snapshot that already landed
+- a remaining narrow capability input can be represented cleanly as immutable snapshot data
 - notification events remain separate from behavioral query inputs
-- focused motor tests can pin current jump and climb behavior before the compatibility seams change
+- focused motor tests can pin current jump and climb behavior before the remaining climb ownership
+  moves fully into snapshots

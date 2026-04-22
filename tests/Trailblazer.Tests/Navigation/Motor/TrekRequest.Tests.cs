@@ -19,6 +19,7 @@ public class TrekRequestTests
             FacingDirection = Vector3d.Right,
             Rate = TrekRate.Fast,
             IsRequestingJump = true,
+            CanAffordJump = false,
             IsRequestingFlight = true,
             IsRequestingClimb = true
         };
@@ -33,6 +34,7 @@ public class TrekRequestTests
         clone.FacingDirection.Should().Be(request.FacingDirection);
         clone.Rate.Should().Be(request.Rate);
         clone.IsRequestingJump.Should().Be(request.IsRequestingJump);
+        clone.CanAffordJump.Should().Be(request.CanAffordJump);
         clone.IsRequestingFlight.Should().Be(request.IsRequestingFlight);
         clone.IsRequestingClimb.Should().Be(request.IsRequestingClimb);
     }
@@ -48,6 +50,7 @@ public class TrekRequestTests
             FacingDirection = Vector3d.Forward,
             Rate = TrekRate.Moderate,
             IsRequestingJump = true,
+            CanAffordJump = true,
             IsRequestingFlight = true,
             IsRequestingClimb = true,
             FootPosition = new Vector3d(1, 1, 3)
@@ -62,6 +65,7 @@ public class TrekRequestTests
         request.FacingDirection.Should().BeNull();
         request.Rate.Should().Be(TrekRate.Stationary);
         request.IsRequestingJump.Should().BeFalse();
+        request.CanAffordJump.Should().BeTrue();
         request.IsRequestingFlight.Should().BeFalse();
         request.IsRequestingClimb.Should().BeFalse();
     }
@@ -78,6 +82,7 @@ public class TrekRequestTests
             FacingDirection = Vector3d.Forward,
             Rate = TrekRate.Fast,
             IsRequestingJump = true,
+            CanAffordJump = false,
             IsRequestingFlight = true,
             IsRequestingClimb = true
         };
@@ -91,6 +96,7 @@ public class TrekRequestTests
         request.FacingDirection.Should().Be(Vector3d.Forward);
         request.Rate.Should().Be(TrekRate.Fast);
         request.IsRequestingJump.Should().BeFalse();
+        request.CanAffordJump.Should().BeTrue();
         request.IsRequestingFlight.Should().BeTrue();
         request.IsRequestingClimb.Should().BeFalse();
     }

@@ -520,7 +520,10 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         var waterAgent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
         waterAgent.Motor.Handler.Swim!.CanBreachWater = false;
 
-        ReflectionUtility.InvokePrivate<bool>(waterAgent.Motor, "CanApplyJumpForce", true).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(waterAgent.Motor, "CanApplyJumpForce", new TrekRequest
+        {
+            IsRequestingJump = true
+        }).Should().BeFalse();
 
         var ceilingSafeAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
         ceilingSafeAgent.Motor.Handler.Move.FrameVelocity = new Vector3d(0, 4, 0);
@@ -669,9 +672,12 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     public void JumpAndStateHelpers_ShouldCoverAffordabilityGuard_AndSteepJumpDirection()
     {
         var jumpAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        jumpAgent.Motor.Events.CanAffordJump = () => false;
 
-        ReflectionUtility.InvokePrivate<bool>(jumpAgent.Motor, "CanApplyJumpForce", true).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(jumpAgent.Motor, "CanApplyJumpForce", new TrekRequest
+        {
+            IsRequestingJump = true,
+            CanAffordJump = false
+        }).Should().BeFalse();
 
         Fixed4x4 steepPlatform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles((Fixed64)1.25f, Fixed64.Zero, Fixed64.Zero));
@@ -691,7 +697,10 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     {
         var jumpAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
 
-        ReflectionUtility.InvokePrivate<bool>(jumpAgent.Motor, "CanApplyJumpForce", false).Should().BeFalse();
+        ReflectionUtility.InvokePrivate<bool>(jumpAgent.Motor, "CanApplyJumpForce", new TrekRequest
+        {
+            IsRequestingJump = false
+        }).Should().BeFalse();
 
         var liquidAgent = MockMotorAgentTestFactory.CreateWaterAgent();
         liquidAgent.Motor.Handler.Fly!.IsFlying = true;

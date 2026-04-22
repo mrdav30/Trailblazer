@@ -116,17 +116,13 @@ public class JumpLocomotionTests : IDisposable
     [Fact]
     public void Given_ScoutCannotAffordJump_When_JumpRequested_Then_ShouldNotJump()
     {
-        // Arrange
         var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
-        scout.Motor.Events.CanAffordJump = () => false;
-
-        // Act
+        scout.FrameRequest.CanAffordJump = false;
         scout.FrameRequest.IsRequestingJump = true;
 
         scout.Simulate();
 
-        // Assert
-        scout.Motor.Handler.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Jump should not apply
+        scout.Motor.Handler.Move.FrameVelocity.y.Should().Be(Fixed64.Zero);
     }
 
     [Fact]

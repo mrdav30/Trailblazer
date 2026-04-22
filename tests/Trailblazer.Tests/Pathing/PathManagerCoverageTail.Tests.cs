@@ -143,9 +143,104 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         snapshot.DuplicateChangeEventSignaturesObserved.Should().Be(0);
         snapshot.MaxIdenticalEventStreak.Should().Be(2);
         snapshot.RebuildPassesExecuted.Should().Be(0);
-        snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(2);
+        snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(1);
         snapshot.TotalChartsSelectedForRebuild.Should().Be(0);
         snapshot.MaxChartsSelectedForSingleEvent.Should().Be(0);
+    }
+
+    [Fact]
+    public void ExternalGridBridgeDiagnostics_ShouldSkipExactDuplicateIntersectingChangeEvents()
+    {
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("DuplicateIntersectingGridChart", Vector3d.Zero)).Should().BeTrue();
+        PathManagerExternalGridBridge.ResetDiagnostics();
+
+        GridEventInfo duplicateChange = new(
+            4,
+            404,
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            11);
+
+        PathManagerExternalGridBridge.HandleGridChanged(duplicateChange);
+        PathManagerExternalGridBridge.HandleGridChanged(duplicateChange);
+
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        snapshot.TotalGridEventsReceived.Should().Be(2);
+        snapshot.ChangedEventsReceived.Should().Be(2);
+        snapshot.DuplicateEventSignaturesObserved.Should().Be(1);
+        snapshot.DuplicateChangeEventSignaturesObserved.Should().Be(1);
+        snapshot.RebuildPassesExecuted.Should().Be(1);
+        snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(0);
+        snapshot.TotalChartsSelectedForRebuild.Should().Be(1);
+        snapshot.MaxChartsSelectedForSingleEvent.Should().Be(1);
+        snapshot.MaxIdenticalEventStreak.Should().Be(2);
+    }
+
+    [Fact]
+    public void ExternalGridBridgeDiagnostics_ShouldNotSkipGridVersionChanges()
+    {
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("VersionBumpGridChart", Vector3d.Zero)).Should().BeTrue();
+        PathManagerExternalGridBridge.ResetDiagnostics();
+
+        GridEventInfo firstChange = new(
+            5,
+            505,
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            12);
+        GridEventInfo versionBumpChange = new(
+            5,
+            505,
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            13);
+
+        PathManagerExternalGridBridge.HandleGridChanged(firstChange);
+        PathManagerExternalGridBridge.HandleGridChanged(versionBumpChange);
+
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        snapshot.TotalGridEventsReceived.Should().Be(2);
+        snapshot.ChangedEventsReceived.Should().Be(2);
+        snapshot.DuplicateEventSignaturesObserved.Should().Be(0);
+        snapshot.RebuildPassesExecuted.Should().Be(2);
+        snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(0);
+        snapshot.TotalChartsSelectedForRebuild.Should().Be(2);
+        snapshot.MaxChartsSelectedForSingleEvent.Should().Be(1);
+        snapshot.MaxIdenticalEventStreak.Should().Be(1);
+    }
+
+    [Fact]
+    public void ExternalGridBridgeDiagnostics_ShouldNotSkipSpawnTokenChangesForSameGridSlot()
+    {
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("SpawnTokenGridChart", Vector3d.Zero)).Should().BeTrue();
+        PathManagerExternalGridBridge.ResetDiagnostics();
+
+        GridEventInfo firstAdd = new(
+            6,
+            606,
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            1);
+        GridEventInfo replacedAdd = new(
+            6,
+            607,
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            1);
+
+        PathManagerExternalGridBridge.HandleGridAdded(firstAdd);
+        PathManagerExternalGridBridge.HandleGridAdded(replacedAdd);
+
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        snapshot.TotalGridEventsReceived.Should().Be(2);
+        snapshot.AddedEventsReceived.Should().Be(2);
+        snapshot.DuplicateEventSignaturesObserved.Should().Be(0);
+        snapshot.RebuildPassesExecuted.Should().Be(2);
+        snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(0);
+        snapshot.TotalChartsSelectedForRebuild.Should().Be(2);
+        snapshot.MaxChartsSelectedForSingleEvent.Should().Be(1);
+        snapshot.MaxIdenticalEventStreak.Should().Be(1);
     }
 
     [Fact]

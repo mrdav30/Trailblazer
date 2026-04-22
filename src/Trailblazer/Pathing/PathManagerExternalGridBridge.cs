@@ -110,7 +110,8 @@ internal static class PathManagerExternalGridBridge
 
     private static void HandleGridChange(GridEventInfo eventInfo, ExternalGridEventKind eventKind)
     {
-        RecordGridEvent(eventInfo, eventKind);
+        if (RecordGridEvent(eventInfo, eventKind))
+            return;
 
         int selectedChartCount = PathManager.RebuildInitializedChartsAgainstExternalGridBounds(
             eventInfo.BoundsMin,
@@ -118,7 +119,7 @@ internal static class PathManagerExternalGridBridge
         RecordGridRebuildSelection(selectedChartCount);
     }
 
-    private static void RecordGridEvent(GridEventInfo eventInfo, ExternalGridEventKind eventKind)
+    private static bool RecordGridEvent(GridEventInfo eventInfo, ExternalGridEventKind eventKind)
     {
         _gridEventsReceived++;
 
@@ -162,6 +163,11 @@ internal static class PathManagerExternalGridBridge
                 }
 
                 observation = new ExternalGridEventObservation(signature, observation.IdenticalEventStreak + 1);
+                _eventObservationsByGridIndex[eventInfo.GridIndex] = observation;
+                if (observation.IdenticalEventStreak > _maxGridEventStreak)
+                    _maxGridEventStreak = observation.IdenticalEventStreak;
+
+                return true;
             }
             else
             {
@@ -177,6 +183,8 @@ internal static class PathManagerExternalGridBridge
         _eventObservationsByGridIndex[eventInfo.GridIndex] = observation;
         if (observation.IdenticalEventStreak > _maxGridEventStreak)
             _maxGridEventStreak = observation.IdenticalEventStreak;
+
+        return false;
     }
 
     private static void RecordGridRebuildSelection(int chartCount)

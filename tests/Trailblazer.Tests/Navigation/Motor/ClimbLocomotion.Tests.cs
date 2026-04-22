@@ -120,7 +120,7 @@ public sealed class ClimbLocomotionTests : IDisposable
     }
 
     [Fact]
-    public void ClimbResolver_AndEvents_ShouldAllowHostOwnedPhaseOneWiring()
+    public void ClimbResolver_AndEvents_ShouldAllowHostOwnedClimbNotifications()
     {
         var motor = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid).Motor;
         var resolver = new StaticClimbResolver();
@@ -130,8 +130,6 @@ public sealed class ClimbLocomotionTests : IDisposable
         bool slipped = false;
 
         motor.ClimbResolver = resolver;
-        motor.Events.CanStartClimb = () => true;
-        motor.Events.CanContinueClimb = () => true;
         motor.Events.OnStartClimb = _ => started = true;
         motor.Events.OnStopClimb = () => stopped = true;
         motor.Events.OnStartMantle = () => mantled = true;
@@ -144,8 +142,6 @@ public sealed class ClimbLocomotionTests : IDisposable
 
         resolved.Should().BeTrue();
         snapshot.Kind.Should().Be(ClimbAffordanceKind.Surface);
-        motor.Events.CanStartClimb!.Invoke().Should().BeTrue();
-        motor.Events.CanContinueClimb!.Invoke().Should().BeTrue();
         motor.Events.OnStartClimb!(snapshot);
         motor.Events.OnStopClimb!();
         motor.Events.OnStartMantle!();
@@ -323,14 +319,13 @@ public sealed class ClimbLocomotionTests : IDisposable
     }
 
     [Fact]
-    public void Given_HostStartVeto_When_ClimbRequested_Then_DoesNotAttach()
+    public void Given_SnapshotDisallowsStart_When_ClimbRequested_Then_DoesNotAttach()
     {
         var agent = CreateClimbingAgent();
         agent.Motor.ClimbResolver = new MutableClimbResolver
         {
-            Snapshot = CreateLadderSnapshot()
+            Snapshot = CreateLadderSnapshot(canStartClimb: false)
         };
-        agent.Motor.Events.CanStartClimb = () => false;
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
@@ -339,18 +334,21 @@ public sealed class ClimbLocomotionTests : IDisposable
     }
 
     [Fact]
-    public void Given_ActiveClimb_When_HostContinueVetoes_Then_SlipsAndStops()
+    public void Given_ActiveClimb_When_SnapshotDisallowsContinuation_Then_SlipsAndStops()
     {
         var agent = CreateClimbingAgent();
-        agent.Motor.ClimbResolver = new MutableClimbResolver
+        var resolver = new MutableClimbResolver
         {
             Snapshot = CreateSurfaceSnapshot(allowLateralTraverse: true)
         };
         int slipCount = 0;
+        agent.Motor.ClimbResolver = resolver;
         agent.Motor.Events.OnClimbSlip = () => slipCount++;
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
-        agent.Motor.Events.CanContinueClimb = () => false;
+        resolver.Snapshot = CreateSurfaceSnapshot(
+            allowLateralTraverse: true,
+            canContinueClimb: false);
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
@@ -685,7 +683,10 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.Simulate();
     }
 
-    private static ClimbAffordanceSnapshot CreateLadderSnapshot(bool allowDescent = true)
+    private static ClimbAffordanceSnapshot CreateLadderSnapshot(
+        bool allowDescent = true,
+        bool canStartClimb = true,
+        bool canContinueClimb = true)
     {
         return new ClimbAffordanceSnapshot(
             kind: ClimbAffordanceKind.Ladder,
@@ -693,6 +694,8 @@ public sealed class ClimbLocomotionTests : IDisposable
             surfaceNormal: Vector3d.Backward,
             upDirection: Vector3d.Up,
             affordanceId: 1,
+            canStartClimb: canStartClimb,
+            canContinueClimb: canContinueClimb,
             allowLateralTraverse: false,
             allowDescent: allowDescent);
     }
@@ -702,7 +705,9 @@ public sealed class ClimbLocomotionTests : IDisposable
         Vector3d? attachmentPoint = null,
         Vector3d? surfaceNormal = null,
         Vector3d? upDirection = null,
-        int? affordanceId = 2)
+        int? affordanceId = 2,
+        bool canStartClimb = true,
+        bool canContinueClimb = true)
     {
         return new ClimbAffordanceSnapshot(
             kind: ClimbAffordanceKind.Surface,
@@ -710,6 +715,8 @@ public sealed class ClimbLocomotionTests : IDisposable
             surfaceNormal: surfaceNormal ?? Vector3d.Backward,
             upDirection: upDirection ?? Vector3d.Up,
             affordanceId: affordanceId,
+            canStartClimb: canStartClimb,
+            canContinueClimb: canContinueClimb,
             allowLateralTraverse: allowLateralTraverse,
             allowDescent: true);
     }

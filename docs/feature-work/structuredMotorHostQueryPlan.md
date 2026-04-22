@@ -25,20 +25,14 @@ interface.
   `ClimbAffordanceSnapshot`
 - active mantle validation already uses an immutable `MantleValidationSnapshot`
 
-The remaining host query seams that still matter are callback-shaped:
-
-- `Events.CanStartClimb`
-- `Events.CanContinueClimb`
-
 Important nuance:
 
 - jump affordability is now sourced only from the frame snapshot
-- climb already has `CanStartClimb` and `CanContinueClimb` inside `ClimbAffordanceSnapshot`, but the
-  motor still allows extra late veto callbacks on top of that snapshot
-- `NavMotorEvents` currently mixes notification hooks with behavior-gating queries
+- climb start and continue permission are now also sourced only from `ClimbAffordanceSnapshot`
+- `NavMotorEvents` is now notification-only for the current known motor capability cases
 
-The host-facing contract is cleaner than it was, but climb still straddles immutable frame
-snapshots and late callback decisions.
+The host-facing contract is cleaner than it was. The motor now consumes immutable frame snapshots
+for the current known capability queries.
 
 ## Relevance Assessment
 
@@ -63,9 +57,8 @@ Recommendation:
 
 - keep this item active
 - do not build a large generalized motor host interface
-- treat Phase 1 and Phase 2 as complete
-- focus the remaining work on climb veto ownership
-- remove duplicated climb permission seams instead of carrying both paths forward
+- treat Phase 1, Phase 2, and Phase 3 as complete
+- only revisit this area if new capability-query families appear later
 
 ## Phased Plan
 
@@ -75,7 +68,7 @@ Completed.
 
 Outcome:
 
-- `NavMotorEvents` now documents climb query callbacks separately from notification hooks
+- the motor docs now distinguish frame-owned query inputs from notification hooks
 - jump affordability is treated as frame-owned query data rather than a notification concern
 
 ### Phase 2. Move Jump Affordability To A Frame Snapshot
@@ -90,18 +83,13 @@ Outcome:
 
 ### Phase 3. Collapse Climb Vetoes Into The Affordance Snapshot When Possible
 
-If host integrations still use `Events.CanStartClimb` or `Events.CanContinueClimb`, prefer moving
-that logic into the existing climb affordance result instead of layering more callback gates on top.
+Completed.
 
-Preferred direction:
+Outcome:
 
-- the climb resolver returns the final `CanStartClimb` and `CanContinueClimb` answers for the frame
-- the motor treats that snapshot as authoritative for climb permission
-- the old callback veto path is removed in the same slice instead of carried as a second path
-
-Important constraint:
-
-- do not force unrelated jump and climb concerns into one shared type yet
+- `ClimbAffordanceSnapshot` now fully owns climb start and continue permission for the frame
+- `NavMotor` no longer layers late climb veto callbacks on top of that snapshot
+- `NavMotorEvents` stays focused on notifications such as climb start, stop, mantle, and slip
 
 ### Phase 4. Introduce A Dedicated Query Provider Only If More Cases Emerge
 
@@ -124,7 +112,7 @@ What not to do:
 After any structured query work lands:
 
 - preserve focused tests for jump affordability through the snapshot path
-- add or update climb tests if climb veto ownership moves fully into the resolver snapshot
+- preserve focused climb tests that pin snapshot-owned start and continue permission
 - update `docs/NAVMOTOR.MD` to distinguish notification hooks from host query inputs
 - link this plan from `docs/feature-work/hardeningPhasePlan.md`
 
@@ -135,7 +123,7 @@ Keep this work narrow and explicit.
 Specifically:
 
 - do not replace action notifications such as `OnStartJump` or `OnStartClimb`
-- do not turn the remaining climb veto cleanup into a heavyweight host interface
+- do not turn future query work into a heavyweight host interface
 - do not duplicate the same permission data in multiple live seams without one clear source of truth
 - do not add per-frame allocations to carry host query data
 - do not keep deprecated callback paths alive once the snapshot path lands
@@ -145,8 +133,7 @@ Specifically:
 Main failure modes to defend against:
 
 - over-engineering a broad query framework for only one or two simple inputs
-- creating conflicting authority between request snapshots, resolver snapshots, and leftover
-  callbacks
+- reintroducing conflicting authority between request snapshots, resolver snapshots, and callbacks
 - making host integration harder by moving too many concerns at once
 - blurring the line between deterministic frame data and imperative event notifications
 
@@ -154,9 +141,8 @@ Main failure modes to defend against:
 
 This item is ready to implement when all of the following are true:
 
-- at least one real host integration would benefit from replacing callback gates with frame-owned
-  query data beyond the jump affordability snapshot that already landed
-- a remaining narrow capability input can be represented cleanly as immutable snapshot data
+- a new real host integration would benefit from another capability query beyond the snapshot seams
+  that already landed
+- that new capability input can be represented cleanly as immutable snapshot data
 - notification events remain separate from behavioral query inputs
-- focused motor tests can pin current jump and climb behavior before the remaining climb ownership
-  moves fully into snapshots
+- focused motor tests can pin behavior before any new query family is introduced

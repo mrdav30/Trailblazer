@@ -24,9 +24,8 @@ These are valid future hardening items, but they should stay demand-driven rathe
   the climb runtime proves the real common shape.
   Tracked here:
   - [movementModeAbstractionPlan.md](./movementModeAbstractionPlan.md)
-4. Continue the structured motor host-query cleanup by collapsing the remaining climb veto callbacks
-  into authoritative frame snapshots when host integrations justify it. Jump affordability already
-  moved to `TrekRequest`, so the remaining value is in separating the last climb permission seams
-  from notification events without growing a monolithic host interface.
+4. If new motor capability-query families emerge later, consider a dedicated structured query seam
+  that remains separate from notification events. The current known cases already route through
+  authoritative frame snapshots, so do not grow a broader motor host interface preemptively.
   Tracked here:
   - [structuredMotorHostQueryPlan.md](./structuredMotorHostQueryPlan.md)

@@ -5,23 +5,11 @@ namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
 /// Defines host interaction hooks for the <see cref="NavMotor"/>.
-/// Remaining query callbacks are climb-specific; the rest are state notifications.
+/// These members are state notifications rather than behavior-gating query seams.
 /// </summary>
 public class NavMotorEvents
 {
 #nullable enable
-
-    /// <summary>
-    /// Optional callback that performs a final host veto before a climb starts
-    /// after the frame's climb affordance snapshot has already been resolved.
-    /// </summary>
-    public Func<bool>? CanStartClimb { get; set; } = null;
-
-    /// <summary>
-    /// Optional callback that performs a final host veto before an active climb continues
-    /// after the frame's climb affordance snapshot has already been resolved.
-    /// </summary>
-    public Func<bool>? CanContinueClimb { get; set; } = null;
 
     /// <summary>
     /// Event triggered when the scout breaches the water surface.

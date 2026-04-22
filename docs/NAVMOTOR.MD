@@ -105,8 +105,8 @@ should use `SyncTraversalState(...)` directly or go through `Navigator.SyncCurre
 Helpers like `Navigator.SetGroundContact(..., updateMotorState: true)` and the lower-level
 `Navigator.SetTrekCondition(updateMotorState: true)` route through that same explicit seam.
 
-`NavMotorEvents` still contains a few climb-specific query callbacks, but jump affordability is not one of them.
-Hosts should answer jump affordability through `TrekRequest`.
+Hosts should answer movement capability queries through frame-owned snapshots such as
+`TrekRequest` and `ClimbAffordanceSnapshot`.
 
 ### 4.1 Climb Affordance And Mantle Validation
 
@@ -115,8 +115,7 @@ Climb integration is host-owned.
 `NavMotor` does not probe climbable geometry itself. Instead:
 
 - `ClimbResolver` may provide climb affordance snapshots through `IClimbAffordanceResolver`
-- the host may still veto climb start or continuation through `Events.CanStartClimb` and
-  `Events.CanContinueClimb`
+- those snapshots authoritatively answer whether climb may start or continue for the frame
 
 Active mantle validation is a separate optional seam.
 
@@ -466,8 +465,7 @@ Owns:
 
 ## 9. Events
 
-`NavMotorEvents` exposes climb-specific query callbacks and state-notification hooks for external
-systems.
+`NavMotorEvents` exposes state-notification hooks for external systems.
 
 Jump and water events:
 

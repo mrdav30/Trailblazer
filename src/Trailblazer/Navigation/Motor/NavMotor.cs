@@ -1353,7 +1353,6 @@ public class NavMotor : IRecordable
         if (ClimbModule.IsClimbing)
         {
             bool canContinue = snapshot.CanContinueClimb
-                && Events.CanContinueClimb?.Invoke() != false
                 && IsCompatibleClimbAffordance(snapshot);
             if (!canContinue)
             {
@@ -1369,8 +1368,7 @@ public class NavMotor : IRecordable
             return;
         }
 
-        bool canStart = snapshot.CanStartClimb
-            && Events.CanStartClimb?.Invoke() != false;
+        bool canStart = snapshot.CanStartClimb;
         if (!canStart)
             return;
 

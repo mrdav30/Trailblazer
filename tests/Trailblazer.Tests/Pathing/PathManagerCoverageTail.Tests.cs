@@ -83,19 +83,19 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridgeDiagnostics_ShouldTrackChangedEvents_Rebuilds_AndIgnoredBounds()
     {
-        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
-        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)), out _);
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort nearGridIndex);
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)), out ushort farGridIndex);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("DiagnosticsNearChart", Vector3d.Zero)).Should().BeTrue();
         PathManagerExternalGridBridge.ResetDiagnostics();
 
         GridEventInfo intersectingChange = new(
-            1,
+            nearGridIndex,
             101,
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
             8);
         GridEventInfo farChange = new(
-            2,
+            farGridIndex,
             202,
             new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)),
             9);
@@ -151,13 +151,13 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridgeDiagnostics_ShouldSkipExactDuplicateIntersectingChangeEvents()
     {
-        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("DuplicateIntersectingGridChart", Vector3d.Zero)).Should().BeTrue();
         PathManagerExternalGridBridge.ResetDiagnostics();
 
         GridEventInfo duplicateChange = new(
-            4,
+            gridIndex,
             404,
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
             11);
@@ -180,18 +180,18 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridgeDiagnostics_ShouldNotSkipGridVersionChanges()
     {
-        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("VersionBumpGridChart", Vector3d.Zero)).Should().BeTrue();
         PathManagerExternalGridBridge.ResetDiagnostics();
 
         GridEventInfo firstChange = new(
-            5,
+            gridIndex,
             505,
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
             12);
         GridEventInfo versionBumpChange = new(
-            5,
+            gridIndex,
             505,
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
             13);
@@ -241,6 +241,85 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         snapshot.TotalChartsSelectedForRebuild.Should().Be(2);
         snapshot.MaxChartsSelectedForSingleEvent.Should().Be(1);
         snapshot.MaxIdenticalEventStreak.Should().Be(1);
+    }
+
+    [Fact]
+    public void ExternalGridBridge_ShouldUseLiveGridTouchesInsteadOfChartBounds_ForChangedEvents()
+    {
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out _);
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)), out ushort rightGridIndex);
+
+        PathManager.Register(CreateSparseChart("SparseBoundsChart", Vector3d.Zero, authoredX: 0, sizeX: 12)).Should().BeTrue();
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("RightTouchChart", new Vector3d(9, 0, 0))).Should().BeTrue();
+        PathManagerExternalGridBridge.ResetDiagnostics();
+
+        GridEventInfo rightGridChange = new(
+            rightGridIndex,
+            222,
+            new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)),
+            1);
+
+        PathManagerExternalGridBridge.HandleGridChanged(rightGridChange);
+
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        snapshot.RebuildPassesExecuted.Should().Be(1);
+        snapshot.TotalChartsSelectedForRebuild.Should().Be(1);
+        snapshot.MaxChartsSelectedForSingleEvent.Should().Be(1);
+    }
+
+    [Fact]
+    public void ExternalGridBridge_ShouldUseAuthoredCellsInsteadOfChartBounds_ForAddedEvents()
+    {
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out _);
+
+        PathManager.Register(CreateSparseChart("SparseAddBoundsChart", Vector3d.Zero, authoredX: 0, sizeX: 12)).Should().BeTrue();
+        PathManagerExternalGridBridge.ResetDiagnostics();
+
+        GridEventInfo rightGridAdd = new(
+            2,
+            333,
+            new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)),
+            1);
+
+        PathManagerExternalGridBridge.HandleGridAdded(rightGridAdd);
+
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        snapshot.RebuildPassesExecuted.Should().Be(0);
+        snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(1);
+        snapshot.TotalChartsSelectedForRebuild.Should().Be(0);
+    }
+
+    [Fact]
+    public void ExternalGridBridge_ShouldUpdateLiveGridTouchesAfterChartCellMutations()
+    {
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out _);
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)), out ushort rightGridIndex);
+
+        NavigationChart chart = CreateSparseChart("MutableGridTouchChart", Vector3d.Zero, authoredX: 0, sizeX: 12);
+        PathManager.Register(chart).Should().BeTrue();
+
+        PathManager.TryUpdateChartCell(chart.Name, new Vector3d(9, 0, 0), NavigationChartCell.Solid).Should().BeTrue();
+        PathManagerExternalGridBridge.ResetDiagnostics();
+
+        GridEventInfo rightGridChange = new(
+            rightGridIndex,
+            444,
+            new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)),
+            1);
+
+        PathManagerExternalGridBridge.HandleGridChanged(rightGridChange);
+        ExternalGridBridgeDiagnosticsSnapshot afterAdd = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        afterAdd.RebuildPassesExecuted.Should().Be(1);
+        afterAdd.TotalChartsSelectedForRebuild.Should().Be(1);
+
+        PathManager.TryUpdateChartCell(chart.Name, new Vector3d(9, 0, 0), NavigationChartCell.Empty).Should().BeTrue();
+        PathManagerExternalGridBridge.ResetDiagnostics();
+
+        PathManagerExternalGridBridge.HandleGridChanged(rightGridChange);
+        ExternalGridBridgeDiagnosticsSnapshot afterRemove = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        afterRemove.RebuildPassesExecuted.Should().Be(0);
+        afterRemove.EventsIgnoredForNoIntersectingCharts.Should().Be(1);
+        afterRemove.TotalChartsSelectedForRebuild.Should().Be(0);
     }
 
     [Fact]
@@ -640,5 +719,12 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             TraversalTransitionType.Jump,
             TraversalTransitionAnchor.Solid(source),
             TraversalTransitionAnchor.Solid(destination));
+    }
+
+    private static NavigationChart CreateSparseChart(string name, Vector3d minBounds, int authoredX, int sizeX)
+    {
+        NavigationChartCell[,,] data = new NavigationChartCell[1, sizeX, 1];
+        data[0, authoredX, 0] = NavigationChartCell.Solid;
+        return NavigationChart.From3D(name, data, minBounds, Fixed64.One);
     }
 }

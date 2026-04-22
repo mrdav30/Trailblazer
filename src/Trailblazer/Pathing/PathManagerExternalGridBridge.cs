@@ -114,8 +114,10 @@ internal static class PathManagerExternalGridBridge
             return;
 
         int selectedChartCount = PathManager.RebuildInitializedChartsAgainstExternalGridBounds(
+            eventInfo.GridIndex,
             eventInfo.BoundsMin,
-            eventInfo.BoundsMax);
+            eventInfo.BoundsMax,
+            useLiveGridTouchIndex: eventKind != ExternalGridEventKind.Added);
         RecordGridRebuildSelection(selectedChartCount);
     }
 

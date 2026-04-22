@@ -79,6 +79,8 @@ public static class PathManager
 
     private static readonly SwiftDictionary<GlobalVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates = new();
 
+    private static readonly SwiftDictionary<ushort, SwiftDictionary<string, int>> _initializedChartTouchCountsByGridIndex = new();
+
     /// <summary>
     /// Lock for managing concurrent access to <c>_navigationChartMap</c> operations.
     /// Ensures thread safety for read/write operations.
@@ -579,6 +581,7 @@ public static class PathManager
                 NavigationChartCell previousEffectiveCell = state.EffectiveCell;
                 state.AddOwner(chart.Name, cell, chart.Priority, chart.RegistrationOrder);
                 ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+                TrackInitializedChartGridTouch(voxel.GridIndex, chart.Name);
             }
 
             foreach (SolidChartPartition part in partitionsToRebind)
@@ -655,6 +658,7 @@ public static class PathManager
                 NavigationChartCell previousEffectiveCell = state.EffectiveCell;
                 state.RemoveOwner(chart.Name);
                 ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+                UntrackInitializedChartGridTouch(voxel.GridIndex, chart.Name);
 
                 if (!state.HasAnyOwners)
                     _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
@@ -691,10 +695,14 @@ public static class PathManager
     #region Pathfinding Utilities
 
     internal static int RebuildInitializedChartsAgainstExternalGridBounds(
+        ushort gridIndex,
         Vector3d boundsMin,
-        Vector3d boundsMax)
+        Vector3d boundsMax,
+        bool useLiveGridTouchIndex)
     {
-        NavigationChart[] initializedCharts = GetInitializedChartsIntersectingBoundsSnapshot(boundsMin, boundsMax);
+        NavigationChart[] initializedCharts = useLiveGridTouchIndex
+            ? GetInitializedChartsTouchingGridSnapshot(gridIndex)
+            : GetInitializedChartsWithAuthoredCellsIntersectingBoundsSnapshot(boundsMin, boundsMax);
         if (initializedCharts.Length == 0)
             return 0;
 
@@ -805,6 +813,88 @@ public static class PathManager
         }
     }
 
+    private static NavigationChart[] GetInitializedChartsTouchingGridSnapshot(ushort gridIndex)
+    {
+        _navigationChartMapLock.EnterReadLock();
+        try
+        {
+            if (_navigationChartMap.Count == 0
+                || !_initializedChartTouchCountsByGridIndex.TryGetValue(gridIndex, out SwiftDictionary<string, int> chartTouches)
+                || chartTouches.Count == 0)
+            {
+                return Array.Empty<NavigationChart>();
+            }
+
+            SwiftList<NavigationChart> initializedCharts = new();
+            foreach (KeyValuePair<string, int> pair in chartTouches)
+            {
+                if (pair.Value <= 0
+                    || !_navigationChartMap.TryGetValue(pair.Key, out NavigationChart chart)
+                    || !chart.IsInitialized)
+                {
+                    continue;
+                }
+
+                initializedCharts.Add(chart);
+            }
+
+            NavigationChart[] snapshot = initializedCharts.ToArray();
+            Array.Sort(snapshot, CompareChartsByRegistrationOrder);
+            return snapshot;
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitReadLock();
+        }
+    }
+
+    private static NavigationChart[] GetInitializedChartsWithAuthoredCellsIntersectingBoundsSnapshot(
+        Vector3d boundsMin,
+        Vector3d boundsMax)
+    {
+        _navigationChartMapLock.EnterReadLock();
+        try
+        {
+            if (_navigationChartMap.Count == 0)
+                return Array.Empty<NavigationChart>();
+
+            SwiftList<NavigationChart> initializedCharts = new();
+            foreach (NavigationChart chart in _navigationChartMap.Values)
+            {
+                if (!chart.IsInitialized
+                    || !DoBoundsOverlap(chart.MinBounds, chart.MaxBounds, boundsMin, boundsMax)
+                    || !ChartHasAuthoredCellInsideBounds(chart, boundsMin, boundsMax))
+                {
+                    continue;
+                }
+
+                initializedCharts.Add(chart);
+            }
+
+            NavigationChart[] snapshot = initializedCharts.ToArray();
+            Array.Sort(snapshot, CompareChartsByRegistrationOrder);
+            return snapshot;
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitReadLock();
+        }
+    }
+
+    private static bool ChartHasAuthoredCellInsideBounds(
+        NavigationChart chart,
+        Vector3d boundsMin,
+        Vector3d boundsMax)
+    {
+        foreach ((Vector3d position, _) in chart.GetAuthoredCells())
+        {
+            if (IsPositionInsideBounds(position, boundsMin, boundsMax))
+                return true;
+        }
+
+        return false;
+    }
+
     private static void ClearInitializedChartLiveStatePreservingRegistration(NavigationChart chart)
     {
         PathGuideFactory.InvalidateCacheFor(chart.Name);
@@ -824,7 +914,10 @@ public static class PathManager
 
                 bool hasLiveVoxel = GlobalGridManager.TryGetGridAndVoxel(pair.Key, out _, out Voxel voxel);
                 if (hasLiveVoxel)
+                {
                     ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+                    UntrackInitializedChartGridTouch(voxel.GridIndex, chart.Name);
+                }
 
                 if (!state.HasAnyOwners
                     || !hasLiveVoxel)
@@ -858,6 +951,7 @@ public static class PathManager
         }
 
         _resolvedChartVoxelStates.Clear();
+        _initializedChartTouchCountsByGridIndex.Clear();
         _activeAuthoredGasCellCount = 0;
         _activeAuthoredLiquidCellCount = 0;
     }
@@ -874,6 +968,20 @@ public static class PathManager
             && firstMax.y >= secondMin.y
             && firstMin.z <= secondMax.z
             && firstMax.z >= secondMin.z;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsPositionInsideBounds(
+        Vector3d position,
+        Vector3d boundsMin,
+        Vector3d boundsMax)
+    {
+        return position.x >= boundsMin.x
+            && position.x <= boundsMax.x
+            && position.y >= boundsMin.y
+            && position.y <= boundsMax.y
+            && position.z >= boundsMin.z
+            && position.z <= boundsMax.z;
     }
 
     private static void RemoveLivePathingPartitions(Voxel voxel)
@@ -894,6 +1002,51 @@ public static class PathManager
     private static int CompareChartsByRegistrationOrder(NavigationChart left, NavigationChart right)
     {
         return left.RegistrationOrder.CompareTo(right.RegistrationOrder);
+    }
+
+    private static void TrackInitializedChartGridTouch(ushort gridIndex, string chartName)
+    {
+        if (!_initializedChartTouchCountsByGridIndex.TryGetValue(gridIndex, out SwiftDictionary<string, int> chartTouches))
+        {
+            chartTouches = new SwiftDictionary<string, int>(4, StringComparer.Ordinal);
+            _initializedChartTouchCountsByGridIndex[gridIndex] = chartTouches;
+        }
+
+        chartTouches.TryGetValue(chartName, out int touchCount);
+        chartTouches[chartName] = touchCount + 1;
+    }
+
+    private static void UntrackInitializedChartGridTouch(ushort gridIndex, string chartName)
+    {
+        if (!_initializedChartTouchCountsByGridIndex.TryGetValue(gridIndex, out SwiftDictionary<string, int> chartTouches)
+            || !chartTouches.TryGetValue(chartName, out int touchCount))
+        {
+            return;
+        }
+
+        if (touchCount <= 1)
+            chartTouches.Remove(chartName);
+        else
+            chartTouches[chartName] = touchCount - 1;
+
+        if (chartTouches.Count == 0)
+            _initializedChartTouchCountsByGridIndex.Remove(gridIndex);
+    }
+
+    private static void TrackInitializedChartGridTouchDelta(
+        ushort gridIndex,
+        string chartName,
+        NavigationChartCell previousCell,
+        NavigationChartCell currentCell)
+    {
+        if (previousCell.HasTraversalData == currentCell.HasTraversalData)
+            return;
+
+        if (previousCell.HasTraversalData)
+            UntrackInitializedChartGridTouch(gridIndex, chartName);
+
+        if (currentCell.HasTraversalData)
+            TrackInitializedChartGridTouch(gridIndex, chartName);
     }
 
     private static readonly (int Dx, int Dy, int Dz)[] ManagedGeneratedNeighborOffsets =
@@ -1586,7 +1739,7 @@ public static class PathManager
         SwiftHashSet<string> invalidatedChartKeys,
         SwiftHashSet<string> managedChartsToRefresh)
     {
-        if (!chart.TrySetCell(x, y, z, cell, out _))
+        if (!chart.TrySetCell(x, y, z, cell, out NavigationChartCell previousCell))
             return false;
 
         TrackManagedChartRefresh(chart, managedChartsToRefresh);
@@ -1609,6 +1762,7 @@ public static class PathManager
         }
 
         TryUpdateResolvedVoxelStateForChartCell(chart, cell, voxel.GlobalIndex, ref state);
+        TrackInitializedChartGridTouchDelta(voxel.GridIndex, chart.Name, previousCell, cell);
 
         ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
         CollectEffectiveStateInvalidations(

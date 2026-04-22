@@ -1913,6 +1913,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(sourceVoxel.TryGetPartition<SolidChartPartition>(out _));
 
         Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+        FlushExternalGridBridge();
 
         Assert.True(PathManager.IsChartRegistered(sourceChart.Name));
         Assert.True(PathManager.IsChartRegistered(destinationChart.Name));
@@ -1923,6 +1924,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
 
         Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        FlushExternalGridBridge();
 
         Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
         Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
@@ -1961,6 +1963,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.Equal(TraversalTransitionType.SwimEntry, beforeRemove[0].Type);
 
         Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+        FlushExternalGridBridge();
 
         Assert.True(PathManager.IsChartRegistered(generatedChart.Name));
         Assert.True(TraversalTransitionRegistry.IsRegistered(generatedTransitionId));
@@ -1968,6 +1971,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.Empty(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
 
         Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        FlushExternalGridBridge();
 
         TraversalTransition[] afterAdd = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
         Assert.Single(afterAdd);
@@ -1996,6 +2000,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(rightVoxel.TryGetPartition<SolidChartPartition>(out _));
 
         GlobalGridManager.IncrementGridVersion(rightGridIndex, false);
+        FlushExternalGridBridge();
 
         Assert.True(leftChart.IsInitialized);
         Assert.True(rightChart.IsInitialized);
@@ -2025,6 +2030,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
 
         GlobalGridManager.IncrementGridVersion(farGridIndex, false);
+        FlushExternalGridBridge();
 
         Assert.True(leftChart.IsInitialized);
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
@@ -2045,6 +2051,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         GlobalGridManager.IncrementGridVersion(gridIndex, false);
+        FlushExternalGridBridge();
 
         Assert.False(deferredChart.IsInitialized);
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
@@ -2067,12 +2074,14 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(chart.IsInitialized);
 
         Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+        FlushExternalGridBridge();
         Assert.True(chart.IsInitialized);
         Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
 
         Assert.True(PathManager.TryUpdateChartCell(chart.Name, 0, 0, 0, NavigationChartCell.Liquid));
 
         Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        FlushExternalGridBridge();
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell restoredCell));
         Assert.False(restoredCell.HasSolid);
         Assert.True(restoredCell.SupportsMedium(TraversalMedium.Liquid));
@@ -2194,5 +2203,10 @@ public class PathingNavigationMapTests : IDisposable
         NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
         data[1, 1, 1] = new NavigationChartCell(traversalMedia);
         return NavigationChart.From3D(chartName, data, minBounds, Fixed64.One, priority);
+    }
+
+    private static void FlushExternalGridBridge()
+    {
+        PathManagerExternalGridBridge.FlushPendingGridChanges();
     }
 }

@@ -266,8 +266,14 @@ Current safety rule:
 Current behavior:
 
 - external `GlobalGridManager.Reset()` is treated as simulation teardown and calls `PathManager.Reset()`
-- external grid add, remove, and change notifications preserve registered charts and rebuild only
-  the initialized charts whose authored bounds overlap the grid event payload
+- external grid add, remove, and change notifications are queued in the bridge and coalesced until
+  the next `PathManager.Tick()`
+- the queued burst expands into one final chart set and each selected chart is rebuilt at most once
+  for that tick
+- changed and removed grids prefer the live grid-touch index so rebuild selection stays tied to
+  charts that actually materialized voxels on that grid
+- added grids fall back to authored-cell intersection against the queued bounds because a newly
+  added grid has no live chart-touch state yet
 - rebuild order follows chart registration order for deterministic overlap restoration
 - managed manual transitions get a full reevaluation pass after rebuild
 - managed generated transitions are suppressed before rebuild and then refreshed against the rebuilt
@@ -275,6 +281,8 @@ Current behavior:
 
 Important nuance:
 
+- this is a deferred maintenance path, so hosts should apply external grid churn before the fixed
+  simulation step when they expect Trailblazer to observe the new live state that same frame
 - a chart can remain registered and logically initialized even when no active grid currently
   materializes any of its authored voxels
 - in that state the chart simply contributes no live partitions and its managed transitions stay

@@ -14,6 +14,10 @@ internal static class PathManagerExternalGridBridge
 {
     private static readonly SwiftDictionary<ushort, ExternalGridEventObservation> _eventObservationsByGridIndex = new();
 
+    private static readonly SwiftDictionary<ushort, PendingExternalGridChange> _pendingGridChangesByGridIndex = new();
+
+    private static readonly SwiftList<ushort> _pendingGridChangeOrder = new();
+
     private static int _gridEventsReceived;
 
     private static int _gridAddEventsReceived;
@@ -72,6 +76,8 @@ internal static class PathManagerExternalGridBridge
     internal static void ResetDiagnostics()
     {
         _eventObservationsByGridIndex.Clear();
+        _pendingGridChangesByGridIndex.Clear();
+        _pendingGridChangeOrder.Clear();
         _gridEventsReceived = 0;
         _gridAddEventsReceived = 0;
         _gridRemoveEventsReceived = 0;
@@ -103,6 +109,46 @@ internal static class PathManagerExternalGridBridge
         HandleGridChange(eventInfo, ExternalGridEventKind.Changed);
     }
 
+    internal static void FlushPendingGridChanges()
+    {
+        if (_pendingGridChangeOrder.Count == 0)
+            return;
+
+        int requestCount = 0;
+        for (int i = 0; i < _pendingGridChangeOrder.Count; i++)
+        {
+            ushort gridIndex = _pendingGridChangeOrder[i];
+            if (_pendingGridChangesByGridIndex.TryGetValue(gridIndex, out PendingExternalGridChange pendingChange)
+                && pendingChange.HasSelectionCriteria)
+            {
+                requestCount++;
+            }
+        }
+
+        if (requestCount == 0)
+        {
+            ClearPendingGridChanges();
+            return;
+        }
+
+        ExternalGridChartRebuildRequest[] rebuildRequests = new ExternalGridChartRebuildRequest[requestCount];
+        int requestIndex = 0;
+        for (int i = 0; i < _pendingGridChangeOrder.Count; i++)
+        {
+            ushort gridIndex = _pendingGridChangeOrder[i];
+            if (!_pendingGridChangesByGridIndex.TryGetValue(gridIndex, out PendingExternalGridChange pendingChange)
+                || !pendingChange.HasSelectionCriteria)
+            {
+                continue;
+            }
+
+            rebuildRequests[requestIndex++] = pendingChange.ToRebuildRequest(gridIndex);
+        }
+
+        ClearPendingGridChanges();
+        RecordGridRebuildSelection(PathManager.RebuildInitializedChartsAgainstExternalGridRequests(rebuildRequests));
+    }
+
     private static void HandleGridReset()
     {
         PathManager.Reset();
@@ -113,12 +159,7 @@ internal static class PathManagerExternalGridBridge
         if (RecordGridEvent(eventInfo, eventKind))
             return;
 
-        int selectedChartCount = PathManager.RebuildInitializedChartsAgainstExternalGridBounds(
-            eventInfo.GridIndex,
-            eventInfo.BoundsMin,
-            eventInfo.BoundsMax,
-            useLiveGridTouchIndex: eventKind != ExternalGridEventKind.Added);
-        RecordGridRebuildSelection(selectedChartCount);
+        QueuePendingGridChange(eventInfo, eventKind);
     }
 
     private static bool RecordGridEvent(GridEventInfo eventInfo, ExternalGridEventKind eventKind)
@@ -203,6 +244,128 @@ internal static class PathManagerExternalGridBridge
             _maxChartsSelectedForSingleGridEvent = chartCount;
     }
 
+    private static void QueuePendingGridChange(GridEventInfo eventInfo, ExternalGridEventKind eventKind)
+    {
+        ushort gridIndex = eventInfo.GridIndex;
+        if (_pendingGridChangesByGridIndex.TryGetValue(gridIndex, out PendingExternalGridChange pendingChange))
+        {
+            _pendingGridChangesByGridIndex[gridIndex] = MergePendingGridChange(pendingChange, eventInfo, eventKind);
+            return;
+        }
+
+        _pendingGridChangesByGridIndex[gridIndex] = CreatePendingGridChange(eventInfo, eventKind);
+        _pendingGridChangeOrder.Add(gridIndex);
+    }
+
+    private static PendingExternalGridChange CreatePendingGridChange(
+        GridEventInfo eventInfo,
+        ExternalGridEventKind eventKind)
+    {
+        return new PendingExternalGridChange(
+            eventInfo.GridSpawnToken,
+            eventInfo.GridVersion,
+            eventInfo.BoundsMin,
+            eventInfo.BoundsMax,
+            requiresLiveGridTouchSelection: eventKind != ExternalGridEventKind.Added,
+            requiresAuthoredCellBoundsSelection: eventKind == ExternalGridEventKind.Added);
+    }
+
+    private static PendingExternalGridChange MergePendingGridChange(
+        PendingExternalGridChange pendingChange,
+        GridEventInfo eventInfo,
+        ExternalGridEventKind eventKind)
+    {
+        if (pendingChange.GridSpawnToken != eventInfo.GridSpawnToken)
+            return MergePendingGridChangeAcrossSpawnTokens(pendingChange, eventInfo, eventKind);
+
+        return MergePendingGridChangeForSameSpawnToken(pendingChange, eventInfo, eventKind);
+    }
+
+    private static PendingExternalGridChange MergePendingGridChangeAcrossSpawnTokens(
+        PendingExternalGridChange pendingChange,
+        GridEventInfo eventInfo,
+        ExternalGridEventKind eventKind)
+    {
+        return new PendingExternalGridChange(
+            eventInfo.GridSpawnToken,
+            eventInfo.GridVersion,
+            eventInfo.BoundsMin,
+            eventInfo.BoundsMax,
+            requiresLiveGridTouchSelection: pendingChange.RequiresLiveGridTouchSelection,
+            requiresAuthoredCellBoundsSelection: eventKind != ExternalGridEventKind.Removed);
+    }
+
+    private static PendingExternalGridChange MergePendingGridChangeForSameSpawnToken(
+        PendingExternalGridChange pendingChange,
+        GridEventInfo eventInfo,
+        ExternalGridEventKind eventKind)
+    {
+        bool requiresLiveGridTouchSelection = pendingChange.RequiresLiveGridTouchSelection;
+        bool requiresAuthoredCellBoundsSelection = pendingChange.RequiresAuthoredCellBoundsSelection;
+
+        switch (eventKind)
+        {
+            case ExternalGridEventKind.Added:
+                requiresAuthoredCellBoundsSelection = true;
+                break;
+
+            case ExternalGridEventKind.Changed:
+                if (!requiresAuthoredCellBoundsSelection)
+                    requiresLiveGridTouchSelection = true;
+
+                break;
+
+            case ExternalGridEventKind.Removed:
+                if (requiresAuthoredCellBoundsSelection && !requiresLiveGridTouchSelection)
+                    requiresAuthoredCellBoundsSelection = false;
+                else
+                {
+                    requiresLiveGridTouchSelection = true;
+                    requiresAuthoredCellBoundsSelection = false;
+                }
+
+                break;
+        }
+
+        Vector3d boundsMin = eventInfo.BoundsMin;
+        Vector3d boundsMax = eventInfo.BoundsMax;
+        if (requiresAuthoredCellBoundsSelection)
+        {
+            boundsMin = MinBounds(pendingChange.BoundsMin, eventInfo.BoundsMin);
+            boundsMax = MaxBounds(pendingChange.BoundsMax, eventInfo.BoundsMax);
+        }
+
+        return new PendingExternalGridChange(
+            eventInfo.GridSpawnToken,
+            eventInfo.GridVersion,
+            boundsMin,
+            boundsMax,
+            requiresLiveGridTouchSelection,
+            requiresAuthoredCellBoundsSelection);
+    }
+
+    private static void ClearPendingGridChanges()
+    {
+        _pendingGridChangesByGridIndex.Clear();
+        _pendingGridChangeOrder.Clear();
+    }
+
+    private static Vector3d MinBounds(Vector3d left, Vector3d right)
+    {
+        return new Vector3d(
+            left.x <= right.x ? left.x : right.x,
+            left.y <= right.y ? left.y : right.y,
+            left.z <= right.z ? left.z : right.z);
+    }
+
+    private static Vector3d MaxBounds(Vector3d left, Vector3d right)
+    {
+        return new Vector3d(
+            left.x >= right.x ? left.x : right.x,
+            left.y >= right.y ? left.y : right.y,
+            left.z >= right.z ? left.z : right.z);
+    }
+
     private enum ExternalGridEventKind : byte
     {
         Added,
@@ -264,5 +427,48 @@ internal static class PathManagerExternalGridBridge
         public ExternalGridEventSignature Signature { get; }
 
         public int IdenticalEventStreak { get; }
+    }
+
+    private readonly struct PendingExternalGridChange
+    {
+        public PendingExternalGridChange(
+            int gridSpawnToken,
+            uint gridVersion,
+            Vector3d boundsMin,
+            Vector3d boundsMax,
+            bool requiresLiveGridTouchSelection,
+            bool requiresAuthoredCellBoundsSelection)
+        {
+            GridSpawnToken = gridSpawnToken;
+            GridVersion = gridVersion;
+            BoundsMin = boundsMin;
+            BoundsMax = boundsMax;
+            RequiresLiveGridTouchSelection = requiresLiveGridTouchSelection;
+            RequiresAuthoredCellBoundsSelection = requiresAuthoredCellBoundsSelection;
+        }
+
+        public int GridSpawnToken { get; }
+
+        public uint GridVersion { get; }
+
+        public Vector3d BoundsMin { get; }
+
+        public Vector3d BoundsMax { get; }
+
+        public bool RequiresLiveGridTouchSelection { get; }
+
+        public bool RequiresAuthoredCellBoundsSelection { get; }
+
+        public bool HasSelectionCriteria => RequiresLiveGridTouchSelection || RequiresAuthoredCellBoundsSelection;
+
+        public ExternalGridChartRebuildRequest ToRebuildRequest(ushort gridIndex)
+        {
+            return new ExternalGridChartRebuildRequest(
+                gridIndex,
+                BoundsMin,
+                BoundsMax,
+                RequiresLiveGridTouchSelection,
+                RequiresAuthoredCellBoundsSelection);
+        }
     }
 }

@@ -107,6 +107,7 @@ public static class PathManager
 
     internal static void Tick()
     {
+        PathManagerExternalGridBridge.FlushPendingGridChanges();
         PathGuideFactory.CullExpiredGuides(TrailblazerManager.FrameCount);
     }
 
@@ -558,6 +559,8 @@ public static class PathManager
             return;
         }
 
+        PathManagerExternalGridBridge.FlushPendingGridChanges();
+
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> affectedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
         SwiftHashSet<GlobalVoxelIndex> touchedVoxelIndices = SwiftHashSetPool<GlobalVoxelIndex>.Shared.Rent();
@@ -694,20 +697,37 @@ public static class PathManager
 
     #region Pathfinding Utilities
 
+    internal static int RebuildInitializedChartsAgainstExternalGridRequests(
+        ExternalGridChartRebuildRequest[] rebuildRequests)
+    {
+        if (rebuildRequests == null || rebuildRequests.Length == 0)
+            return 0;
+
+        NavigationChart[] initializedCharts = GetInitializedChartsAffectedByExternalGridRequestsSnapshot(rebuildRequests);
+        if (initializedCharts.Length == 0)
+            return 0;
+
+        RebuildInitializedChartsAgainstCurrentGrids(initializedCharts);
+        return initializedCharts.Length;
+    }
+
     internal static int RebuildInitializedChartsAgainstExternalGridBounds(
         ushort gridIndex,
         Vector3d boundsMin,
         Vector3d boundsMax,
         bool useLiveGridTouchIndex)
     {
-        NavigationChart[] initializedCharts = useLiveGridTouchIndex
-            ? GetInitializedChartsTouchingGridSnapshot(gridIndex)
-            : GetInitializedChartsWithAuthoredCellsIntersectingBoundsSnapshot(boundsMin, boundsMax);
-        if (initializedCharts.Length == 0)
-            return 0;
+        ExternalGridChartRebuildRequest[] rebuildRequests =
+        {
+            new(
+                gridIndex,
+                boundsMin,
+                boundsMax,
+                includeLiveGridTouches: useLiveGridTouchIndex,
+                includeAuthoredCellsInBounds: !useLiveGridTouchIndex)
+        };
 
-        RebuildInitializedChartsAgainstCurrentGrids(initializedCharts);
-        return initializedCharts.Length;
+        return RebuildInitializedChartsAgainstExternalGridRequests(rebuildRequests);
     }
 
     private static void RebuildInitializedChartsAgainstCurrentGrids(NavigationChart[] chartsToRebuild)
@@ -818,29 +838,12 @@ public static class PathManager
         _navigationChartMapLock.EnterReadLock();
         try
         {
-            if (_navigationChartMap.Count == 0
-                || !_initializedChartTouchCountsByGridIndex.TryGetValue(gridIndex, out SwiftDictionary<string, int> chartTouches)
-                || chartTouches.Count == 0)
-            {
+            if (_navigationChartMap.Count == 0)
                 return Array.Empty<NavigationChart>();
-            }
 
-            SwiftList<NavigationChart> initializedCharts = new();
-            foreach (KeyValuePair<string, int> pair in chartTouches)
-            {
-                if (pair.Value <= 0
-                    || !_navigationChartMap.TryGetValue(pair.Key, out NavigationChart chart)
-                    || !chart.IsInitialized)
-                {
-                    continue;
-                }
-
-                initializedCharts.Add(chart);
-            }
-
-            NavigationChart[] snapshot = initializedCharts.ToArray();
-            Array.Sort(snapshot, CompareChartsByRegistrationOrder);
-            return snapshot;
+            SwiftDictionary<string, NavigationChart> selectedCharts = new(4, StringComparer.Ordinal);
+            AddInitializedChartsTouchingGrid_NoLock(gridIndex, selectedCharts);
+            return BuildInitializedChartSelectionSnapshot_NoLock(selectedCharts);
         }
         finally
         {
@@ -858,27 +861,106 @@ public static class PathManager
             if (_navigationChartMap.Count == 0)
                 return Array.Empty<NavigationChart>();
 
-            SwiftList<NavigationChart> initializedCharts = new();
-            foreach (NavigationChart chart in _navigationChartMap.Values)
-            {
-                if (!chart.IsInitialized
-                    || !DoBoundsOverlap(chart.MinBounds, chart.MaxBounds, boundsMin, boundsMax)
-                    || !ChartHasAuthoredCellInsideBounds(chart, boundsMin, boundsMax))
-                {
-                    continue;
-                }
-
-                initializedCharts.Add(chart);
-            }
-
-            NavigationChart[] snapshot = initializedCharts.ToArray();
-            Array.Sort(snapshot, CompareChartsByRegistrationOrder);
-            return snapshot;
+            SwiftDictionary<string, NavigationChart> selectedCharts = new(4, StringComparer.Ordinal);
+            AddInitializedChartsWithAuthoredCellsIntersectingBounds_NoLock(boundsMin, boundsMax, selectedCharts);
+            return BuildInitializedChartSelectionSnapshot_NoLock(selectedCharts);
         }
         finally
         {
             _navigationChartMapLock.ExitReadLock();
         }
+    }
+
+    private static NavigationChart[] GetInitializedChartsAffectedByExternalGridRequestsSnapshot(
+        ExternalGridChartRebuildRequest[] rebuildRequests)
+    {
+        _navigationChartMapLock.EnterReadLock();
+        try
+        {
+            if (_navigationChartMap.Count == 0)
+                return Array.Empty<NavigationChart>();
+
+            SwiftDictionary<string, NavigationChart> selectedCharts = new(8, StringComparer.Ordinal);
+            for (int i = 0; i < rebuildRequests.Length; i++)
+            {
+                ExternalGridChartRebuildRequest rebuildRequest = rebuildRequests[i];
+                if (!rebuildRequest.HasSelectionCriteria)
+                    continue;
+
+                if (rebuildRequest.IncludeLiveGridTouches)
+                    AddInitializedChartsTouchingGrid_NoLock(rebuildRequest.GridIndex, selectedCharts);
+
+                if (rebuildRequest.IncludeAuthoredCellsInBounds)
+                {
+                    AddInitializedChartsWithAuthoredCellsIntersectingBounds_NoLock(
+                        rebuildRequest.BoundsMin,
+                        rebuildRequest.BoundsMax,
+                        selectedCharts);
+                }
+            }
+
+            return BuildInitializedChartSelectionSnapshot_NoLock(selectedCharts);
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitReadLock();
+        }
+    }
+
+    private static void AddInitializedChartsTouchingGrid_NoLock(
+        ushort gridIndex,
+        SwiftDictionary<string, NavigationChart> selectedCharts)
+    {
+        if (!_initializedChartTouchCountsByGridIndex.TryGetValue(gridIndex, out SwiftDictionary<string, int> chartTouches)
+            || chartTouches.Count == 0)
+        {
+            return;
+        }
+
+        foreach (KeyValuePair<string, int> pair in chartTouches)
+        {
+            if (pair.Value <= 0
+                || !_navigationChartMap.TryGetValue(pair.Key, out NavigationChart chart)
+                || !chart.IsInitialized)
+            {
+                continue;
+            }
+
+            selectedCharts[chart.Name] = chart;
+        }
+    }
+
+    private static void AddInitializedChartsWithAuthoredCellsIntersectingBounds_NoLock(
+        Vector3d boundsMin,
+        Vector3d boundsMax,
+        SwiftDictionary<string, NavigationChart> selectedCharts)
+    {
+        foreach (NavigationChart chart in _navigationChartMap.Values)
+        {
+            if (!chart.IsInitialized
+                || !DoBoundsOverlap(chart.MinBounds, chart.MaxBounds, boundsMin, boundsMax)
+                || !ChartHasAuthoredCellInsideBounds(chart, boundsMin, boundsMax))
+            {
+                continue;
+            }
+
+            selectedCharts[chart.Name] = chart;
+        }
+    }
+
+    private static NavigationChart[] BuildInitializedChartSelectionSnapshot_NoLock(
+        SwiftDictionary<string, NavigationChart> selectedCharts)
+    {
+        if (selectedCharts.Count == 0)
+            return Array.Empty<NavigationChart>();
+
+        NavigationChart[] snapshot = new NavigationChart[selectedCharts.Count];
+        int index = 0;
+        foreach (NavigationChart chart in selectedCharts.Values)
+            snapshot[index++] = chart;
+
+        Array.Sort(snapshot, CompareChartsByRegistrationOrder);
+        return snapshot;
     }
 
     private static bool ChartHasAuthoredCellInsideBounds(
@@ -1353,8 +1435,7 @@ public static class PathManager
         int secondY,
         int secondZ)
     {
-        TraversalTransition[] desiredTransitions = GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
-            chart,
+        string[] potentialTransitionIds = GeneratedTraversalTransitionBuilder.GetPotentialTransitionIdsForPair(
             state.TransitionIdPrefix,
             firstX,
             firstY,
@@ -1363,7 +1444,39 @@ public static class PathManager
             secondY,
             secondZ);
 
-        string[] potentialTransitionIds = GeneratedTraversalTransitionBuilder.GetPotentialTransitionIdsForPair(
+        if (!CanResolveManagedGeneratedPairAnchors(chart, firstX, firstY, firstZ, secondX, secondY, secondZ))
+        {
+            if (GeneratedTraversalTransitionBuilder.CanBuildTransitionsForPairFromChartData(
+                chart,
+                firstX,
+                firstY,
+                firstZ,
+                secondX,
+                secondY,
+                secondZ))
+            {
+                TraversalTransitionRegistry.SetManagedTransitionsSuppressed(
+                    potentialTransitionIds,
+                    suppressed: true);
+            }
+            else
+            {
+                string[] obsoleteSuppressedTransitionIds = GetObsoleteManagedGeneratedTransitionIds(
+                    state,
+                    potentialTransitionIds,
+                    Array.Empty<TraversalTransition>());
+                if (obsoleteSuppressedTransitionIds.Length > 0)
+                {
+                    TraversalTransitionRegistry.UnregisterRange(obsoleteSuppressedTransitionIds);
+                    RemoveManagedGeneratedTransitionIds(chartName, obsoleteSuppressedTransitionIds);
+                }
+            }
+
+            return;
+        }
+
+        TraversalTransition[] desiredTransitions = GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
+            chart,
             state.TransitionIdPrefix,
             firstX,
             firstY,
@@ -1552,6 +1665,31 @@ public static class PathManager
         SwiftHashSet<string> activeTransitionIds,
         SwiftList<TraversalTransition> missingTransitions)
     {
+        if (!CanResolveManagedGeneratedPairAnchors(chart, firstX, firstY, firstZ, secondX, secondY, secondZ))
+        {
+            if (GeneratedTraversalTransitionBuilder.CanBuildTransitionsForPairFromChartData(
+                chart,
+                firstX,
+                firstY,
+                firstZ,
+                secondX,
+                secondY,
+                secondZ))
+            {
+                AddPotentialManagedGeneratedTransitionIds(
+                    state.TransitionIdPrefix,
+                    firstX,
+                    firstY,
+                    firstZ,
+                    secondX,
+                    secondY,
+                    secondZ,
+                    desiredTransitionIds);
+            }
+
+            return;
+        }
+
         TraversalTransition[] pairTransitions = GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
             chart,
             state.TransitionIdPrefix,
@@ -1583,6 +1721,42 @@ public static class PathManager
             if (!state.TransitionIds.Contains(transition.Id))
                 missingTransitions.Add(transition);
         }
+    }
+
+    private static bool CanResolveManagedGeneratedPairAnchors(
+        NavigationChart chart,
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ)
+    {
+        return GlobalGridManager.TryGetVoxel(chart.GetWorldPosition(firstX, firstY, firstZ), out _)
+            && GlobalGridManager.TryGetVoxel(chart.GetWorldPosition(secondX, secondY, secondZ), out _);
+    }
+
+    private static void AddPotentialManagedGeneratedTransitionIds(
+        string transitionIdPrefix,
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ,
+        SwiftHashSet<string> desiredTransitionIds)
+    {
+        string[] potentialTransitionIds = GeneratedTraversalTransitionBuilder.GetPotentialTransitionIdsForPair(
+            transitionIdPrefix,
+            firstX,
+            firstY,
+            firstZ,
+            secondX,
+            secondY,
+            secondZ);
+
+        for (int i = 0; i < potentialTransitionIds.Length; i++)
+            desiredTransitionIds.Add(potentialTransitionIds[i]);
     }
 
     private static bool ShouldCollectManagedGeneratedPair(

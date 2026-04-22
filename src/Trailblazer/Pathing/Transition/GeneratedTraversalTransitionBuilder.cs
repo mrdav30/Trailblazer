@@ -148,6 +148,27 @@ internal static class GeneratedTraversalTransitionBuilder
         };
     }
 
+    internal static bool CanBuildTransitionsForPairFromChartData(
+        NavigationChart chart,
+        int firstX,
+        int firstY,
+        int firstZ,
+        int secondX,
+        int secondY,
+        int secondZ)
+    {
+        if (!chart.IsInBounds(firstX, firstY, firstZ)
+            || !chart.IsInBounds(secondX, secondY, secondZ))
+        {
+            return false;
+        }
+
+        NavigationChartCell firstCell = chart.GetCell(firstX, firstY, firstZ);
+        NavigationChartCell secondCell = chart.GetCell(secondX, secondY, secondZ);
+        return HasSingleBoundaryCandidate(firstCell.GeneratedTransitionMedia, secondCell.GeneratedTransitionMedia)
+            || HasGeneratedClimbTransitionsForPair(firstCell, secondCell);
+    }
+
     private static void AddGeneratedClimbTransitionsForPair(
         SwiftList<TraversalTransition> transitions,
         NavigationChart chart,
@@ -262,6 +283,20 @@ internal static class GeneratedTraversalTransitionBuilder
 
     private static bool IsGeneratedTransitionCandidate(NavigationChartCell cell) =>
         cell.CanGenerateTransition || IsClimbSurface(cell);
+
+    private static bool HasGeneratedClimbTransitionsForPair(
+        NavigationChartCell firstCell,
+        NavigationChartCell secondCell)
+    {
+        bool firstIsClimbSurface = IsClimbSurface(firstCell);
+        bool secondIsClimbSurface = IsClimbSurface(secondCell);
+        if (!firstIsClimbSurface && !secondIsClimbSurface)
+            return false;
+
+        return (firstIsClimbSurface && secondIsClimbSurface)
+            || (firstIsClimbSurface && IsClimbTransitionSeam(firstCell) && secondCell.HasSolid)
+            || (secondIsClimbSurface && IsClimbTransitionSeam(secondCell) && firstCell.HasSolid);
+    }
 
     private static bool ShouldBuildCandidatePair(
         int firstX,
@@ -408,6 +443,38 @@ internal static class GeneratedTraversalTransitionBuilder
             ref chartPosition,
             ref volumePosition,
             ref volumeMedium);
+
+        return candidateCount == 1;
+    }
+
+    private static bool HasSingleBoundaryCandidate(
+        TraversalMedia firstTransitionMedia,
+        TraversalMedia secondTransitionMedia)
+    {
+        int candidateCount = 0;
+        if (((firstTransitionMedia & TraversalMedia.Solid) != 0)
+            && ((secondTransitionMedia & TraversalMedia.Gas) != 0))
+        {
+            candidateCount++;
+        }
+
+        if (((secondTransitionMedia & TraversalMedia.Solid) != 0)
+            && ((firstTransitionMedia & TraversalMedia.Gas) != 0))
+        {
+            candidateCount++;
+        }
+
+        if (((firstTransitionMedia & TraversalMedia.Solid) != 0)
+            && ((secondTransitionMedia & TraversalMedia.Liquid) != 0))
+        {
+            candidateCount++;
+        }
+
+        if (((secondTransitionMedia & TraversalMedia.Solid) != 0)
+            && ((firstTransitionMedia & TraversalMedia.Liquid) != 0))
+        {
+            candidateCount++;
+        }
 
         return candidateCount == 1;
     }

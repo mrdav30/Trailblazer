@@ -103,7 +103,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         PathManagerExternalGridBridge.HandleGridChanged(intersectingChange);
         PathManagerExternalGridBridge.HandleGridChanged(farChange);
 
-        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = FlushExternalGridBridge();
         snapshot.TotalGridEventsReceived.Should().Be(2);
         snapshot.AddedEventsReceived.Should().Be(0);
         snapshot.RemovedEventsReceived.Should().Be(0);
@@ -111,7 +111,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         snapshot.DistinctGridSlotsObserved.Should().Be(2);
         snapshot.DuplicateEventSignaturesObserved.Should().Be(0);
         snapshot.RebuildPassesExecuted.Should().Be(1);
-        snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(1);
+        snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(0);
         snapshot.TotalChartsSelectedForRebuild.Should().Be(1);
         snapshot.MaxChartsSelectedForSingleEvent.Should().Be(1);
         snapshot.MaxIdenticalEventStreak.Should().Be(1);
@@ -131,7 +131,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         PathManagerExternalGridBridge.HandleGridAdded(duplicateAdd);
         PathManagerExternalGridBridge.HandleGridAdded(duplicateAdd);
 
-        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = FlushExternalGridBridge();
         snapshot.TotalGridEventsReceived.Should().Be(2);
         snapshot.AddedEventsReceived.Should().Be(2);
         snapshot.RemovedEventsReceived.Should().Be(0);
@@ -165,7 +165,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         PathManagerExternalGridBridge.HandleGridChanged(duplicateChange);
         PathManagerExternalGridBridge.HandleGridChanged(duplicateChange);
 
-        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = FlushExternalGridBridge();
         snapshot.TotalGridEventsReceived.Should().Be(2);
         snapshot.ChangedEventsReceived.Should().Be(2);
         snapshot.DuplicateEventSignaturesObserved.Should().Be(1);
@@ -199,13 +199,16 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         PathManagerExternalGridBridge.HandleGridChanged(firstChange);
         PathManagerExternalGridBridge.HandleGridChanged(versionBumpChange);
 
-        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot preFlush = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        preFlush.RebuildPassesExecuted.Should().Be(0);
+
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = FlushExternalGridBridge();
         snapshot.TotalGridEventsReceived.Should().Be(2);
         snapshot.ChangedEventsReceived.Should().Be(2);
         snapshot.DuplicateEventSignaturesObserved.Should().Be(0);
-        snapshot.RebuildPassesExecuted.Should().Be(2);
+        snapshot.RebuildPassesExecuted.Should().Be(1);
         snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(0);
-        snapshot.TotalChartsSelectedForRebuild.Should().Be(2);
+        snapshot.TotalChartsSelectedForRebuild.Should().Be(1);
         snapshot.MaxChartsSelectedForSingleEvent.Should().Be(1);
         snapshot.MaxIdenticalEventStreak.Should().Be(1);
     }
@@ -232,13 +235,13 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         PathManagerExternalGridBridge.HandleGridAdded(firstAdd);
         PathManagerExternalGridBridge.HandleGridAdded(replacedAdd);
 
-        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = FlushExternalGridBridge();
         snapshot.TotalGridEventsReceived.Should().Be(2);
         snapshot.AddedEventsReceived.Should().Be(2);
         snapshot.DuplicateEventSignaturesObserved.Should().Be(0);
-        snapshot.RebuildPassesExecuted.Should().Be(2);
+        snapshot.RebuildPassesExecuted.Should().Be(1);
         snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(0);
-        snapshot.TotalChartsSelectedForRebuild.Should().Be(2);
+        snapshot.TotalChartsSelectedForRebuild.Should().Be(1);
         snapshot.MaxChartsSelectedForSingleEvent.Should().Be(1);
         snapshot.MaxIdenticalEventStreak.Should().Be(1);
     }
@@ -261,7 +264,10 @@ public sealed class PathManagerCoverageTailTests : IDisposable
 
         PathManagerExternalGridBridge.HandleGridChanged(rightGridChange);
 
-        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot preFlush = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        preFlush.RebuildPassesExecuted.Should().Be(0);
+
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = FlushExternalGridBridge();
         snapshot.RebuildPassesExecuted.Should().Be(1);
         snapshot.TotalChartsSelectedForRebuild.Should().Be(1);
         snapshot.MaxChartsSelectedForSingleEvent.Should().Be(1);
@@ -283,7 +289,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
 
         PathManagerExternalGridBridge.HandleGridAdded(rightGridAdd);
 
-        ExternalGridBridgeDiagnosticsSnapshot snapshot = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = FlushExternalGridBridge();
         snapshot.RebuildPassesExecuted.Should().Be(0);
         snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(1);
         snapshot.TotalChartsSelectedForRebuild.Should().Be(0);
@@ -308,7 +314,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             1);
 
         PathManagerExternalGridBridge.HandleGridChanged(rightGridChange);
-        ExternalGridBridgeDiagnosticsSnapshot afterAdd = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot afterAdd = FlushExternalGridBridge();
         afterAdd.RebuildPassesExecuted.Should().Be(1);
         afterAdd.TotalChartsSelectedForRebuild.Should().Be(1);
 
@@ -316,10 +322,47 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         PathManagerExternalGridBridge.ResetDiagnostics();
 
         PathManagerExternalGridBridge.HandleGridChanged(rightGridChange);
-        ExternalGridBridgeDiagnosticsSnapshot afterRemove = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        ExternalGridBridgeDiagnosticsSnapshot afterRemove = FlushExternalGridBridge();
         afterRemove.RebuildPassesExecuted.Should().Be(0);
         afterRemove.EventsIgnoredForNoIntersectingCharts.Should().Be(1);
         afterRemove.TotalChartsSelectedForRebuild.Should().Be(0);
+    }
+
+    [Fact]
+    public void ExternalGridBridge_ShouldCoalesceSpawnTokenReplacementIntoOneCombinedChartSelection()
+    {
+        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
+
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("OldGridTouchChart", Vector3d.Zero)).Should().BeTrue();
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("NewGridAuthoredChart", new Vector3d(10, 0, 0))).Should().BeTrue();
+        PathManagerExternalGridBridge.ResetDiagnostics();
+
+        GridEventInfo removedOldGrid = new(
+            gridIndex,
+            701,
+            new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)),
+            2);
+        GridEventInfo addedReplacementGrid = new(
+            gridIndex,
+            702,
+            new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)),
+            1);
+
+        PathManagerExternalGridBridge.HandleGridRemoved(removedOldGrid);
+        PathManagerExternalGridBridge.HandleGridAdded(addedReplacementGrid);
+
+        ExternalGridBridgeDiagnosticsSnapshot preFlush = PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
+        preFlush.RebuildPassesExecuted.Should().Be(0);
+
+        ExternalGridBridgeDiagnosticsSnapshot snapshot = FlushExternalGridBridge();
+        snapshot.TotalGridEventsReceived.Should().Be(2);
+        snapshot.AddedEventsReceived.Should().Be(1);
+        snapshot.RemovedEventsReceived.Should().Be(1);
+        snapshot.DuplicateEventSignaturesObserved.Should().Be(0);
+        snapshot.RebuildPassesExecuted.Should().Be(1);
+        snapshot.EventsIgnoredForNoIntersectingCharts.Should().Be(0);
+        snapshot.TotalChartsSelectedForRebuild.Should().Be(2);
+        snapshot.MaxChartsSelectedForSingleEvent.Should().Be(2);
     }
 
     [Fact]
@@ -726,5 +769,11 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         NavigationChartCell[,,] data = new NavigationChartCell[1, sizeX, 1];
         data[0, authoredX, 0] = NavigationChartCell.Solid;
         return NavigationChart.From3D(name, data, minBounds, Fixed64.One);
+    }
+
+    private static ExternalGridBridgeDiagnosticsSnapshot FlushExternalGridBridge()
+    {
+        PathManagerExternalGridBridge.FlushPendingGridChanges();
+        return PathManagerExternalGridBridge.GetDiagnosticsSnapshot();
     }
 }

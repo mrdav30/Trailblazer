@@ -16,7 +16,7 @@ Current alpha priorities:
 
 Read these in order before making non-trivial changes:
 
-1. [`docs/OVERVIEW.md`](docs/OVERVIEW.md)
+1. [`docs/wiki/OVERVIEW.md`](docs/wiki/OVERVIEW.md)
 2. [`README.md`](README.md)
 3. The relevant source folder under [`src/Trailblazer`](src/Trailblazer)
 4. The matching test area under [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)
@@ -29,8 +29,8 @@ When code and docs disagree, prefer the code.
 Keep these aligned whenever behavior or public API changes:
 
 - [`README.md`](README.md)
-- [`docs/OVERVIEW.md`](docs/OVERVIEW.md)
-- [`docs/SERIALIZATION.MD`](docs/SERIALIZATION.MD) and [`src/Trailblazer/Serialization/README.md`](src/Trailblazer/Serialization/README.md) when serialization behavior or Chronicler guidance changes
+- [`docs/wiki/OVERVIEW.md`](docs/wiki/OVERVIEW.md)
+- [`docs/wiki/SERIALIZATION.MD`](docs/wiki/SERIALIZATION.MD) and [`src/Trailblazer/Serialization/README.md`](src/Trailblazer/Serialization/README.md) when serialization behavior or Chronicler guidance changes
 - [`src/Trailblazer/Serialization/MIGRATION.MD`](src/Trailblazer/Serialization/MIGRATION.MD) when the extraction plan for the standalone Chronicler project changes
 - the relevant source and test files under [`src/Trailblazer`](src/Trailblazer) and [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)
 
@@ -38,7 +38,7 @@ Keep these aligned whenever behavior or public API changes:
 
 | Path | Purpose | Notes |
 | --- | --- | --- |
-| [`docs`](docs) | Design notes and high-level explanations | Start with `docs/OVERVIEW.md`; `SERIALIZATION.MD`, `PATHMANAGER.MD`, `NAVIGATOR.MD`, `NAVSTEERING.MD`, `NAVTURNING.MD`, `NAVMOTOR.MD`, and `GRAVITY.MD` are subsystem references. |
+| [`docs`](docs) | Design notes and high-level explanations | Start with `docs/wiki/OVERVIEW.md`; `SERIALIZATION.MD`, `PATHMANAGER.MD`, `NAVIGATOR.MD`, `NAVSTEERING.MD`, `NAVTURNING.MD`, `NAVMOTOR.MD`, and `GRAVITY.MD` are subsystem references. |
 | [`src/Trailblazer`](src/Trailblazer) | Main library project | Multi-targets `netstandard2.1` and `net8.0`. |
 | [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Chart management, A*, flow field, guide caching, voxel lookup | Most performance-sensitive and correctness-sensitive area. |
 | [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Runtime navigation stack | `Navigator`, `NavSteering`, `NavTurning`, `NavMotor`, locomotions, animation hooks. |
@@ -97,7 +97,7 @@ Important current rules:
 
 If you touch serialization work, read both:
 
-- [`docs/SERIALIZATION.MD`](docs/SERIALIZATION.MD) for Trailblazer-specific coverage and runtime behavior
+- [`docs/wiki/SERIALIZATION.MD`](docs/wiki/SERIALIZATION.MD) for Trailblazer-specific coverage and runtime behavior
 - [`src/Trailblazer/Serialization/README.md`](src/Trailblazer/Serialization/README.md) for the reusable Chronicler API surface
 
 If the work affects extraction planning, also read:

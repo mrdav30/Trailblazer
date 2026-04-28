@@ -1,4 +1,16 @@
+bin/
+obj/
 .vs/
 TestResults/
 .codex
+artifacts/
+.vs/
+.editorconfig
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+TestResults/
+BenchmarkDotNet.Artifacts/
 artifacts/

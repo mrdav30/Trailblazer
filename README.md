@@ -122,7 +122,7 @@ When charts overlap on the same voxel, Trailblazer resolves one winning authored
 
 Registered charts are mutable after registration through `PathManager.TryUpdateChartCell(...)` and `PathManager.ApplyChartUpdates(...)`. Initialized charts re-resolve only the touched voxels and keep the rest of the live pathing state intact. Any registered chart whose cells carry generated-transition media participates in the same managed transition lifecycle: local mutations refresh only the affected adjacent pairs, overlap masking suppresses inactive managed transitions without unregistering them, and unloading the chart removes its managed generated transitions entirely. Explicit manual transitions are lifecycle-managed too: Trailblazer keeps them registered, reevaluates them as local chart state changes, and suppresses them automatically when their endpoint media is no longer supported.
 
-If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse a `string[,,]` using the built-in legend into a `TraversalBuildResult`, and `PathManager.Register(buildResult)` will register the chart, initialize any authored solid or volume partitions, and register generated explicit transitions in one step. Generated transitions inherit the owning chart priority, remain registered while inactive, and become active only when their supporting pair is valid in the current effective world state. The built-in legend and current generator rules are documented in `docs/AUTHORING.MD`.
+If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse a `string[,,]` using the built-in legend into a `TraversalBuildResult`, and `PathManager.Register(buildResult)` will register the chart, initialize any authored solid or volume partitions, and register generated explicit transitions in one step. Generated transitions inherit the owning chart priority, remain registered while inactive, and become active only when their supporting pair is valid in the current effective world state. The built-in legend and current generator rules are documented in `docs/wiki/AUTHORING.MD`.
 
 ### 2. Request a Guide Directly
 
@@ -237,17 +237,17 @@ Use `VolumePathRequest` when:
 
 Start with:
 
-- [`docs/OVERVIEW.md`](docs/OVERVIEW.md)
-- [`docs/PATHING.MD`](docs/PATHING.MD)
-- [`docs/PATHGUIDES.MD`](docs/PATHGUIDES.MD)
-- [`docs/TRANSITIONS.MD`](docs/TRANSITIONS.MD)
-- [`docs/VOLUMETRAVERSAL.MD`](docs/VOLUMETRAVERSAL.MD)
-- [`docs/PATHMANAGER.MD`](docs/PATHMANAGER.MD)
-- [`docs/NAVIGATOR.MD`](docs/NAVIGATOR.MD)
-- [`docs/NAVSTEERING.MD`](docs/NAVSTEERING.MD)
-- [`docs/NAVTURNING.MD`](docs/NAVTURNING.MD)
-- [`docs/NAVMOTOR.MD`](docs/NAVMOTOR.MD)
-- [`docs/GRAVITY.MD`](docs/GRAVITY.MD)
+- [`OVERVIEW.md`](docs/wiki/OVERVIEW.md)
+- [`PATHING.MD`](docs/wiki/PATHING.MD)
+- [`PATHGUIDES.MD`](docs/wiki/PATHGUIDES.MD)
+- [`TRANSITIONS.MD`](docs/wiki/TRANSITIONS.MD)
+- [`VOLUMETRAVERSAL.MD`](docs/wiki/VOLUMETRAVERSAL.MD)
+- [`PATHMANAGER.MD`](docs/wiki/PATHMANAGER.MD)
+- [`NAVIGATOR.MD`](docs/wiki/NAVIGATOR.MD)
+- [`NAVSTEERING.MD`](docs/wiki/NAVSTEERING.MD)
+- [`NAVTURNING.MD`](docs/wiki/NAVTURNING.MD)
+- [`NAVMOTOR.MD`](docs/wiki/NAVMOTOR.MD)
+- [`GRAVITY.MD`](docs/wiki/GRAVITY.MD)
 
 If you are integrating or extending the runtime, the key source entry points are:
 

@@ -120,8 +120,8 @@ After the index lands:
 - extend `PathingNavigationMap.Tests` with dense same-grid cases and tie cases
 - add a focused cache-invalidation test that exercises suppress/reactivate and registry-version
   refresh
-- document the new nearest-transition acceleration path in `docs/PATHMANAGER.MD`
-- mention the profiling gate in `docs/feature-work/hardeningPhasePlan.md` so the item stays
+- document the new nearest-transition acceleration path in `docs/wiki/PATHMANAGER.MD`
+- mention the profiling gate in `docs/wiki/feature-work/hardeningPhasePlan.md` so the item stays
   obviously optional
 
 ## Guardrails

@@ -15,6 +15,7 @@ public struct PlatformSnapshot : IEquatable<PlatformSnapshot>, IRecordable
     /// </summary>
     private int _id;
 
+    /// <inheritdoc cref="_id"/>
     public readonly int Id => _id;
 
     /// <summary>
@@ -37,6 +38,12 @@ public struct PlatformSnapshot : IEquatable<PlatformSnapshot>, IRecordable
     /// </summary>
     public readonly bool SupportsKinematicMotion => Active && !Inert;
 
+    /// <summary>
+    /// Initializes a new instance of the PlatformSnapshot class with the specified identifier, transform, and inert state.
+    /// </summary>
+    /// <param name="id">The unique identifier for the platform snapshot.</param>
+    /// <param name="transform">The transformation matrix representing the platform's position and orientation.</param>
+    /// <param name="inert">true if the platform is inert and does not interact with other objects; otherwise, false.</param>
     [JsonConstructor]
     public PlatformSnapshot(int id, Fixed4x4 transform, bool inert = false)
     {
@@ -45,23 +52,28 @@ public struct PlatformSnapshot : IEquatable<PlatformSnapshot>, IRecordable
         Inert = inert;
     }
 
-    public static bool operator ==(PlatformSnapshot left, PlatformSnapshot right)
-    {
-        return left.Equals(right);
-    }
+    /// <summary>
+    /// Determines whether two PlatformSnapshot instances are equal.
+    /// </summary>
+    public static bool operator ==(PlatformSnapshot left, PlatformSnapshot right) => left.Equals(right);
 
-    public static bool operator !=(PlatformSnapshot left, PlatformSnapshot right)
-    {
-        return !(left == right);
-    }
+    /// <summary>
+    /// Determines whether two PlatformSnapshot instances are not equal.
+    /// </summary>
+    public static bool operator !=(PlatformSnapshot left, PlatformSnapshot right) => !(left == right);
 
     /// <summary>
     /// Two snapshots are considered the same platform when they share the same stable id.
     /// </summary>
     public readonly bool Equals(PlatformSnapshot other) => Id == other.Id;
-    public override readonly bool Equals(object obj) => obj is PlatformSnapshot h && Equals(h);
+
+    /// <inheritdoc/>
+    public override readonly bool Equals(object? obj) => obj is PlatformSnapshot h && Equals(h);
+
+    /// <inheritdoc/>
     public override readonly int GetHashCode() => Id;
 
+    /// <inheritdoc/>
     public void RecordData(IChronicler chronicler)
     {
         chronicler.LookValue(ref _id, nameof(Id), 0);

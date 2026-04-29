@@ -191,11 +191,11 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.InitializeChart("DuplicateInit");
         PathManager.InitializeChart("DuplicateInit"); // idempotent
 
-        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel);
-        var count = voxel.TryGetPartition<SolidChartPartition>(out var partition) ? 1 : 0;
+        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel? voxel);
+        var count = voxel!.TryGetPartition(out SolidChartPartition? partition) ? 1 : 0;
 
-        Assert.True(count == 1);
-        Assert.True(partition.BelongsTo("DuplicateInit"));
+        Assert.Equal(1, count);
+        Assert.True(partition!.BelongsTo("DuplicateInit"));
 
         PathManager.UnloadChart("DuplicateInit");
     }

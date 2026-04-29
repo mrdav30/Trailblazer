@@ -2,6 +2,7 @@ using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
@@ -18,11 +19,11 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
 {
     public Vector3d Origin { get; private set; }
 
-    public Voxel StartNode { get; private set; }
+    public Voxel? StartNode { get; private set; }
 
     public Vector3d TargetPosition { get; private set; }
 
-    public Voxel EndNode { get; private set; }
+    public Voxel? EndNode { get; private set; }
 
     public Fixed64 UnitSize { get; private set; }
 
@@ -55,7 +56,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
-        out VolumePathRequest request,
+        [NotNullWhen(true)] out VolumePathRequest? request,
         HeuristicMethod heuristic = HeuristicMethod.Euclidean,
         bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
@@ -71,7 +72,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         return request != null;
     }
 
-    public static VolumePathRequest Create(
+    public static VolumePathRequest? Create(
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
@@ -82,14 +83,17 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         if (!VolumeVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
-            out Voxel startNode,
-            out Voxel endNode,
+            out Voxel? startNode,
+            out Voxel? endNode,
             unitSize,
             allowUnwalkableEndpoints,
             medium))
         {
             return null;
         }
+
+        if (startNode == null || endNode == null)
+            return null;
 
         var request = new VolumePathRequest
         {
@@ -103,7 +107,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             Medium = medium
         };
 
-        if (PathManager.TryGetMaxSearchSize(request.StartNode, request.EndNode, out int searchSize))
+        if (PathManager.TryGetMaxSearchSize(startNode, endNode, out int searchSize))
             request.MaxPathSearchRange = searchSize;
 
         return request;
@@ -118,8 +122,8 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         bool hasEndpoints = VolumeVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
-            out Voxel startNode,
-            out Voxel endNode,
+            out Voxel? startNode,
+            out Voxel? endNode,
             resolvedUnitSize,
             AllowUnwalkableEndpoints,
             Medium);
@@ -131,7 +135,10 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         UnitSize = resolvedUnitSize;
         MaxPathSearchRange = 0;
 
-        if (hasEndpoints && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+        if (hasEndpoints
+            && StartNode != null
+            && EndNode != null
+            && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
             MaxPathSearchRange = searchSize;
 
         return HasValidEndpoints;
@@ -145,13 +152,16 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         if (!VolumeVoxelFinder.GetStartVoxel(
             origin,
             TargetPosition,
-            out Voxel startNode,
+            out Voxel? startNode,
             AllowUnwalkableEndpoints,
             UnitSize,
             Medium))
         {
             return false;
         }
+
+        if (startNode == null)
+            return false;
 
         Origin = origin;
 
@@ -184,13 +194,16 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         if (!VolumeVoxelFinder.GetEndVoxel(
             Origin,
             destination,
-            out Voxel endNode,
+            out Voxel? endNode,
             AllowUnwalkableEndpoints,
             UnitSize,
             Medium))
         {
             return false;
         }
+
+        if (endNode == null)
+            return false;
 
         TargetPosition = destination;
 
@@ -223,10 +236,10 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         return UpdateRequest(Origin, TargetPosition, unitSize);
     }
 
-    public override bool Equals(object obj) =>
+    public override bool Equals(object? obj) =>
         obj is VolumePathRequest other && Equals(other);
 
-    public bool Equals(VolumePathRequest other) =>
+    public bool Equals(VolumePathRequest? other) =>
         other != null
         && RequestCacheKey == other.RequestCacheKey;
 

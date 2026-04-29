@@ -5,6 +5,7 @@ using SwiftCollections;
 using SwiftCollections.Pool;
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
@@ -43,7 +44,8 @@ public class SolidChartPartition : IVoxelPartition
     {
         get
         {
-            if (TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out var voxel))
+            if (TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out Voxel? voxel)
+                && voxel != null)
                 return voxel;
             throw new InvalidOperationException($"Partition at {WorldIndex} is not attached to a valid voxel!");
         }
@@ -99,12 +101,12 @@ public class SolidChartPartition : IVoxelPartition
     /// <summary>
     /// Maps that currently include this partition as part of their traversable space.
     /// </summary>
-    public SwiftHashSet<string> ChartOwners { get; private set; }
+    public SwiftHashSet<string>? ChartOwners { get; private set; }
 
     /// <summary>
     /// The chart whose authored cell currently wins overlap resolution for this voxel.
     /// </summary>
-    public string EffectiveChartOwner { get; private set; }
+    public string? EffectiveChartOwner { get; private set; }
 
     /// <summary>
     /// The authored chart flags from the winning effective cell currently applied to this live partition.
@@ -262,9 +264,9 @@ public class SolidChartPartition : IVoxelPartition
 
         _isClearanceValid = true;
 
-        if (!TryGetClearanceOrigin(out Voxel origin))
+        if (!TryGetClearanceOrigin(out Voxel? origin))
         {
-            _clearanceRadiusInVoxels = origin?.IsBlocked == true ? (byte)0 : DefaultDegreeCap;
+            _clearanceRadiusInVoxels = origin != null && origin.IsBlocked ? (byte)0 : DefaultDegreeCap;
             return;
         }
 
@@ -272,7 +274,7 @@ public class SolidChartPartition : IVoxelPartition
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool TryGetClearanceOrigin(out Voxel origin)
+    private bool TryGetClearanceOrigin([MaybeNullWhen(false)] out Voxel origin)
     {
         return TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out origin)
             && IsWalkable;
@@ -314,10 +316,14 @@ public class SolidChartPartition : IVoxelPartition
         SwiftQueue<(SolidChartPartition v, byte dist)> queue,
         ref byte best)
     {
-        for (int i = 0; i < part.Neighbors.Length; i++)
+        SolidChartPartition?[]? neighbors = part.Neighbors;
+        if (neighbors == null)
+            return;
+
+        for (int i = 0; i < neighbors.Length; i++)
         {
             byte nextDist = (byte)(dist + 1);
-            SolidChartPartition neighbor = part.Neighbors[i];
+            SolidChartPartition? neighbor = neighbors[i];
 
             if (IsClearanceBoundary(i, neighbor))
             {
@@ -325,13 +331,13 @@ public class SolidChartPartition : IVoxelPartition
                 continue;
             }
 
-            if (ShouldExpandClearanceSearch(nextDist, best, neighbor, visited))
+            if (neighbor != null && ShouldExpandClearanceSearch(nextDist, best, neighbor, visited))
                 queue.Enqueue((neighbor, nextDist));
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsClearanceBoundary(int neighborIndex, SolidChartPartition neighbor)
+    private static bool IsClearanceBoundary(int neighborIndex, SolidChartPartition? neighbor)
     {
         if (neighbor != null && neighbor.IsWalkable)
             return false;
@@ -344,7 +350,7 @@ public class SolidChartPartition : IVoxelPartition
     private static bool ShouldExpandClearanceSearch(
         byte nextDist,
         byte best,
-        SolidChartPartition neighbor,
+        SolidChartPartition? neighbor,
         SwiftHashSet<SolidChartPartition> visited)
     {
         return neighbor != null

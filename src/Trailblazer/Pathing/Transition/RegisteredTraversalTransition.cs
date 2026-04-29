@@ -54,7 +54,7 @@ internal readonly struct RegisteredTraversalTransition : IEquatable<RegisteredTr
             && DestinationPosition.Equals(other.DestinationPosition);
     }
 
-    public override bool Equals(object obj) =>
+    public override bool Equals(object? obj) =>
         obj is RegisteredTraversalTransition other && Equals(other);
 
     public override int GetHashCode()

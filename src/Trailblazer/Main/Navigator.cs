@@ -459,12 +459,19 @@ public abstract class Navigator : INavigate, IRecordable
             aStarHeuristic: GuidedAStarHeuristic,
             flowFieldExtraFloodRange: GuidedFlowFieldExtraFloodRange,
             traversalMedium: _frameCondition.Medium,
-            out pathRequest,
-            out GuidedVolumeExitHandoff handoff);
-        if (success)
+            out IPathRequest? createdRequest,
+            out GuidedVolumeExitHandoff? handoff);
+        if (!success || createdRequest == null)
+        {
+            pathRequest = null!;
+            return false;
+        }
+
+        pathRequest = createdRequest;
+        if (handoff != null)
             _pendingGuidedVolumeExitHandoff = handoff;
 
-        return success;
+        return true;
     }
 
     /// <summary>
@@ -950,7 +957,8 @@ public abstract class Navigator : INavigate, IRecordable
             return false;
         }
 
-        if (!_pendingGuidedVolumeExitHandoff.TryCreateFollowupRequest(Position, Size, out IPathRequest followupRequest))
+        if (!_pendingGuidedVolumeExitHandoff.TryCreateFollowupRequest(Position, Size, out IPathRequest? followupRequest)
+            || followupRequest == null)
         {
             return false;
         }

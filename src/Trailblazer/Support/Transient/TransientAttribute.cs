@@ -19,13 +19,13 @@ public class TransientAttribute : Attribute
     /// Gets the type that declares the static member to use as the clear default, or <c>null</c>
     /// to use <c>default(T)</c>.
     /// </summary>
-    public Type DefaultValueSource { get; }
+    public Type? DefaultValueSource { get; }
 
     /// <summary>
     /// Gets the name of the static field or property on <see cref="DefaultValueSource"/> to use
     /// as the clear default, or <c>null</c> to use <c>default(T)</c>.
     /// </summary>
-    public string DefaultValueMember { get; }
+    public string? DefaultValueMember { get; }
 
     /// <summary>
     /// Marks the property as transient and clears it to <c>default(T)</c> on reset.

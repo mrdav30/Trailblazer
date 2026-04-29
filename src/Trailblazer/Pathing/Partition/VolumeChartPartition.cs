@@ -136,7 +136,8 @@ public sealed class VolumeChartPartition : IVoxelPartition
     {
         get
         {
-            if (TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out Voxel voxel))
+            if (TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out Voxel? voxel)
+                && voxel != null)
                 return voxel;
 
             throw new InvalidOperationException($"Volume partition at {WorldIndex} is not attached to a valid voxel.");

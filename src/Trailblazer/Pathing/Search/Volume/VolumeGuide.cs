@@ -1,4 +1,5 @@
 using FixedMathSharp;
+using System;
 
 namespace Trailblazer.Pathing;
 
@@ -7,21 +8,22 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public sealed class VolumeGuide : IWaypointGuide
 {
-    public VolumeSurveyResult TrailMap { get; private set; }
+    public VolumeSurveyResult? TrailMap { get; private set; }
 
     public int CurrentWaypointIndex { get; private set; }
 
     private int _lastTriedIndex;
 
-    public AStarWaypoint[] ActiveWaypoints => TrailMap.Waypoints;
+    public AStarWaypoint[] ActiveWaypoints => TrailMap?.Waypoints ?? Array.Empty<AStarWaypoint>();
 
     public bool Initialize(VolumeSurveyResult surveyResult)
     {
         if (!surveyResult.HasPath)
             return false;
 
+        AStarWaypoint[] waypoints = surveyResult.Waypoints!;
         TrailMap = surveyResult;
-        CurrentWaypointIndex = surveyResult.Waypoints.Length > 1 ? 1 : 0;
+        CurrentWaypointIndex = waypoints.Length > 1 ? 1 : 0;
         _lastTriedIndex = CurrentWaypointIndex;
         return true;
     }

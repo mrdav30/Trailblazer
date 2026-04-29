@@ -81,10 +81,10 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     {
         RegisterSolidLine("GuideFactoryFlush", Vector3d.Zero, 3);
 
-        AStarPathRequest request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One);
+        AStarPathRequest? request = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One);
         request.Should().NotBeNull();
 
-        PathGuideFactory.RequestGuide(request, out AStarGuide guide).Should().BeTrue();
+        PathGuideFactory.RequestGuide(request, out _).Should().BeTrue();
         PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
         PathGuideFactory.AnyInUse.Should().BeTrue();
 
@@ -95,7 +95,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         PathGuideFactory.ActiveAStarGuideCount.Should().Be(0);
         PathGuideFactory.AnyInUse.Should().BeFalse();
 
-        PathGuideFactory.RequestGuide(request, out guide).Should().BeTrue();
+        PathGuideFactory.RequestGuide(request, out AStarGuide guide).Should().BeTrue();
         PathGuideFactory.ReturnGuide(guide);
         PathGuideFactory.IsPooling.Should().BeTrue();
 

@@ -18,7 +18,7 @@ public interface IPathRequest
     /// <summary>
     /// Most recently evaluated grid voxel under the agent.
     /// </summary>
-    Voxel StartNode { get; }
+    Voxel? StartNode { get; }
 
     /// <summary>
     /// The target world position. 
@@ -28,7 +28,7 @@ public interface IPathRequest
     /// <summary>
     /// Final grid voxel targeted as the destination.
     /// </summary>
-    Voxel EndNode { get; }
+    Voxel? EndNode { get; }
 
     /// <summary>
     /// The physical unit diameter or size used to validate voxel walkability and clearance.

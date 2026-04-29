@@ -1,6 +1,7 @@
 using FixedMathSharp;
 using GridForge.Grids;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
@@ -38,8 +39,8 @@ internal static class GuidedVolumeExitPlanner
         Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange,
-        out VolumePathRequest request,
-        out GuidedVolumeExitHandoff handoff,
+        [NotNullWhen(true)] out VolumePathRequest? request,
+        out GuidedVolumeExitHandoff? handoff,
         out int totalPathCost)
     {
         request = null;
@@ -53,7 +54,7 @@ internal static class GuidedVolumeExitPlanner
         }
 
         TraversalTransition bestTransition = default;
-        VolumePathRequest bestRequest = null;
+        VolumePathRequest? bestRequest = null;
         int bestTotalCost = int.MaxValue;
 
         if (!TryPlanWithTransitions(
@@ -88,6 +89,9 @@ internal static class GuidedVolumeExitPlanner
             return false;
         }
 
+        if (bestRequest == null)
+            return false;
+
         request = bestRequest;
         totalPathCost = bestTotalCost;
         handoff = CreateHandoff(
@@ -114,7 +118,7 @@ internal static class GuidedVolumeExitPlanner
         HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange,
         ref TraversalTransition bestTransition,
-        ref VolumePathRequest bestRequest,
+        ref VolumePathRequest? bestRequest,
         ref int bestTotalCost)
     {
         if (transitions == null || transitions.Length == 0)
@@ -125,7 +129,7 @@ internal static class GuidedVolumeExitPlanner
         for (int i = 0; i < transitions.Length; i++)
         {
             TraversalTransition transition = transitions[i];
-            VolumePathRequest volumeRequest = VolumePathRequest.Create(
+            VolumePathRequest? volumeRequest = VolumePathRequest.Create(
                 origin,
                 transition.Source.Position,
                 unitSize,
@@ -142,7 +146,7 @@ internal static class GuidedVolumeExitPlanner
                 if (!volumeResult.HasPath)
                     continue;
 
-                volumeCost = volumeResult.Waypoints[^1].PathCost;
+                volumeCost = volumeResult.Waypoints![^1].PathCost;
             }
 
             if (!TryGetChartLegCost(
@@ -177,7 +181,8 @@ internal static class GuidedVolumeExitPlanner
         Vector3d targetPosition,
         TraversalMedium medium)
     {
-        if (!TrailblazerWorldManager.TryGetVoxel(targetPosition, out Voxel targetVoxel))
+        if (!TrailblazerWorldManager.TryGetVoxel(targetPosition, out Voxel? targetVoxel)
+            || targetVoxel == null)
             return Array.Empty<TraversalTransition>();
 
         return TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(
@@ -228,7 +233,7 @@ internal static class GuidedVolumeExitPlanner
         switch (chartPathMode)
         {
             case GuidedPathMode.FlowField:
-                FlowFieldPathRequest flowFieldRequest = FlowFieldPathRequest.Create(
+                FlowFieldPathRequest? flowFieldRequest = FlowFieldPathRequest.Create(
                     origin,
                     targetPosition,
                     unitSize,
@@ -252,7 +257,7 @@ internal static class GuidedVolumeExitPlanner
 
             case GuidedPathMode.AStar:
             default:
-                AStarPathRequest aStarRequest = AStarPathRequest.Create(
+                AStarPathRequest? aStarRequest = AStarPathRequest.Create(
                     origin,
                     targetPosition,
                     unitSize,
@@ -295,6 +300,8 @@ internal static class GuidedVolumeExitPlanner
 
         FlowFieldSurveyResult flowFieldResult = FlowFieldSurveyor.Shared.FindPath(request);
         return flowFieldResult.HasPath
+            && flowFieldResult.Fields != null
+            && request.StartNode != null
             && flowFieldResult.Fields.TryGetValue(request.StartNode.WorldIndex, out FlowField startField)
             && TryAssignChartCost(startField.PathCost, out chartCost);
     }
@@ -314,12 +321,12 @@ internal static class GuidedVolumeExitPlanner
     }
 
     internal static bool TryGetTransitionAwareChartCost(
-        HybridPathRequest hybridRequest,
+        HybridPathRequest? hybridRequest,
         out int chartCost)
     {
         chartCost = 0;
 
-        HybridRoutePlan routePlan = hybridRequest?.RoutePlan;
+        HybridRoutePlan? routePlan = hybridRequest?.RoutePlan;
         return routePlan != null
             && routePlan.DirectedTransitions.Length > 0
             && TryAssignChartCost(routePlan.TotalPathCost, out chartCost);

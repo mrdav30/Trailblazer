@@ -4,7 +4,7 @@ namespace Trailblazer.Pathing;
 
 public class AStarSurveyResult : SurveyResult
 {
-    public AStarWaypoint[] Waypoints { get; private set; }
+    public AStarWaypoint[] Waypoints { get; private set; } = Array.Empty<AStarWaypoint>();
 
     public override bool HasPath => IsValid && Waypoints != null && Waypoints.Length > 0;
 
@@ -29,6 +29,6 @@ public class AStarSurveyResult : SurveyResult
     public override void Reset()
     {
         base.Reset();
-        Waypoints = null;
+        Waypoints = Array.Empty<AStarWaypoint>();
     }
 }

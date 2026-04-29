@@ -26,15 +26,33 @@ public readonly struct ActiveMantleState
         MantleTargetPosition = mantleTargetPosition;
     }
 
+    /// <summary>
+    /// Gets the type of climb affordance represented by this instance.
+    /// </summary>
     public ClimbAffordanceKind Kind { get; }
 
+    /// <summary>
+    /// Gets the identifier of the associated affordance, if available.
+    /// </summary>
     public int? AffordanceId { get; }
 
+    /// <summary>
+    /// Gets the position in 3D space where the object is attached.
+    /// </summary>
     public Vector3d AttachmentPoint { get; }
 
+    /// <summary>
+    /// Gets the normal vector perpendicular to the surface at the current location.
+    /// </summary>
     public Vector3d SurfaceNormal { get; }
 
+    /// <summary>
+    /// Gets the up direction vector for the current coordinate system or object.
+    /// </summary>
     public Vector3d UpDirection { get; }
 
+    /// <summary>
+    /// Gets the target world position for the mantling action.
+    /// </summary>
     public Vector3d MantleTargetPosition { get; }
 }

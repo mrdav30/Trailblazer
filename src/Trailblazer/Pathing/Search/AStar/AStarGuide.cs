@@ -11,13 +11,13 @@ public class AStarGuide : IWaypointGuide
     /// <summary>
     /// The result of the A* survey, containing the waypoints and path information needed to guide an agent along the path.
     /// </summary>
-    public AStarSurveyResult TrailMap { get; private set; }
+    public AStarSurveyResult TrailMap { get; private set; } = AStarSurveyResult.Empty;
 
     /// <summary>
     /// Cached smoothed waypoints generated from the original TrailMap waypoints. 
     /// This allows for optional smoothing (e.g. Catmull-Rom interpolation) without modifying the original path data.
     /// </summary>
-    private AStarWaypoint[] _smoothedWaypoints;
+    private AStarWaypoint[]? _smoothedWaypoints;
 
     /// <inheritdoc/>
     public int CurrentWaypointIndex { get; private set; }

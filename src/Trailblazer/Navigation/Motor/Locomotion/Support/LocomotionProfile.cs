@@ -13,12 +13,12 @@ public sealed class LocomotionProfile
     public LocomotionProfile(
         MoveLocomotion move,
         FallLocomotion fall,
-        PlatformLocomotion platform = null,
-        JumpLocomotion jump = null,
-        SlideLocomotion slide = null,
-        SwimLocomotion swim = null,
-        FlyLocomotion fly = null,
-        ClimbLocomotion climb = null)
+        PlatformLocomotion? platform = null,
+        JumpLocomotion? jump = null,
+        SlideLocomotion? slide = null,
+        SwimLocomotion? swim = null,
+        FlyLocomotion? fly = null,
+        ClimbLocomotion? climb = null)
     {
         Move = move ?? throw new ArgumentNullException(nameof(move));
         Fall = fall ?? throw new ArgumentNullException(nameof(fall));
@@ -43,32 +43,32 @@ public sealed class LocomotionProfile
     /// <summary>
     /// Optional moving-platform locomotion.
     /// </summary>
-    public PlatformLocomotion Platform { get; }
+    public PlatformLocomotion? Platform { get; }
 
     /// <summary>
     /// Optional jump locomotion.
     /// </summary>
-    public JumpLocomotion Jump { get; }
+    public JumpLocomotion? Jump { get; }
 
     /// <summary>
     /// Optional slide locomotion.
     /// </summary>
-    public SlideLocomotion Slide { get; }
+    public SlideLocomotion? Slide { get; }
 
     /// <summary>
     /// Optional swim locomotion.
     /// </summary>
-    public SwimLocomotion Swim { get; }
+    public SwimLocomotion? Swim { get; }
 
     /// <summary>
     /// Optional flight locomotion.
     /// </summary>
-    public FlyLocomotion Fly { get; }
+    public FlyLocomotion? Fly { get; }
 
     /// <summary>
     /// Optional climb locomotion.
     /// </summary>
-    public ClimbLocomotion Climb { get; }
+    public ClimbLocomotion? Climb { get; }
 
     /// <summary>
     /// Gets the installed locomotion flags for this profile.

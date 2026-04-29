@@ -18,7 +18,7 @@ internal sealed class ResolvedChartVoxelState
 
     public bool HasAnyOwners => _chartContributions.Count > 0;
 
-    public string EffectiveChartOwner { get; private set; }
+    public string? EffectiveChartOwner { get; private set; }
 
     public NavigationChartCell EffectiveCell { get; private set; }
 

@@ -7,11 +7,11 @@ public abstract class PathRequest : IPathRequest
 {
     public Vector3d Origin { get; protected set; }
 
-    public Voxel StartNode { get; protected set; }
+    public Voxel? StartNode { get; protected set; }
 
     public Vector3d TargetPosition { get; protected set; }
 
-    public Voxel EndNode { get; protected set; }
+    public Voxel? EndNode { get; protected set; }
 
     public Fixed64 UnitSize { get; protected set; }
 
@@ -46,8 +46,8 @@ public abstract class PathRequest : IPathRequest
         bool success = SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
-            out Voxel startVoxel,
-            out Voxel endVoxel,
+            out Voxel? startVoxel,
+            out Voxel? endVoxel,
             unitSize,
             AllowUnwalkableEndpoints);
 
@@ -62,7 +62,9 @@ public abstract class PathRequest : IPathRequest
         if (!success)
             return false;
 
-        if (PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+        if (StartNode != null
+            && EndNode != null
+            && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
             MaxPathSearchRange = searchSize;
 
         return true;
@@ -75,11 +77,11 @@ public abstract class PathRequest : IPathRequest
         bool success = SolidVoxelFinder.GetStartVoxel(
             origin,
             TargetPosition,
-            out Voxel newVoxel,
+            out Voxel? newVoxel,
             AllowUnwalkableEndpoints,
             UnitSize);
 
-        if (!success) return false;
+        if (!success || newVoxel == null) return false;
 
         Origin = origin;
 
@@ -99,7 +101,9 @@ public abstract class PathRequest : IPathRequest
         if (resetSearchRange)
         {
             MaxPathSearchRange = 0;
-            if (PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+            if (StartNode != null
+                && EndNode != null
+                && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
                 MaxPathSearchRange = searchSize;
         }
 
@@ -113,11 +117,11 @@ public abstract class PathRequest : IPathRequest
         bool success = SolidVoxelFinder.GetEndVoxel(
             Origin,
             destination,
-            out Voxel newVoxel,
+            out Voxel? newVoxel,
             AllowUnwalkableEndpoints,
             UnitSize);
 
-        if (!success) return false;
+        if (!success || newVoxel == null) return false;
 
         TargetPosition = destination;
 
@@ -137,7 +141,9 @@ public abstract class PathRequest : IPathRequest
         if (resetSearchRange)
         {
             MaxPathSearchRange = 0;
-            if (PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+            if (StartNode != null
+                && EndNode != null
+                && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
                 MaxPathSearchRange = searchSize;
         }
 

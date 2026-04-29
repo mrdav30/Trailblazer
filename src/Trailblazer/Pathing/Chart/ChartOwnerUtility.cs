@@ -10,7 +10,7 @@ internal static class ChartOwnerUtility
     /// <summary>
     /// Copies chart-owner ids into the destination set using deterministic per-item insertion.
     /// </summary>
-    internal static void AddOwners(SwiftHashSet<string> destination, SwiftHashSet<string> source)
+    internal static void AddOwners(SwiftHashSet<string> destination, SwiftHashSet<string>? source)
     {
         if (destination == null || source == null)
             return;

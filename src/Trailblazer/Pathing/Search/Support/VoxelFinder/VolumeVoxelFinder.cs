@@ -2,6 +2,7 @@ using FixedMathSharp;
 using GridForge;
 using GridForge.Grids;
 using GridForge.Utility;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
@@ -15,8 +16,8 @@ public static class VolumeVoxelFinder
     public static bool TryGetPathEdgeVoxels(
         Vector3d origin,
         Vector3d target,
-        out Voxel originVoxel,
-        out Voxel targetVoxel,
+        [MaybeNullWhen(false)] out Voxel originVoxel,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
         Fixed64 unitSize,
         bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
@@ -34,7 +35,7 @@ public static class VolumeVoxelFinder
     public static bool GetStartVoxel(
         Vector3d origin,
         Vector3d target,
-        out Voxel originVoxel,
+        [MaybeNullWhen(false)] out Voxel originVoxel,
         bool allowUnwalkableEndpoints = false,
         Fixed64? unitSize = null,
         TraversalMedium medium = TraversalMedium.Gas)
@@ -51,7 +52,7 @@ public static class VolumeVoxelFinder
     public static bool GetEndVoxel(
         Vector3d origin,
         Vector3d target,
-        out Voxel targetVoxel,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
         bool allowUnwalkableEndpoints = false,
         Fixed64? unitSize = null,
         TraversalMedium medium = TraversalMedium.Gas)
@@ -116,7 +117,7 @@ public static class VolumeVoxelFinder
 
     public static bool TryGetClosestTraversableVoxel(
         Voxel voxel,
-        out Voxel closestNeighbor,
+        [MaybeNullWhen(false)] out Voxel closestNeighbor,
         Fixed64 unitSize,
         TraversalMedium medium = TraversalMedium.Gas)
     {
@@ -133,10 +134,12 @@ public static class VolumeVoxelFinder
         if (voxel == null || voxel.IsBlocked)
             return false;
 
-        if (voxel.TryGetPartition(out VolumeChartPartition volumePartition))
+        if (voxel.TryGetPartition(out VolumeChartPartition? volumePartition)
+            && volumePartition != null)
             return !volumePartition.IsImpassable(unitSize);
 
-        if (voxel.TryGetPartition(out SolidChartPartition partition))
+        if (voxel.TryGetPartition(out SolidChartPartition? partition)
+            && partition != null)
             return !partition.IsImpassable(unitSize);
 
         return false;
@@ -145,7 +148,7 @@ public static class VolumeVoxelFinder
     private static bool TryGetEndpointVoxel(
         Vector3d position,
         Vector3d traceToward,
-        out Voxel voxel,
+        [MaybeNullWhen(false)] out Voxel voxel,
         bool allowUnwalkableEndpoints,
         Fixed64 unitSize,
         TraversalMedium medium)
@@ -179,10 +182,12 @@ public static class VolumeVoxelFinder
             return false;
         }
 
-        if (voxel.TryGetPartition(out VolumeChartPartition volumePartition))
+        if (voxel.TryGetPartition(out VolumeChartPartition? volumePartition)
+            && volumePartition != null)
             return volumePartition.IsImpassable(unitSize);
 
-        return voxel.TryGetPartition(out SolidChartPartition partition)
+        return voxel.TryGetPartition(out SolidChartPartition? partition)
+            && partition != null
             && partition.IsImpassable(unitSize);
     }
 
@@ -261,7 +266,7 @@ public static class VolumeVoxelFinder
             Vector3d position,
             Voxel directVoxel,
             Fixed64 unitSize,
-            out Voxel voxel)
+            [MaybeNullWhen(false)] out Voxel voxel)
         {
             voxel = null;
             return false;

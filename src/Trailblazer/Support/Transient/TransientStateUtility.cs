@@ -79,7 +79,7 @@ internal static class TransientStateUtility
 
     private static Expression GetDefaultExpression(PropertyInfo property)
     {
-        TransientAttribute attr = property.GetCustomAttribute<TransientAttribute>();
+        TransientAttribute? attr = property.GetCustomAttribute<TransientAttribute>();
         if (attr?.DefaultValueSource != null && attr.DefaultValueMember != null)
             return GetStaticMemberExpression(attr.DefaultValueSource, attr.DefaultValueMember);
 
@@ -88,11 +88,15 @@ internal static class TransientStateUtility
 
     private static Expression GetStaticMemberExpression(Type type, string memberName)
     {
-        FieldInfo field = type.GetField(memberName, BindingFlags.Public | BindingFlags.Static);
+        FieldInfo? field = type.GetField(memberName, BindingFlags.Public | BindingFlags.Static);
         if (field != null)
             return Expression.Field(null, field);
 
-        PropertyInfo prop = type.GetProperty(memberName, BindingFlags.Public | BindingFlags.Static);
+        PropertyInfo? prop = type.GetProperty(memberName, BindingFlags.Public | BindingFlags.Static);
+        if (prop == null)
+            throw new InvalidOperationException(
+                $"Transient default member '{type.FullName}.{memberName}' was not found.");
+
         return Expression.Property(null, prop);
     }
 

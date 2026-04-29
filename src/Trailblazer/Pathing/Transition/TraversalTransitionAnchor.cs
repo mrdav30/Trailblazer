@@ -198,7 +198,8 @@ public readonly struct TraversalTransitionAnchor
 
     private static Vector3d GetVoxelWorldPosition(WorldVoxelIndex voxelIndex)
     {
-        if (TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel voxel))
+        if (TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel? voxel)
+            && voxel != null)
             return voxel.WorldPosition;
 
         throw new InvalidOperationException(

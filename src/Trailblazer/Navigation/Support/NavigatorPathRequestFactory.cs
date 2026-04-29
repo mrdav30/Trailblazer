@@ -1,5 +1,6 @@
 using FixedMathSharp;
 using GridForge.Grids;
+using System.Diagnostics.CodeAnalysis;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;
@@ -20,7 +21,7 @@ public static class NavigatorPathRequestFactory
         HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange,
         TraversalMedium traversalMedium,
-        out IPathRequest request)
+        [NotNullWhen(true)] out IPathRequest? request)
     {
         switch (pathMode)
         {
@@ -80,8 +81,8 @@ public static class NavigatorPathRequestFactory
         HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange,
         TraversalMedium traversalMedium,
-        out IPathRequest request,
-        out GuidedVolumeExitHandoff handoff)
+        [NotNullWhen(true)] out IPathRequest? request,
+        out GuidedVolumeExitHandoff? handoff)
     {
         handoff = null;
 
@@ -100,7 +101,7 @@ public static class NavigatorPathRequestFactory
                     maxClimbHeight, flowFieldExtraFloodRange, out request);
 
             case GuidedPathMode.Aerial:
-                var volume = VolumePathRequest.Create(
+                VolumePathRequest? volume = VolumePathRequest.Create(
                     origin,
                     targetPosition,
                     unitSize,
@@ -148,7 +149,7 @@ public static class NavigatorPathRequestFactory
                     return false;
                 }
 
-                var swim = VolumePathRequest.Create(
+                VolumePathRequest? swim = VolumePathRequest.Create(
                     origin,
                     targetPosition,
                     unitSize,
@@ -206,8 +207,8 @@ public static class NavigatorPathRequestFactory
         Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange,
-        out IPathRequest request,
-        out GuidedVolumeExitHandoff handoff)
+        [NotNullWhen(true)] out IPathRequest? request,
+        out GuidedVolumeExitHandoff? handoff)
     {
         return TryCreateVolumeExitHandoff(
             origin,
@@ -236,8 +237,8 @@ public static class NavigatorPathRequestFactory
         Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange,
-        out IPathRequest request,
-        out GuidedVolumeExitHandoff handoff,
+        [NotNullWhen(true)] out IPathRequest? request,
+        out GuidedVolumeExitHandoff? handoff,
         out int totalPathCost)
     {
         request = null;
@@ -262,9 +263,10 @@ public static class NavigatorPathRequestFactory
             maxClimbHeight,
             aStarHeuristic,
             flowFieldExtraFloodRange,
-            out VolumePathRequest volumeRequest,
+            out VolumePathRequest? volumeRequest,
             out handoff,
             out totalPathCost)
+            && volumeRequest != null
             && (request = volumeRequest) != null;
     }
 
@@ -278,8 +280,8 @@ public static class NavigatorPathRequestFactory
         Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange,
-        out IPathRequest request,
-        out GuidedVolumeExitHandoff handoff)
+        [NotNullWhen(true)] out IPathRequest? request,
+        out GuidedVolumeExitHandoff? handoff)
     {
         request = null;
         handoff = null;
@@ -336,10 +338,11 @@ public static class NavigatorPathRequestFactory
     {
         targetRequiresConstrainedExitHandoff = false;
 
-        if (!TrailblazerWorldManager.TryGetVoxel(targetPosition, out Voxel? targetVoxel))
+        if (!TrailblazerWorldManager.TryGetVoxel(targetPosition, out Voxel? targetVoxel)
+            || targetVoxel == null)
             return false;
 
-        if (targetVoxel!.TryGetPartition(out SolidChartPartition? _) != true)
+        if (targetVoxel.TryGetPartition(out SolidChartPartition? _) != true)
             return false;
 
         targetRequiresConstrainedExitHandoff = !VolumeMediumRules.Matches(targetVoxel, medium);
@@ -356,8 +359,8 @@ public static class NavigatorPathRequestFactory
         Fixed64 maxClimbHeight,
         HeuristicMethod aStarHeuristic,
         int flowFieldExtraFloodRange,
-        out IPathRequest request,
-        out GuidedVolumeExitHandoff handoff)
+        [NotNullWhen(true)] out IPathRequest? request,
+        out GuidedVolumeExitHandoff? handoff)
     {
         request = null;
         handoff = null;
@@ -376,12 +379,15 @@ public static class NavigatorPathRequestFactory
             maxClimbHeight,
             aStarHeuristic,
             flowFieldExtraFloodRange,
-            out IPathRequest plannedRequest,
-            out GuidedVolumeExitHandoff plannedHandoff,
+            out IPathRequest? plannedRequest,
+            out GuidedVolumeExitHandoff? plannedHandoff,
             out int handoffPathCost))
         {
             return false;
         }
+
+        if (plannedRequest == null || plannedHandoff == null || directRequest.EndNode == null)
+            return false;
 
         if (directRequest.EndNode.WorldPosition != targetPosition)
         {
@@ -408,9 +414,9 @@ public static class NavigatorPathRequestFactory
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
-        out IPathRequest request)
+        [NotNullWhen(true)] out IPathRequest? request)
     {
-        AStarPathRequest aStar = AStarPathRequest.Create(
+        AStarPathRequest? aStar = AStarPathRequest.Create(
             origin,
             targetPosition,
             unitSize,
@@ -436,9 +442,9 @@ public static class NavigatorPathRequestFactory
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
         int flowFieldExtraFloodRange,
-        out IPathRequest request)
+        [NotNullWhen(true)] out IPathRequest? request)
     {
-        FlowFieldPathRequest flowField = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest? flowField = FlowFieldPathRequest.Create(
             origin,
             targetPosition,
             unitSize,
@@ -462,7 +468,7 @@ public static class NavigatorPathRequestFactory
             return 0;
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
-        return result.HasPath && result.Waypoints.Length > 0
+        return result.HasPath && result.Waypoints != null && result.Waypoints.Length > 0
             ? result.Waypoints[^1].PathCost
             : int.MaxValue;
     }

@@ -36,7 +36,7 @@ public sealed class VolumeSurveyor
 
     private readonly SwiftHashSet<string> _chartKeys = new();
 
-    private VolumePathRequest _request;
+    private VolumePathRequest? _request;
 
     public VolumeSurveyResult FindPath(VolumePathRequest request)
     {
@@ -46,11 +46,12 @@ public sealed class VolumeSurveyor
                 return VolumeSurveyResult.Empty;
 
             _request = request;
+            VolumePathRequest activeRequest = _request;
 
             ClearWorkingState();
 
-            _meta[_request.StartNode] = new VolumeVoxelMeta();
-            _heap.Add(_request.StartNode, 0);
+            _meta[activeRequest.StartNode!] = new VolumeVoxelMeta();
+            _heap.Add(activeRequest.StartNode!, 0);
 
             if (!TracePath())
             {
@@ -73,10 +74,13 @@ public sealed class VolumeSurveyor
 
     private bool TracePath()
     {
+        VolumePathRequest request = _request!;
         int iterations = 0;
-        int searchSize = _request.MaxPathSearchRange;
+        int searchSize = request.MaxPathSearchRange;
 
-        while (_heap.RemoveFirst(out Voxel current) && iterations++ < searchSize)
+        while (_heap.RemoveFirst(out Voxel? current)
+            && current != null
+            && iterations++ < searchSize)
         {
             if (ProcessNeighbors(current))
                 return true;
@@ -171,9 +175,10 @@ public sealed class VolumeSurveyor
 
     private bool ProcessNeighbor(Voxel current, Voxel neighbor, int movementCost)
     {
+        VolumePathRequest request = _request!;
         int totalMovementCost = movementCost + GetTraversalCostModifier(neighbor);
 
-        if (neighbor == _request.EndNode)
+        if (neighbor == request.EndNode)
         {
             SetVoxelData(neighbor, current.WorldIndex, totalMovementCost);
             return true;
@@ -210,8 +215,9 @@ public sealed class VolumeSurveyor
 
     private void BuildRawPath()
     {
-        Voxel current = _request.EndNode;
-        while (current != _request.StartNode)
+        VolumePathRequest request = _request!;
+        Voxel current = request.EndNode!;
+        while (current != request.StartNode)
         {
             _rawPath.Insert(0, current);
 
@@ -219,13 +225,14 @@ public sealed class VolumeSurveyor
                 || !data.NextTrailIndex.HasValue)
                 break;
 
-            if (!TrailblazerWorldManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel? nextTrailVoxel)
+                || nextTrailVoxel == null)
                 break;
 
             current = nextTrailVoxel;
         }
 
-        _rawPath.Insert(0, _request.StartNode);
+        _rawPath.Insert(0, request.StartNode!);
     }
 
     private void BuildWaypoints()
@@ -278,35 +285,37 @@ public sealed class VolumeSurveyor
         if (voxel == null)
             return;
 
-        if (voxel.TryGetPartition(out SolidChartPartition pathPartition))
+        if (voxel.TryGetPartition(out SolidChartPartition? pathPartition) && pathPartition != null)
             ChartOwnerUtility.AddOwners(_chartKeys, pathPartition.ChartOwners);
 
-        if (voxel.TryGetPartition(out VolumeChartPartition volumePartition))
+        if (voxel.TryGetPartition(out VolumeChartPartition? volumePartition) && volumePartition != null)
             ChartOwnerUtility.AddOwners(_chartKeys, volumePartition.ChartOwners);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int CalculatePathCost(Vector3d currentVoxel, int movementCost)
     {
+        VolumePathRequest request = _request!;
         return movementCost + AStarSurveyor.CalculateHeuristic(
             currentVoxel,
-            _request.EndNode.WorldPosition,
-            _request.Heuristic);
+            request.EndNode!.WorldPosition,
+            request.Heuristic);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool CanTraverseVoxel(Voxel voxel)
     {
-        if (voxel == _request.StartNode)
+        VolumePathRequest request = _request!;
+        if (voxel == request.StartNode)
             return true;
 
-        if (voxel == _request.EndNode && _request.AllowUnwalkableEndpoints)
-            return VolumeMediumRules.Matches(voxel, _request.Medium);
+        if (voxel == request.EndNode && request.AllowUnwalkableEndpoints)
+            return VolumeMediumRules.Matches(voxel, request.Medium);
 
         return VolumeVoxelFinder.IsTraversable(
             voxel,
-            _request.UnitSize,
-            _request.Medium);
+            request.UnitSize,
+            request.Medium);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -318,7 +327,9 @@ public sealed class VolumeSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GetTraversalCostModifier(Voxel voxel)
     {
-        return voxel != null && voxel.TryGetPartition(out VolumeChartPartition volumePartition)
+        return voxel != null
+            && voxel.TryGetPartition(out VolumeChartPartition? volumePartition)
+            && volumePartition != null
             ? volumePartition.PathCostModifier
             : 0;
     }

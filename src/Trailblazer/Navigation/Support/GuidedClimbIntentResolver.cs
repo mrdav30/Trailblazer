@@ -10,6 +10,7 @@ internal static class GuidedClimbIntentResolver
     public static bool Resolve(IPathRequest pathRequest, GuidedVolumeExitHandoff? handoff = null)
     {
         if (handoff != null
+            && !string.IsNullOrEmpty(handoff.TransitionId)
             && TraversalTransitionRegistry.TryGet(handoff.TransitionId, out TraversalTransition transition))
         {
             return transition.RequestsClimbIntent;
@@ -17,16 +18,21 @@ internal static class GuidedClimbIntentResolver
 
         return pathRequest switch
         {
-            AStarPathRequest aStar => RequestsClimbIntent(HybridPathRequest.CreateFromAStar(aStar)),
-            FlowFieldPathRequest flowField => RequestsClimbIntent(HybridPathRequest.CreateFromFlowField(flowField)),
+            AStarPathRequest aStar when aStar.AllowTraversalTransitions =>
+                RequestsClimbIntent(HybridPathRequest.CreateFromAStar(aStar)),
+            FlowFieldPathRequest flowField when flowField.AllowTraversalTransitions =>
+                RequestsClimbIntent(HybridPathRequest.CreateFromFlowField(flowField)),
             HybridPathRequest hybrid => RequestsClimbIntent(hybrid),
             _ => false
         };
     }
 
-    private static bool RequestsClimbIntent(HybridPathRequest request)
+    private static bool RequestsClimbIntent(HybridPathRequest? request)
     {
-        TraversalTransition[]? directedTransitions = request?.RoutePlan?.DirectedTransitions;
+        if (request == null)
+            return false;
+
+        TraversalTransition[]? directedTransitions = request.RoutePlan?.DirectedTransitions;
         if (directedTransitions == null)
             return false;
 

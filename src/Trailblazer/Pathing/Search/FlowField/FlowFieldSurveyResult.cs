@@ -6,7 +6,7 @@ namespace Trailblazer.Pathing;
 
 public class FlowFieldSurveyResult : SurveyResult
 {
-    public SwiftDictionary<WorldVoxelIndex, FlowField> Fields { get; private set; }
+    public SwiftDictionary<WorldVoxelIndex, FlowField>? Fields { get; private set; }
 
     public override bool HasPath => IsValid && Fields != null && Fields.Count > 0;
 

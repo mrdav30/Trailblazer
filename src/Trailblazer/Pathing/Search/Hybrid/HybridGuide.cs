@@ -1,4 +1,5 @@
 using FixedMathSharp;
+using System;
 
 namespace Trailblazer.Pathing;
 
@@ -11,7 +12,7 @@ internal sealed class HybridGuide : IWaypointGuide
     /// The active waypoints for this guide, which may be generated from either A* or flow field segments depending on the current stage of the plan. 
     /// This allows the guide to provide consistent waypoint-based navigation regardless of the underlying pathfinding strategy used for each segment of the route.
     /// </summary>
-    public AStarWaypoint[] ActiveWaypoints { get; private set; }
+    public AStarWaypoint[] ActiveWaypoints { get; private set; } = Array.Empty<AStarWaypoint>();
 
     /// <summary>
     /// Returns the index of the current waypoint being pursued. 

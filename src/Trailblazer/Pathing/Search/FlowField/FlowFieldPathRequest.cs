@@ -2,6 +2,7 @@
 using GridForge.Grids;
 using SwiftCollections;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
@@ -29,7 +30,7 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
     private FlowFieldPathRequest() { }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCreateWithSize(Vector3d origin, Vector3d destination, Fixed64 unitSize, out FlowFieldPathRequest request)
+    public static bool TryCreateWithSize(Vector3d origin, Vector3d destination, Fixed64 unitSize, [NotNullWhen(true)] out FlowFieldPathRequest? request)
     {
         request = Create(origin, destination, unitSize);
         if (request == null)
@@ -38,10 +39,10 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCreate(Vector3d origin, Vector3d destination, out FlowFieldPathRequest request) =>
+    public static bool TryCreate(Vector3d origin, Vector3d destination, [NotNullWhen(true)] out FlowFieldPathRequest? request) =>
         TryCreateWithSize(origin, destination, TrailblazerWorldManager.VoxelSize, out request);
 
-    public static FlowFieldPathRequest Create(
+    public static FlowFieldPathRequest? Create(
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
@@ -51,13 +52,16 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
         if (!SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
-            out Voxel startNode,
-            out Voxel endNode,
+            out Voxel? startNode,
+            out Voxel? endNode,
             unitSize,
             allowUnwalkableEndpoints))
         {
             return null;
         }
+
+        if (startNode == null || endNode == null)
+            return null;
 
         FlowFieldPathRequest request = new()
         {
@@ -72,16 +76,16 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
             ExtraFloodRange = DefaultExtraFloodRange
         };
 
-        if (PathManager.TryGetMaxSearchSize(request.StartNode, request.EndNode, out int searchSize))
+        if (PathManager.TryGetMaxSearchSize(startNode, endNode, out int searchSize))
             request.MaxPathSearchRange = searchSize;
 
         return request;
     }
 
-    public override bool Equals(object obj) =>
+    public override bool Equals(object? obj) =>
         obj is FlowFieldPathRequest other && Equals(other);
 
-    public bool Equals(FlowFieldPathRequest other) =>
+    public bool Equals(FlowFieldPathRequest? other) =>
         other != null && RequestCacheKey == other.RequestCacheKey;
 
     public override int GetHashCode()

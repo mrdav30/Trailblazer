@@ -1,6 +1,7 @@
 ﻿using SwiftCollections;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Trailblazer.Tests")]
@@ -87,11 +88,11 @@ internal sealed class PathHeap<TNode> where TNode : class
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TNode PeekAt(int index) => _items[index];
 
-    public bool RemoveFirst(out TNode result)
+    public bool RemoveFirst([MaybeNullWhen(false)] out TNode result)
     {
         if (HeapCount == 0)
         {
-            result = null;
+            result = null!;
             return false;
         }
 
@@ -103,7 +104,7 @@ internal sealed class PathHeap<TNode> where TNode : class
 
         if (HeapCount == 0)
         {
-            _items[0] = null;
+            _items[0] = null!;
         }
         else
         {
@@ -111,7 +112,7 @@ internal sealed class PathHeap<TNode> where TNode : class
             PathHeapMeta tempMeta = _meta[temp];
             _items[0] = temp;
             tempMeta.HeapIndex = 0;
-            _items[HeapCount] = null;
+            _items[HeapCount] = null!;
 
             if (HeapCount > 1)
                 SortDown(temp);

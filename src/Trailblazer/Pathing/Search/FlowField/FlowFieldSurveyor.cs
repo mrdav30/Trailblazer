@@ -34,7 +34,7 @@ public class FlowFieldSurveyor
 
     private readonly SwiftHashSet<string> _chartKeys = new();
 
-    private FlowFieldPathRequest _request;
+    private FlowFieldPathRequest? _request;
 
     /// <summary>
     /// Attempts to create a shared flow field path from the start to the end voxel specified in the request.
@@ -47,7 +47,9 @@ public class FlowFieldSurveyor
         {
             if (request == null
             || request.HasZeroDisplacement
-            || !request.EndNode.TryGetPartition(out SolidChartPartition targetPart))
+            || request.EndNode == null
+            || !request.EndNode.TryGetPartition(out SolidChartPartition? targetPart)
+            || targetPart == null)
             {
                 return FlowFieldSurveyResult.Empty;
             }
@@ -80,13 +82,15 @@ public class FlowFieldSurveyor
     /// <returns><c>true</c> if the start voxel is reached within the maximum range; otherwise <c>false</c>.</returns>
     private bool FloodPath()
     {
+        FlowFieldPathRequest request = _request!;
         bool targetReached = false;
 
         int iterations = 0;
-        int searchSize = _request.MaxPathSearchRange;
+        int searchSize = request.MaxPathSearchRange;
         int maxFloodRange = 0;
 
-        while (_heap.RemoveFirst(out SolidChartPartition current)
+        while (_heap.RemoveFirst(out SolidChartPartition? current)
+            && current != null
             && iterations++ < searchSize)
         {
             int currentPathCost = GetPathCost(current);
@@ -94,9 +98,9 @@ public class FlowFieldSurveyor
             // Check if we found our way to the start voxel
             if (!targetReached)
             {
-                if (current.Voxel == _request.StartNode)
+                if (current.Voxel == request.StartNode)
                 {
-                    maxFloodRange = currentPathCost + _request.ExtraFloodRange;
+                    maxFloodRange = currentPathCost + request.ExtraFloodRange;
                     targetReached = true;
                 }
 
@@ -130,10 +134,15 @@ public class FlowFieldSurveyor
         int currentPathCost,
         bool checkEdges = false)
     {
+        FlowFieldPathRequest request = _request!;
+        SolidChartPartition?[]? neighbors = current.Neighbors;
+        if (neighbors == null)
+            return;
+
         foreach (SpatialDirection dir in directions)
         {
-            SolidChartPartition neighbor = current.Neighbors[(int)dir];
-            if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request.UnitSize))
+            SolidChartPartition? neighbor = neighbors[(int)dir];
+            if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(request.UnitSize))
                 continue;
 
             if (ExceedsMaxClimbHeight(current, neighbor))
@@ -159,8 +168,9 @@ public class FlowFieldSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool ExceedsMaxClimbHeight(SolidChartPartition current, SolidChartPartition neighbor)
     {
+        FlowFieldPathRequest request = _request!;
         Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
-        return heightDifference > _request.MaxClimbHeight;
+        return heightDifference > request.MaxClimbHeight;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -183,8 +193,13 @@ public class FlowFieldSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsLegClear(SolidChartPartition current, SpatialDirection legDir)
     {
-        SolidChartPartition leg = current.Neighbors[(int)legDir];
-        return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request.UnitSize);
+        FlowFieldPathRequest request = _request!;
+        SolidChartPartition?[]? neighbors = current.Neighbors;
+        if (neighbors == null)
+            return false;
+
+        SolidChartPartition? leg = neighbors[(int)legDir];
+        return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(request.UnitSize);
     }
 
     /// <summary>
@@ -194,6 +209,8 @@ public class FlowFieldSurveyor
     /// <returns>A dictionary of directional flow field data indexed by voxel spawn tokens.</returns>
     private SwiftDictionary<WorldVoxelIndex, FlowField> GenerateFlowFields()
     {
+        FlowFieldPathRequest request = _request!;
+        Voxel endNode = request.EndNode!;
         SwiftDictionary<WorldVoxelIndex, FlowField> result = new(_heap.TrackedCount);
         // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
 
@@ -205,7 +222,7 @@ public class FlowFieldSurveyor
                 PathCost = GetPathCostTotal(current)
             };
 
-            if (current.Voxel == _request.EndNode)
+            if (current.Voxel == endNode)
             {
                 // Ensure end voxel is include, it shouldn't point anywhere
                 currentFlow.IsGoal = true;
@@ -214,11 +231,19 @@ public class FlowFieldSurveyor
             }
 
             // Go through all neighbours and find the one with the lowest distance
-            SolidChartPartition minPartition = null;
+            SolidChartPartition? minPartition = null;
             int minCost = int.MaxValue;
-            for (int i = 0; i < current.Neighbors.Length; i++)
+            SolidChartPartition?[]? neighbors = current.Neighbors;
+            if (neighbors == null)
             {
-                SolidChartPartition nPart = current.Neighbors[i];
+                result.Add(current.GlobalIndex, currentFlow);
+                ChartOwnerUtility.AddOwners(_chartKeys, current.ChartOwners);
+                continue;
+            }
+
+            for (int i = 0; i < neighbors.Length; i++)
+            {
+                SolidChartPartition? nPart = neighbors[i];
                 // check closed heap version to ensure neighbor was part of flood phase
                 if (nPart == null || !_heap.IsClosed(nPart))
                     continue;
@@ -335,7 +360,7 @@ public class FlowFieldSurveyor
         Vector3d origin,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields,
         Fixed64 range,
-        out Voxel result)
+        out Voxel? result)
     {
         result = null;
         if (fields == null || fields.Count == 0)
@@ -346,7 +371,8 @@ public class FlowFieldSurveyor
 
         foreach (FlowField flow in fields.Values)
         {
-            if (!TrailblazerWorldManager.TryGetGridAndVoxel(flow.GlobalIndex, out _, out Voxel flowVoxel))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(flow.GlobalIndex, out _, out Voxel? flowVoxel)
+                || flowVoxel == null)
                 continue;
 
             Fixed64 distSq = Vector3d.SqrDistance(origin, flowVoxel.WorldPosition);
@@ -369,7 +395,8 @@ public class FlowFieldSurveyor
     /// <returns>The direction vector, or <c>Vector3d.Zero</c> if no field exists.</returns>
     public static Vector3d GetFlowDirection(Vector3d position, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
-        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel voxel))
+        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel)
+            && voxel != null)
         {
             if (fields.TryGetValue(voxel.WorldIndex, out FlowField field))
                 return field.Direction;
@@ -379,7 +406,8 @@ public class FlowFieldSurveyor
 
     public static FlowField GetFlowField(Vector3d position, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
-        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel voxel))
+        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel)
+            && voxel != null)
         {
             if (fields.TryGetValue(voxel.WorldIndex, out FlowField field))
                 return field;

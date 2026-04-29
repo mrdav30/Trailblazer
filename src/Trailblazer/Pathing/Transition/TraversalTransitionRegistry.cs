@@ -450,6 +450,7 @@ public static class TraversalTransitionRegistry
     private static TraversalTransition[] QueryTransitionsByKey<TKey>(
         SwiftDictionary<TKey, SwiftHashSet<string>> index,
         TKey key)
+        where TKey : notnull
     {
         _transitionLock.EnterReadLock();
         try
@@ -497,6 +498,7 @@ public static class TraversalTransitionRegistry
         SwiftDictionary<TKey, SwiftHashSet<string>> index,
         TKey key,
         string transitionId)
+        where TKey : notnull
     {
         if (!index.TryGetValue(key, out SwiftHashSet<string> transitionIds))
         {
@@ -746,6 +748,7 @@ public static class TraversalTransitionRegistry
         SwiftDictionary<TKey, SwiftHashSet<string>> index,
         TKey key,
         string transitionId)
+        where TKey : notnull
     {
         if (!index.TryGetValue(key, out SwiftHashSet<string> transitionIds))
             return;
@@ -770,12 +773,13 @@ public static class TraversalTransitionRegistry
 
     private static bool DoesResolvedEndpointSupportMedium(WorldVoxelIndex voxelIndex, TraversalMedium medium)
     {
-        if (!TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel voxel))
+        if (!TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel? voxel)
+            || voxel == null)
             return false;
 
         return medium switch
         {
-            TraversalMedium.Solid => voxel.TryGetPartition(out SolidChartPartition _),
+            TraversalMedium.Solid => voxel.TryGetPartition(out SolidChartPartition? _),
             TraversalMedium.Gas => VolumeMediumRules.Matches(voxel, TraversalMedium.Gas),
             TraversalMedium.Liquid => VolumeMediumRules.Matches(voxel, TraversalMedium.Liquid),
             _ => false

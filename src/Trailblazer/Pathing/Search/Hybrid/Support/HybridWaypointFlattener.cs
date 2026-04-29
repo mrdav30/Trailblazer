@@ -10,7 +10,7 @@ internal static class HybridWaypointFlattener
 {
     public static bool TryBuild(
         HybridRoutePlan routePlan,
-        out AStarWaypoint[] flattenedWaypoints,
+        out AStarWaypoint[]? flattenedWaypoints,
         out string[] chartKeys)
     {
         flattenedWaypoints = null;
@@ -95,7 +95,7 @@ internal static class HybridWaypointFlattener
                 return true;
 
             case VolumePathRequest volumeRequest:
-                VolumeGuide volumeGuide = PathGuideFactory.RequestVolume(volumeRequest);
+                VolumeGuide? volumeGuide = PathGuideFactory.RequestVolume(volumeRequest);
                 if (volumeGuide == null)
                     return false;
 

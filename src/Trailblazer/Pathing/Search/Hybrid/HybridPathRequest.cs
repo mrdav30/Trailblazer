@@ -2,6 +2,7 @@ using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
@@ -23,13 +24,13 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     public Vector3d Origin { get; private set; }
 
     /// <inheritdoc/>
-    public Voxel StartNode { get; private set; }
+    public Voxel? StartNode { get; private set; }
 
     /// <inheritdoc/>
     public Vector3d TargetPosition { get; private set; }
 
     /// <inheritdoc/>
-    public Voxel EndNode { get; private set; }
+    public Voxel? EndNode { get; private set; }
 
     /// <inheritdoc/>
     public Fixed64 UnitSize { get; private set; }
@@ -61,12 +62,13 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     /// <inheritdoc/>
     public bool HasZeroDisplacement =>
         !IsValid
-        || StartNode == EndNode && RoutePlan.DirectedTransitions.Length == 0;
+        || (StartNode == EndNode
+            && (RoutePlan?.DirectedTransitions.Length ?? 0) == 0);
 
     /// <inheritdoc/>
     public int RequestCacheKey => GetHashCode();
 
-    internal HybridRoutePlan RoutePlan { get; private set; }
+    internal HybridRoutePlan? RoutePlan { get; private set; }
 
     internal HybridChartRequestKind ChartRequestKind { get; private set; }
 
@@ -95,7 +97,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
-        out HybridPathRequest request,
+        [NotNullWhen(true)] out HybridPathRequest? request,
         HeuristicMethod heuristic = HeuristicMethod.Manhattan,
         Fixed64? maxClimbHeight = null,
         bool allowUnwalkableEndpoints = false)
@@ -114,7 +116,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     /// <param name="maxClimbHeight">The maximum climb height for the pathfinding unit.</param>
     /// <param name="allowUnwalkableEndpoints">Whether to allow paths to unwalkable areas.</param>
     /// <returns>The created HybridPathRequest if successful; otherwise, null.</returns>
-    public static HybridPathRequest Create(
+    public static HybridPathRequest? Create(
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
@@ -125,13 +127,16 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         if (!SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
-            out Voxel startNode,
-            out Voxel endNode,
+            out Voxel? startNode,
+            out Voxel? endNode,
             unitSize,
             allowUnwalkableEndpoints))
         {
             return null;
         }
+
+        if (startNode == null || endNode == null)
+            return null;
 
         var request = new HybridPathRequest
         {
@@ -159,7 +164,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     /// </summary>
     /// <param name="request">The AStarPathRequest to convert into a HybridPathRequest.</param>
     /// <returns>The created HybridPathRequest if successful; otherwise, null.</returns>
-    internal static HybridPathRequest CreateFromAStar(AStarPathRequest request)
+    internal static HybridPathRequest? CreateFromAStar(AStarPathRequest request)
     {
         if (request == null || !request.HasValidEndpoints)
             return null;
@@ -187,7 +192,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     /// </summary>
     /// <param name="request">The FlowFieldPathRequest to convert into a HybridPathRequest.</param>
     /// <returns>The created HybridPathRequest if successful; otherwise, null.</returns>
-    internal static HybridPathRequest CreateFromFlowField(FlowFieldPathRequest request)
+    internal static HybridPathRequest? CreateFromFlowField(FlowFieldPathRequest request)
     {
         if (request == null || !request.HasValidEndpoints)
             return null;
@@ -220,8 +225,8 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         bool success = SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
-            out Voxel startVoxel,
-            out Voxel endVoxel,
+            out Voxel? startVoxel,
+            out Voxel? endVoxel,
             resolvedUnitSize,
             AllowUnwalkableEndpoints);
 
@@ -231,7 +236,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         EndNode = endVoxel;
         UnitSize = resolvedUnitSize;
 
-        if (!success)
+        if (!success || startVoxel == null || endVoxel == null)
         {
             RoutePlan = null;
             MaxPathSearchRange = 0;
@@ -250,12 +255,15 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         if (!SolidVoxelFinder.GetStartVoxel(
             origin,
             TargetPosition,
-            out Voxel startNode,
+            out Voxel? startNode,
             AllowUnwalkableEndpoints,
             UnitSize))
         {
             return false;
         }
+
+        if (startNode == null)
+            return false;
 
         Origin = origin;
         StartNode = startNode;
@@ -271,12 +279,15 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         if (!SolidVoxelFinder.GetEndVoxel(
             Origin,
             destination,
-            out Voxel endNode,
+            out Voxel? endNode,
             AllowUnwalkableEndpoints,
             UnitSize))
         {
             return false;
         }
+
+        if (endNode == null)
+            return false;
 
         TargetPosition = destination;
         EndNode = endNode;
@@ -293,11 +304,11 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     }
 
     /// <inheritdoc/>
-    public override bool Equals(object obj) =>
+    public override bool Equals(object? obj) =>
         obj is HybridPathRequest other && Equals(other);
 
     /// <inheritdoc/>
-    public bool Equals(HybridPathRequest other) =>
+    public bool Equals(HybridPathRequest? other) =>
         other != null
         && RequestCacheKey == other.RequestCacheKey;
 
@@ -342,7 +353,8 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         if (!HasValidEndpoints)
             return false;
 
-        if (!HybridRoutePlanner.TryPlan(this, out HybridRoutePlan plan))
+        if (!HybridRoutePlanner.TryPlan(this, out HybridRoutePlan? plan)
+            || plan == null)
             return false;
 
         RoutePlan = plan;

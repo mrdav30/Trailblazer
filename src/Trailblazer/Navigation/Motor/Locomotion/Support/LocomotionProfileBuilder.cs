@@ -47,32 +47,32 @@ public sealed class LocomotionProfileBuilder
     /// <summary>
     /// The optional platform locomotion to install.
     /// </summary>
-    public PlatformLocomotion Platform { get; private set; }
+    public PlatformLocomotion? Platform { get; private set; }
 
     /// <summary>
     /// The optional jump locomotion to install.
     /// </summary>
-    public JumpLocomotion Jump { get; private set; }
+    public JumpLocomotion? Jump { get; private set; }
 
     /// <summary>
     /// The optional slide locomotion to install.
     /// </summary>
-    public SlideLocomotion Slide { get; private set; }
+    public SlideLocomotion? Slide { get; private set; }
 
     /// <summary>
     /// The optional swim locomotion to install.
     /// </summary>
-    public SwimLocomotion Swim { get; private set; }
+    public SwimLocomotion? Swim { get; private set; }
 
     /// <summary>
     /// The optional fly locomotion to install.
     /// </summary>
-    public FlyLocomotion Fly { get; private set; }
+    public FlyLocomotion? Fly { get; private set; }
 
     /// <summary>
     /// The optional climb locomotion to install.
     /// </summary>
-    public ClimbLocomotion Climb { get; private set; }
+    public ClimbLocomotion? Climb { get; private set; }
 
     #endregion
 
@@ -97,7 +97,7 @@ public sealed class LocomotionProfileBuilder
     /// <summary>
     /// Installs or replaces platform locomotion.
     /// </summary>
-    public LocomotionProfileBuilder WithPlatform(PlatformLocomotion platform = null)
+    public LocomotionProfileBuilder WithPlatform(PlatformLocomotion? platform = null)
     {
         Platform = platform ?? new PlatformLocomotion();
         return this;
@@ -115,7 +115,7 @@ public sealed class LocomotionProfileBuilder
     /// <summary>
     /// Installs or replaces jump locomotion.
     /// </summary>
-    public LocomotionProfileBuilder WithJump(JumpLocomotion jump = null)
+    public LocomotionProfileBuilder WithJump(JumpLocomotion? jump = null)
     {
         Jump = jump ?? new JumpLocomotion();
         return this;
@@ -133,7 +133,7 @@ public sealed class LocomotionProfileBuilder
     /// <summary>
     /// Installs or replaces slide locomotion.
     /// </summary>
-    public LocomotionProfileBuilder WithSlide(SlideLocomotion slide = null)
+    public LocomotionProfileBuilder WithSlide(SlideLocomotion? slide = null)
     {
         Slide = slide ?? new SlideLocomotion();
         return this;
@@ -151,7 +151,7 @@ public sealed class LocomotionProfileBuilder
     /// <summary>
     /// Installs or replaces swim locomotion.
     /// </summary>
-    public LocomotionProfileBuilder WithSwim(SwimLocomotion swim = null)
+    public LocomotionProfileBuilder WithSwim(SwimLocomotion? swim = null)
     {
         Swim = swim ?? new SwimLocomotion();
         return this;
@@ -169,7 +169,7 @@ public sealed class LocomotionProfileBuilder
     /// <summary>
     /// Installs or replaces fly locomotion.
     /// </summary>
-    public LocomotionProfileBuilder WithFly(FlyLocomotion fly = null)
+    public LocomotionProfileBuilder WithFly(FlyLocomotion? fly = null)
     {
         Fly = fly ?? new FlyLocomotion();
         return this;
@@ -187,7 +187,7 @@ public sealed class LocomotionProfileBuilder
     /// <summary>
     /// Installs or replaces climb locomotion.
     /// </summary>
-    public LocomotionProfileBuilder WithClimb(ClimbLocomotion climb = null)
+    public LocomotionProfileBuilder WithClimb(ClimbLocomotion? climb = null)
     {
         Climb = climb ?? new ClimbLocomotion();
         return this;
@@ -233,37 +233,37 @@ public sealed class LocomotionProfileBuilder
             .SetClimb(handler.Climb);
     }
 
-    private LocomotionProfileBuilder SetPlatform(PlatformLocomotion platform)
+    private LocomotionProfileBuilder SetPlatform(PlatformLocomotion? platform)
     {
         Platform = platform;
         return this;
     }
 
-    private LocomotionProfileBuilder SetJump(JumpLocomotion jump)
+    private LocomotionProfileBuilder SetJump(JumpLocomotion? jump)
     {
         Jump = jump;
         return this;
     }
 
-    private LocomotionProfileBuilder SetSlide(SlideLocomotion slide)
+    private LocomotionProfileBuilder SetSlide(SlideLocomotion? slide)
     {
         Slide = slide;
         return this;
     }
 
-    private LocomotionProfileBuilder SetSwim(SwimLocomotion swim)
+    private LocomotionProfileBuilder SetSwim(SwimLocomotion? swim)
     {
         Swim = swim;
         return this;
     }
 
-    private LocomotionProfileBuilder SetFly(FlyLocomotion fly)
+    private LocomotionProfileBuilder SetFly(FlyLocomotion? fly)
     {
         Fly = fly;
         return this;
     }
 
-    private LocomotionProfileBuilder SetClimb(ClimbLocomotion climb)
+    private LocomotionProfileBuilder SetClimb(ClimbLocomotion? climb)
     {
         Climb = climb;
         return this;

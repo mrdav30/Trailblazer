@@ -7,7 +7,7 @@ namespace Trailblazer.Support;
 /// </summary>
 public sealed class LifecycleHookRegistration : IDisposable
 {
-    private Action _dispose;
+    private Action? _dispose;
 
     /// <summary>
     /// Initializes a new instance of the LifecycleHookRegistration class with the specified dispose action.
@@ -17,7 +17,7 @@ public sealed class LifecycleHookRegistration : IDisposable
 
     public void Dispose()
     {
-        Action dispose = _dispose;
+        Action? dispose = _dispose;
         if (dispose == null)
             return;
 

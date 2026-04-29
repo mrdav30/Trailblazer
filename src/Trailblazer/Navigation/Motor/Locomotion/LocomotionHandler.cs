@@ -2,6 +2,7 @@
 using SwiftCollections;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Navigation.Motor;
@@ -48,7 +49,7 @@ public class LocomotionHandler : IRecordable
     /// <summary>
     /// Handles general movement, including speed limits, acceleration, and velocity calculations.
     /// </summary>
-    public MoveLocomotion Move { get; private set; }
+    public MoveLocomotion Move { get; private set; } = null!;
 
     /// <summary>
     /// Manages movement when interacting with moving platforms or surfaces.
@@ -56,7 +57,7 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion maintains platform velocity tracking and movement transfer states.
     /// </remarks>
-    public PlatformLocomotion Platform { get; private set; }
+    public PlatformLocomotion? Platform { get; private set; }
 
     /// <summary>
     /// Controls the airborne state when a jump is executed successfully.
@@ -64,7 +65,7 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion governs jump height, cooldown timing, and jump force calculations.
     /// </remarks>
-    public JumpLocomotion Jump { get; private set; }
+    public JumpLocomotion? Jump { get; private set; }
 
     /// <summary>
     /// Handles the scout’s falling behavior when downward momentum is detected.
@@ -72,7 +73,7 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion tracks fall distance, applies landing impact logic, and determines if a scout is free-falling.
     /// </remarks>
-    public FallLocomotion Fall { get; private set; }
+    public FallLocomotion Fall { get; private set; } = null!;
 
     /// <summary>
     /// Manages movement when sliding down steep surfaces.
@@ -80,7 +81,7 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion determines when the scout should slide and how much control it has over movement during the slide.
     /// </remarks>
-    public SlideLocomotion Slide { get; private set; }
+    public SlideLocomotion? Slide { get; private set; }
 
     /// <summary>
     /// Handles movement when the scout is in water, including buoyancy and water resistance.
@@ -88,17 +89,17 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion tracks swim speed, dive time, and breath management.
     /// </remarks>
-    public SwimLocomotion Swim { get; private set; }
+    public SwimLocomotion? Swim { get; private set; }
 
     /// <summary>
     /// Handles controlled flight while the scout is airborne.
     /// </summary>
-    public FlyLocomotion Fly { get; private set; }
+    public FlyLocomotion? Fly { get; private set; }
 
     /// <summary>
     /// Handles climb configuration and runtime attachment state.
     /// </summary>
-    public ClimbLocomotion Climb { get; private set; }
+    public ClimbLocomotion? Climb { get; private set; }
 
     #endregion
 
@@ -126,7 +127,7 @@ public class LocomotionHandler : IRecordable
     /// Attempts to retrieve an installed locomotion by type.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryGet<T>(out T locomotion) where T : class, ILocomotion
+    public bool TryGet<T>([NotNullWhen(true)] out T? locomotion) where T : class, ILocomotion
     {
         locomotion = GetLocomotion(typeof(T)) as T;
         return locomotion != null;
@@ -137,7 +138,7 @@ public class LocomotionHandler : IRecordable
     /// </summary>
     public T Require<T>() where T : class, ILocomotion
     {
-        if (TryGet<T>(out T locomotion))
+        if (TryGet<T>(out T? locomotion))
             return locomotion;
 
         throw new InvalidOperationException($"{typeof(T).Name} is not installed on this locomotion handler.");
@@ -171,7 +172,7 @@ public class LocomotionHandler : IRecordable
         if (type == typeof(MoveLocomotion) || type == typeof(FallLocomotion))
             return false;
 
-        ILocomotion locomotion = GetLocomotion(type);
+        ILocomotion? locomotion = GetLocomotion(type);
         if (locomotion == null)
             return false;
 
@@ -276,7 +277,7 @@ public class LocomotionHandler : IRecordable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private ILocomotion GetLocomotion(Type type)
+    private ILocomotion? GetLocomotion(Type type)
     {
         if (!TryResolveLocomotionSlot(type, out LocomotionSlot slot))
             return null;
@@ -285,7 +286,7 @@ public class LocomotionHandler : IRecordable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private ILocomotion GetLocomotion(LocomotionSlot slot)
+    private ILocomotion? GetLocomotion(LocomotionSlot slot)
     {
 #pragma warning disable CS8524 // LocomotionSlot is only produced by TryResolveLocomotionSlot over known built-in locomotions.
         return slot switch
@@ -330,7 +331,7 @@ public class LocomotionHandler : IRecordable
             yield return Slide;
     }
 
-    private void SetLocomotion(Type type, ILocomotion locomotion)
+    private void SetLocomotion(Type type, ILocomotion? locomotion)
     {
         if (!TryResolveLocomotionSlot(type, out LocomotionSlot slot))
             throw new NotSupportedException($"Unsupported locomotion type '{type.Name}'.");
@@ -338,7 +339,7 @@ public class LocomotionHandler : IRecordable
         SetLocomotion(slot, locomotion);
     }
 
-    private void SetLocomotion(LocomotionSlot slot, ILocomotion locomotion)
+    private void SetLocomotion(LocomotionSlot slot, ILocomotion? locomotion)
     {
         switch (slot)
         {
@@ -369,7 +370,7 @@ public class LocomotionHandler : IRecordable
         }
     }
 
-    private static void ClearReplacedLocomotion(ILocomotion current, ILocomotion next)
+    private static void ClearReplacedLocomotion(ILocomotion? current, ILocomotion? next)
     {
         if (current == null || ReferenceEquals(current, next))
             return;
@@ -398,7 +399,7 @@ public class LocomotionHandler : IRecordable
         foreach (var locomotion in GetLocomotions())
         {
             if (!locomotion.IsEnabled) continue;
-            ILocomotion otherLocomotion = other.GetLocomotion(locomotion.GetType());
+            ILocomotion? otherLocomotion = other.GetLocomotion(locomotion.GetType());
             if (otherLocomotion == null) continue;
             locomotion.SyncTransientState(otherLocomotion);
         }
@@ -446,22 +447,22 @@ public class LocomotionHandler : IRecordable
 
         // TODO: can we prevent doing this if the aren't getter/setter properties?
         MoveLocomotion move = Move;
-        PlatformLocomotion platform = Platform;
-        JumpLocomotion jump = Jump;
+        PlatformLocomotion? platform = Platform;
+        JumpLocomotion? jump = Jump;
         FallLocomotion fall = Fall;
-        SlideLocomotion slide = Slide;
-        SwimLocomotion swim = Swim;
-        FlyLocomotion fly = Fly;
-        ClimbLocomotion climb = Climb;
+        SlideLocomotion? slide = Slide;
+        SwimLocomotion? swim = Swim;
+        FlyLocomotion? fly = Fly;
+        ClimbLocomotion? climb = Climb;
 
         RecordDeep.Look(chronicler, ref move, "move");
-        RecordDeep.Look(chronicler, ref platform, "platform");
-        RecordDeep.Look(chronicler, ref jump, "jump");
+        RecordOptionalLocomotion(chronicler, ref platform, "platform");
+        RecordOptionalLocomotion(chronicler, ref jump, "jump");
         RecordDeep.Look(chronicler, ref fall, "fall");
-        RecordDeep.Look(chronicler, ref slide, "slide");
-        RecordDeep.Look(chronicler, ref swim, "swim");
-        RecordDeep.Look(chronicler, ref fly, "fly");
-        RecordDeep.Look(chronicler, ref climb, "climb");
+        RecordOptionalLocomotion(chronicler, ref slide, "slide");
+        RecordOptionalLocomotion(chronicler, ref swim, "swim");
+        RecordOptionalLocomotion(chronicler, ref fly, "fly");
+        RecordOptionalLocomotion(chronicler, ref climb, "climb");
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
@@ -478,6 +479,18 @@ public class LocomotionHandler : IRecordable
     }
 
     #endregion
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void RecordOptionalLocomotion<T>(
+        IChronicler chronicler,
+        ref T? locomotion,
+        string id)
+        where T : class, ILocomotion, IRecordable
+    {
+        T local = locomotion ?? null!;
+        RecordDeep.Look(chronicler, ref local, id);
+        locomotion = local;
+    }
 
     private static bool TryResolveLocomotionSlot(Type type, out LocomotionSlot slot)
     {

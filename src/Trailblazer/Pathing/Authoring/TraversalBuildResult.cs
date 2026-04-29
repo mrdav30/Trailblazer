@@ -17,7 +17,7 @@ public sealed class TraversalBuildResult
     public TraversalBuildResult(
         NavigationChart chart,
         TraversalTransition[] generatedTransitions,
-        string generatedTransitionIdPrefix = null)
+        string? generatedTransitionIdPrefix = null)
     {
         Chart = chart ?? throw new ArgumentNullException(nameof(chart));
         GeneratedTransitions = generatedTransitions ?? Array.Empty<TraversalTransition>();

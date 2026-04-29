@@ -9,7 +9,7 @@ namespace Trailblazer.Navigation;
 /// </summary>
 internal sealed class GuidedVolumeExitHandoff : IRecordable
 {
-    public string TransitionId;
+    public string? TransitionId;
 
     public Vector3d ChartOriginPosition;
 
@@ -38,7 +38,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
     public bool TryCreateFollowupRequest(
         Vector3d currentPosition,
         Fixed64 unitSize,
-        out IPathRequest request)
+        out IPathRequest? request)
     {
         request = null;
         if (!IsValid)
@@ -82,7 +82,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
 
     public void RecordData(IChronicler chronicler)
     {
-        string transitionId = TransitionId;
+        string? transitionId = TransitionId;
         Vector3d chartOriginPosition = ChartOriginPosition;
         Vector3d targetPosition = TargetPosition;
         GuidedPathMode chartPathMode = ChartPathMode;

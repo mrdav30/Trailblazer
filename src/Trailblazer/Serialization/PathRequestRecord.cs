@@ -125,7 +125,7 @@ internal sealed class PathRequestRecord : IRecordable
                 return true;
 
             case PathRequestRecordKind.FlowField:
-                FlowFieldPathRequest flowField = FlowFieldPathRequest.Create(
+                FlowFieldPathRequest? flowField = FlowFieldPathRequest.Create(
                     Origin,
                     TargetPosition,
                     UnitSize,
@@ -143,7 +143,7 @@ internal sealed class PathRequestRecord : IRecordable
                 return true;
 
             case PathRequestRecordKind.Volume:
-                VolumePathRequest volume = VolumePathRequest.Create(
+                VolumePathRequest? volume = VolumePathRequest.Create(
                     Origin,
                     TargetPosition,
                     UnitSize,
@@ -160,7 +160,7 @@ internal sealed class PathRequestRecord : IRecordable
                 return true;
 
             case PathRequestRecordKind.Hybrid:
-                HybridPathRequest hybrid = HybridPathRequest.Create(
+                HybridPathRequest? hybrid = HybridPathRequest.Create(
                     Origin,
                     TargetPosition,
                     UnitSize,

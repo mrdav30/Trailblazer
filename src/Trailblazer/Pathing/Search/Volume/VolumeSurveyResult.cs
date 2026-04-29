@@ -7,7 +7,7 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public sealed class VolumeSurveyResult : SurveyResult
 {
-    public AStarWaypoint[] Waypoints { get; private set; }
+    public AStarWaypoint[]? Waypoints { get; private set; }
 
     public override bool HasPath => IsValid && Waypoints != null && Waypoints.Length > 0;
 

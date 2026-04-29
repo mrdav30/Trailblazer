@@ -34,7 +34,7 @@ public class NavMotor : IRecordable
     /// Optional host-owned resolver that supplies deterministic climb affordance snapshots.
     /// </summary>
     [NonSerialized]
-    public IClimbAffordanceResolver ClimbResolver;
+    public IClimbAffordanceResolver? ClimbResolver;
 
     /// <summary>
     /// This stores the current <see cref="Navigator._frameCondition"/> for the frame.  
@@ -44,7 +44,7 @@ public class NavMotor : IRecordable
     /// through <see cref="SyncTraversalState(TrekCondition, bool)"/>, and is refreshed at the end of
     /// the frame in <see cref="FinalizeTraversal"/>.
     /// </remarks>
-    public TransitState CurrentState { get; private set; }
+    public TransitState CurrentState { get; private set; } = null!;
 
     /// <summary>
     /// Indicates whether a traversal has started for the current frame and still requires finalization or abort.
@@ -53,17 +53,17 @@ public class NavMotor : IRecordable
 
     public bool IsInitialized { get; private set; }
 
-    private PlatformLocomotion PlatformModule => Handler.Platform;
+    private PlatformLocomotion? PlatformModule => Handler.Platform;
 
-    private JumpLocomotion JumpModule => Handler.Jump;
+    private JumpLocomotion? JumpModule => Handler.Jump;
 
-    private SlideLocomotion SlideModule => Handler.Slide;
+    private SlideLocomotion? SlideModule => Handler.Slide;
 
-    private SwimLocomotion SwimModule => Handler.Swim;
+    private SwimLocomotion? SwimModule => Handler.Swim;
 
-    private FlyLocomotion FlyModule => Handler.Fly;
+    private FlyLocomotion? FlyModule => Handler.Fly;
 
-    private ClimbLocomotion ClimbModule => Handler.Climb;
+    private ClimbLocomotion? ClimbModule => Handler.Climb;
 
     #region Cache
 
@@ -335,15 +335,19 @@ public class NavMotor : IRecordable
         ref Vector3d positionDelta,
         ref FixedQuaternion rotationDelta)
     {
+        PlatformLocomotion? platformModule = PlatformModule;
+        if (platformModule == null)
+            return;
+
         // Do not apply platform movement if we just jumped or if the platform is not actively driving us.
-        bool isMovingWithPlatform = PlatformModule?.IsActive == true
+        bool isMovingWithPlatform = platformModule.IsActive
             && !IsFlying
             && !IsClimbing
-            && (IsOnSolid || PlatformModule.IsLockedToPlatform);
+            && (IsOnSolid || platformModule.IsLockedToPlatform);
         if (!isMovingWithPlatform || IsJumping)
             return;
 
-        PlatformModule.GetPlatformInfluence(
+        platformModule.GetPlatformInfluence(
             request.FootPosition ?? request.Origin,
             request.Rotation,
             out positionDelta,
@@ -556,15 +560,16 @@ public class NavMotor : IRecordable
 
         // When jumping up we don't apply gravity for some time when the user is holding the jump button.
         // This allows for more control over jump height by pressing the button longer.
-        if (IsJumping && JumpModule.IsHoldingJump)
+        JumpLocomotion? jumpModule = JumpModule;
+        if (IsJumping && jumpModule?.IsHoldingJump == true)
         {
             // Calculate the duration that the extra jump force should have effect.
             // If we're still less than that duration after the jumping time, apply the force.
-            Fixed64 extraJumpLimit = (JumpModule.JumpStartTime + JumpModule.ExtraJumpHeight) / GetVerticalJumpSpeed();
+            Fixed64 extraJumpLimit = (jumpModule.JumpStartTime + jumpModule.ExtraJumpHeight) / GetVerticalJumpSpeed();
 
             // Negate the gravity we just applied, except we push in jumpDir rather than jump upwards.
             if (TrailblazerManager.TotalTime <= extraJumpLimit)
-                _forceOutput += JumpModule.FrameJumpDirection * gravityStep;
+                _forceOutput += jumpModule.FrameJumpDirection * gravityStep;
         }
     }
 
@@ -614,41 +619,56 @@ public class NavMotor : IRecordable
 
     private Vector3d GetWaterBreachJumpForce()
     {
-        JumpModule.FrameJumpDirection = Vector3d.Up;
+        JumpLocomotion? jumpModule = JumpModule;
+        SwimLocomotion? swimModule = SwimModule;
+        if (jumpModule == null || swimModule == null)
+            return Vector3d.Zero;
+
+        jumpModule.FrameJumpDirection = Vector3d.Up;
         Events.OnStartWaterBreach?.Invoke();
-        return JumpModule.FrameJumpDirection * (GetVerticalJumpSpeed() * SwimModule.BreachJumpMultiplier);
+        return jumpModule.FrameJumpDirection * (GetVerticalJumpSpeed() * swimModule.BreachJumpMultiplier);
     }
 
     private Vector3d GetGroundJumpForce()
     {
+        JumpLocomotion? jumpModule = JumpModule;
+        if (jumpModule == null)
+            return Vector3d.Zero;
+
         EnsureJumpDirectionInitialized();
-        Events.OnStartJump?.Invoke(JumpModule.AvoidGroundingTimer);
-        return JumpModule.FrameJumpDirection * GetVerticalJumpSpeed();
+        Events.OnStartJump?.Invoke(jumpModule.AvoidGroundingTimer);
+        return jumpModule.FrameJumpDirection * GetVerticalJumpSpeed();
     }
 
     private Vector3d GetClimbDetachJumpForce()
     {
-        Vector3d upward = ClimbModule.AttachedUpDirection != Vector3d.Zero
-            ? ClimbModule.AttachedUpDirection.Normal
+        JumpLocomotion? jumpModule = JumpModule;
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (jumpModule == null || climbModule == null)
+            return Vector3d.Zero;
+
+        Vector3d upward = climbModule.AttachedUpDirection != Vector3d.Zero
+            ? climbModule.AttachedUpDirection.Normal
             : Vector3d.Up;
-        Vector3d outward = ClimbModule.AttachedSurfaceNormal != Vector3d.Zero
-            ? ClimbModule.AttachedSurfaceNormal.Normal
+        Vector3d outward = climbModule.AttachedSurfaceNormal != Vector3d.Zero
+            ? climbModule.AttachedSurfaceNormal.Normal
             : Vector3d.Backward;
-        JumpModule.FrameJumpDirection = Vector3d.Slerp(upward, outward, JumpModule.PerpendicularJumpAmount);
-        Events.OnStartJump?.Invoke(JumpModule.AvoidGroundingTimer);
-        return JumpModule.FrameJumpDirection * GetVerticalJumpSpeed();
+        jumpModule.FrameJumpDirection = Vector3d.Slerp(upward, outward, jumpModule.PerpendicularJumpAmount);
+        Events.OnStartJump?.Invoke(jumpModule.AvoidGroundingTimer);
+        return jumpModule.FrameJumpDirection * GetVerticalJumpSpeed();
     }
 
     private void EnsureJumpDirectionInitialized()
     {
-        if (JumpModule.IsJumping)
+        JumpLocomotion? jumpModule = JumpModule;
+        if (jumpModule == null || jumpModule.IsJumping)
             return;
 
         Fixed64 slerpAmount = IsTooSteep(FrameSlopeAngle)
-            ? JumpModule.SteepPerpendicularJumpAmount
-            : JumpModule.PerpendicularJumpAmount;
+            ? jumpModule.SteepPerpendicularJumpAmount
+            : jumpModule.PerpendicularJumpAmount;
 
-        JumpModule.FrameJumpDirection = Vector3d.Slerp(
+        jumpModule.FrameJumpDirection = Vector3d.Slerp(
             Vector3d.Up,
             CurrentState.SurfaceNormal,
             slerpAmount);
@@ -659,7 +679,11 @@ public class NavMotor : IRecordable
         if (IsClimbing)
             StopClimb(wasForced: false);
 
-        JumpModule.RegisterJump();
+        JumpLocomotion? jumpModule = JumpModule;
+        if (jumpModule == null)
+            return;
+
+        jumpModule.RegisterJump();
 
         // Remove any existing downward force before the jump impulse is applied.
         _forceOutput.y = FixedMath.Max(Fixed64.Zero, _forceOutput.y);
@@ -740,10 +764,11 @@ public class NavMotor : IRecordable
 
     private void HandleClimbState(Vector3d position)
     {
-        if (ClimbModule?.IsEnabled != true)
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule?.IsEnabled != true)
             return;
 
-        if (ClimbModule.IsMantling)
+        if (climbModule.IsMantling)
         {
             if (IsInLiquid || CurrentState.Medium == TraversalMedium.Unknown)
             {
@@ -769,7 +794,7 @@ public class NavMotor : IRecordable
             return;
         }
 
-        if ((IsInLiquid || CurrentState.Medium == TraversalMedium.Unknown) && ClimbModule.IsClimbing)
+        if ((IsInLiquid || CurrentState.Medium == TraversalMedium.Unknown) && climbModule.IsClimbing)
             StopClimb(wasForced: false);
     }
 
@@ -777,8 +802,12 @@ public class NavMotor : IRecordable
     {
         if (IsJumping)
         {
+            JumpLocomotion? jumpModule = JumpModule;
+            if (jumpModule == null)
+                return;
+
             // Reset cooldown on landing.
-            JumpModule.ResetJumpCounter();
+            jumpModule.ResetJumpCounter();
 
             if (IsInLiquid)
                 Events.OnStopWaterBreach?.Invoke();
@@ -1119,14 +1148,18 @@ public class NavMotor : IRecordable
 
     private Vector3d GetSlidingVelocity(TrekRequest frameRequest)
     {
+        SlideLocomotion? slideModule = SlideModule;
+        if (slideModule == null)
+            return Vector3d.Zero;
+
         Vector3d slideDirection = new Vector3d(
             CurrentState.SurfaceNormal.x,
             Fixed64.Zero,
             CurrentState.SurfaceNormal.z).Normal;
         Vector3d projectedMoveDir = Vector3d.Project(frameRequest.Direction, slideDirection);
-        Vector3d speedContribution = projectedMoveDir * SlideModule.SpeedControl;
-        Vector3d sidewaysContribution = (frameRequest.Direction - projectedMoveDir) * SlideModule.SidewaysControl;
-        return slideDirection + ((speedContribution + sidewaysContribution) * SlideModule.SlidingSpeed);
+        Vector3d speedContribution = projectedMoveDir * slideModule.SpeedControl;
+        Vector3d sidewaysContribution = (frameRequest.Direction - projectedMoveDir) * slideModule.SidewaysControl;
+        return slideDirection + ((speedContribution + sidewaysContribution) * slideModule.SlidingSpeed);
     }
 
     private Vector3d ResolveLiquidVelocity(TrekRequest frameRequest, Vector3d desiredVelocity)
@@ -1236,7 +1269,7 @@ public class NavMotor : IRecordable
         };
     }
 
-    private Fixed64 GetEllipticalHorizontalSpeed(
+    private static Fixed64 GetEllipticalHorizontalSpeed(
         Vector3d desiredMovementDirection,
         Fixed64 zAxisEllipseMultiplier,
         Fixed64 sidewaysSpeed,
@@ -1259,7 +1292,7 @@ public class NavMotor : IRecordable
             return Fixed64.One;
 
         if (IsJumping)
-            return JumpModule.JumpControlMultiplier;
+            return JumpModule?.JumpControlMultiplier ?? Fixed64.One;
 
         if (IsFalling)
             return Handler.Fall.FallControlMultiplier;
@@ -1377,9 +1410,13 @@ public class NavMotor : IRecordable
 
     private void StartClimb(ClimbAffordanceSnapshot snapshot)
     {
-        ClimbModule.ApplyClimbSnapshot(snapshot);
-        ClimbModule.IsClimbing = true;
-        ClimbModule.IsMantling = false;
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return;
+
+        climbModule.ApplyClimbSnapshot(snapshot);
+        climbModule.IsClimbing = true;
+        climbModule.IsMantling = false;
 
         if (IsFalling)
             Handler.ClearTransientState<FallLocomotion>();
@@ -1401,8 +1438,12 @@ public class NavMotor : IRecordable
 
     private void StartMantle(ClimbAffordanceSnapshot snapshot)
     {
-        ClimbModule.ApplyClimbSnapshot(snapshot);
-        ClimbModule.IsMantling = true;
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return;
+
+        climbModule.ApplyClimbSnapshot(snapshot);
+        climbModule.IsMantling = true;
         Events.OnStartMantle?.Invoke();
     }
 
@@ -1421,31 +1462,39 @@ public class NavMotor : IRecordable
 
     private bool IsCompatibleClimbAffordance(ClimbAffordanceSnapshot snapshot)
     {
-        if (ClimbModule.AttachmentId.HasValue && snapshot.AffordanceId.HasValue)
-            return ClimbModule.AttachmentId.Value == snapshot.AffordanceId.Value;
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return false;
 
-        if (snapshot.Kind != ClimbModule.ActiveClimbKind)
+        if (climbModule.AttachmentId.HasValue && snapshot.AffordanceId.HasValue)
+            return climbModule.AttachmentId.Value == snapshot.AffordanceId.Value;
+
+        if (snapshot.Kind != climbModule.ActiveClimbKind)
             return false;
 
         if (!HasCompatibleClimbAxes(snapshot))
             return false;
 
         Fixed64 tolerance = GetClimbContinuityTolerance();
-        return (snapshot.AttachmentPoint - ClimbModule.AttachmentPoint).SqrMagnitude <= tolerance * tolerance;
+        return (snapshot.AttachmentPoint - climbModule.AttachmentPoint).SqrMagnitude <= tolerance * tolerance;
     }
 
     private bool HasCompatibleClimbAxes(ClimbAffordanceSnapshot snapshot)
     {
-        if (ClimbModule.AttachedSurfaceNormal != Vector3d.Zero
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return false;
+
+        if (climbModule.AttachedSurfaceNormal != Vector3d.Zero
             && snapshot.SurfaceNormal != Vector3d.Zero
-            && Vector3d.Dot(ClimbModule.AttachedSurfaceNormal.Normal, snapshot.SurfaceNormal.Normal) <= Fixed64.Zero)
+            && Vector3d.Dot(climbModule.AttachedSurfaceNormal.Normal, snapshot.SurfaceNormal.Normal) <= Fixed64.Zero)
         {
             return false;
         }
 
-        if (ClimbModule.AttachedUpDirection != Vector3d.Zero
+        if (climbModule.AttachedUpDirection != Vector3d.Zero
             && snapshot.UpDirection != Vector3d.Zero
-            && Vector3d.Dot(ClimbModule.AttachedUpDirection.Normal, snapshot.UpDirection.Normal) <= Fixed64.Zero)
+            && Vector3d.Dot(climbModule.AttachedUpDirection.Normal, snapshot.UpDirection.Normal) <= Fixed64.Zero)
         {
             return false;
         }
@@ -1455,45 +1504,56 @@ public class NavMotor : IRecordable
 
     private Fixed64 GetClimbContinuityTolerance()
     {
-        Fixed64 frameTravelAllowance = ClimbModule.MaxClimbSpeed * TrailblazerManager.DeltaTime;
-        return ClimbModule.ClimbStartTolerance + frameTravelAllowance;
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return Fixed64.Zero;
+
+        Fixed64 frameTravelAllowance = climbModule.MaxClimbSpeed * TrailblazerManager.DeltaTime;
+        return climbModule.ClimbStartTolerance + frameTravelAllowance;
     }
 
     private bool ShouldStartMantle(TrekRequest request, ClimbAffordanceSnapshot snapshot)
     {
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return false;
+
         if (snapshot.Kind != ClimbAffordanceKind.Ledge
-            || !ClimbModule.ActiveAllowMantle
-            || !ClimbModule.MantleTargetPosition.HasValue
+            || !climbModule.ActiveAllowMantle
+            || !climbModule.MantleTargetPosition.HasValue
             || request.Rate == TrekRate.Stationary)
         {
             return false;
         }
 
-        Vector3d upAxis = ClimbModule.AttachedUpDirection != Vector3d.Zero
-            ? ClimbModule.AttachedUpDirection.Normal
+        Vector3d upAxis = climbModule.AttachedUpDirection != Vector3d.Zero
+            ? climbModule.AttachedUpDirection.Normal
             : Vector3d.Up;
         return Vector3d.Dot(request.Direction, upAxis) > Fixed64.Zero;
     }
 
     private Vector3d GetMantleVelocity(Vector3d origin)
     {
-        if (ClimbModule?.MantleTargetPosition.HasValue != true)
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule?.MantleTargetPosition.HasValue != true)
             return Vector3d.Zero;
 
-        Vector3d toTarget = ClimbModule.MantleTargetPosition.Value - origin;
+        Vector3d mantleTargetPosition = climbModule.MantleTargetPosition.GetValueOrDefault();
+        Vector3d toTarget = mantleTargetPosition - origin;
         if (toTarget == Vector3d.Zero)
             return Vector3d.Zero;
 
         Fixed64 distance = toTarget.Magnitude;
-        if (distance <= ClimbModule.ClimbStartTolerance)
+        if (distance <= climbModule.ClimbStartTolerance)
             return Vector3d.Zero;
 
-        return toTarget.Normal * ClimbModule.MaxClimbSpeed;
+        return toTarget.Normal * climbModule.MaxClimbSpeed;
     }
 
     private bool CanContinueActiveMantle()
     {
-        if (!ClimbModule.ValidateActiveMantleWithHost)
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null || !climbModule.ValidateActiveMantleWithHost)
             return true;
 
         if (ClimbResolver is not IActiveMantleValidator validator)
@@ -1501,18 +1561,20 @@ public class NavMotor : IRecordable
 
         return validator.TryValidateActiveMantle(
                 CurrentState,
-                ClimbModule.CreateActiveMantleState(),
+                climbModule.CreateActiveMantleState(),
                 out MantleValidationSnapshot snapshot)
             && snapshot.CanContinueMantle;
     }
 
     private bool HasReachedMantleTarget(Vector3d position)
     {
-        if (ClimbModule?.MantleTargetPosition.HasValue != true)
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule?.MantleTargetPosition.HasValue != true)
             return false;
 
-        Fixed64 tolerance = ClimbModule.ClimbStartTolerance;
-        return (ClimbModule.MantleTargetPosition.Value - position).SqrMagnitude <= tolerance * tolerance;
+        Fixed64 tolerance = climbModule.ClimbStartTolerance;
+        Vector3d mantleTargetPosition = climbModule.MantleTargetPosition.GetValueOrDefault();
+        return (mantleTargetPosition - position).SqrMagnitude <= tolerance * tolerance;
     }
 
     private void CompleteMantle()

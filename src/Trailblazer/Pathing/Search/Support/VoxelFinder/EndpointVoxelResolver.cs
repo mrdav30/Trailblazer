@@ -3,6 +3,7 @@ using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using GridForge.Utility;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Trailblazer.Pathing;
 
@@ -23,7 +24,7 @@ internal interface IVoxelEndpointResolutionPolicy
         Vector3d position,
         Voxel directVoxel,
         Fixed64 unitSize,
-        out Voxel voxel);
+        [MaybeNullWhen(false)] out Voxel voxel);
 }
 
 internal static class EndpointVoxelResolver
@@ -31,7 +32,7 @@ internal static class EndpointVoxelResolver
     public static bool TryGetEndpointVoxel<TPolicy>(
         Vector3d position,
         Vector3d traceToward,
-        out Voxel? voxel,
+        [MaybeNullWhen(false)] out Voxel voxel,
         bool allowUnwalkableEndpoints,
         Fixed64 unitSize,
         TPolicy policy)
@@ -46,17 +47,19 @@ internal static class EndpointVoxelResolver
         voxel = null;
         bool shouldRelaxEndpoint = allowUnwalkableEndpoints;
 
-        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? directVoxel))
+        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? directVoxel)
+            && directVoxel != null)
         {
-            if (policy.TryAcceptDirectVoxel(directVoxel!, unitSize, allowUnwalkableEndpoints))
+            if (policy.TryAcceptDirectVoxel(directVoxel, unitSize, allowUnwalkableEndpoints))
             {
                 voxel = directVoxel;
                 return true;
             }
 
-            shouldRelaxEndpoint = shouldRelaxEndpoint || policy.RequiresSizeFallback(directVoxel!, unitSize);
+            shouldRelaxEndpoint = shouldRelaxEndpoint || policy.RequiresSizeFallback(directVoxel, unitSize);
             if (shouldRelaxEndpoint
-                && TryGetClosestTraversableVoxel(directVoxel!, out Voxel? closestNeighbor, unitSize, policy))
+                && TryGetClosestTraversableVoxel(directVoxel, out Voxel? closestNeighbor, unitSize, policy)
+                && closestNeighbor != null)
             {
                 voxel = closestNeighbor;
                 return true;
@@ -68,7 +71,7 @@ internal static class EndpointVoxelResolver
             if (TryTraceToClosestTraversableVoxel(position, traceToward, unitSize, out voxel, policy))
                 return true;
 
-            return policy.TryGetFinalFallbackVoxel(position, directVoxel!, unitSize, out voxel);
+            return policy.TryGetFinalFallbackVoxel(position, directVoxel, unitSize, out voxel);
         }
 
         if (!shouldRelaxEndpoint)
@@ -83,7 +86,7 @@ internal static class EndpointVoxelResolver
 
     public static bool TryGetClosestTraversableVoxel<TPolicy>(
         Voxel voxel,
-        out Voxel? closestNeighbor,
+        [MaybeNullWhen(false)] out Voxel closestNeighbor,
         Fixed64 unitSize,
         TPolicy policy)
         where TPolicy : struct, IVoxelEndpointResolutionPolicy
@@ -95,7 +98,8 @@ internal static class EndpointVoxelResolver
         foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
         {
             if (!voxel.TryGetNeighborFromDirection(grid!, dir, out Voxel? candidate)
-                || !policy.IsTraversable(candidate!, unitSize))
+                || candidate == null
+                || !policy.IsTraversable(candidate, unitSize))
             {
                 continue;
             }
@@ -107,7 +111,8 @@ internal static class EndpointVoxelResolver
         foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
         {
             if (!voxel.TryGetNeighborFromDirection(grid!, dir, out Voxel? candidate)
-                || !policy.IsTraversable(candidate!, unitSize))
+                || candidate == null
+                || !policy.IsTraversable(candidate, unitSize))
             {
                 continue;
             }
@@ -123,7 +128,7 @@ internal static class EndpointVoxelResolver
         Vector3d position,
         Vector3d traceToward,
         Fixed64 unitSize,
-        out Voxel? voxel,
+        [MaybeNullWhen(false)] out Voxel voxel,
         TPolicy policy)
         where TPolicy : struct, IVoxelEndpointResolutionPolicy
     {

@@ -19,9 +19,9 @@ public static class VolumeMediumRules
 {
     public delegate bool VoxelRule(Voxel voxel);
 
-    private static VoxelRule _gasVoxelRule;
+    private static VoxelRule? _gasVoxelRule;
 
-    private static VoxelRule _liquidVoxelRule;
+    private static VoxelRule? _liquidVoxelRule;
 
     private static int _registryVersion;
 
@@ -120,17 +120,16 @@ public static class VolumeMediumRules
             return false;
 
         bool hasTrailblazerPartition = voxel.HasPartition<SolidChartPartition>();
-        bool hasAuthoredVolumeChartPartition = voxel.TryGetPartition(out VolumeChartPartition volumeChartPartition);
+        bool hasAuthoredVolumeChartPartition = voxel.TryGetPartition(out VolumeChartPartition? volumeChartPartition)
+            && volumeChartPartition != null;
         hasTrailblazerPartition |= hasAuthoredVolumeChartPartition;
         if (!hasTrailblazerPartition)
             return false;
 
         bool hostGasMatch = _gasVoxelRule?.Invoke(voxel) == true;
         bool hostLiquidMatch = _liquidVoxelRule?.Invoke(voxel) == true;
-        bool authoredGasMatch = hasAuthoredVolumeChartPartition
-            && volumeChartPartition.SupportsMedium(TraversalMedium.Gas);
-        bool authoredLiquidMatch = hasAuthoredVolumeChartPartition
-            && volumeChartPartition.SupportsMedium(TraversalMedium.Liquid);
+        bool authoredGasMatch = volumeChartPartition?.SupportsMedium(TraversalMedium.Gas) == true;
+        bool authoredLiquidMatch = volumeChartPartition?.SupportsMedium(TraversalMedium.Liquid) == true;
 
         // Host rules only add medium membership; they do not suppress authored media.
         return medium switch

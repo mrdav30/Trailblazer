@@ -80,7 +80,7 @@ public class MoveLocomotionTests : IDisposable
             platformMatrix: platform
         );
 
-        TrekRequest frameRequest = new TrekRequest
+        TrekRequest frameRequest = new()
         {
             Origin = agent.Position,
             FootPosition = agent.GetFootPosition(),

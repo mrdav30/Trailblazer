@@ -820,13 +820,15 @@ public class NavSteeringTests : IDisposable
             Speed = Fixed64.One
         };
 
-        var leaderSteer = new NavSteering(leader.Radius);
-        leaderSteer.BehaviorWeights = new GroupBehaviorWeights
+        var leaderSteer = new NavSteering(leader.Radius)
         {
-            Separation = Fixed64.One,
-            Alignment = Fixed64.One,
-            Cohesion = Fixed64.One,
-            Avoidance = Fixed64.Zero
+            BehaviorWeights = new GroupBehaviorWeights
+            {
+                Separation = Fixed64.One,
+                Alignment = Fixed64.One,
+                Cohesion = Fixed64.One,
+                Avoidance = Fixed64.Zero
+            }
         };
 
         var neighborSteer = new NavSteering(neighbor.Radius);
@@ -979,13 +981,15 @@ public class NavSteeringTests : IDisposable
             Speed = Fixed64.One
         };
 
-        var leaderSteer = new NavSteering(leader.Radius);
-        leaderSteer.BehaviorWeights = new GroupBehaviorWeights
+        var leaderSteer = new NavSteering(leader.Radius)
         {
-            Separation = Fixed64.One,
-            Alignment = Fixed64.One,
-            Cohesion = Fixed64.One,
-            Avoidance = Fixed64.Zero
+            BehaviorWeights = new GroupBehaviorWeights
+            {
+                Separation = Fixed64.One,
+                Alignment = Fixed64.One,
+                Cohesion = Fixed64.One,
+                Avoidance = Fixed64.Zero
+            }
         };
 
         var neighborSteer = new NavSteering(neighbor.Radius);

@@ -40,7 +40,7 @@ public class AerialSurveyorTests : IDisposable
         AddOpen(new Vector3d(2, 1, 0));
         AddOpen(new Vector3d(2, 0, 0));
         AddObstacle(new Vector3d(1, 0, 0));
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel blockedVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel? blockedVoxel).Should().BeTrue();
 
         VolumePathRequest request = VolumePathRequest.Create(
             Vector3d.Zero,
@@ -53,7 +53,7 @@ public class AerialSurveyorTests : IDisposable
         result.Waypoints.Length.Should().BeGreaterThan(2);
         result.Waypoints[0].GlobalIndex.Should().Be(request.StartNode.WorldIndex);
         result.Waypoints[^1].GlobalIndex.Should().Be(request.EndNode.WorldIndex);
-        result.Waypoints.Should().NotContain(w => w.GlobalIndex == blockedVoxel.WorldIndex);
+        result.Waypoints.Should().NotContain(w => w.GlobalIndex == blockedVoxel!.WorldIndex);
     }
 
     [Fact]

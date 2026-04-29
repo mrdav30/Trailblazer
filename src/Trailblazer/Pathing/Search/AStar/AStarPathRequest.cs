@@ -124,13 +124,16 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
         if (!SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,
-            out Voxel startNode,
-            out Voxel endNode,
+            out Voxel? startNode,
+            out Voxel? endNode,
             unitSize,
             allowUnwalkableEndpoints))
         {
             return null;
         }
+
+        if (startNode == null || endNode == null)
+            return null;
 
         AStarPathRequest request = new()
         {

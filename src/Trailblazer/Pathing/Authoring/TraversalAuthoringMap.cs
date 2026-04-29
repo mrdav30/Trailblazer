@@ -25,8 +25,8 @@ public sealed class TraversalAuthoringMap
         string[,,] sourceMap,
         Vector3d minBounds,
         Fixed64 interval,
-        TraversalLegend legend = null,
-        string transitionIdPrefix = null)
+        TraversalLegend? legend = null,
+        string? transitionIdPrefix = null)
     {
         if (string.IsNullOrWhiteSpace(chartName))
             throw new ArgumentException("Chart name cannot be null or whitespace.", nameof(chartName));

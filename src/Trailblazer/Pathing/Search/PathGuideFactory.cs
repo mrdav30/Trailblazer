@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
@@ -85,13 +86,14 @@ public static class PathGuideFactory
     /// <param name="request">The path request with validated parameters.</param>
     /// <param name="result">The resolved guide or null if the request was invalid.</param>
     /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
-    public static bool RequestGuide<T>(IPathRequest request, out T result) where T : IGuide
+    public static bool RequestGuide<T>(IPathRequest request, [NotNullWhen(true)] out T? result) where T : class, IGuide
     {
         result = default;
-        bool success = RequestGuide(request, out IGuide guide);
-        if (success)
-            result = (T)guide;
-        return success;
+        if (!RequestGuide(request, out IGuide? guide) || guide is not T typedGuide)
+            return false;
+
+        result = typedGuide;
+        return true;
     }
 
     /// <summary>
@@ -100,7 +102,7 @@ public static class PathGuideFactory
     /// <param name="request">The polymorphic request to resolve.</param>
     /// <param name="result">The resolved guide or null if the request was invalid.</param>
     /// <returns><c>true</c> if the guide was properly configured, otherwise <c>false</c>.</returns>
-    public static bool RequestGuide(IPathRequest request, out IGuide result)
+    public static bool RequestGuide(IPathRequest request, [NotNullWhen(true)] out IGuide? result)
     {
         if (request?.IsValid != true)
         {
@@ -125,7 +127,7 @@ public static class PathGuideFactory
     /// </summary>
     /// <param name="request">The configured A* pathfinding request.</param>
     /// <returns>A valid AStarGuide instance.</returns>
-    public static AStarGuide RequestAStar(AStarPathRequest request)
+    public static AStarGuide? RequestAStar(AStarPathRequest request)
     {
         bool pathFound = _cachedAStarResults.TryGetOrCreate(request,
             () => ResolveAStarResult(request),
@@ -144,7 +146,7 @@ public static class PathGuideFactory
     /// </summary>
     /// <param name="request">The configured FlowField pathfinding request.</param>
     /// <returns>A valid FlowFieldGuide instance.</returns>
-    public static FlowFieldGuide RequestFlowField(FlowFieldPathRequest request)
+    public static FlowFieldGuide? RequestFlowField(FlowFieldPathRequest request)
     {
         bool pathFound = _cachedFlowResults.TryGetOrCreate(request,
             () => FlowFieldSurveyor.Shared.FindPath(request),
@@ -153,7 +155,10 @@ public static class PathGuideFactory
         // Make sure the start voxel is within the current fields collection
         // Note: for flow fields, the world-scoped index of the start voxel is used as the key to check for path validity,
         // since the flow field is generated around the start position and may not cover the entire map.
-        if (pathFound && result.Fields.ContainsKey(request.StartNode.WorldIndex))
+        if (pathFound
+            && result.Fields != null
+            && request.StartNode != null
+            && result.Fields.ContainsKey(request.StartNode.WorldIndex))
         {
             FlowFieldGuide guide = new();
             guide.Initialize(result);
@@ -166,7 +171,7 @@ public static class PathGuideFactory
         if (!request.AllowTraversalTransitions)
             return null;
 
-        return TryBuildTransitionFallbackFlowGuide(request, out FlowFieldGuide fallbackGuide)
+        return TryBuildTransitionFallbackFlowGuide(request, out FlowFieldGuide? fallbackGuide)
             ? fallbackGuide
             : null;
     }
@@ -174,7 +179,7 @@ public static class PathGuideFactory
     /// <summary>
     /// Retrieves a raw-volume guide from the pool or creates a new one based on the provided request.
     /// </summary>
-    public static VolumeGuide RequestVolume(VolumePathRequest request)
+    public static VolumeGuide? RequestVolume(VolumePathRequest request)
     {
         bool pathFound = _cachedVolumeResults.TryGetOrCreate(request,
             () => VolumeSurveyor.Shared.FindPath(request),
@@ -191,18 +196,20 @@ public static class PathGuideFactory
     /// <summary>
     /// Builds a hybrid guide by composing cached chart and volume segment guides from a planned route request.
     /// </summary>
-    private static HybridGuide RequestHybrid(HybridPathRequest request)
+    private static HybridGuide? RequestHybrid(HybridPathRequest request)
     {
-        if (!HybridWaypointFlattener.TryBuild(
-            request.RoutePlan,
-            out AStarWaypoint[] flattened,
+        HybridRoutePlan? routePlan = request.RoutePlan;
+        if (routePlan == null
+            || !HybridWaypointFlattener.TryBuild(
+            routePlan,
+            out AStarWaypoint[]? flattened,
             out _))
         {
             return null;
         }
 
         HybridGuide guide = new();
-        return guide.Initialize(flattened) ? guide : null;
+        return guide.Initialize(flattened!) ? guide : null;
     }
 
     /// <summary>
@@ -225,7 +232,8 @@ public static class PathGuideFactory
                     _cachedFlowResults.Return(f.FlowMap, dispose);
                 break;
             case VolumeGuide v:
-                _cachedVolumeResults.Return(v.TrailMap, dispose);
+                if (v.TrailMap != null)
+                    _cachedVolumeResults.Return(v.TrailMap, dispose);
                 break;
         }
     }
@@ -248,9 +256,6 @@ public static class PathGuideFactory
     private static bool UsesChart(ISurveyResult result, string chartId)
     {
         var charts = result.ChartsUtilized;
-        if (charts == null)
-            return false;
-
         for (int i = 0; i < charts.Length; i++)
         {
             if (charts[i] == chartId)
@@ -288,39 +293,41 @@ public static class PathGuideFactory
     {
         result = AStarSurveyResult.Empty;
 
-        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromAStar(request);
-        if (hybridRequest?.RoutePlan == null
-            || hybridRequest.RoutePlan.DirectedTransitions.Length == 0)
+        HybridPathRequest? hybridRequest = HybridPathRequest.CreateFromAStar(request);
+        HybridRoutePlan? routePlan = hybridRequest?.RoutePlan;
+        if (routePlan == null
+            || routePlan.DirectedTransitions.Length == 0)
         {
             return false;
         }
 
         if (!HybridWaypointFlattener.TryBuild(
-            hybridRequest.RoutePlan,
-            out AStarWaypoint[] flattenedWaypoints,
+            routePlan,
+            out AStarWaypoint[]? flattenedWaypoints,
             out string[] chartKeys))
         {
             return false;
         }
 
-        result = AStarSurveyResult.Create(flattenedWaypoints, chartKeys, request.RequestCacheKey);
+        result = AStarSurveyResult.Create(flattenedWaypoints!, chartKeys, request.RequestCacheKey);
         return true;
     }
 
     private static bool TryBuildTransitionFallbackFlowGuide(
         FlowFieldPathRequest request,
-        out FlowFieldGuide guide)
+        [NotNullWhen(true)] out FlowFieldGuide? guide)
     {
         guide = null;
 
-        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromFlowField(request);
-        if (hybridRequest?.RoutePlan == null
-            || hybridRequest.RoutePlan.DirectedTransitions.Length == 0)
+        HybridPathRequest? hybridRequest = HybridPathRequest.CreateFromFlowField(request);
+        HybridRoutePlan? routePlan = hybridRequest?.RoutePlan;
+        if (routePlan == null
+            || routePlan.DirectedTransitions.Length == 0)
         {
             return false;
         }
 
         guide = new FlowFieldGuide();
-        return guide.InitializeStaged(hybridRequest.RoutePlan);
+        return guide.InitializeStaged(routePlan);
     }
 }

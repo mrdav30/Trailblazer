@@ -72,7 +72,7 @@ public class AStarSurveyor
 
     private readonly SwiftHashSet<string> _chartKeys = new();
 
-    private AStarPathRequest _request;
+    private AStarPathRequest? _request;
 
 #nullable enable
     /// <summary>

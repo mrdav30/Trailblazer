@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
@@ -30,8 +31,8 @@ public static class SolidVoxelFinder
     public static bool TryGetPathEdgeVoxels(
         Vector3d origin,
         Vector3d target,
-        out Voxel originVoxel,
-        out Voxel targetVoxel,
+        [MaybeNullWhen(false)] out Voxel originVoxel,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
         Fixed64? unitSize = null,
         bool allowUnwalkableEndpoints = false)
     {
@@ -56,7 +57,7 @@ public static class SolidVoxelFinder
     public static bool GetEndVoxel(
         Vector3d origin,
         Vector3d target,
-        out Voxel targetVoxel,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
         bool allowUnwalkableEndpoints = false,
         Fixed64? unitSize = null)
     {
@@ -80,7 +81,7 @@ public static class SolidVoxelFinder
     public static bool GetStartVoxel(
         Vector3d origin,
         Vector3d target,
-        out Voxel originVoxel,
+        [MaybeNullWhen(false)] out Voxel originVoxel,
         bool allowUnwalkableEndpoints = false,
         Fixed64? unitSize = null)
     {
@@ -100,7 +101,7 @@ public static class SolidVoxelFinder
     /// <param name="target"></param>
     /// <param name="targetVoxel"></param>
     /// <returns></returns>
-    public static bool StarCast(Vector3d target, out Voxel targetVoxel) =>
+    public static bool StarCast(Vector3d target, [MaybeNullWhen(false)] out Voxel targetVoxel) =>
         StarCast(target, out targetVoxel, TrailblazerWorldManager.VoxelSize);
 
     /// <summary>
@@ -111,9 +112,10 @@ public static class SolidVoxelFinder
     /// <param name="targetVoxel"></param>
     /// <param name="unitSize"></param>
     /// <returns></returns>
-    public static bool StarCast(Vector3d target, out Voxel targetVoxel, Fixed64 unitSize)
+    public static bool StarCast(Vector3d target, [MaybeNullWhen(false)] out Voxel targetVoxel, Fixed64 unitSize)
     {
-        if (!TrailblazerWorldManager.TryGetVoxel(target, out Voxel directVoxel))
+        if (!TrailblazerWorldManager.TryGetVoxel(target, out Voxel? directVoxel)
+            || directVoxel == null)
         {
             targetVoxel = null;
             return false;
@@ -131,7 +133,7 @@ public static class SolidVoxelFinder
     /// <returns></returns>
     public static bool TryGetClosestWalkableVoxel(
     Voxel voxel,
-    out Voxel closestNeighbor,
+    [MaybeNullWhen(false)] out Voxel closestNeighbor,
     Fixed64? unitSize = null)
     {
         return EndpointVoxelResolver.TryGetClosestTraversableVoxel(
@@ -154,7 +156,7 @@ public static class SolidVoxelFinder
         Vector3d origin,
         Vector3d target,
         Fixed64 unitSize,
-        out Voxel targetVoxel,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
         bool allowUnwalkableEndpoints = false)
     {
         return EndpointVoxelResolver.TryGetEndpointVoxel(
@@ -169,7 +171,7 @@ public static class SolidVoxelFinder
     private static bool TryGetEndpointVoxel(
         Vector3d position,
         Vector3d traceToward,
-        out Voxel voxel,
+        [MaybeNullWhen(false)] out Voxel voxel,
         bool allowUnwalkableEndpoints,
         Fixed64 unitSize)
     {
@@ -188,9 +190,9 @@ public static class SolidVoxelFinder
         if (!IsBaseChartTraversable(voxel))
             return false;
 
-        voxel.TryGetPartition(out SolidChartPartition partition);
+        voxel.TryGetPartition(out SolidChartPartition? partition);
         return unitSize == TrailblazerWorldManager.VoxelSize
-            || !partition.IsImpassable(unitSize);
+            || (partition != null && !partition.IsImpassable(unitSize));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -204,7 +206,8 @@ public static class SolidVoxelFinder
     {
         if (unitSize == TrailblazerWorldManager.VoxelSize
             || !IsBaseChartTraversable(voxel)
-            || !voxel.TryGetPartition(out SolidChartPartition partition))
+            || !voxel.TryGetPartition(out SolidChartPartition? partition)
+            || partition == null)
         {
             return false;
         }
@@ -243,7 +246,7 @@ public static class SolidVoxelFinder
             Vector3d position,
             Voxel directVoxel,
             Fixed64 unitSize,
-            out Voxel voxel)
+            [MaybeNullWhen(false)] out Voxel voxel)
         {
             return StarCast(position, directVoxel, out voxel, unitSize);
         }
@@ -252,14 +255,15 @@ public static class SolidVoxelFinder
     private static bool StarCast(
         Vector3d target,
         Voxel directVoxel,
-        out Voxel targetVoxel,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
         Fixed64 unitSize)
     {
         targetVoxel = null;
 
         AlternativeVoxelFinder.Instance.SetQuery(target, directVoxel, MaxTestDistance);
 
-        if (!AlternativeVoxelFinder.Instance.GetVoxel(out Voxel candidateVoxel))
+        if (!AlternativeVoxelFinder.Instance.GetVoxel(out Voxel? candidateVoxel)
+            || candidateVoxel == null)
             return false;
 
         if (IsChartTraversable(candidateVoxel, unitSize))

@@ -6,7 +6,7 @@ internal sealed class HybridRouteStep
 {
     public HybridRouteStepKind Kind { get; private set; }
 
-    public IPathRequest SegmentRequest { get; private set; }
+    public IPathRequest SegmentRequest { get; private set; } = null!;
 
     public Vector3d WaypointPosition { get; private set; }
 

@@ -25,7 +25,7 @@ public static class PathManager
 
     #region Pools
 
-    internal static readonly SwiftHashSetPool<SolidChartPartition> PartitionSetPool = new SwiftHashSetPool<SolidChartPartition>();
+    internal static readonly SwiftHashSetPool<SolidChartPartition> PartitionSetPool = new();
 
     /// <summary>
     /// Pool of reusable <see cref="SolidChartPartition"/> instances used for partitioning the navigation grid.

@@ -1,6 +1,7 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Trailblazer.Pathing;
 
@@ -41,7 +42,7 @@ public class AlternativeVoxelFinder
     /// <summary>
     /// Attempts to find the first unblocked voxel in deterministic star/ring order on the query layer.
     /// </summary>
-    public bool GetVoxel(out Voxel nextVoxel)
+    public bool GetVoxel([MaybeNullWhen(false)] out Voxel nextVoxel)
     {
         nextVoxel = null;
         InitializeDirection();
@@ -56,7 +57,8 @@ public class AlternativeVoxelFinder
                 _worldPos.x + _direction.x,
                 _worldPos.y,
                 _worldPos.z + _direction.z);
-            if (TrailblazerWorldManager.TryGetVoxel(checkPosition, out Voxel checkVoxel)
+            if (TrailblazerWorldManager.TryGetVoxel(checkPosition, out Voxel? checkVoxel)
+                && checkVoxel != null
                 && IsSearchCandidate(checkVoxel))
             {
                 nextVoxel = checkVoxel;

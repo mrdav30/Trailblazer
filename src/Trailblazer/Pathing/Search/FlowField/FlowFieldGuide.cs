@@ -1,5 +1,8 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
+using GridForge.Spatial;
+using SwiftCollections;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Trailblazer.Pathing;
 
@@ -17,14 +20,14 @@ public class FlowFieldGuide : IGuide
     /// <summary>
     /// The result of the flow field survey, containing the vector field and path information needed to guide an agent along the flow.
     /// </summary>
-    public FlowFieldSurveyResult FlowMap { get; private set; }
+    public FlowFieldSurveyResult? FlowMap { get; private set; }
 
     #region Staged Guide State
 
     /// <summary>
     /// When executing a hybrid route plan, the guide may need to stage multiple sub-guides for each step of the plan (e.g. flow field for one segment, A* waypoints for another).
     /// </summary>
-    private HybridRoutePlan _stagedPlan;
+    private HybridRoutePlan? _stagedPlan;
 
     /// <summary>
     /// The index of the currently active step within the staged plan. 
@@ -36,7 +39,7 @@ public class FlowFieldGuide : IGuide
     /// The currently active sub-guide for the active step in the staged plan. 
     /// This is used to delegate direction requests to the appropriate guide based on the current step type (e.g. flow field or A*).
     /// </summary>
-    private IGuide _activeStageGuide;
+    private IGuide? _activeStageGuide;
 
     /// <summary>
     /// The index of the currently active step guide within the staged plan.
@@ -71,9 +74,9 @@ public class FlowFieldGuide : IGuide
     /// </summary>
     /// <param name="routePlan">The hybrid route plan containing multiple steps with different guide types.</param>
     /// <returns>True if the guide is successfully initialized with a valid staged plan; otherwise, false.</returns>
-    internal bool InitializeStaged(HybridRoutePlan routePlan)
+    internal bool InitializeStaged(HybridRoutePlan? routePlan)
     {
-        if (routePlan?.Steps == null || routePlan.Steps.Length == 0)
+        if (routePlan == null || routePlan.Steps.Length == 0)
             return false;
 
         ReleaseStagedResources(dispose: false);
@@ -91,10 +94,11 @@ public class FlowFieldGuide : IGuide
         if (IsStaged)
             return TryGetStagedMovementDirection(origin, out direction);
 
-        if (FlowMap == null || !FlowMap.HasPath)
+        SwiftDictionary<WorldVoxelIndex, FlowField>? fields = FlowMap?.Fields;
+        if (FlowMap == null || !FlowMap.HasPath || fields == null)
             return false;
 
-        direction = FlowFieldSurveyor.SampleFlowVector(origin, FlowMap.Fields);
+        direction = FlowFieldSurveyor.SampleFlowVector(origin, fields);
         if (direction == Vector3d.Zero)
             return false;
 
@@ -115,10 +119,13 @@ public class FlowFieldGuide : IGuide
                 && stagedFlowGuide.FlowFieldContainsPosition(origin);
         }
 
+        SwiftDictionary<WorldVoxelIndex, FlowField>? fields = FlowMap?.Fields;
         if (FlowMap == null
             || !FlowMap.HasPath
+            || fields == null
             || !TrailblazerWorldManager.TryGetVoxel(origin, out Voxel? currentVoxel)
-            || !FlowMap.Fields.ContainsKey(currentVoxel!.WorldIndex))
+            || currentVoxel == null
+            || !fields.ContainsKey(currentVoxel.WorldIndex))
         {
             return false;
         }
@@ -133,10 +140,13 @@ public class FlowFieldGuide : IGuide
         if (IsStaged)
             return TryGetStagedFallbackDirection(origin, out fallbackDirection);
 
+        SwiftDictionary<WorldVoxelIndex, FlowField>? fields = FlowMap?.Fields;
         if (FlowMap == null
             || !FlowMap.HasPath
-            || !TrailblazerWorldManager.TryGetVoxel(origin, out Voxel currentVoxel)
-            || !FlowMap.Fields.ContainsKey(currentVoxel.WorldIndex))
+            || fields == null
+            || !TrailblazerWorldManager.TryGetVoxel(origin, out Voxel? currentVoxel)
+            || currentVoxel == null
+            || !fields.ContainsKey(currentVoxel.WorldIndex))
         {
             return false;
         }
@@ -172,8 +182,9 @@ public class FlowFieldGuide : IGuide
     private bool TryGetStagedMovementDirection(Vector3d origin, out Vector3d direction)
     {
         direction = Vector3d.Zero;
-        int remainingStageAdvances = _stagedPlan.Steps.Length;
-        while (TryGetPreparedStage(origin, ref remainingStageAdvances, out HybridRouteStep currentStep))
+        HybridRoutePlan stagedPlan = _stagedPlan!;
+        int remainingStageAdvances = stagedPlan.Steps.Length;
+        while (TryGetPreparedStage(origin, ref remainingStageAdvances, out HybridRouteStep? currentStep))
         {
             switch (currentStep.Kind)
             {
@@ -210,7 +221,7 @@ public class FlowFieldGuide : IGuide
         out Vector3d direction)
     {
         direction = Vector3d.Zero;
-        if (!TryGetOrCreateActiveStageGuide(currentStep, out IGuide activeGuide))
+        if (!TryGetOrCreateActiveStageGuide(currentStep, out IGuide? activeGuide))
             return false;
 
         if (activeGuide is IWaypointGuide waypointGuide)
@@ -233,8 +244,9 @@ public class FlowFieldGuide : IGuide
     private bool TryGetStagedFallbackDirection(Vector3d origin, out Vector3d fallbackDirection)
     {
         fallbackDirection = Vector3d.Zero;
-        int remainingStageAdvances = _stagedPlan.Steps.Length;
-        if (!TryGetPreparedStage(origin, ref remainingStageAdvances, out HybridRouteStep currentStep))
+        HybridRoutePlan stagedPlan = _stagedPlan!;
+        int remainingStageAdvances = stagedPlan.Steps.Length;
+        if (!TryGetPreparedStage(origin, ref remainingStageAdvances, out HybridRouteStep? currentStep))
             return false;
 
         if (currentStep.Kind == HybridRouteStepKind.Waypoint)
@@ -243,7 +255,8 @@ public class FlowFieldGuide : IGuide
             return true;
         }
 
-        return TryGetOrCreateActiveStageGuide(currentStep, out IGuide activeGuide)
+        return TryGetOrCreateActiveStageGuide(currentStep, out IGuide? activeGuide)
+            && activeGuide != null
             && activeGuide.TryGetFallbackDirection(origin, out fallbackDirection);
     }
 
@@ -254,7 +267,7 @@ public class FlowFieldGuide : IGuide
     private bool TryGetPreparedStage(
         Vector3d origin,
         ref int remainingStageAdvances,
-        out HybridRouteStep currentStep)
+        [NotNullWhen(true)] out HybridRouteStep? currentStep)
     {
         while (TryGetCurrentStage(out currentStep))
         {
@@ -274,7 +287,7 @@ public class FlowFieldGuide : IGuide
     /// </summary>
     /// <param name="currentStep">The currently active stage, if found.</param>
     /// <returns>True if a valid stage is found; otherwise, false.</returns>
-    private bool TryGetCurrentStage(out HybridRouteStep currentStep)
+    private bool TryGetCurrentStage([NotNullWhen(true)] out HybridRouteStep? currentStep)
     {
         currentStep = null;
         if (_stagedPlan == null
@@ -329,10 +342,10 @@ public class FlowFieldGuide : IGuide
     /// <param name="currentStep">The current step in the staged plan.</param>
     /// <param name="guide">The active stage guide for the current step, if available.</param>
     /// <returns>True if an active stage guide is available or successfully created; otherwise, false.</returns>
-    private bool TryGetOrCreateActiveStageGuide(HybridRouteStep currentStep, out IGuide guide)
+    private bool TryGetOrCreateActiveStageGuide(HybridRouteStep currentStep, [NotNullWhen(true)] out IGuide? guide)
     {
         guide = null;
-        if (currentStep?.Kind != HybridRouteStepKind.PathSegment)
+        if (currentStep.Kind != HybridRouteStepKind.PathSegment)
             return false;
 
         if (_activeStageGuide != null && _activeStageGuideStepIndex == _stagedStepIndex)

@@ -1,4 +1,6 @@
-﻿namespace Trailblazer.Pathing;
+﻿using System;
+
+namespace Trailblazer.Pathing;
 
 public abstract class SurveyResult : ISurveyResult
 {
@@ -6,7 +8,7 @@ public abstract class SurveyResult : ISurveyResult
 
     public bool IsInUse { get; protected set; }
 
-    public string[] ChartsUtilized { get; protected set; }
+    public string[] ChartsUtilized { get; protected set; } = Array.Empty<string>();
 
     public int LastUsedFrame { get; protected set; }
 
@@ -26,7 +28,7 @@ public abstract class SurveyResult : ISurveyResult
     {
         IsValid = false;
         IsInUse = false;
-        ChartsUtilized = null;
+        ChartsUtilized = Array.Empty<string>();
         LastUsedFrame = -1;
         RequestHashKey = -1;
     }

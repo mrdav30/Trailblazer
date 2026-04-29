@@ -1,7 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using GridForge.Grids;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -13,12 +12,12 @@ public sealed class HybridRoutePlannerTests : IDisposable
 {
     public HybridRoutePlannerTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(
+        TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)),
             out _);
     }
@@ -27,7 +26,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         PathManager.Reset();
         TraversalTransitionRegistry.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -282,7 +281,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_ShouldUseLocalDestinationGridQuery_WhenSourceAndDestinationAreInDifferentGrids()
     {
-        GlobalGridManager.TryAddGrid(
+        TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(20, -8, -8), new Vector3d(16, 16, 16)),
             out _).Should().BeTrue();
 

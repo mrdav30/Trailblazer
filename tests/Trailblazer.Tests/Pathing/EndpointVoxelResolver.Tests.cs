@@ -13,18 +13,18 @@ public sealed class EndpointVoxelResolverTests : IDisposable
 {
     public EndpointVoxelResolverTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)), out _);
+        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)), out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -144,7 +144,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
 
     private static Voxel GetVoxel(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
         return voxel;
     }
 

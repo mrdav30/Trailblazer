@@ -31,7 +31,7 @@ internal static class EndpointVoxelResolver
     public static bool TryGetEndpointVoxel<TPolicy>(
         Vector3d position,
         Vector3d traceToward,
-        out Voxel voxel,
+        out Voxel? voxel,
         bool allowUnwalkableEndpoints,
         Fixed64 unitSize,
         TPolicy policy)
@@ -46,17 +46,17 @@ internal static class EndpointVoxelResolver
         voxel = null;
         bool shouldRelaxEndpoint = allowUnwalkableEndpoints;
 
-        if (GlobalGridManager.TryGetVoxel(position, out Voxel directVoxel))
+        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? directVoxel))
         {
-            if (policy.TryAcceptDirectVoxel(directVoxel, unitSize, allowUnwalkableEndpoints))
+            if (policy.TryAcceptDirectVoxel(directVoxel!, unitSize, allowUnwalkableEndpoints))
             {
                 voxel = directVoxel;
                 return true;
             }
 
-            shouldRelaxEndpoint = shouldRelaxEndpoint || policy.RequiresSizeFallback(directVoxel, unitSize);
+            shouldRelaxEndpoint = shouldRelaxEndpoint || policy.RequiresSizeFallback(directVoxel!, unitSize);
             if (shouldRelaxEndpoint
-                && TryGetClosestTraversableVoxel(directVoxel, out Voxel closestNeighbor, unitSize, policy))
+                && TryGetClosestTraversableVoxel(directVoxel!, out Voxel? closestNeighbor, unitSize, policy))
             {
                 voxel = closestNeighbor;
                 return true;
@@ -68,7 +68,7 @@ internal static class EndpointVoxelResolver
             if (TryTraceToClosestTraversableVoxel(position, traceToward, unitSize, out voxel, policy))
                 return true;
 
-            return policy.TryGetFinalFallbackVoxel(position, directVoxel, unitSize, out voxel);
+            return policy.TryGetFinalFallbackVoxel(position, directVoxel!, unitSize, out voxel);
         }
 
         if (!shouldRelaxEndpoint)
@@ -83,17 +83,19 @@ internal static class EndpointVoxelResolver
 
     public static bool TryGetClosestTraversableVoxel<TPolicy>(
         Voxel voxel,
-        out Voxel closestNeighbor,
+        out Voxel? closestNeighbor,
         Fixed64 unitSize,
         TPolicy policy)
         where TPolicy : struct, IVoxelEndpointResolutionPolicy
     {
         closestNeighbor = null;
+        if (voxel == null || !TrailblazerWorldManager.TryGetGrid(voxel.WorldIndex, out VoxelGrid? grid))
+            return false;
 
         foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
         {
-            if (!voxel.TryGetNeighborFromDirection(dir, out Voxel candidate)
-                || !policy.IsTraversable(candidate, unitSize))
+            if (!voxel.TryGetNeighborFromDirection(grid!, dir, out Voxel? candidate)
+                || !policy.IsTraversable(candidate!, unitSize))
             {
                 continue;
             }
@@ -104,8 +106,8 @@ internal static class EndpointVoxelResolver
 
         foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
         {
-            if (!voxel.TryGetNeighborFromDirection(dir, out Voxel candidate)
-                || !policy.IsTraversable(candidate, unitSize))
+            if (!voxel.TryGetNeighborFromDirection(grid!, dir, out Voxel? candidate)
+                || !policy.IsTraversable(candidate!, unitSize))
             {
                 continue;
             }
@@ -121,11 +123,11 @@ internal static class EndpointVoxelResolver
         Vector3d position,
         Vector3d traceToward,
         Fixed64 unitSize,
-        out Voxel voxel,
+        out Voxel? voxel,
         TPolicy policy)
         where TPolicy : struct, IVoxelEndpointResolutionPolicy
     {
-        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(position, traceToward))
+        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(TrailblazerWorldManager.World, position, traceToward))
         {
             foreach (Voxel current in gridVoxelSet.Voxels)
             {

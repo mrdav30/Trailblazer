@@ -5,7 +5,6 @@ using GridForge.Configuration;
 using GridForge.Grids;
 using System;
 using Trailblazer.Pathing;
-using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing;
@@ -15,19 +14,19 @@ public class AerialSurveyorTests : IDisposable
 {
     public AerialSurveyorTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -41,7 +40,7 @@ public class AerialSurveyorTests : IDisposable
         AddOpen(new Vector3d(2, 1, 0));
         AddOpen(new Vector3d(2, 0, 0));
         AddObstacle(new Vector3d(1, 0, 0));
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel blockedVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel blockedVoxel).Should().BeTrue();
 
         VolumePathRequest request = VolumePathRequest.Create(
             Vector3d.Zero,
@@ -52,9 +51,9 @@ public class AerialSurveyorTests : IDisposable
 
         result.HasPath.Should().BeTrue();
         result.Waypoints.Length.Should().BeGreaterThan(2);
-        result.Waypoints[0].GlobalIndex.Should().Be(request.StartNode.GlobalIndex);
-        result.Waypoints[^1].GlobalIndex.Should().Be(request.EndNode.GlobalIndex);
-        result.Waypoints.Should().NotContain(w => w.GlobalIndex == blockedVoxel.GlobalIndex);
+        result.Waypoints[0].GlobalIndex.Should().Be(request.StartNode.WorldIndex);
+        result.Waypoints[^1].GlobalIndex.Should().Be(request.EndNode.WorldIndex);
+        result.Waypoints.Should().NotContain(w => w.GlobalIndex == blockedVoxel.WorldIndex);
     }
 
     [Fact]
@@ -102,15 +101,15 @@ public class AerialSurveyorTests : IDisposable
 
         result.HasPath.Should().BeTrue();
         result.Waypoints.Length.Should().BeGreaterThan(2);
-        result.Waypoints[0].GlobalIndex.Should().Be(request.StartNode.GlobalIndex);
-        result.Waypoints[^1].GlobalIndex.Should().Be(request.EndNode.GlobalIndex);
+        result.Waypoints[0].GlobalIndex.Should().Be(request.StartNode.WorldIndex);
+        result.Waypoints[^1].GlobalIndex.Should().Be(request.EndNode.WorldIndex);
     }
 
     private static void AddObstacle(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        GridObstacleManager.TryAddObstacle(
-            voxel.GlobalIndex,
+        TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        grid!.TryAddObstacle(
+            voxel!,
             new BoundsKey(position, position)).Should().BeTrue();
     }
 

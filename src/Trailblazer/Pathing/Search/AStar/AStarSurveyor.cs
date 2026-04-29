@@ -24,7 +24,7 @@ internal struct AStarVoxelMeta
     /// <summary>
     /// The next voxel in the trail path.
     /// </summary>
-    public GlobalVoxelIndex? NextTrailIndex;
+    public WorldVoxelIndex? NextTrailIndex;
 }
 
 /// <summary>
@@ -78,7 +78,7 @@ public class AStarSurveyor
     /// <summary>
     /// Optional callback triggered when a height difference exceeds the allowed climb height during pathfinding.
     /// </summary>
-    public static Action<GlobalVoxelIndex, GlobalVoxelIndex, Fixed64>? OnHeightLimitViolated;
+    public static Action<WorldVoxelIndex, WorldVoxelIndex, Fixed64>? OnHeightLimitViolated;
 #nullable disable
 
     /// <summary>
@@ -254,7 +254,7 @@ public class AStarSurveyor
     /// <param name="pathCost">The total survey path cost recorded for this partition.</param>
     private void SetPathPartitionData(
         SolidChartPartition partition,
-        GlobalVoxelIndex nextTrailCoordinates,
+        WorldVoxelIndex nextTrailCoordinates,
         int movementCost,
         int pathCost)
     {
@@ -281,7 +281,7 @@ public class AStarSurveyor
             if (!_meta.TryGetValue(current, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
                 break; // break in the trail!
 
-            if (!GlobalGridManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
                 break; // break in the trail!
 
             current = nextTrailVoxel;
@@ -304,14 +304,14 @@ public class AStarSurveyor
         {
             Position = start.VoxelPosition,
             PathCost = GetPathCost(start.Voxel),
-            GlobalIndex = start.GlobalIndex
+            GlobalIndex = start.WorldIndex
         });
         ChartOwnerUtility.AddOwners(_chartKeys, start.ChartOwners);
 
         Vector3d lastDirection = Vector3d.Zero;
 
         // add 1 to ensure we preserve unwalkable voxels that are close enough to matter for the unit size
-        byte scaledUnitSize = (byte)((_request.UnitSize / GlobalGridManager.VoxelSize).CeilToInt() + 1);
+        byte scaledUnitSize = (byte)((_request.UnitSize / TrailblazerWorldManager.VoxelSize).CeilToInt() + 1);
         for (int i = 1; i < _rawPath.Count - 1; i++)
         {
             Vector3d direction = (_rawPath[i + 1].VoxelPosition - _rawPath[i].VoxelPosition).Normalize();
@@ -326,7 +326,7 @@ public class AStarSurveyor
                 {
                     Position = _rawPath[i].VoxelPosition,
                     PathCost = GetPathCost(_rawPath[i].Voxel),
-                    GlobalIndex = _rawPath[i].GlobalIndex
+                    GlobalIndex = _rawPath[i].WorldIndex
                 });
             }
 
@@ -339,7 +339,7 @@ public class AStarSurveyor
         {
             Position = end.VoxelPosition,
             PathCost = GetPathCost(end.Voxel),
-            GlobalIndex = end.GlobalIndex,
+            GlobalIndex = end.WorldIndex,
             IsGoal = true
         });
         ChartOwnerUtility.AddOwners(_chartKeys, end.ChartOwners);

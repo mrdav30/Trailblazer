@@ -9,7 +9,6 @@ using Trailblazer.Navigation.Animation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
-using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Navigation;
@@ -19,19 +18,19 @@ public class NavigatorTests : IDisposable
 {
     public NavigatorTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -1371,9 +1370,9 @@ public class NavigatorTests : IDisposable
 
     private static void AddObstacle(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        GridObstacleManager.TryAddObstacle(
-            voxel.GlobalIndex,
+        TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        grid!.TryAddObstacle(
+            voxel!,
             new BoundsKey(position, position)).Should().BeTrue();
     }
 

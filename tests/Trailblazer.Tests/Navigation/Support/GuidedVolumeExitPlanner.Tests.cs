@@ -1,7 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using GridForge.Grids;
 using System;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
@@ -14,18 +13,18 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
 {
     public GuidedVolumeExitPlannerTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -385,18 +384,18 @@ public sealed class GuidedVolumeExitHandoffTests : IDisposable
 {
     public GuidedVolumeExitHandoffTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }

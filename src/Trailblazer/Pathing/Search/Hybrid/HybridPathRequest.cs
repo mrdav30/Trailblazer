@@ -143,7 +143,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             ChartRequestKind = HybridChartRequestKind.AStar,
             Heuristic = heuristic,
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
-            MaxClimbHeight = maxClimbHeight ?? GlobalGridManager.VoxelSize
+            MaxClimbHeight = maxClimbHeight ?? TrailblazerWorldManager.VoxelSize
         };
 
         if (!request.RebuildPlan())
@@ -216,7 +216,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         Vector3d destination,
         Fixed64? unitSize)
     {
-        Fixed64 resolvedUnitSize = unitSize ?? GlobalGridManager.VoxelSize;
+        Fixed64 resolvedUnitSize = unitSize ?? TrailblazerWorldManager.VoxelSize;
         bool success = SolidVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,

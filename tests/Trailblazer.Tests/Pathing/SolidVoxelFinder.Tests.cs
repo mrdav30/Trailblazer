@@ -13,19 +13,19 @@ public class SolidVoxelFinderTests : IDisposable
 {
     public SolidVoxelFinderTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -172,7 +172,7 @@ public class SolidVoxelFinderTests : IDisposable
     {
         PathTestFactory.RegisterSingleWalkablePoint("StarCastLocalBias", new Vector3d(1, 0, 0));
 
-        Fixed64 quarter = GlobalGridManager.VoxelSize / 4;
+        Fixed64 quarter = TrailblazerWorldManager.VoxelSize / 4;
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
 
         SolidVoxelFinder.StarCast(query, out Voxel targetVoxel).Should().BeTrue();
@@ -263,7 +263,7 @@ public class SolidVoxelFinderTests : IDisposable
     public void TryGetClosestWalkableVoxel_ShouldReturnFalse_WhenNoNeighborIsTraversable()
     {
         PathTestFactory.RegisterSingleWalkablePoint("NoNeighborWalkable", Vector3d.Zero);
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
 
         SolidVoxelFinder.TryGetClosestWalkableVoxel(voxel, out Voxel closestNeighbor).Should().BeFalse();
         closestNeighbor.Should().BeNull();

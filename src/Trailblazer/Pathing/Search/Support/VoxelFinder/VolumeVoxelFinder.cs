@@ -44,7 +44,7 @@ public static class VolumeVoxelFinder
             target,
             out originVoxel,
             allowUnwalkableEndpoints,
-            unitSize ?? GlobalGridManager.VoxelSize,
+            unitSize ?? TrailblazerWorldManager.VoxelSize,
             medium);
     }
 
@@ -61,7 +61,7 @@ public static class VolumeVoxelFinder
             origin,
             out targetVoxel,
             allowUnwalkableEndpoints,
-            unitSize ?? GlobalGridManager.VoxelSize,
+            unitSize ?? TrailblazerWorldManager.VoxelSize,
             medium);
     }
 
@@ -71,23 +71,23 @@ public static class VolumeVoxelFinder
         Fixed64 unitSize,
         bool allowUnwalkableEndpoints,
         TraversalMedium medium = TraversalMedium.Gas,
-        Voxel startNode = null,
-        Voxel endNode = null)
+        Voxel? startNode = null,
+        Voxel? endNode = null)
     {
         if (!VolumeMediumRules.IsConfigured(medium))
             return false;
 
         bool foundAny = false;
 
-        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(start, end))
+        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(TrailblazerWorldManager.World, start, end))
         {
             foreach (Voxel voxel in gridVoxelSet.Voxels)
             {
                 foundAny = true;
 
                 bool isRelaxedEndpoint = allowUnwalkableEndpoints
-                    && ((startNode != null && voxel.GlobalIndex == startNode.GlobalIndex)
-                    || (endNode != null && voxel.GlobalIndex == endNode.GlobalIndex));
+                    && ((startNode != null && voxel.WorldIndex == startNode.WorldIndex)
+                    || (endNode != null && voxel.WorldIndex == endNode.WorldIndex));
                 if (isRelaxedEndpoint)
                 {
                     if (!PassesMedium(voxel, medium))
@@ -171,7 +171,7 @@ public static class VolumeVoxelFinder
         Fixed64 unitSize,
         TraversalMedium medium)
     {
-        if (unitSize == GlobalGridManager.VoxelSize
+        if (unitSize == TrailblazerWorldManager.VoxelSize
             || voxel == null
             || voxel.IsBlocked
             || !PassesMedium(voxel, medium))
@@ -188,12 +188,15 @@ public static class VolumeVoxelFinder
 
     internal static bool HasClearance(Voxel origin, Fixed64 unitSize)
     {
-        if (unitSize <= GlobalGridManager.VoxelSize)
+        if (unitSize <= TrailblazerWorldManager.VoxelSize)
             return true;
 
-        int requiredRadius = (unitSize / GlobalGridManager.VoxelSize).CeilToInt() - 1;
+        int requiredRadius = (unitSize / TrailblazerWorldManager.VoxelSize).CeilToInt() - 1;
         if (requiredRadius <= 0)
             return true;
+
+        if (!TrailblazerWorldManager.World.TryGetGrid(origin.GridIndex, out VoxelGrid? grid))
+            return false;
 
         for (int x = -requiredRadius; x <= requiredRadius; x++)
         {
@@ -204,8 +207,8 @@ public static class VolumeVoxelFinder
                     if (x == 0 && y == 0 && z == 0)
                         continue;
 
-                    if (!origin.TryGetNeighborFromOffset((x, y, z), out Voxel neighbor)
-                        || neighbor.IsBlocked)
+                    if (!origin.TryGetNeighborFromOffset(grid!, (x, y, z), out Voxel? neighbor)
+                        || neighbor!.IsBlocked)
                     {
                         return false;
                     }

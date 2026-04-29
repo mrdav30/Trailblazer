@@ -403,7 +403,7 @@ internal static class HybridRoutePlanner
 
         FlowFieldSurveyResult surveyResult = FlowFieldSurveyor.Shared.FindPath(chartRequest);
         if (!surveyResult.HasPath
-            || !surveyResult.Fields.TryGetValue(chartRequest.StartNode.GlobalIndex, out FlowField startField))
+            || !surveyResult.Fields.TryGetValue(chartRequest.StartNode.WorldIndex, out FlowField startField))
         {
             return false;
         }

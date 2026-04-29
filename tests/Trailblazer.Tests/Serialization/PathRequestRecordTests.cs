@@ -14,12 +14,12 @@ public sealed class PathRequestRecordTests : IDisposable
 {
     public PathRequestRecordTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(
+        TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)),
             out _);
     }
@@ -27,7 +27,7 @@ public sealed class PathRequestRecordTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -166,8 +166,8 @@ public sealed class PathRequestRecordTests : IDisposable
         emptyGuide.Should().BeNull();
 
         RegisterLineChart("PathRecordUnsupported", Vector3d.Zero, 2);
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
 
         Action captureUnsupported = () => record.Capture(new UnsupportedRequest(start, end), null);
         captureUnsupported.Should().Throw<NotSupportedException>();

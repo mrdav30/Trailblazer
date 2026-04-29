@@ -16,20 +16,20 @@ public class FlowFieldSurveyorTests : IDisposable
 {
     public FlowFieldSurveyorTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
 
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
 
         GC.SuppressFinalize(this);
@@ -269,7 +269,7 @@ public class FlowFieldSurveyorTests : IDisposable
         FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out FlowFieldPathRequest request);
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
 
         FlowFieldSurveyor.TryGetNearestFlowAnchor(
             Vector3d.Zero,
@@ -278,8 +278,8 @@ public class FlowFieldSurveyorTests : IDisposable
             out Voxel staleAnchor).Should().BeFalse();
         staleAnchor.Should().BeNull();
 
-        GlobalGridManager.Setup();
-        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)), out _);
+        TrailblazerWorldManager.Setup();
+        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)), out _);
     }
 
     [Fact]
@@ -519,7 +519,7 @@ public class FlowFieldSurveyorTests : IDisposable
 
         foreach (var pair in result.Fields)
         {
-            GlobalVoxelIndex index = pair.Key;
+            WorldVoxelIndex index = pair.Key;
             FlowField field = pair.Value;
 
             if (field.IsGoal || field.Direction == Vector3d.Zero)
@@ -527,15 +527,15 @@ public class FlowFieldSurveyorTests : IDisposable
 
             // Try get neighbor index
 
-            if (!GlobalGridManager.TryGetGridAndVoxel(field.GlobalIndex, out _, out Voxel current))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(field.GlobalIndex, out _, out Voxel current))
                 continue;
 
             Vector3d neighborPosition = current.WorldPosition + field.Direction;
 
-            if (!GlobalGridManager.TryGetGridAndVoxel(neighborPosition, out _, out Voxel neighbor))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(neighborPosition, out _, out Voxel neighbor))
                 continue;
 
-            if (!result.Fields.TryGetValue(neighbor.GlobalIndex, out FlowField neighborField))
+            if (!result.Fields.TryGetValue(neighbor.WorldIndex, out FlowField neighborField))
                 continue;
 
             neighborField.PathCost.Should()
@@ -634,8 +634,8 @@ public class FlowFieldSurveyorTests : IDisposable
         FlowField found = FlowFieldSurveyor.GetFlowField(Vector3d.Zero, result.Fields);
         FlowField missing = FlowFieldSurveyor.GetFlowField(new Vector3d(4, 0, 0), result.Fields);
 
-        found.GlobalIndex.Should().NotBe(default(GlobalVoxelIndex));
-        missing.GlobalIndex.Should().Be(default(GlobalVoxelIndex));
+        found.GlobalIndex.Should().NotBe(default(WorldVoxelIndex));
+        missing.GlobalIndex.Should().Be(default(WorldVoxelIndex));
         missing.Direction.Should().Be(Vector3d.Zero);
         missing.PathCost.Should().Be(0);
 
@@ -768,7 +768,7 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d goal = new(2, 0, 1);   // Right-middle
 
         // Mark the center partition with a high cost modifier
-        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 1), out _, out Voxel center);
+        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 1), out _, out Voxel center);
         if (center.TryGetPartition(out SolidChartPartition partition))
             partition.PathCostModifier = 10; // Arbitrary high cost to penalize direct path
 
@@ -865,8 +865,8 @@ public class FlowFieldSurveyorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("FlowHelperUpdate", data, Vector3d.Zero);
 
-        GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
-        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel neighborVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel neighborVoxel).Should().BeTrue();
         currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
         neighborVoxel.TryGetPartition(out SolidChartPartition neighbor).Should().BeTrue();
 
@@ -901,7 +901,7 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("FlowDiagLegsPositive", data, Vector3d.Zero);
 
-        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 1, 1), out _, out Voxel currentVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 1, 1), out _, out Voxel currentVoxel).Should().BeTrue();
         currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
 
         FlowFieldPathRequest.TryCreate(
@@ -934,7 +934,7 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("FlowDiagLegsNegative", data, Vector3d.Zero);
 
-        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 1, 1), out _, out Voxel currentVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 1, 1), out _, out Voxel currentVoxel).Should().BeTrue();
         currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
 
         FlowFieldPathRequest.TryCreate(
@@ -961,7 +961,7 @@ public class FlowFieldSurveyorTests : IDisposable
     {
         PathTestFactory.RegisterSingleWalkablePoint("FlowMissingCost", Vector3d.Zero);
 
-        GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel).Should().BeTrue();
         voxel.TryGetPartition(out SolidChartPartition partition).Should().BeTrue();
 
         FlowFieldSurveyor surveyor = new();
@@ -1007,7 +1007,7 @@ public class FlowFieldSurveyorTests : IDisposable
     [Fact]
     public void FlowFieldSurveyResult_Create_ShouldUseFallbackEmptyArray_WhenChartsUtilizedIsNull()
     {
-        var fields = new SwiftCollections.SwiftDictionary<GridForge.Spatial.GlobalVoxelIndex, FlowField>();
+        var fields = new SwiftCollections.SwiftDictionary<GridForge.Spatial.WorldVoxelIndex, FlowField>();
         FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(fields, null, key: 1);
 
         result.ChartsUtilized.Should().NotBeNull();

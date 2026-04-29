@@ -13,7 +13,7 @@ public struct AStarWaypoint
     /// <summary>
     /// Which voxel this corresponds to
     /// </summary>
-    public GlobalVoxelIndex? GlobalIndex;
+    public WorldVoxelIndex? GlobalIndex;
 
     /// <summary>
     /// PathCost at this node (MovementCost + Heuristic at this node)

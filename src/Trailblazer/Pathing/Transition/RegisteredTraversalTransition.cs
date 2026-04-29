@@ -27,11 +27,11 @@ internal readonly struct RegisteredTraversalTransition : IEquatable<RegisteredTr
 
     public TraversalTransition Transition { get; }
 
-    public GlobalVoxelIndex SourceVoxelIndex { get; }
+    public WorldVoxelIndex SourceVoxelIndex { get; }
 
     public Vector3d SourcePosition { get; }
 
-    public GlobalVoxelIndex DestinationVoxelIndex { get; }
+    public WorldVoxelIndex DestinationVoxelIndex { get; }
 
     public Vector3d DestinationPosition { get; }
 

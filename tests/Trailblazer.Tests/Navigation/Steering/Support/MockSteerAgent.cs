@@ -1,6 +1,4 @@
 ﻿using FixedMathSharp;
-using GridForge.Spatial;
-using SwiftCollections;
 using System;
 using Trailblazer.Navigation;
 

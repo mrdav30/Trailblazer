@@ -16,20 +16,16 @@ public class AStarSurveryorTests : IDisposable
 {
     public AStarSurveryorTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
-        else
-            GlobalGridManager.Setup();
-
+        TrailblazerWorldManager.Setup();
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
 
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
 
         GC.SuppressFinalize(this);
@@ -594,7 +590,7 @@ public class AStarSurveryorTests : IDisposable
         var end = new Vector3d(2, 0, 2);
 
         // Apply a high PathCostModifier to the direct diagonal path (1,0,1)
-        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 1), out _, out Voxel diagonalVoxel);
+        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 1), out _, out Voxel diagonalVoxel);
         diagonalVoxel.Should().NotBeNull("Expected midpoint voxel to exist");
 
         var diagonalPartition = diagonalVoxel.GetPartitionOrDefault<SolidChartPartition>();
@@ -633,7 +629,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("AStarMissingMeta", data, Vector3d.Zero);
 
-        GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
         currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
 
         AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out AStarPathRequest request).Should().BeTrue();
@@ -659,8 +655,8 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("AStarHelperUpdate", data, Vector3d.Zero);
 
-        GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
-        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel neighborVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel neighborVoxel).Should().BeTrue();
         currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
         neighborVoxel.TryGetPartition(out SolidChartPartition neighbor).Should().BeTrue();
 
@@ -675,7 +671,7 @@ public class AStarSurveryorTests : IDisposable
         meta[neighbor.Voxel] = new AStarVoxelMeta
         {
             MovementCost = 300,
-            NextTrailIndex = current.GlobalIndex,
+            NextTrailIndex = current.WorldIndex,
             PathCost = 999
         };
         heap.Add(neighbor, 999);
@@ -683,7 +679,7 @@ public class AStarSurveryorTests : IDisposable
         ReflectionUtility.InvokePrivate<bool>(surveyor, "ProcessNeighbor", current, neighbor, 200).Should().BeFalse();
 
         meta[neighbor.Voxel].MovementCost.Should().Be(200);
-        meta[neighbor.Voxel].NextTrailIndex.Should().Be(current.GlobalIndex);
+        meta[neighbor.Voxel].NextTrailIndex.Should().Be(current.WorldIndex);
         heap.TryGetPathCost(neighbor, out int updatedPathCost).Should().BeTrue();
         updatedPathCost.Should().Be(
             neighbor.PathCostModifier

@@ -13,12 +13,12 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
 {
     public TraversalTransitionAnchorTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(
+        TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
     }
@@ -26,7 +26,7 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -34,17 +34,17 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     [Fact]
     public void TraversalTransitionAnchor_GasAndLiquid_ShouldCreateFromVoxelIndex()
     {
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
 
-        var gas = TraversalTransitionAnchor.Gas(voxel.GlobalIndex);
+        var gas = TraversalTransitionAnchor.Gas(voxel.WorldIndex);
         gas.Medium.Should().Be(TraversalMedium.Gas);
-        gas.VoxelIndex.Should().Be(voxel.GlobalIndex);
+        gas.VoxelIndex.Should().Be(voxel.WorldIndex);
         gas.HasPointOverride.Should().BeFalse();
         gas.IsVolumeMedium.Should().BeTrue();
 
-        var liquid = TraversalTransitionAnchor.Liquid(voxel.GlobalIndex);
+        var liquid = TraversalTransitionAnchor.Liquid(voxel.WorldIndex);
         liquid.Medium.Should().Be(TraversalMedium.Liquid);
-        liquid.VoxelIndex.Should().Be(voxel.GlobalIndex);
+        liquid.VoxelIndex.Should().Be(voxel.WorldIndex);
         liquid.HasPointOverride.Should().BeFalse();
         liquid.IsVolumeMedium.Should().BeTrue();
     }
@@ -52,19 +52,19 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     [Fact]
     public void TraversalTransitionAnchor_ShouldCreateFromVoxelIndexWithPointOverride()
     {
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
         var pointOverride = new Vector3d(1.1, 0, 0);
 
-        var gasWithOverride = TraversalTransitionAnchor.Gas(voxel.GlobalIndex, pointOverride);
+        var gasWithOverride = TraversalTransitionAnchor.Gas(voxel.WorldIndex, pointOverride);
         gasWithOverride.HasPointOverride.Should().BeTrue();
         gasWithOverride.PointOverride.Should().Be(pointOverride);
         gasWithOverride.Position.Should().Be(pointOverride);
 
-        var liquidWithOverride = TraversalTransitionAnchor.Liquid(voxel.GlobalIndex, pointOverride);
+        var liquidWithOverride = TraversalTransitionAnchor.Liquid(voxel.WorldIndex, pointOverride);
         liquidWithOverride.HasPointOverride.Should().BeTrue();
         liquidWithOverride.PointOverride.Should().Be(pointOverride);
 
-        var solidWithOverride = TraversalTransitionAnchor.Solid(voxel.GlobalIndex, pointOverride);
+        var solidWithOverride = TraversalTransitionAnchor.Solid(voxel.WorldIndex, pointOverride);
         solidWithOverride.HasPointOverride.Should().BeTrue();
         solidWithOverride.PointOverride.Should().Be(pointOverride);
     }
@@ -104,18 +104,18 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     [Fact]
     public void TraversalTransitionAnchor_Create_ShouldThrow_WhenPointOverrideIsInDifferentVoxel()
     {
-        GlobalGridManager.TryGetVoxel(new Vector3d(0, 0, 0), out Voxel voxelA).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(0, 0, 0), out Voxel voxelA).Should().BeTrue();
 
         // A point override that resolves to a completely different voxel.
-        Action action = () => TraversalTransitionAnchor.Solid(voxelA.GlobalIndex, new Vector3d(2, 0, 0));
+        Action action = () => TraversalTransitionAnchor.Solid(voxelA.WorldIndex, new Vector3d(2, 0, 0));
         action.Should().Throw<ArgumentException>();
     }
 
     [Fact]
     public void TraversalTransitionAnchor_Position_ShouldUseVoxelWorldPosition_WhenNoOverride()
     {
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
-        var anchor = TraversalTransitionAnchor.Solid(voxel.GlobalIndex);
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
+        var anchor = TraversalTransitionAnchor.Solid(voxel.WorldIndex);
         anchor.Position.Should().Be(voxel.WorldPosition);
     }
 }

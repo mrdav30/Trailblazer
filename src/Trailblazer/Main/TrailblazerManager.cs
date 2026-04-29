@@ -1,8 +1,8 @@
 ﻿using FixedMathSharp;
+using GridForge.Grids;
 using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
-using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Support;
@@ -56,6 +56,13 @@ public static class TrailblazerManager
     /// </remarks>
     public static Fixed64 DeltaTime { get; private set; } = Fixed64.One / (Fixed64)FrameRate;
 
+    /// <summary>
+    /// Gets the reciprocal of the current simulation delta time as a fixed-point value.
+    /// </summary>
+    /// <remarks>
+    /// This property is useful for converting time-based calculations to rate-based calculations within the simulation. 
+    /// The value is updated in sync with the simulation's delta time and may change each frame.
+    /// </remarks>
     public static Fixed64 InvDeltaTime => Fixed64.One / DeltaTime;
 
     /// <summary>
@@ -73,8 +80,14 @@ public static class TrailblazerManager
     /// </summary>
     public static Fixed64 AccumulatedTime { get; private set; }
 
+    /// <summary>
+    /// Gets a value indicating whether accumulation should be reset to its initial state.
+    /// </summary>
     public static bool ResetAccumulation { get; private set; }
 
+    /// <summary>
+    /// Gets the expected accumulation value used for calculations or comparisons.
+    /// </summary>
     public static Fixed64 ExpectedAccumulation { get; private set; }
 
     #endregion
@@ -105,6 +118,16 @@ public static class TrailblazerManager
         }
     }
 
+    /// <summary>
+    /// Initializes Trailblazer against the supplied grid world.
+    /// </summary>
+    /// <param name="world">The single active GridForge world Trailblazer should use.</param>
+    public static void Initialize(GridWorld world)
+    {
+        TrailblazerWorldManager.AttachWorld(world);
+        Initialize();
+    }
+
     internal static void EnsureInitialized()
     {
         if (_isInitialized)
@@ -124,6 +147,13 @@ public static class TrailblazerManager
         HookHandler.InvokeHooks(_simulateHooks);
     }
 
+    /// <summary>
+    /// Performs late simulation processing and invokes all registered late simulation hooks.
+    /// </summary>
+    /// <remarks>
+    /// This method should be called after the main simulation step to execute any logic that must occur at the end of the simulation cycle. 
+    /// It resets accumulation state and triggers all hooks registered for late simulation. 
+    /// </remarks>
     public static void LateSimulate()
     {
         EnsureInitialized();
@@ -131,6 +161,14 @@ public static class TrailblazerManager
         HookHandler.InvokeHooks(_lateSimulateHooks);
     }
 
+    /// <summary>
+    /// Performs a visualization update by accumulating time and invoking registered visualization hooks.
+    /// </summary>
+    /// <remarks>
+    /// This method should be called once per update cycle to ensure that all visualization hooks 
+    /// are executed with the current accumulated time. 
+    /// If accumulation is reset, the accumulated time is cleared before proceeding. 
+    /// </remarks>
     public static void Visualize()
     {
         EnsureInitialized();
@@ -186,6 +224,11 @@ public static class TrailblazerManager
         HookHandler.InvokeHooks(_frameRateChangedHooks);
     }
 
+    /// <summary>
+    /// Calculates the frame index corresponding to the specified timestamp.
+    /// </summary>
+    /// <param name="timestamp">The timestamp value, in fixed-point format, for which to determine the frame index.</param>
+    /// <returns>The zero-based index of the frame that contains the specified timestamp.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetFrameFromTime(Fixed64 timestamp)
     {

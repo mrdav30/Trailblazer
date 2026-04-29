@@ -158,7 +158,7 @@ public class NavMotor : IRecordable
     /// <param name="initialCondition">The initial traversal condition of the navigator</param>
     /// <param name="profile">Optional locomotion composition profile. When omitted, the default profile is used.</param>
     /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
-    public static NavMotor CreateNew(TrekCondition initialCondition, LocomotionProfile profile = null) => new(initialCondition, profile);
+    public static NavMotor CreateNew(TrekCondition initialCondition, LocomotionProfile? profile = null) => new(initialCondition, profile);
 
     // Parameterless constructor for serialization purposes. Not intended for direct use.
     private NavMotor() { }
@@ -168,14 +168,14 @@ public class NavMotor : IRecordable
     /// </summary>
     /// <param name="condition">The initial traversal condition of the navigator</param>
     /// <param name="profile">Optional locomotion composition profile. When omitted, the default profile is used.</param>
-    public NavMotor(TrekCondition condition, LocomotionProfile profile = null) => OnInitialize(condition, profile);
+    public NavMotor(TrekCondition condition, LocomotionProfile? profile = null) => OnInitialize(condition, profile);
 
     /// <summary>
     /// Prepares the controller by linking it to the given navigator and setting initial state values.
     /// </summary>
     /// <param name="condition">The initial traversal condition of the navigator</param>
     /// <param name="profile">Optional locomotion composition profile. When omitted, the default profile is used.</param>
-    public void OnInitialize(TrekCondition condition, LocomotionProfile profile = null)
+    public void OnInitialize(TrekCondition condition, LocomotionProfile? profile = null)
     {
         Handler = profile != null ? new LocomotionHandler(profile) : new LocomotionHandler();
         CurrentState = new TransitState(condition);

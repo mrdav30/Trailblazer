@@ -2,7 +2,6 @@ using FixedMathSharp;
 using FluentAssertions;
 using GridForge;
 using GridForge.Grids;
-using GridForge.Spatial;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Tests;
@@ -19,11 +18,11 @@ internal static class GuidedPathTestScene
         PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "GuidedPathTestOpen");
     }
 
-    public static void AddObstacle(Vector3d position)
+    private static void AddObstacle(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        GridObstacleManager.TryAddObstacle(
-            voxel.GlobalIndex,
+        TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        grid!.TryAddObstacle(
+            voxel!,
             new BoundsKey(position, position)).Should().BeTrue();
     }
 

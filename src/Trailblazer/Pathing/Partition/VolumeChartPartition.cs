@@ -19,9 +19,14 @@ public sealed class VolumeChartPartition : IVoxelPartition
     private TraversalMedia _volumeKinds;
 
     /// <summary>
-    /// The global coordinate of the voxel this partition is attached to.
+    /// The world-scoped coordinate of the voxel this partition is attached to.
     /// </summary>
-    public GlobalVoxelIndex GlobalIndex { get; private set; }
+    public WorldVoxelIndex WorldIndex { get; private set; }
+
+    /// <summary>
+    /// Back-compat alias for code that still refers to the pre-v6 name.
+    /// </summary>
+    public WorldVoxelIndex GlobalIndex => WorldIndex;
 
     /// <summary>
     /// The world-space position of the authored voxel.
@@ -36,7 +41,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// <summary>
     /// Charts that currently contribute authored volume data to this voxel.
     /// </summary>
-    public SwiftHashSet<string> ChartOwners { get; private set; }
+    public SwiftHashSet<string>? ChartOwners { get; private set; }
 
     /// <summary>
     /// Returns true if any chart currently contributes authored volume data to this voxel.
@@ -46,7 +51,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// <summary>
     /// The chart whose authored cell currently wins overlap resolution for this voxel.
     /// </summary>
-    public string EffectiveChartOwner { get; private set; }
+    public string? EffectiveChartOwner { get; private set; }
 
     /// <summary>
     /// Additional authored or caller-controlled path cost for this volume voxel.
@@ -59,7 +64,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
         set => _manualPathCostModifier = value;
     }
 
-    public void SetParentIndex(GlobalVoxelIndex parentIndex) => GlobalIndex = parentIndex;
+    public void SetParentIndex(WorldVoxelIndex parentIndex) => WorldIndex = parentIndex;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnAddToVoxel(Voxel voxel)
@@ -67,7 +72,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
         voxel.OnObstacleAdded += HandleChange;
         voxel.OnObstacleRemoved += HandleChange;
 
-        GlobalIndex = voxel.GlobalIndex;
+        WorldIndex = voxel.WorldIndex;
         VoxelPosition = voxel.WorldPosition;
         IsWalkable = !voxel.IsBlocked;
     }
@@ -117,7 +122,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Reset()
     {
-        GlobalIndex = default;
+        WorldIndex = default;
         VoxelPosition = default;
         IsWalkable = false;
         PathCostModifier = 0;
@@ -131,16 +136,16 @@ public sealed class VolumeChartPartition : IVoxelPartition
     {
         get
         {
-            if (GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out Voxel voxel))
+            if (TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out Voxel voxel))
                 return voxel;
 
-            throw new InvalidOperationException($"Volume partition at {GlobalIndex} is not attached to a valid voxel.");
+            throw new InvalidOperationException($"Volume partition at {WorldIndex} is not attached to a valid voxel.");
         }
     }
 
     internal void ApplyAuthoredState(
-        ResolvedChartVoxelState state,
-        string effectiveChartOwner,
+        ResolvedChartVoxelState? state,
+        string? effectiveChartOwner,
         NavigationChartCell effectiveCell)
     {
         ChartOwners ??= new SwiftHashSet<string>();

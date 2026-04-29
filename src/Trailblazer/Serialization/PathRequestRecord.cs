@@ -47,7 +47,7 @@ internal sealed class PathRequestRecord : IRecordable
 
     public int WaypointIndex = NoWaypointIndex;
 
-    public void Capture(IPathRequest request, IGuide guide)
+    public void Capture(IPathRequest? request, IGuide? guide)
     {
         Reset();
         if (request == null)
@@ -97,7 +97,7 @@ internal sealed class PathRequestRecord : IRecordable
             WaypointIndex = waypointGuide.CurrentWaypointIndex;
     }
 
-    public bool TryCreateRequest(out IPathRequest request)
+    public bool TryCreateRequest(out IPathRequest? request)
     {
         request = null;
 
@@ -107,7 +107,7 @@ internal sealed class PathRequestRecord : IRecordable
                 return true;
 
             case PathRequestRecordKind.AStar:
-                AStarPathRequest aStar = AStarPathRequest.Create(
+                AStarPathRequest? aStar = AStarPathRequest.Create(
                     Origin,
                     TargetPosition,
                     UnitSize,
@@ -181,7 +181,7 @@ internal sealed class PathRequestRecord : IRecordable
         }
     }
 
-    public bool TryCreateGuide(IPathRequest request, out IGuide guide)
+    public bool TryCreateGuide(IPathRequest? request, out IGuide? guide)
     {
         guide = null;
         if (!HasGuide || request == null)

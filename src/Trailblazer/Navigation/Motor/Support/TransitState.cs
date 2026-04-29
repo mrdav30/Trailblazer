@@ -51,6 +51,8 @@ public class TransitState
 
     #region Constructors
 
+    private TransitState() { }
+
     public TransitState(TrekCondition condition)
     {
         Update(condition, null);

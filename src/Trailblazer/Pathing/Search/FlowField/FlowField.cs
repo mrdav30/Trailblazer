@@ -12,7 +12,7 @@ public struct FlowField
     /// <summary>
     /// The global coordinates corresponding to this voxel in the field.
     /// </summary>
-    public GlobalVoxelIndex GlobalIndex { get; set; }
+    public WorldVoxelIndex GlobalIndex { get; set; }
 
     /// <summary>
     /// The movement direction vector pointing toward the goal from this cell.

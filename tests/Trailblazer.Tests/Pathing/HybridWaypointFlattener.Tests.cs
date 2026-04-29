@@ -13,12 +13,12 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 {
     public HybridWaypointFlattenerTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(
+        TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)),
             out _);
     }
@@ -26,7 +26,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -80,8 +80,8 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     public void TryBuild_ShouldRejectUnsupportedSegmentRequests()
     {
         RegisterLineChart("HybridFlattenUnsupported", Vector3d.Zero, 2);
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
 
         HybridRoutePlan routePlan = new(
             new[]
@@ -121,8 +121,8 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(3, 0, 0), TraversalMedium.Gas, "HybridFlattenGas");
         RegisterLineChart("HybridFlattenVolEnd", new Vector3d(4, 0, 0), 2);
 
-        GlobalGridManager.TryGetVoxel(new Vector3d(2, 0, 0), out Voxel volStart).Should().BeTrue();
-        GlobalGridManager.TryGetVoxel(new Vector3d(3, 0, 0), out Voxel volEnd).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(2, 0, 0), out Voxel volStart).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(3, 0, 0), out Voxel volEnd).Should().BeTrue();
 
         VolumePathRequest volRequest = VolumePathRequest.Create(
             new Vector3d(2, 0, 0),

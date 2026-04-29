@@ -1,5 +1,4 @@
-﻿using SwiftCollections;
-using System;
+﻿using System;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
@@ -152,9 +151,9 @@ public static class PathGuideFactory
             out FlowFieldSurveyResult result);
 
         // Make sure the start voxel is within the current fields collection
-        // Note: for flow fields, the GlobalIndex of the Start voxel is used as the key to check for path validity,
+        // Note: for flow fields, the world-scoped index of the start voxel is used as the key to check for path validity,
         // since the flow field is generated around the start position and may not cover the entire map.
-        if (pathFound && result.Fields.ContainsKey(request.StartNode.GlobalIndex))
+        if (pathFound && result.Fields.ContainsKey(request.StartNode.WorldIndex))
         {
             FlowFieldGuide guide = new();
             guide.Initialize(result);

@@ -4,11 +4,8 @@ using GridForge.Spatial;
 using SwiftCollections;
 using SwiftCollections.Pool;
 using System;
-using System.Runtime.CompilerServices;
-
-#if DEBUG
 using System.Diagnostics;
-#endif
+using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
 
@@ -33,17 +30,22 @@ public class SolidChartPartition : IVoxelPartition
     #endregion
 
     /// <summary>
-    /// The global coordinate of the voxel this partition is attached to.
+    /// The world-scoped coordinate of the voxel this partition is attached to.
     /// </summary>
-    public GlobalVoxelIndex GlobalIndex { get; private set; }
+    public WorldVoxelIndex WorldIndex { get; private set; }
+
+    /// <summary>
+    /// Back-compat alias for code that still refers to the pre-v6 name.
+    /// </summary>
+    public WorldVoxelIndex GlobalIndex => WorldIndex;
 
     public Voxel Voxel
     {
         get
         {
-            if (GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out var voxel))
+            if (TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out var voxel))
                 return voxel;
-            throw new InvalidOperationException($"Partition at {GlobalIndex} is not attached to a valid voxel!");
+            throw new InvalidOperationException($"Partition at {WorldIndex} is not attached to a valid voxel!");
         }
     }
 
@@ -76,9 +78,7 @@ public class SolidChartPartition : IVoxelPartition
 
     private int _chartPathCostModifier;
 
-#nullable enable
     public SolidChartPartition?[]? Neighbors { get; private set; }
-#nullable disable
 
     #region Clearance Properties
 
@@ -118,7 +118,7 @@ public class SolidChartPartition : IVoxelPartition
 
     #endregion
 
-    public void SetParentIndex(GlobalVoxelIndex parentIndex) => GlobalIndex = parentIndex;
+    public void SetParentIndex(WorldVoxelIndex parentIndex) => WorldIndex = parentIndex;
 
     /// <summary>
     /// Attaches a partition to a specified <see cref="Voxel"/>, updating its state and invoking initialization logic.
@@ -130,7 +130,7 @@ public class SolidChartPartition : IVoxelPartition
         voxel.OnObstacleAdded += HandleChange;
         voxel.OnObstacleRemoved += HandleChange;
 
-        GlobalIndex = voxel.GlobalIndex;
+        WorldIndex = voxel.WorldIndex;
         VoxelPosition = voxel.WorldPosition;
 
         IsWalkable = !voxel.IsBlocked;
@@ -162,7 +162,7 @@ public class SolidChartPartition : IVoxelPartition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Reset()
     {
-        GlobalIndex = default;
+        WorldIndex = default;
 
         _isClearanceValid = false;
 
@@ -197,17 +197,13 @@ public class SolidChartPartition : IVoxelPartition
 
     public void BindNeighbors()
     {
-#nullable enable
         Neighbors = new SolidChartPartition?[26];
-#nullable disable
 
-        GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out var voxel);
-
-        if (voxel == null)
+        if (!TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out VoxelGrid? grid, out Voxel? voxel))
         {
-#if DEBUG
-            Debug.WriteLine($"Partition at {GlobalIndex} is not attached to a voxel!");
-#endif
+            Debug.WriteLine($"SolidChartPartition.BindNeighbors: " +
+                $"Failed to find grid or voxel for WorldIndex {WorldIndex}. " +
+                $"Neighbors will be null.");
             Neighbors = null;
             return;
         }
@@ -216,8 +212,8 @@ public class SolidChartPartition : IVoxelPartition
         foreach (SpatialDirection dir in SpatialAwareness.AllDirections)
         {
             // use Voxel’s cached neighbor lookup
-            if (voxel.TryGetNeighborFromDirection(dir, out var neighborVoxel, useCache: true)
-             && neighborVoxel.TryGetPartition(out SolidChartPartition neighborPart))
+            if (voxel!.TryGetNeighborFromDirection(grid!, dir, out Voxel? neighborVoxel, useCache: true)
+             && neighborVoxel!.TryGetPartition(out SolidChartPartition? neighborPart))
             {
                 Neighbors[(int)dir] = neighborPart;
             }
@@ -247,7 +243,7 @@ public class SolidChartPartition : IVoxelPartition
         CheckClearance();
 
         // How many voxels wide our agent is, in cell terms
-        int required = (unitSize / GlobalGridManager.VoxelSize).CeilToInt();
+        int required = (unitSize / TrailblazerWorldManager.VoxelSize).CeilToInt();
         // If there aren't at least that many free voxels around, it can't go
 
         return required > _clearanceRadiusInVoxels;
@@ -278,7 +274,7 @@ public class SolidChartPartition : IVoxelPartition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool TryGetClearanceOrigin(out Voxel origin)
     {
-        return GlobalGridManager.TryGetGridAndVoxel(GlobalIndex, out _, out origin)
+        return TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out origin)
             && IsWalkable;
     }
 
@@ -363,8 +359,8 @@ public class SolidChartPartition : IVoxelPartition
     /// Applies the resolved overlap state for this voxel to the active solid partition.
     /// </summary>
     internal void ApplyAuthoredState(
-        ResolvedChartVoxelState state,
-        string effectiveChartOwner,
+        ResolvedChartVoxelState? state,
+        string? effectiveChartOwner,
         NavigationChartCell effectiveCell)
     {
         ChartOwners ??= new SwiftHashSet<string>();

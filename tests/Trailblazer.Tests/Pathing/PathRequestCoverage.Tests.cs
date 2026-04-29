@@ -1,7 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using GridForge.Grids;
 using SwiftCollections;
 using System;
 using Trailblazer.Pathing;
@@ -14,12 +13,12 @@ public sealed class PathRequestCoverageTests : IDisposable
 {
     public PathRequestCoverageTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(
+        TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
 
@@ -31,7 +30,7 @@ public sealed class PathRequestCoverageTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }

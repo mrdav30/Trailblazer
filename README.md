@@ -52,7 +52,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 
 Trailblazer does not own your world simulation. Your game or simulation still supplies:
 
-- global grid setup through `GridForge`
+- `GridForge` world creation and grid registration through `GridWorld`
 - traversal medium and contact information
 - collision and environment probing
 - navigator setup and traversal-state refresh
@@ -94,7 +94,17 @@ dotnet add package Trailblazer
 
 ```csharp
 using FixedMathSharp;
+using GridForge.Configuration;
+using GridForge.Grids;
+using Trailblazer;
 using Trailblazer.Pathing;
+
+var world = new GridWorld();
+world.TryAddGrid(
+    new GridConfiguration(new Vector3d(-8, -4, -8), new Vector3d(8, 4, 8)),
+    out _);
+
+TrailblazerManager.Initialize(world);
 
 bool[,,] chartData = new bool[1, 3, 3]
 {
@@ -113,6 +123,11 @@ var chart = NavigationChart.From3D(
 
 PathManager.Register(chart);
 ```
+
+Call `TrailblazerManager.Initialize(world)` once during startup to attach Trailblazer to the `GridWorld`
+instance you want it to use. After that, convenience APIs such as `PathManager.Register(chart)` use the
+configured world automatically. If you need to bind a world opportunistically before manager startup, use
+the explicit overloads such as `PathManager.Register(world, chart)`.
 
 `PathManager.Register(chart)` can initialize the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step.
 
@@ -154,13 +169,20 @@ If you want steering, turning, and locomotion support, create a concrete `Naviga
 
 ```csharp
 using FixedMathSharp;
+using GridForge.Configuration;
+using GridForge.Grids;
 using Trailblazer;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Pathing;
 
 // Once during startup.
-TrailblazerManager.Initialize();
+var world = new GridWorld();
+world.TryAddGrid(
+    new GridConfiguration(new Vector3d(-32, -8, -32), new Vector3d(32, 24, 32)),
+    out _);
+
+TrailblazerManager.Initialize(world);
 
 var navigator = new MyNavigator();
 navigator.Setup(new Vector3d(0, 0, 0), size: Fixed64.One);
@@ -187,7 +209,7 @@ navigator.CommitFrameMotion();
 TrailblazerManager.LateSimulate();
 ```
 
-Call `TrailblazerManager.Initialize()` once during application startup before entering the fixed-step loop. Trailblazer will lazily initialize as a safety net if needed, but explicit bootstrap is the intended host flow.
+Call `TrailblazerManager.Initialize(world)` once during application startup before entering the fixed-step loop. Trailblazer will lazily initialize as a safety net if needed, but explicit world bootstrap is the intended host flow.
 
 If several navigators should move as one formation, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
 

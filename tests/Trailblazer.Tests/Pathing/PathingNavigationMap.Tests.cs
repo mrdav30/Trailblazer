@@ -12,17 +12,14 @@ public class PathingNavigationMapTests : IDisposable
 {
     public PathingNavigationMapTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
-        else
-            GlobalGridManager.Setup();
+        TrailblazerWorldManager.Setup();
     }
 
     public void Dispose()
     {
         PathManager.Reset();
 
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
 
         GC.SuppressFinalize(this);
@@ -32,7 +29,7 @@ public class PathingNavigationMapTests : IDisposable
     public void Register_WithInitializeChartFalse_AddsMapWithoutInitializingIt()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         var map = PathTestFactory.BuildSinglePointMap("TestMap", new Vector3d(0, 0, 0));
         Assert.True(PathManager.Register(map, initializeChart: false));
@@ -40,7 +37,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.TryGetNavigationChart("TestMap", out var retrieved));
         Assert.Equal(map, retrieved);
         Assert.False(map.IsInitialized);
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart("TestMap");
@@ -50,13 +47,13 @@ public class PathingNavigationMapTests : IDisposable
     public void Register_InitializesChartByDefault()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         var map = PathTestFactory.BuildSinglePointMap("InitMap", new Vector3d(0, 0, 0));
         Assert.True(PathManager.Register(map));
 
         Assert.True(map.IsInitialized);
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart("InitMap");
@@ -66,7 +63,7 @@ public class PathingNavigationMapTests : IDisposable
     public void Register_ShouldRejectDuplicateChartNames_WithoutReplacingTheOriginal()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         var original = PathTestFactory.BuildSinglePointMap("DuplicateChart", Vector3d.Zero);
         var duplicate = PathTestFactory.BuildSinglePointMap("DuplicateChart", new Vector3d(1, 0, 0));
@@ -114,7 +111,7 @@ public class PathingNavigationMapTests : IDisposable
     public void InitializeAllCharts_ShouldInitializeDeferredCharts()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(6, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         var first = PathTestFactory.BuildSinglePointMap("DeferredA", Vector3d.Zero);
         var second = PathTestFactory.BuildSinglePointMap("DeferredB", new Vector3d(2, 0, 0));
@@ -128,9 +125,9 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(first.IsInitialized);
         Assert.True(second.IsInitialized);
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel firstVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel firstVoxel));
         Assert.True(firstVoxel.TryGetPartition<SolidChartPartition>(out _));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(2, 0, 0), out _, out Voxel secondVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(2, 0, 0), out _, out Voxel secondVoxel));
         Assert.True(secondVoxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart("DeferredA");
@@ -147,7 +144,7 @@ public class PathingNavigationMapTests : IDisposable
     public void UnloadMap_RemovesOnlyItsPartition()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         var pos = new Vector3d(0, 0, 0);
         var mapA = PathTestFactory.BuildSinglePointMap("MapA", pos);
@@ -160,7 +157,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.InitializeChart("MapB");
 
         // Validate partition exists and belongs to both
-        GlobalGridManager.TryGetGridAndVoxel(pos, out _, out Voxel voxel);
+        TrailblazerWorldManager.TryGetGridAndVoxel(pos, out _, out Voxel voxel);
         voxel.TryGetPartition(out SolidChartPartition partition);
         Assert.True(partition.BelongsTo("MapA"));
         Assert.True(partition.BelongsTo("MapB"));
@@ -187,14 +184,14 @@ public class PathingNavigationMapTests : IDisposable
     public void InitializeMap_ShouldNotDuplicatePartition()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         var map = PathTestFactory.BuildSinglePointMap("DuplicateInit", new Vector3d(0, 0, 0));
         PathManager.Register(map);
         PathManager.InitializeChart("DuplicateInit");
         PathManager.InitializeChart("DuplicateInit"); // idempotent
 
-        GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel);
+        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel);
         var count = voxel.TryGetPartition<SolidChartPartition>(out var partition) ? 1 : 0;
 
         Assert.True(count == 1);
@@ -207,7 +204,7 @@ public class PathingNavigationMapTests : IDisposable
     public void TryGetEffectiveCellAndOwner_ShouldReturnWinningResolvedState()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         Assert.True(PathManager.Register(BuildSingleTraversalPointChart(
             "EffectiveLow",
@@ -220,12 +217,12 @@ public class PathingNavigationMapTests : IDisposable
             TraversalMedia.Gas,
             priority: 1)));
 
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
 
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell worldCell));
-        Assert.True(PathManager.TryGetEffectiveCell(voxel.GlobalIndex, out NavigationChartCell voxelCell));
+        Assert.True(PathManager.TryGetEffectiveCell(voxel.WorldIndex, out NavigationChartCell voxelCell));
         Assert.True(PathManager.TryGetEffectiveChartOwner(Vector3d.Zero, out string worldOwner));
-        Assert.True(PathManager.TryGetEffectiveChartOwner(voxel.GlobalIndex, out string voxelOwner));
+        Assert.True(PathManager.TryGetEffectiveChartOwner(voxel.WorldIndex, out string voxelOwner));
 
         Assert.Equal(TraversalMedia.Gas, worldCell.TraversalKinds);
         Assert.Equal(worldCell, voxelCell);
@@ -240,18 +237,18 @@ public class PathingNavigationMapTests : IDisposable
     public void TryGetEffectiveCell_ByVoxelIndex_ShouldReturnFalse_WhenVoxelHasNoResolvedState()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
-        Assert.False(PathManager.TryGetEffectiveCell(voxel.GlobalIndex, out _));
-        Assert.False(PathManager.TryGetEffectiveChartOwner(voxel.GlobalIndex, out _));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+        Assert.False(PathManager.TryGetEffectiveCell(voxel.WorldIndex, out _));
+        Assert.False(PathManager.TryGetEffectiveChartOwner(voxel.WorldIndex, out _));
     }
 
     [Fact]
     public void TryGetClosestActiveTransition_ShouldReturnClosestDirectedTransitionOfRequestedType()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(12, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpStartA", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpEndA", new Vector3d(1, 0, 0));
@@ -299,7 +296,7 @@ public class PathingNavigationMapTests : IDisposable
     public void TryGetClosestActiveTransition_ShouldUseReversedBidirectionalView_AndIgnoreSuppressedTransitions()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(12, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         PathTestFactory.RegisterSingleWalkablePoint("ClosestReverseStart", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("ClosestReverseEnd", new Vector3d(1, 0, 0));
@@ -351,10 +348,10 @@ public class PathingNavigationMapTests : IDisposable
     [Fact]
     public void TryGetClosestActiveTransition_ShouldStillReturnCloserNeighborGridTransition()
     {
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
             out _));
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(4, -4, -4), new Vector3d(12, 4, 4)),
             out _));
 
@@ -385,10 +382,10 @@ public class PathingNavigationMapTests : IDisposable
     [Fact]
     public void TryGetClosestActiveTransition_ShouldSearchAcrossSourceGrids_WhenOriginIsOutsideAnyGrid()
     {
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
             out _));
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(14, 4, 4)),
             out _));
 
@@ -408,7 +405,7 @@ public class PathingNavigationMapTests : IDisposable
             source: TraversalTransitionAnchor.Solid(new Vector3d(10, 0, 0)),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(11, 0, 0)))));
 
-        Assert.False(GlobalGridManager.TryGetGrid(new Vector3d(8, 6, 0), out _));
+        Assert.False(TrailblazerWorldManager.TryGetGrid(new Vector3d(8, 6, 0), out _));
         Assert.True(PathManager.TryGetClosestActiveTransition(
             new Vector3d(8, 6, 0),
             TraversalTransitionType.Jump,
@@ -420,7 +417,7 @@ public class PathingNavigationMapTests : IDisposable
     public void UnloadChart_ShouldClearInitializationStateSoChartCanBeRegisteredAgain()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         var map = PathTestFactory.BuildSinglePointMap("ReloadableMap", new Vector3d(0, 0, 0));
         PathManager.Register(map);
@@ -433,7 +430,7 @@ public class PathingNavigationMapTests : IDisposable
 
         PathManager.InitializeChart(map.Name);
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart(map);
@@ -443,7 +440,7 @@ public class PathingNavigationMapTests : IDisposable
     public void PathManagerReset_ShouldClearInitializationStateSoSameChartInstanceCanBeRegisteredAgain()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         var map = PathTestFactory.BuildSinglePointMap("ResettableMap", new Vector3d(0, 0, 0));
         Assert.True(PathManager.Register(map));
@@ -454,7 +451,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(map.IsInitialized);
         Assert.True(PathManager.Register(map));
         Assert.True(map.IsInitialized);
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(0, 0, 0), out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart(map);
@@ -542,7 +539,7 @@ public class PathingNavigationMapTests : IDisposable
     public void InitializeChart_ShouldCreateVolumePartitions_ForBooleanVolumeCharts()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         bool[,,] data = new bool[3, 3, 3];
         data[1, 1, 1] = true;
@@ -557,7 +554,7 @@ public class PathingNavigationMapTests : IDisposable
 
         PathManager.Register(chart);
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(voxel.TryGetPartition(out VolumeChartPartition volumePartition));
         Assert.True(volumePartition.SupportsMedium(TraversalMedium.Gas));
@@ -570,7 +567,7 @@ public class PathingNavigationMapTests : IDisposable
     public void InitializeChart_ShouldApplyStructuredCellMetadata_ToPartitions()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
         data[1, 1, 1] = new NavigationChartCell(
@@ -583,7 +580,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.Register(chart);
         PathManager.InitializeChart(chart.Name);
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition(out SolidChartPartition partition));
         Assert.Equal(7, partition.PathCostModifier);
         Assert.Equal(NavigationChartCellFlags.TransitionSourceHint, partition.ChartFlags);
@@ -595,7 +592,7 @@ public class PathingNavigationMapTests : IDisposable
     public void OverlappingChartResolution_ShouldUseRegistrationPrecedence_AndRestoreTheNextOwnerOnUnload()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         Vector3d targetPosition = Vector3d.Zero;
         Vector3d minBounds = new(-1, -1, -1);
@@ -622,7 +619,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.InitializeChart("StructuredB");
         PathManager.InitializeChart("StructuredA");
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition(out SolidChartPartition partition));
         Assert.True(partition.BelongsTo("StructuredA"));
         Assert.True(partition.BelongsTo("StructuredB"));
@@ -646,7 +643,7 @@ public class PathingNavigationMapTests : IDisposable
     public void InitializeChart_ShouldApplyStructuredVolumeMetadata_ToVolumeChartPartitions()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
         data[1, 1, 1] = new NavigationChartCell(
@@ -658,7 +655,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.Register(chart);
         PathManager.InitializeChart(chart.Name);
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(voxel.TryGetPartition(out VolumeChartPartition volumePartition));
         Assert.True(volumePartition.SupportsMedium(TraversalMedium.Liquid));
@@ -672,7 +669,7 @@ public class PathingNavigationMapTests : IDisposable
     public void InitializeChart_ShouldApplyStructuredMixedSolidLiquidCells_ToBothPartitionTypes()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
         data[1, 1, 1] = new NavigationChartCell(
@@ -685,7 +682,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.Register(chart);
         PathManager.InitializeChart(chart.Name);
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition(out SolidChartPartition solidPartition));
         Assert.Equal(4, solidPartition.PathCostModifier);
         Assert.Equal(NavigationChartCellFlags.TransitionSourceHint, solidPartition.ChartFlags);
@@ -703,7 +700,7 @@ public class PathingNavigationMapTests : IDisposable
     public void OverlappingSolidAndLiquidCharts_ShouldResolveToOneEffectiveCell_AndRestoreThePreviousWinnerOnUnload()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         Vector3d targetPosition = Vector3d.Zero;
         Vector3d minBounds = new(-1, -1, -1);
@@ -717,7 +714,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.Register(NavigationChart.From3D("LowSolid", solidData, minBounds, Fixed64.One, priority: 0));
         PathManager.Register(NavigationChart.From3D("HighLiquid", liquidData, minBounds, Fixed64.One, priority: 1));
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(targetPosition, out _, out Voxel voxel));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(voxel.TryGetPartition(out VolumeChartPartition liquidPartition));
         Assert.Equal("HighLiquid", liquidPartition.EffectiveChartOwner);
@@ -737,7 +734,7 @@ public class PathingNavigationMapTests : IDisposable
     public void TryUpdateChartCell_ShouldRefreshLivePartitionsWithoutUnload()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[3, 3, 3];
         data[1, 1, 1] = NavigationChartCell.Solid;
@@ -745,7 +742,7 @@ public class PathingNavigationMapTests : IDisposable
         var chart = NavigationChart.From3D("LiveUpdateChart", data, new Vector3d(-1, -1, -1), Fixed64.One);
         PathManager.Register(chart);
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition(out SolidChartPartition solidPartition));
         Assert.Equal("LiveUpdateChart", solidPartition.EffectiveChartOwner);
         Assert.False(voxel.TryGetPartition<VolumeChartPartition>(out _));
@@ -771,7 +768,7 @@ public class PathingNavigationMapTests : IDisposable
     public void ApplyChartUpdates_ShouldApplySparseBatchAndReportChangedCellCount()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1];
         data[0, 0, 0] = NavigationChartCell.Gas;
@@ -780,7 +777,7 @@ public class PathingNavigationMapTests : IDisposable
         var chart = NavigationChart.From3D("BatchUpdateChart", data, Vector3d.Zero, Fixed64.One);
         PathManager.Register(chart);
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel middleVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel middleVoxel));
         Assert.False(middleVoxel.TryGetPartition<VolumeChartPartition>(out _));
 
         int changedCount = PathManager.ApplyChartUpdates(
@@ -801,7 +798,7 @@ public class PathingNavigationMapTests : IDisposable
     public void ChartUpdateApis_ShouldRejectUnknownChartsOutOfBoundsUpdates_AndNullBatches()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[1, 1, 1];
         data[0, 0, 0] = NavigationChartCell.Solid;
@@ -827,7 +824,7 @@ public class PathingNavigationMapTests : IDisposable
     public void TryUpdateChartCell_ShouldReturnFalse_WhenCellIsUnchanged()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[1, 1, 1];
         data[0, 0, 0] = NavigationChartCell.Solid;
@@ -847,14 +844,14 @@ public class PathingNavigationMapTests : IDisposable
     public void TryUpdateChartCell_ShouldRemoveResolvedState_WhenLastOwnerBecomesEmpty()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[1, 1, 1];
         data[0, 0, 0] = NavigationChartCell.Solid;
 
         var chart = NavigationChart.From3D("EmptyRemovalChart", data, Vector3d.Zero, Fixed64.One);
         Assert.True(PathManager.Register(chart));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         Assert.True(PathManager.TryUpdateChartCell(chart.Name, 0, 0, 0, NavigationChartCell.Empty));
@@ -871,7 +868,7 @@ public class PathingNavigationMapTests : IDisposable
     public void TryUpdateChartCell_ShouldReevaluateManagedManualTransitions_WhenLocalTraversalSupportChanges()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         bool[,,] data = new bool[1, 2, 1]
         {
@@ -913,7 +910,7 @@ public class PathingNavigationMapTests : IDisposable
     public void TryUpdateChartCell_ShouldPreserveEffectiveTraversalWhenWinningOwnerFallsBackToEquivalentCell()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChart lowPriorityChart = BuildSingleTraversalPointChart(
             "FallbackOwnerLow",
@@ -935,7 +932,7 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell effectiveCell));
         Assert.True(PathManager.TryGetEffectiveChartOwner(Vector3d.Zero, out string winningOwnerAfterUpdate));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition(out SolidChartPartition partition));
 
         Assert.True(effectiveCell.HasSolid);
@@ -951,7 +948,7 @@ public class PathingNavigationMapTests : IDisposable
     public void RegisterTraversalBuildResult_ShouldRegisterTransitionsAndInitializeChart()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         string[,,] map =
         {
@@ -971,9 +968,9 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.TryGetNavigationChart(buildResult.Chart.Name, out NavigationChart chart));
         Assert.Same(buildResult.Chart, chart);
         Assert.True(chart.IsInitialized);
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel waterVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel waterVoxel));
         Assert.True(waterVoxel.TryGetPartition(out VolumeChartPartition volumePartition));
         Assert.True(volumePartition.SupportsMedium(TraversalMedium.Liquid));
 
@@ -987,7 +984,7 @@ public class PathingNavigationMapTests : IDisposable
     public void RegisterTraversalBuildResult_ShouldInitializeBareWaterCells_WithoutHostRules()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         string[,,] map =
         {
@@ -1020,7 +1017,7 @@ public class PathingNavigationMapTests : IDisposable
     public void RegisterTraversalBuildResult_ShouldKeepEquivalentManualTransitionActiveOverGeneratedOne()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         string[,,] map =
         {
@@ -1063,7 +1060,7 @@ public class PathingNavigationMapTests : IDisposable
     public void UnloadChart_ShouldUnregisterGeneratedTransitionsFromBuildResult_AndSuppressManualTransitionsWithoutUnregisteringThem()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         string[,,] map =
         {
@@ -1104,7 +1101,7 @@ public class PathingNavigationMapTests : IDisposable
     public void UnloadUninitializedChart_ShouldUnregisterGeneratedTransitionsFromBuildResult()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         string[,,] map =
         {
@@ -1135,9 +1132,9 @@ public class PathingNavigationMapTests : IDisposable
     public void AuthoredGas_ShouldRestrictGasTraversalToAuthoredVoxels()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel unAuthoredVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel unAuthoredVoxel));
         Assert.False(VolumeVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, TraversalMedium.Gas));
 
         string[,,] map =
@@ -1154,7 +1151,7 @@ public class PathingNavigationMapTests : IDisposable
             interval: Fixed64.One).Build();
 
         Assert.True(PathManager.Register(buildResult));
-        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel authoredOpenVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel authoredOpenVoxel));
         Assert.True(VolumeVoxelFinder.IsTraversable(authoredOpenVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.False(VolumeVoxelFinder.IsTraversable(unAuthoredVoxel, Fixed64.One, TraversalMedium.Gas));
 
@@ -1165,13 +1162,13 @@ public class PathingNavigationMapTests : IDisposable
     public void OpenVoxelRule_ShouldRequireTrailblazerPartitionPresence()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         VolumeMediumRules.SetGasVoxelRule(static voxel =>
             voxel.WorldPosition == Vector3d.Zero
             || voxel.WorldPosition == new Vector3d(1, 0, 0));
 
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel unpartitionedVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel unpartitionedVoxel));
         Assert.False(VolumeVoxelFinder.IsTraversable(unpartitionedVoxel, Fixed64.One, TraversalMedium.Gas));
 
         PathTestFactory.RegisterSingleWalkablePoint("OpenRuleSurfaceA", Vector3d.Zero);
@@ -1209,11 +1206,11 @@ public class PathingNavigationMapTests : IDisposable
     public void AuthoredVolume_ShouldRemainValid_WhenMatchingHostRuleIsRemoved()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "AuthoredOpenAuthority");
 
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
         Assert.True(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
 
         VolumeMediumRules.SetGasVoxelRule(static candidate =>
@@ -1231,11 +1228,11 @@ public class PathingNavigationMapTests : IDisposable
     public void HostLiquidRule_ShouldSupplementAuthoredGas_WithoutRemovingGasTraversal()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "AuthoredOpenPlusWater");
 
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
         Assert.True(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Gas));
         Assert.False(VolumeVoxelFinder.IsTraversable(voxel, Fixed64.One, TraversalMedium.Liquid));
 
@@ -1256,13 +1253,13 @@ public class PathingNavigationMapTests : IDisposable
     public void SolidChartPartitionOnlyVoxel_ShouldLoseSupplementalVolumeMembership_WhenHostRuleIsRemoved()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         PathTestFactory.RegisterSingleWalkablePoint("HostOnlyOpenStart", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("HostOnlyOpenEnd", new Vector3d(1, 0, 0));
 
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel startVoxel));
-        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel endVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel startVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel endVoxel));
         Assert.False(VolumeVoxelFinder.IsTraversable(startVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.False(VolumeVoxelFinder.IsTraversable(endVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.Null(VolumePathRequest.Create(
@@ -1299,7 +1296,7 @@ public class PathingNavigationMapTests : IDisposable
     public void UnrelatedChartUnload_ShouldNotInvalidateUnrelatedAStarCache()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         bool[,,] data = new bool[1, 3, 1]
         {
@@ -1339,7 +1336,7 @@ public class PathingNavigationMapTests : IDisposable
     public void UnrelatedChartUnload_ShouldNotInvalidateUnrelatedAuthoredVolumeCache()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1];
         data[0, 0, 0] = new NavigationChartCell(TraversalMedia.Gas);
@@ -1376,7 +1373,7 @@ public class PathingNavigationMapTests : IDisposable
     public void VolumeCache_ShouldTrackSurfaceChartDependencies_WhenHostRuleUsesSolidChartPartitions()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         bool[,,] data = new bool[1, 3, 1]
         {
@@ -1419,7 +1416,7 @@ public class PathingNavigationMapTests : IDisposable
     public void OverlappingChartInitialize_ShouldInvalidateOnlyDependentAStarCacheEntries()
     {
         var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         bool[,,] data = CreateThreeVoxelLine();
 
@@ -1461,7 +1458,7 @@ public class PathingNavigationMapTests : IDisposable
     public void HiddenChartUpdate_ShouldNotInvalidateAStarCache_WhenEffectiveStateDoesNotChange()
     {
         var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         bool[,,] data = CreateThreeVoxelLine();
 
@@ -1503,7 +1500,7 @@ public class PathingNavigationMapTests : IDisposable
     public void EffectiveChartUpdate_ShouldInvalidateOnlyDependentAStarCacheEntries()
     {
         var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         bool[,,] data = CreateThreeVoxelLine();
 
@@ -1546,7 +1543,7 @@ public class PathingNavigationMapTests : IDisposable
     public void OverlappingChartInitialize_ShouldInvalidateOnlyDependentFlowFieldCacheEntries()
     {
         var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         bool[,,] data = CreateThreeVoxelLine();
 
@@ -1586,7 +1583,7 @@ public class PathingNavigationMapTests : IDisposable
     public void OverlappingChartInitialize_ShouldInvalidateOnlyDependentVolumeCacheEntries()
     {
         var config = new GridConfiguration(new Vector3d(-8, 0, -4), new Vector3d(8, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] data = CreateThreeVoxelTraversalLine(TraversalMedia.Gas);
 
@@ -1630,7 +1627,7 @@ public class PathingNavigationMapTests : IDisposable
     public void RegisterTraversalBuildResult_ShouldRollback_WhenGeneratedTransitionRegistrationFails()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         string[,,] map =
         {
@@ -1654,7 +1651,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(buildResult.Chart.IsInitialized);
         Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
         Assert.True(TraversalTransitionRegistry.IsRegistered(preRegisteredTransition.Id));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
     }
 
@@ -1662,7 +1659,7 @@ public class PathingNavigationMapTests : IDisposable
     public void ChartUpdate_ShouldPreserveUnrelatedGeneratedTransitions_FromTraversalBuildCharts()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         string[,,] map =
         {
@@ -1694,7 +1691,7 @@ public class PathingNavigationMapTests : IDisposable
     public void ChartUpdate_ShouldRegenerateAffectedGeneratedTransitions_FromTraversalBuildCharts()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         string[,,] map =
         {
@@ -1736,7 +1733,7 @@ public class PathingNavigationMapTests : IDisposable
     public void ChartUpdate_ShouldGenerateTransitions_ForBuildChartsThatStartedWithoutAny()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         string[,,] map =
         {
@@ -1783,7 +1780,7 @@ public class PathingNavigationMapTests : IDisposable
     public void Overlap_ShouldSuppressPlainChartGeneratedTransitions_ThenReactivateThemOnUnload()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChartCell[,,] generatedCells =
         {
@@ -1835,7 +1832,7 @@ public class PathingNavigationMapTests : IDisposable
     public void Overlap_ShouldSuppressManagedManualTransitions_ThenReactivateThemOnUnload()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         PathTestFactory.RegisterSingleWalkablePoint("ManualManagedSource", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("ManualManagedDestination", new Vector3d(1, 0, 0));
@@ -1870,7 +1867,7 @@ public class PathingNavigationMapTests : IDisposable
     public void GlobalGridReset_ShouldHardResetPathManagerChartsAndTransitions()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
 
         NavigationChart sourceChart = PathTestFactory.RegisterSingleWalkablePoint("ExternalResetSource", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("ExternalResetDestination", new Vector3d(1, 0, 0));
@@ -1885,7 +1882,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.IsChartRegistered(sourceChart.Name));
         Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
 
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
 
         Assert.False(PathManager.IsChartRegistered(sourceChart.Name));
         Assert.False(TraversalTransitionRegistry.IsRegistered(manual.Id));
@@ -1896,7 +1893,7 @@ public class PathingNavigationMapTests : IDisposable
     public void GlobalGridRemoveAndAdd_ShouldRebuildInitializedCharts_AndReactivateManagedManualTransitions()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out ushort gridIndex));
 
         NavigationChart sourceChart = PathTestFactory.RegisterSingleWalkablePoint("ExternalRemoveSource", Vector3d.Zero);
         NavigationChart destinationChart = PathTestFactory.RegisterSingleWalkablePoint("ExternalRemoveDestination", new Vector3d(1, 0, 0));
@@ -1909,10 +1906,10 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(TraversalTransitionRegistry.Register(manual));
         Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel sourceVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel sourceVoxel));
         Assert.True(sourceVoxel.TryGetPartition<SolidChartPartition>(out _));
 
-        Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+        Assert.True(TrailblazerWorldManager.TryRemoveGrid(gridIndex));
         FlushExternalGridBridge();
 
         Assert.True(PathManager.IsChartRegistered(sourceChart.Name));
@@ -1923,14 +1920,14 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(TraversalTransitionRegistry.IsActive(manual.Id));
         Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
 
-        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out _));
         FlushExternalGridBridge();
 
         Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
         Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell restoredCell));
         Assert.True(restoredCell.HasSolid);
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel rebuiltSourceVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel rebuiltSourceVoxel));
         Assert.True(rebuiltSourceVoxel.TryGetPartition<SolidChartPartition>(out _));
     }
 
@@ -1938,7 +1935,7 @@ public class PathingNavigationMapTests : IDisposable
     public void GlobalGridRemoveAndAdd_ShouldSuppressGeneratedTransitions_AndReactivateThemAfterRebuild()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out ushort gridIndex));
 
         NavigationChartCell[,,] generatedCells =
         {
@@ -1962,7 +1959,7 @@ public class PathingNavigationMapTests : IDisposable
         string generatedTransitionId = beforeRemove[0].Id;
         Assert.Equal(TraversalTransitionType.SwimEntry, beforeRemove[0].Type);
 
-        Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+        Assert.True(TrailblazerWorldManager.TryRemoveGrid(gridIndex));
         FlushExternalGridBridge();
 
         Assert.True(PathManager.IsChartRegistered(generatedChart.Name));
@@ -1970,7 +1967,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(TraversalTransitionRegistry.IsActive(generatedTransitionId));
         Assert.Empty(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
 
-        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out _));
         FlushExternalGridBridge();
 
         TraversalTransition[] afterAdd = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
@@ -1982,10 +1979,10 @@ public class PathingNavigationMapTests : IDisposable
     [Fact]
     public void GlobalGridChange_ShouldRebuildOnlyIntersectingCharts()
     {
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
             out ushort leftGridIndex));
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(18, 4, 4)),
             out ushort rightGridIndex));
 
@@ -1994,12 +1991,12 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(leftChart.IsInitialized);
         Assert.True(rightChart.IsInitialized);
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel leftVoxel));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(10, 0, 0), out _, out Voxel rightVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel leftVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(10, 0, 0), out _, out Voxel rightVoxel));
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(rightVoxel.TryGetPartition<SolidChartPartition>(out _));
 
-        GlobalGridManager.IncrementGridVersion(rightGridIndex, false);
+        TrailblazerWorldManager.IncrementGridVersion(rightGridIndex, false);
         FlushExternalGridBridge();
 
         Assert.True(leftChart.IsInitialized);
@@ -2016,20 +2013,20 @@ public class PathingNavigationMapTests : IDisposable
     [Fact]
     public void GlobalGridChange_ShouldIgnoreBoundsWithoutIntersectingCharts()
     {
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
             out _));
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)),
             out ushort farGridIndex));
 
         NavigationChart leftChart = PathTestFactory.RegisterSingleWalkablePoint("UnchangedChart", Vector3d.Zero);
 
         Assert.True(leftChart.IsInitialized);
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel leftVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel leftVoxel));
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
 
-        GlobalGridManager.IncrementGridVersion(farGridIndex, false);
+        TrailblazerWorldManager.IncrementGridVersion(farGridIndex, false);
         FlushExternalGridBridge();
 
         Assert.True(leftChart.IsInitialized);
@@ -2042,15 +2039,15 @@ public class PathingNavigationMapTests : IDisposable
     public void GlobalGridChange_ShouldNotInitializeDeferredIntersectingCharts()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out ushort gridIndex));
 
         NavigationChart deferredChart = PathTestFactory.BuildSinglePointMap("DeferredGridChangeChart", Vector3d.Zero);
         Assert.True(PathManager.Register(deferredChart, initializeChart: false));
         Assert.False(deferredChart.IsInitialized);
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
 
-        GlobalGridManager.IncrementGridVersion(gridIndex, false);
+        TrailblazerWorldManager.IncrementGridVersion(gridIndex, false);
         FlushExternalGridBridge();
 
         Assert.False(deferredChart.IsInitialized);
@@ -2064,7 +2061,7 @@ public class PathingNavigationMapTests : IDisposable
     public void TryUpdateChartCell_ShouldPersistChangesWhileGridIsMissing_AndApplyThemWhenGridReturns()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out ushort gridIndex));
 
         NavigationChartCell[,,] data = new NavigationChartCell[1, 1, 1];
         data[0, 0, 0] = NavigationChartCell.Solid;
@@ -2073,19 +2070,19 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.Register(chart));
         Assert.True(chart.IsInitialized);
 
-        Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+        Assert.True(TrailblazerWorldManager.TryRemoveGrid(gridIndex));
         FlushExternalGridBridge();
         Assert.True(chart.IsInitialized);
         Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
 
         Assert.True(PathManager.TryUpdateChartCell(chart.Name, 0, 0, 0, NavigationChartCell.Liquid));
 
-        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out _));
         FlushExternalGridBridge();
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell restoredCell));
         Assert.False(restoredCell.HasSolid);
         Assert.True(restoredCell.SupportsMedium(TraversalMedium.Liquid));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel rebuiltVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel rebuiltVoxel));
         Assert.False(rebuiltVoxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(rebuiltVoxel.TryGetPartition(out VolumeChartPartition volumePartition));
         Assert.True(volumePartition.SupportsMedium(TraversalMedium.Liquid));
@@ -2095,10 +2092,10 @@ public class PathingNavigationMapTests : IDisposable
     public void TryGetMaxSearchSize_ShouldReturnGridSize_WhenBothVoxelsShareAGrid()
     {
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4));
-        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start));
-        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end));
-        Assert.True(GlobalGridManager.TryGetGrid(start.GridIndex, out VoxelGrid grid));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out _));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end));
+        Assert.True(TrailblazerWorldManager.TryGetGrid(start.GridIndex, out VoxelGrid grid));
 
         Assert.True(PathManager.TryGetMaxSearchSize(start, end, out int maxSearchSize));
         Assert.Equal(grid.Size, maxSearchSize);
@@ -2107,17 +2104,17 @@ public class PathingNavigationMapTests : IDisposable
     [Fact]
     public void TryGetMaxSearchSize_ShouldReturnCombinedSize_WhenVoxelsSpanDifferentGrids()
     {
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
             out _));
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(18, 4, 4)),
             out _));
 
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start));
-        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(10, 0, 0), out Voxel end));
-        Assert.True(GlobalGridManager.TryGetGrid(start.GridIndex, out VoxelGrid startGrid));
-        Assert.True(GlobalGridManager.TryGetGrid(end.GridIndex, out VoxelGrid endGrid));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(new Vector3d(10, 0, 0), out Voxel end));
+        Assert.True(TrailblazerWorldManager.TryGetGrid(start.GridIndex, out VoxelGrid startGrid));
+        Assert.True(TrailblazerWorldManager.TryGetGrid(end.GridIndex, out VoxelGrid endGrid));
 
         Assert.True(PathManager.TryGetMaxSearchSize(start, end, out int maxSearchSize));
         Assert.Equal(startGrid.Size + endGrid.Size, maxSearchSize);
@@ -2127,11 +2124,11 @@ public class PathingNavigationMapTests : IDisposable
     public void TryGetMaxSearchSize_ShouldReturnFalse_WhenEitherVoxelGridIsMissing()
     {
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4));
-        Assert.True(GlobalGridManager.TryAddGrid(config, out ushort gridIndex));
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start));
-        Assert.True(GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out ushort gridIndex));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end));
 
-        Assert.True(GlobalGridManager.TryRemoveGrid(gridIndex));
+        Assert.True(TrailblazerWorldManager.TryRemoveGrid(gridIndex));
 
         Assert.False(PathManager.TryGetMaxSearchSize(start, end, out int maxSearchSize));
         Assert.Equal(0, maxSearchSize);
@@ -2141,7 +2138,7 @@ public class PathingNavigationMapTests : IDisposable
     public void NeedsPath_ShouldReturnTrue_WhenLineCrossesUnpartitionedVoxels()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out _));
 
         Assert.True(PathManager.NeedsPath(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
     }
@@ -2150,7 +2147,7 @@ public class PathingNavigationMapTests : IDisposable
     public void NeedsPath_ShouldReturnFalse_WhenLineIsCoveredByWalkableSurface()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out _));
 
         PathTestFactory.RegisterFromData("NeedsPathWalkableChart", CreateThreeVoxelLine(), Vector3d.Zero);
 
@@ -2163,7 +2160,7 @@ public class PathingNavigationMapTests : IDisposable
     public void NeedsPath_ShouldReturnTrue_WhenUnitSizeExceedsPartitionClearance()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
-        Assert.True(GlobalGridManager.TryAddGrid(config, out _));
+        Assert.True(TrailblazerWorldManager.TryAddGrid(config, out _));
 
         PathTestFactory.RegisterFromData("NeedsPathImpassableChart", CreateThreeVoxelLine(), Vector3d.Zero);
 

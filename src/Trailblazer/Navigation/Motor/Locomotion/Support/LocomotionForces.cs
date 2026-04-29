@@ -6,7 +6,7 @@ namespace Trailblazer.Navigation.Motor;
 /// <summary>
 /// Holds the gravity and terminal velocity forces applied to a navigator, with support for per-instance overrides and global defaults.
 /// </summary>
-public sealed class LocomotionForces: IRecordable
+public sealed class LocomotionForces : IRecordable
 {
     /// <summary>
     /// Simulation-wide gravity defaults applied to all <see cref="MoveLocomotion"/> instances

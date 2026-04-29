@@ -1,5 +1,4 @@
 using FixedMathSharp;
-using GridForge.Grids;
 using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
@@ -217,7 +216,7 @@ internal static class MovementGroupCoordinator
             return false;
 
         groupCenter /= groupCount;
-        averageRadius = (averageRadius / groupCount) + (GlobalGridManager.VoxelSize * Fixed64.Half);
+        averageRadius = (averageRadius / groupCount) + (TrailblazerWorldManager.VoxelSize * Fixed64.Half);
         return true;
     }
 

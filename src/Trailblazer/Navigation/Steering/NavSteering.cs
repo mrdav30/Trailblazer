@@ -5,10 +5,10 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using System;
 using System.Runtime.CompilerServices;
-using Trailblazer.Navigation;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
+
 
 #if DEBUG
 using System.Diagnostics;
@@ -102,25 +102,31 @@ public class NavSteering : IRecordable
     /// <inheritdoc cref="DefaultPathRecheckCooldown"/>
     public int PathRecheckCooldownFrames = DefaultPathRecheckCooldown;
 
+    /// <summary>
+    /// Gets the current target direction as a three-dimensional vector.
+    /// </summary>
     public Vector3d TargetDirection { get; protected set; }
 
+    /// <summary>
+    /// Gets the direction vector of the most recent target interaction.
+    /// </summary>
     public Vector3d LastTargetDirection { get; protected set; }
 
     /// <summary>
     /// The pathfinding configuration used for the current movement request, including size, and type.
     /// </summary>
-    private IPathRequest _currentRequest;
+    private IPathRequest? _currentRequest;
 
     /// <inheritdoc cref="_currentRequest"/>
-    public IPathRequest CurrentRequest => _currentRequest;
+    public IPathRequest? CurrentRequest => _currentRequest;
 
     /// <summary>
     /// Current guide used to compute the desired path or flow.
     /// </summary>
-    private IGuide _trailGuide;
+    private IGuide? _trailGuide;
 
     /// <inheritdoc cref="_trailGuide"/>
-    public IGuide TrailGuide => _trailGuide;
+    public IGuide? TrailGuide => _trailGuide;
 
     /// <summary>
     /// Whether the navigator is following a path or guide to the destination.
@@ -152,6 +158,9 @@ public class NavSteering : IRecordable
     /// </summary>
     protected bool _shouldRequestPathThisFrame;
 
+    /// <summary>
+    /// Represents the cooldown period, in milliseconds, before the next path check can be performed.
+    /// </summary>
     protected int _pathCheckCooldown;
 
     private bool _currentRouteHasResolvedTopology;
@@ -268,9 +277,9 @@ public class NavSteering : IRecordable
     public static NavSteering CreateNew(Fixed64 radius) => new(radius);
 
     /// <summary>
-    /// Initializes a new, empty instance of the <see cref="NavSteering"/> class.
+    /// Initializes a new instance of the NavSteering class with a default radius of 0.5 units.
     /// </summary>
-    public NavSteering() { }
+    public NavSteering() : this(Fixed64.Half) { }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="NavSteering"/> class.
@@ -282,18 +291,27 @@ public class NavSteering : IRecordable
 
     #region Group Properties
 
+    /// <summary>
+    /// Gets or sets the unique identifier for the movement group associated with the current session.
+    /// </summary>
     public int MovementGroupID
     {
         get => _movementGroupSession.GroupId;
         set => _movementGroupSession.GroupId = value;
     }
 
+    /// <summary>
+    /// Gets the index of the group associated with the current movement session.
+    /// </summary>
     public int GroupIndex
     {
         get => _movementGroupSession.GroupIndex;
         protected set => _movementGroupSession.GroupIndex = value;
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the item is assigned to a movement group.
+    /// </summary>
     public bool IsInGroup => MovementGroupID != -1;
 
     #endregion
@@ -305,7 +323,7 @@ public class NavSteering : IRecordable
     /// </summary>
     /// <param name="pathRequest">The movement request that defines the desired origin and destination.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between nearby members.</param>
-    public virtual void ApplyPathRequest(IPathRequest pathRequest, int groupId = -1)
+    public virtual void ApplyPathRequest(IPathRequest? pathRequest, int groupId = -1)
     {
         // assume the navigator is being controlled
         if (pathRequest == null || !pathRequest.HasValidEndpoints)
@@ -351,7 +369,7 @@ public class NavSteering : IRecordable
     /// Replaces the current guide used for guided steering.
     /// </summary>
     /// <param name="guide">The guide to follow, or <c>null</c> to clear guided movement.</param>
-    public void SetTrailGuide(IGuide guide)
+    public void SetTrailGuide(IGuide? guide)
     {
         _trailGuide = guide;
         _shouldRequestPathThisFrame = _trailGuide != null;
@@ -420,7 +438,7 @@ public class NavSteering : IRecordable
     /// <summary>
     /// Initializes the navigator by setting up its defaults, events, traversal state, and movement controller.
     /// </summary>
-    public virtual void OnInitialize(Fixed64 radius)
+    protected virtual void OnInitialize(Fixed64 radius)
     {
         UpdateOwnerRadius(radius);
 
@@ -456,7 +474,7 @@ public class NavSteering : IRecordable
     {
         // Fatter objects can afford to land imprecisely
         _agentRadius = radius;
-        _closingDistance = FixedMath.Round(radius + GlobalGridManager.VoxelSize);
+        _closingDistance = FixedMath.Round(radius + TrailblazerWorldManager.VoxelSize);
     }
 
     /// <summary>
@@ -510,7 +528,7 @@ public class NavSteering : IRecordable
         // Unit-size change detection must run before the shouldRequestPath gate. Without this,
         // external TrySetUnitSize calls between frames are silently ignored when
         // _shouldRequestPathThisFrame is already false, and no repath ever triggers.
-        if (_currentRequest.UnitSize != _lastUnitSize)
+        if (_currentRequest!.UnitSize != _lastUnitSize)
         {
             _lastUnitSize = _currentRequest.UnitSize;
             _shouldRequestPathThisFrame = true;
@@ -603,7 +621,7 @@ public class NavSteering : IRecordable
             if (_trailGuide is IWaypointGuide waypointGuide)
                 targetDirection = waypointGuide.GetCurrentWaypointDirection(position);
             else
-                _trailGuide.TryGetMovementDirection(position, out targetDirection);
+                _trailGuide!.TryGetMovementDirection(position, out targetDirection);
         }
 
         if (targetDirection == Vector3d.Zero)
@@ -627,7 +645,7 @@ public class NavSteering : IRecordable
     {
         return (_distanceToTarget < _closingDistance
                     && Vector3d.Dot(TargetDirection, LastTargetDirection) < Fixed64.Epsilon)
-            || _distanceToTarget < _closingDistance * GlobalGridManager.VoxelSize;
+            || _distanceToTarget < _closingDistance * TrailblazerWorldManager.VoxelSize;
     }
 
     /// <summary>
@@ -720,7 +738,7 @@ public class NavSteering : IRecordable
             HasLineOfSightPath = IsDestinationInSight(
                 position,
                 Destination,
-                _currentRequest.UnitSize,
+                _currentRequest!.UnitSize,
                 _currentRequest.AllowUnwalkableEndpoints);
 
             if (HasLineOfSightPath)
@@ -809,7 +827,7 @@ public class NavSteering : IRecordable
 
     private bool TryApplyFallbackDirection(Vector3d position)
     {
-        if (!HasTrailGuide || !_trailGuide.TryGetFallbackDirection(position, out Vector3d fallback))
+        if (!HasTrailGuide || _trailGuide!.TryGetFallbackDirection(position, out Vector3d fallback) == false)
             return false;
 
         TargetDirection = fallback;
@@ -842,6 +860,19 @@ public class NavSteering : IRecordable
         _trailGuide = null;
     }
 
+    /// <summary>
+    /// Adjusts the target direction to decelerate the object as it approaches its destination based on the specified
+    /// acceleration and current speed.
+    /// </summary>
+    /// <remarks>
+    /// This method is intended to be overridden in derived classes to customize deceleration behavior. 
+    /// It modulates the target direction to ensure smooth slowing as the object nears its target.
+    /// </remarks>
+    /// <param name="acceleration">
+    /// The acceleration vector used to determine the deceleration rate. 
+    /// If the vector is zero, a default braking power is used.
+    /// </param>
+    /// <param name="speed">The current speed of the object, used to calculate the distance required to slow down.</param>
     protected virtual void SetDeceleration(Vector3d acceleration, Fixed64 speed)
     {
         // Scaling direction before passing to the motor lets us
@@ -921,8 +952,8 @@ public class NavSteering : IRecordable
         Fixed64 unitSize,
         bool allowUnwalkableEndpoints,
         TraversalMedium medium = TraversalMedium.Gas,
-        Voxel startNode = null,
-        Voxel endNode = null)
+        Voxel? startNode = null,
+        Voxel? endNode = null)
     {
         return VolumeVoxelFinder.IsDirectPathClear(
             position,
@@ -967,12 +998,12 @@ public class NavSteering : IRecordable
         Vector3d cohesionCM = Vector3d.Zero;
         int groupCount = 0;
 
-        ISteer closest = null;
+        ISteer? closest = null;
         Fixed64 closestDistSq = avoidRadius * avoidRadius;
 
         bool condition(IVoxelOccupant other) =>
             other.GlobalId != id;
-        foreach (IVoxelOccupant entity in GridScanManager.ScanRadius(position, scanRadius, condition))
+        foreach (IVoxelOccupant entity in GridScanManager.ScanRadius(TrailblazerWorldManager.World, position, scanRadius, condition))
         {
             if (entity is not ISteer other || other.Radius <= Fixed64.Zero)
                 continue;
@@ -1140,8 +1171,8 @@ public class NavSteering : IRecordable
         Fixed64 brakingPower = BrakingPower;
         int movementGroupId = MovementGroupID;
         MovementGroupTravelMode movementGroupMode = _movementGroupMode;
-        var requestRecord = new PathRequestRecord();
 
+        var requestRecord = new PathRequestRecord();
         if (chronicler.Mode == SerializationMode.Saving)
             requestRecord.Capture(_currentRequest, _trailGuide);
 
@@ -1213,7 +1244,7 @@ public class NavSteering : IRecordable
             _movementGroupMode = movementGroupMode;
 
             _currentRequest = null;
-            if (!requestRecord.TryCreateRequest(out IPathRequest request))
+            if (!requestRecord.TryCreateRequest(out IPathRequest? request))
             {
                 ShouldMove = false;
                 IsStuck = false;

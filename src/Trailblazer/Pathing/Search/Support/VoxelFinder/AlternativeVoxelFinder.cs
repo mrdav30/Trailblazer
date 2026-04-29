@@ -56,7 +56,7 @@ public class AlternativeVoxelFinder
                 _worldPos.x + _direction.x,
                 _worldPos.y,
                 _worldPos.z + _direction.z);
-            if (GlobalGridManager.TryGetVoxel(checkPosition, out Voxel checkVoxel)
+            if (TrailblazerWorldManager.TryGetVoxel(checkPosition, out Voxel checkVoxel)
                 && IsSearchCandidate(checkVoxel))
             {
                 nextVoxel = checkVoxel;
@@ -145,7 +145,7 @@ public class AlternativeVoxelFinder
 
     private void InitializeDirection()
     {
-        Fixed64 halfVoxel = GlobalGridManager.VoxelSize * Fixed64.Half;
+        Fixed64 halfVoxel = TrailblazerWorldManager.VoxelSize * Fixed64.Half;
         Fixed64 xOffsetFromCenter = _worldPos.x - (_anchorVoxelPosition.x + halfVoxel);
         Fixed64 zOffsetFromCenter = _worldPos.z - (_anchorVoxelPosition.z + halfVoxel);
 

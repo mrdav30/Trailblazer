@@ -34,18 +34,25 @@ public abstract class Navigator : INavigate, IRecordable
 
     #region State - Position / Rotation / Velocity
 
+    /// <inheritdoc/>
     public Vector3d Position { get; protected set; }
 
+    /// <inheritdoc/>
     public Vector3d LastPosition { get; protected set; }
 
+    /// <inheritdoc/>
     public FixedQuaternion Rotation { get; protected set; } = FixedQuaternion.Identity;
 
+    /// <inheritdoc/>
     public Vector3d Forward { get; protected set; }
 
+    /// <inheritdoc/>
     public Vector3d Velocity { get; protected set; }
 
+    /// <inheritdoc/>
     public Fixed64 Speed { get; protected set; }
 
+    /// <inheritdoc/>
     public Vector3d Acceleration { get; protected set; }
 
     /// <summary>
@@ -76,17 +83,17 @@ public abstract class Navigator : INavigate, IRecordable
     /// <summary>
     /// The controller responsible for managing the navigator's desired movement direction.
     /// </summary>
-    public NavSteering Steering { get; protected set; }
+    public NavSteering? Steering { get; protected set; }
 
     /// <summary>
     /// The controller responsible for managing the navigator's rotation towards the movement direction.
     /// </summary>
-    public NavTurning Turning { get; protected set; }
+    public NavTurning? Turning { get; protected set; }
 
     /// <summary>
     /// The controller responsible for managing the navigator's movement and physics interactions.
     /// </summary>
-    public NavMotor Motor { get; protected set; }
+    public NavMotor? Motor { get; protected set; }
 
     /// <summary>
     /// Minimum velocity threshold used to determine if the navigator is considered stuck.
@@ -98,11 +105,13 @@ public abstract class Navigator : INavigate, IRecordable
     /// </summary>
     public bool IsGuideded { get; protected set; }
 
+    /// <inheritdoc cref="TrekCondition"/>
     protected TrekCondition _frameCondition = new();
 
+    /// <inheritdoc cref="TrekRequest"/>
     protected TrekRequest _frameRequest = new();
 
-    private GuidedVolumeExitHandoff _pendingGuidedVolumeExitHandoff;
+    private GuidedVolumeExitHandoff? _pendingGuidedVolumeExitHandoff;
 
     private bool _guidedClimbIntent;
 
@@ -114,8 +123,10 @@ public abstract class Navigator : INavigate, IRecordable
 
     #region Settings
 
+    /// <inheritdoc/>
     public Fixed64 Size { get; set; } = Fixed64.One;
 
+    /// <inheritdoc/>
     public Fixed64 Radius => Size * Fixed64.Half;
 
     /// <summary>
@@ -168,21 +179,49 @@ public abstract class Navigator : INavigate, IRecordable
     /// </remarks>
     public Guid GlobalId { get; protected set; }
 
+    /// <inheritdoc/>
     public byte OccupantGroupId { get; set; } = 1;
 
     #endregion
 
     #region Animation
 
-    private INavAnimationHandler _animationHandler;
+    private INavAnimationHandler? _animationHandler;
 
+    /// <summary>
+    /// Gets or sets a value indicating whether the object is currently locked on to a target.
+    /// </summary>
     public bool IsLockedOn { get; set; }
 
+    /// <summary>
+    /// Specifies the animation damping time used for smoothing transitions.
+    /// </summary>
     public Fixed64 AnimDampTime = (Fixed64)0.1f;
 
     #endregion
 
     #region Setup / Initialization
+
+    /// <summary>
+    /// Initializes and activates the object with the specified condition, position, and optional parameters.
+    /// </summary>
+    /// <param name="condition">The condition that determines how the object is initialized and activated.</param>
+    /// <param name="position">The position in world coordinates where the object will be placed.</param>
+    /// <param name="rotation">The optional rotation to apply to the object. If null, a default rotation is used.</param>
+    /// <param name="velocity">The optional initial velocity of the object. If null, the object is initialized with zero velocity.</param>
+    /// <param name="size">The optional size of the object. If null, a default size is used.</param>
+    /// <param name="globalId">The optional global identifier for the object. If null, a new identifier may be generated.</param>
+    public virtual void Activate(
+        TrekCondition condition,
+        Vector3d position,
+        FixedQuaternion? rotation = null,
+        Vector3d? velocity = null,
+        Fixed64? size = null,
+        Guid? globalId = null)
+    {
+        Setup(position, rotation, velocity, size, globalId);
+        Initialize(condition);
+    }
 
     /// <summary>
     /// Sets the initial configuration of the navigator, including position, rotation, velocity, size, and optional stable identity.
@@ -247,6 +286,15 @@ public abstract class Navigator : INavigate, IRecordable
         return LocomotionProfile.CreateDefault();
     }
 
+    /// <summary>
+    /// Resets the state of the object to its initial configuration, clearing any active conditions, requests, and internal flags.
+    /// </summary>
+    /// <remarks>
+    /// Call this method to reinitialize the object for reuse or to clear any ongoing operations.
+    /// After calling this method, the object will be in the same state as after construction, and any previous state or
+    /// intent will be lost. 
+    /// This method is intended to be overridden in derived classes to extend the reset behavior as needed.
+    /// </remarks>
     public virtual void Reset()
     {
         _frameCondition.Reset();
@@ -255,7 +303,8 @@ public abstract class Navigator : INavigate, IRecordable
         _pendingGuidedVolumeExitHandoff = null;
         ResetGuidedClimbIntentState();
 
-        GridOccupantManager.TryDeregister(this);
+        if (TrailblazerWorldManager.IsActive)
+            GridOccupantManager.TryDeregister(TrailblazerWorldManager.World, this);
 
         _isSet = false;
         _isInitialized = false;
@@ -276,10 +325,8 @@ public abstract class Navigator : INavigate, IRecordable
     /// <summary>
     /// Unbinds any previously attached animation handler.
     /// </summary>
-    public virtual void UnbindAnimationHandler()
-    {
-        _animationHandler = null;
-    }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void UnbindAnimationHandler() => _animationHandler = null;
 
     /// <summary>
     /// Prewarms the steering movement-group coordinator from this navigator's currently loaded state.
@@ -294,7 +341,7 @@ public abstract class Navigator : INavigate, IRecordable
         if (!IsActive)
             throw new InvalidOperationException("Navigator must be Setup and Initialized before prewarming movement groups.");
 
-        Steering.PrewarmMovementGroup(this);
+        Steering!.PrewarmMovementGroup(this);
     }
 
     #endregion
@@ -385,7 +432,7 @@ public abstract class Navigator : INavigate, IRecordable
                 canAffordJump: canAffordJump
         );
 
-        Steering.ApplyPathRequest(pathRequest, groupId);
+        Steering!.ApplyPathRequest(pathRequest, groupId);
         CaptureGuidedRouteTopologyVersion();
     }
 
@@ -498,7 +545,7 @@ public abstract class Navigator : INavigate, IRecordable
         Vector3d heading = Vector3d.Zero;
         if (IsGuideded)
         {
-            heading = Steering.GetHeading(this);
+            heading = Steering!.GetHeading(this);
             SyncGuidedIntentStateFromSteering(activatedGuidedHandoff, handoffRequestedClimb);
         }
 
@@ -510,16 +557,16 @@ public abstract class Navigator : INavigate, IRecordable
         );
 
         if (TryGetTurnDirection(_frameRequest, out Vector3d turnDirection))
-            Turning.RequestTurnDirection(Forward, turnDirection);
+            Turning!.RequestTurnDirection(Forward, turnDirection);
 
-        if (Motor.TryTraversal(_frameRequest, out Vector3d vDelta, out Vector3d pDelta, out FixedQuaternion rDelta))
+        if (Motor!.TryTraversal(_frameRequest, out Vector3d vDelta, out Vector3d pDelta, out FixedQuaternion rDelta))
         {
             AddVelocityDelta(vDelta);
             AddPositionDelta(pDelta);
             ApplyRotationDelta(rDelta);
         }
 
-        if (Turning.TrySimulateTurn(Position, LastPosition, Forward, Rotation, out FixedQuaternion appliedRotation))
+        if (Turning!.TrySimulateTurn(Position, LastPosition, Forward, Rotation, out FixedQuaternion appliedRotation))
             Rotation = appliedRotation;
 
         if (_animationHandler is null) return;
@@ -570,7 +617,7 @@ public abstract class Navigator : INavigate, IRecordable
         Speed = Velocity != Vector3d.Zero ? Velocity.Magnitude : Fixed64.Zero;
         Acceleration = (Velocity - previousVelocity) * invDelta;
 
-        if (Steering.ShouldMove && Acceleration != Vector3d.Zero)
+        if (Steering!.ShouldMove && Acceleration != Vector3d.Zero)
             StuckThresholdSpeed = (Acceleration / TrailblazerManager.FrameRate).Magnitude;
         else
             StuckThresholdSpeed = Fixed64.Zero;
@@ -578,7 +625,7 @@ public abstract class Navigator : INavigate, IRecordable
         _positionDelta = Vector3d.Zero;
         _velocityDelta = Vector3d.Zero;
 
-        Motor.FinalizeTraversal(Position, LastPosition, Rotation, _frameCondition, newFootPosition: GetFootPosition());
+        Motor!.FinalizeTraversal(Position, LastPosition, Rotation, _frameCondition, newFootPosition: GetFootPosition());
 
         // If the navigator is currently following a guided path, 
         // reset only the transient request state to preserve path-following values.
@@ -595,7 +642,7 @@ public abstract class Navigator : INavigate, IRecordable
     {
         if (!IsActive) return;
 
-        Turning.NotifyCollision();
+        Turning!.NotifyCollision();
     }
 
     #endregion
@@ -716,7 +763,7 @@ public abstract class Navigator : INavigate, IRecordable
         if (!IsActive)
             throw new InvalidOperationException("Navigator must be Setup and Initialized before syncing traversal state to the motor.");
 
-        Motor.SyncTraversalState(_frameCondition);
+        Motor!.SyncTraversalState(_frameCondition);
     }
 
     /// <summary>
@@ -764,6 +811,16 @@ public abstract class Navigator : INavigate, IRecordable
 
     #region Deltas - Position / Velocity / Rotation
 
+    /// <summary>
+    /// Applies a positional delta to the current position and updates the last known position accordingly.
+    /// </summary>
+    /// <remarks>
+    /// This method adjusts both the current and last positions to maintain consistent velocity calculations. 
+    /// Use this method to apply external position changes without affecting velocity tracking.
+    /// </remarks>
+    /// <param name="delta">
+    /// The vector representing the positional change to apply. If the vector is <see cref="Vector3d.Zero"/>, no change is made.
+    /// </param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddPositionDelta(Vector3d delta)
     {
@@ -774,6 +831,12 @@ public abstract class Navigator : INavigate, IRecordable
         LastPosition += delta;
     }
 
+    /// <summary>
+    /// Applies the specified rotation delta to the current rotation state.
+    /// </summary>
+    /// <param name="delta">
+    /// The rotation delta to apply. Must not be <see cref="FixedQuaternion.Identity"/>; otherwise, no change is made.
+    /// </param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void ApplyRotationDelta(FixedQuaternion delta)
     {
@@ -782,6 +845,10 @@ public abstract class Navigator : INavigate, IRecordable
         _rotationDelta *= delta;
     }
 
+    /// <summary>
+    /// Adds the specified velocity change to the current velocity delta.
+    /// </summary>
+    /// <param name="delta">The velocity change to add. If this value is <see cref="Vector3d.Zero"/>, no change is applied.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void AddVelocityDelta(Vector3d delta)
     {
@@ -795,12 +862,28 @@ public abstract class Navigator : INavigate, IRecordable
 
     #region Utilities
 
+    /// <summary>
+    /// Calculates the world-space position of the object's foot, adjusted by the configured foot position offset.
+    /// </summary>
+    /// <remarks>
+    /// Use this method to obtain the precise ground contact point for the object, 
+    /// which may be offset from its origin depending on the foot adjustment value.
+    /// </remarks>
+    /// <returns>
+    /// A <see cref="Vector3d"/> representing the foot position in world coordinates, 
+    /// or <see langword="null"/> if the position is undefined.
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual Vector3d? GetFootPosition()
     {
         return Position + Vector3d.Down * FootPositionAdjust;
     }
 
+    /// <summary>
+    /// Generates a new globally unique identifier (GUID) for use in object identification or tracking.
+    /// </summary>
+    /// <remarks>Override this method to customize GUID generation logic if a different strategy is required by derived classes.</remarks>
+    /// <returns>A new <see cref="Guid"/> value that is guaranteed to be unique across space and time.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected virtual Guid GenerateGUID() => NavigatorGlobalIdAllocator.Create();
 
@@ -910,32 +993,43 @@ public abstract class Navigator : INavigate, IRecordable
 
     #region Occupancy Mangement
 
+    /// <summary>
+    /// Checks and updates the occupancy status of the current and previous voxels based on the navigator's position.
+    /// </summary>
+    /// <remarks>
+    /// This method ensures that the navigator is registered as an occupant in the correct voxel and
+    /// removed from the previous voxel if the position has changed. 
+    /// It should be called whenever the navigator's position may have changed to maintain accurate occupancy tracking.
+    /// </remarks>
+    /// <param name="init">Indicates whether the occupancy check is being performed during initialization. 
+    /// If set to <see langword="true"/>, the check is performed regardless of position changes.
+    /// </param>
     protected virtual void CheckVoxelOccupancy(bool init = false)
     {
         if (!init && Position == LastPosition) return;
 
-        bool voxelFound = GlobalGridManager.TryGetGridAndVoxel(
+        bool voxelFound = TrailblazerWorldManager.TryGetGridAndVoxel(
             Position,
-            out VoxelGrid curGrid,
-            out Voxel curVoxel);
+            out VoxelGrid? curGrid,
+            out Voxel? curVoxel);
         if (!voxelFound) return;
 
-        if (!curGrid.TryAddVoxelOccupant(curVoxel, this))
+        if (curGrid!.TryAddVoxelOccupant(curVoxel!, this) == false)
         {
-            GridForgeLogger.Warn($"Navigator {GlobalId} failed to register occupancy in voxel {curVoxel.Index} of grid {curGrid} at position {Position}.");
+            GridForgeLogger.Warn($"Navigator {GlobalId} failed to register occupancy in voxel {curVoxel!.Index} of grid {curGrid} at position {Position}.");
             return;
         }
 
-        bool lastVoxelFound = GlobalGridManager.TryGetGridAndVoxel(
+        bool lastVoxelFound = TrailblazerWorldManager.TryGetGridAndVoxel(
             LastPosition,
-            out VoxelGrid lastGrid,
-            out Voxel lastVoxel);
+            out VoxelGrid? lastGrid,
+            out Voxel? lastVoxel);
 
         // check if position is still within the same voxel
         if (!lastVoxelFound || curVoxel == lastVoxel)
             return;
 
-        lastGrid.TryRemoveVoxelOccupant(lastVoxel, this);
+        lastGrid!.TryRemoveVoxelOccupant(lastVoxel!, this);
     }
 
     #endregion
@@ -970,12 +1064,12 @@ public abstract class Navigator : INavigate, IRecordable
         int lastSeenGuidedRouteTopologyVersion = _lastSeenGuidedRouteTopologyVersion;
         TrekCondition frameCondition = _frameCondition;
         TrekRequest frameRequest = _frameRequest;
-        GuidedVolumeExitHandoff pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
-        if (chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
+        GuidedVolumeExitHandoff? pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
+        if(chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
             pendingGuidedVolumeExitHandoff = new GuidedVolumeExitHandoff();
-        NavSteering steering = Steering;
-        NavTurning turning = Turning;
-        NavMotor motor = Motor;
+        NavSteering? steering = Steering;
+        NavTurning? turning = Turning;
+        NavMotor? motor = Motor;
 
         RecordValues.Look(chronicler, ref position, "position", Vector3d.Zero);
         RecordValues.Look(chronicler, ref lastPosition, "lastPosition", Vector3d.Zero);
@@ -1002,10 +1096,13 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref lastSeenGuidedRouteTopologyVersion, "lastSeenGuidedRouteTopologyVersion", 0);
         RecordDeepStruct.Look(chronicler, ref frameCondition, "frameCondition");
         RecordDeepStruct.Look(chronicler, ref frameRequest, "frameRequest");
-        RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff, "pendingGuidedVolumeExitHandoff");
-        RecordDeep.Look(chronicler, ref steering, "steering");
-        RecordDeep.Look(chronicler, ref turning, "turning");
-        RecordDeep.Look(chronicler, ref motor, "motor");
+        RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff!, "pendingGuidedVolumeExitHandoff");
+        if (steering != null)
+            RecordDeep.Look(chronicler, ref steering, "steering");
+        if (turning != null)
+            RecordDeep.Look(chronicler, ref turning, "turning");
+        if (motor != null)
+            RecordDeep.Look(chronicler, ref motor, "motor");
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

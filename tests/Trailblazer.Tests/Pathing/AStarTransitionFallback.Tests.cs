@@ -1,10 +1,8 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using GridForge.Grids;
 using System;
 using Trailblazer.Pathing;
-using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing;
@@ -14,19 +12,15 @@ public class AStarTransitionFallbackTests : IDisposable
 {
     public AStarTransitionFallbackTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
-        else
-            GlobalGridManager.Setup();
-
+        TrailblazerWorldManager.Setup();
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }

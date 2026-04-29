@@ -19,7 +19,7 @@ public readonly struct TraversalTransitionAnchor
     /// <summary>
     /// The canonical voxel identity this anchor resolves through.
     /// </summary>
-    public GlobalVoxelIndex VoxelIndex { get; }
+    public WorldVoxelIndex VoxelIndex { get; }
 
     /// <summary>
     /// Indicates whether this anchor uses a world-space point override inside the resolved voxel.
@@ -41,13 +41,13 @@ public readonly struct TraversalTransitionAnchor
     /// <summary>
     /// Creates a solid anchor for the provided voxel index.
     /// </summary>
-    public static TraversalTransitionAnchor Solid(GlobalVoxelIndex voxelIndex) =>
+    public static TraversalTransitionAnchor Solid(WorldVoxelIndex voxelIndex) =>
         Create(TraversalMedium.Solid, voxelIndex);
 
     /// <summary>
     /// Creates a solid anchor for the provided voxel index with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor Solid(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
+    public static TraversalTransitionAnchor Solid(WorldVoxelIndex voxelIndex, Vector3d pointOverride) =>
         Create(TraversalMedium.Solid, voxelIndex, pointOverride, hasPointOverride: true);
 
     /// <summary>
@@ -65,13 +65,13 @@ public readonly struct TraversalTransitionAnchor
     /// <summary>
     /// Creates a gas anchor for the provided voxel index.
     /// </summary>
-    public static TraversalTransitionAnchor Gas(GlobalVoxelIndex voxelIndex) =>
+    public static TraversalTransitionAnchor Gas(WorldVoxelIndex voxelIndex) =>
         Create(TraversalMedium.Gas, voxelIndex);
 
     /// <summary>
     /// Creates a gas anchor for the provided voxel index with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor Gas(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
+    public static TraversalTransitionAnchor Gas(WorldVoxelIndex voxelIndex, Vector3d pointOverride) =>
         Create(TraversalMedium.Gas, voxelIndex, pointOverride, hasPointOverride: true);
 
     /// <summary>
@@ -89,13 +89,13 @@ public readonly struct TraversalTransitionAnchor
     /// <summary>
     /// Creates a liquid anchor for the provided voxel index.
     /// </summary>
-    public static TraversalTransitionAnchor Liquid(GlobalVoxelIndex voxelIndex) =>
+    public static TraversalTransitionAnchor Liquid(WorldVoxelIndex voxelIndex) =>
         Create(TraversalMedium.Liquid, voxelIndex);
 
     /// <summary>
     /// Creates a liquid anchor for the provided voxel index with an explicit world-space point override.
     /// </summary>
-    public static TraversalTransitionAnchor Liquid(GlobalVoxelIndex voxelIndex, Vector3d pointOverride) =>
+    public static TraversalTransitionAnchor Liquid(WorldVoxelIndex voxelIndex, Vector3d pointOverride) =>
         Create(TraversalMedium.Liquid, voxelIndex, pointOverride, hasPointOverride: true);
 
     /// <summary>
@@ -136,7 +136,7 @@ public readonly struct TraversalTransitionAnchor
 
     private TraversalTransitionAnchor(
         TraversalMedium medium,
-        GlobalVoxelIndex voxelIndex,
+        WorldVoxelIndex voxelIndex,
         Vector3d pointOverride = default,
         bool hasPointOverride = false)
     {
@@ -146,11 +146,11 @@ public readonly struct TraversalTransitionAnchor
         PointOverride = pointOverride;
     }
 
-    internal static bool TryResolveVoxelIndex(Vector3d position, out GlobalVoxelIndex voxelIndex)
+    internal static bool TryResolveVoxelIndex(Vector3d position, out WorldVoxelIndex voxelIndex)
     {
-        if (GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
+        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel))
         {
-            voxelIndex = voxel.GlobalIndex;
+            voxelIndex = voxel!.WorldIndex;
             return true;
         }
 
@@ -164,7 +164,7 @@ public readonly struct TraversalTransitionAnchor
         Vector3d pointOverride = default,
         bool hasPointOverride = false)
     {
-        if (!TryResolveVoxelIndex(position, out GlobalVoxelIndex voxelIndex))
+        if (!TryResolveVoxelIndex(position, out WorldVoxelIndex voxelIndex))
         {
             throw new ArgumentException(
                 "Anchor position must resolve to a voxel in the active grid setup.",
@@ -176,7 +176,7 @@ public readonly struct TraversalTransitionAnchor
 
     private static TraversalTransitionAnchor Create(
         TraversalMedium medium,
-        GlobalVoxelIndex voxelIndex,
+        WorldVoxelIndex voxelIndex,
         Vector3d pointOverride = default,
         bool hasPointOverride = false)
     {
@@ -190,15 +190,15 @@ public readonly struct TraversalTransitionAnchor
         return new TraversalTransitionAnchor(medium, voxelIndex, pointOverride, hasPointOverride);
     }
 
-    private static bool PointOverrideMatchesVoxel(GlobalVoxelIndex voxelIndex, Vector3d pointOverride)
+    private static bool PointOverrideMatchesVoxel(WorldVoxelIndex voxelIndex, Vector3d pointOverride)
     {
-        return TryResolveVoxelIndex(pointOverride, out GlobalVoxelIndex pointOverrideVoxelIndex)
+        return TryResolveVoxelIndex(pointOverride, out WorldVoxelIndex pointOverrideVoxelIndex)
             && pointOverrideVoxelIndex == voxelIndex;
     }
 
-    private static Vector3d GetVoxelWorldPosition(GlobalVoxelIndex voxelIndex)
+    private static Vector3d GetVoxelWorldPosition(WorldVoxelIndex voxelIndex)
     {
-        if (GlobalGridManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel voxel))
+        if (TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel voxel))
             return voxel.WorldPosition;
 
         throw new InvalidOperationException(

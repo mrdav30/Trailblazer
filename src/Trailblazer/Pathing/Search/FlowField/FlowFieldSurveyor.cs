@@ -65,7 +65,7 @@ public class FlowFieldSurveyor
                 return FlowFieldSurveyResult.Empty;
             }
 
-            SwiftDictionary<GlobalVoxelIndex, FlowField> flowFields = GenerateFlowFields();
+            SwiftDictionary<WorldVoxelIndex, FlowField> flowFields = GenerateFlowFields();
             string[] chartsUsed = _chartKeys.ToArray();
             FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(flowFields, chartsUsed, request.RequestCacheKey);
             ClearWorkingState();
@@ -192,9 +192,9 @@ public class FlowFieldSurveyor
     /// Each partition is assigned a direction vector blending shortest path and direct-to-goal direction.
     /// </summary>
     /// <returns>A dictionary of directional flow field data indexed by voxel spawn tokens.</returns>
-    private SwiftDictionary<GlobalVoxelIndex, FlowField> GenerateFlowFields()
+    private SwiftDictionary<WorldVoxelIndex, FlowField> GenerateFlowFields()
     {
-        SwiftDictionary<GlobalVoxelIndex, FlowField> result = new(_heap.TrackedCount);
+        SwiftDictionary<WorldVoxelIndex, FlowField> result = new(_heap.TrackedCount);
         // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
 
         foreach (SolidChartPartition current in _heap.EnumerateClosed())
@@ -285,27 +285,27 @@ public class FlowFieldSurveyor
     /// <param name="worldPosition">The world-space position to sample from.</param>
     /// <param name="fields">A dictionary of flow field data.</param>
     /// <returns>An interpolated directional vector.</returns>
-    public static Vector3d SampleFlowVector(Vector3d worldPosition, SwiftDictionary<GlobalVoxelIndex, FlowField> fields)
+    public static Vector3d SampleFlowVector(Vector3d worldPosition, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
         if (fields == null || fields.Count == 0)
             return Vector3d.Zero;
 
         // Get bottom-left corner of the square the agent is standing in
         Vector3d corner = new(
-            FixedMath.Floor(worldPosition.x / GlobalGridManager.VoxelSize) * GlobalGridManager.VoxelSize,
-            FixedMath.Floor(worldPosition.y / GlobalGridManager.VoxelSize) * GlobalGridManager.VoxelSize,
-            FixedMath.Floor(worldPosition.z / GlobalGridManager.VoxelSize) * GlobalGridManager.VoxelSize
+            FixedMath.Floor(worldPosition.x / TrailblazerWorldManager.VoxelSize) * TrailblazerWorldManager.VoxelSize,
+            FixedMath.Floor(worldPosition.y / TrailblazerWorldManager.VoxelSize) * TrailblazerWorldManager.VoxelSize,
+            FixedMath.Floor(worldPosition.z / TrailblazerWorldManager.VoxelSize) * TrailblazerWorldManager.VoxelSize
         );
 
         // Compute normalized offset in cell (0..1)
-        Fixed64 dx = (worldPosition.x - corner.x) / GlobalGridManager.VoxelSize;
-        Fixed64 dz = (worldPosition.z - corner.z) / GlobalGridManager.VoxelSize;
+        Fixed64 dx = (worldPosition.x - corner.x) / TrailblazerWorldManager.VoxelSize;
+        Fixed64 dz = (worldPosition.z - corner.z) / TrailblazerWorldManager.VoxelSize;
 
         // Sample the 4 surrounding voxel centers
         Vector3d bottomLeft = corner;
-        Vector3d bottomRight = corner + new Vector3d(GlobalGridManager.VoxelSize, Fixed64.Zero, Fixed64.Zero);
-        Vector3d topLeft = corner + new Vector3d(Fixed64.Zero, Fixed64.Zero, GlobalGridManager.VoxelSize);
-        Vector3d topRight = corner + new Vector3d(GlobalGridManager.VoxelSize, Fixed64.Zero, GlobalGridManager.VoxelSize);
+        Vector3d bottomRight = corner + new Vector3d(TrailblazerWorldManager.VoxelSize, Fixed64.Zero, Fixed64.Zero);
+        Vector3d topLeft = corner + new Vector3d(Fixed64.Zero, Fixed64.Zero, TrailblazerWorldManager.VoxelSize);
+        Vector3d topRight = corner + new Vector3d(TrailblazerWorldManager.VoxelSize, Fixed64.Zero, TrailblazerWorldManager.VoxelSize);
 
         // Get flow vectors
         Vector3d f00 = GetFlowDirection(bottomLeft, fields);
@@ -333,7 +333,7 @@ public class FlowFieldSurveyor
     /// <returns><c>true</c> if a nearby flow field anchor is found; otherwise <c>false</c>.</returns>
     public static bool TryGetNearestFlowAnchor(
         Vector3d origin,
-        SwiftDictionary<GlobalVoxelIndex, FlowField> fields,
+        SwiftDictionary<WorldVoxelIndex, FlowField> fields,
         Fixed64 range,
         out Voxel result)
     {
@@ -346,7 +346,7 @@ public class FlowFieldSurveyor
 
         foreach (FlowField flow in fields.Values)
         {
-            if (!GlobalGridManager.TryGetGridAndVoxel(flow.GlobalIndex, out _, out Voxel flowVoxel))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(flow.GlobalIndex, out _, out Voxel flowVoxel))
                 continue;
 
             Fixed64 distSq = Vector3d.SqrDistance(origin, flowVoxel.WorldPosition);
@@ -367,21 +367,21 @@ public class FlowFieldSurveyor
     /// <param name="position">The position to query within the flow field.</param>
     /// <param name="fields">Flow field data indexed by voxel index.</param>
     /// <returns>The direction vector, or <c>Vector3d.Zero</c> if no field exists.</returns>
-    public static Vector3d GetFlowDirection(Vector3d position, SwiftDictionary<GlobalVoxelIndex, FlowField> fields)
+    public static Vector3d GetFlowDirection(Vector3d position, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
-        if (GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
+        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel voxel))
         {
-            if (fields.TryGetValue(voxel.GlobalIndex, out FlowField field))
+            if (fields.TryGetValue(voxel.WorldIndex, out FlowField field))
                 return field.Direction;
         }
         return Vector3d.Zero;
     }
 
-    public static FlowField GetFlowField(Vector3d position, SwiftDictionary<GlobalVoxelIndex, FlowField> fields)
+    public static FlowField GetFlowField(Vector3d position, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
-        if (GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
+        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel voxel))
         {
-            if (fields.TryGetValue(voxel.GlobalIndex, out FlowField field))
+            if (fields.TryGetValue(voxel.WorldIndex, out FlowField field))
                 return field;
         }
         return default;

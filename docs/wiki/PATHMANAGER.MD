@@ -196,7 +196,7 @@ When it runs, it:
 1. rents a pooled `SwiftHashSet<SolidChartPartition>` for all touched partitions
 2. creates a temporary set for any already-active chart owners encountered on touched voxels
 3. iterates `chart.GetAuthoredCells()`
-4. resolves the voxel from `GlobalGridManager`
+4. resolves the voxel from the active configured `GridWorld`
 5. attaches or reuses a `SolidChartPartition` for authored solid traversal
 6. attaches or reuses a `VolumeChartPartition` for authored volume traversal
 7. records any existing owners for later cache invalidation
@@ -261,11 +261,11 @@ Current safety rule:
 
 ### 6.6 External Grid Lifecycle
 
-`PathManager` listens to `GlobalGridManager` lifecycle events directly.
+`PathManager` listens to the active `GridWorld` lifecycle through Trailblazer's world bridge.
 
 Current behavior:
 
-- external `GlobalGridManager.Reset()` is treated as simulation teardown and calls `PathManager.Reset()`
+- external `GridWorld.Reset()` is treated as simulation teardown and calls `PathManager.Reset()`
 - external grid add, remove, and change notifications are queued in the bridge and coalesced until
   the next `PathManager.Tick()`
 - the queued burst expands into one final chart set and each selected chart is rebuilt at most once

@@ -1,13 +1,11 @@
 using FixedMathSharp;
 using FluentAssertions;
-using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
 using SwiftCollections;
 using System;
 using System.Linq;
 using Trailblazer.Pathing;
-using Trailblazer.Tests;
 using Xunit;
 
 namespace Trailblazer.Tests.Pathing;
@@ -17,13 +15,13 @@ public sealed class VolumeSurveyorTests : IDisposable
 {
     public VolumeSurveyorTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
@@ -31,7 +29,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathManager.Reset();
         VolumeMediumRules.ClearGasVoxelRule();
         VolumeMediumRules.ClearLiquidVoxelRule();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -272,7 +270,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             medium: TraversalMedium.Gas);
         request.Should().NotBeNull();
 
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel current).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel current).Should().BeTrue();
 
         VolumeSurveyor surveyor = new();
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
@@ -293,8 +291,8 @@ public sealed class VolumeSurveyorTests : IDisposable
         foreach (Vector3d position in positions)
             PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "VolumeHelperUpdate");
 
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel current).Should().BeTrue();
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel neighbor).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel current).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel neighbor).Should().BeTrue();
         neighbor.GetPartitionOrDefault<VolumeChartPartition>().Should().NotBeNull();
         neighbor.GetPartitionOrDefault<VolumeChartPartition>().PathCostModifier = 25;
 
@@ -315,14 +313,14 @@ public sealed class VolumeSurveyorTests : IDisposable
         meta[neighbor] = new VolumeVoxelMeta
         {
             MovementCost = 400,
-            NextTrailIndex = current.GlobalIndex
+            NextTrailIndex = current.WorldIndex
         };
         heap.Add(neighbor, 999);
 
         ReflectionUtility.InvokePrivate<bool>(surveyor, "ProcessNeighbor", current, neighbor, 150).Should().BeFalse();
 
         meta[neighbor].MovementCost.Should().Be(175);
-        meta[neighbor].NextTrailIndex.Should().Be(current.GlobalIndex);
+        meta[neighbor].NextTrailIndex.Should().Be(current.WorldIndex);
         heap.TryGetPathCost(neighbor, out int updatedPathCost).Should().BeTrue();
         updatedPathCost.Should().Be(
             175

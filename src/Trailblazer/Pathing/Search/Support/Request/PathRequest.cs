@@ -56,7 +56,7 @@ public abstract class PathRequest : IPathRequest
         TargetPosition = destination;
         StartNode = startVoxel;
         EndNode = endVoxel;
-        UnitSize = unitSize ?? GlobalGridManager.VoxelSize;
+        UnitSize = unitSize ?? TrailblazerWorldManager.VoxelSize;
         MaxPathSearchRange = 0;
 
         if (!success)

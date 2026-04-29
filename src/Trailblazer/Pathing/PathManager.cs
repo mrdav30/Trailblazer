@@ -77,7 +77,7 @@ public static class PathManager
 
     private static readonly SwiftDictionary<string, ManagedChartTransitionState> _managedGeneratedTransitionsByChart = new(8, StringComparer.Ordinal);
 
-    private static readonly SwiftDictionary<GlobalVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates = new();
+    private static readonly SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates = new();
 
     private static readonly SwiftDictionary<ushort, SwiftDictionary<string, int>> _initializedChartTouchCountsByGridIndex = new();
 
@@ -96,6 +96,25 @@ public static class PathManager
     #endregion
 
     #region Lifecycle Hooks
+
+    /// <summary>
+    /// Gets whether Trailblazer currently has an active configured grid world.
+    /// </summary>
+    public static bool HasConfiguredWorld => TrailblazerWorldManager.IsActive;
+
+    /// <summary>
+    /// Gets the active configured grid world.
+    /// </summary>
+    public static GridWorld ConfiguredWorld => TrailblazerWorldManager.World;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void LinkWorld(GridWorld world)
+    {
+        TrailblazerWorldManager.AttachWorld(world);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static GridWorld GetConfiguredWorld() => TrailblazerWorldManager.World;
 
     internal static void RegisterTrailblazerLifecycleHooks()
     {
@@ -118,7 +137,39 @@ public static class PathManager
     {
         VolumeMediumRules.Reset();
         TraversalTransitionRegistry.Reset();
-        ClearLiveGridState();
+        if (HasConfiguredWorld)
+            ClearLiveGridState(GetConfiguredWorld());
+        else
+            ClearLiveGridState();
+
+        PathManagerExternalGridBridge.ResetDiagnostics();
+
+        _navigationChartMapLock.EnterWriteLock();
+        try
+        {
+            MarkRegisteredChartsUninitialized_NoLock();
+            _navigationChartMap.Clear();
+            _managedGeneratedTransitionsByChart.Clear();
+            _nextChartRegistrationOrder = 0;
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitWriteLock();
+        }
+
+        if (PathGuideFactory.IsPooling)
+            PathGuideFactory.FlushCache(true);
+    }
+
+    /// <summary>
+    /// Clears all registered maps, partitions, and guide pools.
+    /// </summary>
+    public static void Reset(GridWorld world)
+    {
+        LinkWorld(world);
+        VolumeMediumRules.Reset();
+        TraversalTransitionRegistry.Reset();
+        ClearLiveGridState(world);
         PathManagerExternalGridBridge.ResetDiagnostics();
 
         _navigationChartMapLock.EnterWriteLock();
@@ -145,15 +196,31 @@ public static class PathManager
     /// <summary>
     /// Attempts to register a new navigation chart with the manager.
     /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="chart">The map to register.</param>
     /// <param name="initializeChart">Whether to initialize the chart after registration succeeds.</param>
     /// <returns>True if successful, false if a duplicate name exists.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="chart"/> is null.</exception>
     public static bool Register(NavigationChart chart, bool initializeChart = true)
     {
+        return Register(GetConfiguredWorld(), chart, initializeChart);
+    }
+
+    /// <summary>
+    /// Attempts to register a new navigation chart with the manager.
+    /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
+    /// <param name="chart">The map to register.</param>
+    /// <param name="initializeChart">Whether to initialize the chart after registration succeeds.</param>
+    /// <returns>True if successful, false if a duplicate name exists.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="chart"/> is null.</exception>
+    public static bool Register(GridWorld world, NavigationChart chart, bool initializeChart = true)
+    {
         SwiftThrowHelper.ThrowIfNull(chart, nameof(chart));
+        LinkWorld(world);
 
         return RegisterChartInternal(
+            world,
             chart,
             generatedTransitionIdPrefix: chart.Name,
             precomputedGeneratedTransitions: null,
@@ -163,15 +230,31 @@ public static class PathManager
     /// <summary>
     /// Attempts to register the chart and generated transitions produced by a traversal authoring build.
     /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="buildResult">The build result to register.</param>
     /// <param name="initializeChart">Whether to initialize the built chart after registration succeeds.</param>
     /// <returns>True when the chart and all generated transitions are registered successfully; otherwise, false.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="buildResult"/> is null.</exception>
     public static bool Register(TraversalBuildResult buildResult, bool initializeChart = true)
     {
+        return Register(GetConfiguredWorld(), buildResult, initializeChart);
+    }
+
+    /// <summary>
+    /// Attempts to register the chart and generated transitions produced by a traversal authoring build.
+    /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
+    /// <param name="buildResult">The build result to register.</param>
+    /// <param name="initializeChart">Whether to initialize the built chart after registration succeeds.</param>
+    /// <returns>True when the chart and all generated transitions are registered successfully; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="buildResult"/> is null.</exception>
+    public static bool Register(GridWorld world, TraversalBuildResult buildResult, bool initializeChart = true)
+    {
         SwiftThrowHelper.ThrowIfNull(buildResult, nameof(buildResult));
+        LinkWorld(world);
 
         return RegisterChartInternal(
+            world,
             buildResult.Chart,
             buildResult.GeneratedTransitionIdPrefix,
             buildResult.GeneratedTransitions,
@@ -179,9 +262,10 @@ public static class PathManager
     }
 
     private static bool RegisterChartInternal(
+        GridWorld world,
         NavigationChart chart,
         string generatedTransitionIdPrefix,
-        TraversalTransition[] precomputedGeneratedTransitions,
+        TraversalTransition[]? precomputedGeneratedTransitions,
         bool initializeChart)
     {
         _navigationChartMapLock.EnterWriteLock();
@@ -206,7 +290,7 @@ public static class PathManager
         }
 
         if (initializeChart)
-            InitializeChart(chart.Name);
+            InitializeChart(world, chart.Name);
 
         return true;
     }
@@ -244,11 +328,11 @@ public static class PathManager
     /// <param name="voxelIndex">The voxel to inspect.</param>
     /// <param name="cell">The effective authored cell currently winning overlap resolution.</param>
     /// <returns>True when the voxel currently has an effective authored chart cell; otherwise, false.</returns>
-    public static bool TryGetEffectiveCell(GlobalVoxelIndex voxelIndex, out NavigationChartCell cell)
+    public static bool TryGetEffectiveCell(WorldVoxelIndex voxelIndex, out NavigationChartCell cell)
     {
-        if (TryGetResolvedChartVoxelState(voxelIndex, out ResolvedChartVoxelState state))
+        if (TryGetResolvedChartVoxelState(voxelIndex, out ResolvedChartVoxelState? state))
         {
-            cell = state.EffectiveCell;
+            cell = state!.EffectiveCell;
             return true;
         }
 
@@ -259,14 +343,16 @@ public static class PathManager
     /// <summary>
     /// Attempts to retrieve the winning effective authored cell at the provided world position.
     /// </summary>
+    /// <param name="world">The grid world context to search.</param>
     /// <param name="worldPosition">The world position to inspect.</param>
     /// <param name="cell">The effective authored cell currently winning overlap resolution.</param>
     /// <returns>True when the position resolves to a voxel with an effective authored chart cell; otherwise, false.</returns>
-    public static bool TryGetEffectiveCell(Vector3d worldPosition, out NavigationChartCell cell)
+    public static bool TryGetEffectiveCell(GridWorld world, Vector3d worldPosition, out NavigationChartCell cell)
     {
-        if (TryGetResolvedChartVoxelState(worldPosition, out _, out ResolvedChartVoxelState state))
+        LinkWorld(world);
+        if (TryGetResolvedChartVoxelState(world, worldPosition, out _, out ResolvedChartVoxelState? state))
         {
-            cell = state.EffectiveCell;
+            cell = state!.EffectiveCell;
             return true;
         }
 
@@ -275,16 +361,24 @@ public static class PathManager
     }
 
     /// <summary>
+    /// Attempts to retrieve the winning effective authored cell at the provided world position using the configured world.
+    /// </summary>
+    public static bool TryGetEffectiveCell(Vector3d worldPosition, out NavigationChartCell cell)
+    {
+        return TryGetEffectiveCell(GetConfiguredWorld(), worldPosition, out cell);
+    }
+
+    /// <summary>
     /// Attempts to retrieve the chart currently winning overlap resolution at the provided voxel.
     /// </summary>
     /// <param name="voxelIndex">The voxel to inspect.</param>
     /// <param name="chartName">The effective chart owner.</param>
     /// <returns>True when the voxel currently has an effective chart owner; otherwise, false.</returns>
-    public static bool TryGetEffectiveChartOwner(GlobalVoxelIndex voxelIndex, out string chartName)
+    public static bool TryGetEffectiveChartOwner(WorldVoxelIndex voxelIndex, out string? chartName)
     {
-        if (TryGetResolvedChartVoxelState(voxelIndex, out ResolvedChartVoxelState state))
+        if (TryGetResolvedChartVoxelState(voxelIndex, out ResolvedChartVoxelState? state))
         {
-            chartName = state.EffectiveChartOwner;
+            chartName = state!.EffectiveChartOwner;
             return true;
         }
 
@@ -295,14 +389,16 @@ public static class PathManager
     /// <summary>
     /// Attempts to retrieve the chart currently winning overlap resolution at the provided world position.
     /// </summary>
+    /// <param name="world">The grid world context to search.</param>
     /// <param name="worldPosition">The world position to inspect.</param>
     /// <param name="chartName">The effective chart owner.</param>
     /// <returns>True when the position resolves to a voxel with an effective chart owner; otherwise, false.</returns>
-    public static bool TryGetEffectiveChartOwner(Vector3d worldPosition, out string chartName)
+    public static bool TryGetEffectiveChartOwner(GridWorld world, Vector3d worldPosition, out string? chartName)
     {
-        if (TryGetResolvedChartVoxelState(worldPosition, out _, out ResolvedChartVoxelState state))
+        LinkWorld(world);
+        if (TryGetResolvedChartVoxelState(world, worldPosition, out _, out ResolvedChartVoxelState? state))
         {
-            chartName = state.EffectiveChartOwner;
+            chartName = state!.EffectiveChartOwner;
             return true;
         }
 
@@ -311,8 +407,17 @@ public static class PathManager
     }
 
     /// <summary>
+    /// Attempts to retrieve the chart currently winning overlap resolution at the provided world position using the configured world.
+    /// </summary>
+    public static bool TryGetEffectiveChartOwner(Vector3d worldPosition, out string? chartName)
+    {
+        return TryGetEffectiveChartOwner(GetConfiguredWorld(), worldPosition, out chartName);
+    }
+
+    /// <summary>
     /// Attempts to retrieve the closest currently active directed transition of the requested type.
     /// </summary>
+    /// <param name="world">The grid world context to search.</param>
     /// <param name="worldPosition">The position to measure from.</param>
     /// <param name="transitionType">The directed handoff family to search.</param>
     /// <param name="transition">
@@ -321,10 +426,12 @@ public static class PathManager
     /// </param>
     /// <returns>True when at least one active directed transition of that type exists; otherwise, false.</returns>
     public static bool TryGetClosestActiveTransition(
+        GridWorld world,
         Vector3d worldPosition,
         TraversalTransitionType transitionType,
         out TraversalTransition transition)
     {
+        LinkWorld(world);
         int[] sourceGridIndices = TraversalTransitionQuery.GetSourceGridIndices(transitionType);
         if (sourceGridIndices.Length == 0)
         {
@@ -337,9 +444,9 @@ public static class PathManager
         Fixed64 closestDistanceSq = Fixed64.Zero;
         int originGridIndex = -1;
 
-        if (GlobalGridManager.TryGetGrid(worldPosition, out VoxelGrid originGrid))
+        if (world.TryGetGrid(worldPosition, out VoxelGrid? originGrid))
         {
-            originGridIndex = originGrid.GlobalIndex;
+            originGridIndex = originGrid!.GridIndex;
             EvaluateClosestTransitionCandidates(
                 TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(originGridIndex, transitionType),
                 worldPosition,
@@ -355,8 +462,8 @@ public static class PathManager
         {
             int sourceGridIndex = sourceGridIndices[i];
             if (sourceGridIndex == originGridIndex
-                || !GlobalGridManager.TryGetGrid(sourceGridIndex, out VoxelGrid sourceGrid)
-                || (found && GetBoundsDistanceSq(worldPosition, sourceGrid.BoundsMin, sourceGrid.BoundsMax) >= closestDistanceSq))
+                || !world.TryGetGrid(sourceGridIndex, out VoxelGrid? sourceGrid)
+                || (found && GetBoundsDistanceSq(worldPosition, sourceGrid!.BoundsMin, sourceGrid.BoundsMax) >= closestDistanceSq))
             {
                 continue;
             }
@@ -376,12 +483,32 @@ public static class PathManager
     }
 
     /// <summary>
+    /// Attempts to retrieve the closest currently active directed transition of the requested type using the configured world.
+    /// </summary>
+    public static bool TryGetClosestActiveTransition(
+        Vector3d worldPosition,
+        TraversalTransitionType transitionType,
+        out TraversalTransition transition)
+    {
+        return TryGetClosestActiveTransition(GetConfiguredWorld(), worldPosition, transitionType, out transition);
+    }
+
+    /// <summary>
     /// Initializes all registered navigation charts by materializing their authored surface and volume partitions.
     /// </summary>
     public static void InitializeAllCharts()
     {
+        InitializeAllCharts(GetConfiguredWorld());
+    }
+
+    /// <summary>
+    /// Initializes all registered navigation charts by materializing their authored surface and volume partitions.
+    /// </summary>
+    public static void InitializeAllCharts(GridWorld world)
+    {
+        LinkWorld(world);
         foreach (NavigationChart chart in AllCharts)
-            InitializeChart(chart.Name);
+            InitializeChart(world, chart.Name);
     }
 
     private static void EvaluateClosestTransitionCandidates(
@@ -433,13 +560,26 @@ public static class PathManager
     /// </returns>
     public static bool TryUpdateChartCell(string chartName, int x, int y, int z, NavigationChartCell cell)
     {
+        return TryUpdateChartCell(GetConfiguredWorld(), chartName, x, y, z, cell);
+    }
+
+    /// <summary>
+    /// Applies one authored cell mutation to a registered chart using chart-local indices.
+    /// </summary>
+    /// <returns>
+    /// <c>true</c> when the target cell was in bounds and the authored payload changed; otherwise, <c>false</c>.
+    /// </returns>
+    public static bool TryUpdateChartCell(GridWorld world, string chartName, int x, int y, int z, NavigationChartCell cell)
+    {
+        LinkWorld(world);
         if (!TryGetNavigationChart(chartName, out NavigationChart chart))
             return false;
 
-        return TryUpdateChartCell(chart, x, y, z, cell);
+        return TryUpdateChartCell(world, chart, x, y, z, cell);
     }
 
     private static bool TryUpdateChartCell(
+        GridWorld world,
         NavigationChart chart,
         int x,
         int y,
@@ -452,6 +592,7 @@ public static class PathManager
         try
         {
             bool changed = TryApplyChartCellUpdate(
+                world,
                 chart,
                 x,
                 y,
@@ -463,6 +604,7 @@ public static class PathManager
 
             if (changed)
                 RefreshManagedTransitionsForVoxel(
+                    world,
                     chart.GetWorldPosition(x, y, z),
                     managedChartsToRefresh);
 
@@ -485,25 +627,52 @@ public static class PathManager
     /// </returns>
     public static bool TryUpdateChartCell(string chartName, Vector3d worldPosition, NavigationChartCell cell)
     {
+        return TryUpdateChartCell(GetConfiguredWorld(), chartName, worldPosition, cell);
+    }
+
+    /// <summary>
+    /// Applies one authored cell mutation to a registered chart using a world-space position.
+    /// </summary>
+    /// <returns>
+    /// <c>true</c> when the position resolves inside the chart and the authored payload changed; otherwise, <c>false</c>.
+    /// </returns>
+    public static bool TryUpdateChartCell(GridWorld world, string chartName, Vector3d worldPosition, NavigationChartCell cell)
+    {
+        LinkWorld(world);
         if (!TryGetNavigationChart(chartName, out NavigationChart chart)
             || !chart.TryWorldToIndex(worldPosition, out int x, out int y, out int z))
         {
             return false;
         }
 
-        return TryUpdateChartCell(chart, x, y, z, cell);
+        return TryUpdateChartCell(world, chart, x, y, z, cell);
     }
 
     /// <summary>
     /// Applies a sparse batch of authored cell mutations to a registered chart.
     /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="chartName">The registered chart to mutate.</param>
     /// <param name="updates">The sparse set of cell changes to apply in order.</param>
     /// <returns>The number of authored cell mutations that changed the chart payload.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="updates"/> is null.</exception>
     public static int ApplyChartUpdates(string chartName, IReadOnlyList<NavigationChartCellUpdate> updates)
     {
+        return ApplyChartUpdates(GetConfiguredWorld(), chartName, updates);
+    }
+
+    /// <summary>
+    /// Applies a sparse batch of authored cell mutations to a registered chart.
+    /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
+    /// <param name="chartName">The registered chart to mutate.</param>
+    /// <param name="updates">The sparse set of cell changes to apply in order.</param>
+    /// <returns>The number of authored cell mutations that changed the chart payload.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="updates"/> is null.</exception>
+    public static int ApplyChartUpdates(GridWorld world, string chartName, IReadOnlyList<NavigationChartCellUpdate> updates)
+    {
         SwiftThrowHelper.ThrowIfNull(updates, nameof(updates));
+        LinkWorld(world);
 
         if (updates.Count == 0 || !TryGetNavigationChart(chartName, out NavigationChart chart))
             return 0;
@@ -519,6 +688,7 @@ public static class PathManager
                 managedChartsToRefresh.Clear();
                 NavigationChartCellUpdate update = updates[i];
                 if (TryApplyChartCellUpdate(
+                    world,
                     chart,
                     update.X,
                     update.Y,
@@ -530,6 +700,7 @@ public static class PathManager
                 {
                     changedCount++;
                     RefreshManagedTransitionsForVoxel(
+                        world,
                         chart.GetWorldPosition(update.X, update.Y, update.Z),
                         managedChartsToRefresh);
                 }
@@ -549,9 +720,21 @@ public static class PathManager
     /// <summary>
     /// Initializes a specific navigation chart by materializing its authored surface and volume partitions.
     /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="chartKey">The name of the map to initialize.</param>
     public static void InitializeChart(string chartKey)
     {
+        InitializeChart(GetConfiguredWorld(), chartKey);
+    }
+
+    /// <summary>
+    /// Initializes a specific navigation chart by materializing its authored surface and volume partitions.
+    /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
+    /// <param name="chartKey">The name of the map to initialize.</param>
+    public static void InitializeChart(GridWorld world, string chartKey)
+    {
+        LinkWorld(world);
         if (string.IsNullOrEmpty(chartKey)
             || !TryGetNavigationChart(chartKey, out var chart)
             || chart.IsInitialized)
@@ -563,27 +746,27 @@ public static class PathManager
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> affectedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
-        SwiftHashSet<GlobalVoxelIndex> touchedVoxelIndices = SwiftHashSetPool<GlobalVoxelIndex>.Shared.Rent();
+        SwiftHashSet<WorldVoxelIndex> touchedVoxelIndices = SwiftHashSetPool<WorldVoxelIndex>.Shared.Rent();
         try
         {
             foreach ((Vector3d pos, NavigationChartCell cell) in chart.GetAuthoredCells())
             {
-                if (!GlobalGridManager.TryGetVoxel(pos, out Voxel voxel))
+                if (!world.TryGetVoxel(pos, out Voxel? voxel))
                     continue;
 
-                touchedVoxelIndices.Add(voxel.GlobalIndex);
+                touchedVoxelIndices.Add(voxel!.WorldIndex);
 
-                if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state))
+                if (!_resolvedChartVoxelStates.TryGetValue(voxel.WorldIndex, out ResolvedChartVoxelState state))
                 {
                     state = new ResolvedChartVoxelState();
-                    _resolvedChartVoxelStates[voxel.GlobalIndex] = state;
+                    _resolvedChartVoxelStates[voxel.WorldIndex] = state;
                 }
                 else if (state.HasAnyOwners)
                     state.AddChartOwnersTo(affectedChartKeys);
 
                 NavigationChartCell previousEffectiveCell = state.EffectiveCell;
                 state.AddOwner(chart.Name, cell, chart.Priority, chart.RegistrationOrder);
-                ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+                ApplyResolvedVoxelState(world, voxel, state, previousEffectiveCell, partitionsToRebind);
                 TrackInitializedChartGridTouch(voxel.GridIndex, chart.Name);
             }
 
@@ -594,7 +777,7 @@ public static class PathManager
             affectedChartKeys.Add(chart.Name);
 
             RefreshManagedManualTransitionsForVoxels(touchedVoxelIndices);
-            RefreshManagedGeneratedTransitionsForCharts(affectedChartKeys);
+            RefreshManagedGeneratedTransitionsForCharts(world, affectedChartKeys);
 
             foreach (string affectedChartKey in affectedChartKeys)
                 PathGuideFactory.InvalidateCacheFor(affectedChartKey);
@@ -603,24 +786,56 @@ public static class PathManager
         {
             PartitionSetPool.Release(partitionsToRebind);
             SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
-            SwiftHashSetPool<GlobalVoxelIndex>.Shared.Release(touchedVoxelIndices);
+            SwiftHashSetPool<WorldVoxelIndex>.Shared.Release(touchedVoxelIndices);
         }
     }
 
+    /// <summary>
+    /// Unloads the navigation chart identified by the specified key from the given world.
+    /// </summary>
+    /// <param name="world">The world instance from which to unload the navigation chart.</param>
+    /// <param name="chartKey">
+    /// The unique key identifying the navigation chart to unload. 
+    /// If the key does not correspond to a loaded chart, no action is taken.</param>
     public static void UnloadChart(string chartKey)
     {
+        UnloadChart(GetConfiguredWorld(), chartKey);
+    }
+
+    /// <summary>
+    /// Unloads the navigation chart identified by the specified key from the given world.
+    /// </summary>
+    /// <param name="world">The world instance from which to unload the navigation chart.</param>
+    /// <param name="chartKey">
+    /// The unique key identifying the navigation chart to unload. 
+    /// If the key does not correspond to a loaded chart, no action is taken.</param>
+    public static void UnloadChart(GridWorld world, string chartKey)
+    {
+        LinkWorld(world);
         if (!TryGetNavigationChart(chartKey, out NavigationChart chart))
             return;
 
-        UnloadChart(chart);
+        UnloadChart(world, chart);
     }
 
     /// <summary>
     /// Unloads a navigation map by name and releases associated partitions.
     /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="chart">The navigation chart to unload.</param>
     public static void UnloadChart(NavigationChart chart)
     {
+        UnloadChart(GetConfiguredWorld(), chart);
+    }
+
+    /// <summary>
+    /// Unloads a navigation map by name and releases associated partitions.
+    /// </summary>
+    /// <param name="world">The grid world context for the chart.</param>
+    /// <param name="chart">The navigation chart to unload.</param>
+    public static void UnloadChart(GridWorld world, NavigationChart chart)
+    {
+        LinkWorld(world);
         if (chart == null)
             return;
 
@@ -639,18 +854,18 @@ public static class PathManager
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> affectedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
-        SwiftHashSet<GlobalVoxelIndex> touchedVoxelIndices = SwiftHashSetPool<GlobalVoxelIndex>.Shared.Rent();
+        SwiftHashSet<WorldVoxelIndex> touchedVoxelIndices = SwiftHashSetPool<WorldVoxelIndex>.Shared.Rent();
         try
         {
             affectedChartKeys.Add(chart.Name);
             foreach ((Vector3d position, _) in chart.GetAuthoredCells())
             {
-                if (!GlobalGridManager.TryGetVoxel(position, out Voxel voxel))
+                if (!world.TryGetVoxel(position, out Voxel? voxel))
                     continue;
 
-                touchedVoxelIndices.Add(voxel.GlobalIndex);
+                touchedVoxelIndices.Add(voxel!.WorldIndex);
 
-                if (!_resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out ResolvedChartVoxelState state)
+                if (!_resolvedChartVoxelStates.TryGetValue(voxel.WorldIndex, out ResolvedChartVoxelState state)
                     || !state.ContainsOwner(chart.Name))
                 {
                     continue;
@@ -660,11 +875,11 @@ public static class PathManager
 
                 NavigationChartCell previousEffectiveCell = state.EffectiveCell;
                 state.RemoveOwner(chart.Name);
-                ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+                ApplyResolvedVoxelState(world, voxel, state, previousEffectiveCell, partitionsToRebind);
                 UntrackInitializedChartGridTouch(voxel.GridIndex, chart.Name);
 
                 if (!state.HasAnyOwners)
-                    _resolvedChartVoxelStates.Remove(voxel.GlobalIndex);
+                    _resolvedChartVoxelStates.Remove(voxel.WorldIndex);
             }
 
             foreach (SolidChartPartition part in partitionsToRebind)
@@ -675,7 +890,7 @@ public static class PathManager
             chart.IsInitialized = false;
 
             RefreshManagedManualTransitionsForVoxels(touchedVoxelIndices);
-            RefreshManagedGeneratedTransitionsForCharts(affectedChartKeys, chart.Name);
+            RefreshManagedGeneratedTransitionsForCharts(world, affectedChartKeys, chart.Name);
 
             foreach (string affectedChartKey in affectedChartKeys)
             {
@@ -689,7 +904,7 @@ public static class PathManager
         {
             PartitionSetPool.Release(partitionsToRebind);
             SwiftHashSetPool<string>.Shared.Release(affectedChartKeys);
-            SwiftHashSetPool<GlobalVoxelIndex>.Shared.Release(touchedVoxelIndices);
+            SwiftHashSetPool<WorldVoxelIndex>.Shared.Release(touchedVoxelIndices);
         }
     }
 
@@ -700,6 +915,13 @@ public static class PathManager
     internal static int RebuildInitializedChartsAgainstExternalGridRequests(
         ExternalGridChartRebuildRequest[] rebuildRequests)
     {
+        return RebuildInitializedChartsAgainstExternalGridRequests(GetConfiguredWorld(), rebuildRequests);
+    }
+
+    internal static int RebuildInitializedChartsAgainstExternalGridRequests(
+        GridWorld world,
+        ExternalGridChartRebuildRequest[] rebuildRequests)
+    {
         if (rebuildRequests == null || rebuildRequests.Length == 0)
             return 0;
 
@@ -707,11 +929,12 @@ public static class PathManager
         if (initializedCharts.Length == 0)
             return 0;
 
-        RebuildInitializedChartsAgainstCurrentGrids(initializedCharts);
+        RebuildInitializedChartsAgainstCurrentGrids(world, initializedCharts);
         return initializedCharts.Length;
     }
 
     internal static int RebuildInitializedChartsAgainstExternalGridBounds(
+        GridWorld world,
         ushort gridIndex,
         Vector3d boundsMin,
         Vector3d boundsMax,
@@ -727,20 +950,20 @@ public static class PathManager
                 includeAuthoredCellsInBounds: !useLiveGridTouchIndex)
         };
 
-        return RebuildInitializedChartsAgainstExternalGridRequests(rebuildRequests);
+        return RebuildInitializedChartsAgainstExternalGridRequests(world, rebuildRequests);
     }
 
-    private static void RebuildInitializedChartsAgainstCurrentGrids(NavigationChart[] chartsToRebuild)
+    private static void RebuildInitializedChartsAgainstCurrentGrids(GridWorld world, NavigationChart[] chartsToRebuild)
     {
         SuppressManagedGeneratedTransitionsForCharts(chartsToRebuild);
 
         for (int i = 0; i < chartsToRebuild.Length; i++)
-            ClearInitializedChartLiveStatePreservingRegistration(chartsToRebuild[i]);
+            ClearInitializedChartLiveStatePreservingRegistration(world, chartsToRebuild[i]);
 
         for (int i = 0; i < chartsToRebuild.Length; i++)
-            InitializeChart(chartsToRebuild[i].Name);
+            InitializeChart(world, chartsToRebuild[i].Name);
 
-        RefreshManagedGeneratedTransitionsForCharts(GetInitializedChartsSnapshot());
+        RefreshManagedGeneratedTransitionsForCharts(world, GetInitializedChartsSnapshot());
         TraversalTransitionRegistry.RefreshManagedManualTransitions();
     }
 
@@ -977,15 +1200,15 @@ public static class PathManager
         return false;
     }
 
-    private static void ClearInitializedChartLiveStatePreservingRegistration(NavigationChart chart)
+    private static void ClearInitializedChartLiveStatePreservingRegistration(GridWorld world, NavigationChart chart)
     {
         PathGuideFactory.InvalidateCacheFor(chart.Name);
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
-        SwiftList<GlobalVoxelIndex> resolvedVoxelIndicesToRemove = new();
+        SwiftList<WorldVoxelIndex> resolvedVoxelIndicesToRemove = new();
         try
         {
-            foreach (KeyValuePair<GlobalVoxelIndex, ResolvedChartVoxelState> pair in _resolvedChartVoxelStates)
+            foreach (KeyValuePair<WorldVoxelIndex, ResolvedChartVoxelState> pair in _resolvedChartVoxelStates)
             {
                 ResolvedChartVoxelState state = pair.Value;
                 if (!state.ContainsOwner(chart.Name))
@@ -994,11 +1217,11 @@ public static class PathManager
                 NavigationChartCell previousEffectiveCell = state.EffectiveCell;
                 state.RemoveOwner(chart.Name);
 
-                bool hasLiveVoxel = GlobalGridManager.TryGetGridAndVoxel(pair.Key, out _, out Voxel voxel);
+                bool hasLiveVoxel = world.TryGetGridAndVoxel(pair.Key, out _, out Voxel? voxel);
                 if (hasLiveVoxel)
                 {
-                    ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
-                    UntrackInitializedChartGridTouch(voxel.GridIndex, chart.Name);
+                    ApplyResolvedVoxelState(world, voxel!, state, previousEffectiveCell, partitionsToRebind);
+                    UntrackInitializedChartGridTouch(voxel!.GridIndex, chart.Name);
                 }
 
                 if (!state.HasAnyOwners
@@ -1022,16 +1245,21 @@ public static class PathManager
         }
     }
 
-    private static void ClearLiveGridState()
+    private static void ClearLiveGridState(GridWorld world)
     {
-        foreach (KeyValuePair<GlobalVoxelIndex, ResolvedChartVoxelState> pair in _resolvedChartVoxelStates)
+        foreach (KeyValuePair<WorldVoxelIndex, ResolvedChartVoxelState> pair in _resolvedChartVoxelStates)
         {
-            if (!GlobalGridManager.TryGetGridAndVoxel(pair.Key, out _, out Voxel voxel))
+            if (!world.TryGetGridAndVoxel(pair.Key, out _, out Voxel? voxel))
                 continue;
 
-            RemoveLivePathingPartitions(voxel);
+            RemoveLivePathingPartitions(voxel!);
         }
 
+        ClearLiveGridState();
+    }
+
+    private static void ClearLiveGridState()
+    {
         _resolvedChartVoxelStates.Clear();
         _initializedChartTouchCountsByGridIndex.Clear();
         _activeAuthoredGasCellCount = 0;
@@ -1068,10 +1296,10 @@ public static class PathManager
 
     private static void RemoveLivePathingPartitions(Voxel voxel)
     {
-        if (voxel.TryGetPartition(out SolidChartPartition _))
+        if (voxel.TryGetPartition<SolidChartPartition>(out _))
             voxel.TryRemovePartition<SolidChartPartition>();
 
-        if (voxel.TryGetPartition(out VolumeChartPartition _))
+        if (voxel.TryGetPartition<VolumeChartPartition>(out _))
             voxel.TryRemovePartition<VolumeChartPartition>();
     }
 
@@ -1144,7 +1372,7 @@ public static class PathManager
     private static bool TryRegisterManagedGeneratedTransitions(
         NavigationChart chart,
         string transitionIdPrefix,
-        TraversalTransition[] precomputedGeneratedTransitions)
+        TraversalTransition[]? precomputedGeneratedTransitions)
     {
         TraversalTransition[] generatedTransitions = precomputedGeneratedTransitions
             ?? GeneratedTraversalTransitionBuilder.BuildTransitions(chart, transitionIdPrefix);
@@ -1216,8 +1444,9 @@ public static class PathManager
     }
 
     private static void RefreshManagedGeneratedTransitionsForCharts(
+        GridWorld world,
         SwiftHashSet<string> chartNames,
-        string excludedChartName = null)
+        string? excludedChartName = null)
     {
         if (chartNames == null || chartNames.Count == 0)
             return;
@@ -1230,11 +1459,11 @@ public static class PathManager
                 continue;
             }
 
-            RefreshManagedGeneratedTransitionsForChart(chartName);
+            RefreshManagedGeneratedTransitionsForChart(world, chartName);
         }
     }
 
-    private static void RefreshManagedGeneratedTransitionsForCharts(NavigationChart[] charts)
+    private static void RefreshManagedGeneratedTransitionsForCharts(GridWorld world, NavigationChart[] charts)
     {
         SwiftHashSet<string> chartNames = SwiftHashSetPool<string>.Shared.Rent();
         try
@@ -1242,7 +1471,7 @@ public static class PathManager
             for (int i = 0; i < charts.Length; i++)
                 chartNames.Add(charts[i].Name);
 
-            RefreshManagedGeneratedTransitionsForCharts(chartNames);
+            RefreshManagedGeneratedTransitionsForCharts(world, chartNames);
         }
         finally
         {
@@ -1251,25 +1480,26 @@ public static class PathManager
     }
 
     private static void RefreshManagedTransitionsForVoxel(
+        GridWorld world,
         Vector3d worldPosition,
         SwiftHashSet<string> chartNames)
     {
-        if (GlobalGridManager.TryGetVoxel(worldPosition, out Voxel voxel))
-            TraversalTransitionRegistry.RefreshManagedManualTransitionsForVoxel(voxel.GlobalIndex);
+        if (world.TryGetVoxel(worldPosition, out Voxel? voxel))
+            TraversalTransitionRegistry.RefreshManagedManualTransitionsForVoxel(voxel!.WorldIndex);
 
-        RefreshManagedGeneratedTransitionsForVoxel(worldPosition, chartNames);
+        RefreshManagedGeneratedTransitionsForVoxel(world, worldPosition, chartNames);
     }
 
-    private static void RefreshManagedManualTransitionsForVoxels(SwiftHashSet<GlobalVoxelIndex> voxelIndices)
+    private static void RefreshManagedManualTransitionsForVoxels(SwiftHashSet<WorldVoxelIndex> voxelIndices)
     {
         if (voxelIndices == null || voxelIndices.Count == 0)
             return;
 
-        foreach (GlobalVoxelIndex voxelIndex in voxelIndices)
+        foreach (WorldVoxelIndex voxelIndex in voxelIndices)
             TraversalTransitionRegistry.RefreshManagedManualTransitionsForVoxel(voxelIndex);
     }
 
-    private static void RefreshManagedGeneratedTransitionsForChart(string chartName)
+    private static void RefreshManagedGeneratedTransitionsForChart(GridWorld world, string chartName)
     {
         if (!TryGetNavigationChart(chartName, out NavigationChart chart)
             || !TryGetManagedGeneratedTransitionState(chartName, out ManagedChartTransitionState state))
@@ -1282,6 +1512,7 @@ public static class PathManager
         try
         {
             TraversalTransition[] missingTransitions = CollectManagedGeneratedTransitionsForChart(
+                world,
                 chart,
                 state,
                 desiredTransitionIds,
@@ -1302,6 +1533,7 @@ public static class PathManager
     }
 
     private static TraversalTransition[] CollectManagedGeneratedTransitionsForChart(
+        GridWorld world,
         NavigationChart chart,
         ManagedChartTransitionState state,
         SwiftHashSet<string> desiredTransitionIds,
@@ -1323,7 +1555,6 @@ public static class PathManager
 
                 NavigationChartCell neighborCell = chart.GetCell(neighborX, neighborY, neighborZ);
                 if (!ShouldCollectManagedGeneratedPair(
-                    chart,
                     x,
                     y,
                     z,
@@ -1336,6 +1567,7 @@ public static class PathManager
                 }
 
                 CollectManagedGeneratedTransitionsForPair(
+                    world,
                     chart,
                     state,
                     x,
@@ -1356,6 +1588,7 @@ public static class PathManager
     }
 
     private static void RefreshManagedGeneratedTransitionsForVoxel(
+        GridWorld world,
         Vector3d worldPosition,
         SwiftHashSet<string> chartNames)
     {
@@ -1372,11 +1605,12 @@ public static class PathManager
                 continue;
             }
 
-            RefreshManagedGeneratedTransitionsForVoxel(chartName, chart, state, x, y, z);
+            RefreshManagedGeneratedTransitionsForVoxel(world, chartName, chart, state, x, y, z);
         }
     }
 
     private static void RefreshManagedGeneratedTransitionsForVoxel(
+        GridWorld world,
         string chartName,
         NavigationChart chart,
         ManagedChartTransitionState state,
@@ -1398,6 +1632,7 @@ public static class PathManager
                 || (neighborX == x && neighborY == y && neighborZ < z))
             {
                 RefreshManagedGeneratedTransitionsForPair(
+                    world,
                     chartName,
                     chart,
                     state,
@@ -1411,6 +1646,7 @@ public static class PathManager
             else
             {
                 RefreshManagedGeneratedTransitionsForPair(
+                    world,
                     chartName,
                     chart,
                     state,
@@ -1425,6 +1661,7 @@ public static class PathManager
     }
 
     private static void RefreshManagedGeneratedTransitionsForPair(
+        GridWorld world,
         string chartName,
         NavigationChart chart,
         ManagedChartTransitionState state,
@@ -1444,7 +1681,7 @@ public static class PathManager
             secondY,
             secondZ);
 
-        if (!CanResolveManagedGeneratedPairAnchors(chart, firstX, firstY, firstZ, secondX, secondY, secondZ))
+        if (!CanResolveManagedGeneratedPairAnchors(world, chart, firstX, firstY, firstZ, secondX, secondY, secondZ))
         {
             if (GeneratedTraversalTransitionBuilder.CanBuildTransitionsForPairFromChartData(
                 chart,
@@ -1510,6 +1747,7 @@ public static class PathManager
 
         string[] desiredTransitionIds = CopyTransitionIds(desiredTransitions);
         bool shouldBeActive = IsManagedGeneratedPairActive(
+            world,
             chartName,
             chart,
             firstX,
@@ -1653,6 +1891,7 @@ public static class PathManager
     }
 
     private static void CollectManagedGeneratedTransitionsForPair(
+        GridWorld world,
         NavigationChart chart,
         ManagedChartTransitionState state,
         int firstX,
@@ -1665,7 +1904,7 @@ public static class PathManager
         SwiftHashSet<string> activeTransitionIds,
         SwiftList<TraversalTransition> missingTransitions)
     {
-        if (!CanResolveManagedGeneratedPairAnchors(chart, firstX, firstY, firstZ, secondX, secondY, secondZ))
+        if (!CanResolveManagedGeneratedPairAnchors(world, chart, firstX, firstY, firstZ, secondX, secondY, secondZ))
         {
             if (GeneratedTraversalTransitionBuilder.CanBuildTransitionsForPairFromChartData(
                 chart,
@@ -1703,6 +1942,7 @@ public static class PathManager
             return;
 
         bool isActive = IsManagedGeneratedPairActive(
+            world,
             chart.Name,
             chart,
             firstX,
@@ -1724,6 +1964,7 @@ public static class PathManager
     }
 
     private static bool CanResolveManagedGeneratedPairAnchors(
+        GridWorld world,
         NavigationChart chart,
         int firstX,
         int firstY,
@@ -1732,8 +1973,8 @@ public static class PathManager
         int secondY,
         int secondZ)
     {
-        return GlobalGridManager.TryGetVoxel(chart.GetWorldPosition(firstX, firstY, firstZ), out _)
-            && GlobalGridManager.TryGetVoxel(chart.GetWorldPosition(secondX, secondY, secondZ), out _);
+        return world.TryGetVoxel(chart.GetWorldPosition(firstX, firstY, firstZ), out _)
+            && world.TryGetVoxel(chart.GetWorldPosition(secondX, secondY, secondZ), out _);
     }
 
     private static void AddPotentialManagedGeneratedTransitionIds(
@@ -1760,7 +2001,6 @@ public static class PathManager
     }
 
     private static bool ShouldCollectManagedGeneratedPair(
-        NavigationChart chart,
         int firstX,
         int firstY,
         int firstZ,
@@ -1784,6 +2024,7 @@ public static class PathManager
     }
 
     private static bool IsManagedGeneratedPairActive(
+        GridWorld world,
         string chartName,
         NavigationChart chart,
         int firstX,
@@ -1796,18 +2037,16 @@ public static class PathManager
         if (!chart.IsInitialized)
             return false;
 
-        return IsChartEffectiveOwnerAtPosition(chartName, chart.GetWorldPosition(firstX, firstY, firstZ))
-            && IsChartEffectiveOwnerAtPosition(chartName, chart.GetWorldPosition(secondX, secondY, secondZ));
+        return IsChartEffectiveOwnerAtPosition(world, chartName, chart.GetWorldPosition(firstX, firstY, firstZ))
+            && IsChartEffectiveOwnerAtPosition(world, chartName, chart.GetWorldPosition(secondX, secondY, secondZ));
     }
 
-    private static bool IsChartEffectiveOwnerAtPosition(string chartName, Vector3d worldPosition)
+    private static bool IsChartEffectiveOwnerAtPosition(GridWorld world, string chartName, Vector3d worldPosition)
     {
-        if (!TryGetResolvedChartVoxelState(worldPosition, out _, out ResolvedChartVoxelState state))
-        {
+        if (!TryGetResolvedChartVoxelState(world, worldPosition, out _, out ResolvedChartVoxelState? state))
             return false;
-        }
 
-        return string.Equals(state.EffectiveChartOwner, chartName, StringComparison.Ordinal);
+        return string.Equals(state!.EffectiveChartOwner, chartName, StringComparison.Ordinal);
     }
 
     private static void AddManagedGeneratedTransitionIds(
@@ -1872,13 +2111,14 @@ public static class PathManager
     }
 
     private static bool TryGetResolvedChartVoxelState(
+        GridWorld world,
         Vector3d worldPosition,
-        out GlobalVoxelIndex voxelIndex,
-        out ResolvedChartVoxelState state)
+        out WorldVoxelIndex voxelIndex,
+        out ResolvedChartVoxelState? state)
     {
-        if (GlobalGridManager.TryGetVoxel(worldPosition, out Voxel voxel))
+        if (world.TryGetVoxel(worldPosition, out Voxel? voxel))
         {
-            voxelIndex = voxel.GlobalIndex;
+            voxelIndex = voxel!.WorldIndex;
             return TryGetResolvedChartVoxelState(voxelIndex, out state);
         }
 
@@ -1888,8 +2128,8 @@ public static class PathManager
     }
 
     private static bool TryGetResolvedChartVoxelState(
-        GlobalVoxelIndex voxelIndex,
-        out ResolvedChartVoxelState state)
+        WorldVoxelIndex voxelIndex,
+        out ResolvedChartVoxelState? state)
     {
         if (_resolvedChartVoxelStates.TryGetValue(voxelIndex, out state)
             && state != null
@@ -1904,6 +2144,7 @@ public static class PathManager
     }
 
     private static bool TryApplyChartCellUpdate(
+        GridWorld world,
         NavigationChart chart,
         int x,
         int y,
@@ -1922,27 +2163,28 @@ public static class PathManager
             return true;
 
         if (!TryGetChartUpdateVoxelContext(
+            world,
             chart,
             x,
             y,
             z,
             managedChartsToRefresh,
-            out Voxel voxel,
-            out ResolvedChartVoxelState state,
+            out Voxel? voxel,
+            out ResolvedChartVoxelState? state,
             out NavigationChartCell previousEffectiveCell,
-            out string previousEffectiveOwner))
+            out string? previousEffectiveOwner))
         {
             return true;
         }
 
-        TryUpdateResolvedVoxelStateForChartCell(chart, cell, voxel.GlobalIndex, ref state);
+        TryUpdateResolvedVoxelStateForChartCell(chart, cell, voxel!.WorldIndex, ref state);
         TrackInitializedChartGridTouchDelta(voxel.GridIndex, chart.Name, previousCell, cell);
 
-        ApplyResolvedVoxelState(voxel, state, previousEffectiveCell, partitionsToRebind);
+        ApplyResolvedVoxelState(world, voxel, state, previousEffectiveCell, partitionsToRebind);
         CollectEffectiveStateInvalidations(
             previousEffectiveOwner,
             previousEffectiveCell,
-            state?.EffectiveChartOwner,
+            state?.EffectiveChartOwner ?? string.Empty,
             state?.EffectiveCell ?? NavigationChartCell.Empty,
             invalidatedChartKeys);
         if (state != null && state.HasAnyOwners)
@@ -1960,26 +2202,26 @@ public static class PathManager
     }
 
     private static bool TryGetChartUpdateVoxelContext(
+        GridWorld world,
         NavigationChart chart,
         int x,
         int y,
         int z,
         SwiftHashSet<string> managedChartsToRefresh,
-        out Voxel voxel,
-        out ResolvedChartVoxelState state,
+        out Voxel? voxel,
+        out ResolvedChartVoxelState? state,
         out NavigationChartCell previousEffectiveCell,
-        out string previousEffectiveOwner)
+        out string? previousEffectiveOwner)
     {
-        voxel = null;
         state = null;
         previousEffectiveCell = NavigationChartCell.Empty;
         previousEffectiveOwner = null;
 
         Vector3d position = chart.GetWorldPosition(x, y, z);
-        if (!GlobalGridManager.TryGetVoxel(position, out voxel))
+        if (!world.TryGetVoxel(position, out voxel))
             return false;
 
-        _resolvedChartVoxelStates.TryGetValue(voxel.GlobalIndex, out state);
+        _resolvedChartVoxelStates.TryGetValue(voxel!.WorldIndex, out state);
         if (state != null && state.HasAnyOwners)
         {
             state.AddChartOwnersTo(managedChartsToRefresh);
@@ -1993,8 +2235,8 @@ public static class PathManager
     private static void TryUpdateResolvedVoxelStateForChartCell(
         NavigationChart chart,
         NavigationChartCell cell,
-        GlobalVoxelIndex voxelIndex,
-        ref ResolvedChartVoxelState state)
+        WorldVoxelIndex voxelIndex,
+        ref ResolvedChartVoxelState? state)
     {
         if (cell.HasTraversalData)
         {
@@ -2024,9 +2266,9 @@ public static class PathManager
     }
 
     private static void CollectEffectiveStateInvalidations(
-        string previousEffectiveOwner,
+        string? previousEffectiveOwner,
         NavigationChartCell previousEffectiveCell,
-        string currentEffectiveOwner,
+        string? currentEffectiveOwner,
         NavigationChartCell currentEffectiveCell,
         SwiftHashSet<string> invalidatedChartKeys)
     {
@@ -2054,8 +2296,9 @@ public static class PathManager
     }
 
     private static void ApplyResolvedVoxelState(
+        GridWorld world,
         Voxel voxel,
-        ResolvedChartVoxelState state,
+        ResolvedChartVoxelState? state,
         NavigationChartCell previousEffectiveCell,
         SwiftHashSet<SolidChartPartition> partitionsToRebind)
     {
@@ -2066,33 +2309,33 @@ public static class PathManager
 
         if (effectiveCell.HasSolid)
         {
-            if (!voxel.TryGetPartition(out SolidChartPartition solidPartition))
+            if (!voxel.TryGetPartition(out SolidChartPartition? solidPartition))
             {
                 solidPartition = PartitionPool.Rent();
                 voxel.TryAddPartition(solidPartition);
             }
 
-            solidPartition.ApplyAuthoredState(state, state.EffectiveChartOwner, effectiveCell);
+            solidPartition!.ApplyAuthoredState(state, state?.EffectiveChartOwner, effectiveCell);
             if (solidPresenceChanged)
-                CollectSolidPartitionsForRebind(voxel, partitionsToRebind);
+                CollectSolidPartitionsForRebind(world, voxel, partitionsToRebind);
         }
-        else if (previousEffectiveCell.HasSolid && voxel.TryGetPartition(out SolidChartPartition _))
+        else if (previousEffectiveCell.HasSolid && voxel.TryGetPartition<SolidChartPartition>(out _))
         {
             voxel.TryRemovePartition<SolidChartPartition>();
-            CollectSolidPartitionsForRebind(voxel, partitionsToRebind);
+            CollectSolidPartitionsForRebind(world, voxel, partitionsToRebind);
         }
 
         if (effectiveCell.HasVolume)
         {
-            if (!voxel.TryGetPartition(out VolumeChartPartition volumePartition))
+            if (!voxel.TryGetPartition(out VolumeChartPartition? volumePartition))
             {
                 volumePartition = VolumeChartPartitionPool.Rent();
                 voxel.TryAddPartition(volumePartition);
             }
 
-            volumePartition.ApplyAuthoredState(state, state.EffectiveChartOwner, effectiveCell);
+            volumePartition!.ApplyAuthoredState(state, state?.EffectiveChartOwner, effectiveCell);
         }
-        else if (previousEffectiveCell.HasVolume && voxel.TryGetPartition(out VolumeChartPartition _))
+        else if (previousEffectiveCell.HasVolume && voxel.TryGetPartition<VolumeChartPartition>(out _))
             voxel.TryRemovePartition<VolumeChartPartition>();
     }
 
@@ -2114,18 +2357,22 @@ public static class PathManager
     }
 
     private static void CollectSolidPartitionsForRebind(
+        GridWorld world,
         Voxel voxel,
         SwiftHashSet<SolidChartPartition> partitionsToRebind)
     {
-        if (voxel.TryGetPartition(out SolidChartPartition currentPartition))
-            partitionsToRebind.Add(currentPartition);
+        if (!world.TryGetGrid(voxel.WorldIndex.GridIndex, out VoxelGrid? grid))
+            return;
+
+        if (voxel.TryGetPartition(out SolidChartPartition? currentPartition))
+            partitionsToRebind.Add(currentPartition!);
 
         foreach (SpatialDirection direction in SpatialAwareness.AllDirections)
         {
-            if (voxel.TryGetNeighborFromDirection(direction, out Voxel neighborVoxel, useCache: true)
-                && neighborVoxel.TryGetPartition(out SolidChartPartition neighborPartition))
+            if (voxel.TryGetNeighborFromDirection(grid!, direction, out Voxel? neighborVoxel, useCache: true)
+                && neighborVoxel!.TryGetPartition(out SolidChartPartition? neighborPartition))
             {
-                partitionsToRebind.Add(neighborPartition);
+                partitionsToRebind.Add(neighborPartition!);
             }
         }
     }
@@ -2137,50 +2384,77 @@ public static class PathManager
     /// <summary>
     /// Determines the maximum number of voxels to search based on the start and end voxel's grid sizes.
     /// </summary>
+    /// <param name="world">The grid world.</param>
     /// <param name="start">The start voxel.</param>
     /// <param name="end">The end voxel.</param>
     /// <param name="maxSearchSize">The output max search size.</param>
     /// <returns>True if both voxels belong to valid grids; otherwise, false.</returns>
-    public static bool TryGetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)
+    public static bool TryGetMaxSearchSize(GridWorld world, Voxel start, Voxel end, out int maxSearchSize)
     {
-        if (!GlobalGridManager.TryGetGrid(start.GlobalIndex.GridIndex, out VoxelGrid startGrid)
-            || !GlobalGridManager.TryGetGrid(end.GlobalIndex.GridIndex, out VoxelGrid endGrid))
+        LinkWorld(world);
+        if (!world.TryGetGrid(start.WorldIndex.GridIndex, out VoxelGrid? startGrid)
+            || !world.TryGetGrid(end.WorldIndex.GridIndex, out VoxelGrid? endGrid))
         {
             maxSearchSize = 0;
             return false;
         }
 
-        maxSearchSize = startGrid == endGrid ? startGrid.Size : startGrid.Size + endGrid.Size;
+        maxSearchSize = startGrid == endGrid
+            ? startGrid!.Size
+            : startGrid!.Size + endGrid!.Size;
         return true;
+    }
+
+    /// <summary>
+    /// Determines the maximum number of voxels to search based on the start and end voxel's grid sizes using the configured world.
+    /// </summary>
+    public static bool TryGetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)
+    {
+        return TryGetMaxSearchSize(GetConfiguredWorld(), start, end, out maxSearchSize);
     }
 
     /// <summary>
     /// Checks if a path is needed between the start and end positions based on traced voxels and unit size.
     /// </summary>
+    /// <param name="world">The grid world.</param>
     /// <param name="startPos">The starting position.</param>
     /// <param name="endPos">The destination position.</param>
     /// <param name="unitSize">The size of the navigating unit.</param>
-    /// <param name="allowUnwalkableEndpoints">Whether to permit unwalkable voxels.</param>
+    /// <param name="includeEnd">Whether to permit unwalkable voxels.</param>
     /// <returns>True if a path is required; otherwise, false.</returns>
     public static bool NeedsPath(
+        GridWorld world,
         Vector3d startPos,
         Vector3d endPos,
         Fixed64 unitSize,
-        bool allowUnwalkableEndpoints = false)
+        bool includeEnd = false)
     {
-        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(startPos, endPos))
+        LinkWorld(world);
+        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(world, startPos, endPos))
         {
             foreach (Voxel voxel in gridVoxelSet.Voxels)
             {
                 // A path is required if a voxel doesn't exist in the traced line
-                if (!voxel.TryGetPartition(out SolidChartPartition partition))
+                if (!voxel.TryGetPartition(out SolidChartPartition? partition))
                     return true;
 
-                if (!allowUnwalkableEndpoints && !voxel.IsBlocked && partition.IsImpassable(unitSize))
+                if (!includeEnd && !voxel.IsBlocked && partition!.IsImpassable(unitSize))
                     return true;
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Checks if a path is needed between the start and end positions using the configured world.
+    /// </summary>
+    public static bool NeedsPath(
+        Vector3d startPos,
+        Vector3d endPos,
+        Fixed64 unitSize,
+        bool includeEnd = false)
+    {
+        return NeedsPath(GetConfiguredWorld(), startPos, endPos, unitSize, includeEnd);
     }
 
     #endregion

@@ -14,19 +14,19 @@ public class AlternativeVoxelFinderTests : IDisposable
 {
     public AlternativeVoxelFinderTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -35,7 +35,7 @@ public class AlternativeVoxelFinderTests : IDisposable
     public void GetVoxel_ShouldRemainOnTheQueryLayer()
     {
         Vector3d query = new(2, 1, 0);
-        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
 
         AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 1);
 
@@ -48,7 +48,7 @@ public class AlternativeVoxelFinderTests : IDisposable
     {
         Vector3d query = Vector3d.Zero;
         BlockFirstRing(query);
-        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
 
         AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
 
@@ -59,9 +59,9 @@ public class AlternativeVoxelFinderTests : IDisposable
     [Fact]
     public void GetVoxel_ShouldBiasSearchFromTheAnchorVoxelLocalOffset()
     {
-        Fixed64 quarter = GlobalGridManager.VoxelSize / 4;
+        Fixed64 quarter = TrailblazerWorldManager.VoxelSize / 4;
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
-        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
 
         AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 1);
 
@@ -72,9 +72,9 @@ public class AlternativeVoxelFinderTests : IDisposable
     [Fact]
     public void GetVoxel_ShouldAdvancePositiveXLayer_WhenTheFirstRingIsBlocked()
     {
-        Fixed64 quarter = GlobalGridManager.VoxelSize / 4;
+        Fixed64 quarter = TrailblazerWorldManager.VoxelSize / 4;
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
-        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
         BlockFirstRing(query);
 
         AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
@@ -86,11 +86,11 @@ public class AlternativeVoxelFinderTests : IDisposable
     [Fact]
     public void GetVoxel_ShouldAdvancePositiveZLayer_WhenTheFirstRingIsBlocked()
     {
-        Fixed64 halfVoxel = GlobalGridManager.VoxelSize / 2;
-        Fixed64 quarter = GlobalGridManager.VoxelSize / 4;
-        Fixed64 eighth = GlobalGridManager.VoxelSize / 8;
+        Fixed64 halfVoxel = TrailblazerWorldManager.VoxelSize / 2;
+        Fixed64 quarter = TrailblazerWorldManager.VoxelSize / 4;
+        Fixed64 eighth = TrailblazerWorldManager.VoxelSize / 8;
         Vector3d query = new(halfVoxel - eighth, Fixed64.Zero, halfVoxel + quarter);
-        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
         BlockFirstRing(query);
 
         AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
@@ -103,7 +103,7 @@ public class AlternativeVoxelFinderTests : IDisposable
     public void GetVoxel_ShouldReturnFalse_WhenSearchRadiusIsExhausted()
     {
         Vector3d query = Vector3d.Zero;
-        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
         BlockFirstRing(query);
 
         AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 1);
@@ -119,9 +119,9 @@ public class AlternativeVoxelFinderTests : IDisposable
         // and be negative, so InitializeDirection chooses direction (0, -1).
         // Blocking the first ring then forces a layer advance where _direction.z < 0,
         // exercising the negative-Z branches in both InitializeDirection and the ring-advance logic.
-        Fixed64 halfVoxel = GlobalGridManager.VoxelSize / 2;
+        Fixed64 halfVoxel = TrailblazerWorldManager.VoxelSize / 2;
         Vector3d query = new(halfVoxel, Fixed64.Zero, Fixed64.Zero);
-        GlobalGridManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
         BlockFirstRing(query);
 
         AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
@@ -144,9 +144,9 @@ public class AlternativeVoxelFinderTests : IDisposable
 
     private static void AddObstacle(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        GridObstacleManager.TryAddObstacle(
-            voxel.GlobalIndex,
+        TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        grid!.TryAddObstacle(
+            voxel!,
             new BoundsKey(position, position)).Should().BeTrue();
     }
 }

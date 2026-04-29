@@ -1,5 +1,4 @@
 using FixedMathSharp;
-using GridForge.Grids;
 using System;
 using System.Threading;
 using Trailblazer.Pathing;
@@ -23,7 +22,7 @@ public static class PathTestFactory
 
     public static NavigationChart RegisterFromData(string name, bool[,,] data, Vector3d minBounds)
     {
-        var map = NavigationChart.From3D(name, data, minBounds, GlobalGridManager.VoxelSize);
+        var map = NavigationChart.From3D(name, data, minBounds, TrailblazerWorldManager.VoxelSize);
         PathManager.Register(map);
         return map;
     }

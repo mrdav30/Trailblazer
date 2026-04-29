@@ -15,12 +15,12 @@ public sealed class FlowFieldGuideTests : IDisposable
 {
     public FlowFieldGuideTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(
+        TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(12, 12, 12)),
             out _);
     }
@@ -28,7 +28,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -201,8 +201,8 @@ public sealed class FlowFieldGuideTests : IDisposable
     {
         RegisterLineChart("FlowFieldGuideUnsupportedSegment", Vector3d.Zero, 2);
 
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
 
         var plan = new HybridRoutePlan(
             new[] { HybridRouteStep.Segment(new UnsupportedRequest(start, end)) },
@@ -286,14 +286,14 @@ public sealed class FlowFieldGuideTests : IDisposable
 
     private static FlowFieldSurveyResult CreateSurveyResult(params (Vector3d position, Vector3d direction, int cost, bool isGoal)[] cells)
     {
-        var fields = new SwiftDictionary<GlobalVoxelIndex, FlowField>(cells.Length);
+        var fields = new SwiftDictionary<WorldVoxelIndex, FlowField>(cells.Length);
 
         for (int i = 0; i < cells.Length; i++)
         {
-            GlobalGridManager.TryGetVoxel(cells[i].position, out Voxel voxel).Should().BeTrue();
-            fields.Add(voxel.GlobalIndex, new FlowField
+            TrailblazerWorldManager.TryGetVoxel(cells[i].position, out Voxel voxel).Should().BeTrue();
+            fields.Add(voxel.WorldIndex, new FlowField
             {
-                GlobalIndex = voxel.GlobalIndex,
+                GlobalIndex = voxel.WorldIndex,
                 Direction = cells[i].direction,
                 PathCost = cells[i].cost,
                 IsGoal = cells[i].isGoal

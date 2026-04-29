@@ -177,7 +177,7 @@ internal static class GuidedVolumeExitPlanner
         Vector3d targetPosition,
         TraversalMedium medium)
     {
-        if (!GlobalGridManager.TryGetVoxel(targetPosition, out Voxel targetVoxel))
+        if (!TrailblazerWorldManager.TryGetVoxel(targetPosition, out Voxel targetVoxel))
             return Array.Empty<TraversalTransition>();
 
         return TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(
@@ -295,7 +295,7 @@ internal static class GuidedVolumeExitPlanner
 
         FlowFieldSurveyResult flowFieldResult = FlowFieldSurveyor.Shared.FindPath(request);
         return flowFieldResult.HasPath
-            && flowFieldResult.Fields.TryGetValue(request.StartNode.GlobalIndex, out FlowField startField)
+            && flowFieldResult.Fields.TryGetValue(request.StartNode.WorldIndex, out FlowField startField)
             && TryAssignChartCost(startField.PathCost, out chartCost);
     }
 

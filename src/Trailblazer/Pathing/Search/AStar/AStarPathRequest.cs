@@ -82,8 +82,8 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
     /// <summary>
     /// Attempts to create an A* pathfinding request between the specified origin and destination points using the default voxel size.
     /// </summary>
-    /// <remarks>This method uses the default voxel size from GlobalGridManager. Use this overload for
-    /// standard pathfinding scenarios where custom voxel sizing is not required.</remarks>
+    /// <remarks>This method uses the voxel size from Trailblazer's configured <see cref="GridWorld"/>.
+    /// Use this overload for standard pathfinding scenarios where custom voxel sizing is not required.</remarks>
     /// <param name="origin">The starting point of the path, represented as a Vector3d.</param>
     /// <param name="destination">The target point of the path, represented as a Vector3d.</param>
     /// <param name="request">When this method returns, contains the created AStarPathRequest if the operation succeeds; 
@@ -93,7 +93,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
     public static bool TryCreate(
         Vector3d origin,
         Vector3d destination,
-        out AStarPathRequest request) => TryCreate(origin, destination, GlobalGridManager.VoxelSize, out request);
+        out AStarPathRequest? request) => TryCreate(origin, destination, TrailblazerWorldManager.VoxelSize, out request);
 
     /// <summary>
     /// Creates a new A* pathfinding request between the specified origin and destination positions, using the given
@@ -142,7 +142,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
             Heuristic = heuristic,
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             AllowTraversalTransitions = allowTraversalTransitions,
-            MaxClimbHeight = GlobalGridManager.VoxelSize
+            MaxClimbHeight = TrailblazerWorldManager.VoxelSize
         };
 
         if (PathManager.TryGetMaxSearchSize(request.StartNode, request.EndNode, out int searchSize))

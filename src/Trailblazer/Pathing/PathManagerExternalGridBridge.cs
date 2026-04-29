@@ -48,10 +48,10 @@ internal static class PathManagerExternalGridBridge
 
     internal static void Register()
     {
-        GlobalGridManager.OnReset += HandleGridReset;
-        GlobalGridManager.OnActiveGridAdded += HandleGridAdded;
-        GlobalGridManager.OnActiveGridRemoved += HandleGridRemoved;
-        GlobalGridManager.OnActiveGridChange += HandleGridChanged;
+        TrailblazerWorldManager.OnReset += HandleGridReset;
+        TrailblazerWorldManager.OnActiveGridAdded += HandleGridAdded;
+        TrailblazerWorldManager.OnActiveGridRemoved += HandleGridRemoved;
+        TrailblazerWorldManager.OnActiveGridChange += HandleGridChanged;
     }
 
     internal static ExternalGridBridgeDiagnosticsSnapshot GetDiagnosticsSnapshot()

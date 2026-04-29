@@ -15,8 +15,8 @@ namespace Trailblazer.Pathing;
 /// Registration resolves transition endpoints to the current voxel grid and keeps transitions
 /// registered even while their resolved endpoints are temporarily unsupported. Manual transitions
 /// participate in the same active versus suppressed lifecycle model as chart-generated transitions.
-/// External <see cref="GlobalGridManager"/> add and remove events are reevaluated through
-/// <see cref="PathManager"/>'s grid-lifecycle bridge, and external grid reset is treated as a hard
+/// External <see cref="GridWorld"/> add and remove events are reevaluated through
+/// <see cref="PathManager"/>'s grid-lifecycle bridge, and external world reset is treated as a hard
 /// pathing reset.
 /// </remarks>
 public static class TraversalTransitionRegistry
@@ -33,11 +33,11 @@ public static class TraversalTransitionRegistry
 
     private static readonly SwiftHashSet<string> _suppressedManagedTransitionIds = new();
 
-    private static readonly SwiftDictionary<GlobalVoxelIndex, SwiftHashSet<string>> _managedManualTransitionIdsByVoxel = new();
+    private static readonly SwiftDictionary<WorldVoxelIndex, SwiftHashSet<string>> _managedManualTransitionIdsByVoxel = new();
 
-    private static readonly SwiftDictionary<GlobalVoxelIndex, SwiftHashSet<string>> _outgoingTransitionIdsByVoxel = new();
+    private static readonly SwiftDictionary<WorldVoxelIndex, SwiftHashSet<string>> _outgoingTransitionIdsByVoxel = new();
 
-    private static readonly SwiftDictionary<GlobalVoxelIndex, SwiftHashSet<string>> _incomingTransitionIdsByVoxel = new();
+    private static readonly SwiftDictionary<WorldVoxelIndex, SwiftHashSet<string>> _incomingTransitionIdsByVoxel = new();
 
     private static readonly SwiftDictionary<int, SwiftHashSet<string>> _transitionIdsBySourceGrid = new();
 
@@ -267,8 +267,8 @@ public static class TraversalTransitionRegistry
     /// </summary>
     public static bool TryGetResolvedEndpoints(
         string id,
-        out GlobalVoxelIndex sourceVoxelIndex,
-        out GlobalVoxelIndex destinationVoxelIndex)
+        out WorldVoxelIndex sourceVoxelIndex,
+        out WorldVoxelIndex destinationVoxelIndex)
     {
         _transitionLock.EnterReadLock();
         try
@@ -355,13 +355,13 @@ public static class TraversalTransitionRegistry
     /// <summary>
     /// Returns the currently active transitions whose authored source anchor resolves to the provided voxel.
     /// </summary>
-    public static TraversalTransition[] GetOutgoingTransitions(GlobalVoxelIndex sourceVoxelIndex) =>
+    public static TraversalTransition[] GetOutgoingTransitions(WorldVoxelIndex sourceVoxelIndex) =>
         QueryTransitionsByKey(_outgoingTransitionIdsByVoxel, sourceVoxelIndex);
 
     /// <summary>
     /// Returns the currently active transitions whose authored destination anchor resolves to the provided voxel.
     /// </summary>
-    public static TraversalTransition[] GetIncomingTransitions(GlobalVoxelIndex destinationVoxelIndex) =>
+    public static TraversalTransition[] GetIncomingTransitions(WorldVoxelIndex destinationVoxelIndex) =>
         QueryTransitionsByKey(_incomingTransitionIdsByVoxel, destinationVoxelIndex);
 
     /// <summary>
@@ -369,7 +369,7 @@ public static class TraversalTransitionRegistry
     /// </summary>
     public static TraversalTransition[] GetOutgoingTransitions(Vector3d sourcePosition)
     {
-        if (!TraversalTransitionAnchor.TryResolveVoxelIndex(sourcePosition, out GlobalVoxelIndex sourceVoxelIndex))
+        if (!TraversalTransitionAnchor.TryResolveVoxelIndex(sourcePosition, out WorldVoxelIndex sourceVoxelIndex))
             return Array.Empty<TraversalTransition>();
 
         return GetOutgoingTransitions(sourceVoxelIndex);
@@ -380,7 +380,7 @@ public static class TraversalTransitionRegistry
     /// </summary>
     public static TraversalTransition[] GetIncomingTransitions(Vector3d destinationPosition)
     {
-        if (!TraversalTransitionAnchor.TryResolveVoxelIndex(destinationPosition, out GlobalVoxelIndex destinationVoxelIndex))
+        if (!TraversalTransitionAnchor.TryResolveVoxelIndex(destinationPosition, out WorldVoxelIndex destinationVoxelIndex))
             return Array.Empty<TraversalTransition>();
 
         return GetIncomingTransitions(destinationVoxelIndex);
@@ -586,10 +586,10 @@ public static class TraversalTransitionRegistry
 
     private static bool TryResolveAnchorVoxelIndex(
         TraversalTransitionAnchor anchor,
-        out GlobalVoxelIndex voxelIndex)
+        out WorldVoxelIndex voxelIndex)
     {
         voxelIndex = anchor.VoxelIndex;
-        if (!GlobalGridManager.TryGetGridAndVoxel(voxelIndex, out _, out _))
+        if (!TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out _))
             return false;
 
         if (!anchor.HasPointOverride)
@@ -597,7 +597,7 @@ public static class TraversalTransitionRegistry
 
         return TraversalTransitionAnchor.TryResolveVoxelIndex(
                 anchor.PointOverride,
-                out GlobalVoxelIndex pointOverrideVoxelIndex)
+                out WorldVoxelIndex pointOverrideVoxelIndex)
             && pointOverrideVoxelIndex == voxelIndex;
     }
 
@@ -636,7 +636,7 @@ public static class TraversalTransitionRegistry
         }
     }
 
-    internal static void RefreshManagedManualTransitionsForVoxel(GlobalVoxelIndex voxelIndex)
+    internal static void RefreshManagedManualTransitionsForVoxel(WorldVoxelIndex voxelIndex)
     {
         _transitionLock.EnterWriteLock();
         try
@@ -768,9 +768,9 @@ public static class TraversalTransitionRegistry
             && DoesResolvedEndpointSupportMedium(registered.DestinationVoxelIndex, registered.Transition.Destination.Medium);
     }
 
-    private static bool DoesResolvedEndpointSupportMedium(GlobalVoxelIndex voxelIndex, TraversalMedium medium)
+    private static bool DoesResolvedEndpointSupportMedium(WorldVoxelIndex voxelIndex, TraversalMedium medium)
     {
-        if (!GlobalGridManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel voxel))
+        if (!TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel voxel))
             return false;
 
         return medium switch

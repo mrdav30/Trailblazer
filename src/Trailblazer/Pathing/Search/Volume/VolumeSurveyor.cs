@@ -13,7 +13,7 @@ internal struct VolumeVoxelMeta
 {
     public int MovementCost;
 
-    public GlobalVoxelIndex? NextTrailIndex;
+    public WorldVoxelIndex? NextTrailIndex;
 }
 
 /// <summary>
@@ -118,10 +118,13 @@ public sealed class VolumeSurveyor
         int movementCost,
         bool checkEdges = false)
     {
+        if (!TrailblazerWorldManager.TryGetGrid(current.GridIndex, out VoxelGrid? grid))
+            return false;
+
         foreach (SpatialDirection dir in directions)
         {
-            if (!current.TryGetNeighborFromDirection(dir, out Voxel neighbor, useCache: true)
-                || _heap.IsClosed(neighbor))
+            if (!current.TryGetNeighborFromDirection(grid!, dir, out Voxel? neighbor, useCache: true)
+                || _heap.IsClosed(neighbor!))
             {
                 continue;
             }
@@ -129,10 +132,10 @@ public sealed class VolumeSurveyor
             if (checkEdges && !HasValidDiagonalLegs(current, dir))
                 continue;
 
-            if (!CanTraverseVoxel(neighbor))
+            if (CanTraverseVoxel(neighbor!) != true)
                 continue;
 
-            if (ProcessNeighbor(current, neighbor, movementCost))
+            if (ProcessNeighbor(current, neighbor!, movementCost))
                 return true;
         }
 
@@ -142,25 +145,28 @@ public sealed class VolumeSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool HasValidDiagonalLegs(Voxel current, SpatialDirection diagonal)
     {
+        if (!TrailblazerWorldManager.TryGetGrid(current.GridIndex, out VoxelGrid? grid))
+            return false;
+
         (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
-        if (dx != 0 && !IsLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
+        if (dx != 0 && !IsLegClear(grid!, current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
             return false;
 
-        if (dy != 0 && !IsLegClear(current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below))
+        if (dy != 0 && !IsLegClear(grid!, current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below))
             return false;
 
-        if (dz != 0 && !IsLegClear(current, dz > 0 ? SpatialDirection.East : SpatialDirection.South))
+        if (dz != 0 && !IsLegClear(grid!, current, dz > 0 ? SpatialDirection.East : SpatialDirection.South))
             return false;
 
         return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool IsLegClear(Voxel current, SpatialDirection legDir)
+    private bool IsLegClear(VoxelGrid grid, Voxel current, SpatialDirection legDir)
     {
-        return current.TryGetNeighborFromDirection(legDir, out Voxel leg, useCache: true)
-            && CanTraverseVoxel(leg);
+        return current.TryGetNeighborFromDirection(grid, legDir, out Voxel? leg, useCache: true)
+            && CanTraverseVoxel(leg!);
     }
 
     private bool ProcessNeighbor(Voxel current, Voxel neighbor, int movementCost)
@@ -169,20 +175,20 @@ public sealed class VolumeSurveyor
 
         if (neighbor == _request.EndNode)
         {
-            SetVoxelData(neighbor, current.GlobalIndex, totalMovementCost);
+            SetVoxelData(neighbor, current.WorldIndex, totalMovementCost);
             return true;
         }
 
         int pathCost = CalculatePathCost(neighbor.WorldPosition, totalMovementCost);
         if (!_heap.Contains(neighbor))
         {
-            SetVoxelData(neighbor, current.GlobalIndex, totalMovementCost);
+            SetVoxelData(neighbor, current.WorldIndex, totalMovementCost);
             _heap.Add(neighbor, pathCost);
         }
         else if (_meta.TryGetValue(neighbor, out VolumeVoxelMeta neighborData)
             && neighborData.MovementCost > totalMovementCost)
         {
-            SetVoxelData(neighbor, current.GlobalIndex, totalMovementCost);
+            SetVoxelData(neighbor, current.WorldIndex, totalMovementCost);
             _heap.UpdatePathCost(neighbor, pathCost);
             _heap.SortUp(neighbor);
         }
@@ -192,7 +198,7 @@ public sealed class VolumeSurveyor
 
     private void SetVoxelData(
         Voxel voxel,
-        GlobalVoxelIndex nextTrailIndex,
+        WorldVoxelIndex nextTrailIndex,
         int movementCost)
     {
         _meta[voxel] = new VolumeVoxelMeta()
@@ -213,7 +219,7 @@ public sealed class VolumeSurveyor
                 || !data.NextTrailIndex.HasValue)
                 break;
 
-            if (!GlobalGridManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
                 break;
 
             current = nextTrailVoxel;
@@ -231,7 +237,7 @@ public sealed class VolumeSurveyor
         {
             Position = start.WorldPosition,
             PathCost = 0,
-            GlobalIndex = start.GlobalIndex
+            GlobalIndex = start.WorldIndex
         });
 
         Vector3d lastDirection = Vector3d.Zero;
@@ -244,7 +250,7 @@ public sealed class VolumeSurveyor
                 {
                     Position = _rawPath[i].WorldPosition,
                     PathCost = GetMovementCost(_rawPath[i]),
-                    GlobalIndex = _rawPath[i].GlobalIndex
+                    GlobalIndex = _rawPath[i].WorldIndex
                 });
             }
 
@@ -256,7 +262,7 @@ public sealed class VolumeSurveyor
         {
             Position = end.WorldPosition,
             PathCost = GetMovementCost(end),
-            GlobalIndex = end.GlobalIndex,
+            GlobalIndex = end.WorldIndex,
             IsGoal = true
         });
     }

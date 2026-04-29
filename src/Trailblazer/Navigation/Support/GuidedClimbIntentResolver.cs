@@ -7,7 +7,7 @@ namespace Trailblazer.Navigation;
 /// </summary>
 internal static class GuidedClimbIntentResolver
 {
-    public static bool Resolve(IPathRequest pathRequest, GuidedVolumeExitHandoff handoff = null)
+    public static bool Resolve(IPathRequest pathRequest, GuidedVolumeExitHandoff? handoff = null)
     {
         if (handoff != null
             && TraversalTransitionRegistry.TryGet(handoff.TransitionId, out TraversalTransition transition))
@@ -26,7 +26,7 @@ internal static class GuidedClimbIntentResolver
 
     private static bool RequestsClimbIntent(HybridPathRequest request)
     {
-        TraversalTransition[] directedTransitions = request?.RoutePlan?.DirectedTransitions;
+        TraversalTransition[]? directedTransitions = request?.RoutePlan?.DirectedTransitions;
         if (directedTransitions == null)
             return false;
 

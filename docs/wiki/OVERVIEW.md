@@ -290,13 +290,19 @@ See also:
 
 ## 7. Deterministic Frame Flow
 
-Call `TrailblazerManager.Initialize()` once during application startup before entering the fixed-step loop.
+Call `TrailblazerManager.Initialize(world)` once during application startup after your host creates
+and populates the `GridWorld` instance Trailblazer should use.
 
 The fixed-step flow is usually:
 
 ```csharp
 // Once during startup.
-TrailblazerManager.Initialize();
+var world = new GridWorld();
+world.TryAddGrid(
+    new GridConfiguration(new Vector3d(-32, -8, -32), new Vector3d(32, 24, 32)),
+    out _);
+
+TrailblazerManager.Initialize(world);
 TrailblazerManager.Simulate();
 navigator.Simulate();
 navigator.CommitFrameMotion();
@@ -316,7 +322,7 @@ What each stage does:
 Important maintenance rule:
 
 - when a subsystem needs frame-step, reset, or frame-rate-change maintenance, register an ordered internal `TrailblazerManager` lifecycle hook instead of hard-wiring that subsystem into the manager
-- hosts should prefer explicit `TrailblazerManager.Initialize()` during startup rather than relying on lazy first-use initialization
+- hosts should prefer explicit `TrailblazerManager.Initialize(world)` during startup rather than relying on lazy first-use initialization
 - `TrailblazerManager.SetFrameRate(...)` requires a positive frame rate; zero or negative values are rejected
 - if a value depends on `TrailblazerManager.FrameRate`, do not freeze it in a one-time snapshot unless the code also refreshes it from the frame-rate-change hook; prefer reading the manager live or recomputing from stored inputs
 

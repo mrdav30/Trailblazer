@@ -39,7 +39,7 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryCreate(Vector3d origin, Vector3d destination, out FlowFieldPathRequest request) =>
-        TryCreateWithSize(origin, destination, GlobalGridManager.VoxelSize, out request);
+        TryCreateWithSize(origin, destination, TrailblazerWorldManager.VoxelSize, out request);
 
     public static FlowFieldPathRequest Create(
         Vector3d origin,
@@ -68,7 +68,7 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
             UnitSize = unitSize,
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             AllowTraversalTransitions = allowTraversalTransitions,
-            MaxClimbHeight = GlobalGridManager.VoxelSize,
+            MaxClimbHeight = TrailblazerWorldManager.VoxelSize,
             ExtraFloodRange = DefaultExtraFloodRange
         };
 

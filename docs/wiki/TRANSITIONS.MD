@@ -187,7 +187,7 @@ Important lifecycle rules:
   reevaluate the managed manual transitions touching the affected voxels
 - external grid add, remove, and change notifications rebuild only the overlapping initialized chart
   state and then reevaluate managed transitions
-- external `GlobalGridManager.Reset()` is treated as simulation teardown and hard resets
+- external `GridWorld.Reset()` is treated as simulation teardown and hard resets
   `PathManager`, which also clears the registry
 
 The registry remarks in code are important here: endpoint voxels are resolved at registration time, not lazily every time a request is planned.

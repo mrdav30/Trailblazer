@@ -1,5 +1,4 @@
 ﻿using GridForge;
-using GridForge.Grids;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -11,14 +10,14 @@ public class PathingFixture : IDisposable
     public PathingFixture()
     {
         GridForgeLogger.MinimumLevel = SwiftCollections.Diagnostics.DiagnosticLevel.Error;
-        GlobalGridManager.Setup();
+        TrailblazerWorldManager.Setup();
     }
 
     public void Dispose()
     {
         PathManager.Reset();
 
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
 
         GC.SuppressFinalize(this);

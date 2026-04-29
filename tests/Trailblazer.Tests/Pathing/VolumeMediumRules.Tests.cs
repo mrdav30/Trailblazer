@@ -14,12 +14,12 @@ public sealed class VolumeMediumRulesTests : IDisposable
 {
     public VolumeMediumRulesTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(
+        TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
     }
@@ -29,7 +29,7 @@ public sealed class VolumeMediumRulesTests : IDisposable
         VolumeMediumRules.ClearGasVoxelRule();
         VolumeMediumRules.ClearLiquidVoxelRule();
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -86,7 +86,7 @@ public sealed class VolumeMediumRulesTests : IDisposable
     [Fact]
     public void VolumeMediumRules_Matches_ShouldReturnFalse_ForVoxelWithNoPartition()
     {
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
 
         VolumeMediumRules.SetGasVoxelRule(static v => true);
 
@@ -108,7 +108,7 @@ public sealed class VolumeMediumRulesTests : IDisposable
     public void VolumeMediumRules_Matches_ShouldReturnFalse_ForUnknownMedium()
     {
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "VMRGasTest");
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
 
         VolumeMediumRules.Matches(voxel, TraversalMedium.Unknown).Should().BeFalse();
     }

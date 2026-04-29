@@ -16,19 +16,19 @@ public sealed class SolidChartPartitionTests : IDisposable
 
     public SolidChartPartitionTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -77,15 +77,15 @@ public sealed class SolidChartPartitionTests : IDisposable
     public void HandleChange_ShouldTrackObstacleAddAndRemoval()
     {
         PathManager.Register(PathTestFactory.BuildSinglePointMap("SolidPartitionObstacle", Vector3d.Zero));
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
-        voxel.TryGetPartition(out SolidChartPartition partition).Should().BeTrue();
-        partition.IsWalkable.Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        voxel!.TryGetPartition(out SolidChartPartition? partition).Should().BeTrue();
+        partition!.IsWalkable.Should().BeTrue();
         partition.HasAnyOwners.Should().BeTrue();
 
-        GridObstacleManager.TryAddObstacle(voxel.GlobalIndex, _obstacleKey).Should().BeTrue();
+        grid!.TryAddObstacle(voxel, _obstacleKey).Should().BeTrue();
         partition.IsWalkable.Should().BeFalse();
 
-        GridObstacleManager.TryRemoveObstacle(voxel.GlobalIndex, _obstacleKey).Should().BeTrue();
+        grid!.TryRemoveObstacle(voxel, _obstacleKey).Should().BeTrue();
         partition.IsWalkable.Should().BeTrue();
 
         partition.HandleChange(default);
@@ -116,11 +116,11 @@ public sealed class SolidChartPartitionTests : IDisposable
         PathManager.Register(PathTestFactory.BuildSinglePointMap("IsImpassableZeroSize", Vector3d.Zero));
         PathManager.InitializeChart("IsImpassableZeroSize");
 
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
-        voxel.TryGetPartition(out SolidChartPartition partition).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel? voxel).Should().BeTrue();
+        voxel!.TryGetPartition(out SolidChartPartition? partition).Should().BeTrue();
 
         // unitSize <= 0 should return false without performing any clearance check.
-        partition.IsImpassable(Fixed64.Zero).Should().BeFalse();
+        partition!.IsImpassable(Fixed64.Zero).Should().BeFalse();
         partition.IsImpassable(Fixed64.Zero - Fixed64.One).Should().BeFalse();
     }
 
@@ -130,21 +130,20 @@ public sealed class SolidChartPartitionTests : IDisposable
         PathManager.Register(PathTestFactory.BuildSinglePointMap("ClearanceObstacle", Vector3d.Zero));
         PathManager.InitializeChart("ClearanceObstacle");
 
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
-        voxel.TryGetPartition(out SolidChartPartition partition).Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        voxel!.TryGetPartition(out SolidChartPartition? partition).Should().BeTrue();
 
         // Before obstacle: clearance should be at least 1.
-        partition.GetNeighborClearance().Should().BeGreaterThan(0);
-
+        partition!.GetNeighborClearance().Should().BeGreaterThan(0);
         // Add obstacle → IsWalkable = false.
-        GridObstacleManager.TryAddObstacle(voxel.GlobalIndex, _obstacleKey).Should().BeTrue();
+        grid!.TryAddObstacle(voxel, _obstacleKey).Should().BeTrue();
 
         // CheckClearance: TryGetClearanceOrigin returns false because !IsWalkable.
         // origin.IsBlocked == true → clearance is set to 0.
         partition.GetNeighborClearance().Should().Be(0);
 
         // Cleanup.
-        GridObstacleManager.TryRemoveObstacle(voxel.GlobalIndex, _obstacleKey).Should().BeTrue();
+        grid!.TryRemoveObstacle(voxel, _obstacleKey).Should().BeTrue();
     }
 
     [Fact]
@@ -166,7 +165,7 @@ public sealed class SolidChartPartitionTests : IDisposable
         PathManager.Register(PathTestFactory.BuildSinglePointMap("ClearanceCached", Vector3d.Zero));
         PathManager.InitializeChart("ClearanceCached");
 
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
         voxel.TryGetPartition(out SolidChartPartition partition).Should().BeTrue();
 
         byte first = partition.GetNeighborClearance();  // computes and marks valid
@@ -187,7 +186,7 @@ public sealed class SolidChartPartitionTests : IDisposable
         PathManager.Register(PathTestFactory.BuildSinglePointMap("ClearanceDefault", Vector3d.Zero));
         PathManager.InitializeChart("ClearanceDefault");
 
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
         voxel.TryGetPartition(out SolidChartPartition partition).Should().BeTrue();
 
         // Force IsWalkable = false without blocking the voxel.
@@ -201,4 +200,3 @@ public sealed class SolidChartPartitionTests : IDisposable
         PathManager.UnloadChart("ClearanceDefault");
     }
 }
-

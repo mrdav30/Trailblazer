@@ -1,4 +1,3 @@
-using Chronicler;
 using FixedMathSharp;
 using FixedMathSharp.Assertions;
 using FluentAssertions;

@@ -1,7 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using GridForge.Grids;
 using System;
 using Trailblazer.Navigation.MovementGroups;
 using Xunit;
@@ -13,13 +12,13 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
 {
     public MovementGroupCoordinatorTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
         MovementGroupCoordinator.Reset();
         TrailblazerManager.Reset();
     }
@@ -27,7 +26,7 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
     public void Dispose()
     {
         MovementGroupCoordinator.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }

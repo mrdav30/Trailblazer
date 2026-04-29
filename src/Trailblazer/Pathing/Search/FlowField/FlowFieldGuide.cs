@@ -117,8 +117,8 @@ public class FlowFieldGuide : IGuide
 
         if (FlowMap == null
             || !FlowMap.HasPath
-            || !GlobalGridManager.TryGetVoxel(origin, out Voxel currentVoxel)
-            || !FlowMap.Fields.ContainsKey(currentVoxel.GlobalIndex))
+            || !TrailblazerWorldManager.TryGetVoxel(origin, out Voxel? currentVoxel)
+            || !FlowMap.Fields.ContainsKey(currentVoxel!.WorldIndex))
         {
             return false;
         }
@@ -135,8 +135,8 @@ public class FlowFieldGuide : IGuide
 
         if (FlowMap == null
             || !FlowMap.HasPath
-            || !GlobalGridManager.TryGetVoxel(origin, out Voxel currentVoxel)
-            || !FlowMap.Fields.ContainsKey(currentVoxel.GlobalIndex))
+            || !TrailblazerWorldManager.TryGetVoxel(origin, out Voxel currentVoxel)
+            || !FlowMap.Fields.ContainsKey(currentVoxel.WorldIndex))
         {
             return false;
         }
@@ -362,11 +362,11 @@ public class FlowFieldGuide : IGuide
     private static bool IsStageTargetReached(Vector3d origin, HybridRouteStep currentStep)
     {
         // HybridRouteStep.Kind is factory-assigned to Waypoint or PathSegment only.
-        Vector3d target = currentStep.Kind == HybridRouteStepKind.Waypoint 
-            ? currentStep.WaypointPosition 
+        Vector3d target = currentStep.Kind == HybridRouteStepKind.Waypoint
+            ? currentStep.WaypointPosition
             : currentStep.SegmentRequest.TargetPosition;
 
-        Fixed64 completionDistance = GlobalGridManager.VoxelSize * Fixed64.Half;
+        Fixed64 completionDistance = TrailblazerWorldManager.VoxelSize * Fixed64.Half;
         return (target - origin).SqrMagnitude <= completionDistance * completionDistance;
     }
 }

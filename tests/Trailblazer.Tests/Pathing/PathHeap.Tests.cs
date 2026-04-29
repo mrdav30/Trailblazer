@@ -13,18 +13,18 @@ public class PathHeapTests : IDisposable
 {
     public PathHeapTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
 
-        GlobalGridManager.Setup();
+        TrailblazerWorldManager.Setup();
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -72,9 +72,9 @@ public class PathHeapTests : IDisposable
     {
         var heap = new PathHeap<Voxel>();
 
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel a));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel b));
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(new Vector3d(2, 0, 0), out _, out Voxel c));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel a));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel b));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(2, 0, 0), out _, out Voxel c));
 
         heap.Add(a, pathCost: 30);
         heap.Add(b, pathCost: 20);
@@ -204,7 +204,7 @@ public class PathHeapTests : IDisposable
 
     private static SolidChartPartition CreateAttachedPartition(Vector3d position)
     {
-        Assert.True(GlobalGridManager.TryGetGridAndVoxel(position, out _, out Voxel voxel));
+        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(position, out _, out Voxel voxel));
 
         var partition = new SolidChartPartition();
 

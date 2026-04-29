@@ -13,18 +13,14 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
 {
     public PathGuideFactoryCoverageTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
-        else
-            GlobalGridManager.Setup();
-
-        GlobalGridManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+        TrailblazerWorldManager.Setup();
+        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -40,8 +36,8 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         invalidGuide.Should().BeNull();
 
         RegisterSolidLine("GuideFactoryUnknown", Vector3d.Zero, 2);
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
-        GlobalGridManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
+        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
 
         var unknownRequest = new UnknownRequest
         {

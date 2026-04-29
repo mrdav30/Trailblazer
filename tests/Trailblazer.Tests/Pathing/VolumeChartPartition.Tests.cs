@@ -16,12 +16,12 @@ public sealed class VolumeChartPartitionTests : IDisposable
 
     public VolumeChartPartitionTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
-        GlobalGridManager.TryAddGrid(
+        TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
     }
@@ -29,7 +29,7 @@ public sealed class VolumeChartPartitionTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -69,14 +69,14 @@ public sealed class VolumeChartPartitionTests : IDisposable
     public void HandleChange_ShouldTrackObstacleEvents_WhenAttachedToVoxel()
     {
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Liquid, "VolumePartitionObstacle");
-        GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
-        voxel.TryGetPartition(out VolumeChartPartition partition).Should().BeTrue();
-        partition.IsWalkable.Should().BeTrue();
+        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        voxel!.TryGetPartition(out VolumeChartPartition? partition).Should().BeTrue();
+        partition!.IsWalkable.Should().BeTrue();
 
-        GridObstacleManager.TryAddObstacle(voxel.GlobalIndex, _obstacleKey).Should().BeTrue();
+        grid!.TryAddObstacle(voxel, _obstacleKey).Should().BeTrue();
         partition.IsWalkable.Should().BeFalse();
 
-        GridObstacleManager.TryRemoveObstacle(voxel.GlobalIndex, _obstacleKey).Should().BeTrue();
+        grid!.TryRemoveObstacle(voxel, _obstacleKey).Should().BeTrue();
         partition.IsWalkable.Should().BeTrue();
     }
 

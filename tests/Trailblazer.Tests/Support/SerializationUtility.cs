@@ -25,7 +25,7 @@ public static class SerializationUtility
 
         JsonRecordSerializer.Populate(target, (string)payload);
     }
- 
+
     public static object RemovePayloadEntry(object payload, bool useMemoryPack, params string[] path)
     {
         return useMemoryPack

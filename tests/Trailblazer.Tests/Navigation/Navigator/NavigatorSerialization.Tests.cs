@@ -10,7 +10,6 @@ using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
-using Trailblazer.Tests;
 using Trailblazer.Tests.Navigation.Motor;
 using Xunit;
 
@@ -21,19 +20,19 @@ public class NavigatorSerializationTests : IDisposable
 {
     public NavigatorSerializationTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -551,7 +550,7 @@ public class NavigatorSerializationTests : IDisposable
 
         target.SetTestPosition(new Vector3d(1, 0, 0));
         target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        target.Steering.Arrive();
+        target.Steering!.Arrive();
 
         TrailblazerManager.Simulate();
         target.Simulate();
@@ -581,9 +580,9 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         target.OccupantGroupId = 9;
-        target.Steering.StopMultiplier = (Fixed64)0.33f;
-        target.Turning.TurnRate = (Fixed64)0.72f;
-        target.Motor.Handler.Move.MaxFastSpeed = (Fixed64)8;
+        target.Steering!.StopMultiplier = (Fixed64)0.33f;
+        target.Turning!.TurnRate = (Fixed64)0.72f;
+        target.Motor!.Handler.Move.MaxFastSpeed = (Fixed64)8;
 
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
@@ -1337,9 +1336,9 @@ public class NavigatorSerializationTests : IDisposable
 
     private static void AddObstacle(Vector3d position)
     {
-        GlobalGridManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
-        GridObstacleManager.TryAddObstacle(
-            voxel.GlobalIndex,
+        TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        grid!.TryAddObstacle(
+            voxel!,
             new BoundsKey(position, position)).Should().BeTrue();
     }
 

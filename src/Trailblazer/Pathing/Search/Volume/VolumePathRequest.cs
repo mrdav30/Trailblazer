@@ -114,7 +114,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Vector3d destination,
         Fixed64? unitSize)
     {
-        Fixed64 resolvedUnitSize = unitSize ?? GlobalGridManager.VoxelSize;
+        Fixed64 resolvedUnitSize = unitSize ?? TrailblazerWorldManager.VoxelSize;
         bool hasEndpoints = VolumeVoxelFinder.TryGetPathEdgeVoxels(
             origin,
             destination,

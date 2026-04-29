@@ -12,19 +12,19 @@ public class TraversalTransitionQueryTests : IDisposable
 {
     public TraversalTransitionQueryTests()
     {
-        if (GlobalGridManager.IsActive)
-            GlobalGridManager.Reset();
+        if (TrailblazerWorldManager.IsActive)
+            TrailblazerWorldManager.Reset();
         else
-            GlobalGridManager.Setup();
+            TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        GlobalGridManager.TryAddGrid(config, out _);
+        TrailblazerWorldManager.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        GlobalGridManager.Reset();
+        TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
     }
@@ -32,7 +32,7 @@ public class TraversalTransitionQueryTests : IDisposable
     [Fact]
     public void GridScopedQueries_ShouldReturnOnlyDirectionsRelevantToThatGrid()
     {
-        Assert.True(GlobalGridManager.TryAddGrid(
+        Assert.True(TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(16, -4, -4), new Vector3d(8, 8, 8)),
             out _));
 
@@ -41,8 +41,8 @@ public class TraversalTransitionQueryTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("QueryFirstGridPoint", firstGridPosition);
         PathTestFactory.RegisterSingleWalkablePoint("QuerySecondGridPoint", secondGridPosition);
 
-        Assert.True(GlobalGridManager.TryGetVoxel(firstGridPosition, out Voxel firstGridVoxel));
-        Assert.True(GlobalGridManager.TryGetVoxel(secondGridPosition, out Voxel secondGridVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(firstGridPosition, out Voxel firstGridVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(secondGridPosition, out Voxel secondGridVoxel));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "cross-grid-link",
@@ -84,7 +84,7 @@ public class TraversalTransitionQueryTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("QueryRefreshMid", mid);
         PathTestFactory.RegisterSingleWalkablePoint("QueryRefreshEnd", end);
 
-        Assert.True(GlobalGridManager.TryGetVoxel(source, out Voxel sourceVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(source, out Voxel sourceVoxel));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "cache-refresh-a",
@@ -116,7 +116,7 @@ public class TraversalTransitionQueryTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("QueryFilteredSolidDestination", solidDestination);
         PathTestFactory.RegisterGeneratedVolumePoint(liquidPoint, TraversalMedium.Liquid, "QueryFilteredLiquid");
 
-        Assert.True(GlobalGridManager.TryGetVoxel(solidSource, out Voxel sourceVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(solidSource, out Voxel sourceVoxel));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "filtered-swim",
@@ -165,7 +165,7 @@ public class TraversalTransitionQueryTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("QueryFilteredRefreshMid", mid);
         PathTestFactory.RegisterSingleWalkablePoint("QueryFilteredRefreshEnd", end);
 
-        Assert.True(GlobalGridManager.TryGetVoxel(source, out Voxel sourceVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(source, out Voxel sourceVoxel));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "filtered-refresh-a",
@@ -198,7 +198,7 @@ public class TraversalTransitionQueryTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("QueryOverrideSource", source);
         PathTestFactory.RegisterSingleWalkablePoint("QueryOverrideDestination", destination);
 
-        Assert.True(GlobalGridManager.TryGetVoxel(source, out Voxel sourceVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(source, out Voxel sourceVoxel));
 
         var generated = new TraversalTransition(
             id: "generated-directed",
@@ -267,7 +267,7 @@ public class TraversalTransitionQueryTests : IDisposable
 
         PathTestFactory.RegisterSingleWalkablePoint("QueryCachedSource", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("QueryCachedDestination", new Vector3d(1, 0, 0));
-        Assert.True(GlobalGridManager.TryGetVoxel(Vector3d.Zero, out Voxel sourceVoxel));
+        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel sourceVoxel));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "cached-jump",

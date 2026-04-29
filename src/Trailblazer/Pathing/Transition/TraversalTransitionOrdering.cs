@@ -62,7 +62,7 @@ internal static class TraversalTransitionOrdering
         return ComparePositions(left.PointOverride, right.PointOverride);
     }
 
-    private static int CompareVoxelIndices(GlobalVoxelIndex left, GlobalVoxelIndex right)
+    private static int CompareVoxelIndices(WorldVoxelIndex left, WorldVoxelIndex right)
     {
         int gridComparison = left.GridIndex.CompareTo(right.GridIndex);
         if (gridComparison != 0)

@@ -336,10 +336,10 @@ public static class NavigatorPathRequestFactory
     {
         targetRequiresConstrainedExitHandoff = false;
 
-        if (!GlobalGridManager.TryGetVoxel(targetPosition, out Voxel targetVoxel))
+        if (!TrailblazerWorldManager.TryGetVoxel(targetPosition, out Voxel? targetVoxel))
             return false;
 
-        if (!targetVoxel.TryGetPartition(out SolidChartPartition _))
+        if (targetVoxel!.TryGetPartition(out SolidChartPartition? _) != true)
             return false;
 
         targetRequiresConstrainedExitHandoff = !VolumeMediumRules.Matches(targetVoxel, medium);

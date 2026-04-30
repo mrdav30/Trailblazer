@@ -2,13 +2,32 @@
 
 namespace Trailblazer.Navigation.Animation;
 
+/// <summary>
+/// Provides static methods for updating navigation animation parameters based on movement direction, rotation, and character state.
+/// </summary>
+/// <remarks>
+/// This class is intended for use in navigation animation systems where animation parameters must be
+/// updated according to player input and character state, such as lock-on targeting or sprinting. 
+/// All methods are static and thread safety is guaranteed as there is no shared mutable state.
+/// </remarks>
 public static class NavAnimationUpdater
 {
+    // TODO: Consider making these configurable via parameters or a settings object if different thresholds are needed for different characters or animations.
     private static readonly Fixed64 _minAxisV = Fixed64.FromRaw(0x40000000L); // 0.25
     private static readonly Fixed64 _maxAxisV = Fixed64.FromRaw(0x80000000L); // 0.5
     private static readonly Fixed64 _minAxisH = Fixed64.FromRaw(0x40000000L); // 0.25
     private static readonly Fixed64 _maxAxisH = Fixed64.FromRaw(0xB3333333L); // 0.7
 
+    /// <summary>
+    /// Updates the animation parameters on the specified animation handler based on 
+    /// movement direction, rotation, lock-on state, sprinting state, and damping time.
+    /// </summary>
+    /// <param name="handler">The animation handler that receives the updated movement and state parameters. Cannot be null.</param>
+    /// <param name="moveDirection">The world-space movement direction to be applied to the animation parameters.</param>
+    /// <param name="rotation">The current rotation used to resolve movement direction relative to the character.</param>
+    /// <param name="isLockedOn">true if the character is locked onto a target; otherwise, false. Affects how movement input is interpreted.</param>
+    /// <param name="isSprinting">true if the character is sprinting; otherwise, false. Determines whether sprinting animation parameters are set.</param>
+    /// <param name="dampTime">The time, in seconds, over which to smoothly interpolate the animation parameters.</param>
     public static void UpdateAnimationParameters(
         INavAnimationHandler handler,
         Vector3d moveDirection,

@@ -64,8 +64,20 @@ public sealed class VolumeChartPartition : IVoxelPartition
         set => _manualPathCostModifier = value;
     }
 
+    /// <summary>
+    /// Sets the parent index for this voxel in the world structure.
+    /// </summary>
+    /// <param name="parentIndex">The index representing the parent voxel to assign. Must be a valid WorldVoxelIndex.</param>
     public void SetParentIndex(WorldVoxelIndex parentIndex) => WorldIndex = parentIndex;
 
+    /// <summary>
+    /// Initializes the obstacle's state based on the specified voxel and subscribes to voxel change events.
+    /// </summary>
+    /// <remarks>
+    /// This method updates the obstacle's world index, position, and walkability status to match the provided voxel. 
+    /// It also attaches event handlers to respond to changes in the voxel's obstacle state.
+    /// </remarks>
+    /// <param name="voxel">The voxel to which the obstacle is being added. Cannot be null.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnAddToVoxel(Voxel voxel)
     {
@@ -77,6 +89,14 @@ public sealed class VolumeChartPartition : IVoxelPartition
         IsWalkable = !voxel.IsBlocked;
     }
 
+    /// <summary>
+    /// Handles cleanup when this object is removed from the specified voxel, including detaching event handlers and releasing resources.
+    /// </summary>
+    /// <remarks>
+    /// After calling this method, the object should not be used with the specified voxel unless re-added. 
+    /// This method also releases the object back to the partition pool for reuse.
+    /// </remarks>
+    /// <param name="voxel">The voxel from which this object is being removed. Cannot be null.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void OnRemoveFromVoxel(Voxel voxel)
     {
@@ -86,6 +106,15 @@ public sealed class VolumeChartPartition : IVoxelPartition
         PathManager.VolumeChartPartitionPool.Release(this);
     }
 
+    /// <summary>
+    /// Updates the walkability state based on the provided obstacle event information.
+    /// </summary>
+    /// <remarks>
+    /// Call this method when obstacle state changes to ensure the walkability property reflects the current environment.
+    /// </remarks>
+    /// <param name="eventInfo">
+    /// The event data containing voxel index and obstacle count information used to determine walkability. Cannot be null.
+    /// </param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void HandleChange(ObstacleEventInfo eventInfo)
     {

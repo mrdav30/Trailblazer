@@ -17,40 +17,85 @@ namespace Trailblazer.Pathing;
 /// </remarks>
 public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathRequest>
 {
+    /// <inheritdoc/>
     public Vector3d Origin { get; private set; }
 
+    /// <inheritdoc/>
     public Voxel? StartNode { get; private set; }
 
+    /// <inheritdoc/>
     public Vector3d TargetPosition { get; private set; }
 
+    /// <inheritdoc/>
     public Voxel? EndNode { get; private set; }
 
+    /// <inheritdoc/>
     public Fixed64 UnitSize { get; private set; }
 
+    /// <inheritdoc/>
     public bool AllowUnwalkableEndpoints { get; set; }
 
+    /// <inheritdoc/>
     public int MaxPathSearchRange { get; set; }
 
+    /// <summary>
+    /// Gets or sets the heuristic method used to guide the algorithm's decision-making process.
+    /// </summary>
+    /// <remarks>
+    /// Selecting an appropriate heuristic can significantly impact the performance and accuracy of
+    /// the algorithm. Refer to the documentation for HeuristicMethod for available options and their intended use
+    /// cases.
+    /// </remarks>
     public HeuristicMethod Heuristic { get; set; }
 
+    /// <summary>
+    /// Gets the medium used for traversal operations.
+    /// </summary>
+    /// <remarks>
+    /// The traversal medium determines the method or environment by which traversal is performed.
+    /// The value is set internally and cannot be modified directly by consumers of the class.
+    /// </remarks>
     public TraversalMedium Medium { get; private set; }
 
+    /// <inheritdoc/>
     public bool HasOrigin => StartNode != null;
 
+    /// <inheritdoc/>
     public bool HasDestination => EndNode != null;
 
+    /// <inheritdoc/>
     public bool HasValidEndpoints => HasOrigin && HasDestination;
 
+    /// <inheritdoc/>
     public bool IsValid => HasValidEndpoints && MaxPathSearchRange > 0;
 
+    /// <inheritdoc/>
     public bool HasZeroDisplacement =>
         !IsValid
         || StartNode == EndNode;
 
+    /// <inheritdoc/>
     public int RequestCacheKey => GetHashCode();
 
     private VolumePathRequest() { }
 
+    /// <summary>
+    /// Attempts to create a new volume pathfinding request between the specified origin
+    /// and destination points using the given parameters.
+    /// </summary>
+    /// <remarks>This method does not throw exceptions if the request cannot be created. Use the return value
+    /// to determine success before using the output request.</remarks>
+    /// <param name="origin">The starting point of the path, specified as a 3D vector.</param>
+    /// <param name="destination">The target point of the path, specified as a 3D vector.</param>
+    /// <param name="unitSize">The size of each unit or step in the pathfinding grid. Must be a positive value.</param>
+    /// <param name="request">When this method returns, contains the created volume pathfinding request if successful; otherwise, null.</param>
+    /// <param name="heuristic">The heuristic method to use for pathfinding. Defaults to Euclidean.</param>
+    /// <param name="allowUnwalkableEndpoints">true to allow the origin or destination to be unwalkable; otherwise, false. Defaults to false.</param>
+    /// <param name="medium">
+    /// The traversal medium to use for pathfinding, such as gas or other supported types. 
+    /// Defaults to TraversalMedium.Gas.
+    /// </param>
+    /// <returns>true if the volume pathfinding request was successfully created; otherwise, false.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryCreate(
         Vector3d origin,
@@ -72,6 +117,25 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         return request != null;
     }
 
+    /// <summary>
+    /// Creates a new pathfinding request for traversing a volumetric space between the specified origin
+    /// and destination points.
+    /// </summary>
+    /// <remarks>
+    /// Returns null if the origin or destination cannot be mapped to valid pathfinding nodes,
+    /// or if a path cannot be initialized with the given parameters.
+    /// </remarks>
+    /// <param name="origin">The starting position of the path, specified as a 3D vector in world coordinates.</param>
+    /// <param name="destination">The target position of the path, specified as a 3D vector in world coordinates.</param>
+    /// <param name="unitSize">The size of each voxel or unit used for pathfinding calculations. Must be a positive value.</param>
+    /// <param name="heuristic">The heuristic method to use for estimating pathfinding cost. Defaults to Euclidean if not specified.</param>
+    /// <param name="allowUnwalkableEndpoints">
+    /// true to allow the origin or destination to be in unwalkable locations; otherwise, false. Defaults to false.
+    /// </param>
+    /// <param name="medium">
+    /// The traversal medium to consider when generating the path, such as gas or other supported types. 
+    /// Defaults to TraversalMedium.Gas.</param>
+    /// <returns>A VolumePathRequest representing the pathfinding request if a valid path can be initialized; otherwise, null.</returns>
     public static VolumePathRequest? Create(
         Vector3d origin,
         Vector3d destination,
@@ -113,6 +177,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         return request;
     }
 
+    /// <inheritdoc/>
     public bool UpdateRequest(
         Vector3d origin,
         Vector3d destination,
@@ -144,6 +209,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         return HasValidEndpoints;
     }
 
+    /// <inheritdoc/>
     public bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false)
     {
         if (EndNode == null)
@@ -186,6 +252,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         return true;
     }
 
+    /// <inheritdoc/>
     public bool TrySetDestination(Vector3d destination, bool resetSearchRange = false)
     {
         if (StartNode == null)
@@ -228,6 +295,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         return true;
     }
 
+    /// <inheritdoc/>
     public bool TrySetUnitSize(Fixed64 unitSize)
     {
         if (UnitSize == unitSize || !HasValidEndpoints)
@@ -235,14 +303,17 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
 
         return UpdateRequest(Origin, TargetPosition, unitSize);
     }
-
+    
+    /// <inheritdoc/>
     public override bool Equals(object? obj) =>
         obj is VolumePathRequest other && Equals(other);
 
+    /// <inheritdoc/>
     public bool Equals(VolumePathRequest? other) =>
         other != null
         && RequestCacheKey == other.RequestCacheKey;
 
+    /// <inheritdoc/>
     public override int GetHashCode()
     {
         return (

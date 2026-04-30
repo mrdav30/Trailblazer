@@ -46,7 +46,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 - `Navigator` as the host-facing simulation coordinator
 - `NavSteering` for headings, direct-path checks, guide following, and repathing
 - `NavTurning` for deterministic facing updates
-- `NavMotor` and locomotion handlers for movement state transitions, gravity, jumps, slopes, swimming, sliding, moving platforms, and per-navigator locomotion profiles
+- `NavMotor` and locomotion handlers for movement state transitions, gravity, jumps, slopes, swimming, sliding, moving platforms, and per-object locomotion profiles
 
 ### Host Responsibilities
 
@@ -55,7 +55,7 @@ Trailblazer does not own your world simulation. Your game or simulation still su
 - `GridForge` world creation and grid registration through `GridWorld`
 - traversal medium and contact information
 - collision and environment probing
-- navigator setup and traversal-state refresh
+- object setup and traversal-state refresh
 - any rendering, animation, or ECS integration
 
 ## Dependencies
@@ -242,7 +242,7 @@ Use `VolumePathRequest` when:
 
 - traversal should stay in raw voxel volume instead of chart-backed surface space
 - movement needs gas or liquid routing without authored chart structure
-- navigator-owned `Swim` and `Aerial` guidance should stay volume-first but still be allowed to hand off into chart-backed traversal at authored exits or landing zones when `GuidedAllowTraversalTransitions` is enabled
+- object-owned `Swim` and `Aerial` guidance should stay volume-first but still be allowed to hand off into chart-backed traversal at authored exits or landing zones when `GuidedAllowTraversalTransitions` is enabled
 
 ## Project Layout
 

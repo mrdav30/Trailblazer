@@ -10,6 +10,26 @@ namespace Trailblazer.Navigation;
 /// </summary>
 public static class NavigatorPathRequestFactory
 {
+    /// <summary>
+    /// Attempts to create a pathfinding request using the specified parameters and pathfinding mode.
+    /// </summary>
+    /// <remarks>
+    /// The parameters aStarHeuristic, flowFieldExtraFloodRange, and traversalMedium are only used for specific path modes. 
+    /// The method returns false if the combination of parameters does not support the requested pathfinding mode.
+    /// </remarks>
+    /// <param name="origin">The starting position for the pathfinding request.</param>
+    /// <param name="targetPosition">The target position the path should reach.</param>
+    /// <param name="unitSize">The size of the unit for which the path is being calculated. Must be a positive value.</param>
+    /// <param name="pathMode">The pathfinding algorithm or mode to use when creating the request.</param>
+    /// <param name="allowUnwalkableEndpoints">true to allow the origin or target position to be unwalkable; otherwise, false.</param>
+    /// <param name="allowTraversalTransitions">true to allow traversal transitions (such as moving between different terrain types); otherwise, false.</param>
+    /// <param name="maxClimbHeight">The maximum height the unit can climb during pathfinding. Must be non-negative.</param>
+    /// <param name="aStarHeuristic">The heuristic method to use for A* pathfinding. Only relevant when pathMode is AStar or Volume.</param>
+    /// <param name="flowFieldExtraFloodRange">The additional range, in units, to flood when using flow field pathfinding. Only relevant when pathMode is
+    /// FlowField.</param>
+    /// <param name="traversalMedium">The traversal medium to use for pathfinding. Only relevant when pathMode is Volume.</param>
+    /// <param name="request">When this method returns, contains the created pathfinding request if successful; otherwise, null.</param>
+    /// <returns>true if the pathfinding request was successfully created; otherwise, false.</returns>
     public static bool TryCreate(
         Vector3d origin,
         Vector3d targetPosition,

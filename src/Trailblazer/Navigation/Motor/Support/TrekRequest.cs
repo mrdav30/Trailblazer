@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Represents a movement request for a navigator to pass to <see cref="NavMotor"/>,
+/// Represents a movement request for a object to pass to <see cref="NavMotor"/>,
 /// containing the current origin, foot position, rotation, direction, speed, and frame-owned locomotion intent.
 /// </summary>
 [Serializable]
@@ -62,11 +62,26 @@ public struct TrekRequest : IRecordable
     /// </summary>
     public bool IsRequestingClimb;
 
+    /// <summary>
+    /// Initializes a new instance of the TrekRequest class with default values.
+    /// </summary>
     public TrekRequest()
     {
         CanAffordJump = true;
     }
 
+    /// <summary>
+    /// Sets the current movement request parameters, including direction, rate, and action flags such as jump, flight, and climb.
+    /// </summary>
+    /// <param name="direction">The movement direction vector to apply for the request.</param>
+    /// <param name="rate">The rate at which the movement should be performed.</param>
+    /// <param name="isRequestingJump">true to request a jump action; otherwise, false.</param>
+    /// <param name="isRequestingFlight">true to request a flight action; otherwise, false.</param>
+    /// <param name="isRequestingClimb">true to request a climb action; otherwise, false.</param>
+    /// <param name="facingDirection">
+    /// An optional vector specifying the desired facing direction. 
+    /// If null or equal to Vector3d.Zero, the facing direction is not changed.</param>
+    /// <param name="canAffordJump">true if the jump action can be afforded; otherwise, false. Defaults to true.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetRequest(
         Vector3d direction,
@@ -88,6 +103,17 @@ public struct TrekRequest : IRecordable
         IsRequestingClimb = isRequestingClimb;
     }
 
+    /// <summary>
+    /// Sets the transient state for the current frame, including origin, optional foot position, rotation, and optionally direction.
+    /// </summary>
+    /// <remarks>
+    /// If <paramref name="direction"/> is null, the current direction is retained for this frame.
+    /// This method is intended for per-frame updates where only some state components may change.
+    /// </remarks>
+    /// <param name="origin">The new origin position to set for the transient state.</param>
+    /// <param name="footPosition">The foot position to set for the transient state, or null to leave it unset.</param>
+    /// <param name="rotation">The rotation to apply to the transient state.</param>
+    /// <param name="direction">The direction to set for the transient state, or null to preserve the existing direction.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetTransientState(
         Vector3d origin,
@@ -155,6 +181,7 @@ public struct TrekRequest : IRecordable
         IsRequestingClimb = false;
     }
 
+    /// <inheritdoc/>
     public void RecordData(IChronicler chronicler)
     {
         RecordValues.Look(chronicler, ref Origin, nameof(Origin), Vector3d.Zero);

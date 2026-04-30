@@ -2,6 +2,16 @@
 
 namespace Trailblazer.Pathing;
 
+/// <summary>
+/// Defines an interface for guiding an agent along a sequence of waypoints, providing methods to query and advance
+/// waypoint progression and to determine movement direction.
+/// </summary>
+/// <remarks>
+/// Implementations of this interface are responsible for managing waypoint navigation logic, including
+/// tracking the agent's current position within the waypoint sequence and determining the appropriate direction for
+/// movement. This interface is typically used in pathfinding or navigation systems where agents must follow a
+/// predefined route.
+/// </remarks>
 public interface IWaypointGuide : IGuide
 {
     /// <summary>

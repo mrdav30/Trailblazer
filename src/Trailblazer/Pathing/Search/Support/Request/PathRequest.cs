@@ -3,18 +3,34 @@ using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
+/// <summary>
+/// Represents an abstract base class for a pathfinding request, encapsulating the parameters and
+/// state required to compute a path between two points in a voxel-based environment.
+/// </summary>
+/// <remarks>
+/// PathRequest provides a common interface and shared logic for specifying origins, destinations, and
+/// traversal options for pathfinding operations. 
+/// Derived classes should implement additional behavior as needed for specific pathfinding scenarios. 
+/// Thread safety is not guaranteed; synchronize access if used concurrently.
+/// </remarks>
 public abstract class PathRequest : IPathRequest
 {
+    /// <inheritdoc/>
     public Vector3d Origin { get; protected set; }
 
+    /// <inheritdoc/>
     public Voxel? StartNode { get; protected set; }
 
+    /// <inheritdoc/>
     public Vector3d TargetPosition { get; protected set; }
 
+    /// <inheritdoc/>
     public Voxel? EndNode { get; protected set; }
 
+    /// <inheritdoc/>
     public Fixed64 UnitSize { get; protected set; }
 
+    /// <inheritdoc/>
     public bool AllowUnwalkableEndpoints { get; set; }
 
     /// <summary>
@@ -22,22 +38,30 @@ public abstract class PathRequest : IPathRequest
     /// </summary>
     public bool AllowTraversalTransitions { get; set; }
 
+    /// <inheritdoc/>
     public int MaxPathSearchRange { get; set; }
 
+    /// <inheritdoc/>
     public bool HasOrigin => StartNode != null;
 
+    /// <inheritdoc/>
     public bool HasDestination => EndNode != null;
 
+    /// <inheritdoc/>
     public bool HasValidEndpoints => HasOrigin && HasDestination;
 
+    /// <inheritdoc/>
     public bool IsValid => HasValidEndpoints && MaxPathSearchRange > 0;
 
+    /// <inheritdoc/>
     public bool HasZeroDisplacement =>
         !IsValid
         || StartNode == EndNode;
 
+    /// <inheritdoc/>
     public int RequestCacheKey => GetHashCode();
 
+    /// <inheritdoc/>
     public bool UpdateRequest(
         Vector3d origin,
         Vector3d destination,
@@ -70,6 +94,7 @@ public abstract class PathRequest : IPathRequest
         return true;
     }
 
+    /// <inheritdoc/>
     public bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false)
     {
         if (EndNode == null) return false;
@@ -110,6 +135,7 @@ public abstract class PathRequest : IPathRequest
         return true;
     }
 
+    /// <inheritdoc/>
     public bool TrySetDestination(Vector3d destination, bool resetSearchRange = false)
     {
         if (StartNode == null) return false;
@@ -150,6 +176,7 @@ public abstract class PathRequest : IPathRequest
         return true;
     }
 
+    /// <inheritdoc/>
     public bool TrySetUnitSize(Fixed64 unitSize)
     {
         // no change
@@ -158,5 +185,6 @@ public abstract class PathRequest : IPathRequest
         return UpdateRequest(Origin, TargetPosition, unitSize);
     }
 
+    /// <inheritdoc/>
     public override abstract int GetHashCode();
 }

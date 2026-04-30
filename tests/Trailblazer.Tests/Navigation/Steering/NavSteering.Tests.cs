@@ -1163,7 +1163,7 @@ public class NavSteeringTests : IDisposable
 
         steer.Invoking(s => s.PrewarmMovementGroup(null!))
             .Should().Throw<ArgumentNullException>()
-            .WithParameterName("navigator");
+            .WithParameterName("vessel");
     }
 
     [Fact]

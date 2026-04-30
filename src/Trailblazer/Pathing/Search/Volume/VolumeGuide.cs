@@ -8,14 +8,27 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public sealed class VolumeGuide : IWaypointGuide
 {
+    /// <summary>
+    /// Gets the trail map result for the volume survey, if available.
+    /// </summary>
     public VolumeSurveyResult? TrailMap { get; private set; }
 
+    /// <inheritdoc/>
     public int CurrentWaypointIndex { get; private set; }
 
     private int _lastTriedIndex;
 
+    /// <summary>
+    /// Gets the collection of currently active waypoints used for pathfinding.
+    /// </summary>
+    /// <remarks>Returns an empty array if no trail map is available or if there are no active waypoints.</remarks>
     public AStarWaypoint[] ActiveWaypoints => TrailMap?.Waypoints ?? Array.Empty<AStarWaypoint>();
 
+    /// <summary>
+    /// Initializes the navigation state using the specified survey result.
+    /// </summary>
+    /// <param name="surveyResult">The survey result containing the path and waypoints to initialize navigation. Must have a valid path.</param>
+    /// <returns>true if initialization succeeds and a valid path is present; otherwise, false.</returns>
     public bool Initialize(VolumeSurveyResult surveyResult)
     {
         if (!surveyResult.HasPath)
@@ -28,6 +41,7 @@ public sealed class VolumeGuide : IWaypointGuide
         return true;
     }
 
+    /// <inheritdoc/>
     public int GetIndex(Vector3d from)
     {
         Fixed64 minDistSq = Fixed64.MAX_VALUE;
@@ -48,8 +62,10 @@ public sealed class VolumeGuide : IWaypointGuide
         return bestIndex;
     }
 
+    /// <inheritdoc/>
     public void AdvanceWaypoint() => CurrentWaypointIndex++;
 
+    /// <inheritdoc/>
     public bool TryGetMovementDirection(Vector3d origin, out Vector3d direction)
     {
         direction = Vector3d.Zero;
@@ -65,6 +81,7 @@ public sealed class VolumeGuide : IWaypointGuide
         return true;
     }
 
+    /// <inheritdoc/>
     public Vector3d GetCurrentWaypointDirection(Vector3d origin)
     {
         if (TrailMap == null
@@ -82,6 +99,7 @@ public sealed class VolumeGuide : IWaypointGuide
         return (waypoint - origin).Normal;
     }
 
+    /// <inheritdoc/>
     public bool TryGetFallbackDirection(Vector3d from, out Vector3d fallbackDirection)
     {
         fallbackDirection = Vector3d.Zero;
@@ -111,6 +129,16 @@ public sealed class VolumeGuide : IWaypointGuide
         return true;
     }
 
+    /// <summary>
+    /// Attempts to retrieve the waypoint at the specified index in the active waypoints collection.
+    /// </summary>
+    /// <remarks>Returns false if the trail map is null, does not have a path, or if the index is out of range.</remarks>
+    /// <param name="index">The zero-based index of the waypoint to retrieve. Must be within the bounds of the active waypoints collection.</param>
+    /// <param name="waypoint">
+    /// When this method returns, contains the waypoint at the specified index if the operation succeeds; otherwise, 
+    /// the default value for <see cref="AStarWaypoint"/>.
+    /// </param>
+    /// <returns>true if the waypoint at the specified index was successfully retrieved; otherwise, false.</returns>
     public bool TryGetWaypointAt(int index, out AStarWaypoint waypoint)
     {
         if (TrailMap == null || !TrailMap.HasPath || index < 0 || index >= ActiveWaypoints.Length)

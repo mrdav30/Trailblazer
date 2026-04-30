@@ -3,7 +3,7 @@ using System;
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Describes the installed locomotion modules for a navigator motor.
+/// Describes the installed locomotion modules for a object motor.
 /// </summary>
 public sealed class LocomotionProfile
 {

@@ -48,6 +48,19 @@ public readonly struct TraversalTransition
     /// </summary>
     public bool PreserveClimbIntentOnFollowup { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the TraversalTransition class, representing a transition between two traversal
+    /// anchors with optional path cost and intent modifiers.
+    /// </summary>
+    /// <param name="id">The unique identifier for the transition. Cannot be null or whitespace.</param>
+    /// <param name="type">The type of the transition, indicating how traversal occurs between the source and destination anchors.</param>
+    /// <param name="source">The anchor from which the transition originates.</param>
+    /// <param name="destination">The anchor to which the transition leads.</param>
+    /// <param name="pathCostModifier">An optional value that modifies the traversal path cost for this transition. Defaults to 0.</param>
+    /// <param name="isBidirectional">true if the transition can be traversed in both directions; otherwise, false. Defaults to false.</param>
+    /// <param name="requestsClimbIntent">true if the transition requests a climb intent during traversal; otherwise, false. Defaults to false.</param>
+    /// <param name="preserveClimbIntentOnFollowup">true if climb intent should be preserved on follow-up transitions; otherwise, false. Defaults to false.</param>
+    /// <exception cref="ArgumentException">Thrown if id is null or consists only of whitespace.</exception>
     public TraversalTransition(
         string id,
         TraversalTransitionType type,

@@ -2,6 +2,9 @@ using System;
 
 namespace Trailblazer.Pathing;
 
+/// <summary>
+/// Provides extension methods for debugging and visualizing the layout of a TraversalAuthoringMap.
+/// </summary>
 public static class TraversalAuthoringMapExtensions
 {
     /// <summary>

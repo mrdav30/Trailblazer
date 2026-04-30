@@ -4,7 +4,7 @@ using System.Threading;
 namespace Trailblazer;
 
 /// <summary>
-/// Allocates deterministic navigator ids for the current Trailblazer runtime session.
+/// Allocates deterministic object ids for the current Trailblazer runtime session.
 /// </summary>
 internal static class NavigatorGlobalIdAllocator
 {

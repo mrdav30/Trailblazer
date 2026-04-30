@@ -405,6 +405,11 @@ public class LocomotionHandler : IRecordable
         }
     }
 
+    /// <summary>
+    /// Clears the transient state for the locomotion component of the specified type, if it is enabled.
+    /// </summary>
+    /// <remarks>This method has no effect if the specified locomotion component is not present or is not enabled.</remarks>
+    /// <typeparam name="T">The type of locomotion component for which to clear transient state. Must implement the ILocomotion interface.</typeparam>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ClearTransientState<T>() where T : ILocomotion
     {

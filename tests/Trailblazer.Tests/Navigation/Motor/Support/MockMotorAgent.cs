@@ -168,7 +168,7 @@ public class MockMotorAgent
         if (delta == Vector3d.Zero) return;
 
         _positionDelta += delta;
-        // shift last position so it doesn't alter navigator's velocity
+        // shift last position so it doesn't alter object's velocity
         LastPosition += delta;
     }
 

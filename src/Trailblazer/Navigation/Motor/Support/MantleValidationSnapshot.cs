@@ -23,5 +23,8 @@ public readonly struct MantleValidationSnapshot
         CanContinueMantle = canContinueMantle;
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the mantle action can be continued.
+    /// </summary>
     public bool CanContinueMantle { get; }
 }

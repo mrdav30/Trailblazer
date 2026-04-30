@@ -8,6 +8,8 @@ using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 using Trailblazer.Serialization;
+using SwiftCollections;
+
 
 
 #if DEBUG
@@ -129,7 +131,7 @@ public class NavSteering : IRecordable
     public IGuide? TrailGuide => _trailGuide;
 
     /// <summary>
-    /// Whether the navigator is following a path or guide to the destination.
+    /// Whether the object is following a path or guide to the destination.
     /// </summary>
     public bool ShouldMove { get; protected set; }
 
@@ -270,9 +272,9 @@ public class NavSteering : IRecordable
     #region Constructors
 
     /// <summary>
-    /// Creates a new <see cref="NavSteering"/> instance and initializes it with the provided navigator.
+    /// Creates a new <see cref="NavSteering"/> instance and initializes it with the provided object.
     /// </summary>
-    /// <param name="radius">The radius of the navigator entity that this controller will manage.</param>
+    /// <param name="radius">The radius of the object entity that this controller will manage.</param>
     /// <returns>A new instance of <see cref="NavSteering"/>.</returns>
     public static NavSteering CreateNew(Fixed64 radius) => new(radius);
 
@@ -284,7 +286,7 @@ public class NavSteering : IRecordable
     /// <summary>
     /// Initializes a new instance of the <see cref="NavSteering"/> class.
     /// </summary>
-    /// <param name="radius">The radius of the navigator entity that this controller will manage.</param>
+    /// <param name="radius">The radius of the object entity that this controller will manage.</param>
     public NavSteering(Fixed64 radius) => OnInitialize(radius);
 
     #endregion
@@ -325,7 +327,7 @@ public class NavSteering : IRecordable
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between nearby members.</param>
     public virtual void ApplyPathRequest(IPathRequest? pathRequest, int groupId = -1)
     {
-        // assume the navigator is being controlled
+        // assume the object is being controlled
         if (pathRequest == null || !pathRequest.HasValidEndpoints)
         {
             GridForgeLogger.Warn($"Invalid path request applied: {pathRequest}");
@@ -414,20 +416,19 @@ public class NavSteering : IRecordable
     /// before the next simulation frame. If it is skipped, grouped steering will still recover lazily
     /// during <see cref="GetHeading(ISteer)"/>.
     /// </remarks>
-    /// <param name="navigator">The current steering owner whose position, radius, and stable id should seed the coordinator.</param>
-    public void PrewarmMovementGroup(ISteer navigator)
+    /// <param name="vessel">The current steering owner whose position, radius, and stable id should seed the coordinator.</param>
+    public void PrewarmMovementGroup(ISteer vessel)
     {
-        if (navigator == null)
-            throw new ArgumentNullException(nameof(navigator));
+        SwiftThrowHelper.ThrowIfNull(vessel, nameof(vessel));
 
         if (!ShouldMove || !IsInGroup || _currentRequest == null)
             return;
 
         MovementGroupCoordinator.Prewarm(
             _movementGroupSession,
-            navigator.GlobalId,
+            vessel.GlobalId,
             _requestedDestination,
-            navigator.Position,
+            vessel.Position,
             _agentRadius);
     }
 
@@ -436,7 +437,7 @@ public class NavSteering : IRecordable
     #region Simulation Lifecycle
 
     /// <summary>
-    /// Initializes the navigator by setting up its defaults, events, traversal state, and movement controller.
+    /// Initializes the object by setting up its defaults, events, traversal state, and movement controller.
     /// </summary>
     protected virtual void OnInitialize(Fixed64 radius)
     {
@@ -480,33 +481,33 @@ public class NavSteering : IRecordable
     /// <summary>
     /// Called every simulation step to handle agent steering and movement logic.
     /// </summary>
-    public virtual Vector3d GetHeading(ISteer navigator)
+    public virtual Vector3d GetHeading(ISteer vessel)
     {
-        CacheOwner(navigator);
+        CacheOwner(vessel);
 
         if (!CanMove)
             return Vector3d.Zero;
 
         if (!ShouldMove || IsAtDestination)
-            return FinalizeIdleHeading(navigator.Speed);
+            return FinalizeIdleHeading(vessel.Speed);
 
         if (!TryEnsureCurrentRequest(out Vector3d heading))
             return heading;
 
         bool usesVolumeGuidance = UsesVolumeGuidance();
-        UpdateMovementGroupState(navigator.Position);
+        UpdateMovementGroupState(vessel.Position);
 
-        if (!TryPrepareMovementPathForHeading(navigator.Position, usesVolumeGuidance))
+        if (!TryPrepareMovementPathForHeading(vessel.Position, usesVolumeGuidance))
             return Vector3d.Zero;
 
-        UpdateTargetDirection(navigator);
+        UpdateTargetDirection(vessel);
         if (ShouldArriveWithoutTrailGuide())
         {
             Arrive();
             return Vector3d.Zero;
         }
 
-        if (!CheckStuckStatus(navigator.Position, navigator.Speed, navigator.StuckThresholdSpeed))
+        if (!CheckStuckStatus(vessel.Position, vessel.Speed, vessel.StuckThresholdSpeed))
         {
 #if DEBUG
             Debug.WriteLine("Stuck agent arriving!");
@@ -515,7 +516,7 @@ public class NavSteering : IRecordable
             return Vector3d.Zero;
         }
 
-        UpdateTrailGuideProgress(navigator.Acceleration, navigator.Speed);
+        UpdateTrailGuideProgress(vessel.Acceleration, vessel.Speed);
         return FinalizeHeadingFrame();
     }
 
@@ -757,16 +758,16 @@ public class NavSteering : IRecordable
         Arrive();
     }
 
-    private void UpdateTargetDirection(ISteer navigator)
+    private void UpdateTargetDirection(ISteer vessel)
     {
         LastTargetDirection = TargetDirection;
-        TargetDirection = FindTargetDirection(navigator.Position);
+        TargetDirection = FindTargetDirection(vessel.Position);
         TargetDirection += ComputeCombinedSteering(
-            navigator.Position,
-            navigator.Velocity,
-            navigator.Speed,
-            navigator.Radius,
-            navigator.GlobalId);
+            vessel.Position,
+            vessel.Velocity,
+            vessel.Speed,
+            vessel.Radius,
+            vessel.GlobalId);
     }
 
     private bool ShouldArriveWithoutTrailGuide()
@@ -1075,8 +1076,8 @@ public class NavSteering : IRecordable
 
     #region Movement Groups
 
-    private void CacheOwner(ISteer navigator) =>
-        MovementGroupCoordinator.CacheOwner(_movementGroupSession, navigator.GlobalId);
+    private void CacheOwner(ISteer vessel) =>
+        MovementGroupCoordinator.CacheOwner(_movementGroupSession, vessel.GlobalId);
 
     private void UpdateMovementGroupState(Vector3d position, bool resetFormationOffset = false)
     {

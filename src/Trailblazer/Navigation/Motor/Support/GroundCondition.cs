@@ -30,6 +30,15 @@ public struct GroundCondition : IRecordable
     /// </summary>
     public readonly Vector3d GroundNormal => Platform.Active ? Platform.Transform.Up : Vector3d.Zero;
 
+    /// <summary>
+    /// Creates a new GroundCondition instance that is a copy of the current instance.
+    /// </summary>
+    /// <remarks>
+    /// The returned object is a shallow copy. Reference-type properties are not deeply cloned.
+    /// </remarks>
+    /// <returns>
+    /// A new GroundCondition object with the same Platform, SurfaceFriction, and MotionTransferState values as the current instance.
+    /// </returns>
     public GroundCondition Clone() => new()
     {
         Platform = Platform,
@@ -37,6 +46,7 @@ public struct GroundCondition : IRecordable
         MotionTransferState = MotionTransferState
     };
 
+    /// <inheritdoc/>
     public void RecordData(IChronicler chronicler)
     {
         chronicler.LookDeepStruct(ref Platform, nameof(Platform));

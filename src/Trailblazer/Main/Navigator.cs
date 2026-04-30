@@ -14,7 +14,7 @@ using Trailblazer.Pathing;
 namespace Trailblazer;
 
 /// <summary>
-/// Base class representing a navigator, responsible for handling movement, traversal state, and simulation flow.
+/// Base class representing a object, responsible for handling movement, traversal state, and simulation flow.
 /// </summary>
 /// <remarks>
 /// This class acts as a bridge between the simulation logic and the entity's external representation.  
@@ -26,7 +26,7 @@ public abstract class Navigator : INavigate, IRecordable
     #region Constants
 
     /// <summary>
-    /// Default vertical offset used to determine the navigator’s contact point with the ground.
+    /// Default vertical offset used to determine the object’s contact point with the ground.
     /// </summary>
     public static readonly Fixed64 DefaultFootPositionAdjust = new(0.25f);
 
@@ -70,10 +70,19 @@ public abstract class Navigator : INavigate, IRecordable
     /// </summary>
     protected Vector3d _velocityDelta;
 
+    /// <summary>
+    /// Indicates whether the Navigator has been set.
+    /// </summary>
     protected bool _isSet;
 
+    /// <summary>
+    /// Indicates whether the Navigator has been initialized.
+    /// </summary>
     protected bool _isInitialized;
 
+    /// <summary>
+    /// Indicates whether the Navigator is currently active and ready for simulation.
+    /// </summary>
     public bool IsActive => _isSet && _isInitialized;
 
     #endregion
@@ -81,22 +90,22 @@ public abstract class Navigator : INavigate, IRecordable
     #region State - Traversal / Steering
 
     /// <summary>
-    /// The controller responsible for managing the navigator's desired movement direction.
+    /// The controller responsible for managing the object's desired movement direction.
     /// </summary>
     public NavSteering? Steering { get; protected set; }
 
     /// <summary>
-    /// The controller responsible for managing the navigator's rotation towards the movement direction.
+    /// The controller responsible for managing the object's rotation towards the movement direction.
     /// </summary>
     public NavTurning? Turning { get; protected set; }
 
     /// <summary>
-    /// The controller responsible for managing the navigator's movement and physics interactions.
+    /// The controller responsible for managing the object's movement and physics interactions.
     /// </summary>
     public NavMotor? Motor { get; protected set; }
 
     /// <summary>
-    /// Minimum velocity threshold used to determine if the navigator is considered stuck.
+    /// Minimum velocity threshold used to determine if the object is considered stuck.
     /// </summary>
     public Fixed64 StuckThresholdSpeed { get; protected set; }
 
@@ -140,28 +149,28 @@ public abstract class Navigator : INavigate, IRecordable
     public GuidedPathMode GuidedPathMode { get; set; } = GuidedPathMode.AStar;
 
     /// <summary>
-    /// Whether navigator-built guided requests may target unwalkable voxels.
+    /// Whether object-built guided requests may target unwalkable voxels.
     /// </summary>
     public bool GuidedAllowUnwalkableEndpoints { get; set; }
 
     /// <summary>
-    /// Whether navigator-built guided requests may use authored traversal transitions for chart fallback,
+    /// Whether object-built guided requests may use authored traversal transitions for chart fallback,
     /// bounded swim exits, or bounded aerial landing handoffs.
     /// </summary>
     public bool GuidedAllowTraversalTransitions { get; set; }
 
     /// <summary>
-    /// Default max climb height used when the navigator builds guided requests.
+    /// Default max climb height used when the object builds guided requests.
     /// </summary>
     public Fixed64 GuidedMaxClimbHeight { get; set; } = Fixed64.One;
 
     /// <summary>
-    /// Default heuristic used when the navigator builds A* requests.
+    /// Default heuristic used when the object builds A* requests.
     /// </summary>
     public HeuristicMethod GuidedAStarHeuristic { get; set; } = HeuristicMethod.Manhattan;
 
     /// <summary>
-    /// Default extra flood range used when the navigator builds flow-field requests.
+    /// Default extra flood range used when the object builds flow-field requests.
     /// </summary>
     public int GuidedFlowFieldExtraFloodRange { get; set; } = FlowFieldPathRequest.DefaultExtraFloodRange;
 
@@ -173,7 +182,7 @@ public abstract class Navigator : INavigate, IRecordable
     /// Stable runtime identity used for occupancy and steering coordination.
     /// </summary>
     /// <remarks>
-    /// By default this is allocated deterministically from navigator setup order.
+    /// By default this is allocated deterministically from object setup order.
     /// Hosts can override it during <see cref="Setup(Vector3d, FixedQuaternion?, Vector3d?, Fixed64?, Guid?)"/>
     /// when a broader simulation stack already owns stable agent ids.
     /// </remarks>
@@ -224,7 +233,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Sets the initial configuration of the navigator, including position, rotation, velocity, size, and optional stable identity.
+    /// Sets the initial configuration of the object, including position, rotation, velocity, size, and optional stable identity.
     /// </summary>
     /// <param name="position">Initial world-space position.</param>
     /// <param name="rotation">Optional starting rotation.</param>
@@ -256,7 +265,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Initializes the navigator by setting up its defaults, events, traversal state, and movement controller.
+    /// Initializes the object by setting up its defaults, events, traversal state, and movement controller.
     /// </summary>
     public virtual void Initialize(TrekCondition condition)
     {
@@ -275,10 +284,10 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Creates the locomotion profile used when this navigator initializes its motor.
+    /// Creates the locomotion profile used when this object initializes its motor.
     /// </summary>
     /// <remarks>
-    /// Override this to install a smaller or custom locomotion set per navigator type while preserving
+    /// Override this to install a smaller or custom locomotion set per object type while preserving
     /// the default profile for callers that do not opt in.
     /// </remarks>
     protected virtual LocomotionProfile CreateLocomotionProfile()
@@ -315,7 +324,7 @@ public abstract class Navigator : INavigate, IRecordable
     #region Host Bindings
 
     /// <summary>
-    /// Binds a host-owned animation handler to this navigator.
+    /// Binds a host-owned animation handler to this object.
     /// </summary>
     public virtual void BindAnimationHandler(INavAnimationHandler handler)
     {
@@ -329,11 +338,11 @@ public abstract class Navigator : INavigate, IRecordable
     public virtual void UnbindAnimationHandler() => _animationHandler = null;
 
     /// <summary>
-    /// Prewarms the steering movement-group coordinator from this navigator's currently loaded state.
+    /// Prewarms the steering movement-group coordinator from this object's currently loaded state.
     /// </summary>
     /// <remarks>
     /// This is primarily useful after loading several grouped navigators through Chronicler. Call it once
-    /// for each loaded navigator before the next simulation frame if you want movement-group formation state
+    /// for each loaded object before the next simulation frame if you want movement-group formation state
     /// available immediately. If it is skipped, grouped steering will still rejoin lazily on the next update.
     /// </remarks>
     public virtual void PrewarmMovementGroup()
@@ -384,13 +393,13 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Constructs and applies a guided traversal request toward a destination using navigator-owned path request defaults.
+    /// Constructs and applies a guided traversal request toward a destination using object-owned path request defaults.
     /// </summary>
     /// <param name="targetPosition">The desired world-space target position.</param>
     /// <param name="pathMode">Optional override for the built-in path request mode. When omitted, <see cref="GuidedPathMode"/> is used.</param>
     /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
-    /// <param name="isRequestingJump">Whether the navigator intends to jump during traversal.</param>
-    /// <param name="isRequestingClimb">Whether the navigator intends to preserve climb engagement while guided travel is active.</param>
+    /// <param name="isRequestingJump">Whether the object intends to jump during traversal.</param>
+    /// <param name="isRequestingClimb">Whether the object intends to preserve climb engagement while guided travel is active.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between navigators.</param>
     /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
     public virtual void ApplyGuidedTrekRequest(
@@ -408,7 +417,7 @@ public abstract class Navigator : INavigate, IRecordable
         if (!TryCreateGuidedPathRequest(targetPosition, selectedPathMode, out IPathRequest pathRequest))
         {
             GridForgeLogger.Warn(
-                $"Unable to create a {selectedPathMode} path request for navigator {GlobalId} at {Position} targeting {targetPosition}.");
+                $"Unable to create a {selectedPathMode} path request for object {GlobalId} at {Position} targeting {targetPosition}.");
             return;
         }
 
@@ -437,7 +446,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Builds a concrete path request for guided travel from the navigator's current state and defaults.
+    /// Builds a concrete path request for guided travel from the object's current state and defaults.
     /// Subclasses can override this to support custom request types without changing steering.
     /// </summary>
     protected virtual bool TryCreateGuidedPathRequest(
@@ -502,7 +511,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Changes the speed at which the navigator is currently traveling without altering direction.
+    /// Changes the speed at which the object is currently traveling without altering direction.
     /// </summary>
     /// <param name="rate">New traversal rate to apply (walk, run, etc.).</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -513,7 +522,7 @@ public abstract class Navigator : INavigate, IRecordable
     #region Simulation Lifecycle
 
     /// <summary>
-    /// Attempts to resolve the direction the navigator should try to face for the current frame.
+    /// Attempts to resolve the direction the object should try to face for the current frame.
     /// </summary>
     protected virtual bool TryGetTurnDirection(TrekRequest request, out Vector3d turnDirection)
     {
@@ -539,7 +548,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Runs simulation logic for this navigator (input handling, steering, etc.).
+    /// Runs simulation logic for this object (input handling, steering, etc.).
     /// </summary>
     public virtual void Simulate()
     {
@@ -634,7 +643,7 @@ public abstract class Navigator : INavigate, IRecordable
 
         Motor!.FinalizeTraversal(Position, LastPosition, Rotation, _frameCondition, newFootPosition: GetFootPosition());
 
-        // If the navigator is currently following a guided path, 
+        // If the object is currently following a guided path, 
         // reset only the transient request state to preserve path-following values.
         if (IsGuideded)
             _frameRequest.ResetTransient();
@@ -643,7 +652,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Notifies the navigator that a collision occurred so collision-driven subsystem responses can run on the next simulation step.
+    /// Notifies the object that a collision occurred so collision-driven subsystem responses can run on the next simulation step.
     /// </summary>
     public virtual void NotifyCollision()
     {
@@ -657,7 +666,7 @@ public abstract class Navigator : INavigate, IRecordable
     #region Traversal Condition Management
 
     /// <summary>
-    /// Updates the navigator to a grounded state using a sampled surface snapshot.
+    /// Updates the object to a grounded state using a sampled surface snapshot.
     /// </summary>
     public virtual void SetGroundContact(
         Fixed64 surfaceLevel,
@@ -675,7 +684,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Updates the navigator to a grounded state using a host-provided platform snapshot plus surface settings.
+    /// Updates the object to a grounded state using a host-provided platform snapshot plus surface settings.
     /// Inert snapshots still describe the contacted surface but opt out of moving-platform carry logic.
     /// </summary>
     public virtual void SetGroundContact(
@@ -699,7 +708,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Updates the navigator to an airborne state while preserving the last known ground condition unless an override is provided.
+    /// Updates the object to an airborne state while preserving the last known ground condition unless an override is provided.
     /// </summary>
     public virtual void SetAirborne(
         Fixed64? surfaceLevel = null,
@@ -717,7 +726,7 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     /// <summary>
-    /// Updates the navigator to a water-contact state and clears any grounded platform contact.
+    /// Updates the object to a water-contact state and clears any grounded platform contact.
     /// </summary>
     public virtual void SetWaterContact(
         Fixed64 surfaceLevel,
@@ -834,7 +843,7 @@ public abstract class Navigator : INavigate, IRecordable
         if (delta == Vector3d.Zero) return;
 
         _positionDelta += delta;
-        // shift last position so it doesn't alter navigator's velocity
+        // shift last position so it doesn't alter object's velocity
         LastPosition += delta;
     }
 
@@ -1002,12 +1011,12 @@ public abstract class Navigator : INavigate, IRecordable
     #region Occupancy Mangement
 
     /// <summary>
-    /// Checks and updates the occupancy status of the current and previous voxels based on the navigator's position.
+    /// Checks and updates the occupancy status of the current and previous voxels based on the object's position.
     /// </summary>
     /// <remarks>
-    /// This method ensures that the navigator is registered as an occupant in the correct voxel and
+    /// This method ensures that the object is registered as an occupant in the correct voxel and
     /// removed from the previous voxel if the position has changed. 
-    /// It should be called whenever the navigator's position may have changed to maintain accurate occupancy tracking.
+    /// It should be called whenever the object's position may have changed to maintain accurate occupancy tracking.
     /// </remarks>
     /// <param name="init">Indicates whether the occupancy check is being performed during initialization. 
     /// If set to <see langword="true"/>, the check is performed regardless of position changes.

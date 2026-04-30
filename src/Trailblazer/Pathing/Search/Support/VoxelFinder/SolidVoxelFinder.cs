@@ -11,7 +11,9 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public static class SolidVoxelFinder
 {
-    // set to the highest height or width valu1e of any game object
+    /// <summary>
+    /// Specifies the maximum allowable test distance.
+    /// </summary>
     public const int MaxTestDistance = 3;
 
     /// <summary>
@@ -260,9 +262,9 @@ public static class SolidVoxelFinder
     {
         targetVoxel = null;
 
-        AlternativeVoxelFinder.Instance.SetQuery(target, directVoxel, MaxTestDistance);
+        AlternativeVoxelFinder.Shared.SetQuery(target, directVoxel, MaxTestDistance);
 
-        if (!AlternativeVoxelFinder.Instance.GetVoxel(out Voxel? candidateVoxel)
+        if (!AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? candidateVoxel)
             || candidateVoxel == null)
             return false;
 

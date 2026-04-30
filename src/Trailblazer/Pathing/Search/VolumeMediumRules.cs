@@ -17,6 +17,12 @@ namespace Trailblazer.Pathing;
 /// </remarks>
 public static class VolumeMediumRules
 {
+    /// <summary>
+    /// Represents a method that defines a rule to evaluate a voxel and 
+    /// determine whether it satisfies specific criteria.
+    /// </summary>
+    /// <param name="voxel">The voxel to evaluate against the rule.</param>
+    /// <returns>true if the voxel meets the criteria defined by the rule; otherwise, false.</returns>
     public delegate bool VoxelRule(Voxel voxel);
 
     private static VoxelRule? _gasVoxelRule;

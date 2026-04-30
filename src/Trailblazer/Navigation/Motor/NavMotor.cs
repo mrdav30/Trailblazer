@@ -4,6 +4,7 @@ using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
 
+// TODO: replace this with a proper logging system that can be enabled/disabled based on build configuration or runtime settings.
 #if DEBUG
 using System.Diagnostics;
 #endif
@@ -27,6 +28,7 @@ public class NavMotor : IRecordable
     /// </summary>
     public LocomotionHandler Handler = new();
 
+    /// <inheritdoc cref="NavMotorEvents"/>
     [NonSerialized]
     public NavMotorEvents Events = new();
 
@@ -51,6 +53,9 @@ public class NavMotor : IRecordable
     /// </summary>
     public bool TraversalInProgress { get; private set; }
 
+    /// <summary>
+    /// Gets a value indicating whether the object has been initialized.
+    /// </summary>
     public bool IsInitialized { get; private set; }
 
     private PlatformLocomotion? PlatformModule => Handler.Platform;
@@ -94,54 +99,57 @@ public class NavMotor : IRecordable
         && CurrentState.PreviousMedium != TraversalMedium.Unknown;
 
     /// <summary>
-    /// Determines if the navigator is currently on the ground.
+    /// Determines if the object is currently on the ground.
     /// </summary>
     public bool IsOnSolid => CurrentState.Medium == TraversalMedium.Solid;
 
     /// <summary>
-    /// Determines if the navigator was on the ground in the previous frame.
+    /// Determines if the object was on the ground in the previous frame.
     /// </summary>
     public bool WasOnSolid => CurrentState.PreviousMedium == TraversalMedium.Solid;
 
     /// <summary>
-    /// Determines if the navigator is currently in the air.
+    /// Determines if the object is currently in the air.
     /// </summary>
     public bool IsInGas => CurrentState.Medium == TraversalMedium.Gas;
 
     /// <summary>
-    /// Determines if the navigator was in the air in the previous frame.
+    /// Determines if the object was in the air in the previous frame.
     /// </summary>
     public bool WasInGas => CurrentState.PreviousMedium == TraversalMedium.Gas;
 
     /// <summary>
-    /// Determines if the navigator is currently in water.
+    /// Determines if the object is currently in water.
     /// </summary>
     public bool IsInLiquid => CurrentState.Medium == TraversalMedium.Liquid;
 
     /// <summary>
-    /// Determines if the navigator was in water in the previous frame.
+    /// Determines if the object was in water in the previous frame.
     /// </summary>
     public bool WasInLiquid => CurrentState.PreviousMedium == TraversalMedium.Liquid;
 
     /// <summary>
-    /// Determines if the navigator is currently under active flight control.
+    /// Determines if the object is currently under active flight control.
     /// </summary>
     public bool IsFlying => FlyModule?.IsFlying == true;
 
     /// <summary>
-    /// Determines if the navigator is currently in a jump state.
+    /// Determines if the object is currently in a jump state.
     /// </summary>
     public bool IsJumping => JumpModule?.IsJumping == true;
 
+    /// <summary>
+    /// Gets a value indicating whether the object is currently falling.
+    /// </summary>
     public bool IsFalling => Handler.Fall.IsFalling;
 
     /// <summary>
-    /// Determines if the navigator is currently attached to a climb affordance.
+    /// Determines if the object is currently attached to a climb affordance.
     /// </summary>
     public bool IsClimbing => ClimbModule?.IsClimbing == true;
 
     /// <summary>
-    /// Checks if the navigator is in a state where it is airborne but not actively jumping, flying, or falling.
+    /// Checks if the object is in a state where it is airborne but not actively jumping, flying, or falling.
     /// </summary>
     public bool InLimbo => !IsOnSolid && !IsInGas && !IsInLiquid
         || IsInGas && !IsFlying && !IsJumping && !IsFalling && !IsClimbing;
@@ -153,9 +161,9 @@ public class NavMotor : IRecordable
     #region Construct
 
     /// <summary>
-    /// Creates a new <see cref="NavMotor"/> instance and initializes it with the provided navigator.
+    /// Creates a new <see cref="NavMotor"/> instance and initializes it with the provided object.
     /// </summary>
-    /// <param name="initialCondition">The initial traversal condition of the navigator</param>
+    /// <param name="initialCondition">The initial traversal condition of the object</param>
     /// <param name="profile">Optional locomotion composition profile. When omitted, the default profile is used.</param>
     /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
     public static NavMotor CreateNew(TrekCondition initialCondition, LocomotionProfile? profile = null) => new(initialCondition, profile);
@@ -166,14 +174,14 @@ public class NavMotor : IRecordable
     /// <summary>
     /// Initializes a new instance of the <see cref="NavMotor"/> class.
     /// </summary>
-    /// <param name="condition">The initial traversal condition of the navigator</param>
+    /// <param name="condition">The initial traversal condition of the object</param>
     /// <param name="profile">Optional locomotion composition profile. When omitted, the default profile is used.</param>
     public NavMotor(TrekCondition condition, LocomotionProfile? profile = null) => OnInitialize(condition, profile);
 
     /// <summary>
-    /// Prepares the controller by linking it to the given navigator and setting initial state values.
+    /// Prepares the controller by linking it to the given object and setting initial state values.
     /// </summary>
-    /// <param name="condition">The initial traversal condition of the navigator</param>
+    /// <param name="condition">The initial traversal condition of the object</param>
     /// <param name="profile">Optional locomotion composition profile. When omitted, the default profile is used.</param>
     public void OnInitialize(TrekCondition condition, LocomotionProfile? profile = null)
     {
@@ -226,9 +234,9 @@ public class NavMotor : IRecordable
     /// Movement forces such as gravity, jump, and platform adjustments are applied.
     /// </remarks>
     /// <param name="request">The movement request containing desired movement parameters</param>
-    /// <param name="velocityDelta">The resulting velocity change to apply to the navigator</param>
-    /// <param name="positionDelta">The resulting position change from platform movement to apply to the navigator</param>
-    /// <param name="rotationDelta">The resulting rotation change from platform movement to apply to the navigator</param>
+    /// <param name="velocityDelta">The resulting velocity change to apply to the object</param>
+    /// <param name="positionDelta">The resulting position change from platform movement to apply to the object</param>
+    /// <param name="rotationDelta">The resulting rotation change from platform movement to apply to the object</param>
     public bool TryTraversal(
         TrekRequest request,
         out Vector3d velocityDelta,
@@ -355,10 +363,10 @@ public class NavMotor : IRecordable
     }
 
     /// <summary>
-    /// Computes the movement forces based on the traversal state and applies them to the navigator.
+    /// Computes the movement forces based on the traversal state and applies them to the object.
     /// </summary>
     /// <remarks>
-    /// This method determines whether the navigator is in control, calculates velocity adjustments,
+    /// This method determines whether the object is in control, calculates velocity adjustments,
     /// and applies constraints such as slope resistance and airborne drag.
     /// </remarks>
     private void ComputeMovementForces(TrekRequest frameRequest)
@@ -381,7 +389,7 @@ public class NavMotor : IRecordable
     /// <summary>
     /// Determines the desired velocity based on input direction, movement constraints, and traversal state.
     /// </summary>
-    /// <returns>The computed velocity vector that the navigator should move toward.</returns>
+    /// <returns>The computed velocity vector that the object should move toward.</returns>
     private Vector3d GetDesiredVelocity(TrekRequest frameRequest)
     {
         if (IsFlying)
@@ -471,9 +479,9 @@ public class NavMotor : IRecordable
     }
 
     /// <summary>
-    /// Retrieves the maximum acceleration value based on the navigator’s current traversal state.
+    /// Retrieves the maximum acceleration value based on the object’s current traversal state.
     /// </summary>
-    /// <returns>The acceleration limit depending on whether the navigator is grounded, airborne, or swimming.</returns>
+    /// <returns>The acceleration limit depending on whether the object is grounded, airborne, or swimming.</returns>
     public Fixed64 GetMaxAcceleration()
     {
         if (CurrentState == null)
@@ -574,11 +582,11 @@ public class NavMotor : IRecordable
     }
 
     /// <summary>
-    /// Applies an instantaneous jump force to the navigator, considering platform inertia and jump physics.
+    /// Applies an instantaneous jump force to the object, considering platform inertia and jump physics.
     /// </summary>
     /// <remarks>
     /// This method validates jump conditions, determines the jump direction, and calculates the jump force.
-    /// If the navigator is on a platform, its velocity is adjusted accordingly.
+    /// If the object is on a platform, its velocity is adjusted accordingly.
     /// </remarks>
     private void ApplyJumpForce(TrekRequest request)
     {
@@ -695,7 +703,7 @@ public class NavMotor : IRecordable
     #region Phase 2 - Finalize 
 
     /// <summary>
-    /// Finalizes traversal state updates and prepares the navigator for the next simulation frame.
+    /// Finalizes traversal state updates and prepares the object for the next simulation frame.
     /// </summary>
     /// <remarks>
     /// This method updates the frame velocity, applies necessary adjustments based on traversal state changes,
@@ -884,18 +892,18 @@ public class NavMotor : IRecordable
         if (WasInGas && IsOnSolid)
         {
             if (PlatformModule.IsNewPlatform)
-                // If navigator landed on a new platform, we have to wait for two frames
-                // before we know the new velocity of the platform under the navigator
+                // If object landed on a new platform, we have to wait for two frames
+                // before we know the new velocity of the platform under the object
                 PlatformModule.SetHoldPlatform(PlatformModule.ActivePlatform);
             else
-                // If the platform isn’t new, we assume the navigator landed back on the same platform
+                // If the platform isn’t new, we assume the object landed back on the same platform
                 // and subtract platform velocity to prevent doubling the effect.
                 Handler.Move.FrameVelocity -= PlatformModule.PlatformVelocity;
         }
     }
 
     /// <summary>
-    /// Manages the navigator's state when entering, exiting, or moving within water.
+    /// Manages the object's state when entering, exiting, or moving within water.
     /// </summary>
     /// <remarks>
     /// This method updates swim-related properties, tracks dive time, and triggers drowning events if necessary.
@@ -947,10 +955,10 @@ public class NavMotor : IRecordable
     }
 
     /// <summary>
-    /// Processes the navigator’s fall state, tracking fall height and triggering landing events when appropriate.
+    /// Processes the object’s fall state, tracking fall height and triggering landing events when appropriate.
     /// </summary>
     /// <remarks>
-    /// This method determines when a navigator starts falling, updates fall height, and detects when a safe landing occurs.
+    /// This method determines when a object starts falling, updates fall height, and detects when a safe landing occurs.
     /// </remarks>
     private void HandleFallState(Vector3d position)
     {
@@ -1607,9 +1615,9 @@ public class NavMotor : IRecordable
     }
 
     /// <summary>
-    /// Checks if the navigator is on a sloped surface that is not considered too steep.
+    /// Checks if the object is on a sloped surface that is not considered too steep.
     /// </summary>
-    /// <returns>True if the navigator is on a valid slope; otherwise, false.</returns>
+    /// <returns>True if the object is on a valid slope; otherwise, false.</returns>
     public bool IsOnSlope(Fixed64 angle)
     {
         if (!IsOnSolid) return false;
@@ -1619,9 +1627,9 @@ public class NavMotor : IRecordable
     }
 
     /// <summary>
-    /// Manually sets the navigator’s velocity, overriding the computed velocity for the next frame.
+    /// Manually sets the object’s velocity, overriding the computed velocity for the next frame.
     /// </summary>
-    /// <param name="velocity">The new velocity to assign to the navigator.</param>
+    /// <param name="velocity">The new velocity to assign to the object.</param>
     public void SetVelocity(Vector3d velocity)
     {
         Handler.Move.FrameVelocity = velocity;

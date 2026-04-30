@@ -32,6 +32,9 @@ public struct TrekCondition : IRecordable
     /// </summary>
     public GroundCondition? GroundState;
 
+    /// <summary>
+    /// Initializes a new instance of the TrekCondition class.
+    /// </summary>
     public TrekCondition() { }
 
     /// <summary>
@@ -57,6 +60,7 @@ public struct TrekCondition : IRecordable
         CeilingLevel = Fixed64.MAX_VALUE;
     }
 
+    /// <inheritdoc/>
     public void RecordData(IChronicler chronicler)
     {
         RecordValues.Look(chronicler, ref Medium, nameof(Medium), TraversalMedium.Unknown);

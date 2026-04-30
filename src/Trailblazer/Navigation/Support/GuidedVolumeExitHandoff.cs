@@ -5,7 +5,7 @@ using Trailblazer.Pathing;
 namespace Trailblazer.Navigation;
 
 /// <summary>
-/// Stores the follow-up chart-backed leg for a navigator-owned volume exit handoff.
+/// Stores the follow-up chart-backed leg for a object-owned volume exit handoff.
 /// </summary>
 internal sealed class GuidedVolumeExitHandoff : IRecordable
 {

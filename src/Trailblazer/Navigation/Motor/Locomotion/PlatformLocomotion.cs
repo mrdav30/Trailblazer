@@ -127,10 +127,19 @@ public class PlatformLocomotion : ILocomotion
     [Transient]
     public int HoldPlatformFrames { get; private set; }
 
+    /// <summary>
+    /// Gets a value indicating whether the component is currently active and supports kinematic motion.
+    /// </summary>
     public bool IsActive => IsEnabled && ActivePlatform?.SupportsKinematicMotion == true;
 
+    /// <summary>
+    /// Gets a value indicating whether the object is permanently locked to the platform.
+    /// </summary>
     public bool IsLockedToPlatform => MovementTransfer == MotionTransfer.PermaLocked;
 
+    /// <summary>
+    /// Gets a value indicating whether the current object is holding a platform that supports kinematic motion.
+    /// </summary>
     public bool IsHoldingPlatform => IsEnabled && HoldPlatform?.SupportsKinematicMotion == true;
 
     /// <summary>
@@ -172,10 +181,10 @@ public class PlatformLocomotion : ILocomotion
     }
 
     /// <summary>
-    /// Applies movement adjustments due to platform motion, ensuring the navigator inherits platform movement correctly.
+    /// Applies movement adjustments due to platform motion, ensuring the object inherits platform movement correctly.
     /// </summary>
     /// <remarks>
-    /// This method updates the navigator’s position and rotation based on the platform’s transform,
+    /// This method updates the object’s position and rotation based on the platform’s transform,
     /// preventing unwanted movement shifts when transitioning between platforms.
     /// </remarks>
     public void GetPlatformInfluence(
@@ -229,7 +238,15 @@ public class PlatformLocomotion : ILocomotion
         return false;
     }
 
-
+    /// <summary>
+    /// Handles changes in the platform state based on the specified ground condition. Updates platform-related movement and state accordingly.
+    /// </summary>
+    /// <remarks>
+    /// This method should be called whenever the underlying platform or ground condition changes,
+    /// such as when stepping onto a new platform or leaving one. 
+    /// It resets and updates platform movement and transfer state as needed.
+    /// </remarks>
+    /// <param name="condition">The ground condition representing the current platform state. May be null if there is no platform contact.</param>
     public void HandlePlatformChange(GroundCondition? condition)
     {
         // If we hit a new platform, reset platform state
@@ -249,10 +266,10 @@ public class PlatformLocomotion : ILocomotion
     }
 
     /// <summary>
-    /// Determines if the navigator has transitioned onto a different platform.
+    /// Determines if the object has transitioned onto a different platform.
     /// </summary>
     /// <param name="newPlatform"></param>
-    /// <returns>True if the navigator is on a new platform; otherwise, false.</returns>
+    /// <returns>True if the object is on a new platform; otherwise, false.</returns>
     private bool DidPlatformChange(PlatformSnapshot? newPlatform) => ActivePlatform != newPlatform;
 
     private static PlatformSnapshot? NormalizeKinematicPlatform(PlatformSnapshot? platform)
@@ -311,7 +328,7 @@ public class PlatformLocomotion : ILocomotion
     }
 
     /// <summary>
-    /// Updates platform movement by synchronizing the navigator's position and rotation with the platform it is standing on.
+    /// Updates platform movement by synchronizing the object's position and rotation with the platform it is standing on.
     /// </summary>
     /// <remarks>
     /// This method prevents unwanted movement shifts when transitioning between platforms, ensuring smooth locomotion.

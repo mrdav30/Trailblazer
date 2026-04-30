@@ -4,7 +4,7 @@ using FixedMathSharp;
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Holds the gravity and terminal velocity forces applied to a navigator, with support for per-instance overrides and global defaults.
+/// Holds the gravity and terminal velocity forces applied to a object, with support for per-instance overrides and global defaults.
 /// </summary>
 public sealed class LocomotionForces : IRecordable
 {
@@ -13,7 +13,7 @@ public sealed class LocomotionForces : IRecordable
     /// that do not carry a per-instance override.
     /// </summary>
     /// <remarks>
-    /// Assign fields on this instance to shift gravity for every unoverridden navigator at once.
+    /// Assign fields on this instance to shift gravity for every unoverridden object at once.
     /// Call <see cref="GlobalEnviromentForces.Reset"/> to restore the defaults.
     /// </remarks>
     public static readonly GlobalEnviromentForces GlobalForces = new();
@@ -21,7 +21,7 @@ public sealed class LocomotionForces : IRecordable
     #region Configurable Parameters
 
     /// <summary>
-    /// The gravity force applied to this navigator.
+    /// The gravity force applied to this object.
     /// Returns the per-instance override when one is set;
     /// otherwise delegates to <see cref="GlobalEnviromentForces"/> so a single global change takes effect for all unoverridden navigators simultaneously.
     /// Assigning this property sets the per-instance override.
@@ -43,7 +43,7 @@ public sealed class LocomotionForces : IRecordable
 
 
     /// <summary>
-    /// The terminal fall velocity cap for this navigator.
+    /// The terminal fall velocity cap for this object.
     /// Returns the per-instance override when one is set; otherwise delegates to
     /// <see cref="GlobalEnviromentForces"/>.
     /// Assigning this property sets the per-instance override.
@@ -68,13 +68,13 @@ public sealed class LocomotionForces : IRecordable
     #region Overrides
 
     /// <summary>
-    /// Removes the per-instance gravity override so this navigator tracks
+    /// Removes the per-instance gravity override so this object tracks
     /// <see cref="GlobalEnviromentForces"/>.
     /// </summary>
     public void ClearGravityForceOverride() => _gravityForceOverride = null;
 
     /// <summary>
-    /// Removes the per-instance terminal velocity override so this navigator tracks
+    /// Removes the per-instance terminal velocity override so this object tracks
     /// <see cref="GlobalEnviromentForces"/>.
     /// </summary>
     public void ClearTerminalVelocityOverride() => _terminalVelocityOverride = null;

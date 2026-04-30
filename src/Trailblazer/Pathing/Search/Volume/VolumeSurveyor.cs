@@ -24,6 +24,13 @@ public sealed class VolumeSurveyor
     private static readonly Lazy<VolumeSurveyor> _instance =
         new(() => new VolumeSurveyor(), LazyThreadSafetyMode.ExecutionAndPublication);
 
+    /// <summary>
+    /// Gets the singleton instance of the VolumeSurveyor class.
+    /// </summary>
+    /// <remarks>
+    /// Use this property to access the shared VolumeSurveyor instance throughout the application.
+    /// This instance is thread-safe and intended for global use.
+    /// </remarks>
     public static VolumeSurveyor Shared => _instance.Value;
 
     private readonly PathHeap<Voxel> _heap = new();
@@ -38,6 +45,19 @@ public sealed class VolumeSurveyor
 
     private VolumePathRequest? _request;
 
+    /// <summary>
+    /// Finds a navigable path through the volume based on the specified pathfinding request.
+    /// </summary>
+    /// <remarks>
+    /// Returns an empty result if the request is null, has zero displacement, or does not specify
+    /// valid endpoints. The method is thread-safe and synchronizes access using a global lock.
+    /// </remarks>
+    /// <param name="request">The pathfinding request that defines the start and end points, as well as any constraints or options for the
+    /// path search. Cannot be null, must have valid endpoints, and must specify a non-zero displacement.</param>
+    /// <returns>
+    /// A VolumeSurveyResult containing the computed path and related metadata if a valid path is found; otherwise,
+    /// VolumeSurveyResult.Empty.
+    /// </returns>
     public VolumeSurveyResult FindPath(VolumePathRequest request)
     {
         lock (SurveyorLock.GlobalLock)

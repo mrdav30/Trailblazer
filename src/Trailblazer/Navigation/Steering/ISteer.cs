@@ -3,10 +3,14 @@ using GridForge.Spatial;
 
 namespace Trailblazer.Navigation;
 
+/// <summary>
+/// Defines the contract for an agent that can move and steer within a voxel-based world, providing access 
+/// to its velocity, speed, acceleration, and spatial characteristics.
+/// </summary>
 public interface ISteer : IVoxelOccupant
 {
     /// <summary>
-    /// The current velocity of the navigator in world space.
+    /// The current velocity of the object in world space.
     /// </summary>
     Vector3d Velocity { get; }
 
@@ -16,7 +20,7 @@ public interface ISteer : IVoxelOccupant
     Fixed64 Speed { get; }
 
     /// <summary>
-    /// The current acceleration vector of the navigator, updated each frame based on velocity change.
+    /// The current acceleration vector of the object, updated each frame based on velocity change.
     /// </summary>
     Vector3d Acceleration { get; }
 
@@ -26,7 +30,7 @@ public interface ISteer : IVoxelOccupant
     Fixed64 StuckThresholdSpeed { get; }
 
     /// <summary>
-    /// The size of navigator in worldspace.
+    /// The size of object in worldspace.
     /// </summary>
     /// <remarks>
     /// Note: Add a little padding to manevour around blockers

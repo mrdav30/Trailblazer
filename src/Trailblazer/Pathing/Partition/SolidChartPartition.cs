@@ -40,6 +40,9 @@ public class SolidChartPartition : IVoxelPartition
     /// </summary>
     public WorldVoxelIndex GlobalIndex => WorldIndex;
 
+    /// <summary>
+    /// Gets the voxel associated with this partition.
+    /// </summary>
     public Voxel Voxel
     {
         get
@@ -56,6 +59,9 @@ public class SolidChartPartition : IVoxelPartition
     /// </summary>
     public Vector3d VoxelPosition { get; private set; }
 
+    /// <summary>
+    /// Gets a value indicating whether the current tile can be traversed.
+    /// </summary>
     public bool IsWalkable { get; private set; }
 
     /// <summary>
@@ -80,6 +86,13 @@ public class SolidChartPartition : IVoxelPartition
 
     private int _chartPathCostModifier;
 
+    /// <summary>
+    /// Gets the neighboring partitions adjacent to this partition.
+    /// </summary>
+    /// <remarks>
+    /// Each element in the array represents a neighboring partition in a specific direction or position. 
+    /// The array may contain null values if a neighbor does not exist in that position.
+    /// </remarks>
     public SolidChartPartition?[]? Neighbors { get; private set; }
 
     #region Clearance Properties
@@ -120,6 +133,10 @@ public class SolidChartPartition : IVoxelPartition
 
     #endregion
 
+    /// <summary>
+    /// Sets the parent index for the current voxel in the world.
+    /// </summary>
+    /// <param name="parentIndex">The index to assign as the parent of the current voxel.</param>
     public void SetParentIndex(WorldVoxelIndex parentIndex) => WorldIndex = parentIndex;
 
     /// <summary>
@@ -197,6 +214,14 @@ public class SolidChartPartition : IVoxelPartition
         _isClearanceValid = false;
     }
 
+    /// <summary>
+    /// Populates the Neighbors array with references to adjacent SolidChartPartition instances based on the current WorldIndex.
+    /// </summary>
+    /// <remarks>
+    /// If the grid or voxel corresponding to WorldIndex cannot be found, Neighbors is set to null.
+    /// Each entry in the Neighbors array corresponds to a spatial direction; 
+    /// entries remain null if a neighbor is blocked or missing.
+    /// </remarks>
     public void BindNeighbors()
     {
         Neighbors = new SolidChartPartition?[26];
@@ -309,7 +334,7 @@ public class SolidChartPartition : IVoxelPartition
         }
     }
 
-    private void ExploreClearanceNeighbors(
+    private static void ExploreClearanceNeighbors(
         SolidChartPartition part,
         byte dist,
         SwiftHashSet<SolidChartPartition> visited,
@@ -386,5 +411,6 @@ public class SolidChartPartition : IVoxelPartition
 
     #endregion
 
+    /// <inheritdoc/>
     public override int GetHashCode() => Voxel.GetHashCode();
 }

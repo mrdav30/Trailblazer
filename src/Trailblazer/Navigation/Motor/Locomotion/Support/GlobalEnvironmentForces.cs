@@ -8,7 +8,7 @@ namespace Trailblazer.Navigation.Motor;
 /// </summary>
 /// <remarks>
 /// Access the shared instance through <see cref="LocomotionForces.GlobalForces"/>.
-/// Assigning fields on that instance changes the effective gravity for every unoverridden navigator
+/// Assigning fields on that instance changes the effective gravity for every unoverridden object
 /// on the next simulation frame without touching individual locomotion instances.
 /// </remarks>
 public sealed class GlobalEnviromentForces

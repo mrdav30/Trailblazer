@@ -404,6 +404,18 @@ public class FlowFieldSurveyor
         return Vector3d.Zero;
     }
 
+    /// <summary>
+    /// Retrieves the flow field associated with the specified world position, if available.
+    /// </summary>
+    /// <remarks>
+    /// If the position does not correspond to a valid voxel or no flow field is found for the voxel,
+    /// the method returns the default value for FlowField.
+    /// </remarks>
+    /// <param name="position">The world position for which to retrieve the corresponding flow field.</param>
+    /// <param name="fields">A dictionary mapping world voxel indices to their associated flow fields. Must not be null.</param>
+    /// <returns>
+    /// The flow field associated with the specified position if found; otherwise, the default value for the FlowField type.
+    /// </returns>
     public static FlowField GetFlowField(Vector3d position, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
         if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel)

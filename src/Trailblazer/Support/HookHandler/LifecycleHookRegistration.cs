@@ -15,6 +15,7 @@ public sealed class LifecycleHookRegistration : IDisposable
     /// <param name="dispose">The action to execute when the registration is disposed.</param>
     public LifecycleHookRegistration(Action dispose) => _dispose = dispose;
 
+    /// <inheritdoc/>
     public void Dispose()
     {
         Action? dispose = _dispose;

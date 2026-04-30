@@ -24,6 +24,13 @@ public class NavTurning : IRecordable
     private static readonly Fixed64 _arriveThresholdAngle =
         Fixed64.FromRaw(0x68DB9L); // 0.0001M;
 
+    /// <summary>
+    /// Represents the default turn rate value used for rotation calculations.
+    /// </summary>
+    /// <remarks>
+    /// This value is typically used as a standard or baseline turn rate in movement or rotation logic. 
+    /// The specific value is one eighth of a full rotation, which may correspond to 45 degrees if a full rotation is considered 360 degrees.
+    /// </remarks>
     public static readonly Fixed64 DefaultTurnRate = Fixed64.One / 8;
 
     #endregion
@@ -72,7 +79,7 @@ public class NavTurning : IRecordable
     public bool TargetReached { get; private set; }
 
     /// <summary>
-    /// The desired target rotation quaternion that the navigator is turning toward.
+    /// The desired target rotation quaternion that the object is turning toward.
     /// </summary>
     public FixedQuaternion TargetRotation { get; private set; }
 
@@ -90,7 +97,7 @@ public class NavTurning : IRecordable
     #endregion
 
     /// <summary>
-    /// Creates and initializes a new <see cref="NavTurning"/> instance for a navigator of the given radius.
+    /// Creates and initializes a new <see cref="NavTurning"/> instance for a object of the given radius.
     /// </summary>
     public static NavTurning CreateNew(Fixed64 radius) => new(radius);
 
@@ -100,12 +107,12 @@ public class NavTurning : IRecordable
     public NavTurning() { }
 
     /// <summary>
-    /// Constructs and immediately initializes a <see cref="NavTurning"/> with the given navigator radius.
+    /// Constructs and immediately initializes a <see cref="NavTurning"/> with the given object radius.
     /// </summary>
     public NavTurning(Fixed64 radius) => OnInitialize(radius);
 
     /// <summary>
-    /// Configures internal thresholds based on the navigator’s radius and resets turn state.
+    /// Configures internal thresholds based on the object’s radius and resets turn state.
     /// </summary>
     public void OnInitialize(Fixed64 radius)
     {
@@ -121,7 +128,7 @@ public class NavTurning : IRecordable
     }
 
     /// <summary>
-    ///Advances the navigator’s rotation toward the <see cref="TargetRotation"/>, handling both buffered and auto-turn logic.
+    ///Advances the object’s rotation toward the <see cref="TargetRotation"/>, handling both buffered and auto-turn logic.
     /// </summary>
     public bool TrySimulateTurn(
         Vector3d position,
@@ -230,7 +237,7 @@ public class NavTurning : IRecordable
     /// <summary>
     /// Determines whether the angular difference between the current forward and a desired target direction exceeds the minimum threshold.
     /// </summary>
-    public bool NeedsTurn(
+    public static bool NeedsTurn(
         Vector3d currentForward,
         Vector3d targetDirection,
         Fixed64? minAngle = null)

@@ -3,7 +3,7 @@
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Represents the traversal state for a navigator while using a <see cref="NavMotor"/>
+/// Represents the traversal state for a object while using a <see cref="NavMotor"/>
 ///  and provides synchronization with <see cref="TrekCondition"/>.
 /// </summary>
 public class TransitState
@@ -35,6 +35,9 @@ public class TransitState
     /// </summary>
     public Vector3d SurfaceNormal { get; private set; }
 
+    /// <summary>
+    /// Gets the angle of the slope at the current position, in fixed-point degrees.
+    /// </summary>
     public Fixed64 SlopeAngle { get; private set; }
 
     /// <summary>
@@ -53,15 +56,18 @@ public class TransitState
 
     private TransitState() { }
 
-    public TransitState(TrekCondition condition)
-    {
-        Update(condition, null);
-    }
+    /// <summary>
+    /// Initializes a new instance of the TransitState class using the specified trek condition.
+    /// </summary>
+    /// <param name="condition">The trek condition to use for initializing the state. Cannot be null.</param>
+    public TransitState(TrekCondition condition) => Update(condition, null);
 
-    public TransitState(TrekCondition condition, TrekCondition? previous)
-    {
-        Update(condition, previous);
-    }
+    /// <summary>
+    /// Initializes a new instance of the TransitState class with the specified current and previous trek conditions.
+    /// </summary>
+    /// <param name="condition">The current trek condition to represent. Cannot be null.</param>
+    /// <param name="previous">The previous trek condition, or null if there is no previous condition.</param>
+    public TransitState(TrekCondition condition, TrekCondition? previous) => Update(condition, previous);
 
     #endregion
 
@@ -95,6 +101,18 @@ public class TransitState
 
     #region Utility Methods
 
+    /// <summary>
+    /// Calculates the signed angle of the current surface slope relative to the specified movement direction.
+    /// </summary>
+    /// <param name="moveDirection">
+    /// The movement direction vector used to determine the orientation relative to the slope. 
+    /// If this value is <see cref="Vector3d.Zero"/>, the method treats the movement as oriented downhill.
+    /// </param>
+    /// <returns>
+    /// The signed slope angle in degrees. 
+    /// A negative value indicates movement downhill, and a positive value indicates movement uphill. 
+    /// Returns zero if the surface is flat.
+    /// </returns>
     public Fixed64 GetSignedSlopeAngle(Vector3d moveDirection)
     {
         if (SlopeAngle == Fixed64.Zero)

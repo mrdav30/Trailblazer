@@ -37,15 +37,14 @@ public sealed class VolumeSurveyorTests : IDisposable
     [Fact]
     public void FindPath_ShouldReturnEmpty_ForNullZeroDisplacementAndInvalidRequests()
     {
-        VolumeSurveyor.Shared.FindPath(null).HasPath.Should().BeFalse();
+        VolumeSurveyor.Shared.FindPath(null!).HasPath.Should().BeFalse();
 
         AddOpen(Vector3d.Zero);
 
-        VolumePathRequest sameVoxel = VolumePathRequest.Create(Vector3d.Zero, Vector3d.Zero, Fixed64.One);
-        sameVoxel.Should().NotBeNull();
+        VolumePathRequest sameVoxel = TestRequire.NotNull(VolumePathRequest.Create(Vector3d.Zero, Vector3d.Zero, Fixed64.One));
         VolumeSurveyor.Shared.FindPath(sameVoxel).HasPath.Should().BeFalse();
 
-        VolumePathRequest invalid = VolumePathRequest.Create(Vector3d.Zero, Vector3d.Zero, Fixed64.One);
+        VolumePathRequest invalid = TestRequire.NotNull(VolumePathRequest.Create(Vector3d.Zero, Vector3d.Zero, Fixed64.One));
         invalid.UpdateRequest(new Vector3d(64, 0, 0), Vector3d.Zero, Fixed64.One).Should().BeFalse();
         VolumeSurveyor.Shared.FindPath(invalid).HasPath.Should().BeFalse();
     }
@@ -56,12 +55,10 @@ public sealed class VolumeSurveyorTests : IDisposable
         AddOpen(Vector3d.Zero);
         AddOpen(new Vector3d(2, 0, 0));
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
-            Fixed64.One);
-
-        request.Should().NotBeNull();
+            Fixed64.One));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
 
@@ -75,12 +72,10 @@ public sealed class VolumeSurveyorTests : IDisposable
         AddOpen(Vector3d.Zero);
         AddOpen(new Vector3d(1, 0, 1));
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 1),
-            Fixed64.One);
-
-        request.Should().NotBeNull();
+            Fixed64.One));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
 
@@ -95,17 +90,16 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasSuccA");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasSuccA");
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            medium: TraversalMedium.Gas);
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
 
         result.HasPath.Should().BeTrue();
-        result.Waypoints.Should().NotBeNull();
+        Assert.NotNull(result.Waypoints);
         result.Waypoints.Should().HaveCount(2);
         result.Waypoints[0].Position.Should().Be(Vector3d.Zero);
         result.Waypoints[^1].Position.Should().Be(new Vector3d(1, 0, 0));
@@ -128,17 +122,16 @@ public sealed class VolumeSurveyorTests : IDisposable
         foreach (Vector3d pos in positions)
             PathTestFactory.RegisterGeneratedVolumePoint(pos, TraversalMedium.Gas, "GasLShape");
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 2),
             Fixed64.One,
-            medium: TraversalMedium.Gas);
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
 
         result.HasPath.Should().BeTrue();
-        result.Waypoints.Should().NotBeNull();
+        Assert.NotNull(result.Waypoints);
         // More than just start+end because the direction change at the corner is preserved.
         result.Waypoints.Length.Should().BeGreaterThan(2);
         result.Waypoints[0].Position.Should().Be(Vector3d.Zero);
@@ -153,18 +146,17 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasChartKeys");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasChartKeys");
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            medium: TraversalMedium.Gas);
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
 
         result.HasPath.Should().BeTrue();
         // Chart keys from the VolumeChartPartition owners must make it into the result.
-        result.ChartsUtilized.Should().NotBeNull();
+        Assert.NotNull(result.ChartsUtilized);
         result.ChartsUtilized.Length.Should().BeGreaterThan(0);
     }
 
@@ -176,18 +168,18 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasRelaxed");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasRelaxed");
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             allowUnwalkableEndpoints: true,
-            medium: TraversalMedium.Gas);
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        AStarWaypoint[] waypoints = TestRequire.NotNull(result.Waypoints);
 
         result.HasPath.Should().BeTrue();
-        result.Waypoints[^1].Position.Should().Be(new Vector3d(1, 0, 0));
+        waypoints[^1].Position.Should().Be(new Vector3d(1, 0, 0));
     }
 
     [Fact]
@@ -208,19 +200,18 @@ public sealed class VolumeSurveyorTests : IDisposable
         foreach (Vector3d pos in positions)
             PathTestFactory.RegisterGeneratedVolumePoint(pos, TraversalMedium.Gas, "GasStraight");
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            medium: TraversalMedium.Gas);
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
 
         result.HasPath.Should().BeTrue();
         // The 5-voxel straight-line path: start + first inner (lastDir=Zero differs from dir) + end = 3 waypoints.
         // Voxels at index 2 and 3 share the same direction as index 1 → not added.
-        result.Waypoints.Select(waypoint => waypoint.Position).Should().Equal(
+        result.Waypoints?.Select(waypoint => waypoint.Position).Should().Equal(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             new Vector3d(4, 0, 0));
@@ -243,13 +234,12 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterFromData("SolidVolumeOwners", data, Vector3d.Zero);
         VolumeMediumRules.SetGasVoxelRule(static voxel => voxel != null && voxel.HasPartition<SolidChartPartition>());
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             allowUnwalkableEndpoints: true,
-            medium: TraversalMedium.Gas);
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
 
@@ -263,14 +253,13 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "VolumeMissingMeta");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "VolumeMissingMeta");
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            medium: TraversalMedium.Gas);
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
-        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel current).Should().BeTrue();
+        Voxel current = TestRequire.VoxelAt(Vector3d.Zero);
 
         VolumeSurveyor surveyor = new();
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
@@ -291,18 +280,17 @@ public sealed class VolumeSurveyorTests : IDisposable
         foreach (Vector3d position in positions)
             PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "VolumeHelperUpdate");
 
-        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel current).Should().BeTrue();
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel neighbor).Should().BeTrue();
-        neighbor.GetPartitionOrDefault<VolumeChartPartition>().Should().NotBeNull();
-        neighbor.GetPartitionOrDefault<VolumeChartPartition>().PathCostModifier = 25;
+        Voxel current = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel neighbor = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        VolumeChartPartition neighborPartition = TestRequire.NotNull(neighbor.GetPartitionOrDefault<VolumeChartPartition>());
+        neighborPartition.PathCostModifier = 25;
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             heuristic: HeuristicMethod.Manhattan,
-            medium: TraversalMedium.Gas);
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
         VolumeSurveyor surveyor = new();
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
@@ -326,7 +314,7 @@ public sealed class VolumeSurveyorTests : IDisposable
             175
             + AStarSurveyor.CalculateHeuristic(
                 neighbor.WorldPosition,
-                request.EndNode.WorldPosition,
+                TestRequire.NotNull(request.EndNode).WorldPosition,
                 request.Heuristic));
     }
 
@@ -338,9 +326,9 @@ public sealed class VolumeSurveyorTests : IDisposable
     public void VolumeSurveyResult_Create_ShouldUseFallbackEmptyArray_WhenChartsUtilizedIsNull()
     {
         var waypoints = new[] { new AStarWaypoint { Position = Vector3d.Zero, IsGoal = true } };
-        VolumeSurveyResult result = VolumeSurveyResult.Create(waypoints, null, key: 1);
+        VolumeSurveyResult result = VolumeSurveyResult.Create(waypoints, null!, key: 1);
 
-        result.ChartsUtilized.Should().NotBeNull();
+        Assert.NotNull(result.ChartsUtilized);
         result.ChartsUtilized.Should().BeEmpty();
     }
 
@@ -358,18 +346,18 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(0, 0, 1), TraversalMedium.Gas, "GasDiagEnd");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 1), TraversalMedium.Gas, "GasDiagEnd");
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 1),
             Fixed64.One,
-            medium: TraversalMedium.Gas);
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        AStarWaypoint[] waypoints = TestRequire.NotNull(result.Waypoints);
 
         result.HasPath.Should().BeTrue();
-        result.Waypoints[0].Position.Should().Be(Vector3d.Zero);
-        result.Waypoints[^1].Position.Should().Be(new Vector3d(1, 0, 1));
+        waypoints[0].Position.Should().Be(Vector3d.Zero);
+        waypoints[^1].Position.Should().Be(new Vector3d(1, 0, 1));
     }
 
     [Fact]

@@ -72,7 +72,7 @@ public class ResolvedChartVoxelStateTests
         state.AddOwner("Chart", NavigationChartCell.Solid, priority: 0, registrationOrder: 0);
 
         // Passing null must not throw.
-        Action act = () => state.AddChartOwnersTo(null);
+        Action act = () => state.AddChartOwnersTo(null!);
         act.Should().NotThrow();
     }
 

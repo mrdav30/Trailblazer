@@ -38,16 +38,16 @@ public class AStarTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        AStarPathRequest request = AStarPathRequest.Create(
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            HeuristicMethod.Euclidean);
-        request.Should().NotBeNull();
+            HeuristicMethod.Euclidean));
         request.AllowTraversalTransitions = true;
 
-        PathGuideFactory.RequestGuide(request, out AStarGuide guide).Should().BeTrue();
-        guide.Should().NotBeNull();
+        AStarGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide),
+            createdGuide);
         guide.ActiveWaypoints.Should().HaveCount(2);
         guide.ActiveWaypoints[0].Position.Should().Be(Vector3d.Zero);
         guide.ActiveWaypoints[1].Position.Should().Be(new Vector3d(2, 0, 0));
@@ -78,16 +78,16 @@ public class AStarTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        AStarPathRequest request = AStarPathRequest.Create(
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
             new Vector3d(-1, 0, 0),
             new Vector3d(3, 0, 0),
             Fixed64.One,
-            HeuristicMethod.Euclidean);
-        request.Should().NotBeNull();
+            HeuristicMethod.Euclidean));
         request.AllowTraversalTransitions = true;
 
-        PathGuideFactory.RequestGuide(request, out AStarGuide guide).Should().BeTrue();
-        guide.Should().NotBeNull();
+        AStarGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide),
+            createdGuide);
         guide.ActiveWaypoints.Should().NotBeEmpty();
         guide.ActiveWaypoints[0].Position.Should().Be(new Vector3d(-1, 0, 0));
         guide.ActiveWaypoints[^1].Position.Should().Be(new Vector3d(3, 0, 0));
@@ -111,16 +111,15 @@ public class AStarTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        AStarPathRequest request = AStarPathRequest.Create(
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
-            allowUnwalkableEndpoints: true);
-        request.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
         request.AllowTraversalTransitions.Should().BeFalse();
 
-        PathGuideFactory.RequestGuide(request, out AStarGuide guide).Should().BeFalse();
+        PathGuideFactory.RequestGuide(request, out AStarGuide? guide).Should().BeFalse();
         guide.Should().BeNull();
     }
 
@@ -129,18 +128,18 @@ public class AStarTransitionFallbackTests : IDisposable
     {
         RegisterAuthoredClimbRoute("AStarClimbFallback");
 
-        AStarPathRequest request = AStarPathRequest.Create(
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(3, 0, 1),
             Fixed64.One,
             HeuristicMethod.Euclidean,
-            allowUnwalkableEndpoints: true);
-        request.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
         request.MaxClimbHeight = Fixed64.Zero;
         request.AllowTraversalTransitions = true;
 
-        PathGuideFactory.RequestGuide(request, out AStarGuide guide).Should().BeTrue();
-        guide.Should().NotBeNull();
+        AStarGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide),
+            createdGuide);
         guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(1, 0, 0));
         guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(1, 1, 0));
         guide.ActiveWaypoints.Should().Contain(waypoint => waypoint.Position == new Vector3d(1, 1, 1));

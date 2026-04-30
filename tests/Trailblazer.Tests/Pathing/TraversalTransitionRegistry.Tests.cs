@@ -67,8 +67,8 @@ public class TraversalTransitionRegistryTests : IDisposable
             out WorldVoxelIndex sourceVoxelIndex,
             out WorldVoxelIndex destinationVoxelIndex));
 
-        Assert.True(TrailblazerWorldManager.TryGetVoxel(source, out Voxel sourceVoxel));
-        Assert.True(TrailblazerWorldManager.TryGetVoxel(destination, out Voxel destinationVoxel));
+        Voxel sourceVoxel = TestRequire.VoxelAt(source);
+        Voxel destinationVoxel = TestRequire.VoxelAt(destination);
         Assert.Equal(sourceVoxel.WorldIndex, sourceVoxelIndex);
         Assert.Equal(destinationVoxel.WorldIndex, destinationVoxelIndex);
     }
@@ -97,14 +97,14 @@ public class TraversalTransitionRegistryTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("RegistryPointOverrideSource", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("RegistryPointOverrideDestination", new Vector3d(1, 0, 0));
 
-        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel sourceVoxel));
-        Assert.True(TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel destinationVoxel));
+        Voxel sourceVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel destinationVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
 
         Vector3d pointOverride = sourceVoxel.WorldPosition + new Vector3d(
             TrailblazerWorldManager.VoxelSize / 4,
             Fixed64.Zero,
             Fixed64.Zero);
-        Assert.True(TrailblazerWorldManager.TryGetVoxel(pointOverride, out Voxel overrideVoxel));
+        Voxel overrideVoxel = TestRequire.VoxelAt(pointOverride);
         Assert.Equal(sourceVoxel.WorldIndex, overrideVoxel.WorldIndex);
 
         var transition = new TraversalTransition(
@@ -214,7 +214,7 @@ public class TraversalTransitionRegistryTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("RegistryDistinctOverrideSource", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("RegistryDistinctOverrideDestination", new Vector3d(1, 0, 0));
 
-        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel sourceVoxel));
+        Voxel sourceVoxel = TestRequire.VoxelAt(Vector3d.Zero);
 
         Vector3d pointOverride = sourceVoxel.WorldPosition + new Vector3d(
             TrailblazerWorldManager.VoxelSize / 4,
@@ -482,7 +482,7 @@ public class TraversalTransitionRegistryTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(Vector3d.Zero));
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
-        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
 
         TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
         TraversalTransition[] incoming = TraversalTransitionRegistry.GetIncomingTransitions(Vector3d.Zero);
@@ -513,7 +513,7 @@ public class TraversalTransitionRegistryTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
-        Assert.True(TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel));
+        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
 
         TraversalTransition[] touching = TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(voxel.GridIndex);
 

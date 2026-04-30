@@ -163,7 +163,6 @@ public class FallLocomotionTests : IDisposable
             agent.Simulate();
         }
 
-        fallHeight.Should().NotBeNull();
         fallHeight.Should().BeGreaterThan(Fixed64.One);
     }
 
@@ -203,8 +202,9 @@ public class FallLocomotionTests : IDisposable
             agent.Simulate();
         }
 
-        agent.Motor.Handler.Slide.IsSliding.Should().BeTrue();
-        agent.Motor.Handler.Fall.IsFalling.Should().BeTrue();
+        var motor = TestRequire.NotNull(agent.Motor);
+        TestRequire.NotNull(motor.Handler.Slide).IsSliding.Should().BeTrue();
+        TestRequire.NotNull(motor.Handler.Fall).IsFalling.Should().BeTrue();
     }
 
     [Fact]

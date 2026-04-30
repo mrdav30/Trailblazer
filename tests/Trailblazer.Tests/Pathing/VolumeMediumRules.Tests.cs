@@ -86,7 +86,7 @@ public sealed class VolumeMediumRulesTests : IDisposable
     [Fact]
     public void VolumeMediumRules_Matches_ShouldReturnFalse_ForVoxelWithNoPartition()
     {
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
 
         VolumeMediumRules.SetGasVoxelRule(static v => true);
 
@@ -100,7 +100,7 @@ public sealed class VolumeMediumRulesTests : IDisposable
     public void VolumeMediumRules_Matches_ShouldReturnFalse_ForNullVoxel()
     {
         VolumeMediumRules.SetGasVoxelRule(static v => true);
-        VolumeMediumRules.Matches(null, TraversalMedium.Gas).Should().BeFalse();
+        VolumeMediumRules.Matches(null!, TraversalMedium.Gas).Should().BeFalse();
         VolumeMediumRules.ClearGasVoxelRule();
     }
 
@@ -108,7 +108,7 @@ public sealed class VolumeMediumRulesTests : IDisposable
     public void VolumeMediumRules_Matches_ShouldReturnFalse_ForUnknownMedium()
     {
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "VMRGasTest");
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
 
         VolumeMediumRules.Matches(voxel, TraversalMedium.Unknown).Should().BeFalse();
     }
@@ -151,7 +151,7 @@ public sealed class ManagedChartTransitionStateTests
         var state = new ManagedChartTransitionState("prefix", priority: 3);
         state.TransitionIdPrefix.Should().Be("prefix");
         state.Priority.Should().Be(3);
-        state.TransitionIds.Should().NotBeNull();
+        Assert.NotNull(state.TransitionIds);
         state.TransitionIds.Count.Should().Be(0);
     }
 }
@@ -178,7 +178,7 @@ public sealed class ChartOwnerUtilityTests
         var source = new SwiftHashSet<string>();
         source.Add("chart-a");
 
-        Action action = () => ChartOwnerUtility.AddOwners(null, source);
+        Action action = () => ChartOwnerUtility.AddOwners(null!, source);
         action.Should().NotThrow();
     }
 

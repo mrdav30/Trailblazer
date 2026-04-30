@@ -43,14 +43,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            out HybridPathRequest hybridRequest).Should().BeTrue();
+            out HybridPathRequest? hybridRequest).Should().BeTrue();
 
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.RoutePlan.Should().NotBeNull();
-        hybridRequest.RoutePlan.DirectedTransitions.Should().BeEmpty();
-        hybridRequest.RoutePlan.Steps.Should().HaveCount(1);
-        hybridRequest.RoutePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.PathSegment);
-        hybridRequest.RoutePlan.Steps[0].SegmentRequest.Should().BeOfType<AStarPathRequest>();
+        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        routePlan.DirectedTransitions.Should().BeEmpty();
+        routePlan.Steps.Should().HaveCount(1);
+        routePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.PathSegment);
+        routePlan.Steps[0].SegmentRequest.Should().BeOfType<AStarPathRequest>();
     }
 
     /// <summary>
@@ -63,18 +62,16 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterLineChart("HybridPlannerFF", Vector3d.Zero, 3);
 
-        var flowFieldRequest = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
-            Fixed64.One);
-        flowFieldRequest.Should().NotBeNull();
+            Fixed64.One));
 
-        var hybridRequest = HybridPathRequest.CreateFromFlowField(flowFieldRequest);
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.RoutePlan.Should().NotBeNull();
-        hybridRequest.RoutePlan.Steps.Should().HaveCount(1);
-        hybridRequest.RoutePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.PathSegment);
-        hybridRequest.RoutePlan.Steps[0].SegmentRequest.Should().BeOfType<FlowFieldPathRequest>();
+        HybridPathRequest hybridRequest = TestRequire.NotNull(HybridPathRequest.CreateFromFlowField(flowFieldRequest));
+        HybridRoutePlan routePlan = TestRequire.NotNull(hybridRequest.RoutePlan);
+        routePlan.Steps.Should().HaveCount(1);
+        routePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.PathSegment);
+        routePlan.Steps[0].SegmentRequest.Should().BeOfType<FlowFieldPathRequest>();
     }
 
     /// <summary>
@@ -98,16 +95,15 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(5, 0, 0),
             Fixed64.One,
-            out HybridPathRequest hybridRequest).Should().BeTrue();
+            out HybridPathRequest? hybridRequest).Should().BeTrue();
 
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.RoutePlan.Should().NotBeNull();
-        hybridRequest.RoutePlan.DirectedTransitions.Should().ContainSingle();
-        hybridRequest.RoutePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-solid-hop");
-        hybridRequest.RoutePlan.Steps.Should().HaveCount(3);
-        hybridRequest.RoutePlan.Steps[0].SegmentRequest.Should().BeOfType<AStarPathRequest>();
-        hybridRequest.RoutePlan.Steps[1].Kind.Should().Be(HybridRouteStepKind.Waypoint);
-        hybridRequest.RoutePlan.Steps[2].SegmentRequest.Should().BeOfType<AStarPathRequest>();
+        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        routePlan.DirectedTransitions.Should().ContainSingle();
+        routePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-solid-hop");
+        routePlan.Steps.Should().HaveCount(3);
+        routePlan.Steps[0].SegmentRequest.Should().BeOfType<AStarPathRequest>();
+        routePlan.Steps[1].Kind.Should().Be(HybridRouteStepKind.Waypoint);
+        routePlan.Steps[2].SegmentRequest.Should().BeOfType<AStarPathRequest>();
     }
 
     /// <summary>
@@ -142,15 +138,14 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            out HybridPathRequest hybridRequest).Should().BeTrue();
+            out HybridPathRequest? hybridRequest).Should().BeTrue();
 
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.RoutePlan.Should().NotBeNull();
-        hybridRequest.RoutePlan.DirectedTransitions.Should().HaveCount(2);
+        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        routePlan.DirectedTransitions.Should().HaveCount(2);
 
         // Plan must include a volume (liquid) segment step
         bool hasVolumeSegment = false;
-        foreach (HybridRouteStep step in hybridRequest.RoutePlan.Steps)
+        foreach (HybridRouteStep step in routePlan.Steps)
         {
             if (step.Kind == HybridRouteStepKind.PathSegment
                 && step.SegmentRequest is VolumePathRequest vpr
@@ -194,14 +189,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            out HybridPathRequest hybridRequest).Should().BeTrue();
+            out HybridPathRequest? hybridRequest).Should().BeTrue();
 
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.RoutePlan.Should().NotBeNull();
-        hybridRequest.RoutePlan.DirectedTransitions.Should().HaveCount(2);
+        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        routePlan.DirectedTransitions.Should().HaveCount(2);
 
         bool hasGasSegment = false;
-        foreach (HybridRouteStep step in hybridRequest.RoutePlan.Steps)
+        foreach (HybridRouteStep step in routePlan.Steps)
         {
             if (step.Kind == HybridRouteStepKind.PathSegment
                 && step.SegmentRequest is VolumePathRequest vpr
@@ -263,15 +257,14 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(6, 0, 0),
             Fixed64.One,
-            out HybridPathRequest hybridRequest).Should().BeTrue();
+            out HybridPathRequest? hybridRequest).Should().BeTrue();
 
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.RoutePlan.Should().NotBeNull();
-        hybridRequest.RoutePlan.DirectedTransitions.Should().HaveCount(2);
-        hybridRequest.RoutePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-dual-liquid-entry");
-        hybridRequest.RoutePlan.DirectedTransitions[1].Id.Should().Be("hybridplanner-dual-liquid-exit");
+        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        routePlan.DirectedTransitions.Should().HaveCount(2);
+        routePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-dual-liquid-entry");
+        routePlan.DirectedTransitions[1].Id.Should().Be("hybridplanner-dual-liquid-exit");
 
-        HybridRouteStep volumeStep = hybridRequest.RoutePlan.Steps.Should().ContainSingle(
+        HybridRouteStep volumeStep = routePlan.Steps.Should().ContainSingle(
             step => step.Kind == HybridRouteStepKind.PathSegment
                 && step.SegmentRequest is VolumePathRequest).Subject;
         volumeStep.SegmentRequest.Should().BeOfType<VolumePathRequest>()
@@ -299,13 +292,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(20, 0, 0),
             Fixed64.One,
-            out HybridPathRequest hybridRequest).Should().BeTrue();
+            out HybridPathRequest? hybridRequest).Should().BeTrue();
 
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.StartNode.GridIndex.Should().NotBe(hybridRequest.EndNode.GridIndex);
-        hybridRequest.RoutePlan.Should().NotBeNull();
-        hybridRequest.RoutePlan.DirectedTransitions.Should().ContainSingle();
-        hybridRequest.RoutePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-cross-grid-hop");
+        HybridPathRequest actualRequest = TestRequire.NotNull(hybridRequest);
+        TestRequire.NotNull(actualRequest.StartNode).GridIndex.Should().NotBe(TestRequire.NotNull(actualRequest.EndNode).GridIndex);
+        HybridRoutePlan routePlan = TestRequire.NotNull(actualRequest.RoutePlan);
+        routePlan.DirectedTransitions.Should().ContainSingle();
+        routePlan.DirectedTransitions[0].Id.Should().Be("hybridplanner-cross-grid-hop");
     }
 
     [Fact]
@@ -313,38 +306,36 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterAuthoredClimbRoute("HybridPlannerClimbChain");
 
-        AStarPathRequest request = AStarPathRequest.Create(
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(3, 0, 1),
             Fixed64.One,
             HeuristicMethod.Manhattan,
-            allowUnwalkableEndpoints: true);
-        request.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
         request.MaxClimbHeight = Fixed64.Zero;
 
         HybridPathRequest.TryCreate(
             Vector3d.Zero,
             new Vector3d(3, 0, 1),
             Fixed64.One,
-            out HybridPathRequest hybridRequest,
+            out HybridPathRequest? hybridRequest,
             maxClimbHeight: Fixed64.Zero,
             allowUnwalkableEndpoints: true).Should().BeTrue();
 
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.RoutePlan.Should().NotBeNull();
-        hybridRequest.RoutePlan.DirectedTransitions.Should().HaveCount(5);
-        hybridRequest.RoutePlan.DirectedTransitions.Should().OnlyContain(t => t.Type == TraversalTransitionType.Climb);
-        hybridRequest.RoutePlan.DirectedTransitions[^1].RequestsClimbIntent.Should().BeFalse();
-        hybridRequest.RoutePlan.Steps.Should().HaveCount(7);
-        hybridRequest.RoutePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.Waypoint);
-        hybridRequest.RoutePlan.Steps[^1].Kind.Should().Be(HybridRouteStepKind.PathSegment);
-        hybridRequest.RoutePlan.Steps.Should().Contain(step =>
+        HybridRoutePlan routePlan = TestRequire.NotNull(TestRequire.NotNull(hybridRequest).RoutePlan);
+        routePlan.DirectedTransitions.Should().HaveCount(5);
+        routePlan.DirectedTransitions.Should().OnlyContain(t => t.Type == TraversalTransitionType.Climb);
+        routePlan.DirectedTransitions[^1].RequestsClimbIntent.Should().BeFalse();
+        routePlan.Steps.Should().HaveCount(7);
+        routePlan.Steps[0].Kind.Should().Be(HybridRouteStepKind.Waypoint);
+        routePlan.Steps[^1].Kind.Should().Be(HybridRouteStepKind.PathSegment);
+        routePlan.Steps.Should().Contain(step =>
             step.Kind == HybridRouteStepKind.Waypoint
             && step.WaypointPosition == new Vector3d(1, 1, 0));
-        hybridRequest.RoutePlan.Steps.Should().Contain(step =>
+        routePlan.Steps.Should().Contain(step =>
             step.Kind == HybridRouteStepKind.Waypoint
             && step.WaypointPosition == new Vector3d(1, 1, 1));
-        hybridRequest.RoutePlan.Steps.Should().Contain(step =>
+        routePlan.Steps.Should().Contain(step =>
             step.Kind == HybridRouteStepKind.Waypoint
             && step.WaypointPosition == new Vector3d(2, 0, 1));
     }
@@ -358,20 +349,19 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterLineChart("HybridPlannerFFZero", Vector3d.Zero, 3);
 
-        FlowFieldPathRequest flowFieldRequest = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             Vector3d.Zero,
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        flowFieldRequest.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
 
-        var hybridRequest = HybridPathRequest.CreateFromFlowField(flowFieldRequest);
+        HybridPathRequest? hybridRequest = HybridPathRequest.CreateFromFlowField(flowFieldRequest);
 
         // Zero displacement means both start and end are the same — the entire route is a waypoint
         // or the plan itself is trivially zero-cost
         if (hybridRequest != null)
         {
-            hybridRequest.RoutePlan.Should().NotBeNull();
+            TestRequire.NotNull(hybridRequest.RoutePlan);
         }
     }
 
@@ -384,13 +374,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            out HybridPathRequest request).Should().BeTrue();
+            out HybridPathRequest? request).Should().BeTrue();
 
         object[] args =
         {
             new Vector3d(64, 0, 0),
             new Vector3d(65, 0, 0),
-            request,
+            TestRequire.NotNull(request),
             null!,
             0
         };
@@ -405,14 +395,12 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterLineChart("HybridPlannerFlowInvalid", Vector3d.Zero, 2);
 
-        FlowFieldPathRequest flowFieldRequest = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
-            Fixed64.One);
-        flowFieldRequest.Should().NotBeNull();
+            Fixed64.One));
 
-        HybridPathRequest request = HybridPathRequest.CreateFromFlowField(flowFieldRequest);
-        request.Should().NotBeNull();
+        HybridPathRequest request = TestRequire.NotNull(HybridPathRequest.CreateFromFlowField(flowFieldRequest));
 
         object[] args =
         {
@@ -437,13 +425,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            out HybridPathRequest request).Should().BeTrue();
+            out HybridPathRequest? request).Should().BeTrue();
 
         object[] args =
         {
             new Vector3d(64, 0, 0),
             new Vector3d(65, 0, 0),
-            request,
+            TestRequire.NotNull(request),
             TraversalMedium.Gas,
             null!,
             0
@@ -464,13 +452,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            out HybridPathRequest request).Should().BeTrue();
+            out HybridPathRequest? request).Should().BeTrue();
 
         object[] args =
         {
             new Vector3d(4, 0, 0),
             new Vector3d(4, 0, 0),
-            request,
+            TestRequire.NotNull(request),
             TraversalMedium.Gas,
             null!,
             0
@@ -493,13 +481,13 @@ public sealed class HybridRoutePlannerTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            out HybridPathRequest request).Should().BeTrue();
+            out HybridPathRequest? request).Should().BeTrue();
 
         object[] args =
         {
             new Vector3d(4, 0, 0),
             new Vector3d(6, 0, 0),
-            request,
+            request!,
             TraversalMedium.Gas,
             null!,
             0
@@ -513,7 +501,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_ShouldRejectNullRequests()
     {
-        HybridRoutePlanner.TryPlan(null, out HybridRoutePlan plan).Should().BeFalse();
+        HybridRoutePlanner.TryPlan(null!, out HybridRoutePlan? plan).Should().BeFalse();
         plan.Should().BeNull();
     }
 

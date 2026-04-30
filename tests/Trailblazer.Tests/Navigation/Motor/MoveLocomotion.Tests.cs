@@ -93,7 +93,7 @@ public class MoveLocomotionTests : IDisposable
         agent.Motor.TryTraversal(frameRequest, out _, out _, out _);
 
         // Assert
-        agent.Motor.Handler.Slide.IsSliding.Should().BeFalse();
+        TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Slide).IsSliding.Should().BeFalse();
     }
 
     [Fact]
@@ -456,12 +456,14 @@ public class MoveLocomotionTests : IDisposable
             highFrictionScout.Simulate();
         }
 
-        var low = lowFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
-        var high = highFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
+        var lowFrictionMotor = TestRequire.NotNull(lowFrictionScout.Motor);
+        var highFrictionMotor = TestRequire.NotNull(highFrictionScout.Motor);
+        var low = lowFrictionMotor.Handler.Move.FrameVelocity.Magnitude;
+        var high = highFrictionMotor.Handler.Move.FrameVelocity.Magnitude;
 
         high.Should().BeLessThan(low);
-        lowFrictionScout.Motor.Handler.Platform.IsActive.Should().BeFalse();
-        highFrictionScout.Motor.Handler.Platform.IsActive.Should().BeFalse();
+        TestRequire.NotNull(lowFrictionMotor.Handler.Platform).IsActive.Should().BeFalse();
+        TestRequire.NotNull(highFrictionMotor.Handler.Platform).IsActive.Should().BeFalse();
     }
 
     [Fact]
@@ -500,4 +502,3 @@ public class MoveLocomotionTests : IDisposable
         speed.Should().BeApproximately((Fixed64)5, Fixed64.Epsilon);
     }
 }
-

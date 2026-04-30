@@ -23,16 +23,18 @@ public class FlyLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
             startingMedium: TraversalMedium.Gas);
+        var fly = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fly);
+        var fall = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fall);
 
-        agent.Motor.Handler.Fly.GravityCompensation = Fixed64.One;
+        fly.GravityCompensation = Fixed64.One;
 
         TrailblazerManager.Simulate();
         agent.FrameRequest.IsRequestingFlight = true;
         agent.Simulate();
 
         agent.Position.y.Should().Be((Fixed64)10);
-        agent.Motor.Handler.Fly.IsFlying.Should().BeTrue();
-        agent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
+        fly.IsFlying.Should().BeTrue();
+        fall.IsFalling.Should().BeFalse();
     }
 
     [Fact]
@@ -41,8 +43,9 @@ public class FlyLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
             startingMedium: TraversalMedium.Gas);
+        var fly = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fly);
 
-        agent.Motor.Handler.Fly.GravityCompensation = Fixed64.Half;
+        fly.GravityCompensation = Fixed64.Half;
 
         TrailblazerManager.Simulate();
         agent.FrameRequest.IsRequestingFlight = true;
@@ -63,6 +66,8 @@ public class FlyLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
             startingMedium: TraversalMedium.Gas);
+        var fly = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fly);
+        var fall = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fall);
 
         TrailblazerManager.Simulate();
         agent.FrameRequest.Direction = Vector3d.Down;
@@ -71,8 +76,8 @@ public class FlyLocomotionTests : IDisposable
         agent.Simulate();
 
         agent.Position.y.Should().BeLessThan((Fixed64)10);
-        agent.Motor.Handler.Fly.IsFlying.Should().BeTrue();
-        agent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
+        fly.IsFlying.Should().BeTrue();
+        fall.IsFalling.Should().BeFalse();
     }
 
     [Fact]
@@ -81,28 +86,32 @@ public class FlyLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
             startingMedium: TraversalMedium.Gas);
+        var fly = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fly);
+        var fall = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fall);
 
-        agent.Motor.Handler.Fly.GravityCompensation = Fixed64.One;
+        fly.GravityCompensation = Fixed64.One;
 
         TrailblazerManager.Simulate();
         agent.FrameRequest.IsRequestingFlight = true;
         agent.Simulate();
 
-        agent.Motor.Handler.Fly.IsFlying.Should().BeTrue();
-        agent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
+        fly.IsFlying.Should().BeTrue();
+        fall.IsFalling.Should().BeFalse();
 
         TrailblazerManager.Simulate();
         agent.Simulate();
 
-        agent.Motor.Handler.Fly.IsFlying.Should().BeFalse();
-        agent.Motor.Handler.Fall.IsFalling.Should().BeTrue();
+        fly.IsFlying.Should().BeFalse();
+        fall.IsFalling.Should().BeTrue();
     }
 
     [Fact]
     public void FlyLocomotion_WhenDisabled_ShouldClearTransientState()
     {
-        var fly = new FlyLocomotion();
-        fly.IsFlying = true;
+        var fly = new FlyLocomotion
+        {
+            IsFlying = true
+        };
         fly.IsEnabled.Should().BeTrue();
 
         fly.IsEnabled = false;
@@ -119,21 +128,24 @@ public class FlyLocomotionTests : IDisposable
         var source = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
             startingMedium: TraversalMedium.Gas);
+        var sourceFly = TestRequire.NotNull(TestRequire.NotNull(source.Motor).Handler.Fly);
 
         // Mark as flying and then disable before serializing.
-        source.Motor.Handler.Fly.IsFlying = true;
-        source.Motor.Handler.Fly.IsEnabled = false;
+        sourceFly.IsFlying = true;
+        sourceFly.IsEnabled = false;
 
         object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
 
         var target = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: Vector3d.Zero,
             startingMedium: TraversalMedium.Solid);
-        target.Motor.Handler.Fly.IsEnabled = true;
-        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
+        NavMotor targetMotor = TestRequire.NotNull(target.Motor);
+        TestRequire.NotNull(targetMotor.Handler.Fly).IsEnabled = true;
+        SerializationUtility.PopulateRecord(targetMotor, payload, useMemoryPack);
+        var targetFly = TestRequire.NotNull(targetMotor.Handler.Fly);
 
-        target.Motor.Handler.Fly.IsEnabled.Should().BeFalse();
-        target.Motor.Handler.Fly.IsFlying.Should().BeFalse();
+        targetFly.IsEnabled.Should().BeFalse();
+        targetFly.IsFlying.Should().BeFalse();
     }
 
     [Fact]
@@ -142,9 +154,10 @@ public class FlyLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
             startingMedium: TraversalMedium.Gas);
+        var fly = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fly);
 
-        agent.Motor.Handler.Fly.IsFlying = true;
-        agent.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)7;
+        fly.IsFlying = true;
+        fly.MaxFlySpeed = (Fixed64)7;
 
         Fixed64 speed = agent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Fast);
 
@@ -159,26 +172,28 @@ public class FlyLocomotionTests : IDisposable
         var source = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: new Vector3d(0, 10, 0),
             startingMedium: TraversalMedium.Gas);
-        source.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)3;
-        source.Motor.Handler.Fly.MaxAscendSpeed = (Fixed64)2;
-        source.Motor.Handler.Fly.MaxDescendSpeed = (Fixed64)1.5f;
-        source.Motor.Handler.Fly.MaxFlyAcceleration = (Fixed64)24;
-        source.Motor.Handler.Fly.GravityCompensation = (Fixed64)0.75f;
-        source.Motor.Handler.Fly.IsFlying = true;
+        var sourceFly = TestRequire.NotNull(TestRequire.NotNull(source.Motor).Handler.Fly);
+        sourceFly.MaxFlySpeed = (Fixed64)3;
+        sourceFly.MaxAscendSpeed = (Fixed64)2;
+        sourceFly.MaxDescendSpeed = (Fixed64)1.5f;
+        sourceFly.MaxFlyAcceleration = (Fixed64)24;
+        sourceFly.GravityCompensation = (Fixed64)0.75f;
+        sourceFly.IsFlying = true;
 
         object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
 
         var target = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: Vector3d.Zero,
             startingMedium: TraversalMedium.Solid);
-        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
+        NavMotor targetMotor = TestRequire.NotNull(target.Motor);
+        SerializationUtility.PopulateRecord(targetMotor, payload, useMemoryPack);
 
-        target.Motor.Handler.Fly.Should().NotBeNull();
-        target.Motor.Handler.Fly.MaxFlySpeed.Should().Be((Fixed64)3);
-        target.Motor.Handler.Fly.MaxAscendSpeed.Should().Be((Fixed64)2);
-        target.Motor.Handler.Fly.MaxDescendSpeed.Should().Be((Fixed64)1.5f);
-        target.Motor.Handler.Fly.MaxFlyAcceleration.Should().Be((Fixed64)24);
-        target.Motor.Handler.Fly.GravityCompensation.Should().Be((Fixed64)0.75f);
-        target.Motor.Handler.Fly.IsFlying.Should().BeTrue();
+        var targetFly = TestRequire.NotNull(targetMotor.Handler.Fly);
+        targetFly.MaxFlySpeed.Should().Be((Fixed64)3);
+        targetFly.MaxAscendSpeed.Should().Be((Fixed64)2);
+        targetFly.MaxDescendSpeed.Should().Be((Fixed64)1.5f);
+        targetFly.MaxFlyAcceleration.Should().Be((Fixed64)24);
+        targetFly.GravityCompensation.Should().Be((Fixed64)0.75f);
+        targetFly.IsFlying.Should().BeTrue();
     }
 }

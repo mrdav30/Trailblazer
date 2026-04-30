@@ -9,8 +9,6 @@ namespace Trailblazer.Navigation.Motor;
 /// </summary>
 public class NavMotorEvents
 {
-#nullable enable
-
     /// <summary>
     /// Event triggered when the scout breaches the water surface.
     /// </summary>
@@ -78,5 +76,4 @@ public class NavMotorEvents
     /// Event triggered when the scout reaches the maximum allowable fall height.
     /// </summary>
     public Action? OnMaxFallHeightReached { get; set; } = null;
-
 }

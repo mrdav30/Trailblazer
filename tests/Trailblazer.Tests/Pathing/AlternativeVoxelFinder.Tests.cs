@@ -35,11 +35,11 @@ public class AlternativeVoxelFinderTests : IDisposable
     public void GetVoxel_ShouldRemainOnTheQueryLayer()
     {
         Vector3d query = new(2, 1, 0);
-        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        Voxel anchorVoxel = TestRequire.VoxelAt(query);
 
-        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 1);
+        AlternativeVoxelFinder.Shared.SetQuery(query, anchorVoxel, maxTestDistance: 1);
 
-        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.y.Should().Be(query.y);
     }
 
@@ -48,11 +48,11 @@ public class AlternativeVoxelFinderTests : IDisposable
     {
         Vector3d query = Vector3d.Zero;
         BlockFirstRing(query);
-        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        Voxel anchorVoxel = TestRequire.VoxelAt(query);
 
-        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
+        AlternativeVoxelFinder.Shared.SetQuery(query, anchorVoxel, maxTestDistance: 2);
 
-        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.Should().Be(new Vector3d(-2, 0, 0));
     }
 
@@ -61,11 +61,11 @@ public class AlternativeVoxelFinderTests : IDisposable
     {
         Fixed64 quarter = TrailblazerWorldManager.VoxelSize / 4;
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
-        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        Voxel anchorVoxel = TestRequire.VoxelAt(query);
 
-        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 1);
+        AlternativeVoxelFinder.Shared.SetQuery(query, anchorVoxel, maxTestDistance: 1);
 
-        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
@@ -74,12 +74,12 @@ public class AlternativeVoxelFinderTests : IDisposable
     {
         Fixed64 quarter = TrailblazerWorldManager.VoxelSize / 4;
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
-        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        Voxel anchorVoxel = TestRequire.VoxelAt(query);
         BlockFirstRing(query);
 
-        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
+        AlternativeVoxelFinder.Shared.SetQuery(query, anchorVoxel, maxTestDistance: 2);
 
-        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.Should().Be(new Vector3d(2, 0, 0));
     }
 
@@ -90,12 +90,12 @@ public class AlternativeVoxelFinderTests : IDisposable
         Fixed64 quarter = TrailblazerWorldManager.VoxelSize / 4;
         Fixed64 eighth = TrailblazerWorldManager.VoxelSize / 8;
         Vector3d query = new(halfVoxel - eighth, Fixed64.Zero, halfVoxel + quarter);
-        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        Voxel anchorVoxel = TestRequire.VoxelAt(query);
         BlockFirstRing(query);
 
-        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
+        AlternativeVoxelFinder.Shared.SetQuery(query, anchorVoxel, maxTestDistance: 2);
 
-        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.Should().Be(new Vector3d(0, 0, 2));
     }
 
@@ -103,12 +103,12 @@ public class AlternativeVoxelFinderTests : IDisposable
     public void GetVoxel_ShouldReturnFalse_WhenSearchRadiusIsExhausted()
     {
         Vector3d query = Vector3d.Zero;
-        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        Voxel anchorVoxel = TestRequire.VoxelAt(query);
         BlockFirstRing(query);
 
-        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 1);
+        AlternativeVoxelFinder.Shared.SetQuery(query, anchorVoxel, maxTestDistance: 1);
 
-        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeFalse();
+        AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? voxel).Should().BeFalse();
         voxel.Should().BeNull();
     }
 
@@ -121,12 +121,12 @@ public class AlternativeVoxelFinderTests : IDisposable
         // exercising the negative-Z branches in both InitializeDirection and the ring-advance logic.
         Fixed64 halfVoxel = TrailblazerWorldManager.VoxelSize / 2;
         Vector3d query = new(halfVoxel, Fixed64.Zero, Fixed64.Zero);
-        TrailblazerWorldManager.TryGetVoxel(query, out Voxel anchorVoxel).Should().BeTrue();
+        Voxel anchorVoxel = TestRequire.VoxelAt(query);
         BlockFirstRing(query);
 
-        AlternativeVoxelFinder.Instance.SetQuery(query, anchorVoxel, maxTestDistance: 2);
+        AlternativeVoxelFinder.Shared.SetQuery(query, anchorVoxel, maxTestDistance: 2);
 
-        AlternativeVoxelFinder.Instance.GetVoxel(out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.z.Should().BeLessThan(Fixed64.Zero);
     }
 
@@ -144,9 +144,9 @@ public class AlternativeVoxelFinderTests : IDisposable
 
     private static void AddObstacle(Vector3d position)
     {
-        TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
-        grid!.TryAddObstacle(
-            voxel!,
+        var (grid, voxel) = TestRequire.GridAndVoxelAt(position);
+        grid.TryAddObstacle(
+            voxel,
             new BoundsKey(position, position)).Should().BeTrue();
     }
 }

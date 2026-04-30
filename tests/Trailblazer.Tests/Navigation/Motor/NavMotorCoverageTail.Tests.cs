@@ -942,7 +942,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         JsonRecordSerializer.Populate(target, json);
 
         target.IsInitialized.Should().BeFalse();
-        target.CurrentState.Should().NotBeNull();
+        Assert.NotNull(target.CurrentState);
         target.CurrentState.Medium.Should().Be(TraversalMedium.Unknown);
         target.TraversalInProgress.Should().BeFalse();
     }

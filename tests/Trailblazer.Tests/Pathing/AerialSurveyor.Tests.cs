@@ -40,20 +40,23 @@ public class AerialSurveyorTests : IDisposable
         AddOpen(new Vector3d(2, 1, 0));
         AddOpen(new Vector3d(2, 0, 0));
         AddObstacle(new Vector3d(1, 0, 0));
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel? blockedVoxel).Should().BeTrue();
+        Voxel blockedVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
-            Fixed64.One);
+            Fixed64.One));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        var waypoints = TestRequire.NotNull(result.Waypoints);
+        Voxel startNode = TestRequire.NotNull(request.StartNode);
+        Voxel endNode = TestRequire.NotNull(request.EndNode);
 
         result.HasPath.Should().BeTrue();
-        result.Waypoints.Length.Should().BeGreaterThan(2);
-        result.Waypoints[0].GlobalIndex.Should().Be(request.StartNode.WorldIndex);
-        result.Waypoints[^1].GlobalIndex.Should().Be(request.EndNode.WorldIndex);
-        result.Waypoints.Should().NotContain(w => w.GlobalIndex == blockedVoxel!.WorldIndex);
+        waypoints.Length.Should().BeGreaterThan(2);
+        waypoints[0].GlobalIndex.Should().Be(startNode.WorldIndex);
+        waypoints[^1].GlobalIndex.Should().Be(endNode.WorldIndex);
+        waypoints.Should().NotContain(w => w.GlobalIndex == blockedVoxel.WorldIndex);
     }
 
     [Fact]
@@ -66,15 +69,17 @@ public class AerialSurveyorTests : IDisposable
         AddOpen(new Vector3d(2, 0, 0));
         AddObstacle(new Vector3d(1, 0, 0));
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
-            Fixed64.One);
+            Fixed64.One));
 
-        PathGuideFactory.RequestGuide(request, out VolumeGuide guide).Should().BeTrue();
+        VolumeGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out VolumeGuide? createdGuide),
+            createdGuide);
 
-        guide.Should().NotBeNull();
-        guide.TrailMap.HasPath.Should().BeTrue();
+        VolumeSurveyResult trailMap = TestRequire.NotNull(guide.TrailMap);
+        trailMap.HasPath.Should().BeTrue();
         guide.CurrentWaypointIndex.Should().BeGreaterThan(0);
     }
 
@@ -89,27 +94,28 @@ public class AerialSurveyorTests : IDisposable
 
         AddObstacle(new Vector3d(1, 0, 1));
 
-        VolumePathRequest request = VolumePathRequest.Create(
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
             new Vector3d(0, 0, 1),
             new Vector3d(2, 0, 1),
             Fixed64.One,
-            medium: TraversalMedium.Liquid);
-
-        request.Should().NotBeNull();
+            medium: TraversalMedium.Liquid));
 
         VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        var waypoints = TestRequire.NotNull(result.Waypoints);
+        Voxel startNode = TestRequire.NotNull(request.StartNode);
+        Voxel endNode = TestRequire.NotNull(request.EndNode);
 
         result.HasPath.Should().BeTrue();
-        result.Waypoints.Length.Should().BeGreaterThan(2);
-        result.Waypoints[0].GlobalIndex.Should().Be(request.StartNode.WorldIndex);
-        result.Waypoints[^1].GlobalIndex.Should().Be(request.EndNode.WorldIndex);
+        waypoints.Length.Should().BeGreaterThan(2);
+        waypoints[0].GlobalIndex.Should().Be(startNode.WorldIndex);
+        waypoints[^1].GlobalIndex.Should().Be(endNode.WorldIndex);
     }
 
     private static void AddObstacle(Vector3d position)
     {
-        TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
-        grid!.TryAddObstacle(
-            voxel!,
+        var (grid, voxel) = TestRequire.GridAndVoxelAt(position);
+        grid.TryAddObstacle(
+            voxel,
             new BoundsKey(position, position)).Should().BeTrue();
     }
 

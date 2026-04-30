@@ -159,9 +159,10 @@ public sealed class WaypointGuideTests : IDisposable
 
         var guide = new VolumeGuide();
         guide.Initialize(survey).Should().BeTrue();
+        var waypoints = TestRequire.NotNull(survey.Waypoints);
 
         // Advance past the last waypoint.
-        for (int i = 0; i < survey.Waypoints.Length; i++)
+        for (int i = 0; i < waypoints.Length; i++)
             guide.AdvanceWaypoint();
 
         guide.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero,

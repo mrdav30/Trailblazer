@@ -217,7 +217,7 @@ public static class PathGuideFactory
     /// </summary>
     /// <param name="guide">The guide to return to the cache.</param>
     /// <param name="dispose">Whether to destroy the guide instead of pooling it.</param>
-    public static void ReturnGuide(IGuide guide, bool dispose = false)
+    public static void ReturnGuide(IGuide? guide, bool dispose = false)
     {
         if (guide == null) return;
 
@@ -238,6 +238,15 @@ public static class PathGuideFactory
         }
     }
 
+    /// <summary>
+    /// Invalidates all cached results associated with the specified chart key.
+    /// </summary>
+    /// <remarks>
+    /// Call this method to ensure that any cached data related to the specified chart is removed and
+    /// will be recalculated on the next access. 
+    /// This is useful when the underlying chart data has changed and stale cache entries must be cleared.
+    /// </remarks>
+    /// <param name="chartKey">The unique key identifying the chart whose cached results should be invalidated. Cannot be null or empty.</param>
     public static void InvalidateCacheFor(string chartKey)
     {
         if (string.IsNullOrEmpty(chartKey)) return;

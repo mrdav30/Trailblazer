@@ -47,7 +47,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 11,
             traversalMedium: TraversalMedium.Solid,
-            out IPathRequest aStarRequest).Should().BeTrue();
+            out IPathRequest? aStarRequest).Should().BeTrue();
 
         aStarRequest.Should().BeOfType<AStarPathRequest>()
             .Which.MaxClimbHeight.Should().Be((Fixed64)2);
@@ -63,7 +63,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 17,
             traversalMedium: TraversalMedium.Solid,
-            out IPathRequest flowFieldRequest).Should().BeTrue();
+            out IPathRequest? flowFieldRequest).Should().BeTrue();
 
         flowFieldRequest.Should().BeOfType<FlowFieldPathRequest>().Which.ExtraFloodRange.Should().Be(17);
 
@@ -78,7 +78,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest aerialRequest).Should().BeTrue();
+            out IPathRequest? aerialRequest).Should().BeTrue();
 
         aerialRequest.Should().BeOfType<VolumePathRequest>().Which.Medium.Should().Be(TraversalMedium.Gas);
 
@@ -93,7 +93,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Liquid,
-            out IPathRequest swimRequest).Should().BeTrue();
+            out IPathRequest? swimRequest).Should().BeTrue();
 
         swimRequest.Should().BeOfType<VolumePathRequest>().Which.Medium.Should().Be(TraversalMedium.Liquid);
     }
@@ -114,7 +114,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest swimRequest).Should().BeFalse();
+            out IPathRequest? swimRequest).Should().BeFalse();
 
         swimRequest.Should().BeNull();
 
@@ -129,7 +129,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Solid,
-            out IPathRequest invalidRequest).Should().BeFalse();
+            out IPathRequest? invalidRequest).Should().BeFalse();
 
         invalidRequest.Should().BeNull();
     }
@@ -152,15 +152,15 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 9,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.TransitionId.Should().Be($"{sceneKey}-landing");
-        handoff.ChartOriginPosition.Should().Be(new Vector3d(1, 0, 0));
-        handoff.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
-        handoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+        GuidedVolumeExitHandoff aerialHandoff = TestRequire.NotNull(handoff);
+        aerialHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
+        aerialHandoff.ChartOriginPosition.Should().Be(new Vector3d(1, 0, 0));
+        aerialHandoff.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
+        aerialHandoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
     }
 
     [Fact]
@@ -182,10 +182,10 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
             out _,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
-        handoff.Should().NotBeNull();
-        handoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+        GuidedVolumeExitHandoff normalizedHandoff = TestRequire.NotNull(handoff);
+        normalizedHandoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
     }
 
     [Fact]
@@ -205,8 +205,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
         handoff.Should().BeNull();
@@ -230,8 +230,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
         handoff.Should().BeNull();
@@ -255,15 +255,15 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 12,
             traversalMedium: TraversalMedium.Liquid,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.TransitionId.Should().Be($"{sceneKey}-exit");
-        handoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
-        handoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
-        handoff.FlowFieldExtraFloodRange.Should().Be(12);
+        GuidedVolumeExitHandoff swimHandoff = TestRequire.NotNull(handoff);
+        swimHandoff.TransitionId.Should().Be($"{sceneKey}-exit");
+        swimHandoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
+        swimHandoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
+        swimHandoff.FlowFieldExtraFloodRange.Should().Be(12);
     }
 
     [Fact]
@@ -284,8 +284,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 7,
             traversalMedium: TraversalMedium.Liquid,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
         handoff.Should().BeNull();
@@ -309,8 +309,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Liquid,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeFalse();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
         request.Should().BeNull();
         handoff.Should().BeNull();
@@ -333,12 +333,12 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
-        VolumePathRequest volumeRequest = request.Should().BeOfType<VolumePathRequest>().Subject;
+        VolumePathRequest volumeRequest = Assert.IsType<VolumePathRequest>(request);
         volumeRequest.TargetPosition.Should().Be(new Vector3d(12, 0, 0));
-        volumeRequest.EndNode.WorldPosition.Should().Be(new Vector3d(2, 0, 0));
+        TestRequire.NotNull(volumeRequest.EndNode).WorldPosition.Should().Be(new Vector3d(2, 0, 0));
         handoff.Should().BeNull();
     }
 
@@ -363,8 +363,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
         handoff.Should().BeNull();
@@ -388,13 +388,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.TransitionId.Should().Be($"{sceneKey}-landing");
-        handoff.ChartOriginPosition.Should().Be(new Vector3d(1, 0, 0));
+        GuidedVolumeExitHandoff snappedAerialHandoff = TestRequire.NotNull(handoff);
+        snappedAerialHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
+        snappedAerialHandoff.ChartOriginPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
     [Fact]
@@ -415,13 +415,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 4,
             traversalMedium: TraversalMedium.Liquid,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.TransitionId.Should().Be($"{sceneKey}-exit");
-        handoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
+        GuidedVolumeExitHandoff snappedSwimHandoff = TestRequire.NotNull(handoff);
+        snappedSwimHandoff.TransitionId.Should().Be($"{sceneKey}-exit");
+        snappedSwimHandoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
     }
 
     /// <summary>
@@ -444,7 +444,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Solid,
-            out IPathRequest aStarRequest).Should().BeFalse();
+            out IPathRequest? aStarRequest).Should().BeFalse();
 
         aStarRequest.Should().BeNull();
 
@@ -459,7 +459,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Solid,
-            out IPathRequest flowFieldRequest).Should().BeFalse();
+            out IPathRequest? flowFieldRequest).Should().BeFalse();
 
         flowFieldRequest.Should().BeNull();
     }
@@ -483,8 +483,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Solid,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeFalse();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
         request.Should().BeNull();
         handoff.Should().BeNull();
@@ -511,8 +511,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeFalse();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
         request.Should().BeNull();
         handoff.Should().BeNull();
@@ -537,8 +537,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Liquid,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeFalse();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
         request.Should().BeNull();
         handoff.Should().BeNull();
@@ -568,8 +568,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Liquid,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         // TryCreateGasLandingHandoff returns false for Liquid medium → direct request kept
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
@@ -591,8 +591,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Solid,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeFalse();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
         request.Should().BeNull();
         handoff.Should().BeNull();
@@ -615,11 +615,11 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
-        VolumePathRequest volumeRequest = request.Should().BeOfType<VolumePathRequest>().Subject;
-        volumeRequest.EndNode.WorldPosition.Should().Be(new Vector3d(2, 0, 0));
+        VolumePathRequest volumeRequest = Assert.IsType<VolumePathRequest>(request);
+        TestRequire.NotNull(volumeRequest.EndNode).WorldPosition.Should().Be(new Vector3d(2, 0, 0));
         handoff.Should().BeNull();
     }
 
@@ -641,13 +641,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
-        request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.TransitionId.Should().Be($"{sceneKey}-landing");
-        handoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
+        Assert.IsType<VolumePathRequest>(request).TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        GuidedVolumeExitHandoff preciseLandingHandoff = TestRequire.NotNull(handoff);
+        preciseLandingHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
+        preciseLandingHandoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
     }
 
     [Fact]
@@ -670,12 +670,12 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.TransitionId.Should().Be($"{sceneKey}-landing");
+        GuidedVolumeExitHandoff cheaperLandingHandoff = TestRequire.NotNull(handoff);
+        cheaperLandingHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
     }
 
     [Fact]
@@ -696,8 +696,8 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
             traversalMedium: TraversalMedium.Gas,
-            out IPathRequest request,
-            out GuidedVolumeExitHandoff handoff).Should().BeTrue();
+            out IPathRequest? request,
+            out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         request.Should().BeOfType<VolumePathRequest>().Which.TargetPosition.Should().Be(Vector3d.Zero);
         handoff.Should().BeNull();

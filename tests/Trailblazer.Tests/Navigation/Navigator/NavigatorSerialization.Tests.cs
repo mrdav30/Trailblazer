@@ -41,13 +41,15 @@ public class NavigatorSerializationTests : IDisposable
     public void JsonRoundTrip_ShouldRestoreMotorStateIntoExistingMotor()
     {
         var source = CreateConfiguredMotorAgent();
+        NavMotor sourceMotor = TestRequire.NotNull(source.Motor);
 
-        string json = JsonRecordSerializer.Serialize(source.Motor, writeIndented: true);
+        string json = JsonRecordSerializer.Serialize(sourceMotor, writeIndented: true);
 
         var target = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(-2, 0, -2), startingMedium: TraversalMedium.Solid);
-        JsonRecordSerializer.Populate(target.Motor, json);
+        NavMotor targetMotor = TestRequire.NotNull(target.Motor);
+        JsonRecordSerializer.Populate(targetMotor, json);
 
-        AssertMotorStateMatches(source.Motor, target.Motor);
+        AssertMotorStateMatches(sourceMotor, targetMotor);
     }
 
     [Fact]
@@ -59,6 +61,8 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         JsonRecordSerializer.Populate(target, json);
+        NavMotor targetMotor = TestRequire.NotNull(target.Motor);
+        NavTurning targetTurning = TestRequire.NotNull(target.Turning);
 
         target.Position.Should().Be(source.Position);
         target.LastPosition.Should().Be(source.LastPosition);
@@ -84,28 +88,30 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.IsGuideded.Should().BeFalse();
 
-        AssertMotorStateMatches(source.Motor, target.Motor);
-        AssertTurningStateMatches(source.Turning, target.Turning);
+        AssertMotorStateMatches(TestRequire.NotNull(source.Motor), targetMotor);
+        AssertTurningStateMatches(TestRequire.NotNull(source.Turning), targetTurning);
 
         TrailblazerManager.Simulate();
         target.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Slow, isRequestingJump: false);
         target.Simulate();
         target.CommitFrameMotion();
 
-        target.Motor.IsInitialized.Should().BeTrue();
+        targetMotor.IsInitialized.Should().BeTrue();
     }
 
     [Fact]
     public void MemoryPackRoundTrip_ShouldRestoreMotorStateIntoExistingMotor()
     {
         var source = CreateConfiguredMotorAgent();
+        NavMotor sourceMotor = TestRequire.NotNull(source.Motor);
 
-        byte[] data = MemoryPackRecordSerializer.Serialize(source.Motor);
+        byte[] data = MemoryPackRecordSerializer.Serialize(sourceMotor);
 
         var target = MockMotorAgentTestFactory.CreateMockAgent(startPosition: new Vector3d(-2, 0, -2), startingMedium: TraversalMedium.Solid);
-        MemoryPackRecordSerializer.Populate(target.Motor, data);
+        NavMotor targetMotor = TestRequire.NotNull(target.Motor);
+        MemoryPackRecordSerializer.Populate(targetMotor, data);
 
-        AssertMotorStateMatches(source.Motor, target.Motor);
+        AssertMotorStateMatches(sourceMotor, targetMotor);
     }
 
     [Fact]
@@ -117,6 +123,8 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         MemoryPackRecordSerializer.Populate(target, data);
+        NavMotor targetMotor = TestRequire.NotNull(target.Motor);
+        NavTurning targetTurning = TestRequire.NotNull(target.Turning);
 
         target.Position.Should().Be(source.Position);
         target.LastPosition.Should().Be(source.LastPosition);
@@ -142,15 +150,15 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.IsGuideded.Should().BeFalse();
 
-        AssertMotorStateMatches(source.Motor, target.Motor);
-        AssertTurningStateMatches(source.Turning, target.Turning);
+        AssertMotorStateMatches(TestRequire.NotNull(source.Motor), targetMotor);
+        AssertTurningStateMatches(TestRequire.NotNull(source.Turning), targetTurning);
 
         TrailblazerManager.Simulate();
         target.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Slow, isRequestingJump: false);
         target.Simulate();
         target.CommitFrameMotion();
 
-        target.Motor.IsInitialized.Should().BeTrue();
+        targetMotor.IsInitialized.Should().BeTrue();
     }
 
     [Fact]
@@ -159,12 +167,14 @@ public class NavigatorSerializationTests : IDisposable
         RegisterGuidedPathChart("NavigatorSerializationJsonAStar");
 
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.AStar);
-        source.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        sourceSteering.TrailGuide.Should().BeOfType<AStarGuide>();
 
         string json = JsonRecordSerializer.Serialize(source, writeIndented: true);
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         JsonRecordSerializer.Populate(target, json);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
@@ -174,13 +184,13 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
 
-        AssertSteeringStateMatches(source.Steering, target.Steering);
+        AssertSteeringStateMatches(sourceSteering, targetSteering);
 
         TrailblazerManager.Simulate();
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
-        target.Steering.ShouldMove.Should().BeTrue();
+        targetSteering.ShouldMove.Should().BeTrue();
     }
 
     [Theory]
@@ -199,6 +209,7 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.IsRequestingClimb.Should().BeTrue();
@@ -206,7 +217,7 @@ public class NavigatorSerializationTests : IDisposable
         TrailblazerManager.Simulate();
         target.Simulate();
 
-        target.Steering.CurrentRequest.Should().NotBeNull();
+        Assert.NotNull(targetSteering.CurrentRequest);
         target.FrameRequest.IsRequestingClimb.Should().BeTrue();
 
         PathManager.UnloadChart("NavigatorSerializationGuidedClimb");
@@ -229,6 +240,7 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
         ReflectionUtility.GetPrivateFieldFromBase<object>(target, "_guidedClimbIntentMode")
             .ToString().Should().Be(sourceMode.ToString());
@@ -239,7 +251,7 @@ public class NavigatorSerializationTests : IDisposable
         target.Simulate();
 
         target.FrameRequest.IsRequestingClimb.Should().BeTrue();
-        target.Steering.CurrentRouteRequestsClimbIntent.Should().BeTrue();
+        targetSteering.CurrentRouteRequestsClimbIntent.Should().BeTrue();
     }
 
     [Theory]
@@ -248,25 +260,27 @@ public class NavigatorSerializationTests : IDisposable
     public void RoundTrip_ShouldRebuildTurningRuntimeState_OnLoad(bool useMemoryPack)
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
-        source.Turning.TurnRate = (Fixed64)0.35f;
-        source.Turning.RequestTurnDirection(source.Forward, Vector3d.Right, interpolation: Fixed64.Half);
-        source.Turning.TrySimulateTurn(
+        NavTurning sourceTurning = TestRequire.NotNull(source.Turning);
+        sourceTurning.TurnRate = (Fixed64)0.35f;
+        sourceTurning.RequestTurnDirection(source.Forward, Vector3d.Right, interpolation: Fixed64.Half);
+        sourceTurning.TrySimulateTurn(
             source.Position,
             source.LastPosition,
             source.Forward,
             source.Rotation,
             out _).Should().BeTrue();
 
-        source.Turning.TargetReached.Should().BeFalse();
-        source.Turning.TargetRotation.Should().NotBe(FixedQuaternion.Identity);
+        sourceTurning.TargetReached.Should().BeFalse();
+        sourceTurning.TargetRotation.Should().NotBe(FixedQuaternion.Identity);
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavTurning targetTurning = TestRequire.NotNull(target.Turning);
 
-        target.Turning.CanTurn.Should().Be(source.Turning.CanTurn);
-        target.Turning.TurnRate.Should().Be(source.Turning.TurnRate);
-        target.Turning.TargetReached.Should().BeTrue();
-        target.Turning.TargetRotation.Should().Be(FixedQuaternion.Identity);
+        targetTurning.CanTurn.Should().Be(sourceTurning.CanTurn);
+        targetTurning.TurnRate.Should().Be(sourceTurning.TurnRate);
+        targetTurning.TargetReached.Should().BeTrue();
+        targetTurning.TargetRotation.Should().Be(FixedQuaternion.Identity);
     }
 
     [Fact]
@@ -275,12 +289,14 @@ public class NavigatorSerializationTests : IDisposable
         RegisterGuidedPathChart("NavigatorSerializationMemoryPackFlowField");
 
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.FlowField);
-        source.Steering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        sourceSteering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
 
         byte[] data = MemoryPackRecordSerializer.Serialize(source);
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         MemoryPackRecordSerializer.Populate(target, data);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
@@ -290,13 +306,13 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
 
-        AssertSteeringStateMatches(source.Steering, target.Steering);
+        AssertSteeringStateMatches(sourceSteering, targetSteering);
 
         TrailblazerManager.Simulate();
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
-        target.Steering.ShouldMove.Should().BeTrue();
+        targetSteering.ShouldMove.Should().BeTrue();
     }
 
     [Theory]
@@ -305,11 +321,13 @@ public class NavigatorSerializationTests : IDisposable
     public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedAerialTraversal(bool useMemoryPack)
     {
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.Aerial);
-        source.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
-        source.Steering.TrailGuide.Should().BeOfType<VolumeGuide>();
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        sourceSteering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
+        sourceSteering.TrailGuide.Should().BeOfType<VolumeGuide>();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
@@ -318,7 +336,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
 
-        AssertSteeringStateMatches(source.Steering, target.Steering);
+        AssertSteeringStateMatches(sourceSteering, targetSteering);
 
         TrailblazerManager.Simulate();
         target.Simulate();
@@ -326,7 +344,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
         target.FrameRequest.Direction.y.Should().BeGreaterThan(Fixed64.Zero);
         target.FrameRequest.IsRequestingFlight.Should().BeTrue();
-        target.Steering.ShouldMove.Should().BeTrue();
+        targetSteering.ShouldMove.Should().BeTrue();
     }
 
     [Theory]
@@ -337,15 +355,17 @@ public class NavigatorSerializationTests : IDisposable
         RegisterTransitionFallbackAStarScene();
 
         var source = CreateConfiguredTransitionFallbackAStarNavigator();
-        source.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
-        source.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        sourceSteering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
+        sourceSteering.TrailGuide.Should().BeOfType<AStarGuide>();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
-        target.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
-        target.Steering.TrailGuide.Should().BeOfType<AStarGuide>();
-        AssertSteeringStateMatches(source.Steering, target.Steering);
+        targetSteering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
+        targetSteering.TrailGuide.Should().BeOfType<AStarGuide>();
+        AssertSteeringStateMatches(sourceSteering, targetSteering);
     }
 
     [Theory]
@@ -373,17 +393,19 @@ public class NavigatorSerializationTests : IDisposable
             groupId: 3);
 
         TrailblazerManager.Simulate();
-        source.Steering.GetHeading(source);
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        sourceSteering.GetHeading(source);
 
-        VolumeGuide sourceGuide = source.Steering.TrailGuide.Should().BeOfType<VolumeGuide>().Subject;
+        VolumeGuide sourceGuide = sourceSteering.TrailGuide.Should().BeOfType<VolumeGuide>().Subject;
         if (sourceGuide.TryGetWaypointAt(sourceGuide.CurrentWaypointIndex + 1, out _))
             sourceGuide.AdvanceWaypoint();
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
-        target.Steering.TrailGuide.Should().BeOfType<VolumeGuide>();
-        ((VolumeGuide)target.Steering.TrailGuide).CurrentWaypointIndex.Should().Be(sourceGuide.CurrentWaypointIndex);
+        targetSteering.TrailGuide.Should().BeOfType<VolumeGuide>();
+        ((VolumeGuide)targetSteering.TrailGuide).CurrentWaypointIndex.Should().Be(sourceGuide.CurrentWaypointIndex);
 
         TrailblazerManager.Simulate();
         target.Simulate();
@@ -414,11 +436,12 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
-        target.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
-        ((VolumePathRequest)target.Steering.CurrentRequest).Medium.Should().Be(TraversalMedium.Liquid);
+        targetSteering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
+        ((VolumePathRequest)targetSteering.CurrentRequest).Medium.Should().Be(TraversalMedium.Liquid);
 
         TrailblazerManager.Simulate();
         target.Simulate();
@@ -448,26 +471,28 @@ public class NavigatorSerializationTests : IDisposable
             isRequestingJump: false,
             groupId: 5);
 
-        VolumePathRequest sourceRequest = source.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        VolumePathRequest sourceRequest = Assert.IsType<VolumePathRequest>(TestRequire.NotNull(sourceSteering.CurrentRequest));
         sourceRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
-        target.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
-            .Which.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        Assert.IsType<VolumePathRequest>(TestRequire.NotNull(targetSteering.CurrentRequest))
+            .TargetPosition.Should().Be(new Vector3d(2, 0, 0));
 
         target.SetTestPosition(new Vector3d(2, 0, 0));
         target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        target.Steering.Arrive();
+        targetSteering.Arrive();
 
         TrailblazerManager.Simulate();
         target.Simulate();
 
-        FlowFieldPathRequest followupRequest = target.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
+        FlowFieldPathRequest followupRequest = Assert.IsType<FlowFieldPathRequest>(TestRequire.NotNull(targetSteering.CurrentRequest));
         followupRequest.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
         followupRequest.MaxClimbHeight.Should().Be((Fixed64)2);
-        target.Steering.MovementGroupID.Should().Be(5);
+        targetSteering.MovementGroupID.Should().Be(5);
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
         target.FrameRequest.Direction.x.Should().BeGreaterThan(Fixed64.Zero);
 
@@ -493,30 +518,32 @@ public class NavigatorSerializationTests : IDisposable
             isRequestingJump: false,
             groupId: 6);
 
-        VolumePathRequest sourceRequest = source.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
+        VolumePathRequest sourceRequest = Assert.IsType<VolumePathRequest>(TestRequire.NotNull(sourceSteering.CurrentRequest));
         sourceRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
-        target.Steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
-            .Which.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
+        Assert.IsType<VolumePathRequest>(TestRequire.NotNull(targetSteering.CurrentRequest))
+            .TargetPosition.Should().Be(new Vector3d(1, 0, 0));
         target.FrameRequest.IsRequestingFlight.Should().BeTrue();
 
         target.SetTestPosition(new Vector3d(1, 0, 0));
         target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        target.Steering.Arrive();
+        targetSteering.Arrive();
 
         TrailblazerManager.Simulate();
         target.Simulate();
 
-        AStarPathRequest followupRequest = target.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
+        AStarPathRequest followupRequest = Assert.IsType<AStarPathRequest>(TestRequire.NotNull(targetSteering.CurrentRequest));
         followupRequest.TargetPosition.x.Should().Be((Fixed64)4);
         followupRequest.TargetPosition.y.Should().Be(Fixed64.Zero);
         followupRequest.TargetPosition.z.Should().Be(Fixed64.Zero);
         followupRequest.AllowTraversalTransitions.Should().BeTrue();
-        target.Steering.MovementGroupID.Should().Be(6);
-        target.Steering.Destination.x.Should().Be((Fixed64)4);
+        targetSteering.MovementGroupID.Should().Be(6);
+        targetSteering.Destination.x.Should().Be((Fixed64)4);
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
 
         UnloadAerialLandingHandoffScene(sceneKey);
@@ -544,19 +571,20 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
         target.FrameRequest.IsRequestingFlight.Should().BeTrue();
         target.FrameRequest.IsRequestingClimb.Should().BeTrue();
 
         target.SetTestPosition(new Vector3d(1, 0, 0));
         target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        target.Steering!.Arrive();
+        targetSteering.Arrive();
 
         TrailblazerManager.Simulate();
         target.Simulate();
 
-        target.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
-        target.Steering.MovementGroupID.Should().Be(8);
+        targetSteering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
+        targetSteering.MovementGroupID.Should().Be(8);
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
         target.FrameRequest.IsRequestingClimb.Should().BeTrue();
 
@@ -580,9 +608,12 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         target.OccupantGroupId = 9;
-        target.Steering!.StopMultiplier = (Fixed64)0.33f;
-        target.Turning!.TurnRate = (Fixed64)0.72f;
-        target.Motor!.Handler.Move.MaxFastSpeed = (Fixed64)8;
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
+        NavTurning targetTurning = TestRequire.NotNull(target.Turning);
+        NavMotor targetMotor = TestRequire.NotNull(target.Motor);
+        targetSteering.StopMultiplier = (Fixed64)0.33f;
+        targetTurning.TurnRate = (Fixed64)0.72f;
+        targetMotor.Handler.Move.MaxFastSpeed = (Fixed64)8;
 
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
@@ -590,9 +621,9 @@ public class NavigatorSerializationTests : IDisposable
         // since we removed the occupantGroupId entry, it should fall back to the default value of 1
         // regardless of the source and target values before population
         target.OccupantGroupId.Should().Be(1);
-        target.Steering.StopMultiplier.Should().Be((Fixed64)0.33f);
-        target.Turning.TurnRate.Should().Be((Fixed64)0.72f);
-        target.Motor.Handler.Move.MaxFastSpeed.Should().Be((Fixed64)8);
+        targetSteering.StopMultiplier.Should().Be((Fixed64)0.33f);
+        targetTurning.TurnRate.Should().Be((Fixed64)0.72f);
+        targetMotor.Handler.Move.MaxFastSpeed.Should().Be((Fixed64)8);
     }
 
     [Theory]
@@ -637,13 +668,15 @@ public class NavigatorSerializationTests : IDisposable
         payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRequest", "flowFieldExtraFloodRange");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
         bool expectedAllowUnwalkable = target.GuidedAllowUnwalkableEndpoints;
         bool expectedAllowTraversalTransitions = target.GuidedAllowTraversalTransitions;
         Fixed64 expectedRootFlowFieldMaxClimbHeight = target.GuidedMaxClimbHeight;
         int expectedRootExtraFloodRange = target.GuidedFlowFieldExtraFloodRange;
-        int expectedPathRecheckCooldown = target.Steering.PathRecheckCooldownFrames;
-        Fixed64 expectedStopMultiplier = target.Steering.StopMultiplier;
-        Fixed64 expectedBrakingPower = target.Steering.BrakingPower;
+        int expectedPathRecheckCooldown = targetSteering.PathRecheckCooldownFrames;
+        Fixed64 expectedStopMultiplier = targetSteering.StopMultiplier;
+        Fixed64 expectedBrakingPower = targetSteering.BrakingPower;
 
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
 
@@ -652,12 +685,12 @@ public class NavigatorSerializationTests : IDisposable
         target.GuidedAllowTraversalTransitions.Should().Be(expectedAllowTraversalTransitions);
         target.GuidedMaxClimbHeight.Should().Be(expectedRootFlowFieldMaxClimbHeight);
         target.GuidedFlowFieldExtraFloodRange.Should().Be(expectedRootExtraFloodRange);
-        target.Steering.PathRecheckCooldownFrames.Should().Be(expectedPathRecheckCooldown);
-        target.Steering.StopMultiplier.Should().Be(expectedStopMultiplier);
-        target.Steering.BrakingPower.Should().Be(expectedBrakingPower);
-        target.Steering.BehaviorWeights.Separation.Should().Be(source.Steering.BehaviorWeights.Separation);
+        targetSteering.PathRecheckCooldownFrames.Should().Be(expectedPathRecheckCooldown);
+        targetSteering.StopMultiplier.Should().Be(expectedStopMultiplier);
+        targetSteering.BrakingPower.Should().Be(expectedBrakingPower);
+        targetSteering.BehaviorWeights.Separation.Should().Be(sourceSteering.BehaviorWeights.Separation);
 
-        var request = target.Steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
+        var request = targetSteering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
         request.MaxClimbHeight.Should().Be(Fixed64.One);
         request.ExtraFloodRange.Should().Be(FlowFieldPathRequest.DefaultExtraFloodRange);
 
@@ -704,8 +737,9 @@ public class NavigatorSerializationTests : IDisposable
         RegisterGuidedPathChart("NavigatorSerializationInvalidRequest");
 
         var source = CreateConfiguredGuidedNavigator(GuidedPathMode.AStar);
+        NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
         source.GuidedAllowUnwalkableEndpoints = false;
-        source.Steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject.AllowUnwalkableEndpoints = false;
+        sourceSteering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject.AllowUnwalkableEndpoints = false;
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
         payload = SerializationUtility.SetPayloadValue(
             payload,
@@ -717,14 +751,15 @@ public class NavigatorSerializationTests : IDisposable
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+        NavSteering targetSteering = TestRequire.NotNull(target.Steering);
 
-        target.Steering.CurrentRequest.Should().BeNull();
-        target.Steering.TrailGuide.Should().BeNull();
-        target.Steering.ShouldMove.Should().BeFalse();
-        target.Steering.IsStuck.Should().BeFalse();
-        target.Steering.HasLineOfSightPath.Should().BeFalse();
-        target.Steering.Destination.Should().Be(Vector3d.Zero);
-        target.Steering.TargetDirection.Should().Be(Vector3d.Zero);
+        targetSteering.CurrentRequest.Should().BeNull();
+        targetSteering.TrailGuide.Should().BeNull();
+        targetSteering.ShouldMove.Should().BeFalse();
+        targetSteering.IsStuck.Should().BeFalse();
+        targetSteering.HasLineOfSightPath.Should().BeFalse();
+        targetSteering.Destination.Should().Be(Vector3d.Zero);
+        targetSteering.TargetDirection.Should().Be(Vector3d.Zero);
 
         TrailblazerManager.Simulate();
         target.Simulate();
@@ -753,41 +788,47 @@ public class NavigatorSerializationTests : IDisposable
             startPosition: new Vector3d(-2, 0, -2),
             platformMatrix: MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(-1, 0, -1)),
             motionTransfer: MotionTransfer.PermaLocked);
-        SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
+        NavMotor targetMotor = TestRequire.NotNull(target.Motor);
+        SerializationUtility.PopulateRecord(targetMotor, payload, useMemoryPack);
+        var targetPlatform = TestRequire.NotNull(targetMotor.Handler.Platform);
+        var targetJump = TestRequire.NotNull(targetMotor.Handler.Jump);
+        var targetFall = TestRequire.NotNull(targetMotor.Handler.Fall);
+        var targetSlide = TestRequire.NotNull(targetMotor.Handler.Slide);
+        var targetSwim = TestRequire.NotNull(targetMotor.Handler.Swim);
 
-        target.Motor.Handler.Move.IsEnabled.Should().BeFalse();
-        target.Motor.Handler.Move.FrameVelocity.Should().Be(Vector3d.Zero);
+        targetMotor.Handler.Move.IsEnabled.Should().BeFalse();
+        targetMotor.Handler.Move.FrameVelocity.Should().Be(Vector3d.Zero);
 
-        target.Motor.Handler.Platform.IsEnabled.Should().BeFalse();
-        target.Motor.Handler.Platform.IsNewPlatform.Should().BeFalse();
-        target.Motor.Handler.Platform.ActivePlatform.Should().BeNull();
-        target.Motor.Handler.Platform.PreviousPlatform.Should().BeNull();
-        target.Motor.Handler.Platform.HoldPlatform.Should().BeNull();
-        target.Motor.Handler.Platform.MovementTransfer.Should().Be(MotionTransfer.None);
-        target.Motor.Handler.Platform.ScoutLocalPoint.Should().Be(Vector3d.Zero);
-        target.Motor.Handler.Platform.ScoutLocalRotation.Should().Be(FixedQuaternion.Identity);
-        target.Motor.Handler.Platform.PlatformVelocity.Should().Be(Vector3d.Zero);
-        target.Motor.Handler.Platform.FramePlatformVelocity.Should().Be(Vector3d.Zero);
-        target.Motor.Handler.Platform.HoldPlatformFrames.Should().Be(0);
+        targetPlatform.IsEnabled.Should().BeFalse();
+        targetPlatform.IsNewPlatform.Should().BeFalse();
+        targetPlatform.ActivePlatform.Should().BeNull();
+        targetPlatform.PreviousPlatform.Should().BeNull();
+        targetPlatform.HoldPlatform.Should().BeNull();
+        targetPlatform.MovementTransfer.Should().Be(MotionTransfer.None);
+        targetPlatform.ScoutLocalPoint.Should().Be(Vector3d.Zero);
+        targetPlatform.ScoutLocalRotation.Should().Be(FixedQuaternion.Identity);
+        targetPlatform.PlatformVelocity.Should().Be(Vector3d.Zero);
+        targetPlatform.FramePlatformVelocity.Should().Be(Vector3d.Zero);
+        targetPlatform.HoldPlatformFrames.Should().Be(0);
 
-        target.Motor.Handler.Jump.IsEnabled.Should().BeFalse();
-        target.Motor.Handler.Jump.IsJumping.Should().BeFalse();
-        target.Motor.Handler.Jump.IsHoldingJump.Should().BeFalse();
-        target.Motor.Handler.Jump.JumpStartTime.Should().Be(Fixed64.Zero);
-        target.Motor.Handler.Jump.FrameJumpDirection.Should().Be(Vector3d.Zero);
+        targetJump.IsEnabled.Should().BeFalse();
+        targetJump.IsJumping.Should().BeFalse();
+        targetJump.IsHoldingJump.Should().BeFalse();
+        targetJump.JumpStartTime.Should().Be(Fixed64.Zero);
+        targetJump.FrameJumpDirection.Should().Be(Vector3d.Zero);
 
-        target.Motor.Handler.Fall.IsEnabled.Should().BeFalse();
-        target.Motor.Handler.Fall.IsFalling.Should().BeFalse();
-        target.Motor.Handler.Fall.FallStart.Should().Be(Fixed64.Zero);
-        target.Motor.Handler.Fall.FallEnd.Should().Be(Fixed64.Zero);
+        targetFall.IsEnabled.Should().BeFalse();
+        targetFall.IsFalling.Should().BeFalse();
+        targetFall.FallStart.Should().Be(Fixed64.Zero);
+        targetFall.FallEnd.Should().Be(Fixed64.Zero);
 
-        target.Motor.Handler.Slide.IsEnabled.Should().BeFalse();
-        target.Motor.Handler.Slide.IsSliding.Should().BeFalse();
+        targetSlide.IsEnabled.Should().BeFalse();
+        targetSlide.IsSliding.Should().BeFalse();
 
-        target.Motor.Handler.Swim.IsEnabled.Should().BeFalse();
-        target.Motor.Handler.Swim.IsSwimming.Should().BeFalse();
-        target.Motor.Handler.Swim.IsDiving.Should().BeFalse();
-        target.Motor.Handler.Swim.UnderwaterTimer.Should().Be(Fixed64.Zero);
+        targetSwim.IsEnabled.Should().BeFalse();
+        targetSwim.IsSwimming.Should().BeFalse();
+        targetSwim.IsDiving.Should().BeFalse();
+        targetSwim.UnderwaterTimer.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -812,12 +853,14 @@ public class NavigatorSerializationTests : IDisposable
         var lazySecond = CreateNavigator(new Vector3d(-2, 0, 0), size: Fixed64.One);
         JsonRecordSerializer.Populate(lazyFirst, firstJson);
         JsonRecordSerializer.Populate(lazySecond, secondJson);
+        NavSteering lazyFirstSteering = TestRequire.NotNull(lazyFirst.Steering);
+        NavSteering lazySecondSteering = TestRequire.NotNull(lazySecond.Steering);
 
-        lazyFirst.Steering.GetHeading(lazyFirst);
-        lazySecond.Steering.GetHeading(lazySecond);
+        lazyFirstSteering.GetHeading(lazyFirst);
+        lazySecondSteering.GetHeading(lazySecond);
 
-        lazyFirst.Steering.Destination.Should().Be(sharedDestination);
-        lazySecond.Steering.Destination.Should().Be(new Vector3d((Fixed64)4.5f, Fixed64.Zero, Fixed64.Zero));
+        lazyFirstSteering.Destination.Should().Be(sharedDestination);
+        lazySecondSteering.Destination.Should().Be(new Vector3d((Fixed64)4.5f, Fixed64.Zero, Fixed64.Zero));
 
         TrailblazerManager.Reset();
 
@@ -825,15 +868,17 @@ public class NavigatorSerializationTests : IDisposable
         var prewarmedSecond = CreateNavigator(new Vector3d(-2, 0, 0), size: Fixed64.One);
         JsonRecordSerializer.Populate(prewarmedFirst, firstJson);
         JsonRecordSerializer.Populate(prewarmedSecond, secondJson);
+        NavSteering prewarmedFirstSteering = TestRequire.NotNull(prewarmedFirst.Steering);
+        NavSteering prewarmedSecondSteering = TestRequire.NotNull(prewarmedSecond.Steering);
 
         prewarmedFirst.PrewarmMovementGroup();
         prewarmedSecond.PrewarmMovementGroup();
 
-        prewarmedFirst.Steering.GetHeading(prewarmedFirst);
-        prewarmedSecond.Steering.GetHeading(prewarmedSecond);
+        prewarmedFirstSteering.GetHeading(prewarmedFirst);
+        prewarmedSecondSteering.GetHeading(prewarmedSecond);
 
-        prewarmedFirst.Steering.Destination.Should().Be(new Vector3d((Fixed64)3.5f, Fixed64.Zero, Fixed64.Zero));
-        prewarmedSecond.Steering.Destination.Should().Be(new Vector3d((Fixed64)4.5f, Fixed64.Zero, Fixed64.Zero));
+        prewarmedFirstSteering.Destination.Should().Be(new Vector3d((Fixed64)3.5f, Fixed64.Zero, Fixed64.Zero));
+        prewarmedSecondSteering.Destination.Should().Be(new Vector3d((Fixed64)4.5f, Fixed64.Zero, Fixed64.Zero));
 
         PathManager.UnloadChart("NavigatorSerializationMovementGroupPrewarm");
     }
@@ -861,39 +906,46 @@ public class NavigatorSerializationTests : IDisposable
             startPosition: new Vector3d(2, 0, 3),
             platformMatrix: MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(4, 0, 5)),
             motionTransfer: MotionTransfer.PermaTransfer);
+        NavMotor motor = TestRequire.NotNull(source.Motor);
+        var jump = TestRequire.NotNull(motor.Handler.Jump);
+        var fall = TestRequire.NotNull(motor.Handler.Fall);
+        var slide = TestRequire.NotNull(motor.Handler.Slide);
+        var swim = TestRequire.NotNull(motor.Handler.Swim);
+        var fly = TestRequire.NotNull(motor.Handler.Fly);
+        var platform = TestRequire.NotNull(motor.Handler.Platform);
 
-        source.Motor.Handler.IsInControl = false;
-        source.Motor.Handler.Move.MaxFastSpeed = (Fixed64)1.75f;
-        source.Motor.Handler.Move.FrameVelocity = new Vector3d(1, 2, 3);
+        motor.Handler.IsInControl = false;
+        motor.Handler.Move.MaxFastSpeed = (Fixed64)1.75f;
+        motor.Handler.Move.FrameVelocity = new Vector3d(1, 2, 3);
 
-        source.Motor.Handler.Jump.MaxJumpCount = 2;
-        source.Motor.Handler.Jump.RegisterJump();
-        source.Motor.Handler.Jump.FrameJumpDirection = new Vector3d(0, 1, 1).Normal;
-        source.Motor.Handler.Jump.StartCooldown();
+        jump.MaxJumpCount = 2;
+        jump.RegisterJump();
+        jump.FrameJumpDirection = new Vector3d(0, 1, 1).Normal;
+        jump.StartCooldown();
 
-        source.Motor.Handler.Fall.IsFalling = true;
-        source.Motor.Handler.Fall.FallStart = (Fixed64)9;
-        source.Motor.Handler.Fall.FallEnd = (Fixed64)3;
+        fall.IsFalling = true;
+        fall.FallStart = (Fixed64)9;
+        fall.FallEnd = (Fixed64)3;
 
-        source.Motor.Handler.Slide.IsSliding = true;
+        slide.IsSliding = true;
 
-        source.Motor.Handler.Swim.IsSwimming = true;
-        source.Motor.Handler.Swim.IsDiving = true;
-        source.Motor.Handler.Swim.UnderwaterTimer = (Fixed64)7;
+        swim.IsSwimming = true;
+        swim.IsDiving = true;
+        swim.UnderwaterTimer = (Fixed64)7;
 
-        source.Motor.Handler.Fly.MaxFlySpeed = (Fixed64)2.5f;
-        source.Motor.Handler.Fly.GravityCompensation = (Fixed64)0.75f;
-        source.Motor.Handler.Fly.IsFlying = true;
+        fly.MaxFlySpeed = (Fixed64)2.5f;
+        fly.GravityCompensation = (Fixed64)0.75f;
+        fly.IsFlying = true;
 
         var holdPlatform = new PlatformSnapshot(9, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(6, 0, 6)));
-        source.Motor.Handler.Platform.IsNewPlatform = true;
-        source.Motor.Handler.Platform.PreviousPlatform = new PlatformSnapshot(8, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(3, 0, 3)));
-        source.Motor.Handler.Platform.SetHoldPlatform(holdPlatform);
-        source.Motor.Handler.Platform.TickHoldOnPlatform();
-        source.Motor.Handler.Platform.ScoutLocalPoint = new Vector3d(1, 0, 1);
-        source.Motor.Handler.Platform.ScoutLocalRotation = FixedQuaternion.FromAxisAngle(Vector3d.Up, (Fixed64)0.25f);
-        source.Motor.Handler.Platform.PlatformVelocity = new Vector3d(5, 0, 0);
-        source.Motor.Handler.Platform.FramePlatformVelocity = new Vector3d(2, 0, 0);
+        platform.IsNewPlatform = true;
+        platform.PreviousPlatform = new PlatformSnapshot(8, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(3, 0, 3)));
+        platform.SetHoldPlatform(holdPlatform);
+        platform.TickHoldOnPlatform();
+        platform.ScoutLocalPoint = new Vector3d(1, 0, 1);
+        platform.ScoutLocalRotation = FixedQuaternion.FromAxisAngle(Vector3d.Up, (Fixed64)0.25f);
+        platform.PlatformVelocity = new Vector3d(5, 0, 0);
+        platform.FramePlatformVelocity = new Vector3d(2, 0, 0);
 
         return source;
     }
@@ -901,6 +953,13 @@ public class NavigatorSerializationTests : IDisposable
     private static TestNavigator CreateConfiguredNavigator()
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
+        NavMotor motor = TestRequire.NotNull(source.Motor);
+        NavTurning turning = TestRequire.NotNull(source.Turning);
+        var platform = TestRequire.NotNull(motor.Handler.Platform);
+        var jump = TestRequire.NotNull(motor.Handler.Jump);
+        var fall = TestRequire.NotNull(motor.Handler.Fall);
+        var fly = TestRequire.NotNull(motor.Handler.Fly);
+        var climb = TestRequire.NotNull(motor.Handler.Climb);
         source.ApplyInputTrekRequest(
             Vector3d.Right,
             TrekRate.Moderate,
@@ -925,25 +984,25 @@ public class NavigatorSerializationTests : IDisposable
         source.FootPositionAdjust = (Fixed64)0.75f;
         source.IsLockedOn = true;
         source.AnimDampTime = (Fixed64)0.25f;
-        source.Motor.Handler.Move.FrameVelocity = new Vector3d(1, 0, 2);
-        source.Motor.Handler.Platform.ActivePlatform = new PlatformSnapshot(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1)));
-        source.Motor.Handler.Platform.MovementTransfer = MotionTransfer.PermaLocked;
-        source.Motor.Handler.Platform.ScoutLocalPoint = new Vector3d(0, 0, 1);
-        source.Motor.Handler.Platform.ScoutLocalRotation = FixedQuaternion.FromAxisAngle(Vector3d.Up, (Fixed64)0.5f);
-        source.Motor.Handler.Jump.RegisterJump();
-        source.Motor.Handler.Jump.FrameJumpDirection = Vector3d.Up;
-        source.Motor.Handler.Fall.IsFalling = true;
-        source.Motor.Handler.Fall.FallStart = (Fixed64)10;
-        source.Motor.Handler.Fly.GravityCompensation = (Fixed64)0.8f;
-        source.Motor.Handler.Fly.IsFlying = true;
-        source.Motor.Handler.Climb.IsClimbing = true;
-        source.Motor.Handler.Climb.ActiveClimbKind = ClimbAffordanceKind.Surface;
-        source.Motor.Handler.Climb.AttachmentId = 21;
-        source.Motor.Handler.Climb.AttachmentPoint = new Vector3d(2, 1, 2);
-        source.Motor.Handler.Climb.AttachedSurfaceNormal = Vector3d.Left;
-        source.Motor.Handler.Climb.AttachedUpDirection = Vector3d.Up;
-        source.Turning.CanTurn = false;
-        source.Turning.TurnRate = (Fixed64)0.35f;
+        motor.Handler.Move.FrameVelocity = new Vector3d(1, 0, 2);
+        platform.ActivePlatform = new PlatformSnapshot(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1)));
+        platform.MovementTransfer = MotionTransfer.PermaLocked;
+        platform.ScoutLocalPoint = new Vector3d(0, 0, 1);
+        platform.ScoutLocalRotation = FixedQuaternion.FromAxisAngle(Vector3d.Up, (Fixed64)0.5f);
+        jump.RegisterJump();
+        jump.FrameJumpDirection = Vector3d.Up;
+        fall.IsFalling = true;
+        fall.FallStart = (Fixed64)10;
+        fly.GravityCompensation = (Fixed64)0.8f;
+        fly.IsFlying = true;
+        climb.IsClimbing = true;
+        climb.ActiveClimbKind = ClimbAffordanceKind.Surface;
+        climb.AttachmentId = 21;
+        climb.AttachmentPoint = new Vector3d(2, 1, 2);
+        climb.AttachedSurfaceNormal = Vector3d.Left;
+        climb.AttachedUpDirection = Vector3d.Up;
+        turning.CanTurn = false;
+        turning.TurnRate = (Fixed64)0.35f;
 
         return source;
     }
@@ -951,6 +1010,7 @@ public class NavigatorSerializationTests : IDisposable
     private static TestNavigator CreateConfiguredGuidedNavigator(GuidedPathMode pathMode)
     {
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        NavSteering steering = TestRequire.NotNull(source.Steering);
         source.GuidedPathMode = pathMode;
         source.GuidedAllowUnwalkableEndpoints = true;
         source.GuidedAllowTraversalTransitions = true;
@@ -958,18 +1018,18 @@ public class NavigatorSerializationTests : IDisposable
         source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         source.GuidedFlowFieldExtraFloodRange = 24;
 
-        source.Steering.PathRecheckCooldownFrames = 9;
-        source.Steering.StopMultiplier = (Fixed64)0.75f;
-        source.Steering.GroupFactor = (Fixed64)12;
-        source.Steering.AvoidFactor = (Fixed64)4;
-        source.Steering.BehaviorWeights = new GroupBehaviorWeights()
+        steering.PathRecheckCooldownFrames = 9;
+        steering.StopMultiplier = (Fixed64)0.75f;
+        steering.GroupFactor = (Fixed64)12;
+        steering.AvoidFactor = (Fixed64)4;
+        steering.BehaviorWeights = new GroupBehaviorWeights()
         {
             Separation = (Fixed64)3,
             Alignment = (Fixed64)0.75f,
             Cohesion = (Fixed64)0.4f,
             Avoidance = (Fixed64)1.25f
         };
-        source.Steering.BrakingPower = (Fixed64)0.2f;
+        steering.BrakingPower = (Fixed64)0.2f;
 
         Vector3d targetPosition = pathMode == GuidedPathMode.Aerial
             ? new Vector3d(4, 4, 0)
@@ -996,14 +1056,14 @@ public class NavigatorSerializationTests : IDisposable
             groupId: 7);
 
         TrailblazerManager.Simulate();
-        source.Steering.GetHeading(source);
-        source.Steering.PauseAutoStop();
+        steering.GetHeading(source);
+        steering.PauseAutoStop();
 
-        if (source.Steering.TrailGuide is AStarGuide aStarGuide)
+        if (steering.TrailGuide is AStarGuide aStarGuide)
         {
             aStarGuide.AdvanceWaypoint();
             TrailblazerManager.Simulate();
-            source.Steering.GetHeading(source);
+            steering.GetHeading(source);
         }
 
         return source;
@@ -1012,44 +1072,43 @@ public class NavigatorSerializationTests : IDisposable
     private static TestNavigator CreateConfiguredTransitionFallbackAStarNavigator()
     {
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        NavSteering steering = TestRequire.NotNull(source.Steering);
         source.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Fast, isRequestingJump: true);
 
-        source.Steering.PathRecheckCooldownFrames = 11;
-        source.Steering.StopMultiplier = (Fixed64)0.8f;
-        source.Steering.GroupFactor = (Fixed64)10;
-        source.Steering.AvoidFactor = (Fixed64)3;
-        source.Steering.BehaviorWeights = new GroupBehaviorWeights()
+        steering.PathRecheckCooldownFrames = 11;
+        steering.StopMultiplier = (Fixed64)0.8f;
+        steering.GroupFactor = (Fixed64)10;
+        steering.AvoidFactor = (Fixed64)3;
+        steering.BehaviorWeights = new GroupBehaviorWeights()
         {
             Separation = (Fixed64)2.5f,
             Alignment = (Fixed64)0.5f,
             Cohesion = (Fixed64)0.35f,
             Avoidance = (Fixed64)1.4f
         };
-        source.Steering.BrakingPower = (Fixed64)0.3f;
+        steering.BrakingPower = (Fixed64)0.3f;
 
-        AStarPathRequest request = AStarPathRequest.Create(
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
-            allowUnwalkableEndpoints: true);
-
-        request.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
         request.MaxClimbHeight = (Fixed64)2;
         request.AllowTraversalTransitions = true;
 
-        source.Steering.ApplyPathRequest(request, groupId: 5);
+        steering.ApplyPathRequest(request, groupId: 5);
 
         TrailblazerManager.Simulate();
-        source.Steering.GetHeading(source);
-        source.Steering.PauseAutoStop();
+        steering.GetHeading(source);
+        steering.PauseAutoStop();
 
-        AStarGuide guide = source.Steering.TrailGuide.Should().BeOfType<AStarGuide>().Subject;
+        AStarGuide guide = steering.TrailGuide.Should().BeOfType<AStarGuide>().Subject;
         if (guide.TryGetWaypointAt(guide.CurrentWaypointIndex + 1, out _))
         {
             guide.AdvanceWaypoint();
             TrailblazerManager.Simulate();
-            source.Steering.GetHeading(source);
+            steering.GetHeading(source);
         }
 
         return source;
@@ -1171,66 +1230,83 @@ public class NavigatorSerializationTests : IDisposable
 
     private static void AssertMotorStateMatches(NavMotor expected, NavMotor actual)
     {
+        var expectedHandler = expected.Handler;
+        var actualHandler = actual.Handler;
+        var expectedJump = TestRequire.NotNull(expectedHandler.Jump);
+        var actualJump = TestRequire.NotNull(actualHandler.Jump);
+        var expectedFall = TestRequire.NotNull(expectedHandler.Fall);
+        var actualFall = TestRequire.NotNull(actualHandler.Fall);
+        var expectedSlide = TestRequire.NotNull(expectedHandler.Slide);
+        var actualSlide = TestRequire.NotNull(actualHandler.Slide);
+        var expectedSwim = TestRequire.NotNull(expectedHandler.Swim);
+        var actualSwim = TestRequire.NotNull(actualHandler.Swim);
+        var expectedFly = TestRequire.NotNull(expectedHandler.Fly);
+        var actualFly = TestRequire.NotNull(actualHandler.Fly);
+        var expectedClimb = TestRequire.NotNull(expectedHandler.Climb);
+        var actualClimb = TestRequire.NotNull(actualHandler.Climb);
+        var expectedPlatform = TestRequire.NotNull(expectedHandler.Platform);
+        var actualPlatform = TestRequire.NotNull(actualHandler.Platform);
+
         actual.IsInitialized.Should().Be(expected.IsInitialized);
         actual.CurrentState.ToTrekCondition().Medium.Should().Be(expected.CurrentState.ToTrekCondition().Medium);
         actual.CurrentState.ToTrekCondition().SurfaceLevel.Should().Be(expected.CurrentState.ToTrekCondition().SurfaceLevel);
         actual.CurrentState.ToTrekCondition().CeilingLevel.Should().Be(expected.CurrentState.ToTrekCondition().CeilingLevel);
         actual.CurrentState.PreviousState.Should().Be(expected.CurrentState.PreviousState);
 
-        actual.Handler.IsInControl.Should().Be(expected.Handler.IsInControl);
+        actualHandler.IsInControl.Should().Be(expectedHandler.IsInControl);
 
-        actual.Handler.Move.IsEnabled.Should().Be(expected.Handler.Move.IsEnabled);
-        actual.Handler.Move.FrameVelocity.Should().Be(expected.Handler.Move.FrameVelocity);
-        actual.Handler.Move.MaxFastSpeed.Should().Be(expected.Handler.Move.MaxFastSpeed);
+        actualHandler.Move.IsEnabled.Should().Be(expectedHandler.Move.IsEnabled);
+        actualHandler.Move.FrameVelocity.Should().Be(expectedHandler.Move.FrameVelocity);
+        actualHandler.Move.MaxFastSpeed.Should().Be(expectedHandler.Move.MaxFastSpeed);
 
-        actual.Handler.Jump.IsJumping.Should().Be(expected.Handler.Jump.IsJumping);
-        actual.Handler.Jump.IsHoldingJump.Should().Be(expected.Handler.Jump.IsHoldingJump);
-        actual.Handler.Jump.JumpStartTime.Should().Be(expected.Handler.Jump.JumpStartTime);
-        actual.Handler.Jump.FrameJumpDirection.Should().Be(expected.Handler.Jump.FrameJumpDirection);
-        actual.Handler.Jump.CanJump.Should().Be(expected.Handler.Jump.CanJump);
+        actualJump.IsJumping.Should().Be(expectedJump.IsJumping);
+        actualJump.IsHoldingJump.Should().Be(expectedJump.IsHoldingJump);
+        actualJump.JumpStartTime.Should().Be(expectedJump.JumpStartTime);
+        actualJump.FrameJumpDirection.Should().Be(expectedJump.FrameJumpDirection);
+        actualJump.CanJump.Should().Be(expectedJump.CanJump);
 
-        actual.Handler.Fall.IsFalling.Should().Be(expected.Handler.Fall.IsFalling);
-        actual.Handler.Fall.FallStart.Should().Be(expected.Handler.Fall.FallStart);
-        actual.Handler.Fall.FallEnd.Should().Be(expected.Handler.Fall.FallEnd);
+        actualFall.IsFalling.Should().Be(expectedFall.IsFalling);
+        actualFall.FallStart.Should().Be(expectedFall.FallStart);
+        actualFall.FallEnd.Should().Be(expectedFall.FallEnd);
 
-        actual.Handler.Slide.IsSliding.Should().Be(expected.Handler.Slide.IsSliding);
+        actualSlide.IsSliding.Should().Be(expectedSlide.IsSliding);
 
-        actual.Handler.Swim.IsSwimming.Should().Be(expected.Handler.Swim.IsSwimming);
-        actual.Handler.Swim.IsDiving.Should().Be(expected.Handler.Swim.IsDiving);
-        actual.Handler.Swim.UnderwaterTimer.Should().Be(expected.Handler.Swim.UnderwaterTimer);
+        actualSwim.IsSwimming.Should().Be(expectedSwim.IsSwimming);
+        actualSwim.IsDiving.Should().Be(expectedSwim.IsDiving);
+        actualSwim.UnderwaterTimer.Should().Be(expectedSwim.UnderwaterTimer);
 
-        actual.Handler.Fly.IsEnabled.Should().Be(expected.Handler.Fly.IsEnabled);
-        actual.Handler.Fly.MaxFlySpeed.Should().Be(expected.Handler.Fly.MaxFlySpeed);
-        actual.Handler.Fly.GravityCompensation.Should().Be(expected.Handler.Fly.GravityCompensation);
-        actual.Handler.Fly.IsFlying.Should().Be(expected.Handler.Fly.IsFlying);
+        actualFly.IsEnabled.Should().Be(expectedFly.IsEnabled);
+        actualFly.MaxFlySpeed.Should().Be(expectedFly.MaxFlySpeed);
+        actualFly.GravityCompensation.Should().Be(expectedFly.GravityCompensation);
+        actualFly.IsFlying.Should().Be(expectedFly.IsFlying);
 
-        actual.Handler.Climb.IsEnabled.Should().Be(expected.Handler.Climb.IsEnabled);
-        actual.Handler.Climb.CanClimb.Should().Be(expected.Handler.Climb.CanClimb);
-        actual.Handler.Climb.IsClimbing.Should().Be(expected.Handler.Climb.IsClimbing);
-        actual.Handler.Climb.IsMantling.Should().Be(expected.Handler.Climb.IsMantling);
-        actual.Handler.Climb.ActiveClimbKind.Should().Be(expected.Handler.Climb.ActiveClimbKind);
-        actual.Handler.Climb.AttachmentId.Should().Be(expected.Handler.Climb.AttachmentId);
-        actual.Handler.Climb.AttachmentPoint.Should().Be(expected.Handler.Climb.AttachmentPoint);
-        actual.Handler.Climb.AttachedSurfaceNormal.Should().Be(expected.Handler.Climb.AttachedSurfaceNormal);
-        actual.Handler.Climb.AttachedUpDirection.Should().Be(expected.Handler.Climb.AttachedUpDirection);
+        actualClimb.IsEnabled.Should().Be(expectedClimb.IsEnabled);
+        actualClimb.CanClimb.Should().Be(expectedClimb.CanClimb);
+        actualClimb.IsClimbing.Should().Be(expectedClimb.IsClimbing);
+        actualClimb.IsMantling.Should().Be(expectedClimb.IsMantling);
+        actualClimb.ActiveClimbKind.Should().Be(expectedClimb.ActiveClimbKind);
+        actualClimb.AttachmentId.Should().Be(expectedClimb.AttachmentId);
+        actualClimb.AttachmentPoint.Should().Be(expectedClimb.AttachmentPoint);
+        actualClimb.AttachedSurfaceNormal.Should().Be(expectedClimb.AttachedSurfaceNormal);
+        actualClimb.AttachedUpDirection.Should().Be(expectedClimb.AttachedUpDirection);
 
-        actual.Handler.Platform.IsNewPlatform.Should().Be(expected.Handler.Platform.IsNewPlatform);
-        actual.Handler.Platform.MovementTransfer.Should().Be(expected.Handler.Platform.MovementTransfer);
-        actual.Handler.Platform.ScoutLocalPoint.Should().Be(expected.Handler.Platform.ScoutLocalPoint);
-        actual.Handler.Platform.ScoutLocalRotation.Should().Be(expected.Handler.Platform.ScoutLocalRotation);
-        actual.Handler.Platform.PlatformVelocity.Should().Be(expected.Handler.Platform.PlatformVelocity);
-        actual.Handler.Platform.FramePlatformVelocity.Should().Be(expected.Handler.Platform.FramePlatformVelocity);
-        actual.Handler.Platform.HoldPlatformFrames.Should().Be(expected.Handler.Platform.HoldPlatformFrames);
+        actualPlatform.IsNewPlatform.Should().Be(expectedPlatform.IsNewPlatform);
+        actualPlatform.MovementTransfer.Should().Be(expectedPlatform.MovementTransfer);
+        actualPlatform.ScoutLocalPoint.Should().Be(expectedPlatform.ScoutLocalPoint);
+        actualPlatform.ScoutLocalRotation.Should().Be(expectedPlatform.ScoutLocalRotation);
+        actualPlatform.PlatformVelocity.Should().Be(expectedPlatform.PlatformVelocity);
+        actualPlatform.FramePlatformVelocity.Should().Be(expectedPlatform.FramePlatformVelocity);
+        actualPlatform.HoldPlatformFrames.Should().Be(expectedPlatform.HoldPlatformFrames);
 
-        actual.Handler.Platform.ActivePlatform.Should().NotBeNull();
-        expected.Handler.Platform.ActivePlatform.Should().NotBeNull();
-        actual.Handler.Platform.ActivePlatform?.Id.Should().Be(expected.Handler.Platform.ActivePlatform?.Id);
-        actual.Handler.Platform.ActivePlatform?.Transform.Should().Be(expected.Handler.Platform.ActivePlatform?.Transform);
+        var actualActivePlatform = TestRequire.NotNull(actualPlatform.ActivePlatform);
+        var expectedActivePlatform = TestRequire.NotNull(expectedPlatform.ActivePlatform);
+        actualActivePlatform.Id.Should().Be(expectedActivePlatform.Id);
+        actualActivePlatform.Transform.Should().Be(expectedActivePlatform.Transform);
 
-        actual.Handler.Platform.PreviousPlatform?.Id.Should().Be(expected.Handler.Platform.PreviousPlatform?.Id);
-        actual.Handler.Platform.PreviousPlatform?.Transform.Should().Be(expected.Handler.Platform.PreviousPlatform?.Transform);
-        actual.Handler.Platform.HoldPlatform?.Id.Should().Be(expected.Handler.Platform.HoldPlatform?.Id);
-        actual.Handler.Platform.HoldPlatform?.Transform.Should().Be(expected.Handler.Platform.HoldPlatform?.Transform);
+        actualPlatform.PreviousPlatform?.Id.Should().Be(expectedPlatform.PreviousPlatform?.Id);
+        actualPlatform.PreviousPlatform?.Transform.Should().Be(expectedPlatform.PreviousPlatform?.Transform);
+        actualPlatform.HoldPlatform?.Id.Should().Be(expectedPlatform.HoldPlatform?.Id);
+        actualPlatform.HoldPlatform?.Transform.Should().Be(expectedPlatform.HoldPlatform?.Transform);
     }
 
     private static void AssertSteeringStateMatches(NavSteering expected, NavSteering actual)
@@ -1266,16 +1342,16 @@ public class NavigatorSerializationTests : IDisposable
         }
         else
         {
-            actual.CurrentRequest.Should().NotBeNull();
-            actual.CurrentRequest.GetType().Should().Be(expected.CurrentRequest.GetType());
-            actual.CurrentRequest.Origin.Should().Be(expected.CurrentRequest.Origin);
-            actual.CurrentRequest.TargetPosition.Should().Be(expected.CurrentRequest.TargetPosition);
-            actual.CurrentRequest.UnitSize.Should().Be(expected.CurrentRequest.UnitSize);
-            actual.CurrentRequest.AllowUnwalkableEndpoints.Should().Be(expected.CurrentRequest.AllowUnwalkableEndpoints);
-            actual.CurrentRequest.MaxPathSearchRange.Should().Be(expected.CurrentRequest.MaxPathSearchRange);
+            IPathRequest actualRequest = TestRequire.NotNull(actual.CurrentRequest);
+            actualRequest.GetType().Should().Be(expected.CurrentRequest.GetType());
+            actualRequest.Origin.Should().Be(expected.CurrentRequest.Origin);
+            actualRequest.TargetPosition.Should().Be(expected.CurrentRequest.TargetPosition);
+            actualRequest.UnitSize.Should().Be(expected.CurrentRequest.UnitSize);
+            actualRequest.AllowUnwalkableEndpoints.Should().Be(expected.CurrentRequest.AllowUnwalkableEndpoints);
+            actualRequest.MaxPathSearchRange.Should().Be(expected.CurrentRequest.MaxPathSearchRange);
 
             if (expected.CurrentRequest is AStarPathRequest expectedAStar
-                && actual.CurrentRequest is AStarPathRequest actualAStar)
+                && actualRequest is AStarPathRequest actualAStar)
             {
                 actualAStar.Heuristic.Should().Be(expectedAStar.Heuristic);
                 actualAStar.MaxClimbHeight.Should().Be(expectedAStar.MaxClimbHeight);
@@ -1283,7 +1359,7 @@ public class NavigatorSerializationTests : IDisposable
             }
 
             if (expected.CurrentRequest is FlowFieldPathRequest expectedFlowField
-                && actual.CurrentRequest is FlowFieldPathRequest actualFlowField)
+                && actualRequest is FlowFieldPathRequest actualFlowField)
             {
                 actualFlowField.MaxClimbHeight.Should().Be(expectedFlowField.MaxClimbHeight);
                 actualFlowField.ExtraFloodRange.Should().Be(expectedFlowField.ExtraFloodRange);
@@ -1291,14 +1367,14 @@ public class NavigatorSerializationTests : IDisposable
             }
 
             if (expected.CurrentRequest is VolumePathRequest expectedVolume
-                && actual.CurrentRequest is VolumePathRequest actualVolume)
+                && actualRequest is VolumePathRequest actualVolume)
             {
                 actualVolume.Heuristic.Should().Be(expectedVolume.Heuristic);
                 actualVolume.Medium.Should().Be(expectedVolume.Medium);
             }
 
             if (expected.CurrentRequest is HybridPathRequest expectedHybrid
-                && actual.CurrentRequest is HybridPathRequest actualHybrid)
+                && actualRequest is HybridPathRequest actualHybrid)
             {
                 actualHybrid.Heuristic.Should().Be(expectedHybrid.Heuristic);
                 actualHybrid.MaxClimbHeight.Should().Be(expectedHybrid.MaxClimbHeight);
@@ -1311,23 +1387,23 @@ public class NavigatorSerializationTests : IDisposable
         }
         else
         {
-            actual.TrailGuide.Should().NotBeNull();
-            actual.TrailGuide.GetType().Should().Be(expected.TrailGuide.GetType());
+            IGuide actualTrailGuide = TestRequire.NotNull(actual.TrailGuide);
+            actualTrailGuide.GetType().Should().Be(expected.TrailGuide.GetType());
 
             if (expected.TrailGuide is AStarGuide expectedAStarGuide
-                && actual.TrailGuide is AStarGuide actualAStarGuide)
+                && actualTrailGuide is AStarGuide actualAStarGuide)
             {
                 actualAStarGuide.CurrentWaypointIndex.Should().Be(expectedAStarGuide.CurrentWaypointIndex);
             }
 
             if (expected.TrailGuide is VolumeGuide expectedVolumeGuide
-                && actual.TrailGuide is VolumeGuide actualVolumeGuide)
+                && actualTrailGuide is VolumeGuide actualVolumeGuide)
             {
                 actualVolumeGuide.CurrentWaypointIndex.Should().Be(expectedVolumeGuide.CurrentWaypointIndex);
             }
 
             if (expected.TrailGuide is HybridGuide expectedHybridGuide
-                && actual.TrailGuide is HybridGuide actualHybridGuide)
+                && actualTrailGuide is HybridGuide actualHybridGuide)
             {
                 actualHybridGuide.CurrentWaypointIndex.Should().Be(expectedHybridGuide.CurrentWaypointIndex);
             }
@@ -1336,9 +1412,9 @@ public class NavigatorSerializationTests : IDisposable
 
     private static void AddObstacle(Vector3d position)
     {
-        TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
-        grid!.TryAddObstacle(
-            voxel!,
+        var (grid, voxel) = TestRequire.GridAndVoxelAt(position);
+        grid.TryAddObstacle(
+            voxel,
             new BoundsKey(position, position)).Should().BeTrue();
     }
 

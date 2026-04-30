@@ -24,8 +24,8 @@ public class LocomotionCompositionTests : IDisposable
             profile: LocomotionProfile.CreateMoveAndFallOnly());
 
         agent.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
-        agent.Motor.Handler.Move.Should().NotBeNull();
-        agent.Motor.Handler.Fall.Should().NotBeNull();
+        Assert.NotNull(agent.Motor.Handler.Move);
+        Assert.NotNull(agent.Motor.Handler.Fall);
         agent.Motor.Handler.Platform.Should().BeNull();
         agent.Motor.Handler.Jump.Should().BeNull();
         agent.Motor.Handler.Slide.Should().BeNull();
@@ -45,12 +45,13 @@ public class LocomotionCompositionTests : IDisposable
             SurfaceLevel = Fixed64.Zero,
             GroundState = new GroundCondition()
         });
+        var motor = TestRequire.NotNull(navigator.Motor);
 
-        navigator.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
-        navigator.Motor.Handler.Jump.Should().BeNull();
-        navigator.Motor.Handler.Swim.Should().BeNull();
-        navigator.Motor.Handler.Fly.Should().BeNull();
-        navigator.Motor.Handler.Climb.Should().BeNull();
+        motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
+        motor.Handler.Jump.Should().BeNull();
+        motor.Handler.Swim.Should().BeNull();
+        motor.Handler.Fly.Should().BeNull();
+        motor.Handler.Climb.Should().BeNull();
     }
 
     [Fact]
@@ -96,28 +97,30 @@ public class LocomotionCompositionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
             platformMatrix: platform,
             profile: profile);
+        var motor = TestRequire.NotNull(agent.Motor);
 
         TrailblazerManager.Simulate();
         agent.Simulate();
 
-        agent.Motor.Handler.Slide.Should().BeNull();
-        agent.Motor.Handler.Fall.IsFalling.Should().BeTrue();
+        motor.Handler.Slide.Should().BeNull();
+        TestRequire.NotNull(motor.Handler.Fall).IsFalling.Should().BeTrue();
     }
 
     [Fact]
     public void Given_DefaultMotor_When_ReconfiguredToMinimalProfile_Then_OptionalLocomotionsAreRemoved()
     {
         var agent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
-        agent.Motor.Handler.Jump.RegisterJump();
+        var motor = TestRequire.NotNull(agent.Motor);
+        TestRequire.NotNull(motor.Handler.Jump).RegisterJump();
 
-        agent.Motor.SetLocomotionProfile(LocomotionProfile.CreateMoveAndFallOnly());
+        motor.SetLocomotionProfile(LocomotionProfile.CreateMoveAndFallOnly());
 
-        agent.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
-        agent.Motor.Handler.Jump.Should().BeNull();
-        agent.Motor.Handler.Platform.Should().BeNull();
-        agent.Motor.Handler.Slide.Should().BeNull();
-        agent.Motor.Handler.Swim.Should().BeNull();
-        agent.Motor.Handler.Fly.Should().BeNull();
+        motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
+        motor.Handler.Jump.Should().BeNull();
+        motor.Handler.Platform.Should().BeNull();
+        motor.Handler.Slide.Should().BeNull();
+        motor.Handler.Swim.Should().BeNull();
+        motor.Handler.Fly.Should().BeNull();
         agent.Motor.Handler.Climb.Should().BeNull();
     }
 
@@ -160,12 +163,12 @@ public class LocomotionCompositionTests : IDisposable
         SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
 
         target.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.All);
-        target.Motor.Handler.Jump.Should().NotBeNull();
-        target.Motor.Handler.Platform.Should().NotBeNull();
-        target.Motor.Handler.Slide.Should().NotBeNull();
-        target.Motor.Handler.Swim.Should().NotBeNull();
-        target.Motor.Handler.Fly.Should().NotBeNull();
-        target.Motor.Handler.Climb.Should().NotBeNull();
+        Assert.NotNull(target.Motor.Handler.Jump);
+        Assert.NotNull(target.Motor.Handler.Platform);
+        Assert.NotNull(target.Motor.Handler.Slide);
+        Assert.NotNull(target.Motor.Handler.Swim);
+        Assert.NotNull(target.Motor.Handler.Fly);
+        Assert.NotNull(target.Motor.Handler.Climb);
     }
 
     private sealed class MinimalProfileNavigator : Navigator

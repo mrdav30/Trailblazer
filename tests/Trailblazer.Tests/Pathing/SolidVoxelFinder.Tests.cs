@@ -64,31 +64,29 @@ public class SolidVoxelFinderTests : IDisposable
         SolidVoxelFinder.TryGetPathEdgeVoxels(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
-            out Voxel startVoxel,
-            out Voxel endVoxel,
+            out Voxel? startVoxel,
+            out Voxel? endVoxel,
             Fixed64.One,
             allowUnwalkableEndpoints: true).Should().BeTrue();
 
-        startVoxel.WorldPosition.Should().Be(Vector3d.Zero);
-        endVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+        TestRequire.NotNull(startVoxel).WorldPosition.Should().Be(Vector3d.Zero);
+        TestRequire.NotNull(endVoxel).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
 
-        AStarPathRequest aStarRequest = AStarPathRequest.Create(
+        AStarPathRequest aStarRequest = TestRequire.NotNull(AStarPathRequest.Create(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        aStarRequest.Should().NotBeNull();
-        aStarRequest.StartNode.WorldPosition.Should().Be(Vector3d.Zero);
-        aStarRequest.EndNode.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+            allowUnwalkableEndpoints: true));
+        TestRequire.NotNull(aStarRequest.StartNode).WorldPosition.Should().Be(Vector3d.Zero);
+        TestRequire.NotNull(aStarRequest.EndNode).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
 
-        FlowFieldPathRequest flowFieldRequest = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        flowFieldRequest.Should().NotBeNull();
-        flowFieldRequest.StartNode.WorldPosition.Should().Be(Vector3d.Zero);
-        flowFieldRequest.EndNode.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+            allowUnwalkableEndpoints: true));
+        TestRequire.NotNull(flowFieldRequest.StartNode).WorldPosition.Should().Be(Vector3d.Zero);
+        TestRequire.NotNull(flowFieldRequest.EndNode).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
     [Fact]
@@ -96,37 +94,36 @@ public class SolidVoxelFinderTests : IDisposable
     {
         RegisterTwoPointChart("AStarConsistency");
 
-        AStarPathRequest created = AStarPathRequest.Create(
+        AStarPathRequest created = TestRequire.NotNull(AStarPathRequest.Create(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        created.Should().NotBeNull();
-        created.StartNode.WorldPosition.Should().Be(Vector3d.Zero);
-        created.EndNode.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+            allowUnwalkableEndpoints: true));
+        Voxel createdStart = TestRequire.NotNull(created.StartNode);
+        Voxel createdEnd = TestRequire.NotNull(created.EndNode);
+        createdStart.WorldPosition.Should().Be(Vector3d.Zero);
+        createdEnd.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
 
-        AStarPathRequest updated = AStarPathRequest.Create(
+        AStarPathRequest updated = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        updated.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
 
         updated.UpdateRequest(new Vector3d(-1, 0, 0), new Vector3d(2, 0, 0), Fixed64.One).Should().BeTrue();
-        updated.StartNode.WorldPosition.Should().Be(created.StartNode.WorldPosition);
-        updated.EndNode.WorldPosition.Should().Be(created.EndNode.WorldPosition);
+        TestRequire.NotNull(updated.StartNode).WorldPosition.Should().Be(createdStart.WorldPosition);
+        TestRequire.NotNull(updated.EndNode).WorldPosition.Should().Be(createdEnd.WorldPosition);
 
-        AStarPathRequest setters = AStarPathRequest.Create(
+        AStarPathRequest setters = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        setters.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
 
         setters.TrySetOrigin(new Vector3d(-1, 0, 0)).Should().BeTrue();
         setters.TrySetDestination(new Vector3d(2, 0, 0)).Should().BeTrue();
-        setters.StartNode.WorldPosition.Should().Be(created.StartNode.WorldPosition);
-        setters.EndNode.WorldPosition.Should().Be(created.EndNode.WorldPosition);
+        TestRequire.NotNull(setters.StartNode).WorldPosition.Should().Be(createdStart.WorldPosition);
+        TestRequire.NotNull(setters.EndNode).WorldPosition.Should().Be(createdEnd.WorldPosition);
     }
 
     [Fact]
@@ -134,37 +131,36 @@ public class SolidVoxelFinderTests : IDisposable
     {
         RegisterTwoPointChart("FlowFieldConsistency");
 
-        FlowFieldPathRequest created = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest created = TestRequire.NotNull(FlowFieldPathRequest.Create(
             new Vector3d(-1, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        created.Should().NotBeNull();
-        created.StartNode.WorldPosition.Should().Be(Vector3d.Zero);
-        created.EndNode.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+            allowUnwalkableEndpoints: true));
+        Voxel createdStart = TestRequire.NotNull(created.StartNode);
+        Voxel createdEnd = TestRequire.NotNull(created.EndNode);
+        createdStart.WorldPosition.Should().Be(Vector3d.Zero);
+        createdEnd.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
 
-        FlowFieldPathRequest updated = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest updated = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        updated.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
 
         updated.UpdateRequest(new Vector3d(-1, 0, 0), new Vector3d(2, 0, 0), Fixed64.One).Should().BeTrue();
-        updated.StartNode.WorldPosition.Should().Be(created.StartNode.WorldPosition);
-        updated.EndNode.WorldPosition.Should().Be(created.EndNode.WorldPosition);
+        TestRequire.NotNull(updated.StartNode).WorldPosition.Should().Be(createdStart.WorldPosition);
+        TestRequire.NotNull(updated.EndNode).WorldPosition.Should().Be(createdEnd.WorldPosition);
 
-        FlowFieldPathRequest setters = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest setters = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        setters.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
 
         setters.TrySetOrigin(new Vector3d(-1, 0, 0)).Should().BeTrue();
         setters.TrySetDestination(new Vector3d(2, 0, 0)).Should().BeTrue();
-        setters.StartNode.WorldPosition.Should().Be(created.StartNode.WorldPosition);
-        setters.EndNode.WorldPosition.Should().Be(created.EndNode.WorldPosition);
+        TestRequire.NotNull(setters.StartNode).WorldPosition.Should().Be(createdStart.WorldPosition);
+        TestRequire.NotNull(setters.EndNode).WorldPosition.Should().Be(createdEnd.WorldPosition);
     }
 
     [Fact]
@@ -175,21 +171,21 @@ public class SolidVoxelFinderTests : IDisposable
         Fixed64 quarter = TrailblazerWorldManager.VoxelSize / 4;
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
 
-        SolidVoxelFinder.StarCast(query, out Voxel targetVoxel).Should().BeTrue();
-        targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+        SolidVoxelFinder.StarCast(query, out Voxel? targetVoxel).Should().BeTrue();
+        TestRequire.NotNull(targetVoxel).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
     [Fact]
     public void StarCast_ShouldReturnFalse_WhenQueryIsOutsideAnyGrid()
     {
-        SolidVoxelFinder.StarCast(new Vector3d(20, 0, 0), out Voxel targetVoxel).Should().BeFalse();
+        SolidVoxelFinder.StarCast(new Vector3d(20, 0, 0), out Voxel? targetVoxel).Should().BeFalse();
         targetVoxel.Should().BeNull();
     }
 
     [Fact]
     public void StarCast_ShouldReturnFalse_WhenNoAlternativeVoxelExistsInsideGrid()
     {
-        SolidVoxelFinder.StarCast(Vector3d.Zero, out Voxel targetVoxel, Fixed64.One).Should().BeFalse();
+        SolidVoxelFinder.StarCast(Vector3d.Zero, out Voxel? targetVoxel, Fixed64.One).Should().BeFalse();
         targetVoxel.Should().BeNull();
     }
 
@@ -201,12 +197,12 @@ public class SolidVoxelFinderTests : IDisposable
         SolidVoxelFinder.TryGetPathEdgeVoxels(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
-            out Voxel originVoxel,
-            out Voxel targetVoxel,
+            out Voxel? originVoxel,
+            out Voxel? targetVoxel,
             allowUnwalkableEndpoints: false).Should().BeTrue();
 
-        originVoxel.WorldPosition.Should().Be(Vector3d.Zero);
-        targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+        TestRequire.NotNull(originVoxel).WorldPosition.Should().Be(Vector3d.Zero);
+        TestRequire.NotNull(targetVoxel).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
     [Fact]
@@ -217,16 +213,16 @@ public class SolidVoxelFinderTests : IDisposable
         SolidVoxelFinder.GetStartVoxel(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
-            out Voxel originVoxel,
+            out Voxel? originVoxel,
             allowUnwalkableEndpoints: false).Should().BeTrue();
         SolidVoxelFinder.GetEndVoxel(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
-            out Voxel targetVoxel,
+            out Voxel? targetVoxel,
             allowUnwalkableEndpoints: false).Should().BeTrue();
 
-        originVoxel.WorldPosition.Should().Be(Vector3d.Zero);
-        targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+        TestRequire.NotNull(originVoxel).WorldPosition.Should().Be(Vector3d.Zero);
+        TestRequire.NotNull(targetVoxel).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
     [Fact]
@@ -238,10 +234,10 @@ public class SolidVoxelFinderTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            out Voxel targetVoxel,
+            out Voxel? targetVoxel,
             allowUnwalkableEndpoints: false).Should().BeTrue();
 
-        targetVoxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+        TestRequire.NotNull(targetVoxel).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
     [Fact]
@@ -253,7 +249,7 @@ public class SolidVoxelFinderTests : IDisposable
             Vector3d.Zero,
             new Vector3d(20, 0, 0),
             Fixed64.One,
-            out Voxel targetVoxel,
+            out Voxel? targetVoxel,
             allowUnwalkableEndpoints: false).Should().BeFalse();
 
         targetVoxel.Should().BeNull();
@@ -263,9 +259,9 @@ public class SolidVoxelFinderTests : IDisposable
     public void TryGetClosestWalkableVoxel_ShouldReturnFalse_WhenNoNeighborIsTraversable()
     {
         PathTestFactory.RegisterSingleWalkablePoint("NoNeighborWalkable", Vector3d.Zero);
-        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
 
-        SolidVoxelFinder.TryGetClosestWalkableVoxel(voxel, out Voxel closestNeighbor).Should().BeFalse();
+        SolidVoxelFinder.TryGetClosestWalkableVoxel(voxel, out Voxel? closestNeighbor).Should().BeFalse();
         closestNeighbor.Should().BeNull();
     }
 

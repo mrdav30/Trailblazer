@@ -45,8 +45,8 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: Fixed64.One,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeFalse();
 
         request.Should().BeNull();
@@ -71,17 +71,18 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: (Fixed64)2,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeTrue();
 
-        request.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.TransitionId.Should().Be($"{sceneKey}-exit");
-        handoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+        VolumePathRequest plannedRequest = TestRequire.NotNull(request);
+        GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
+        plannedRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        plannedHandoff.TransitionId.Should().Be($"{sceneKey}-exit");
+        plannedHandoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
         totalCost.Should().BeGreaterThan(0);
 
-        handoff.TryCreateFollowupRequest(new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest followup).Should().BeTrue();
+        plannedHandoff.TryCreateFollowupRequest(new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest? followup).Should().BeTrue();
         followup.Should().BeOfType<AStarPathRequest>();
     }
 
@@ -102,17 +103,18 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: (Fixed64)2,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 8,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeTrue();
 
-        request.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
-        handoff.FlowFieldExtraFloodRange.Should().Be(8);
+        VolumePathRequest plannedRequest = TestRequire.NotNull(request);
+        GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
+        plannedRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        plannedHandoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
+        plannedHandoff.FlowFieldExtraFloodRange.Should().Be(8);
         totalCost.Should().BeGreaterThan(0);
 
-        handoff.TryCreateFollowupRequest(new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest followup).Should().BeTrue();
+        plannedHandoff.TryCreateFollowupRequest(new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest? followup).Should().BeTrue();
         followup.Should().BeOfType<FlowFieldPathRequest>();
     }
 
@@ -133,15 +135,15 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: Fixed64.One,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeTrue();
 
-        request.Should().NotBeNull();
-        request.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.TransitionId.Should().Be($"{sceneKey}-landing");
-        handoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+        VolumePathRequest plannedRequest = TestRequire.NotNull(request);
+        GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
+        plannedRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
+        plannedHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
+        plannedHandoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
         totalCost.Should().BeGreaterThan(0);
     }
 
@@ -162,16 +164,16 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: Fixed64.One,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 6,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeTrue();
 
-        request.Should().NotBeNull();
-        request.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.TransitionId.Should().Be($"{sceneKey}-landing");
-        handoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
-        handoff.FlowFieldExtraFloodRange.Should().Be(6);
+        VolumePathRequest plannedRequest = TestRequire.NotNull(request);
+        GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
+        plannedRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
+        plannedHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
+        plannedHandoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
+        plannedHandoff.FlowFieldExtraFloodRange.Should().Be(6);
         totalCost.Should().BeGreaterThan(0);
     }
 
@@ -192,8 +194,8 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: Fixed64.One,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeFalse();
 
         request.Should().BeNull();
@@ -218,8 +220,8 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: Fixed64.One,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 4,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeFalse();
 
         request.Should().BeNull();
@@ -246,15 +248,15 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: Fixed64.One,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 3,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeTrue();
 
-        request.Should().NotBeNull();
-        request.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        handoff.Should().NotBeNull();
-        handoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
-        handoff.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        VolumePathRequest plannedRequest = TestRequire.NotNull(request);
+        GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
+        plannedRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
+        plannedHandoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
+        plannedHandoff.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
         totalCost.Should().BeGreaterThan(0);
     }
 
@@ -275,8 +277,8 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: Fixed64.One,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeFalse();
 
         request.Should().BeNull();
@@ -302,8 +304,8 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             maxClimbHeight: Fixed64.One,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
-            out VolumePathRequest request,
-            out GuidedVolumeExitHandoff handoff,
+            out VolumePathRequest? request,
+            out GuidedVolumeExitHandoff? handoff,
             out int totalCost).Should().BeFalse();
 
         request.Should().BeNull();
@@ -323,18 +325,14 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     {
         RegisterSolidTargetLine("GuidedPlannerDirectHybrid", Vector3d.Zero, 3);
 
-        AStarPathRequest request = AStarPathRequest.Create(
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            allowTraversalTransitions: true);
+            allowTraversalTransitions: true));
 
-        request.Should().NotBeNull();
-
-        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromAStar(request);
-
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.RoutePlan.Should().NotBeNull();
+        HybridPathRequest hybridRequest = TestRequire.NotNull(HybridPathRequest.CreateFromAStar(request));
+        Assert.NotNull(hybridRequest.RoutePlan);
         hybridRequest.RoutePlan.DirectedTransitions.Should().BeEmpty();
 
         GuidedVolumeExitPlanner.TryGetTransitionAwareChartCost(hybridRequest, out int chartCost).Should().BeFalse();
@@ -347,18 +345,14 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerTransitionAwareHelper";
         GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
 
-        AStarPathRequest request = AStarPathRequest.Create(
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
             new Vector3d(1, 0, 0),
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            allowTraversalTransitions: true);
+            allowTraversalTransitions: true));
 
-        request.Should().NotBeNull();
-
-        HybridPathRequest hybridRequest = HybridPathRequest.CreateFromAStar(request);
-
-        hybridRequest.Should().NotBeNull();
-        hybridRequest.RoutePlan.Should().NotBeNull();
+        HybridPathRequest hybridRequest = TestRequire.NotNull(HybridPathRequest.CreateFromAStar(request));
+        Assert.NotNull(hybridRequest.RoutePlan);
         hybridRequest.RoutePlan.DirectedTransitions.Should().NotBeEmpty();
 
         GuidedVolumeExitPlanner.TryGetTransitionAwareChartCost(hybridRequest, out int chartCost).Should().BeTrue();

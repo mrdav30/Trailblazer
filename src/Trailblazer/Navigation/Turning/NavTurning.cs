@@ -90,9 +90,7 @@ public class NavTurning : IRecordable
     /// <summary>
     /// Optional predicate that determines whether an auto-turn is permitted after a collision.
     /// </summary>
-#nullable enable
     public Func<bool>? CanTurnOnCollision { get; set; } = null;
-#nullable disable
 
     #endregion
 

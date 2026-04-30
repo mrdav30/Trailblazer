@@ -117,11 +117,10 @@ public sealed class FlowFieldGuideTests : IDisposable
     {
         RegisterLineChart("FlowFieldStageLine", Vector3d.Zero, 3);
 
-        FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
-            Fixed64.One);
-        request.Should().NotBeNull();
+            Fixed64.One));
 
         var plan = new HybridRoutePlan(
             new[] { HybridRouteStep.Segment(request) },
@@ -178,7 +177,7 @@ public sealed class FlowFieldGuideTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One);
-        aStarRequest.Should().NotBeNull();
+        Assert.NotNull(aStarRequest);
 
         var plan = new HybridRoutePlan(
             new[] { HybridRouteStep.Segment(aStarRequest) },
@@ -201,8 +200,8 @@ public sealed class FlowFieldGuideTests : IDisposable
     {
         RegisterLineChart("FlowFieldGuideUnsupportedSegment", Vector3d.Zero, 2);
 
-        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
+        Voxel start = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
 
         var plan = new HybridRoutePlan(
             new[] { HybridRouteStep.Segment(new UnsupportedRequest(start, end)) },
@@ -254,11 +253,10 @@ public sealed class FlowFieldGuideTests : IDisposable
     {
         RegisterLineChart("FlowFieldGuidePrivateSegment", Vector3d.Zero, 3);
 
-        FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
-            Fixed64.One);
-        request.Should().NotBeNull();
+            Fixed64.One));
 
         var step = HybridRouteStep.Segment(request);
         var guide = new FlowFieldGuide();
@@ -290,7 +288,7 @@ public sealed class FlowFieldGuideTests : IDisposable
 
         for (int i = 0; i < cells.Length; i++)
         {
-            TrailblazerWorldManager.TryGetVoxel(cells[i].position, out Voxel voxel).Should().BeTrue();
+            Voxel voxel = TestRequire.VoxelAt(cells[i].position);
             fields.Add(voxel.WorldIndex, new FlowField
             {
                 GlobalIndex = voxel.WorldIndex,

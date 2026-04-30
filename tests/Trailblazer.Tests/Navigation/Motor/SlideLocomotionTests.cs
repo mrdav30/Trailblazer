@@ -29,6 +29,7 @@ public class SlideLocomotionTests : IDisposable
             startPosition: Vector3d.Zero,
             platformMatrix: platform
         );
+        var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
         TrekRequest frameRequest = new()
         {
@@ -43,7 +44,7 @@ public class SlideLocomotionTests : IDisposable
         scout.Motor.FinalizeTraversal(scout.Position, scout.LastPosition, scout.Rotation, scout.FrameCondition, scout.GetFootPosition());
 
         // Assert
-        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        slide.IsSliding.Should().BeTrue();
     }
 
     [Fact]
@@ -59,6 +60,7 @@ public class SlideLocomotionTests : IDisposable
             startPosition: Vector3d.Zero,
             platformMatrix: platform
         );
+        var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
         TrekRequest frameRequest = new()
         {
@@ -72,7 +74,7 @@ public class SlideLocomotionTests : IDisposable
         scout.Motor.TryTraversal(frameRequest, out _, out _, out _);
 
         // Assert
-        scout.Motor.Handler.Slide.IsSliding.Should().BeFalse();
+        slide.IsSliding.Should().BeFalse();
     }
 
 
@@ -85,6 +87,7 @@ public class SlideLocomotionTests : IDisposable
         );
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
+        var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
         // No movement input
         for (int i = 0; i < 3; i++)
@@ -93,7 +96,7 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        slide.IsSliding.Should().BeTrue();
         scout.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);
     }
 
@@ -106,6 +109,7 @@ public class SlideLocomotionTests : IDisposable
         );
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.One); // max friction
+        var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
         var request = new TrekRequest
         {
@@ -126,7 +130,7 @@ public class SlideLocomotionTests : IDisposable
             request.Rotation = scout.Rotation;
         }
 
-        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        slide.IsSliding.Should().BeTrue();
         scout.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeLessThan((Fixed64)1);
     }
 
@@ -138,6 +142,8 @@ public class SlideLocomotionTests : IDisposable
 
         var lowFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.Zero);
         var highFrictionScout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform, surfaceFriction: Fixed64.One);
+        var lowSlide = TestRequire.NotNull(TestRequire.NotNull(lowFrictionScout.Motor).Handler.Slide);
+        var highSlide = TestRequire.NotNull(TestRequire.NotNull(highFrictionScout.Motor).Handler.Slide);
 
         for (int i = 0; i < 5; i++)
         {
@@ -150,8 +156,8 @@ public class SlideLocomotionTests : IDisposable
         var low = lowFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
         var high = highFrictionScout.Motor.Handler.Move.FrameVelocity.Magnitude;
 
-        lowFrictionScout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
-        highFrictionScout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        lowSlide.IsSliding.Should().BeTrue();
+        highSlide.IsSliding.Should().BeTrue();
 
         high.Should().BeLessThan(low);
     }
@@ -168,6 +174,7 @@ public class SlideLocomotionTests : IDisposable
         );
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
+        var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
         scout.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
 
         // Simulate sliding for a few frames
@@ -177,7 +184,7 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        slide.IsSliding.Should().BeTrue();
 
         GroundCondition shallowSlopeSurface = new()
         {
@@ -194,7 +201,7 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Handler.Slide.IsSliding.Should().BeFalse();
+        slide.IsSliding.Should().BeFalse();
     }
 
     [Fact]
@@ -206,9 +213,9 @@ public class SlideLocomotionTests : IDisposable
         );
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
-
+        var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
         scout.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
-        scout.Motor.Handler.Slide.SidewaysControl = (Fixed64)1;
+        slide.SidewaysControl = (Fixed64)1;
 
         for (int i = 0; i < 3; i++)
         {
@@ -218,7 +225,7 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        slide.IsSliding.Should().BeTrue();
 
         var velocity = scout.Motor.Handler.Move.FrameVelocity;
         velocity.x.Should().NotBe(Fixed64.Zero, "Sideways input should influence sliding direction");
@@ -239,6 +246,7 @@ public class SlideLocomotionTests : IDisposable
             startPosition: new Vector3d(0, 2, 0),
             surfaceLevel: Fixed64.Zero,
             platformMatrix: platform);
+        var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
 
         for (int i = 0; i < 32; i++)
         {
@@ -253,7 +261,7 @@ public class SlideLocomotionTests : IDisposable
         scout.Simulate();
 
         scout.Motor.IsOnSolid.Should().BeTrue();
-        scout.Motor.Handler.Slide.IsSliding.Should().BeTrue();
+        slide.IsSliding.Should().BeTrue();
     }
 
     [Fact]
@@ -265,7 +273,8 @@ public class SlideLocomotionTests : IDisposable
         );
 
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent(platformMatrix: platform);
-        scout.Motor.Handler.Slide.IsEnabled = false;
+        var slide = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Slide);
+        slide.IsEnabled = false;
 
         for (int i = 0; i < 3; i++)
         {
@@ -273,6 +282,6 @@ public class SlideLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Motor.Handler.Slide.IsSliding.Should().BeFalse();
+        slide.IsSliding.Should().BeFalse();
     }
 }

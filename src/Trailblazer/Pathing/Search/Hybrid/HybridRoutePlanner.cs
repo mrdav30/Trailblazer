@@ -324,9 +324,6 @@ internal static class HybridRoutePlanner
         [NotNullWhen(true)] out HybridRouteStep? step,
         out int pathCost)
     {
-        step = null;
-        pathCost = 0;
-
         if (request.ChartRequestKind == HybridChartRequestKind.FlowField)
         {
             return TryCreateFlowFieldStep(

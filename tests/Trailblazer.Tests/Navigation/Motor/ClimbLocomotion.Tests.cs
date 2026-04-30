@@ -670,7 +670,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: startPosition ?? Vector3d.Zero,
             startingMedium: TraversalMedium.Gas);
-        agent.Motor.Handler.Climb.Should().NotBeNull();
+        Assert.NotNull(agent.Motor.Handler.Climb);
         return agent;
     }
 
@@ -741,7 +741,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         public bool TryResolveClimbAffordance(TrekRequest request, TransitState currentState, out ClimbAffordanceSnapshot snapshot)
         {
             request.IsRequestingClimb.Should().BeTrue();
-            currentState.Should().NotBeNull();
+            Assert.NotNull(currentState);
             snapshot = new ClimbAffordanceSnapshot(
                 kind: ClimbAffordanceKind.Surface,
                 attachmentPoint: new Vector3d(2, 3, 4),
@@ -760,7 +760,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         public bool TryResolveClimbAffordance(TrekRequest request, TransitState currentState, out ClimbAffordanceSnapshot snapshot)
         {
             request.IsRequestingClimb.Should().BeTrue();
-            currentState.Should().NotBeNull();
+            Assert.NotNull(currentState);
             snapshot = Snapshot;
             return Resolve;
         }
@@ -783,7 +783,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         public bool TryResolveClimbAffordance(TrekRequest request, TransitState currentState, out ClimbAffordanceSnapshot snapshot)
         {
             request.IsRequestingClimb.Should().BeTrue();
-            currentState.Should().NotBeNull();
+            Assert.NotNull(currentState);
             snapshot = Snapshot;
             return Resolve;
         }
@@ -793,7 +793,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             ActiveMantleState activeMantle,
             out MantleValidationSnapshot snapshot)
         {
-            currentState.Should().NotBeNull();
+            Assert.NotNull(currentState);
             ValidationCallCount++;
             LastActiveMantle = activeMantle;
             snapshot = ValidationSnapshot;

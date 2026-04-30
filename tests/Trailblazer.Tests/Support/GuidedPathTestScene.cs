@@ -20,7 +20,7 @@ internal static class GuidedPathTestScene
 
     private static void AddObstacle(Vector3d position)
     {
-        TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        var (grid, voxel) = TestRequire.GridAndVoxelAt(position);
         grid!.TryAddObstacle(
             voxel!,
             new BoundsKey(position, position)).Should().BeTrue();

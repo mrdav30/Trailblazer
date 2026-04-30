@@ -196,7 +196,6 @@ public static class PathManager
     /// <summary>
     /// Attempts to register a new navigation chart with the manager.
     /// </summary>
-    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="chart">The map to register.</param>
     /// <param name="initializeChart">Whether to initialize the chart after registration succeeds.</param>
     /// <returns>True if successful, false if a duplicate name exists.</returns>
@@ -230,7 +229,6 @@ public static class PathManager
     /// <summary>
     /// Attempts to register the chart and generated transitions produced by a traversal authoring build.
     /// </summary>
-    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="buildResult">The build result to register.</param>
     /// <param name="initializeChart">Whether to initialize the built chart after registration succeeds.</param>
     /// <returns>True when the chart and all generated transitions are registered successfully; otherwise, false.</returns>
@@ -651,7 +649,6 @@ public static class PathManager
     /// <summary>
     /// Applies a sparse batch of authored cell mutations to a registered chart.
     /// </summary>
-    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="chartName">The registered chart to mutate.</param>
     /// <param name="updates">The sparse set of cell changes to apply in order.</param>
     /// <returns>The number of authored cell mutations that changed the chart payload.</returns>
@@ -720,7 +717,6 @@ public static class PathManager
     /// <summary>
     /// Initializes a specific navigation chart by materializing its authored surface and volume partitions.
     /// </summary>
-    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="chartKey">The name of the map to initialize.</param>
     public static void InitializeChart(string chartKey)
     {
@@ -793,7 +789,6 @@ public static class PathManager
     /// <summary>
     /// Unloads the navigation chart identified by the specified key from the given world.
     /// </summary>
-    /// <param name="world">The world instance from which to unload the navigation chart.</param>
     /// <param name="chartKey">
     /// The unique key identifying the navigation chart to unload. 
     /// If the key does not correspond to a loaded chart, no action is taken.</param>
@@ -821,7 +816,6 @@ public static class PathManager
     /// <summary>
     /// Unloads a navigation map by name and releases associated partitions.
     /// </summary>
-    /// <param name="world">The grid world context for the chart.</param>
     /// <param name="chart">The navigation chart to unload.</param>
     public static void UnloadChart(NavigationChart chart)
     {

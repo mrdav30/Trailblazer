@@ -38,20 +38,17 @@ public class NavTurningTests
     [Fact]
     public void NeedsTurn_ShouldReturnFalse_When_DirectionsAreIdentical()
     {
-        var turning = new NavTurning(Fixed64.One);
         var fwd = Vector3d.Right;
 
         // identical forward ⇒ angle = 0 ≤ min threshold
-        turning.NeedsTurn(fwd, fwd).Should().BeFalse();
+        NavTurning.NeedsTurn(fwd, fwd).Should().BeFalse();
     }
 
     [Fact]
     public void NeedsTurn_ShouldReturnTrue_When_AngleIsLarge()
     {
-        var turning = new NavTurning(Fixed64.One);
-
         // 90° turn definitely > min threshold
-        turning.NeedsTurn(Vector3d.Forward, Vector3d.Right).Should().BeTrue();
+        NavTurning.NeedsTurn(Vector3d.Forward, Vector3d.Right).Should().BeTrue();
     }
 
     [Fact]

@@ -43,8 +43,8 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
 
         agent.Motor.SetLocomotionProfile(profile);
 
-        agent.Motor.Handler.Platform.Should().NotBeNull();
-        agent.Motor.Handler.Platform!.ActivePlatform.Should().NotBeNull();
+        Assert.NotNull(agent.Motor.Handler.Platform);
+        Assert.NotNull(agent.Motor.Handler.Platform!.ActivePlatform);
         agent.Motor.Handler.Platform.ActivePlatform!.Value.Transform.Should().Be(platformMatrix);
     }
 
@@ -60,8 +60,8 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
             .WithFly());
 
         agent.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Fly);
-        agent.Motor.Handler.Jump.Should().NotBeNull();
-        agent.Motor.Handler.Fly.Should().NotBeNull();
+        Assert.NotNull(agent.Motor.Handler.Jump);
+        Assert.NotNull(agent.Motor.Handler.Fly);
         agent.Motor.Handler.Platform.Should().BeNull();
         agent.Motor.Handler.Slide.Should().BeNull();
         agent.Motor.Handler.Swim.Should().BeNull();

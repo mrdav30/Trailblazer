@@ -69,7 +69,7 @@ public sealed class VolumeChartPartitionTests : IDisposable
     public void HandleChange_ShouldTrackObstacleEvents_WhenAttachedToVoxel()
     {
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Liquid, "VolumePartitionObstacle");
-        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
+        var (grid, voxel) = TestRequire.GridAndVoxelAt(Vector3d.Zero);
         voxel!.TryGetPartition(out VolumeChartPartition? partition).Should().BeTrue();
         partition!.IsWalkable.Should().BeTrue();
 

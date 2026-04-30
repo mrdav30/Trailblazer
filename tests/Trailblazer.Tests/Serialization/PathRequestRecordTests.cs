@@ -38,47 +38,47 @@ public sealed class PathRequestRecordTests : IDisposable
         RegisterLineChart("PathRecordSolid", Vector3d.Zero, 5);
         RegisterVolumeLine(new Vector3d(0, 0, 2), TraversalMedium.Gas, 5, "PathRecordGas");
 
-        AStarPathRequest aStar = AStarPathRequest.Create(
+        AStarPathRequest aStar = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
             allowUnwalkableEndpoints: true,
-            allowTraversalTransitions: true);
+            allowTraversalTransitions: true));
         aStar.MaxClimbHeight = (Fixed64)3;
         aStar.MaxPathSearchRange = 17;
 
-        FlowFieldPathRequest flowField = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest flowField = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             allowUnwalkableEndpoints: true,
-            allowTraversalTransitions: true);
+            allowTraversalTransitions: true));
         flowField.MaxClimbHeight = (Fixed64)2;
         flowField.ExtraFloodRange = 21;
         flowField.MaxPathSearchRange = 13;
 
-        VolumePathRequest volume = VolumePathRequest.Create(
+        VolumePathRequest volume = TestRequire.NotNull(VolumePathRequest.Create(
             new Vector3d(0, 0, 2),
             new Vector3d(4, 0, 2),
             Fixed64.One,
             HeuristicMethod.Manhattan,
             allowUnwalkableEndpoints: true,
-            medium: TraversalMedium.Gas);
+            medium: TraversalMedium.Gas));
         volume.MaxPathSearchRange = 9;
 
-        HybridPathRequest hybrid = HybridPathRequest.Create(
+        HybridPathRequest hybrid = TestRequire.NotNull(HybridPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
             (Fixed64)4,
-            allowUnwalkableEndpoints: true);
+            allowUnwalkableEndpoints: true));
         hybrid.MaxPathSearchRange = 11;
 
         AssertRoundTrip(aStar, PathRequestRecordKind.AStar, recreated =>
         {
-            AStarPathRequest recreatedAStar = recreated.Should().BeOfType<AStarPathRequest>().Subject;
+            AStarPathRequest recreatedAStar = Assert.IsType<AStarPathRequest>(recreated);
             recreatedAStar.AllowTraversalTransitions.Should().BeTrue();
             recreatedAStar.AllowUnwalkableEndpoints.Should().BeTrue();
             recreatedAStar.Heuristic.Should().Be(HeuristicMethod.Euclidean);
@@ -88,7 +88,7 @@ public sealed class PathRequestRecordTests : IDisposable
 
         AssertRoundTrip(flowField, PathRequestRecordKind.FlowField, recreated =>
         {
-            FlowFieldPathRequest recreatedFlowField = recreated.Should().BeOfType<FlowFieldPathRequest>().Subject;
+            FlowFieldPathRequest recreatedFlowField = Assert.IsType<FlowFieldPathRequest>(recreated);
             recreatedFlowField.AllowTraversalTransitions.Should().BeTrue();
             recreatedFlowField.AllowUnwalkableEndpoints.Should().BeTrue();
             recreatedFlowField.MaxClimbHeight.Should().Be((Fixed64)2);
@@ -98,7 +98,7 @@ public sealed class PathRequestRecordTests : IDisposable
 
         AssertRoundTrip(volume, PathRequestRecordKind.Volume, recreated =>
         {
-            VolumePathRequest recreatedVolume = recreated.Should().BeOfType<VolumePathRequest>().Subject;
+            VolumePathRequest recreatedVolume = Assert.IsType<VolumePathRequest>(recreated);
             recreatedVolume.AllowUnwalkableEndpoints.Should().BeTrue();
             recreatedVolume.Heuristic.Should().Be(HeuristicMethod.Manhattan);
             recreatedVolume.Medium.Should().Be(TraversalMedium.Gas);
@@ -107,7 +107,7 @@ public sealed class PathRequestRecordTests : IDisposable
 
         AssertRoundTrip(hybrid, PathRequestRecordKind.Hybrid, recreated =>
         {
-            HybridPathRequest recreatedHybrid = recreated.Should().BeOfType<HybridPathRequest>().Subject;
+            HybridPathRequest recreatedHybrid = Assert.IsType<HybridPathRequest>(recreated);
             recreatedHybrid.AllowUnwalkableEndpoints.Should().BeTrue();
             recreatedHybrid.Heuristic.Should().Be(HeuristicMethod.Euclidean);
             recreatedHybrid.MaxClimbHeight.Should().Be((Fixed64)4);
@@ -122,34 +122,40 @@ public sealed class PathRequestRecordTests : IDisposable
         RegisterVolumeLine(new Vector3d(0, 0, 2), TraversalMedium.Gas, 5, "PathRecordGuideGas");
         GuidedPathTestScene.RegisterTransitionFallbackScene();
 
-        AStarPathRequest aStar = AStarPathRequest.Create(
+        AStarPathRequest aStar = TestRequire.NotNull(AStarPathRequest.Create(
             new Vector3d(0, 2, 0),
             new Vector3d(4, 2, 0),
-            Fixed64.One);
-        PathGuideFactory.RequestGuide(aStar, out AStarGuide aStarGuide).Should().BeTrue();
+            Fixed64.One));
+        AStarGuide aStarGuide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(aStar, out AStarGuide? createdAStarGuide),
+            createdAStarGuide);
         aStarGuide.AdvanceWaypoint();
         aStarGuide.AdvanceWaypoint();
         AssertGuideRoundTrip(aStar, aStarGuide, expectedWaypointIndex: 2);
         PathGuideFactory.ReturnGuide(aStarGuide, dispose: true);
 
-        VolumePathRequest volume = VolumePathRequest.Create(
+        VolumePathRequest volume = TestRequire.NotNull(VolumePathRequest.Create(
             new Vector3d(0, 0, 2),
             new Vector3d(4, 0, 2),
             Fixed64.One,
-            medium: TraversalMedium.Gas);
-        PathGuideFactory.RequestGuide(volume, out VolumeGuide volumeGuide).Should().BeTrue();
+            medium: TraversalMedium.Gas));
+        VolumeGuide volumeGuide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(volume, out VolumeGuide? createdVolumeGuide),
+            createdVolumeGuide);
         volumeGuide.AdvanceWaypoint();
         AssertGuideRoundTrip(volume, volumeGuide, expectedWaypointIndex: 2);
         PathGuideFactory.ReturnGuide(volumeGuide, dispose: true);
 
-        AStarPathRequest transitionAwareRequest = AStarPathRequest.Create(
+        AStarPathRequest transitionAwareRequest = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
-            allowTraversalTransitions: true);
-        HybridPathRequest hybrid = HybridPathRequest.CreateFromAStar(transitionAwareRequest);
-        PathGuideFactory.RequestGuide(hybrid, out HybridGuide hybridGuide).Should().BeTrue();
+            allowTraversalTransitions: true));
+        HybridPathRequest hybrid = TestRequire.NotNull(HybridPathRequest.CreateFromAStar(transitionAwareRequest));
+        HybridGuide hybridGuide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(hybrid, out HybridGuide? createdHybridGuide),
+            createdHybridGuide);
         hybridGuide.AdvanceWaypoint();
         AssertGuideRoundTrip(hybrid, hybridGuide, expectedWaypointIndex: 2);
         PathGuideFactory.ReturnGuide(hybridGuide, dispose: true);
@@ -160,19 +166,19 @@ public sealed class PathRequestRecordTests : IDisposable
     {
         PathRequestRecord record = new();
 
-        record.TryCreateRequest(out IPathRequest emptyRequest).Should().BeTrue();
+        record.TryCreateRequest(out IPathRequest? emptyRequest).Should().BeTrue();
         emptyRequest.Should().BeNull();
-        record.TryCreateGuide(null, out IGuide emptyGuide).Should().BeFalse();
+        record.TryCreateGuide(null, out IGuide? emptyGuide).Should().BeFalse();
         emptyGuide.Should().BeNull();
 
         RegisterLineChart("PathRecordUnsupported", Vector3d.Zero, 2);
-        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
+        Voxel start = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
 
         Action captureUnsupported = () => record.Capture(new UnsupportedRequest(start, end), null);
         captureUnsupported.Should().Throw<NotSupportedException>();
 
-        AStarPathRequest aStar = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One);
+        AStarPathRequest aStar = TestRequire.NotNull(AStarPathRequest.Create(Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One));
         record.Capture(aStar, null);
         record.Reset();
 
@@ -189,14 +195,14 @@ public sealed class PathRequestRecordTests : IDisposable
         PathRequestRecord record = new();
 
         record.Kind = (PathRequestRecordKind)999;
-        record.TryCreateRequest(out IPathRequest unsupportedKind).Should().BeFalse();
+        record.TryCreateRequest(out IPathRequest? unsupportedKind).Should().BeFalse();
         unsupportedKind.Should().BeNull();
 
         record.Reset();
         record.Kind = PathRequestRecordKind.FlowField;
         record.Origin = new Vector3d(-20, 0, 0);
         record.TargetPosition = new Vector3d(-18, 0, 0);
-        record.TryCreateRequest(out IPathRequest failedFlowField).Should().BeFalse();
+        record.TryCreateRequest(out IPathRequest? failedFlowField).Should().BeFalse();
         failedFlowField.Should().BeNull();
 
         record.Reset();
@@ -204,14 +210,14 @@ public sealed class PathRequestRecordTests : IDisposable
         record.Origin = new Vector3d(-20, 0, 2);
         record.TargetPosition = new Vector3d(-18, 0, 2);
         record.Medium = TraversalMedium.Gas;
-        record.TryCreateRequest(out IPathRequest failedVolume).Should().BeFalse();
+        record.TryCreateRequest(out IPathRequest? failedVolume).Should().BeFalse();
         failedVolume.Should().BeNull();
 
         record.Reset();
         record.Kind = PathRequestRecordKind.Hybrid;
         record.Origin = Vector3d.Zero;
         record.TargetPosition = new Vector3d(4, 0, 0);
-        record.TryCreateRequest(out IPathRequest failedHybrid).Should().BeFalse();
+        record.TryCreateRequest(out IPathRequest? failedHybrid).Should().BeFalse();
         failedHybrid.Should().BeNull();
     }
 
@@ -220,16 +226,19 @@ public sealed class PathRequestRecordTests : IDisposable
     {
         RegisterLineChart("PathRecordFlowField", new Vector3d(0, 4, 0), 3);
 
-        FlowFieldPathRequest flowField = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest flowField = TestRequire.NotNull(FlowFieldPathRequest.Create(
             new Vector3d(0, 4, 0),
             new Vector3d(2, 4, 0),
-            Fixed64.One);
-        flowField.Should().NotBeNull();
+            Fixed64.One));
 
-        PathGuideFactory.RequestGuide(flowField, out FlowFieldGuide flowGuide).Should().BeTrue();
+        FlowFieldGuide flowGuide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(flowField, out FlowFieldGuide? createdFlowGuide),
+            createdFlowGuide);
         PathRequestRecord flowRecord = new();
         flowRecord.Capture(flowField, flowGuide);
-        flowRecord.TryCreateGuide(flowField, out IGuide recreatedFlowGuide).Should().BeTrue();
+        IGuide recreatedFlowGuide = TestRequire.Created(
+            flowRecord.TryCreateGuide(flowField, out IGuide? createdRecreatedFlowGuide),
+            createdRecreatedFlowGuide);
         recreatedFlowGuide.Should().BeOfType<FlowFieldGuide>();
 
         PathGuideFactory.ReturnGuide(recreatedFlowGuide, dispose: true);
@@ -249,7 +258,7 @@ public sealed class PathRequestRecordTests : IDisposable
             allowTraversalTransitions: true)
             ?? throw new InvalidOperationException("Expected disconnected AStar request to resolve endpoints.");
 
-        failureRecord.TryCreateGuide(disconnected, out IGuide failedGuide).Should().BeFalse();
+        failureRecord.TryCreateGuide(disconnected, out IGuide? failedGuide).Should().BeFalse();
         failedGuide.Should().BeNull();
     }
 
@@ -262,9 +271,8 @@ public sealed class PathRequestRecordTests : IDisposable
         record.Capture(request, null);
         record.Kind.Should().Be(expectedKind);
 
-        record.TryCreateRequest(out IPathRequest recreated).Should().BeTrue();
-        recreated.Should().NotBeNull();
-        assertRequest(recreated);
+        record.TryCreateRequest(out IPathRequest? recreated).Should().BeTrue();
+        assertRequest(TestRequire.NotNull(recreated));
     }
 
     private static void AssertGuideRoundTrip(
@@ -277,8 +285,11 @@ public sealed class PathRequestRecordTests : IDisposable
         record.HasGuide.Should().BeTrue();
         record.WaypointIndex.Should().Be(expectedWaypointIndex);
 
-        record.TryCreateRequest(out IPathRequest recreatedRequest).Should().BeTrue();
-        record.TryCreateGuide(recreatedRequest, out IGuide recreatedGuide).Should().BeTrue();
+        record.TryCreateRequest(out IPathRequest? recreatedRequest).Should().BeTrue();
+        IPathRequest restoredRequest = TestRequire.NotNull(recreatedRequest);
+        IGuide recreatedGuide = TestRequire.Created(
+            record.TryCreateGuide(restoredRequest, out IGuide? createdRecreatedGuide),
+            createdRecreatedGuide);
         recreatedGuide.Should().BeAssignableTo<IWaypointGuide>()
             .Which.CurrentWaypointIndex.Should().Be(expectedWaypointIndex);
 

@@ -42,15 +42,15 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
-            Fixed64.One);
-        request.Should().NotBeNull();
+            Fixed64.One));
         request.AllowTraversalTransitions = true;
 
-        PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide).Should().BeTrue();
-        guide.Should().NotBeNull();
+        FlowFieldGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out FlowFieldGuide? createdGuide),
+            createdGuide);
         guide.IsStaged.Should().BeTrue();
 
         guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d toJumpSource).Should().BeTrue();
@@ -87,15 +87,15 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
             new Vector3d(-2, 0, 0),
             new Vector3d(4, 0, 0),
-            Fixed64.One);
-        request.Should().NotBeNull();
+            Fixed64.One));
         request.AllowTraversalTransitions = true;
 
-        PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide).Should().BeTrue();
-        guide.Should().NotBeNull();
+        FlowFieldGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out FlowFieldGuide? createdGuide),
+            createdGuide);
         guide.IsStaged.Should().BeTrue();
 
         guide.TryGetMovementDirection(new Vector3d(-2, 0, 0), out Vector3d toShoreline).Should().BeTrue();
@@ -127,15 +127,14 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        request.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
         request.AllowTraversalTransitions.Should().BeFalse();
 
-        PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide).Should().BeFalse();
+        PathGuideFactory.RequestGuide(request, out FlowFieldGuide? guide).Should().BeFalse();
         guide.Should().BeNull();
     }
 
@@ -144,17 +143,17 @@ public class FlowFieldTransitionFallbackTests : IDisposable
     {
         RegisterAuthoredClimbRoute("FlowFieldClimbFallback");
 
-        FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(3, 0, 1),
             Fixed64.One,
-            allowUnwalkableEndpoints: true);
-        request.Should().NotBeNull();
+            allowUnwalkableEndpoints: true));
         request.MaxClimbHeight = Fixed64.Zero;
         request.AllowTraversalTransitions = true;
 
-        PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide).Should().BeTrue();
-        guide.Should().NotBeNull();
+        FlowFieldGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out FlowFieldGuide? createdGuide),
+            createdGuide);
         guide.IsStaged.Should().BeTrue();
 
         guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d toSeam).Should().BeTrue();

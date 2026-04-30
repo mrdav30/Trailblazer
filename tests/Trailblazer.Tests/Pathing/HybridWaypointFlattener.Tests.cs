@@ -36,17 +36,14 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     {
         RegisterLineChart("HybridFlattenChart", Vector3d.Zero, 5);
 
-        AStarPathRequest first = AStarPathRequest.Create(
+        AStarPathRequest first = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
-            Fixed64.One);
-        AStarPathRequest second = AStarPathRequest.Create(
+            Fixed64.One));
+        AStarPathRequest second = TestRequire.NotNull(AStarPathRequest.Create(
             new Vector3d(2, 0, 0),
             new Vector3d(4, 0, 0),
-            Fixed64.One);
-
-        first.Should().NotBeNull();
-        second.Should().NotBeNull();
+            Fixed64.One));
 
         HybridRoutePlan routePlan = new(
             new[]
@@ -59,17 +56,17 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 
         HybridWaypointFlattener.TryBuild(
             routePlan,
-            out AStarWaypoint[] flattenedWaypoints,
+            out AStarWaypoint[]? flattenedWaypoints,
             out string[] chartKeys).Should().BeTrue();
 
-        flattenedWaypoints.Should().NotBeNull();
-        flattenedWaypoints[^1].IsGoal.Should().BeTrue();
+        AStarWaypoint[] actualWaypoints = TestRequire.NotNull(flattenedWaypoints);
+        actualWaypoints[^1].IsGoal.Should().BeTrue();
         chartKeys.Should().Equal("HybridFlattenChart");
 
         int duplicatePositionCount = 0;
-        for (int i = 0; i < flattenedWaypoints.Length; i++)
+        for (int i = 0; i < actualWaypoints.Length; i++)
         {
-            if (flattenedWaypoints[i].Position == new Vector3d(2, 0, 0))
+            if (actualWaypoints[i].Position == new Vector3d(2, 0, 0))
                 duplicatePositionCount++;
         }
 
@@ -80,8 +77,8 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     public void TryBuild_ShouldRejectUnsupportedSegmentRequests()
     {
         RegisterLineChart("HybridFlattenUnsupported", Vector3d.Zero, 2);
-        TrailblazerWorldManager.TryGetVoxel(Vector3d.Zero, out Voxel start).Should().BeTrue();
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(1, 0, 0), out Voxel end).Should().BeTrue();
+        Voxel start = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
 
         HybridRoutePlan routePlan = new(
             new[]
@@ -93,7 +90,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 
         HybridWaypointFlattener.TryBuild(
             routePlan,
-            out AStarWaypoint[] flattenedWaypoints,
+            out AStarWaypoint[]? flattenedWaypoints,
             out string[] chartKeys).Should().BeFalse();
 
         flattenedWaypoints.Should().BeNull();
@@ -104,8 +101,8 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     public void TryBuild_ShouldReturnFalse_ForNullRoutePlan()
     {
         HybridWaypointFlattener.TryBuild(
-            null,
-            out AStarWaypoint[] waypoints,
+            null!,
+            out AStarWaypoint[]? waypoints,
             out string[] chartKeys).Should().BeFalse();
 
         waypoints.Should().BeNull();
@@ -121,20 +118,19 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(3, 0, 0), TraversalMedium.Gas, "HybridFlattenGas");
         RegisterLineChart("HybridFlattenVolEnd", new Vector3d(4, 0, 0), 2);
 
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(2, 0, 0), out Voxel volStart).Should().BeTrue();
-        TrailblazerWorldManager.TryGetVoxel(new Vector3d(3, 0, 0), out Voxel volEnd).Should().BeTrue();
+        Voxel volStart = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
+        Voxel volEnd = TestRequire.VoxelAt(new Vector3d(3, 0, 0));
 
-        VolumePathRequest volRequest = VolumePathRequest.Create(
+        VolumePathRequest volRequest = TestRequire.NotNull(VolumePathRequest.Create(
             new Vector3d(2, 0, 0),
             new Vector3d(3, 0, 0),
             Fixed64.One,
-            medium: TraversalMedium.Gas);
-        volRequest.Should().NotBeNull();
+            medium: TraversalMedium.Gas));
 
-        AStarPathRequest leadUp = AStarPathRequest.Create(
+        AStarPathRequest leadUp = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
-            Fixed64.One);
+            Fixed64.One));
 
         HybridRoutePlan plan = new(
             new[]
@@ -147,13 +143,13 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 
         bool success = HybridWaypointFlattener.TryBuild(
             plan,
-            out AStarWaypoint[] flattenedWaypoints,
+            out AStarWaypoint[]? flattenedWaypoints,
             out string[] chartKeys);
 
         success.Should().BeTrue();
-        flattenedWaypoints.Should().NotBeNull();
-        flattenedWaypoints.Length.Should().BeGreaterThan(0);
-        flattenedWaypoints[^1].IsGoal.Should().BeTrue();
+        AStarWaypoint[] actualWaypoints = TestRequire.NotNull(flattenedWaypoints);
+        actualWaypoints.Length.Should().BeGreaterThan(0);
+        actualWaypoints[^1].IsGoal.Should().BeTrue();
     }
 
     [Fact]
@@ -174,13 +170,13 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 
         HybridWaypointFlattener.TryBuild(
             plan,
-            out AStarWaypoint[] flattenedWaypoints,
+            out AStarWaypoint[]? flattenedWaypoints,
             out string[] chartKeys).Should().BeTrue();
 
-        flattenedWaypoints.Should().NotBeNull();
-        flattenedWaypoints.Length.Should().Be(3);
-        flattenedWaypoints[0].Position.Should().Be(Vector3d.Zero);
-        flattenedWaypoints[^1].IsGoal.Should().BeTrue();
+        AStarWaypoint[] actualWaypoints = TestRequire.NotNull(flattenedWaypoints);
+        actualWaypoints.Length.Should().Be(3);
+        actualWaypoints[0].Position.Should().Be(Vector3d.Zero);
+        actualWaypoints[^1].IsGoal.Should().BeTrue();
         chartKeys.Should().BeEmpty("waypoint steps carry no chart keys");
     }
 
@@ -193,13 +189,10 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("HybridFlattenIsolatedA", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("HybridFlattenIsolatedB", new Vector3d(7, 0, 0));
 
-        AStarPathRequest request = AStarPathRequest.Create(
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
             Vector3d.Zero,
             new Vector3d(7, 0, 0),
-            Fixed64.One);
-
-        // Both endpoints are walkable so the request itself is valid.
-        request.Should().NotBeNull();
+            Fixed64.One));
 
         HybridRoutePlan plan = new(
             new[] { HybridRouteStep.Segment(request) },
@@ -208,7 +201,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 
         HybridWaypointFlattener.TryBuild(
             plan,
-            out AStarWaypoint[] flattenedWaypoints,
+            out AStarWaypoint[]? flattenedWaypoints,
             out string[] chartKeys).Should().BeFalse();
 
         flattenedWaypoints.Should().BeNull();
@@ -226,7 +219,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 
         HybridWaypointFlattener.TryBuild(
             plan,
-            out AStarWaypoint[] flattenedWaypoints,
+            out AStarWaypoint[]? flattenedWaypoints,
             out string[] chartKeys).Should().BeFalse();
 
         flattenedWaypoints.Should().BeNull();

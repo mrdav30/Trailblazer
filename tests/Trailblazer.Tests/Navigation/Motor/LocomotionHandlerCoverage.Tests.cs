@@ -204,12 +204,12 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
 
         handler.ConfigureInstalledKinds(LocomotionKind.Platform | LocomotionKind.Fly);
         handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Platform | LocomotionKind.Fly);
-        handler.Platform.Should().NotBeNull();
-        handler.Fly.Should().NotBeNull();
+        Assert.NotNull(handler.Platform);
+        Assert.NotNull(handler.Fly);
 
         handler.ConfigureInstalledKinds(LocomotionKind.Climb);
         handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Climb);
-        handler.Climb.Should().NotBeNull();
+        Assert.NotNull(handler.Climb);
     }
 
     [Fact]
@@ -253,9 +253,9 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         target.IsInControl.Should().BeTrue();
         target.Move.FrameVelocity.Should().Be(Vector3d.Forward);
         target.Fall.IsFalling.Should().BeTrue();
-        target.Jump.Should().NotBeNull();
+        Assert.NotNull(target.Jump);
         target.Jump.IsJumping.Should().BeFalse();
-        target.Fly.Should().NotBeNull();
+        Assert.NotNull(target.Fly);
         target.Fly.IsFlying.Should().BeTrue();
     }
 

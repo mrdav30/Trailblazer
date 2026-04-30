@@ -48,7 +48,7 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(4, 0, 0);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -85,7 +85,7 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(1, 0, 0);
         var end = new Vector3d(5, 0, 0);
 
-        var request = FlowFieldPathRequest.Create(start, end, Fixed64.Two);
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(start, end, Fixed64.Two));
 
         request.IsValid.Should().BeTrue();
 
@@ -106,7 +106,7 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("FlowHeightLimit", data, Vector3d.Zero);
 
-        FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(0, 2, 0), out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(0, 2, 0), out FlowFieldPathRequest? createdrequest), createdrequest);
         request.MaxClimbHeight = Fixed64.Half;
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
@@ -126,10 +126,10 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("HybridFlowHeightLimit", data, Vector3d.Zero);
 
-        FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(0, 2, 0), out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(0, 2, 0), out FlowFieldPathRequest? createdrequest), createdrequest);
         request.MaxClimbHeight = Fixed64.Half;
 
-        HybridPathRequest hybrid = HybridPathRequest.CreateFromFlowField(request);
+        HybridPathRequest? hybrid = HybridPathRequest.CreateFromFlowField(request);
 
         hybrid.Should().BeNull();
 
@@ -149,15 +149,16 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(-2, 0, 0);
         var end = new Vector3d(3, 0, 3);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
         request.ExtraFloodRange = 5;
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+        var fields = TestRequire.NotNull(result.Fields);
 
         Assert.True(result.HasPath);
 
         var distanceToTarget = Vector3d.Distance(end, start).CeilToInt() + 2 + request.ExtraFloodRange;
-        foreach (FlowField flow in result.Fields.Values)
+        foreach (FlowField flow in fields.Values)
             Assert.True(flow.PathCost <= distanceToTarget);
 
         PathManager.UnloadChart("ShortRange");
@@ -180,10 +181,10 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(2, 0, 0);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
-        var dir = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+        var dir = FlowFieldSurveyor.SampleFlowVector(start, TestRequire.NotNull(result.Fields));
 
         var expected = (end - start).Normalize();
         var angleDiff = Vector3d.Dot(expected, dir);
@@ -206,11 +207,11 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(2, 0, 0);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        var goalField = result.Fields.Values.First(f => f.IsGoal);
+        var goalField = TestRequire.NotNull(result.Fields).Values.First(f => f.IsGoal);
         Assert.Equal(Vector3d.Zero, goalField.Direction);
 
         PathManager.UnloadChart("GoalZero");
@@ -222,7 +223,7 @@ public class FlowFieldSurveyorTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("IsolatedStart", new Vector3d(0, 0, 0));
         PathTestFactory.RegisterSingleWalkablePoint("IsolatedEnd", new Vector3d(5, 0, 5));
 
-        FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(5, 0, 5), out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(5, 0, 5), out FlowFieldPathRequest? createdrequest), createdrequest);
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -236,13 +237,13 @@ public class FlowFieldSurveyorTests : IDisposable
     [Fact]
     public void FlowField_ShouldReturnEmpty_ForNullAndUnresolvedRequests()
     {
-        FlowFieldSurveyor.Shared.FindPath(null).HasPath.Should().BeFalse();
+        FlowFieldSurveyor.Shared.FindPath(null!).HasPath.Should().BeFalse();
 
         bool[,,] data = new bool[1, 1, 1];
         data[0, 0, 0] = true;
         PathTestFactory.RegisterFromData("FlowInvalidRequest", data, Vector3d.Zero);
 
-        FlowFieldPathRequest.TryCreate(Vector3d.Zero, Vector3d.Zero, out FlowFieldPathRequest request).Should().BeTrue();
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(Vector3d.Zero, Vector3d.Zero, out FlowFieldPathRequest? createdrequest), createdrequest);
         FlowFieldSurveyor.Shared.FindPath(request).HasPath.Should().BeFalse();
 
         request.UpdateRequest(new Vector3d(64, 0, 0), Vector3d.Zero, Fixed64.One).Should().BeFalse();
@@ -258,7 +259,7 @@ public class FlowFieldSurveyorTests : IDisposable
             Vector3d.Zero,
             null!,
             Fixed64.One,
-            out Voxel nullAnchor).Should().BeFalse();
+            out Voxel? nullAnchor).Should().BeFalse();
         nullAnchor.Should().BeNull();
 
         bool[,,] data = new bool[1, 2, 1];
@@ -266,16 +267,17 @@ public class FlowFieldSurveyorTests : IDisposable
         data[0, 1, 0] = true;
 
         PathTestFactory.RegisterFromData("StaleFlowAnchor", data, Vector3d.Zero);
-        FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out FlowFieldPathRequest? createdrequest), createdrequest);
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+        var fields = TestRequire.NotNull(result.Fields);
 
         TrailblazerWorldManager.Reset();
 
         FlowFieldSurveyor.TryGetNearestFlowAnchor(
             Vector3d.Zero,
-            result.Fields,
+            fields,
             Fixed64.One,
-            out Voxel staleAnchor).Should().BeFalse();
+            out Voxel? staleAnchor).Should().BeFalse();
         staleAnchor.Should().BeNull();
 
         TrailblazerWorldManager.Setup();
@@ -291,10 +293,9 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("FlowDiagonalBlocked", data, Vector3d.Zero);
 
-        FlowFieldPathRequest.TryCreate(
-            new Vector3d(0, 0, 0),
-            new Vector3d(1, 0, 1),
-            out FlowFieldPathRequest request).Should().BeTrue();
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(1, 0, 1), out FlowFieldPathRequest? createdRequest),
+            createdRequest);
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -313,10 +314,9 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("FlowVerticalDiagonalBlocked", data, Vector3d.Zero);
 
-        FlowFieldPathRequest.TryCreate(
-            new Vector3d(0, 0, 0),
-            new Vector3d(1, 1, 0),
-            out FlowFieldPathRequest request).Should().BeTrue();
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(1, 1, 0), out FlowFieldPathRequest? createdRequest),
+            createdRequest);
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -339,7 +339,7 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(2, 0, 0);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -372,10 +372,10 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(0, 0, 1);
         var end = new Vector3d(2, 0, 1);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
-        var vec = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+        var vec = FlowFieldSurveyor.SampleFlowVector(start, TestRequire.NotNull(result.Fields));
 
         Assert.True(vec.x > Fixed64.Zero); // ensure direction favors straight axis
         Assert.True(vec.z.Abs() < Fixed64.Half);
@@ -399,17 +399,19 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d start = new(2, 0, 2);
 
         // Try two different end goals and compare flow field results
-        FlowFieldPathRequest.TryCreate(start, new Vector3d(0, 0, 0), out FlowFieldPathRequest request1);
+        FlowFieldPathRequest request1 = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, new Vector3d(0, 0, 0), out FlowFieldPathRequest? createdrequest1), createdrequest1);
         var flowResult1 = FlowFieldSurveyor.Shared.FindPath(request1);
-        FlowFieldPathRequest.TryCreate(start, new Vector3d(4, 0, 4), out FlowFieldPathRequest request2);
+        FlowFieldPathRequest request2 = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, new Vector3d(4, 0, 4), out FlowFieldPathRequest? createdrequest2), createdrequest2);
         var flowResult2 = FlowFieldSurveyor.Shared.FindPath(request2);
 
         // Both results should be valid and flow toward the respective goals
-        flowResult1.Fields.Count.Should().BeGreaterThan(0);
-        flowResult2.Fields.Count.Should().BeGreaterThan(0);
+        var fields1 = TestRequire.NotNull(flowResult1.Fields);
+        var fields2 = TestRequire.NotNull(flowResult2.Fields);
+        fields1.Count.Should().BeGreaterThan(0);
+        fields2.Count.Should().BeGreaterThan(0);
 
-        Vector3d dir1 = FlowFieldSurveyor.SampleFlowVector(start, flowResult1.Fields);
-        Vector3d dir2 = FlowFieldSurveyor.SampleFlowVector(start, flowResult2.Fields);
+        Vector3d dir1 = FlowFieldSurveyor.SampleFlowVector(start, fields1);
+        Vector3d dir2 = FlowFieldSurveyor.SampleFlowVector(start, fields2);
 
         dir1.Should().NotBeApproximately(dir2);
 
@@ -431,11 +433,11 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d start = new(2, 0, 2);
         Vector3d goal = new(4, 0, 4);
 
-        FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, TestRequire.NotNull(result.Fields));
 
         // Expect a roughly diagonal vector toward the goal
         flow.x.Should().BeGreaterThan(Fixed64.Zero);
@@ -486,13 +488,13 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d start = new(2, 0, 2);
         Vector3d goal = new(4, 0, 4);
 
-        FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest? createdrequest), createdrequest);
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
         // Sample outside of known field bounds
         Vector3d outsidePos = new(10, 0, 10);
 
-        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(outsidePos, result.Fields);
+        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(outsidePos, TestRequire.NotNull(result.Fields));
 
         flow.Should().Be(Vector3d.Zero);
 
@@ -514,10 +516,12 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(2, 0, 2);
         var end = new Vector3d(0, 0, 0);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest), createdrequest);
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        foreach (var pair in result.Fields)
+        var fields = TestRequire.NotNull(result.Fields);
+
+        foreach (var pair in fields)
         {
             WorldVoxelIndex index = pair.Key;
             FlowField field = pair.Value;
@@ -527,15 +531,17 @@ public class FlowFieldSurveyorTests : IDisposable
 
             // Try get neighbor index
 
-            if (!TrailblazerWorldManager.TryGetGridAndVoxel(field.GlobalIndex, out _, out Voxel current))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(field.GlobalIndex, out _, out Voxel? current))
                 continue;
+            Voxel currentVoxel = TestRequire.NotNull(current);
 
-            Vector3d neighborPosition = current.WorldPosition + field.Direction;
+            Vector3d neighborPosition = currentVoxel.WorldPosition + field.Direction;
 
-            if (!TrailblazerWorldManager.TryGetGridAndVoxel(neighborPosition, out _, out Voxel neighbor))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(neighborPosition, out _, out Voxel? neighbor))
                 continue;
+            Voxel neighborVoxel = TestRequire.NotNull(neighbor);
 
-            if (!result.Fields.TryGetValue(neighbor.WorldIndex, out FlowField neighborField))
+            if (!fields.TryGetValue(neighborVoxel.WorldIndex, out FlowField neighborField))
                 continue;
 
             neighborField.PathCost.Should()
@@ -558,10 +564,10 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d start = new(1, 0, 1);
         Vector3d goal = new(2, 0, 2);
 
-        FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest? createdrequest), createdrequest);
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, TestRequire.NotNull(result.Fields));
 
         flow.x.Should().BeApproximately(flow.z, (Fixed64)0.05);
         flow.x.Should().BeGreaterThan(Fixed64.Zero);
@@ -583,10 +589,10 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d start = new(1, 0, 1);
         Vector3d goal = new(1, 0, 0);
 
-        FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest? createdrequest), createdrequest);
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, TestRequire.NotNull(result.Fields));
         flow.Should().Be(Vector3d.Backward);
 
         PathManager.UnloadChart("CardinalOverDiagonal");
@@ -603,14 +609,14 @@ public class FlowFieldSurveyorTests : IDisposable
         PathTestFactory.RegisterFromData("DifferentGoals", data, Vector3d.Zero);
 
         Vector3d start = new(2, 0, 2);
-        FlowFieldPathRequest.TryCreate(start, new Vector3d(0, 0, 0), out FlowFieldPathRequest request1);
-        FlowFieldPathRequest.TryCreate(start, new Vector3d(4, 0, 4), out FlowFieldPathRequest request2);
+        FlowFieldPathRequest request1 = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, new Vector3d(0, 0, 0), out FlowFieldPathRequest? createdrequest1), createdrequest1);
+        FlowFieldPathRequest request2 = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, new Vector3d(4, 0, 4), out FlowFieldPathRequest? createdrequest2), createdrequest2);
 
         var result1 = FlowFieldSurveyor.Shared.FindPath(request1);
         var result2 = FlowFieldSurveyor.Shared.FindPath(request2);
 
-        FlowField field1 = FlowFieldSurveyor.GetFlowField(start, result1.Fields);
-        FlowField field2 = FlowFieldSurveyor.GetFlowField(start, result2.Fields);
+        FlowField field1 = FlowFieldSurveyor.GetFlowField(start, TestRequire.NotNull(result1.Fields));
+        FlowField field2 = FlowFieldSurveyor.GetFlowField(start, TestRequire.NotNull(result2.Fields));
 
         field1.Direction.Should().NotBe(Vector3d.Zero);
         field2.Direction.Should().NotBe(Vector3d.Zero);
@@ -628,11 +634,12 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("MissingFlowFieldLookup", data, Vector3d.Zero);
 
-        FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out FlowFieldPathRequest? createdrequest), createdrequest);
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        FlowField found = FlowFieldSurveyor.GetFlowField(Vector3d.Zero, result.Fields);
-        FlowField missing = FlowFieldSurveyor.GetFlowField(new Vector3d(4, 0, 0), result.Fields);
+        var fields = TestRequire.NotNull(result.Fields);
+        FlowField found = FlowFieldSurveyor.GetFlowField(Vector3d.Zero, fields);
+        FlowField missing = FlowFieldSurveyor.GetFlowField(new Vector3d(4, 0, 0), fields);
 
         found.GlobalIndex.Should().NotBe(default(WorldVoxelIndex));
         missing.GlobalIndex.Should().Be(default(WorldVoxelIndex));
@@ -655,19 +662,21 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(4, 0, 4);
         var end = new Vector3d(0, 0, 0);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request1);
+        FlowFieldPathRequest request1 = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest1), createdrequest1);
         var result1 = FlowFieldSurveyor.Shared.FindPath(request1);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request2);
+        FlowFieldPathRequest request2 = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest2), createdrequest2);
         var result2 = FlowFieldSurveyor.Shared.FindPath(request2);
 
-        result1.Fields.Count.Should().Be(result2.Fields.Count);
+        var fields1 = TestRequire.NotNull(result1.Fields);
+        var fields2 = TestRequire.NotNull(result2.Fields);
+        fields1.Count.Should().Be(fields2.Count);
 
-        foreach (var kvp in result1.Fields)
+        foreach (var kvp in fields1)
         {
-            result2.Fields.Should().ContainKey(kvp.Key);
+            fields2.Should().ContainKey(kvp.Key);
             FlowField field1 = kvp.Value;
-            FlowField field2 = result2.Fields[kvp.Key];
+            FlowField field2 = fields2[kvp.Key];
 
             field1.Direction.Should().Be(field2.Direction);
             field1.PathCost.Should().Be(field2.PathCost);
@@ -680,23 +689,24 @@ public class FlowFieldSurveyorTests : IDisposable
     public void FlowField_ShouldReroute_WhenAdjacentBlockersExist()
     {
         bool[,,] data = new bool[1, 3, 3];
-        data[0, 0, 0] = true;
-        data[0, 0, 2] = true;
-        data[0, 2, 0] = true;
-        data[0, 2, 2] = true;
-        data[0, 1, 0] = false;
+        for (int x = 0; x < 3; x++)
+            for (int z = 0; z < 3; z++)
+                data[0, x, z] = true;
+
         data[0, 1, 1] = false;
-        data[0, 1, 2] = false;
 
         PathTestFactory.RegisterFromData("RerouteAroundBlockers", data, Vector3d.Zero);
 
         var start = new Vector3d(0, 0, 2);
         var goal = new Vector3d(2, 0, 0);
-        FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest? createdrequest), createdrequest);
         var result = FlowFieldSurveyor.Shared.FindPath(request);
+        var fields = TestRequire.NotNull(result.Fields);
 
-        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
-        flow.Should().NotBe(Vector3d.Left);
+        result.HasPath.Should().BeTrue();
+        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(start, fields);
+        flow.Should().NotBe(Vector3d.Zero);
+        flow.Should().NotBe((goal - start).Normalize(), "the direct diagonal through the blocked center is invalid");
 
         PathManager.UnloadChart("RerouteAroundBlockers");
     }
@@ -713,10 +723,10 @@ public class FlowFieldSurveyorTests : IDisposable
 
         var start = new Vector3d(2, 0, 2);
         var goal = new Vector3d(5, 0, 5);
-        FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest request);
-        var result = FlowFieldSurveyor.Shared.FindPath(request);
+        bool created = FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest? request);
 
-        result.HasPath.Should().BeFalse();
+        created.Should().BeFalse();
+        request.Should().BeNull();
 
         PathManager.UnloadChart("EdgeGoalTest");
     }
@@ -734,17 +744,19 @@ public class FlowFieldSurveyorTests : IDisposable
         var start = new Vector3d(4, 0, 4);
         var end = new Vector3d(0, 0, 0);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request1);
+        FlowFieldPathRequest request1 = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest1), createdrequest1);
         var result1 = FlowFieldSurveyor.Shared.FindPath(request1);
 
-        FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest request2);
+        FlowFieldPathRequest request2 = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, end, out FlowFieldPathRequest? createdrequest2), createdrequest2);
         var result2 = FlowFieldSurveyor.Shared.FindPath(request2);
 
-        result1.Fields.Count.Should().Be(result2.Fields.Count);
+        var fields1 = TestRequire.NotNull(result1.Fields);
+        var fields2 = TestRequire.NotNull(result2.Fields);
+        fields1.Count.Should().Be(fields2.Count);
 
-        foreach (var kv in result1.Fields)
+        foreach (var kv in fields1)
         {
-            result2.Fields.TryGetValue(kv.Key, out var f2).Should().BeTrue();
+            fields2.TryGetValue(kv.Key, out var f2).Should().BeTrue();
             f2.Direction.Should().Be(kv.Value.Direction);
             f2.PathCost.Should().Be(kv.Value.PathCost);
         }
@@ -768,14 +780,13 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d goal = new(2, 0, 1);   // Right-middle
 
         // Mark the center partition with a high cost modifier
-        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 1), out _, out Voxel center);
-        if (center.TryGetPartition(out SolidChartPartition partition))
-            partition.PathCostModifier = 10; // Arbitrary high cost to penalize direct path
+        Voxel center = TestRequire.VoxelAt(new Vector3d(1, 0, 1));
+        TestRequire.Partition<SolidChartPartition>(center).PathCostModifier = 10; // Arbitrary high cost to penalize direct path
 
-        FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest? createdrequest), createdrequest);
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        Vector3d dir = FlowFieldSurveyor.SampleFlowVector(start, result.Fields);
+        Vector3d dir = FlowFieldSurveyor.SampleFlowVector(start, TestRequire.NotNull(result.Fields));
 
         // Expect diagonal movement to avoid center
         dir.x.Should().NotBe(Fixed64.One, "the center partition is penalized");
@@ -803,7 +814,7 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d start = new(0, 0, 0);
         Vector3d goal = new(2, 0, 2);
 
-        FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest? createdrequest), createdrequest);
 
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
@@ -824,10 +835,10 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("VerticalAscend", data, Vector3d.Zero);
 
-        FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(0, 2, 0), out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(0, 2, 0), out FlowFieldPathRequest? createdrequest), createdrequest);
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        var dir = FlowFieldSurveyor.SampleFlowVector(new Vector3d(0, 0, 0), result.Fields);
+        var dir = FlowFieldSurveyor.SampleFlowVector(new Vector3d(0, 0, 0), TestRequire.NotNull(result.Fields));
         dir.Should().Be(Vector3d.Up, "flow should direct agent upward");
 
         PathManager.UnloadChart("VerticalAscend");
@@ -843,10 +854,10 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("VerticalDescend", data, Vector3d.Zero);
 
-        FlowFieldPathRequest.TryCreate(new Vector3d(0, 2, 0), new Vector3d(0, 0, 0), out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(new Vector3d(0, 2, 0), new Vector3d(0, 0, 0), out FlowFieldPathRequest? createdrequest), createdrequest);
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        var dir = FlowFieldSurveyor.SampleFlowVector(new Vector3d(0, 2, 0), result.Fields);
+        var dir = FlowFieldSurveyor.SampleFlowVector(new Vector3d(0, 2, 0), TestRequire.NotNull(result.Fields));
         dir.Should().Be(Vector3d.Down, "flow should direct agent downward");
 
         PathManager.UnloadChart("VerticalDescend");
@@ -865,15 +876,14 @@ public class FlowFieldSurveyorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("FlowHelperUpdate", data, Vector3d.Zero);
 
-        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel currentVoxel).Should().BeTrue();
-        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel neighborVoxel).Should().BeTrue();
-        currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
-        neighborVoxel.TryGetPartition(out SolidChartPartition neighbor).Should().BeTrue();
+        Voxel currentVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel neighborVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        SolidChartPartition current = TestRequire.Partition<SolidChartPartition>(currentVoxel);
+        SolidChartPartition neighbor = TestRequire.Partition<SolidChartPartition>(neighborVoxel);
 
-        FlowFieldPathRequest.TryCreate(
-            Vector3d.Zero,
-            new Vector3d(2, 0, 0),
-            out FlowFieldPathRequest request).Should().BeTrue();
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out FlowFieldPathRequest? createdRequest),
+            createdRequest);
 
         FlowFieldSurveyor surveyor = new();
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
@@ -901,13 +911,12 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("FlowDiagLegsPositive", data, Vector3d.Zero);
 
-        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 1, 1), out _, out Voxel currentVoxel).Should().BeTrue();
-        currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
+        Voxel currentVoxel = TestRequire.VoxelAt(new Vector3d(1, 1, 1));
+        SolidChartPartition current = TestRequire.Partition<SolidChartPartition>(currentVoxel);
 
-        FlowFieldPathRequest.TryCreate(
-            new Vector3d(1, 1, 1),
-            new Vector3d(2, 2, 1),
-            out FlowFieldPathRequest request).Should().BeTrue();
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreate(new Vector3d(1, 1, 1), new Vector3d(2, 2, 1), out FlowFieldPathRequest? createdRequest),
+            createdRequest);
 
         FlowFieldSurveyor surveyor = new();
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
@@ -934,13 +943,12 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("FlowDiagLegsNegative", data, Vector3d.Zero);
 
-        TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 1, 1), out _, out Voxel currentVoxel).Should().BeTrue();
-        currentVoxel.TryGetPartition(out SolidChartPartition current).Should().BeTrue();
+        Voxel currentVoxel = TestRequire.VoxelAt(new Vector3d(1, 1, 1));
+        SolidChartPartition current = TestRequire.Partition<SolidChartPartition>(currentVoxel);
 
-        FlowFieldPathRequest.TryCreate(
-            new Vector3d(1, 1, 1),
-            new Vector3d(2, 0, 1),
-            out FlowFieldPathRequest request).Should().BeTrue();
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreate(new Vector3d(1, 1, 1), new Vector3d(2, 0, 1), out FlowFieldPathRequest? createdRequest),
+            createdRequest);
 
         FlowFieldSurveyor surveyor = new();
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
@@ -961,8 +969,8 @@ public class FlowFieldSurveyorTests : IDisposable
     {
         PathTestFactory.RegisterSingleWalkablePoint("FlowMissingCost", Vector3d.Zero);
 
-        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel).Should().BeTrue();
-        voxel.TryGetPartition(out SolidChartPartition partition).Should().BeTrue();
+        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        SolidChartPartition partition = TestRequire.Partition<SolidChartPartition>(voxel);
 
         FlowFieldSurveyor surveyor = new();
 
@@ -985,16 +993,17 @@ public class FlowFieldSurveyorTests : IDisposable
 
         PathTestFactory.RegisterFromData("ZigZagStairs", data, Vector3d.Zero);
 
-        FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(1, 2, 0), out FlowFieldPathRequest request);
+        FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(1, 2, 0), out FlowFieldPathRequest? createdrequest), createdrequest);
         var result = FlowFieldSurveyor.Shared.FindPath(request);
 
-        var dir0 = FlowFieldSurveyor.SampleFlowVector(new Vector3d(0, 0, 0), result.Fields);
+        var fields = TestRequire.NotNull(result.Fields);
+        var dir0 = FlowFieldSurveyor.SampleFlowVector(new Vector3d(0, 0, 0), fields);
         dir0.Should().Be(new Vector3d(1, 0, 0), "first step should be right");
 
-        var dir1 = FlowFieldSurveyor.SampleFlowVector(new Vector3d(1, 0, 0), result.Fields);
+        var dir1 = FlowFieldSurveyor.SampleFlowVector(new Vector3d(1, 0, 0), fields);
         dir1.Should().Be(new Vector3d(0, 1, 0), "second step should go up");
 
-        var dir2 = FlowFieldSurveyor.SampleFlowVector(new Vector3d(1, 1, 0), result.Fields);
+        var dir2 = FlowFieldSurveyor.SampleFlowVector(new Vector3d(1, 1, 0), fields);
         dir2.Should().Be(Vector3d.Up, "final step should go up");
 
         PathManager.UnloadChart("ZigZagStairs");
@@ -1008,10 +1017,9 @@ public class FlowFieldSurveyorTests : IDisposable
     public void FlowFieldSurveyResult_Create_ShouldUseFallbackEmptyArray_WhenChartsUtilizedIsNull()
     {
         var fields = new SwiftCollections.SwiftDictionary<GridForge.Spatial.WorldVoxelIndex, FlowField>();
-        FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(fields, null, key: 1);
+        FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(fields, null!, key: 1);
 
-        result.ChartsUtilized.Should().NotBeNull();
-        result.ChartsUtilized.Should().BeEmpty();
+        TestRequire.NotNull(result.ChartsUtilized).Should().BeEmpty();
     }
 
     private static SpatialDirection FindDirection(int dx, int dy, int dz)
@@ -1045,7 +1053,7 @@ public class FlowFieldSurveyorTests : IDisposable
 
     private static void CloseLeg(SolidChartPartition? leg, PathHeap<SolidChartPartition> heap)
     {
-        leg.Should().NotBeNull();
+        Assert.NotNull(leg);
         heap.Add(leg, 0);
         heap.SetClosed(leg);
     }

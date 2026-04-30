@@ -35,7 +35,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
         bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
             Vector3d.Zero,
             new Vector3d(1, 1, 1),
-            out Voxel voxel,
+            out Voxel? voxel,
             allowUnwalkableEndpoints: true,
             unitSize: Fixed64.One,
             new TestEndpointPolicy(canResolve: false));
@@ -50,15 +50,14 @@ public sealed class EndpointVoxelResolverTests : IDisposable
         bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
-            out Voxel voxel,
+            out Voxel? voxel,
             allowUnwalkableEndpoints: true,
             unitSize: Fixed64.One,
             new TestEndpointPolicy(
                 isTraversable: candidate => candidate.WorldPosition == new Vector3d(1, 0, 0)));
 
         resolved.Should().BeTrue();
-        voxel.Should().NotBeNull();
-        voxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+        TestRequire.NotNull(voxel).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
     [Fact]
@@ -69,7 +68,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
         bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
-            out Voxel voxel,
+            out Voxel? voxel,
             allowUnwalkableEndpoints: true,
             unitSize: Fixed64.One,
             new TestEndpointPolicy(
@@ -86,14 +85,13 @@ public sealed class EndpointVoxelResolverTests : IDisposable
         bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
             new Vector3d(-8, 0, 0),
             Vector3d.Zero,
-            out Voxel voxel,
+            out Voxel? voxel,
             allowUnwalkableEndpoints: true,
             unitSize: Fixed64.One,
             new TestEndpointPolicy(isTraversable: candidate => candidate.WorldPosition == Vector3d.Zero));
 
         resolved.Should().BeTrue();
-        voxel.Should().NotBeNull();
-        voxel.WorldPosition.Should().Be(Vector3d.Zero);
+        TestRequire.NotNull(voxel).WorldPosition.Should().Be(Vector3d.Zero);
     }
 
     [Fact]
@@ -102,7 +100,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
         bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
             new Vector3d(-8, 0, 0),
             Vector3d.Zero,
-            out Voxel voxel,
+            out Voxel? voxel,
             allowUnwalkableEndpoints: true,
             unitSize: Fixed64.One,
             new TestEndpointPolicy());
@@ -118,13 +116,12 @@ public sealed class EndpointVoxelResolverTests : IDisposable
 
         bool resolved = EndpointVoxelResolver.TryGetClosestTraversableVoxel(
             origin,
-            out Voxel voxel,
+            out Voxel? voxel,
             Fixed64.One,
             new TestEndpointPolicy(isTraversable: candidate => candidate.WorldPosition == new Vector3d(1, 0, 1)));
 
         resolved.Should().BeTrue();
-        voxel.Should().NotBeNull();
-        voxel.WorldPosition.Should().Be(new Vector3d(1, 0, 1));
+        TestRequire.NotNull(voxel).WorldPosition.Should().Be(new Vector3d(1, 0, 1));
     }
 
     [Fact]
@@ -134,7 +131,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
 
         bool resolved = EndpointVoxelResolver.TryGetClosestTraversableVoxel(
             origin,
-            out Voxel voxel,
+            out Voxel? voxel,
             Fixed64.One,
             new TestEndpointPolicy());
 
@@ -144,7 +141,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
 
     private static Voxel GetVoxel(Vector3d position)
     {
-        TrailblazerWorldManager.TryGetVoxel(position, out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.VoxelAt(position);
         return voxel;
     }
 

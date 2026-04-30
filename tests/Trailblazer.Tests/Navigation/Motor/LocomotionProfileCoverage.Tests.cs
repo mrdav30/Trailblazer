@@ -59,12 +59,12 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         var profile = builder.Build();
 
         profile.InstalledKinds.Should().Be(LocomotionKind.All);
-        profile.Platform.Should().NotBeNull();
-        profile.Jump.Should().NotBeNull();
-        profile.Slide.Should().NotBeNull();
-        profile.Swim.Should().NotBeNull();
-        profile.Fly.Should().NotBeNull();
-        profile.Climb.Should().NotBeNull();
+        Assert.NotNull(profile.Platform);
+        Assert.NotNull(profile.Jump);
+        Assert.NotNull(profile.Slide);
+        Assert.NotNull(profile.Swim);
+        Assert.NotNull(profile.Fly);
+        Assert.NotNull(profile.Climb);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
 
         profile.Move.Should().BeSameAs(move);
         profile.Fall.Should().BeSameAs(fall);
-        profile.Platform.Should().NotBeNull();
+        Assert.NotNull(profile.Platform);
         profile.Jump.Should().BeSameAs(jump);
         profile.Slide.Should().BeNull();
         profile.Swim.Should().BeNull();

@@ -55,7 +55,7 @@ public sealed class TraversalValueObjectTests : IDisposable
             Vector3d.Zero,
             Fixed64.One);
 
-        TraversalBuildResult result = new(chart, generatedTransitions: null, generatedTransitionIdPrefix: " ");
+        TraversalBuildResult result = new(chart, generatedTransitions: null!, generatedTransitionIdPrefix: " ");
 
         result.Chart.Should().BeSameAs(chart);
         result.GeneratedTransitions.Should().BeEmpty();
@@ -192,7 +192,7 @@ public sealed class TraversalValueObjectTests : IDisposable
     private static void AssertRejectsInvalidTransitionId(string? id)
     {
         Action act = () => new TraversalTransition(
-            id: id,
+            id: id!,
             type: TraversalTransitionType.Jump,
             source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));

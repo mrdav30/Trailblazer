@@ -123,9 +123,9 @@ public sealed class PlatformLocomotionTailTests : IDisposable
         });
 
         locomotion.MovementTransfer.Should().Be(MotionTransfer.PermaLocked);
-        locomotion.ActivePlatform.Should().NotBeNull();
+        Assert.NotNull(locomotion.ActivePlatform);
         locomotion.ActivePlatform!.Value.Transform.Translation.Should().Be(refreshedTransform.Translation);
-        locomotion.PreviousPlatform.Should().NotBeNull();
+        Assert.NotNull(locomotion.PreviousPlatform);
         locomotion.PreviousPlatform!.Value.Transform.Translation.Should().Be(originalTransform.Translation);
         locomotion.IsNewPlatform.Should().BeFalse();
 

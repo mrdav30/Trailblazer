@@ -39,8 +39,8 @@ public class PathHeapTests : IDisposable
         heap.Add(voxel, pathCost: 1);
         Assert.Equal(1u, heap.HeapCount);
 
-        heap.RemoveFirst(out SolidChartPartition removed);
-        Assert.Equal(voxel, removed);
+        heap.RemoveFirst(out SolidChartPartition? removed);
+        Assert.Equal(voxel, TestRequire.NotNull(removed));
         Assert.Equal(0u, heap.HeapCount);
 
         // Should not leave stale data
@@ -72,9 +72,9 @@ public class PathHeapTests : IDisposable
     {
         var heap = new PathHeap<Voxel>();
 
-        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel a));
-        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(1, 0, 0), out _, out Voxel b));
-        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(new Vector3d(2, 0, 0), out _, out Voxel c));
+        Voxel a = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel b = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel c = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
 
         heap.Add(a, pathCost: 30);
         heap.Add(b, pathCost: 20);
@@ -83,10 +83,11 @@ public class PathHeapTests : IDisposable
         heap.UpdatePathCost(a, pathCost: 5);
         heap.SortUp(a);
 
-        heap.RemoveFirst(out Voxel first);
-        heap.SetClosed(first);
+        heap.RemoveFirst(out Voxel? first);
+        Voxel removedVoxel = TestRequire.NotNull(first);
+        heap.SetClosed(removedVoxel);
 
-        Assert.Equal(a, first);
+        Assert.Equal(a, removedVoxel);
         Assert.True(heap.IsClosed(a));
         Assert.True(heap.TryGetPathCost(a, out int pathCost));
         Assert.Equal(5, pathCost);
@@ -109,12 +110,12 @@ public class PathHeapTests : IDisposable
         heap.Add(left, pathCost: 30);
         heap.Add(right, pathCost: 20);
 
-        heap.RemoveFirst(out SolidChartPartition first);
-        Assert.Equal(root, first);
+        heap.RemoveFirst(out SolidChartPartition? first);
+        Assert.Equal(root, TestRequire.NotNull(first));
 
         // After SortDown the right child (cost 20) should bubble up as the new minimum.
-        heap.RemoveFirst(out SolidChartPartition second);
-        Assert.Equal(right, second);
+        heap.RemoveFirst(out SolidChartPartition? second);
+        Assert.Equal(right, TestRequire.NotNull(second));
     }
 
     [Fact]
@@ -174,12 +175,12 @@ public class PathHeapTests : IDisposable
         heap.Add(a, pathCost: 5);
         heap.Add(b, pathCost: 10);
 
-        heap.RemoveFirst(out SolidChartPartition first);
-        Assert.Equal(a, first);
+        heap.RemoveFirst(out SolidChartPartition? first);
+        Assert.Equal(a, TestRequire.NotNull(first));
         Assert.Equal(1u, heap.HeapCount);
 
-        heap.RemoveFirst(out SolidChartPartition second);
-        Assert.Equal(b, second);
+        heap.RemoveFirst(out SolidChartPartition? second);
+        Assert.Equal(b, TestRequire.NotNull(second));
         Assert.Equal(0u, heap.HeapCount);
     }
 
@@ -204,7 +205,7 @@ public class PathHeapTests : IDisposable
 
     private static SolidChartPartition CreateAttachedPartition(Vector3d position)
     {
-        Assert.True(TrailblazerWorldManager.TryGetGridAndVoxel(position, out _, out Voxel voxel));
+        Voxel voxel = TestRequire.VoxelAt(position);
 
         var partition = new SolidChartPartition();
 

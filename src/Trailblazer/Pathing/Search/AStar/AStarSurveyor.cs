@@ -74,13 +74,6 @@ public class AStarSurveyor
 
     private AStarPathRequest? _request;
 
-#nullable enable
-    /// <summary>
-    /// Optional callback triggered when a height difference exceeds the allowed climb height during pathfinding.
-    /// </summary>
-    public static Action<WorldVoxelIndex, WorldVoxelIndex, Fixed64>? OnHeightLimitViolated;
-#nullable disable
-
     /// <summary>
     /// Attempts to find a path between the start and end points provided in the request. 
     /// Returns true if a valid path was found and outputs the resulting waypoint list.
@@ -93,7 +86,7 @@ public class AStarSurveyor
         {
             if (request == null
                 || request.HasZeroDisplacement
-                || !request.StartNode.TryGetPartition(out SolidChartPartition startPartition))
+                || request.StartNode!.TryGetPartition(out SolidChartPartition? startPartition) != true)
             {
                 return AStarSurveyResult.Empty;
             }
@@ -106,7 +99,7 @@ public class AStarSurveyor
             {
                 PathCost = 0
             };
-            _heap.Add(startPartition, pathCost: 0);
+            _heap.Add(startPartition!, pathCost: 0);
 
             if (!TracePath())
             {
@@ -132,8 +125,9 @@ public class AStarSurveyor
     private bool TracePath()
     {
         int iterations = 0;
-        int searchSize = _request.MaxPathSearchRange;
-        while (_heap.RemoveFirst(out SolidChartPartition currentPartition)
+        int searchSize = _request!.MaxPathSearchRange;
+        while (_heap.RemoveFirst(out SolidChartPartition? currentPartition)
+            && currentPartition != null
             && iterations++ < searchSize)
         {
             if (ProcessNeighbors(currentPartition))
@@ -166,8 +160,8 @@ public class AStarSurveyor
     {
         foreach (SpatialDirection dir in directions)
         {
-            SolidChartPartition neighbor = current.Neighbors[(int)dir];
-            if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request.UnitSize))
+            SolidChartPartition? neighbor = current.Neighbors?[(int)dir] ?? null;
+            if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request!.UnitSize))
                 continue;
 
             if (checkEdges && !HasValidDiagonalLegs(current, dir))
@@ -200,8 +194,8 @@ public class AStarSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsLegClear(SolidChartPartition current, SpatialDirection legDir)
     {
-        SolidChartPartition leg = current.Neighbors[(int)legDir];
-        return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request.UnitSize);
+        SolidChartPartition? leg = current.Neighbors?[(int)legDir] ?? null;
+        return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request!.UnitSize);
     }
 
     /// <summary>
@@ -215,11 +209,8 @@ public class AStarSurveyor
     {
         // Skip neighbors that have a height difference greater than the allowed maximum
         Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
-        if (heightDifference > _request.MaxClimbHeight)
-        {
-            OnHeightLimitViolated?.Invoke(current.GlobalIndex, neighbor.GlobalIndex, heightDifference);
+        if (heightDifference > _request!.MaxClimbHeight)
             return false;
-        }
 
         if (neighbor.Voxel == _request.EndNode)
         {
@@ -272,24 +263,28 @@ public class AStarSurveyor
     /// <returns>A list of voxels from start to end representing the raw path.</returns>
     private void BuildRawPath()
     {
-        Voxel current = _request.EndNode;
-        while (current != _request.StartNode)
+        Voxel? current = _request!.EndNode;
+        while (current != null && current != _request.StartNode)
         {
-            SolidChartPartition currentPartition = current.GetPartitionOrDefault<SolidChartPartition>();
+            SolidChartPartition? currentPartition = current.GetPartitionOrDefault<SolidChartPartition>();
+            if (currentPartition == null)
+                break;
+
             _rawPath.Insert(0, currentPartition);
 
             if (!_meta.TryGetValue(current, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
                 break; // break in the trail!
 
-            if (!TrailblazerWorldManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel nextTrailVoxel))
+            if (!TrailblazerWorldManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel? nextTrailVoxel))
                 break; // break in the trail!
 
             current = nextTrailVoxel;
         }
 
         // Ensure start position is included
-        SolidChartPartition startPartition = _request.StartNode.GetPartitionOrDefault<SolidChartPartition>();
-        _rawPath.Insert(0, startPartition);
+        SolidChartPartition? startPartition = _request!.StartNode!.GetPartitionOrDefault<SolidChartPartition>();
+        if (startPartition != null)
+            _rawPath.Insert(0, startPartition);
     }
 
     /// <summary>
@@ -311,7 +306,7 @@ public class AStarSurveyor
         Vector3d lastDirection = Vector3d.Zero;
 
         // add 1 to ensure we preserve unwalkable voxels that are close enough to matter for the unit size
-        byte scaledUnitSize = (byte)((_request.UnitSize / TrailblazerWorldManager.VoxelSize).CeilToInt() + 1);
+        byte scaledUnitSize = (byte)((_request!.UnitSize / TrailblazerWorldManager.VoxelSize).CeilToInt() + 1);
         for (int i = 1; i < _rawPath.Count - 1; i++)
         {
             Vector3d direction = (_rawPath[i + 1].VoxelPosition - _rawPath[i].VoxelPosition).Normalize();
@@ -350,7 +345,7 @@ public class AStarSurveyor
     {
         int heuristicCost = CalculateHeuristic(
             partition.VoxelPosition,
-            _request.EndNode.WorldPosition,
+            _request!.EndNode!.WorldPosition,
             _request.Heuristic);
 
         return partition.PathCostModifier + movementCost + heuristicCost;
@@ -376,14 +371,14 @@ public class AStarSurveyor
     /// This implementation takes into account the X, Y, and Z axes for pathfinding.
     /// </summary>
     public static int CalculateHeuristic(
-        Vector3d currentVoxel,
-        Vector3d targetVoxel,
+        Vector3d currentPosition,
+        Vector3d targetPosition,
         HeuristicMethod heuristicMethod)
     {
         Fixed64 heuristicCost = Fixed64.MAX_VALUE;
 
         // Calculate the absolute distance in each axis
-        Vector3d dst = Vector3d.Abs(currentVoxel - targetVoxel);
+        Vector3d dst = Vector3d.Abs(currentPosition - targetPosition);
 
         switch (heuristicMethod)
         {
@@ -455,7 +450,7 @@ public class AStarSurveyor
         }
 
         // Add the final point
-        output[outputIndex] = input[input.Length - 1];
+        output[outputIndex] = input[^1];
         return output;
     }
 

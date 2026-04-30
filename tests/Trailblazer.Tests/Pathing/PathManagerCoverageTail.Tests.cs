@@ -524,7 +524,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             ReflectionUtility.GetPrivateStaticField<SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState>>(
                 typeof(PathManager),
                 "_resolvedChartVoxelStates");
-        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
         resolvedStates[voxel.WorldIndex] = resolvedState;
 
         ReflectionUtility.InvokePrivateStatic<bool>(
@@ -718,7 +718,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         NavigationChart chart = PathTestFactory.BuildSinglePointMap("ResolvedVoxelChart", Vector3d.Zero);
-        TrailblazerWorldManager.TryGetGridAndVoxel(Vector3d.Zero, out _, out Voxel voxel).Should().BeTrue();
+        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
 
         SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> resolvedStates =
             ReflectionUtility.GetPrivateStaticField<SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState>>(

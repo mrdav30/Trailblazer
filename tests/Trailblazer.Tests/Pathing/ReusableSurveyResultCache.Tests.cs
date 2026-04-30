@@ -148,7 +148,7 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
             () => TestSurveyResult.Create(1, hasPath: false),
             out TestSurveyResult failed).Should().BeFalse();
 
-        failed.Should().NotBeNull();
+        Assert.NotNull(failed);
         cache.Count.Should().Be(0);
         cache.CountInUse.Should().Be(0);
 

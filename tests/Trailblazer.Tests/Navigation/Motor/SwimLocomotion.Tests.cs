@@ -41,7 +41,7 @@ public class SwimLocomotionTests : IDisposable
     }
 
     [Fact]
-    public void Given_ScoutEntersWater_When_Simulated_Then_ShouldTransitionToSwimming()
+    public void Given_ScoutEntersWater_When_SwimIsRequested_Then_ShouldTransitionToSwimming()
     {
         // Arrange
         var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
@@ -55,6 +55,7 @@ public class SwimLocomotionTests : IDisposable
 
         agent.FrameCondition.Medium = TraversalMedium.Liquid;
         agent.FrameCondition.SurfaceLevel = agent.Position.y;
+        agent.FrameRequest.IsRequestingSwim = true;
 
         agent.Simulate();
 
@@ -63,11 +64,28 @@ public class SwimLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void Given_ScoutEntersWater_When_SwimIsNotRequested_Then_ShouldRemainOutOfSwimming()
+    {
+        var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
+
+        TrailblazerManager.Simulate();
+        agent.Simulate();
+
+        TrailblazerManager.Simulate();
+        agent.FrameCondition.Medium = TraversalMedium.Liquid;
+        agent.FrameCondition.SurfaceLevel = agent.Position.y;
+        agent.Simulate();
+
+        TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Swim).IsSwimming.Should().BeFalse();
+    }
+
+    [Fact]
     public void Given_ScoutExitsWater_When_Simulated_Then_ShouldTransitionOutOfSwimming()
     {
         // Arrange
         var agent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.One);
 
+        agent.FrameRequest.IsRequestingSwim = true;
         agent.Simulate();
 
         // Act - Exit water
@@ -96,6 +114,7 @@ public class SwimLocomotionTests : IDisposable
         TrailblazerManager.Simulate();
         agent.FrameRequest.Direction = Vector3d.Forward;
         agent.FrameRequest.Rate = TrekRate.Slow;
+        agent.FrameRequest.IsRequestingSwim = true;
         agent.Simulate();
 
         // Act - Simulate 3 Frames
@@ -104,6 +123,7 @@ public class SwimLocomotionTests : IDisposable
             TrailblazerManager.Simulate();
             agent.FrameRequest.Direction = Vector3d.Forward;
             agent.FrameRequest.Rate = TrekRate.Slow;
+            agent.FrameRequest.IsRequestingSwim = true;
             agent.Simulate();
         }
 
@@ -235,13 +255,13 @@ public class SwimLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startPosition: initialPosition,
             startingMedium: TraversalMedium.Liquid);
-        TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Swim).IsSwimming = true;
 
         for (int i = 0; i < 10; i++) // Simulate swimming upwards
         {
             TrailblazerManager.Simulate();
             agent.FrameRequest.Direction = Vector3d.Up;
             agent.FrameRequest.Rate = TrekRate.Slow;
+            agent.FrameRequest.IsRequestingSwim = true;
             agent.Simulate();
         }
 
@@ -282,6 +302,7 @@ public class SwimLocomotionTests : IDisposable
         // Request a jump while swimming
 
         agent.FrameRequest.Rate = TrekRate.Stationary;
+        agent.FrameRequest.IsRequestingSwim = true;
         agent.FrameRequest.IsRequestingJump = true;
         TrailblazerManager.Simulate();
         agent.Simulate();
@@ -305,6 +326,7 @@ public class SwimLocomotionTests : IDisposable
         agent.Motor.Events.OnStartWaterBreach += () => breached = true;
 
         // Request a jump while swimming, but breach is disabled
+        agent.FrameRequest.IsRequestingSwim = true;
         agent.FrameRequest.IsRequestingJump = true;
         TrailblazerManager.Simulate();
         agent.Simulate();
@@ -326,6 +348,7 @@ public class SwimLocomotionTests : IDisposable
         agent.Motor.Events.OnStopWaterBreach += () => stopBreach = true;
 
         // Simulate a jump breach
+        agent.FrameRequest.IsRequestingSwim = true;
         agent.FrameRequest.IsRequestingJump = true;
         TrailblazerManager.Simulate();
         agent.Simulate();
@@ -333,6 +356,7 @@ public class SwimLocomotionTests : IDisposable
         for (int i = 0; i < 32; i++)
         {
             TrailblazerManager.Simulate();
+            agent.FrameRequest.IsRequestingSwim = true;
             agent.Simulate();
             if (agent.FrameCondition.Medium == TraversalMedium.Liquid)
                 break;

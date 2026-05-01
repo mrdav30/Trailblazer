@@ -58,6 +58,11 @@ public struct TrekRequest : IRecordable
     public bool IsRequestingFlight;
 
     /// <summary>
+    /// Indicates whether the scout is requesting active swimming while traversing liquid.
+    /// </summary>
+    public bool IsRequestingSwim;
+
+    /// <summary>
     /// Indicates whether the scout is requesting climb engagement or continuation.
     /// </summary>
     public bool IsRequestingClimb;
@@ -71,12 +76,13 @@ public struct TrekRequest : IRecordable
     }
 
     /// <summary>
-    /// Sets the current movement request parameters, including direction, rate, and action flags such as jump, flight, and climb.
+    /// Sets the current movement request parameters, including direction, rate, and action flags such as jump, flight, swim, and climb.
     /// </summary>
     /// <param name="direction">The movement direction vector to apply for the request.</param>
     /// <param name="rate">The rate at which the movement should be performed.</param>
     /// <param name="isRequestingJump">true to request a jump action; otherwise, false.</param>
     /// <param name="isRequestingFlight">true to request a flight action; otherwise, false.</param>
+    /// <param name="isRequestingSwim">true to request active swim control while in liquid; otherwise, false.</param>
     /// <param name="isRequestingClimb">true to request a climb action; otherwise, false.</param>
     /// <param name="facingDirection">
     /// An optional vector specifying the desired facing direction. 
@@ -88,6 +94,7 @@ public struct TrekRequest : IRecordable
         TrekRate rate,
         bool isRequestingJump,
         bool isRequestingFlight,
+        bool isRequestingSwim,
         bool isRequestingClimb,
         Vector3d? facingDirection = null,
         bool canAffordJump = true)
@@ -100,6 +107,7 @@ public struct TrekRequest : IRecordable
         IsRequestingJump = isRequestingJump;
         CanAffordJump = canAffordJump;
         IsRequestingFlight = isRequestingFlight;
+        IsRequestingSwim = isRequestingSwim;
         IsRequestingClimb = isRequestingClimb;
     }
 
@@ -145,6 +153,7 @@ public struct TrekRequest : IRecordable
         IsRequestingJump = IsRequestingJump,
         CanAffordJump = CanAffordJump,
         IsRequestingFlight = IsRequestingFlight,
+        IsRequestingSwim = IsRequestingSwim,
         IsRequestingClimb = IsRequestingClimb,
         FootPosition = FootPosition
     };
@@ -163,6 +172,7 @@ public struct TrekRequest : IRecordable
         CanAffordJump = true;
         Rate = TrekRate.Stationary;
         IsRequestingFlight = false;
+        IsRequestingSwim = false;
         IsRequestingClimb = false;
     }
 
@@ -193,6 +203,7 @@ public struct TrekRequest : IRecordable
         RecordValues.Look(chronicler, ref IsRequestingJump, nameof(IsRequestingJump), false);
         RecordValues.Look(chronicler, ref CanAffordJump, nameof(CanAffordJump), true);
         RecordValues.Look(chronicler, ref IsRequestingFlight, nameof(IsRequestingFlight), false);
+        RecordValues.Look(chronicler, ref IsRequestingSwim, nameof(IsRequestingSwim), false);
         RecordValues.Look(chronicler, ref IsRequestingClimb, nameof(IsRequestingClimb), false);
     }
 }

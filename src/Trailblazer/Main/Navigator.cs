@@ -364,6 +364,7 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="rate">Rate of travel (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the agent is requesting a jump action.</param>
     /// <param name="isRequestingFlight">Whether the agent is requesting to fly or glide.</param>
+    /// <param name="isRequestingSwim">Whether the agent is requesting active swim control while in liquid.</param>
     /// <param name="isRequestingClimb">Whether the agent is requesting to climb or maintain climb intent.</param>
     /// <param name="facingDirection">Optional world-space facing direction to use instead of facing along the movement direction.</param>
     /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
@@ -372,6 +373,7 @@ public abstract class Navigator : INavigate, IRecordable
         TrekRate? rate = null,
         Vector3d? facingDirection = null,
         bool? isRequestingFlight = null,
+        bool? isRequestingSwim = null,
         bool? isRequestingClimb = null,
         bool? isRequestingJump = null,
         bool canAffordJump = true)
@@ -386,6 +388,7 @@ public abstract class Navigator : INavigate, IRecordable
                 rate: rate ?? TrekRate.Stationary,
                 isRequestingJump: isRequestingJump ?? false,
                 isRequestingFlight: isRequestingFlight ?? false,
+                isRequestingSwim: isRequestingSwim ?? false,
                 isRequestingClimb: isRequestingClimb ?? false,
                 facingDirection: facingDirection,
                 canAffordJump: canAffordJump
@@ -399,6 +402,7 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the object intends to jump during traversal.</param>
     /// <param name="isRequestingFlight">Whether the object intends to fly or glide during traversal.</param>
+    /// <param name="isRequestingSwim">Whether the object intends to actively swim while traversing liquid.</param>
     /// <param name="isRequestingClimb">Whether the object intends to climb during traversal.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between navigators.</param>
     /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
@@ -406,6 +410,7 @@ public abstract class Navigator : INavigate, IRecordable
         Vector3d targetPosition,
         TrekRate? rate = null,
         bool? isRequestingFlight = null,
+        bool? isRequestingSwim = null,
         bool? isRequestingClimb = null,
         bool? isRequestingJump = null,
         bool canAffordJump = true,
@@ -435,6 +440,7 @@ public abstract class Navigator : INavigate, IRecordable
                 rate: rate ?? TrekRate.Stationary,
                 isRequestingJump: isRequestingJump ?? false,
                 isRequestingFlight: isRequestingFlight ?? false,
+                isRequestingSwim: isRequestingSwim ?? false,
                 isRequestingClimb: _guidedClimbIntent,
                 facingDirection: null,
                 canAffordJump: canAffordJump
@@ -497,6 +503,12 @@ public abstract class Navigator : INavigate, IRecordable
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void ToggleGuidedFlight(bool status) => _frameRequest.IsRequestingFlight = status;
+
+    /// <summary>
+    /// Called to toggle active swim control if supported by the installed locomotion profile.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void ToggleGuidedSwim(bool status) => _frameRequest.IsRequestingSwim = status;
 
     /// <summary>
     /// Called to toggle climb intent if supported by the installed locomotion profile.
@@ -663,24 +675,6 @@ public abstract class Navigator : INavigate, IRecordable
     #region Traversal Condition Management
 
     /// <summary>
-    /// Updates the object to a grounded state using a sampled surface snapshot.
-    /// </summary>
-    public virtual void SetGroundContact(
-        Fixed64 surfaceLevel,
-        GroundCondition surfaceCondition,
-        Fixed64? ceilingLevel = null,
-        bool updateMotorState = false)
-    {
-        ApplyTrekCondition(
-            medium: TraversalMedium.Solid,
-            surfaceLevel: surfaceLevel,
-            surfaceCondition: surfaceCondition,
-            replaceSurfaceCondition: true,
-            ceilingLevel: ceilingLevel,
-            updateMotorState: updateMotorState);
-    }
-
-    /// <summary>
     /// Updates the object to a grounded state using a host-provided platform snapshot plus surface settings.
     /// Inert snapshots still describe the contacted surface but opt out of moving-platform carry logic.
     /// </summary>
@@ -692,16 +686,17 @@ public abstract class Navigator : INavigate, IRecordable
         Fixed64? ceilingLevel = null,
         bool updateMotorState = false)
     {
-        SetGroundContact(
-            surfaceLevel,
-            new GroundCondition()
+        SetTrekCondition(
+            medium: TraversalMedium.Solid,
+            surfaceLevel: surfaceLevel,
+            surfaceCondition: new GroundCondition()
             {
                 Platform = platform,
                 SurfaceFriction = surfaceFriction ?? Fixed64.Zero,
                 MotionTransferState = motionTransfer
             },
-            ceilingLevel,
-            updateMotorState);
+            ceilingLevel: ceilingLevel,
+            updateMotorState: updateMotorState);
     }
 
     /// <summary>
@@ -713,11 +708,11 @@ public abstract class Navigator : INavigate, IRecordable
         Fixed64? ceilingLevel = null,
         bool updateMotorState = false)
     {
-        ApplyTrekCondition(
+        SetTrekCondition(
             medium: TraversalMedium.Gas,
             surfaceLevel: surfaceLevel,
             surfaceCondition: launchCondition,
-            replaceSurfaceCondition: launchCondition.HasValue,
+            replaceGroundContact: launchCondition.HasValue,
             ceilingLevel: ceilingLevel,
             updateMotorState: updateMotorState);
     }
@@ -730,11 +725,10 @@ public abstract class Navigator : INavigate, IRecordable
         Fixed64? ceilingLevel = null,
         bool updateMotorState = false)
     {
-        ApplyTrekCondition(
+        SetTrekCondition(
             medium: TraversalMedium.Liquid,
             surfaceLevel: surfaceLevel,
             surfaceCondition: null,
-            replaceSurfaceCondition: true,
             ceilingLevel: ceilingLevel,
             updateMotorState: updateMotorState);
     }
@@ -750,22 +744,28 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="medium">The traversal medium (e.g., ground, air, water).</param>
     /// <param name="surfaceLevel">The vertical surface level, if applicable.</param>
     /// <param name="surfaceCondition">The ground state data, if applicable.</param>
+    /// <param name="replaceGroundContact">Whether to replace the current ground contact platform.  This should be true when entering water or jumping off a platform, but false when maintaining contact with the same surface across frames.</param>
     /// <param name="ceilingLevel">The vertical ceiling level, if applicable.</param>
     /// <param name="updateMotorState">Flags whether or not to update the motor's internal surface state.  Otherwise, it should be updated at the end of the frame.</param>
     public virtual void SetTrekCondition(
         TraversalMedium? medium = null,
         Fixed64? surfaceLevel = null,
         GroundCondition? surfaceCondition = null,
+        bool replaceGroundContact = true,
         Fixed64? ceilingLevel = null,
         bool updateMotorState = false)
     {
-        ApplyTrekCondition(
-            medium: medium,
-            surfaceLevel: surfaceLevel,
-            surfaceCondition: surfaceCondition,
-            replaceSurfaceCondition: surfaceCondition.HasValue,
-            ceilingLevel: ceilingLevel,
-            updateMotorState: updateMotorState);
+        if (!IsActive)
+            return;
+
+        _frameCondition.Medium = medium ?? _frameCondition.Medium;
+        _frameCondition.SurfaceLevel = surfaceLevel ?? _frameCondition.SurfaceLevel;
+        if (replaceGroundContact)
+            _frameCondition.GroundState = surfaceCondition;
+        _frameCondition.CeilingLevel = ceilingLevel ?? _frameCondition.CeilingLevel;
+
+        if (updateMotorState)
+            SyncCurrentTrekConditionToMotor();
     }
 
     /// <summary>
@@ -798,27 +798,6 @@ public abstract class Navigator : INavigate, IRecordable
     /// Checks and updates the current traversal condition.
     /// </summary>
     public abstract void CheckTrekCondition();
-
-    private void ApplyTrekCondition(
-        TraversalMedium? medium,
-        Fixed64? surfaceLevel,
-        GroundCondition? surfaceCondition,
-        bool replaceSurfaceCondition,
-        Fixed64? ceilingLevel,
-        bool updateMotorState)
-    {
-        if (!IsActive)
-            return;
-
-        _frameCondition.Medium = medium ?? _frameCondition.Medium;
-        _frameCondition.SurfaceLevel = surfaceLevel ?? _frameCondition.SurfaceLevel;
-        if (replaceSurfaceCondition)
-            _frameCondition.GroundState = surfaceCondition;
-        _frameCondition.CeilingLevel = ceilingLevel ?? _frameCondition.CeilingLevel;
-
-        if (updateMotorState)
-            SyncCurrentTrekConditionToMotor();
-    }
 
     #endregion
 
@@ -975,6 +954,7 @@ public abstract class Navigator : INavigate, IRecordable
         Steering.ApplyPathRequest(followupRequest, handoff.MovementGroupId);
         CaptureGuidedRouteTopologyVersion();
         _frameRequest.IsRequestingFlight = false;
+        _frameRequest.IsRequestingSwim = false;
         handoffRequestedClimb = handoff.IsRequestingClimb;
         if (_guidedClimbIntentMode == GuidedClimbIntentMode.Auto)
             _guidedClimbIntent = handoffRequestedClimb;

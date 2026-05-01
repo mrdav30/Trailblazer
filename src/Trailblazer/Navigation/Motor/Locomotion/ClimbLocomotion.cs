@@ -79,6 +79,11 @@ public class ClimbLocomotion : ILocomotion
     public bool ValidateActiveMantleWithHost;
 
     /// <summary>
+    /// Optional host-owned resolver that supplies deterministic climb affordance snapshots.
+    /// </summary>
+    public IClimbAffordanceResolver? ClimbResolver;
+
+    /// <summary>
     /// Whether active climb movement is currently attached to an affordance.
     /// </summary>
     [Transient]

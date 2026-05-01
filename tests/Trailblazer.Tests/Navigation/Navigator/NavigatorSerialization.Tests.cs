@@ -80,6 +80,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsLockedOn.Should().Be(source.IsLockedOn);
         target.AnimDampTime.Should().Be(source.AnimDampTime);
         target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
+        target.FrameRequest.IsRequestingSwim.Should().Be(source.FrameRequest.IsRequestingSwim);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.IsGuideded.Should().BeFalse();
@@ -142,6 +143,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsLockedOn.Should().Be(source.IsLockedOn);
         target.AnimDampTime.Should().Be(source.AnimDampTime);
         target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
+        target.FrameRequest.IsRequestingSwim.Should().Be(source.FrameRequest.IsRequestingSwim);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.IsGuideded.Should().BeFalse();
@@ -177,6 +179,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
         target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
+        target.FrameRequest.IsRequestingSwim.Should().Be(source.FrameRequest.IsRequestingSwim);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
 
@@ -299,6 +302,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
         target.FrameRequest.CanAffordJump.Should().Be(source.FrameRequest.CanAffordJump);
         target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
+        target.FrameRequest.IsRequestingSwim.Should().Be(source.FrameRequest.IsRequestingSwim);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
 
@@ -329,6 +333,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.Rate.Should().Be(source.FrameRequest.Rate);
         target.FrameRequest.IsRequestingJump.Should().Be(source.FrameRequest.IsRequestingJump);
         target.FrameRequest.IsRequestingFlight.Should().Be(source.FrameRequest.IsRequestingFlight);
+        target.FrameRequest.IsRequestingSwim.Should().Be(source.FrameRequest.IsRequestingSwim);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
         target.Size.Should().Be(source.Size);
 
@@ -425,6 +430,7 @@ public class NavigatorSerializationTests : IDisposable
         source.ApplyGuidedTrekRequest(
             new Vector3d(0, 0, 2),
             rate: TrekRate.Fast,
+            isRequestingSwim: true,
             isRequestingJump: false,
             groupId: 3);
 
@@ -434,6 +440,7 @@ public class NavigatorSerializationTests : IDisposable
 
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        target.FrameRequest.IsRequestingSwim.Should().BeTrue();
         targetSteering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
         ((VolumePathRequest)targetSteering.CurrentRequest).Medium.Should().Be(TraversalMedium.Liquid);
 
@@ -443,6 +450,7 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
         target.FrameRequest.Direction.z.Should().BeGreaterThan(Fixed64.Zero);
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        target.FrameRequest.IsRequestingSwim.Should().BeTrue();
     }
 
     [Theory]
@@ -461,6 +469,7 @@ public class NavigatorSerializationTests : IDisposable
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
             rate: TrekRate.Fast,
+            isRequestingSwim: true,
             isRequestingJump: false,
             groupId: 5);
 
@@ -487,6 +496,7 @@ public class NavigatorSerializationTests : IDisposable
         followupRequest.MaxClimbHeight.Should().Be((Fixed64)2);
         targetSteering.MovementGroupID.Should().Be(5);
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        target.FrameRequest.IsRequestingSwim.Should().BeFalse();
         target.FrameRequest.Direction.x.Should().BeGreaterThan(Fixed64.Zero);
 
         PathManager.UnloadChart("NavigatorSerializationSwimExitHandoff");

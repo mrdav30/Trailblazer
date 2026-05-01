@@ -158,6 +158,12 @@ public class SwimLocomotion : ILocomotion
     public Fixed64 UnderwaterTimer { get; set; }
 
     /// <summary>
+    /// Stores the authored swim intent for the active traversal so entry into liquid can resolve after state refresh.
+    /// </summary>
+    [Transient]
+    public bool RequestedSwimThisTraversal { get; set; }
+
+    /// <summary>
     /// The effective maximum acceleration while swimming, factoring in the acceleration modifier.
     /// </summary>
     public Fixed64 MaxSwimAcceleration => MaxWaterAcceleration * SwimAccelerationModifier;

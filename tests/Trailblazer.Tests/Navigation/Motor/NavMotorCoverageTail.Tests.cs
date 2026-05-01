@@ -197,6 +197,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             .Should().Be(Vector3d.Zero);
 
         var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent();
+        swimmingAgent.Motor.Handler.Swim!.IsSwimming = true;
         swimmingAgent.Motor.Handler.Swim!.MaxSwimSidewaysSpeed = Fixed64.One;
         swimmingAgent.Motor.Handler.Swim.MaxSwimSpeed = Fixed64.Zero;
         swimmingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Moderate)

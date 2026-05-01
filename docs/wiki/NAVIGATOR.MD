@@ -86,6 +86,7 @@ The main entry points are:
 - `ApplyGuidedTrekRequest(...)`
 - `ToggleGuidedJump(bool status)`
 - `ToggleGuidedFlight(bool status)`
+- `ToggleGuidedSwim(bool status)`
 - `SetGuidedTrekRate(TrekRate rate)`
 - `Simulate()`
 - `CommitFrameMotion()`
@@ -179,7 +180,7 @@ In practice that means:
 
 - `Origin`, `FootPosition`, and `Rotation` are refreshed every `Simulate()`
 - `Direction` is overwritten by steering while guided, or preserved from manual input for the current frame
-- `Rate` and `IsRequestingFlight` can persist across guided frames
+- `Rate`, `IsRequestingFlight`, and `IsRequestingSwim` can persist across guided frames
 - `IsRequestingJump` is frame-scoped and is cleared after commit
 
 `IsGuideded` is explicit navigator state.
@@ -284,6 +285,7 @@ After `Reset()`, the instance must go through `Setup(...)` and `Initialize(...)`
 - `Rate`
 - `IsRequestingJump`
 - `IsRequestingFlight`
+- `IsRequestingSwim`
 
 and marks the navigator as not guided.
 
@@ -316,13 +318,14 @@ While guided movement remains active:
 
 - `Rate` persists until changed or replaced by a different request
 - `IsRequestingFlight` persists until changed or replaced by a different request
+- `IsRequestingSwim` persists until changed or replaced by a different request
 - `IsRequestingJump` is still frame-scoped unless the host reissues it
 - explicit guided climb intent stays host-owned and sticky
 - auto-derived guided climb intent follows the current effective steering route topology after `Steering.GetHeading(...)`
 
 When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically. Steering may then travel directly through authored or explicitly configured gas volume, acquire a volume guide if blockers force a detour inside that space, or hand off into a chart-backed follow-up route through an authored landing transition when transition fallback is enabled and the landing route is preferable.
 
-When the selected path mode is `GuidedPathMode.Swim`, guided travel does not toggle a swim state. Swim remains medium-driven through `TrekCondition.Medium == TraversalMedium.Liquid`. The request simply uses the raw-volume pathing stack with authored liquid-volume cells, `VolumeMediumRules`, or both providing the valid swim medium.
+Guided travel through liquid does not auto-toggle a swim state. `TrekCondition.Medium` still decides that the request should use liquid-volume pathing, but active swim control is authored separately through `IsRequestingSwim` on the frame request via `ApplyGuidedTrekRequest(...)`, `ApplyInputTrekRequest(...)`, or `ToggleGuidedSwim(bool status)`.
 
 If the requested swim or aerial target sits outside the active volume medium and reaching it would require an authored exit or landing handoff, when `GuidedAllowTraversalTransitions` is disabled, the request will fail instead of silently snapping the volume endpoint onto the nearest handoff voxel.
 
@@ -345,9 +348,10 @@ If a project needs a different request shape, override `TryCreateGuidedPathReque
 
 - `ToggleGuidedJump(bool status)`
 - `ToggleGuidedFlight(bool status)`
+- `ToggleGuidedSwim(bool status)`
 - `SetGuidedTrekRate(TrekRate rate)`
 
-These let the host modify the frame request for a guided movement session without rebuilding the whole movement session. While guided movement is active, the `ToggleGuidedFlight(bool status)` and `SetGuidedTrekRate(TrekRate rate)` values persist across subsequent simulation ticks. Note that `ToggleGuidedJump(...)` only updates the current frame request, and is not intended for toggling jump outside of a guided movement session.
+These let the host modify the frame request for a guided movement session without rebuilding the whole movement session. While guided movement is active, the `ToggleGuidedFlight(bool status)`, `ToggleGuidedSwim(bool status)`, and `SetGuidedTrekRate(TrekRate rate)` values persist across subsequent simulation ticks. Note that `ToggleGuidedJump(...)` only updates the current frame request, and is not intended for toggling jump outside of a guided movement session.
 
 ## 8. Simulation Lifecycle
 

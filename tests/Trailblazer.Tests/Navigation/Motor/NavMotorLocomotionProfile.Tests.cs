@@ -91,6 +91,7 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
         groundedAgent.Motor.GetMaxAcceleration().Should().Be(groundedAgent.Motor.Handler.Move.MaxGroundAcceleration);
 
         var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent();
+        swimmingAgent.Motor.Handler.Swim!.IsSwimming = true;
         swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Swim!.MaxSwimAcceleration);
         swimmingAgent.Motor.Handler.Swim.CanSwim = false;
         swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Move.MaxAirAcceleration);

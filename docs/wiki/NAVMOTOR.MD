@@ -86,7 +86,7 @@ Important public state includes:
 
 `NavMotor` operates on snapshots rather than a host interface. The host must supply:
 
-- a populated `TrekRequest`, including any frame-owned query answers such as `CanAffordJump`
+- a populated `TrekRequest`, including explicit locomotion intents such as jump, flight, swim, and any frame-owned query answers such as `CanAffordJump`
 - the current post-application position and last position
 - the current post-application rotation
 - the refreshed `TrekCondition`
@@ -364,7 +364,7 @@ This stage manages water-state bookkeeping.
 It can:
 
 - clear transient locomotion state on first entering water
-- toggle `Handler.Swim.IsSwimming`
+- honor the request-authored `Handler.Swim.IsSwimming` state while in liquid
 - track diving versus surface-level swimming
 - update underwater time
 - trigger drowning events

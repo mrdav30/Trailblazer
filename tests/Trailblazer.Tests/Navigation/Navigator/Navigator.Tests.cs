@@ -367,7 +367,7 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
-    public void ApplyGuidedTrekRequest_Should_CreateSwimRequest_WithoutFlight_WhenInWater()
+    public void ApplyGuidedTrekRequest_Should_CreateLiquidRequest_WithoutAutoSwimIntent_WhenInWater()
     {
         AddWater(Vector3d.Zero);
         AddWater(new Vector3d(0, 0, 1));
@@ -383,11 +383,33 @@ public class NavigatorTests : IDisposable
         navigator.IsGuideded.Should().BeTrue();
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
 
         var request = steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
         request.Origin.Should().Be(navigator.Position);
         request.TargetPosition.Should().Be(target);
         request.Medium.Should().Be(TraversalMedium.Liquid);
+    }
+
+    [Fact]
+    public void ApplyGuidedTrekRequest_ShouldCaptureExplicitSwimIntent_WhenRequestedInWater()
+    {
+        AddWater(Vector3d.Zero);
+        AddWater(new Vector3d(0, 0, 1));
+        AddWater(new Vector3d(0, 0, 2));
+
+        var navigator = CreateNavigator(Vector3d.Zero);
+        NavSteering steering = TestRequire.NotNull(navigator.Steering);
+        navigator.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
+
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(0, 0, 2),
+            rate: TrekRate.Fast,
+            isRequestingSwim: true);
+
+        navigator.FrameRequest.IsRequestingSwim.Should().BeTrue();
+        steering.CurrentRequest.Should().BeOfType<VolumePathRequest>()
+            .Which.Medium.Should().Be(TraversalMedium.Liquid);
     }
 
     [Fact]
@@ -520,6 +542,7 @@ public class NavigatorTests : IDisposable
         navigator.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
             rate: TrekRate.Fast,
+            isRequestingSwim: true,
             groupId: 7);
 
         VolumePathRequest initialRequest = steering.CurrentRequest.Should().BeOfType<VolumePathRequest>().Subject;
@@ -538,6 +561,7 @@ public class NavigatorTests : IDisposable
         followupRequest.MaxClimbHeight.Should().Be((Fixed64)2);
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
         steering.MovementGroupID.Should().Be(7);
         steering.ShouldMove.Should().BeTrue();
         navigator.FrameRequest.Direction.x.Should().BeGreaterThan(Fixed64.Zero);
@@ -612,10 +636,14 @@ public class NavigatorTests : IDisposable
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
 
-        navigator.ApplyGuidedTrekRequest(new Vector3d(0, 0, 2), rate: TrekRate.Fast);
+        navigator.ApplyGuidedTrekRequest(
+            new Vector3d(0, 0, 2),
+            rate: TrekRate.Fast,
+            isRequestingSwim: true);
 
         navigator.IsGuideded.Should().BeFalse();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
         steering.CurrentRequest.Should().BeNull();
         steering.ShouldMove.Should().BeFalse();
     }
@@ -850,8 +878,22 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
         navigator.FrameRequest.CanAffordJump.Should().BeTrue();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
         navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
         navigator.FrameRequest.FacingDirection.Should().BeNull();
+    }
+
+    [Fact]
+    public void ApplyInputTrekRequest_ShouldCaptureExplicitSwimIntent()
+    {
+        var navigator = CreateNavigator(Vector3d.Zero);
+
+        navigator.ApplyInputTrekRequest(
+            Vector3d.Forward,
+            TrekRate.Moderate,
+            isRequestingSwim: true);
+
+        navigator.FrameRequest.IsRequestingSwim.Should().BeTrue();
     }
 
     [Fact]
@@ -1109,12 +1151,14 @@ public class NavigatorTests : IDisposable
             TrekRate.Fast,
             isRequestingJump: true,
             isRequestingFlight: true,
+            isRequestingSwim: true,
             facingDirection: Vector3d.Forward);
         navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast, isRequestingJump: true, groupId: 7);
         navigator.SetTrekCondition(
             medium: TraversalMedium.Liquid,
             surfaceLevel: (Fixed64)3,
             surfaceCondition: new GroundCondition(),
+            replaceGroundContact: false,
             ceilingLevel: (Fixed64)6,
             updateMotorState: true);
         navigator.NotifyCollision();
@@ -1124,6 +1168,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Stationary);
         navigator.FrameRequest.IsRequestingJump.Should().BeFalse();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
+        navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
         navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
         navigator.FrameRequest.FacingDirection.Should().BeNull();
         navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Unknown);
@@ -1140,12 +1185,14 @@ public class NavigatorTests : IDisposable
         navigator.SetFrameJumpAffordability(false);
         navigator.ToggleGuidedJump(true);
         navigator.ToggleGuidedFlight(true);
+        navigator.ToggleGuidedSwim(true);
         navigator.ToggleGuidedClimb(true);
         navigator.SetGuidedTrekRate(TrekRate.Moderate);
 
         navigator.FrameRequest.CanAffordJump.Should().BeFalse();
         navigator.FrameRequest.IsRequestingJump.Should().BeTrue();
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
+        navigator.FrameRequest.IsRequestingSwim.Should().BeTrue();
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Moderate);
     }
@@ -1250,7 +1297,7 @@ public class NavigatorTests : IDisposable
             ceilingLevel: (Fixed64)8,
             updateMotorState: false);
 
-        navigator.SetTrekCondition(medium: TraversalMedium.Gas, updateMotorState: false);
+        navigator.SetTrekCondition(medium: TraversalMedium.Gas, replaceGroundContact: false, updateMotorState: false);
 
         navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Gas);
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)3);

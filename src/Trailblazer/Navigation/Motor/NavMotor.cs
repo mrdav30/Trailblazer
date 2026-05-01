@@ -33,12 +33,6 @@ public class NavMotor : IRecordable
     public NavMotorEvents Events = new();
 
     /// <summary>
-    /// Optional host-owned resolver that supplies deterministic climb affordance snapshots.
-    /// </summary>
-    [NonSerialized]
-    public IClimbAffordanceResolver? ClimbResolver;
-
-    /// <summary>
     /// This stores the current <see cref="Navigator._frameCondition"/> for the frame.  
     /// </summary>
     /// <remarks>
@@ -58,17 +52,23 @@ public class NavMotor : IRecordable
     /// </summary>
     public bool IsInitialized { get; private set; }
 
-    private PlatformLocomotion? PlatformModule => Handler.Platform;
+    /// <inheritdoc cref="PlatformLocomotion"/>
+    public PlatformLocomotion? PlatformModule => Handler.Platform;
 
-    private JumpLocomotion? JumpModule => Handler.Jump;
+    /// <inheritdoc cref="JumpLocomotion"/>
+    public JumpLocomotion? JumpModule => Handler.Jump;
 
-    private SlideLocomotion? SlideModule => Handler.Slide;
+    /// <inheritdoc cref="SlideLocomotion"/>
+    public SlideLocomotion? SlideModule => Handler.Slide;
 
-    private SwimLocomotion? SwimModule => Handler.Swim;
+    /// <inheritdoc cref="SwimLocomotion"/>
+    public SwimLocomotion? SwimModule => Handler.Swim;
 
-    private FlyLocomotion? FlyModule => Handler.Fly;
+    /// <inheritdoc cref="FlyLocomotion"/>
+    public FlyLocomotion? FlyModule => Handler.Fly;
 
-    private ClimbLocomotion? ClimbModule => Handler.Climb;
+    /// <inheritdoc cref="ClimbLocomotion"/>
+    public ClimbLocomotion? ClimbModule => Handler.Climb;
 
     #region Cache
 
@@ -316,7 +316,10 @@ public class NavMotor : IRecordable
 
         UpdateClimbState(request);
         UpdateFlightState(request);
+        UpdateSwimState(request);
     }
+
+    #region Traversal Force Resolution
 
     private void ResolveTraversalForces(TrekRequest request)
     {
@@ -328,38 +331,6 @@ public class NavMotor : IRecordable
 
         ApplyEnvironmentalForces();
         ApplyJumpForce(request);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private Vector3d ResolveTraversalVelocityDelta()
-    {
-        return _forceOutput != Vector3d.Zero
-            ? _forceOutput * TrailblazerManager.DeltaTime
-            : Vector3d.Zero;
-    }
-
-    private void ResolvePlatformTraversal(
-        TrekRequest request,
-        ref Vector3d positionDelta,
-        ref FixedQuaternion rotationDelta)
-    {
-        PlatformLocomotion? platformModule = PlatformModule;
-        if (platformModule == null)
-            return;
-
-        // Do not apply platform movement if we just jumped or if the platform is not actively driving us.
-        bool isMovingWithPlatform = platformModule.IsActive
-            && !IsFlying
-            && !IsClimbing
-            && (IsOnSolid || platformModule.IsLockedToPlatform);
-        if (!isMovingWithPlatform || IsJumping)
-            return;
-
-        platformModule.GetPlatformInfluence(
-            request.FootPosition ?? request.Origin,
-            request.Rotation,
-            out positionDelta,
-            out rotationDelta);
     }
 
     /// <summary>
@@ -384,6 +355,55 @@ public class NavMotor : IRecordable
             return;
 
         ApplyDesiredVelocity(desiredVelocity);
+    }
+
+    private void UpdateControlState()
+    {
+        if (IsClimbing)
+        {
+            SetSlidingState(false);
+            Handler.IsInControl = true;
+            return;
+        }
+
+        if (IsOnSolid)
+        {
+            if (IsFlying)
+            {
+                SetSlidingState(false);
+                Handler.IsInControl = true;
+            }
+            else
+            {
+                bool isTooSteep = IsTooSteep(FrameSlopeAngle);
+                SetSlidingState(SlideModule?.IsEnabled == true && isTooSteep);
+                Handler.IsInControl = !isTooSteep;
+            }
+
+            return;
+        }
+
+        Handler.IsInControl = IsFlying || !InLimbo;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void SetSlidingState(bool isSliding)
+    {
+        if (SlideModule != null)
+            SlideModule.IsSliding = isSliding;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ResetDownwardMomentumIfNeeded()
+    {
+        if (IsClimbing)
+        {
+            _forceOutput = Vector3d.Zero;
+            return;
+        }
+
+        if ((!IsOnSolid || WasInGas) && !IsFlying)
+            _forceOutput.y = Fixed64.Zero;
     }
 
     /// <summary>
@@ -439,10 +459,88 @@ public class NavMotor : IRecordable
         return Fixed3x3.TransformDirection(transposedMatrix, desiredLocalVelocity);
     }
 
-    /// <summary>
-    /// Computes the horizontal velocity based on movement input and current facing direction.
-    /// </summary>
-    /// <returns>The target horizontal velocity.</returns>
+    private Vector3d GetClimbVelocity(TrekRequest frameRequest)
+    {
+        if (ClimbModule?.IsEnabled != true
+            || !ClimbModule.CanClimb
+            || frameRequest.Rate == TrekRate.Stationary)
+        {
+            return Vector3d.Zero;
+        }
+
+        Vector3d upAxis = ClimbModule.AttachedUpDirection != Vector3d.Zero
+            ? ClimbModule.AttachedUpDirection.Normal
+            : Vector3d.Up;
+        Vector3d outwardNormal = ClimbModule.AttachedSurfaceNormal != Vector3d.Zero
+            ? ClimbModule.AttachedSurfaceNormal.Normal
+            : Vector3d.Backward;
+        Vector3d lateralAxis = Vector3d.Cross(upAxis, outwardNormal);
+        if (lateralAxis == Vector3d.Zero)
+            lateralAxis = Vector3d.Cross(Vector3d.Up, outwardNormal);
+        if (lateralAxis == Vector3d.Zero)
+            lateralAxis = Vector3d.Right;
+        lateralAxis = lateralAxis.Normal;
+
+        Fixed64 verticalAmount = Vector3d.Dot(frameRequest.Direction, upAxis);
+        if (!ClimbModule.ActiveAllowDescent && verticalAmount < Fixed64.Zero)
+            verticalAmount = Fixed64.Zero;
+
+        Fixed64 lateralAmount = ClimbModule.ActiveAllowLateralTraverse
+            ? Vector3d.Dot(frameRequest.Direction, lateralAxis)
+            : Fixed64.Zero;
+
+        Vector3d climbDirection = (upAxis * verticalAmount) + (lateralAxis * lateralAmount);
+        Fixed64 inputMagnitude = FixedMath.Clamp01(climbDirection.Magnitude);
+        if (inputMagnitude <= Fixed64.Zero)
+            return Vector3d.Zero;
+
+        return climbDirection.Normal * (ClimbModule.MaxClimbSpeed * inputMagnitude);
+    }
+
+    private Vector3d GetMantleVelocity(Vector3d origin)
+    {
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule?.MantleTargetPosition.HasValue != true)
+            return Vector3d.Zero;
+
+        Vector3d mantleTargetPosition = climbModule.MantleTargetPosition.GetValueOrDefault();
+        Vector3d toTarget = mantleTargetPosition - origin;
+        if (toTarget == Vector3d.Zero)
+            return Vector3d.Zero;
+
+        Fixed64 distance = toTarget.Magnitude;
+        if (distance <= climbModule.ClimbStartTolerance)
+            return Vector3d.Zero;
+
+        return toTarget.Normal * climbModule.MaxClimbSpeed;
+    }
+
+    private Vector3d GetControlledSurfaceVelocity(TrekRequest frameRequest)
+    {
+        if (SlideModule?.IsSliding == true)
+            return GetSlidingVelocity(frameRequest);
+
+        return Handler.IsInControl && frameRequest.Rate != TrekRate.Stationary
+            ? GetHorizontalVelocity(frameRequest)
+            : Vector3d.Zero;
+    }
+
+    private Vector3d GetSlidingVelocity(TrekRequest frameRequest)
+    {
+        SlideLocomotion? slideModule = SlideModule;
+        if (slideModule == null)
+            return Vector3d.Zero;
+
+        Vector3d slideDirection = new Vector3d(
+            CurrentState.SurfaceNormal.x,
+            Fixed64.Zero,
+            CurrentState.SurfaceNormal.z).Normal;
+        Vector3d projectedMoveDir = Vector3d.Project(frameRequest.Direction, slideDirection);
+        Vector3d speedContribution = projectedMoveDir * slideModule.SpeedControl;
+        Vector3d sidewaysContribution = (frameRequest.Direction - projectedMoveDir) * slideModule.SidewaysControl;
+        return slideDirection + ((speedContribution + sidewaysContribution) * slideModule.SlidingSpeed);
+    }
+
     private Vector3d GetHorizontalVelocity(TrekRequest frameRequest)
     {
         Fixed3x3 transposedMatrix = frameRequest.Rotation.ToMatrix3x3();
@@ -478,6 +576,192 @@ public class NavMotor : IRecordable
         return GetGroundHorizontalSpeed(desiredMovementDirection, rate);
     }
 
+    private Fixed64 GetFlightHorizontalSpeed(Vector3d desiredMovementDirection, TrekRate rate)
+    {
+        if (FlyModule?.IsEnabled != true || !FlyModule.CanFly)
+            return Fixed64.Zero;
+
+        Fixed64 horizontalMagnitude = FixedMath.Clamp01(new Vector3d(
+            desiredMovementDirection.x,
+            Fixed64.Zero,
+            desiredMovementDirection.z).Magnitude);
+        return horizontalMagnitude * FlyModule.MaxFlySpeed * GetFlightSpeedMultiplier(rate);
+    }
+
+    private Fixed64 GetFlightSpeedMultiplier(TrekRate rate)
+    {
+        if (rate == TrekRate.Stationary)
+            return Fixed64.Zero;
+
+        Fixed64 maxFastSpeed = Handler.Move.MaxFastSpeed;
+        if (rate == TrekRate.Fast || maxFastSpeed <= Fixed64.Zero)
+            return Fixed64.One;
+
+        return FixedMath.Clamp(GetScaledFlightSpeedMultiplier(rate, maxFastSpeed), Fixed64.Zero, Fixed64.One);
+    }
+
+    private Fixed64 GetLiquidHorizontalSpeed(Vector3d desiredMovementDirection)
+    {
+        if (SwimModule?.IsEnabled != true
+            || !SwimModule.CanSwim
+            || !SwimModule.IsSwimming)
+        {
+            return Fixed64.Zero;
+        }
+
+        Fixed64 ellipseMultiplier = SwimModule.MaxSwimSpeed / SwimModule.MaxSwimSidewaysSpeed;
+        if (ellipseMultiplier <= Fixed64.Zero)
+            return Fixed64.Zero;
+
+        return GetEllipticalHorizontalSpeed(
+            desiredMovementDirection,
+            ellipseMultiplier,
+            SwimModule.MaxSwimSidewaysSpeed,
+            Fixed64.One);
+    }
+
+    private Fixed64 GetGroundHorizontalSpeed(Vector3d desiredMovementDirection, TrekRate rate)
+    {
+        Fixed64 maxSpeed = GetGroundDirectionalMaxSpeed(desiredMovementDirection, rate);
+        Fixed64 ellipseMultiplier = maxSpeed / Handler.Move.MaxSidewaysSpeed;
+        if (ellipseMultiplier <= Fixed64.Zero)
+            return Fixed64.Zero;
+
+        return GetEllipticalHorizontalSpeed(
+            desiredMovementDirection,
+            ellipseMultiplier,
+            Handler.Move.MaxSidewaysSpeed,
+            GetAirborneControlMultiplier());
+    }
+
+    private Fixed64 GetAirborneControlMultiplier()
+    {
+        if (IsOnSolid)
+            return Fixed64.One;
+
+        if (IsJumping)
+            return JumpModule?.JumpControlMultiplier ?? Fixed64.One;
+
+        if (IsFalling)
+            return Handler.Fall.FallControlMultiplier;
+
+        return Fixed64.One;
+    }
+
+    private static Fixed64 GetEllipticalHorizontalSpeed(
+        Vector3d desiredMovementDirection,
+        Fixed64 zAxisEllipseMultiplier,
+        Fixed64 sidewaysSpeed,
+        Fixed64 controlMultiplier)
+    {
+        Vector3d normalized = new Vector3d(
+            desiredMovementDirection.x,
+            Fixed64.Zero,
+            desiredMovementDirection.z / zAxisEllipseMultiplier).Normal;
+        Fixed64 length = new Vector3d(
+            normalized.x,
+            Fixed64.Zero,
+            normalized.z * zAxisEllipseMultiplier).Magnitude;
+        return length * sidewaysSpeed * controlMultiplier;
+    }
+
+    private Fixed64 GetGroundDirectionalMaxSpeed(Vector3d desiredMovementDirection, TrekRate rate)
+    {
+        if (desiredMovementDirection.z < Fixed64.Zero)
+            return Handler.Move.MaxBackwardsSpeed;
+
+        return rate switch
+        {
+            TrekRate.Slow => Handler.Move.MaxSlowSpeed,
+            TrekRate.Moderate => Handler.Move.MaxModerateSpeed,
+            TrekRate.Fast => Handler.Move.MaxFastSpeed,
+            _ => Fixed64.Zero
+        };
+    }
+
+    private Vector3d ResolveLiquidVelocity(TrekRequest frameRequest, Vector3d desiredVelocity)
+    {
+        if (SwimModule?.IsEnabled != true
+            || !SwimModule.CanSwim
+            || !SwimModule.IsSwimming)
+        {
+            desiredVelocity = Vector3d.Zero;
+        }
+
+        if (SwimModule?.IsSwimming == true && frameRequest.Direction.y != Fixed64.Zero)
+            desiredVelocity.y = frameRequest.Direction.y * SwimModule.MaxSwimSpeed;
+
+        if (desiredVelocity != Vector3d.Zero)
+            desiredVelocity *= FixedMath.Clamp01(Fixed64.One - Handler.Move.WaterDragFactor);
+
+        return desiredVelocity;
+    }
+
+    private Vector3d ApplyPlatformTransferVelocity(Vector3d desiredVelocity)
+    {
+        if (PlatformModule?.IsEnabled == true
+            && PlatformModule.MovementTransfer == MotionTransfer.PermaTransfer)
+        {
+            desiredVelocity += PlatformModule.FramePlatformVelocity;
+            desiredVelocity.y = Fixed64.Zero;
+        }
+
+        return desiredVelocity;
+    }
+
+    private Vector3d ApplyGroundVelocityConstraints(Vector3d desiredVelocity)
+    {
+        if (!IsOnSolid || desiredVelocity == Vector3d.Zero)
+            return desiredVelocity;
+
+        Fixed64 surfaceFriction = CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
+        desiredVelocity *= Fixed64.One - surfaceFriction;
+
+        // Flat or host-defined "solid but no sampled normal" surfaces should preserve the raw ground vector.
+        // Sliding also already produces a slope-aware direction, so re-projecting it here distorts the result.
+        if (CurrentState.SurfaceNormal == Vector3d.Zero
+            || CurrentState.SlopeAngle == Fixed64.Zero
+            || SlideModule?.IsSliding == true)
+        {
+            return desiredVelocity;
+        }
+
+        Vector3d sideways = Vector3d.Cross(Vector3d.Up, desiredVelocity);
+        Vector3d adjustedVelocity = Vector3d.Cross(sideways, CurrentState.SurfaceNormal).Normal * desiredVelocity.Magnitude;
+        if (Fixed64.Sign(adjustedVelocity.y) != Fixed64.Sign(FrameSlopeAngle))
+            adjustedVelocity.y *= -1;
+
+        return adjustedVelocity;
+    }
+
+    private bool TryApplyStationaryGroundFriction(Vector3d desiredDirection)
+    {
+        if (!IsOnSolid || IsFlying || desiredDirection != Vector3d.Zero)
+            return false;
+
+        Fixed64 friction = CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
+        if (friction <= Fixed64.Zero || _forceOutput == Vector3d.Zero)
+            return false;
+
+        _forceOutput *= Fixed64.One - friction;
+        return true;
+    }
+
+    private void ApplyDesiredVelocity(Vector3d desiredVelocity)
+    {
+        if (desiredVelocity == _forceOutput)
+            return;
+
+        Fixed64 maxVelocityChange = GetMaxAcceleration() * TrailblazerManager.DeltaTime;
+        Vector3d velocityChange = (desiredVelocity - _forceOutput).ClampMagnitude(maxVelocityChange);
+        if (!IsOnSolid && !Handler.IsInControl)
+            return;
+
+        _forceOutput += velocityChange;
+        if (IsOnSolid && !IsFlying)
+            _forceOutput.y = FixedMath.Min(_forceOutput.y, Fixed64.Zero);
+    }
+
     /// <summary>
     /// Retrieves the maximum acceleration value based on the object’s current traversal state.
     /// </summary>
@@ -488,7 +772,9 @@ public class NavMotor : IRecordable
             throw new InvalidOperationException("NavMotor must be initialized before querying max acceleration.");
 
         if (IsInLiquid)
-            return SwimModule?.IsEnabled == true && SwimModule.CanSwim
+            return SwimModule?.IsEnabled == true
+                && SwimModule.CanSwim
+                && SwimModule.IsSwimming
                 ? SwimModule.MaxSwimAcceleration
                 : Handler.Move.MaxAirAcceleration;
 
@@ -511,9 +797,6 @@ public class NavMotor : IRecordable
             $"Cannot resolve max acceleration while traversal medium is {CurrentState.Medium}. NavMotor requires a known traversal medium before movement forces are evaluated.");
     }
 
-    /// <summary>
-    /// Applies environmental forces such as gravity, water buoyancy, and downward force when grounded.
-    /// </summary>
     private void ApplyEnvironmentalForces()
     {
         Fixed64 gravityStep = Handler.Forces.GravityForce * TrailblazerManager.DeltaTime;
@@ -581,13 +864,6 @@ public class NavMotor : IRecordable
         }
     }
 
-    /// <summary>
-    /// Applies an instantaneous jump force to the object, considering platform inertia and jump physics.
-    /// </summary>
-    /// <remarks>
-    /// This method validates jump conditions, determines the jump direction, and calculates the jump force.
-    /// If the object is on a platform, its velocity is adjusted accordingly.
-    /// </remarks>
     private void ApplyJumpForce(TrekRequest request)
     {
         if (!CanApplyJumpForce(request))
@@ -696,6 +972,249 @@ public class NavMotor : IRecordable
         // Remove any existing downward force before the jump impulse is applied.
         _forceOutput.y = FixedMath.Max(Fixed64.Zero, _forceOutput.y);
         _forceOutput += jumpForce;
+    }
+
+    private void UpdateClimbState(TrekRequest request)
+    {
+        if (ClimbModule?.IsEnabled != true)
+            return;
+
+        if (ClimbModule.IsMantling)
+            return;
+
+        bool canAttemptClimb = request.IsRequestingClimb
+            && ClimbModule.CanClimb
+            && !IsInLiquid
+            && CurrentState.Medium != TraversalMedium.Unknown;
+        if (!canAttemptClimb)
+        {
+            if (ClimbModule.IsClimbing)
+                StopClimb(wasForced: false);
+
+            return;
+        }
+
+        if (ClimbModule.ClimbResolver == null
+            || !ClimbModule.ClimbResolver.TryResolveClimbAffordance(request, CurrentState, out ClimbAffordanceSnapshot snapshot))
+        {
+            if (ClimbModule.IsClimbing)
+                StopClimb(wasForced: true);
+
+            return;
+        }
+
+        if (ClimbModule.IsClimbing)
+        {
+            bool canContinue = snapshot.CanContinueClimb
+                && IsCompatibleClimbAffordance(snapshot);
+            if (!canContinue)
+            {
+                StopClimb(wasForced: true);
+                return;
+            }
+
+            ClimbModule.ApplyClimbSnapshot(snapshot);
+
+            if (ShouldStartMantle(request, snapshot))
+                StartMantle(snapshot);
+
+            return;
+        }
+
+        bool canStart = snapshot.CanStartClimb;
+        if (!canStart)
+            return;
+
+        StartClimb(snapshot);
+    }
+
+    private bool IsCompatibleClimbAffordance(ClimbAffordanceSnapshot snapshot)
+    {
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return false;
+
+        if (climbModule.AttachmentId.HasValue && snapshot.AffordanceId.HasValue)
+            return climbModule.AttachmentId.Value == snapshot.AffordanceId.Value;
+
+        if (snapshot.Kind != climbModule.ActiveClimbKind)
+            return false;
+
+        if (!HasCompatibleClimbAxes(snapshot))
+            return false;
+
+        Fixed64 tolerance = GetClimbContinuityTolerance();
+        return (snapshot.AttachmentPoint - climbModule.AttachmentPoint).SqrMagnitude <= tolerance * tolerance;
+    }
+
+    private bool HasCompatibleClimbAxes(ClimbAffordanceSnapshot snapshot)
+    {
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return false;
+
+        if (climbModule.AttachedSurfaceNormal != Vector3d.Zero
+            && snapshot.SurfaceNormal != Vector3d.Zero
+            && Vector3d.Dot(climbModule.AttachedSurfaceNormal.Normal, snapshot.SurfaceNormal.Normal) <= Fixed64.Zero)
+        {
+            return false;
+        }
+
+        if (climbModule.AttachedUpDirection != Vector3d.Zero
+            && snapshot.UpDirection != Vector3d.Zero
+            && Vector3d.Dot(climbModule.AttachedUpDirection.Normal, snapshot.UpDirection.Normal) <= Fixed64.Zero)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private Fixed64 GetClimbContinuityTolerance()
+    {
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return Fixed64.Zero;
+
+        Fixed64 frameTravelAllowance = climbModule.MaxClimbSpeed * TrailblazerManager.DeltaTime;
+        return climbModule.ClimbStartTolerance + frameTravelAllowance;
+    }
+
+    private void StartClimb(ClimbAffordanceSnapshot snapshot)
+    {
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return;
+
+        climbModule.ApplyClimbSnapshot(snapshot);
+        climbModule.IsClimbing = true;
+        climbModule.IsMantling = false;
+
+        if (IsFalling)
+            Handler.ClearTransientState<FallLocomotion>();
+
+        if (JumpModule != null)
+        {
+            JumpModule.IsJumping = false;
+            JumpModule.IsHoldingJump = false;
+        }
+
+        if (FlyModule != null)
+            FlyModule.IsFlying = false;
+
+        if (SlideModule != null)
+            SlideModule.IsSliding = false;
+
+        Events.OnStartClimb?.Invoke(snapshot);
+    }
+
+    private bool ShouldStartMantle(TrekRequest request, ClimbAffordanceSnapshot snapshot)
+    {
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return false;
+
+        if (snapshot.Kind != ClimbAffordanceKind.Ledge
+            || !climbModule.ActiveAllowMantle
+            || !climbModule.MantleTargetPosition.HasValue
+            || request.Rate == TrekRate.Stationary)
+        {
+            return false;
+        }
+
+        Vector3d upAxis = climbModule.AttachedUpDirection != Vector3d.Zero
+            ? climbModule.AttachedUpDirection.Normal
+            : Vector3d.Up;
+        return Vector3d.Dot(request.Direction, upAxis) > Fixed64.Zero;
+    }
+
+    private void StartMantle(ClimbAffordanceSnapshot snapshot)
+    {
+        ClimbLocomotion? climbModule = ClimbModule;
+        if (climbModule == null)
+            return;
+
+        climbModule.ApplyClimbSnapshot(snapshot);
+        climbModule.IsMantling = true;
+        Events.OnStartMantle?.Invoke();
+    }
+
+    private void UpdateFlightState(TrekRequest request)
+    {
+        if (FlyModule?.IsEnabled != true)
+            return;
+
+        bool shouldFly = request.IsRequestingFlight
+            && FlyModule.CanFly
+            && !IsClimbing
+            && !IsInLiquid
+            && CurrentState.Medium != TraversalMedium.Unknown;
+
+        if (!shouldFly)
+        {
+            FlyModule.IsFlying = false;
+            return;
+        }
+
+        FlyModule.IsFlying = true;
+
+        if (IsFalling)
+            Handler.ClearTransientState<FallLocomotion>();
+
+        if (JumpModule != null)
+        {
+            JumpModule.IsJumping = false;
+            JumpModule.IsHoldingJump = false;
+        }
+
+        if (SlideModule != null)
+            SlideModule.IsSliding = false;
+    }
+
+    private void UpdateSwimState(TrekRequest request)
+    {
+        SwimLocomotion? swimModule = SwimModule;
+        if (swimModule?.IsEnabled != true)
+            return;
+
+        swimModule.RequestedSwimThisTraversal = request.IsRequestingSwim;
+        swimModule.IsSwimming = IsInLiquid
+            && swimModule.CanSwim
+            && request.IsRequestingSwim;
+    }
+
+    #endregion
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private Vector3d ResolveTraversalVelocityDelta()
+    {
+        return _forceOutput != Vector3d.Zero
+            ? _forceOutput * TrailblazerManager.DeltaTime
+            : Vector3d.Zero;
+    }
+
+    private void ResolvePlatformTraversal(
+        TrekRequest request,
+        ref Vector3d positionDelta,
+        ref FixedQuaternion rotationDelta)
+    {
+        PlatformLocomotion? platformModule = PlatformModule;
+        if (platformModule == null)
+            return;
+
+        // Do not apply platform movement if we just jumped or if the platform is not actively driving us.
+        bool isMovingWithPlatform = platformModule.IsActive
+            && !IsFlying
+            && !IsClimbing
+            && (IsOnSolid || platformModule.IsLockedToPlatform);
+        if (!isMovingWithPlatform || IsJumping)
+            return;
+
+        platformModule.GetPlatformInfluence(
+            request.FootPosition ?? request.Origin,
+            request.Rotation,
+            out positionDelta,
+            out rotationDelta);
     }
 
     #endregion
@@ -857,12 +1376,6 @@ public class NavMotor : IRecordable
         }
     }
 
-    /// <summary>
-    /// Handles platform updates by applying inertia and adjusting velocity based on platform motion.
-    /// </summary>
-    /// <remarks>
-    /// This method ensures that velocity transitions smoothly when stepping onto or off moving platforms.
-    /// </remarks>
     private void HandlePlatformTransitions()
     {
         // Don't process platform state when in water
@@ -902,12 +1415,6 @@ public class NavMotor : IRecordable
         }
     }
 
-    /// <summary>
-    /// Manages the object's state when entering, exiting, or moving within water.
-    /// </summary>
-    /// <remarks>
-    /// This method updates swim-related properties, tracks dive time, and triggers drowning events if necessary.
-    /// </remarks>
     private void HandleSwimState(Vector3d position)
     {
         if (!IsInLiquid)
@@ -918,25 +1425,23 @@ public class NavMotor : IRecordable
             return;
         }
 
+        bool hadSwimIntent = SwimModule?.RequestedSwimThisTraversal == true;
         // Clear the transient state when entering water for the first time
         if (!WasInLiquid)
             Handler.ClearAllTransientState();
 
         if (SwimModule?.IsEnabled == true)
         {
-            SwimModule.IsSwimming = SwimModule.CanSwim;
+            SwimModule.IsSwimming = SwimModule.CanSwim && hadSwimIntent;
             SwimModule.IsDiving = position.y < CurrentState.SurfaceLevel;
 
             SwimModule.UpdateDiveTime();
 
-            if (IsInLiquid && SwimModule.IsDrowning)
+            if (SwimModule.IsDrowning)
                 Events.OnDrowning?.Invoke(SwimModule.UnderwaterTimer);
         }
     }
 
-    /// <summary>
-    /// Clears or preserves flight state based on the refreshed traversal medium.
-    /// </summary>
     private void HandleFlightState()
     {
         if (FlyModule?.IsEnabled != true)
@@ -954,12 +1459,6 @@ public class NavMotor : IRecordable
             Handler.ClearTransientState<FallLocomotion>();
     }
 
-    /// <summary>
-    /// Processes the object’s fall state, tracking fall height and triggering landing events when appropriate.
-    /// </summary>
-    /// <remarks>
-    /// This method determines when a object starts falling, updates fall height, and detects when a safe landing occurs.
-    /// </remarks>
     private void HandleFallState(Vector3d position)
     {
         if (!Handler.Fall.IsEnabled) return;
@@ -977,335 +1476,6 @@ public class NavMotor : IRecordable
         }
 
         TryStartFall(position);
-    }
-
-    /// <summary>
-    /// Updates the active flight state from the current frame request.
-    /// </summary>
-    private void UpdateFlightState(TrekRequest request)
-    {
-        if (FlyModule?.IsEnabled != true)
-            return;
-
-        bool shouldFly = request.IsRequestingFlight
-            && FlyModule.CanFly
-            && !IsClimbing
-            && !IsInLiquid
-            && CurrentState.Medium != TraversalMedium.Unknown;
-
-        if (!shouldFly)
-        {
-            FlyModule.IsFlying = false;
-            return;
-        }
-
-        FlyModule.IsFlying = true;
-
-        if (IsFalling)
-            Handler.ClearTransientState<FallLocomotion>();
-
-        if (JumpModule != null)
-        {
-            JumpModule.IsJumping = false;
-            JumpModule.IsHoldingJump = false;
-        }
-
-        if (SlideModule != null)
-            SlideModule.IsSliding = false;
-    }
-
-    /// <summary>
-    /// Scales configured flight speeds by the requested traversal rate.
-    /// </summary>
-    private Fixed64 GetFlightSpeedMultiplier(TrekRate rate)
-    {
-        if (rate == TrekRate.Stationary)
-            return Fixed64.Zero;
-
-        Fixed64 maxFastSpeed = Handler.Move.MaxFastSpeed;
-        if (rate == TrekRate.Fast || maxFastSpeed <= Fixed64.Zero)
-            return Fixed64.One;
-
-        return FixedMath.Clamp(GetScaledFlightSpeedMultiplier(rate, maxFastSpeed), Fixed64.Zero, Fixed64.One);
-    }
-
-    private void UpdateControlState()
-    {
-        if (IsClimbing)
-        {
-            SetSlidingState(false);
-            Handler.IsInControl = true;
-            return;
-        }
-
-        if (IsOnSolid)
-        {
-            if (IsFlying)
-            {
-                SetSlidingState(false);
-                Handler.IsInControl = true;
-            }
-            else
-            {
-                bool isTooSteep = IsTooSteep(FrameSlopeAngle);
-                SetSlidingState(SlideModule?.IsEnabled == true && isTooSteep);
-                Handler.IsInControl = !isTooSteep;
-            }
-
-            return;
-        }
-
-        Handler.IsInControl = IsFlying || !InLimbo;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void SetSlidingState(bool isSliding)
-    {
-        if (SlideModule != null)
-            SlideModule.IsSliding = isSliding;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void ResetDownwardMomentumIfNeeded()
-    {
-        if (IsClimbing)
-        {
-            _forceOutput = Vector3d.Zero;
-            return;
-        }
-
-        if ((!IsOnSolid || WasInGas) && !IsFlying)
-            _forceOutput.y = Fixed64.Zero;
-    }
-
-    private Vector3d GetClimbVelocity(TrekRequest frameRequest)
-    {
-        if (ClimbModule?.IsEnabled != true
-            || !ClimbModule.CanClimb
-            || frameRequest.Rate == TrekRate.Stationary)
-        {
-            return Vector3d.Zero;
-        }
-
-        Vector3d upAxis = ClimbModule.AttachedUpDirection != Vector3d.Zero
-            ? ClimbModule.AttachedUpDirection.Normal
-            : Vector3d.Up;
-        Vector3d outwardNormal = ClimbModule.AttachedSurfaceNormal != Vector3d.Zero
-            ? ClimbModule.AttachedSurfaceNormal.Normal
-            : Vector3d.Backward;
-        Vector3d lateralAxis = Vector3d.Cross(upAxis, outwardNormal);
-        if (lateralAxis == Vector3d.Zero)
-            lateralAxis = Vector3d.Cross(Vector3d.Up, outwardNormal);
-        if (lateralAxis == Vector3d.Zero)
-            lateralAxis = Vector3d.Right;
-        lateralAxis = lateralAxis.Normal;
-
-        Fixed64 verticalAmount = Vector3d.Dot(frameRequest.Direction, upAxis);
-        if (!ClimbModule.ActiveAllowDescent && verticalAmount < Fixed64.Zero)
-            verticalAmount = Fixed64.Zero;
-
-        Fixed64 lateralAmount = ClimbModule.ActiveAllowLateralTraverse
-            ? Vector3d.Dot(frameRequest.Direction, lateralAxis)
-            : Fixed64.Zero;
-
-        Vector3d climbDirection = (upAxis * verticalAmount) + (lateralAxis * lateralAmount);
-        Fixed64 inputMagnitude = FixedMath.Clamp01(climbDirection.Magnitude);
-        if (inputMagnitude <= Fixed64.Zero)
-            return Vector3d.Zero;
-
-        return climbDirection.Normal * (ClimbModule.MaxClimbSpeed * inputMagnitude);
-    }
-
-    private bool TryApplyStationaryGroundFriction(Vector3d desiredDirection)
-    {
-        if (!IsOnSolid || IsFlying || desiredDirection != Vector3d.Zero)
-            return false;
-
-        Fixed64 friction = CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
-        if (friction <= Fixed64.Zero || _forceOutput == Vector3d.Zero)
-            return false;
-
-        _forceOutput *= Fixed64.One - friction;
-        return true;
-    }
-
-    private void ApplyDesiredVelocity(Vector3d desiredVelocity)
-    {
-        if (desiredVelocity == _forceOutput)
-            return;
-
-        Fixed64 maxVelocityChange = GetMaxAcceleration() * TrailblazerManager.DeltaTime;
-        Vector3d velocityChange = (desiredVelocity - _forceOutput).ClampMagnitude(maxVelocityChange);
-        if (!IsOnSolid && !Handler.IsInControl)
-            return;
-
-        _forceOutput += velocityChange;
-        if (IsOnSolid && !IsFlying)
-            _forceOutput.y = FixedMath.Min(_forceOutput.y, Fixed64.Zero);
-    }
-
-    private Vector3d GetControlledSurfaceVelocity(TrekRequest frameRequest)
-    {
-        if (SlideModule?.IsSliding == true)
-            return GetSlidingVelocity(frameRequest);
-
-        return Handler.IsInControl && frameRequest.Rate != TrekRate.Stationary
-            ? GetHorizontalVelocity(frameRequest)
-            : Vector3d.Zero;
-    }
-
-    private Vector3d GetSlidingVelocity(TrekRequest frameRequest)
-    {
-        SlideLocomotion? slideModule = SlideModule;
-        if (slideModule == null)
-            return Vector3d.Zero;
-
-        Vector3d slideDirection = new Vector3d(
-            CurrentState.SurfaceNormal.x,
-            Fixed64.Zero,
-            CurrentState.SurfaceNormal.z).Normal;
-        Vector3d projectedMoveDir = Vector3d.Project(frameRequest.Direction, slideDirection);
-        Vector3d speedContribution = projectedMoveDir * slideModule.SpeedControl;
-        Vector3d sidewaysContribution = (frameRequest.Direction - projectedMoveDir) * slideModule.SidewaysControl;
-        return slideDirection + ((speedContribution + sidewaysContribution) * slideModule.SlidingSpeed);
-    }
-
-    private Vector3d ResolveLiquidVelocity(TrekRequest frameRequest, Vector3d desiredVelocity)
-    {
-        if (SwimModule?.IsEnabled != true || !SwimModule.CanSwim)
-            desiredVelocity = Vector3d.Zero;
-
-        if (SwimModule?.IsEnabled == true && frameRequest.Direction.y != Fixed64.Zero)
-            desiredVelocity.y = frameRequest.Direction.y * SwimModule.MaxSwimSpeed;
-
-        if (desiredVelocity != Vector3d.Zero)
-            desiredVelocity *= FixedMath.Clamp01(Fixed64.One - Handler.Move.WaterDragFactor);
-
-        return desiredVelocity;
-    }
-
-    private Vector3d ApplyPlatformTransferVelocity(Vector3d desiredVelocity)
-    {
-        if (PlatformModule?.IsEnabled == true
-            && PlatformModule.MovementTransfer == MotionTransfer.PermaTransfer)
-        {
-            desiredVelocity += PlatformModule.FramePlatformVelocity;
-            desiredVelocity.y = Fixed64.Zero;
-        }
-
-        return desiredVelocity;
-    }
-
-    private Vector3d ApplyGroundVelocityConstraints(Vector3d desiredVelocity)
-    {
-        if (!IsOnSolid || desiredVelocity == Vector3d.Zero)
-            return desiredVelocity;
-
-        Fixed64 surfaceFriction = CurrentState.GroundState?.SurfaceFriction ?? Fixed64.Zero;
-        desiredVelocity *= Fixed64.One - surfaceFriction;
-
-        // Flat or host-defined "solid but no sampled normal" surfaces should preserve the raw ground vector.
-        // Sliding also already produces a slope-aware direction, so re-projecting it here distorts the result.
-        if (CurrentState.SurfaceNormal == Vector3d.Zero
-            || CurrentState.SlopeAngle == Fixed64.Zero
-            || SlideModule?.IsSliding == true)
-        {
-            return desiredVelocity;
-        }
-
-        Vector3d sideways = Vector3d.Cross(Vector3d.Up, desiredVelocity);
-        Vector3d adjustedVelocity = Vector3d.Cross(sideways, CurrentState.SurfaceNormal).Normal * desiredVelocity.Magnitude;
-        if (Fixed64.Sign(adjustedVelocity.y) != Fixed64.Sign(FrameSlopeAngle))
-            adjustedVelocity.y *= -1;
-
-        return adjustedVelocity;
-    }
-
-    private Fixed64 GetFlightHorizontalSpeed(Vector3d desiredMovementDirection, TrekRate rate)
-    {
-        if (FlyModule?.IsEnabled != true || !FlyModule.CanFly)
-            return Fixed64.Zero;
-
-        Fixed64 horizontalMagnitude = FixedMath.Clamp01(new Vector3d(
-            desiredMovementDirection.x,
-            Fixed64.Zero,
-            desiredMovementDirection.z).Magnitude);
-        return horizontalMagnitude * FlyModule.MaxFlySpeed * GetFlightSpeedMultiplier(rate);
-    }
-
-    private Fixed64 GetLiquidHorizontalSpeed(Vector3d desiredMovementDirection)
-    {
-        if (SwimModule?.IsEnabled != true || !SwimModule.CanSwim)
-            return Fixed64.Zero;
-
-        Fixed64 ellipseMultiplier = SwimModule.MaxSwimSpeed / SwimModule.MaxSwimSidewaysSpeed;
-        if (ellipseMultiplier <= Fixed64.Zero)
-            return Fixed64.Zero;
-
-        return GetEllipticalHorizontalSpeed(
-            desiredMovementDirection,
-            ellipseMultiplier,
-            SwimModule.MaxSwimSidewaysSpeed,
-            Fixed64.One);
-    }
-
-    private Fixed64 GetGroundHorizontalSpeed(Vector3d desiredMovementDirection, TrekRate rate)
-    {
-        Fixed64 maxSpeed = GetGroundDirectionalMaxSpeed(desiredMovementDirection, rate);
-        Fixed64 ellipseMultiplier = maxSpeed / Handler.Move.MaxSidewaysSpeed;
-        if (ellipseMultiplier <= Fixed64.Zero)
-            return Fixed64.Zero;
-
-        return GetEllipticalHorizontalSpeed(
-            desiredMovementDirection,
-            ellipseMultiplier,
-            Handler.Move.MaxSidewaysSpeed,
-            GetAirborneControlMultiplier());
-    }
-
-    private Fixed64 GetGroundDirectionalMaxSpeed(Vector3d desiredMovementDirection, TrekRate rate)
-    {
-        if (desiredMovementDirection.z < Fixed64.Zero)
-            return Handler.Move.MaxBackwardsSpeed;
-
-        return rate switch
-        {
-            TrekRate.Slow => Handler.Move.MaxSlowSpeed,
-            TrekRate.Moderate => Handler.Move.MaxModerateSpeed,
-            TrekRate.Fast => Handler.Move.MaxFastSpeed,
-            _ => Fixed64.Zero
-        };
-    }
-
-    private static Fixed64 GetEllipticalHorizontalSpeed(
-        Vector3d desiredMovementDirection,
-        Fixed64 zAxisEllipseMultiplier,
-        Fixed64 sidewaysSpeed,
-        Fixed64 controlMultiplier)
-    {
-        Vector3d normalized = new Vector3d(
-            desiredMovementDirection.x,
-            Fixed64.Zero,
-            desiredMovementDirection.z / zAxisEllipseMultiplier).Normal;
-        Fixed64 length = new Vector3d(
-            normalized.x,
-            Fixed64.Zero,
-            normalized.z * zAxisEllipseMultiplier).Magnitude;
-        return length * sidewaysSpeed * controlMultiplier;
-    }
-
-    private Fixed64 GetAirborneControlMultiplier()
-    {
-        if (IsOnSolid)
-            return Fixed64.One;
-
-        if (IsJumping)
-            return JumpModule?.JumpControlMultiplier ?? Fixed64.One;
-
-        if (IsFalling)
-            return Handler.Fall.FallControlMultiplier;
-
-        return Fixed64.One;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1362,99 +1532,6 @@ public class NavMotor : IRecordable
         _ => Fixed64.Zero
     };
 
-    private void UpdateClimbState(TrekRequest request)
-    {
-        if (ClimbModule?.IsEnabled != true)
-            return;
-
-        if (ClimbModule.IsMantling)
-            return;
-
-        bool canAttemptClimb = request.IsRequestingClimb
-            && ClimbModule.CanClimb
-            && !IsInLiquid
-            && CurrentState.Medium != TraversalMedium.Unknown;
-        if (!canAttemptClimb)
-        {
-            if (ClimbModule.IsClimbing)
-                StopClimb(wasForced: false);
-
-            return;
-        }
-
-        if (ClimbResolver == null
-            || !ClimbResolver.TryResolveClimbAffordance(request, CurrentState, out ClimbAffordanceSnapshot snapshot))
-        {
-            if (ClimbModule.IsClimbing)
-                StopClimb(wasForced: true);
-
-            return;
-        }
-
-        if (ClimbModule.IsClimbing)
-        {
-            bool canContinue = snapshot.CanContinueClimb
-                && IsCompatibleClimbAffordance(snapshot);
-            if (!canContinue)
-            {
-                StopClimb(wasForced: true);
-                return;
-            }
-
-            ClimbModule.ApplyClimbSnapshot(snapshot);
-
-            if (ShouldStartMantle(request, snapshot))
-                StartMantle(snapshot);
-
-            return;
-        }
-
-        bool canStart = snapshot.CanStartClimb;
-        if (!canStart)
-            return;
-
-        StartClimb(snapshot);
-    }
-
-    private void StartClimb(ClimbAffordanceSnapshot snapshot)
-    {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return;
-
-        climbModule.ApplyClimbSnapshot(snapshot);
-        climbModule.IsClimbing = true;
-        climbModule.IsMantling = false;
-
-        if (IsFalling)
-            Handler.ClearTransientState<FallLocomotion>();
-
-        if (JumpModule != null)
-        {
-            JumpModule.IsJumping = false;
-            JumpModule.IsHoldingJump = false;
-        }
-
-        if (FlyModule != null)
-            FlyModule.IsFlying = false;
-
-        if (SlideModule != null)
-            SlideModule.IsSliding = false;
-
-        Events.OnStartClimb?.Invoke(snapshot);
-    }
-
-    private void StartMantle(ClimbAffordanceSnapshot snapshot)
-    {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return;
-
-        climbModule.ApplyClimbSnapshot(snapshot);
-        climbModule.IsMantling = true;
-        Events.OnStartMantle?.Invoke();
-    }
-
     private void StopClimb(bool wasForced)
     {
         if (ClimbModule?.IsClimbing != true)
@@ -1468,103 +1545,13 @@ public class NavMotor : IRecordable
         Events.OnStopClimb?.Invoke();
     }
 
-    private bool IsCompatibleClimbAffordance(ClimbAffordanceSnapshot snapshot)
-    {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return false;
-
-        if (climbModule.AttachmentId.HasValue && snapshot.AffordanceId.HasValue)
-            return climbModule.AttachmentId.Value == snapshot.AffordanceId.Value;
-
-        if (snapshot.Kind != climbModule.ActiveClimbKind)
-            return false;
-
-        if (!HasCompatibleClimbAxes(snapshot))
-            return false;
-
-        Fixed64 tolerance = GetClimbContinuityTolerance();
-        return (snapshot.AttachmentPoint - climbModule.AttachmentPoint).SqrMagnitude <= tolerance * tolerance;
-    }
-
-    private bool HasCompatibleClimbAxes(ClimbAffordanceSnapshot snapshot)
-    {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return false;
-
-        if (climbModule.AttachedSurfaceNormal != Vector3d.Zero
-            && snapshot.SurfaceNormal != Vector3d.Zero
-            && Vector3d.Dot(climbModule.AttachedSurfaceNormal.Normal, snapshot.SurfaceNormal.Normal) <= Fixed64.Zero)
-        {
-            return false;
-        }
-
-        if (climbModule.AttachedUpDirection != Vector3d.Zero
-            && snapshot.UpDirection != Vector3d.Zero
-            && Vector3d.Dot(climbModule.AttachedUpDirection.Normal, snapshot.UpDirection.Normal) <= Fixed64.Zero)
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    private Fixed64 GetClimbContinuityTolerance()
-    {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return Fixed64.Zero;
-
-        Fixed64 frameTravelAllowance = climbModule.MaxClimbSpeed * TrailblazerManager.DeltaTime;
-        return climbModule.ClimbStartTolerance + frameTravelAllowance;
-    }
-
-    private bool ShouldStartMantle(TrekRequest request, ClimbAffordanceSnapshot snapshot)
-    {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule == null)
-            return false;
-
-        if (snapshot.Kind != ClimbAffordanceKind.Ledge
-            || !climbModule.ActiveAllowMantle
-            || !climbModule.MantleTargetPosition.HasValue
-            || request.Rate == TrekRate.Stationary)
-        {
-            return false;
-        }
-
-        Vector3d upAxis = climbModule.AttachedUpDirection != Vector3d.Zero
-            ? climbModule.AttachedUpDirection.Normal
-            : Vector3d.Up;
-        return Vector3d.Dot(request.Direction, upAxis) > Fixed64.Zero;
-    }
-
-    private Vector3d GetMantleVelocity(Vector3d origin)
-    {
-        ClimbLocomotion? climbModule = ClimbModule;
-        if (climbModule?.MantleTargetPosition.HasValue != true)
-            return Vector3d.Zero;
-
-        Vector3d mantleTargetPosition = climbModule.MantleTargetPosition.GetValueOrDefault();
-        Vector3d toTarget = mantleTargetPosition - origin;
-        if (toTarget == Vector3d.Zero)
-            return Vector3d.Zero;
-
-        Fixed64 distance = toTarget.Magnitude;
-        if (distance <= climbModule.ClimbStartTolerance)
-            return Vector3d.Zero;
-
-        return toTarget.Normal * climbModule.MaxClimbSpeed;
-    }
-
     private bool CanContinueActiveMantle()
     {
         ClimbLocomotion? climbModule = ClimbModule;
         if (climbModule == null || !climbModule.ValidateActiveMantleWithHost)
             return true;
 
-        if (ClimbResolver is not IActiveMantleValidator validator)
+        if (climbModule.ClimbResolver is not IActiveMantleValidator validator)
             return true;
 
         return validator.TryValidateActiveMantle(

@@ -33,7 +33,7 @@ internal static class GuidedVolumeExitPlanner
         Vector3d targetPosition,
         Fixed64 unitSize,
         TraversalMedium medium,
-        GuidedPathMode chartPathMode,
+        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
@@ -47,8 +47,8 @@ internal static class GuidedVolumeExitPlanner
         handoff = null;
         totalPathCost = 0;
 
-        if (chartPathMode != GuidedPathMode.AStar
-            && chartPathMode != GuidedPathMode.FlowField)
+        if (chartPathMode != SolidPathAlgorithm.AStar
+            && chartPathMode != SolidPathAlgorithm.FlowField)
         {
             return false;
         }
@@ -111,7 +111,7 @@ internal static class GuidedVolumeExitPlanner
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        GuidedPathMode chartPathMode,
+        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
@@ -194,7 +194,7 @@ internal static class GuidedVolumeExitPlanner
     private static GuidedVolumeExitHandoff CreateHandoff(
         TraversalTransition transition,
         Vector3d targetPosition,
-        GuidedPathMode chartPathMode,
+        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
@@ -220,7 +220,7 @@ internal static class GuidedVolumeExitPlanner
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
-        GuidedPathMode chartPathMode,
+        SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
         bool allowTraversalTransitions,
         Fixed64 maxClimbHeight,
@@ -232,7 +232,7 @@ internal static class GuidedVolumeExitPlanner
 
         switch (chartPathMode)
         {
-            case GuidedPathMode.FlowField:
+            case SolidPathAlgorithm.FlowField:
                 FlowFieldPathRequest? flowFieldRequest = FlowFieldPathRequest.Create(
                     origin,
                     targetPosition,
@@ -255,7 +255,7 @@ internal static class GuidedVolumeExitPlanner
 
                 return TryGetTransitionAwareChartCost(flowFieldRequest, out chartCost);
 
-            case GuidedPathMode.AStar:
+            case SolidPathAlgorithm.AStar:
             default:
                 AStarPathRequest? aStarRequest = AStarPathRequest.Create(
                     origin,

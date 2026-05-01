@@ -12,11 +12,7 @@ public sealed class WaypointGuideTests : IDisposable
 {
     public WaypointGuideTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
-
+        TrailblazerWorldManager.Setup();
         TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(12, 12, 12)),
             out _);

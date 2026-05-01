@@ -12,11 +12,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
 {
     public FlowFieldTransitionFallbackTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
-
+        TrailblazerWorldManager.Setup();
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
         TrailblazerWorldManager.TryAddGrid(config, out _);
     }

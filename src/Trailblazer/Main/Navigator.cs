@@ -144,9 +144,9 @@ public abstract class Navigator : INavigate, IRecordable
     public Fixed64 FootPositionAdjust { get; set; } = DefaultFootPositionAdjust;
 
     /// <summary>
-    /// Default built-in path request mode used when guided travel does not specify an override.
+    /// Path request mode used for guided travel.
     /// </summary>
-    public GuidedPathMode GuidedPathMode { get; set; } = GuidedPathMode.AStar;
+    public SolidPathAlgorithm GuidedPathMode { get; set; } = SolidPathAlgorithm.AStar;
 
     /// <summary>
     /// Whether object-built guided requests may target unwalkable voxels.
@@ -363,17 +363,17 @@ public abstract class Navigator : INavigate, IRecordable
     /// <param name="direction">Desired direction of travel.</param>
     /// <param name="rate">Rate of travel (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the agent is requesting a jump action.</param>
-    /// <param name="isRequestingFlight">Whether the agent is requesting controlled flight.</param>
-    /// <param name="isRequestingClimb">Whether the agent is requesting climb engagement or continuation.</param>
+    /// <param name="isRequestingFlight">Whether the agent is requesting to fly or glide.</param>
+    /// <param name="isRequestingClimb">Whether the agent is requesting to climb or maintain climb intent.</param>
     /// <param name="facingDirection">Optional world-space facing direction to use instead of facing along the movement direction.</param>
     /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
     public virtual void ApplyInputTrekRequest(
         Vector3d? direction = null,
         TrekRate? rate = null,
-        bool? isRequestingJump = null,
+        Vector3d? facingDirection = null,
         bool? isRequestingFlight = null,
         bool? isRequestingClimb = null,
-        Vector3d? facingDirection = null,
+        bool? isRequestingJump = null,
         bool canAffordJump = true)
     {
         if (!IsActive) return;
@@ -396,28 +396,27 @@ public abstract class Navigator : INavigate, IRecordable
     /// Constructs and applies a guided traversal request toward a destination using object-owned path request defaults.
     /// </summary>
     /// <param name="targetPosition">The desired world-space target position.</param>
-    /// <param name="pathMode">Optional override for the built-in path request mode. When omitted, <see cref="GuidedPathMode"/> is used.</param>
     /// <param name="rate">Desired movement rate (walk, run, etc.).</param>
     /// <param name="isRequestingJump">Whether the object intends to jump during traversal.</param>
-    /// <param name="isRequestingClimb">Whether the object intends to preserve climb engagement while guided travel is active.</param>
+    /// <param name="isRequestingFlight">Whether the object intends to fly or glide during traversal.</param>
+    /// <param name="isRequestingClimb">Whether the object intends to climb during traversal.</param>
     /// <param name="groupId">Optional shared group identifier used to preserve formation offsets between navigators.</param>
     /// <param name="canAffordJump">Frame-owned jump affordability answer for this request.</param>
     public virtual void ApplyGuidedTrekRequest(
         Vector3d targetPosition,
-        GuidedPathMode? pathMode = null,
         TrekRate? rate = null,
-        bool? isRequestingJump = null,
+        bool? isRequestingFlight = null,
         bool? isRequestingClimb = null,
-        int groupId = -1,
-        bool canAffordJump = true)
+        bool? isRequestingJump = null,
+        bool canAffordJump = true,
+        int groupId = -1)
     {
         if (!IsActive) return;
 
-        GuidedPathMode selectedPathMode = pathMode ?? GuidedPathMode;
-        if (!TryCreateGuidedPathRequest(targetPosition, selectedPathMode, out IPathRequest pathRequest))
+        if (!TryCreateGuidedPathRequest(targetPosition, out IPathRequest pathRequest))
         {
             GridForgeLogger.Warn(
-                $"Unable to create a {selectedPathMode} path request for object {GlobalId} at {Position} targeting {targetPosition}.");
+                $"Unable to create a {GuidedPathMode} path request for object {GlobalId} at {Position} targeting {targetPosition}.");
             return;
         }
 
@@ -435,7 +434,7 @@ public abstract class Navigator : INavigate, IRecordable
                 direction: Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
                 isRequestingJump: isRequestingJump ?? false,
-                isRequestingFlight: selectedPathMode == GuidedPathMode.Aerial,
+                isRequestingFlight: isRequestingFlight ?? false,
                 isRequestingClimb: _guidedClimbIntent,
                 facingDirection: null,
                 canAffordJump: canAffordJump
@@ -451,7 +450,6 @@ public abstract class Navigator : INavigate, IRecordable
     /// </summary>
     protected virtual bool TryCreateGuidedPathRequest(
         Vector3d targetPosition,
-        GuidedPathMode pathMode,
         out IPathRequest pathRequest)
     {
         _pendingGuidedVolumeExitHandoff = null;
@@ -460,14 +458,13 @@ public abstract class Navigator : INavigate, IRecordable
             origin: Position,
             targetPosition: targetPosition,
             unitSize: Size,
-            pathMode: pathMode,
-            fallbackChartPathMode: GuidedPathMode,
+            pathMode: GuidedPathMode,
             allowUnwalkableEndpoints: GuidedAllowUnwalkableEndpoints,
             allowTraversalTransitions: GuidedAllowTraversalTransitions,
             maxClimbHeight: GuidedMaxClimbHeight,
+            traversalMedium: _frameCondition.Medium,
             aStarHeuristic: GuidedAStarHeuristic,
             flowFieldExtraFloodRange: GuidedFlowFieldExtraFloodRange,
-            traversalMedium: _frameCondition.Medium,
             out IPathRequest? createdRequest,
             out GuidedVolumeExitHandoff? handoff);
         if (!success || createdRequest == null)
@@ -1064,7 +1061,7 @@ public abstract class Navigator : INavigate, IRecordable
         Vector3d acceleration = Acceleration;
         Fixed64 size = Size;
         Fixed64 footPositionAdjust = FootPositionAdjust;
-        GuidedPathMode guidedPathMode = GuidedPathMode;
+        SolidPathAlgorithm guidedPathMode = GuidedPathMode;
         bool guidedAllowUnwalkableEndpoints = GuidedAllowUnwalkableEndpoints;
         bool guidedAllowTraversalTransitions = GuidedAllowTraversalTransitions;
         Fixed64 guidedMaxClimbHeight = GuidedMaxClimbHeight;
@@ -1082,7 +1079,7 @@ public abstract class Navigator : INavigate, IRecordable
         TrekCondition frameCondition = _frameCondition;
         TrekRequest frameRequest = _frameRequest;
         GuidedVolumeExitHandoff? pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
-        if(chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
+        if (chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
             pendingGuidedVolumeExitHandoff = new GuidedVolumeExitHandoff();
         NavSteering? steering = Steering;
         NavTurning? turning = Turning;
@@ -1096,7 +1093,7 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref acceleration, "acceleration", Vector3d.Zero);
         RecordValues.Look(chronicler, ref size, "size", Fixed64.One);
         RecordValues.Look(chronicler, ref footPositionAdjust, "footPositionAdjust", DefaultFootPositionAdjust);
-        RecordValues.Look(chronicler, ref guidedPathMode, "guidedPathMode", GuidedPathMode.AStar);
+        RecordValues.Look(chronicler, ref guidedPathMode, "guidedPathMode", SolidPathAlgorithm.AStar);
         RecordValues.Look(chronicler, ref guidedAllowUnwalkableEndpoints, "guidedAllowUnwalkableEndpoints", false);
         RecordValues.Look(chronicler, ref guidedAllowTraversalTransitions, "guidedAllowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref guidedMaxClimbHeight, "guidedMaxClimbHeight", Fixed64.One);

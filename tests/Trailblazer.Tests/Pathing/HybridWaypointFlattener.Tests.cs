@@ -13,11 +13,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 {
     public HybridWaypointFlattenerTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
-
+        TrailblazerWorldManager.Setup();
         TrailblazerWorldManager.TryAddGrid(
             new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)),
             out _);

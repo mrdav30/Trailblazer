@@ -13,9 +13,6 @@ public class PathHeapTests : IDisposable
 {
     public PathHeapTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-
         TrailblazerWorldManager.Setup();
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         TrailblazerWorldManager.TryAddGrid(config, out _);

@@ -13,11 +13,7 @@ public class SolidVoxelFinderTests : IDisposable
 {
     public SolidVoxelFinderTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
-
+        TrailblazerWorldManager.Setup();
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         TrailblazerWorldManager.TryAddGrid(config, out _);
     }

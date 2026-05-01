@@ -13,11 +13,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
 {
     public NavigatorPathRequestFactoryTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
-
+        TrailblazerWorldManager.Setup();
         TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
     }
 
@@ -40,14 +36,15 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: true,
             allowTraversalTransitions: true,
             maxClimbHeight: (Fixed64)2,
+            traversalMedium: TraversalMedium.Solid,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 11,
-            traversalMedium: TraversalMedium.Solid,
-            out IPathRequest? aStarRequest).Should().BeTrue();
+            out IPathRequest? aStarRequest,
+            out _).Should().BeTrue();
 
         aStarRequest.Should().BeOfType<AStarPathRequest>()
             .Which.MaxClimbHeight.Should().Be((Fixed64)2);
@@ -56,14 +53,15 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            GuidedPathMode.FlowField,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: (Fixed64)3,
+            traversalMedium: TraversalMedium.Solid,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 17,
-            traversalMedium: TraversalMedium.Solid,
-            out IPathRequest? flowFieldRequest).Should().BeTrue();
+            out IPathRequest? flowFieldRequest,
+            out _).Should().BeTrue();
 
         flowFieldRequest.Should().BeOfType<FlowFieldPathRequest>().Which.ExtraFloodRange.Should().Be(17);
 
@@ -71,14 +69,15 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             new Vector3d(0, 0, 2),
             new Vector3d(2, 0, 2),
             Fixed64.One,
-            GuidedPathMode.Aerial,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
-            out IPathRequest? aerialRequest).Should().BeTrue();
+            out IPathRequest? aerialRequest,
+            out _).Should().BeTrue();
 
         aerialRequest.Should().BeOfType<VolumePathRequest>().Which.Medium.Should().Be(TraversalMedium.Gas);
 
@@ -86,52 +85,17 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             new Vector3d(0, 0, 4),
             new Vector3d(2, 0, 4),
             Fixed64.One,
-            GuidedPathMode.Swim,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Liquid,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Liquid,
-            out IPathRequest? swimRequest).Should().BeTrue();
+            out IPathRequest? swimRequest,
+            out _).Should().BeTrue();
 
         swimRequest.Should().BeOfType<VolumePathRequest>().Which.Medium.Should().Be(TraversalMedium.Liquid);
-    }
-
-    [Fact]
-    public void TryCreate_ShouldRejectInvalidModesAndSwimMediums()
-    {
-        RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 2, "NavigatorFactoryRejectGas");
-
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            Fixed64.One,
-            GuidedPathMode.Swim,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: false,
-            maxClimbHeight: Fixed64.One,
-            aStarHeuristic: HeuristicMethod.Manhattan,
-            flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
-            out IPathRequest? swimRequest).Should().BeFalse();
-
-        swimRequest.Should().BeNull();
-
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
-            new Vector3d(1, 0, 0),
-            Fixed64.One,
-            (GuidedPathMode)99,
-            allowUnwalkableEndpoints: false,
-            allowTraversalTransitions: false,
-            maxClimbHeight: Fixed64.One,
-            aStarHeuristic: HeuristicMethod.Manhattan,
-            flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Solid,
-            out IPathRequest? invalidRequest).Should().BeFalse();
-
-        invalidRequest.Should().BeNull();
     }
 
     [Fact]
@@ -144,14 +108,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: (Fixed64)2,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 9,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -160,7 +123,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         aerialHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
         aerialHandoff.ChartOriginPosition.Should().Be(new Vector3d(1, 0, 0));
         aerialHandoff.TargetPosition.Should().Be(new Vector3d(4, 0, 0));
-        aerialHandoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+        aerialHandoff.ChartPathMode.Should().Be(SolidPathAlgorithm.AStar);
     }
 
     [Fact]
@@ -173,19 +136,18 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.Swim,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: (Fixed64)2,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out _,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
         GuidedVolumeExitHandoff normalizedHandoff = TestRequire.NotNull(handoff);
-        normalizedHandoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+        normalizedHandoff.ChartPathMode.Should().Be(SolidPathAlgorithm.AStar);
     }
 
     [Fact]
@@ -197,14 +159,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -222,14 +183,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -247,14 +207,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Swim,
-            GuidedPathMode.FlowField,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: (Fixed64)2,
+            traversalMedium: TraversalMedium.Liquid,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 12,
-            traversalMedium: TraversalMedium.Liquid,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -262,7 +221,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         GuidedVolumeExitHandoff swimHandoff = TestRequire.NotNull(handoff);
         swimHandoff.TransitionId.Should().Be($"{sceneKey}-exit");
         swimHandoff.ChartOriginPosition.Should().Be(new Vector3d(2, 0, 0));
-        swimHandoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
+        swimHandoff.ChartPathMode.Should().Be(SolidPathAlgorithm.FlowField);
         swimHandoff.FlowFieldExtraFloodRange.Should().Be(12);
     }
 
@@ -276,14 +235,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Swim,
-            GuidedPathMode.FlowField,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Liquid,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 7,
-            traversalMedium: TraversalMedium.Liquid,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -301,14 +259,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Swim,
-            GuidedPathMode.FlowField,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: false,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Liquid,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Liquid,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
@@ -325,14 +282,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(12, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: true,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -355,14 +311,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -380,14 +335,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: true,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -407,14 +361,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Swim,
-            GuidedPathMode.FlowField,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: true,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Liquid,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 4,
-            traversalMedium: TraversalMedium.Liquid,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -437,14 +390,15 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: false,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Solid,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Solid,
-            out IPathRequest? aStarRequest).Should().BeFalse();
+            out IPathRequest? aStarRequest,
+            out _).Should().BeFalse();
 
         aStarRequest.Should().BeNull();
 
@@ -452,14 +406,15 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
-            GuidedPathMode.FlowField,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: false,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Solid,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Solid,
-            out IPathRequest? flowFieldRequest).Should().BeFalse();
+            out IPathRequest? flowFieldRequest,
+            out _).Should().BeFalse();
 
         flowFieldRequest.Should().BeNull();
     }
@@ -475,14 +430,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
-            GuidedPathMode.FlowField,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: false,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Solid,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Solid,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
@@ -503,14 +457,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: false,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
@@ -529,14 +482,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
-            GuidedPathMode.Swim,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: false,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Liquid,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Liquid,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
@@ -560,14 +512,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Swim,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Liquid,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Liquid,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -583,14 +534,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
-            (GuidedPathMode)123,
-            GuidedPathMode.AStar,
+            (SolidPathAlgorithm)123,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: false,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Solid,
             aStarHeuristic: HeuristicMethod.Manhattan,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Solid,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeFalse();
 
@@ -607,14 +557,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(64, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: true,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -633,14 +582,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(2.25f, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -662,14 +610,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 
@@ -688,14 +635,13 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             Vector3d.Zero,
             Vector3d.Zero,
             Fixed64.One,
-            GuidedPathMode.Aerial,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
+            traversalMedium: TraversalMedium.Gas,
             aStarHeuristic: HeuristicMethod.Euclidean,
             flowFieldExtraFloodRange: 0,
-            traversalMedium: TraversalMedium.Gas,
             out IPathRequest? request,
             out GuidedVolumeExitHandoff? handoff).Should().BeTrue();
 

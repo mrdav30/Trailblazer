@@ -20,11 +20,7 @@ public class NavigatorSerializationTests : IDisposable
 {
     public NavigatorSerializationTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
-
+        TrailblazerWorldManager.Setup();
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
         TrailblazerWorldManager.TryAddGrid(config, out _);
     }
@@ -166,7 +162,7 @@ public class NavigatorSerializationTests : IDisposable
     {
         RegisterGuidedPathChart("NavigatorSerializationJsonAStar");
 
-        var source = CreateConfiguredGuidedNavigator(GuidedPathMode.AStar);
+        var source = CreateConfiguredGuidedNavigator(SolidPathAlgorithm.AStar);
         NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
         sourceSteering.TrailGuide.Should().BeOfType<AStarGuide>();
 
@@ -201,7 +197,7 @@ public class NavigatorSerializationTests : IDisposable
         RegisterGuidedPathChart("NavigatorSerializationGuidedClimb");
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        source.GuidedPathMode = GuidedPathMode.AStar;
+        source.GuidedPathMode = SolidPathAlgorithm.AStar;
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
             rate: TrekRate.Fast,
@@ -231,7 +227,7 @@ public class NavigatorSerializationTests : IDisposable
         GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        source.GuidedPathMode = GuidedPathMode.AStar;
+        source.GuidedPathMode = SolidPathAlgorithm.AStar;
         source.GuidedAllowTraversalTransitions = true;
         source.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
 
@@ -288,7 +284,7 @@ public class NavigatorSerializationTests : IDisposable
     {
         RegisterGuidedPathChart("NavigatorSerializationMemoryPackFlowField");
 
-        var source = CreateConfiguredGuidedNavigator(GuidedPathMode.FlowField);
+        var source = CreateConfiguredGuidedNavigator(SolidPathAlgorithm.FlowField);
         NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
         sourceSteering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
 
@@ -320,7 +316,7 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(true)]
     public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedAerialTraversal(bool useMemoryPack)
     {
-        var source = CreateConfiguredGuidedNavigator(GuidedPathMode.Aerial);
+        var source = CreateConfiguredGuidedNavigator(medium: TraversalMedium.Gas, isFlying: true);
         NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
         sourceSteering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
         sourceSteering.TrailGuide.Should().BeOfType<VolumeGuide>();
@@ -383,12 +379,12 @@ public class NavigatorSerializationTests : IDisposable
         AddObstacle(new Vector3d(2, 0, 0));
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        source.GuidedPathMode = GuidedPathMode.Aerial;
+        source.SetTrekCondition(medium: TraversalMedium.Gas);
         source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
-            pathMode: GuidedPathMode.Aerial,
             rate: TrekRate.Fast,
+            isRequestingFlight: true,
             isRequestingJump: false,
             groupId: 3);
 
@@ -425,11 +421,9 @@ public class NavigatorSerializationTests : IDisposable
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
-        source.GuidedPathMode = GuidedPathMode.Swim;
         source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         source.ApplyGuidedTrekRequest(
             new Vector3d(0, 0, 2),
-            pathMode: GuidedPathMode.Swim,
             rate: TrekRate.Fast,
             isRequestingJump: false,
             groupId: 3);
@@ -460,13 +454,12 @@ public class NavigatorSerializationTests : IDisposable
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        source.GuidedPathMode = GuidedPathMode.FlowField;
+        source.GuidedPathMode = SolidPathAlgorithm.FlowField;
         source.GuidedAllowTraversalTransitions = true;
         source.GuidedMaxClimbHeight = (Fixed64)2;
         source.GuidedFlowFieldExtraFloodRange = 12;
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
-            pathMode: GuidedPathMode.Swim,
             rate: TrekRate.Fast,
             isRequestingJump: false,
             groupId: 5);
@@ -508,13 +501,14 @@ public class NavigatorSerializationTests : IDisposable
         RegisterAerialLandingHandoffScene(sceneKey);
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        source.GuidedPathMode = GuidedPathMode.AStar;
+        source.SetTrekCondition(medium: TraversalMedium.Gas);
+        source.GuidedPathMode = SolidPathAlgorithm.AStar;
         source.GuidedAllowTraversalTransitions = true;
         source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
-            pathMode: GuidedPathMode.Aerial,
             rate: TrekRate.Fast,
+            isRequestingFlight: true,
             isRequestingJump: false,
             groupId: 6);
 
@@ -558,12 +552,13 @@ public class NavigatorSerializationTests : IDisposable
         GuidedPathTestScene.RegisterAerialClimbHandoffScene(sceneKey);
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        source.GuidedPathMode = GuidedPathMode.AStar;
+        source.SetTrekCondition(medium: TraversalMedium.Gas);
+        source.GuidedPathMode = SolidPathAlgorithm.AStar;
         source.GuidedAllowTraversalTransitions = true;
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
-            pathMode: GuidedPathMode.Aerial,
             rate: TrekRate.Fast,
+            isRequestingFlight: true,
             isRequestingJump: false,
             groupId: 8);
 
@@ -654,7 +649,7 @@ public class NavigatorSerializationTests : IDisposable
     {
         RegisterGuidedPathChart("NavigatorSerializationLegacyDefaults");
 
-        var source = CreateConfiguredGuidedNavigator(GuidedPathMode.FlowField);
+        var source = CreateConfiguredGuidedNavigator(SolidPathAlgorithm.FlowField);
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
         payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "guidedAllowUnwalkableEndpoints");
@@ -736,7 +731,7 @@ public class NavigatorSerializationTests : IDisposable
     {
         RegisterGuidedPathChart("NavigatorSerializationInvalidRequest");
 
-        var source = CreateConfiguredGuidedNavigator(GuidedPathMode.AStar);
+        var source = CreateConfiguredGuidedNavigator(SolidPathAlgorithm.AStar);
         NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
         source.GuidedAllowUnwalkableEndpoints = false;
         sourceSteering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject.AllowUnwalkableEndpoints = false;
@@ -841,8 +836,8 @@ public class NavigatorSerializationTests : IDisposable
         var sourceFirst = CreateNavigator(new Vector3d(1, 0, 0), size: Fixed64.One);
         var sourceSecond = CreateNavigator(new Vector3d(2, 0, 0), size: Fixed64.One);
 
-        sourceFirst.ApplyGuidedTrekRequest(sharedDestination, pathMode: GuidedPathMode.AStar, groupId: 5);
-        sourceSecond.ApplyGuidedTrekRequest(sharedDestination, pathMode: GuidedPathMode.AStar, groupId: 5);
+        sourceFirst.ApplyGuidedTrekRequest(sharedDestination, groupId: 5);
+        sourceSecond.ApplyGuidedTrekRequest(sharedDestination, groupId: 5);
 
         string firstJson = JsonRecordSerializer.Serialize(sourceFirst, writeIndented: true);
         string secondJson = JsonRecordSerializer.Serialize(sourceSecond, writeIndented: true);
@@ -964,8 +959,6 @@ public class NavigatorSerializationTests : IDisposable
             Vector3d.Right,
             TrekRate.Moderate,
             isRequestingJump: true,
-            isRequestingFlight: true,
-            isRequestingClimb: true,
             facingDirection: Vector3d.Forward,
             canAffordJump: false);
         source.SetGroundContact(
@@ -975,7 +968,7 @@ public class NavigatorSerializationTests : IDisposable
             motionTransfer: MotionTransfer.PermaLocked,
             updateMotorState: true);
 
-        source.GuidedPathMode = GuidedPathMode.FlowField;
+        source.GuidedPathMode = SolidPathAlgorithm.FlowField;
         source.GuidedAllowUnwalkableEndpoints = true;
         source.GuidedAllowTraversalTransitions = true;
         source.GuidedMaxClimbHeight = (Fixed64)4;
@@ -1007,9 +1000,14 @@ public class NavigatorSerializationTests : IDisposable
         return source;
     }
 
-    private static TestNavigator CreateConfiguredGuidedNavigator(GuidedPathMode pathMode)
+    private static TestNavigator CreateConfiguredGuidedNavigator(
+        SolidPathAlgorithm pathMode = SolidPathAlgorithm.AStar,
+        TraversalMedium medium = TraversalMedium.Solid,
+        bool isFlying = false,
+        bool isClimbing = false)
     {
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
+        source.SetTrekCondition(medium: medium);
         NavSteering steering = TestRequire.NotNull(source.Steering);
         source.GuidedPathMode = pathMode;
         source.GuidedAllowUnwalkableEndpoints = true;
@@ -1031,11 +1029,11 @@ public class NavigatorSerializationTests : IDisposable
         };
         steering.BrakingPower = (Fixed64)0.2f;
 
-        Vector3d targetPosition = pathMode == GuidedPathMode.Aerial
+        Vector3d targetPosition = medium == TraversalMedium.Gas
             ? new Vector3d(4, 4, 0)
             : new Vector3d(4, 0, 0);
 
-        if (pathMode == GuidedPathMode.Aerial)
+        if (medium == TraversalMedium.Gas)
         {
             AddOpen(Vector3d.Zero);
             AddOpen(new Vector3d(0, 1, 0));
@@ -1050,8 +1048,9 @@ public class NavigatorSerializationTests : IDisposable
 
         source.ApplyGuidedTrekRequest(
             targetPosition,
-            pathMode: pathMode,
             rate: TrekRate.Fast,
+            isRequestingFlight: isFlying,
+            isRequestingClimb: isClimbing,
             isRequestingJump: true,
             groupId: 7);
 

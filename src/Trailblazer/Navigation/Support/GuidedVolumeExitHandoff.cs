@@ -15,7 +15,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
 
     public Vector3d TargetPosition;
 
-    public GuidedPathMode ChartPathMode = GuidedPathMode.AStar;
+    public SolidPathAlgorithm ChartPathMode = SolidPathAlgorithm.AStar;
 
     public bool AllowUnwalkableEndpoints;
 
@@ -33,7 +33,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
 
     public bool IsValid =>
         !string.IsNullOrWhiteSpace(TransitionId)
-        && (ChartPathMode == GuidedPathMode.AStar || ChartPathMode == GuidedPathMode.FlowField);
+        && (ChartPathMode == SolidPathAlgorithm.AStar || ChartPathMode == SolidPathAlgorithm.FlowField);
 
     public bool TryCreateFollowupRequest(
         Vector3d currentPosition,
@@ -45,7 +45,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
             return false;
         switch (ChartPathMode)
         {
-            case GuidedPathMode.AStar:
+            case SolidPathAlgorithm.AStar:
                 var aStar = AStarPathRequest.Create(
                     ChartOriginPosition,
                     TargetPosition,
@@ -60,7 +60,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
                 request = aStar;
                 return true;
 
-            case GuidedPathMode.FlowField:
+            case SolidPathAlgorithm.FlowField:
                 var flowField = FlowFieldPathRequest.Create(
                     ChartOriginPosition,
                     TargetPosition,
@@ -85,7 +85,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         string? transitionId = TransitionId;
         Vector3d chartOriginPosition = ChartOriginPosition;
         Vector3d targetPosition = TargetPosition;
-        GuidedPathMode chartPathMode = ChartPathMode;
+        SolidPathAlgorithm chartPathMode = ChartPathMode;
         bool allowUnwalkableEndpoints = AllowUnwalkableEndpoints;
         bool allowTraversalTransitions = AllowTraversalTransitions;
         Fixed64 maxClimbHeight = MaxClimbHeight;
@@ -97,7 +97,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         RecordValues.Look(chronicler, ref transitionId, "transitionId", null);
         RecordValues.Look(chronicler, ref chartOriginPosition, "chartOriginPosition", Vector3d.Zero);
         RecordValues.Look(chronicler, ref targetPosition, "targetPosition", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref chartPathMode, "chartPathMode", GuidedPathMode.AStar);
+        RecordValues.Look(chronicler, ref chartPathMode, "chartPathMode", SolidPathAlgorithm.AStar);
         RecordValues.Look(chronicler, ref allowUnwalkableEndpoints, "allowUnwalkableEndpoints", false);
         RecordValues.Look(chronicler, ref allowTraversalTransitions, "allowTraversalTransitions", false);
         RecordValues.Look(chronicler, ref maxClimbHeight, "maxClimbHeight", Fixed64.One);

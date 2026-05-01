@@ -15,10 +15,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
 {
     public PathManagerCoverageTailTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
+        TrailblazerWorldManager.Setup();
     }
 
     public void Dispose()

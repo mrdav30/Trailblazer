@@ -13,11 +13,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
 {
     public GuidedVolumeExitPlannerTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
-
+        TrailblazerWorldManager.Setup();
         TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
     }
 
@@ -39,7 +35,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
-            GuidedPathMode.Swim,
+            (SolidPathAlgorithm)123, // Invalid enum value to trigger the unsupported mode branch.
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
@@ -65,7 +61,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: (Fixed64)2,
@@ -79,7 +75,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
         plannedRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
         plannedHandoff.TransitionId.Should().Be($"{sceneKey}-exit");
-        plannedHandoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+        plannedHandoff.ChartPathMode.Should().Be(SolidPathAlgorithm.AStar);
         totalCost.Should().BeGreaterThan(0);
 
         plannedHandoff.TryCreateFollowupRequest(new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest? followup).Should().BeTrue();
@@ -97,7 +93,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
-            GuidedPathMode.FlowField,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: (Fixed64)2,
@@ -110,7 +106,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         VolumePathRequest plannedRequest = TestRequire.NotNull(request);
         GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
         plannedRequest.TargetPosition.Should().Be(new Vector3d(2, 0, 0));
-        plannedHandoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
+        plannedHandoff.ChartPathMode.Should().Be(SolidPathAlgorithm.FlowField);
         plannedHandoff.FlowFieldExtraFloodRange.Should().Be(8);
         totalCost.Should().BeGreaterThan(0);
 
@@ -129,7 +125,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Gas,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
@@ -143,7 +139,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
         plannedRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
         plannedHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
-        plannedHandoff.ChartPathMode.Should().Be(GuidedPathMode.AStar);
+        plannedHandoff.ChartPathMode.Should().Be(SolidPathAlgorithm.AStar);
         totalCost.Should().BeGreaterThan(0);
     }
 
@@ -158,7 +154,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Gas,
-            GuidedPathMode.FlowField,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
@@ -172,7 +168,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         GuidedVolumeExitHandoff plannedHandoff = TestRequire.NotNull(handoff);
         plannedRequest.TargetPosition.Should().Be(new Vector3d(1, 0, 0));
         plannedHandoff.TransitionId.Should().Be($"{sceneKey}-landing");
-        plannedHandoff.ChartPathMode.Should().Be(GuidedPathMode.FlowField);
+        plannedHandoff.ChartPathMode.Should().Be(SolidPathAlgorithm.FlowField);
         plannedHandoff.FlowFieldExtraFloodRange.Should().Be(6);
         totalCost.Should().BeGreaterThan(0);
     }
@@ -188,7 +184,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Gas,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: false,
             maxClimbHeight: Fixed64.One,
@@ -214,7 +210,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Gas,
-            GuidedPathMode.FlowField,
+            SolidPathAlgorithm.FlowField,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: false,
             maxClimbHeight: Fixed64.One,
@@ -230,9 +226,9 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(GuidedPathMode.AStar)]
-    [InlineData(GuidedPathMode.FlowField)]
-    public void TryPlan_ShouldAllowZeroDisplacementChartLeg(GuidedPathMode chartPathMode)
+    [InlineData(SolidPathAlgorithm.AStar)]
+    [InlineData(SolidPathAlgorithm.FlowField)]
+    public void TryPlan_ShouldAllowZeroDisplacementChartLeg(SolidPathAlgorithm chartPathMode)
     {
         const string sceneKey = "GuidedPlannerZeroChartLeg";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
@@ -271,7 +267,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             new Vector3d(40, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
@@ -298,7 +294,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
-            GuidedPathMode.AStar,
+            SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,
             allowTraversalTransitions: true,
             maxClimbHeight: Fixed64.One,
@@ -410,7 +406,7 @@ public sealed class GuidedVolumeExitHandoffTests : IDisposable
         var handoff = new GuidedVolumeExitHandoff
         {
             TransitionId = "test-transition",
-            ChartPathMode = GuidedPathMode.AStar,
+            ChartPathMode = SolidPathAlgorithm.AStar,
             ChartOriginPosition = new Vector3d(1000, 0, 0),
             TargetPosition = new Vector3d(1001, 0, 0),
         };
@@ -424,7 +420,7 @@ public sealed class GuidedVolumeExitHandoffTests : IDisposable
         var handoff = new GuidedVolumeExitHandoff
         {
             TransitionId = "test-transition",
-            ChartPathMode = GuidedPathMode.FlowField,
+            ChartPathMode = SolidPathAlgorithm.FlowField,
             ChartOriginPosition = new Vector3d(1000, 0, 0),
             TargetPosition = new Vector3d(1001, 0, 0),
         };

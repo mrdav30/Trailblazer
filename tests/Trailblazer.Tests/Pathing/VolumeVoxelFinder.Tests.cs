@@ -13,10 +13,7 @@ public sealed class VolumeVoxelFinderTests : IDisposable
 {
     public VolumeVoxelFinderTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
+        TrailblazerWorldManager.Setup();
     }
 
     public void Dispose()

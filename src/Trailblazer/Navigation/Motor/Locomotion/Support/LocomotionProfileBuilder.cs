@@ -24,7 +24,7 @@ public sealed class LocomotionProfileBuilder
             Platform = new PlatformLocomotion();
             Jump = new JumpLocomotion();
             Slide = new SlideLocomotion();
-            Swim = new SwimLocomotion();
+            Water = new WaterLocomotion();
             Fly = new FlyLocomotion();
             Climb = new ClimbLocomotion();
         }
@@ -60,9 +60,9 @@ public sealed class LocomotionProfileBuilder
     public SlideLocomotion? Slide { get; private set; }
 
     /// <summary>
-    /// The optional swim locomotion to install.
+    /// The optional water locomotion to install.
     /// </summary>
-    public SwimLocomotion? Swim { get; private set; }
+    public WaterLocomotion? Water { get; private set; }
 
     /// <summary>
     /// The optional fly locomotion to install.
@@ -149,20 +149,20 @@ public sealed class LocomotionProfileBuilder
     }
 
     /// <summary>
-    /// Installs or replaces swim locomotion.
+    /// Installs or replaces water locomotion.
     /// </summary>
-    public LocomotionProfileBuilder WithSwim(SwimLocomotion? swim = null)
+    public LocomotionProfileBuilder WithWater(WaterLocomotion? water = null)
     {
-        Swim = swim ?? new SwimLocomotion();
+        Water = water ?? new WaterLocomotion();
         return this;
     }
 
     /// <summary>
-    /// Removes swim locomotion.
+    /// Removes water locomotion.
     /// </summary>
-    public LocomotionProfileBuilder WithoutSwim()
+    public LocomotionProfileBuilder WithoutWater()
     {
-        Swim = null;
+        Water = null;
         return this;
     }
 
@@ -213,7 +213,7 @@ public sealed class LocomotionProfileBuilder
             Platform,
             Jump,
             Slide,
-            Swim,
+            Water,
             Fly,
             Climb);
     }
@@ -228,7 +228,7 @@ public sealed class LocomotionProfileBuilder
             .SetPlatform(handler.Platform)
             .SetJump(handler.Jump)
             .SetSlide(handler.Slide)
-            .SetSwim(handler.Swim)
+            .SetWater(handler.Water)
             .SetFly(handler.Fly)
             .SetClimb(handler.Climb);
     }
@@ -251,9 +251,9 @@ public sealed class LocomotionProfileBuilder
         return this;
     }
 
-    private LocomotionProfileBuilder SetSwim(SwimLocomotion? swim)
+    private LocomotionProfileBuilder SetWater(WaterLocomotion? water)
     {
-        Swim = swim;
+        Water = water;
         return this;
     }
 

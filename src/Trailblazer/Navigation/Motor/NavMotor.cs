@@ -61,8 +61,8 @@ public class NavMotor : IRecordable
     /// <inheritdoc cref="SlideLocomotion"/>
     public SlideLocomotion? SlideModule => Handler.Slide;
 
-    /// <inheritdoc cref="SwimLocomotion"/>
-    public SwimLocomotion? SwimModule => Handler.Swim;
+    /// <inheritdoc cref="WaterLocomotion"/>
+    public WaterLocomotion? WaterModule => Handler.Water;
 
     /// <inheritdoc cref="FlyLocomotion"/>
     public FlyLocomotion? FlyModule => Handler.Fly;
@@ -602,21 +602,21 @@ public class NavMotor : IRecordable
 
     private Fixed64 GetLiquidHorizontalSpeed(Vector3d desiredMovementDirection)
     {
-        if (SwimModule?.IsEnabled != true
-            || !SwimModule.CanSwim
-            || !SwimModule.IsSwimming)
+        if (WaterModule?.IsEnabled != true
+            || !WaterModule.CanSwim
+            || !WaterModule.IsSwimming)
         {
             return Fixed64.Zero;
         }
 
-        Fixed64 ellipseMultiplier = SwimModule.MaxSwimSpeed / SwimModule.MaxSwimSidewaysSpeed;
+        Fixed64 ellipseMultiplier = WaterModule.MaxSwimSpeed / WaterModule.MaxSwimSidewaysSpeed;
         if (ellipseMultiplier <= Fixed64.Zero)
             return Fixed64.Zero;
 
         return GetEllipticalHorizontalSpeed(
             desiredMovementDirection,
             ellipseMultiplier,
-            SwimModule.MaxSwimSidewaysSpeed,
+            WaterModule.MaxSwimSidewaysSpeed,
             Fixed64.One);
     }
 
@@ -681,15 +681,15 @@ public class NavMotor : IRecordable
 
     private Vector3d ResolveLiquidVelocity(TrekRequest frameRequest, Vector3d desiredVelocity)
     {
-        if (SwimModule?.IsEnabled != true
-            || !SwimModule.CanSwim
-            || !SwimModule.IsSwimming)
+        if (WaterModule?.IsEnabled != true
+            || !WaterModule.CanSwim
+            || !WaterModule.IsSwimming)
         {
             desiredVelocity = Vector3d.Zero;
         }
 
-        if (SwimModule?.IsSwimming == true && frameRequest.Direction.y != Fixed64.Zero)
-            desiredVelocity.y = frameRequest.Direction.y * SwimModule.MaxSwimSpeed;
+        if (WaterModule?.IsSwimming == true && frameRequest.Direction.y != Fixed64.Zero)
+            desiredVelocity.y = frameRequest.Direction.y * WaterModule.MaxSwimSpeed;
 
         if (desiredVelocity != Vector3d.Zero)
             desiredVelocity *= FixedMath.Clamp01(Fixed64.One - Handler.Move.WaterDragFactor);
@@ -772,10 +772,10 @@ public class NavMotor : IRecordable
             throw new InvalidOperationException("NavMotor must be initialized before querying max acceleration.");
 
         if (IsInLiquid)
-            return SwimModule?.IsEnabled == true
-                && SwimModule.CanSwim
-                && SwimModule.IsSwimming
-                ? SwimModule.MaxSwimAcceleration
+            return WaterModule?.IsEnabled == true
+                && WaterModule.CanSwim
+                && WaterModule.IsSwimming
+                ? WaterModule.MaxSwimAcceleration
                 : Handler.Move.MaxAirAcceleration;
 
         if (IsClimbing)
@@ -832,8 +832,8 @@ public class NavMotor : IRecordable
             // Apply buoyancy if we can swim, otherwise apply gravity as normal.
             // Even if we can swim, we still apply gravity but reduce it based on the buoyancy factor to
             // create a more natural sinking effect when not actively swimming upwards.
-            if (SwimModule?.IsEnabled == true)
-                _forceOutput.y += gravityStep * (SwimModule.BuoyancyFactor - Fixed64.One);
+            if (WaterModule?.IsEnabled == true)
+                _forceOutput.y += gravityStep * (WaterModule.BuoyancyFactor - Fixed64.One);
             else
                 _forceOutput.y = Handler.Move.FrameVelocity.y - gravityStep;
 
@@ -892,7 +892,7 @@ public class NavMotor : IRecordable
         if (IsClimbing && !(ClimbModule?.ActiveAllowDetachJump ?? false))
             return false;
 
-        if (IsInLiquid && !(SwimModule?.CanBreachWater ?? false))
+        if (IsInLiquid && !(WaterModule?.CanBreachWater ?? false))
             return false;
 
         if (!JumpModule.CanJump)
@@ -904,13 +904,13 @@ public class NavMotor : IRecordable
     private Vector3d GetWaterBreachJumpForce()
     {
         JumpLocomotion? jumpModule = JumpModule;
-        SwimLocomotion? swimModule = SwimModule;
-        if (jumpModule == null || swimModule == null)
+        WaterLocomotion? waterModule = WaterModule;
+        if (jumpModule == null || waterModule == null)
             return Vector3d.Zero;
 
         jumpModule.FrameJumpDirection = Vector3d.Up;
         Events.OnStartWaterBreach?.Invoke();
-        return jumpModule.FrameJumpDirection * (GetVerticalJumpSpeed() * swimModule.BreachJumpMultiplier);
+        return jumpModule.FrameJumpDirection * (GetVerticalJumpSpeed() * waterModule.BreachJumpMultiplier);
     }
 
     private Vector3d GetGroundJumpForce()
@@ -1173,13 +1173,13 @@ public class NavMotor : IRecordable
 
     private void UpdateSwimState(TrekRequest request)
     {
-        SwimLocomotion? swimModule = SwimModule;
-        if (swimModule?.IsEnabled != true)
+        WaterLocomotion? waterModule = WaterModule;
+        if (waterModule?.IsEnabled != true)
             return;
 
-        swimModule.RequestedSwimThisTraversal = request.IsRequestingSwim;
-        swimModule.IsSwimming = IsInLiquid
-            && swimModule.CanSwim
+        waterModule.RequestedSwimThisTraversal = request.IsRequestingSwim;
+        waterModule.IsSwimming = IsInLiquid
+            && waterModule.CanSwim
             && request.IsRequestingSwim;
     }
 
@@ -1285,8 +1285,8 @@ public class NavMotor : IRecordable
         if (WasInGas && !IsInGas)
             HandleGasExitTransition();
 
-        if (SwimModule?.IsEnabled == true && !IsInLiquid && WasInLiquid)
-            Handler.ClearTransientState<SwimLocomotion>();
+        if (WaterModule?.IsEnabled == true && !IsInLiquid && WasInLiquid)
+            Handler.ClearTransientState<WaterLocomotion>();
     }
 
     private void HandleClimbState(Vector3d position)
@@ -1419,26 +1419,26 @@ public class NavMotor : IRecordable
     {
         if (!IsInLiquid)
         {
-            if (SwimModule?.IsEnabled == true && WasInLiquid)
-                Handler.ClearTransientState<SwimLocomotion>();
+            if (WaterModule?.IsEnabled == true && WasInLiquid)
+                Handler.ClearTransientState<WaterLocomotion>();
 
             return;
         }
 
-        bool hadSwimIntent = SwimModule?.RequestedSwimThisTraversal == true;
+        bool hadSwimIntent = WaterModule?.RequestedSwimThisTraversal == true;
         // Clear the transient state when entering water for the first time
         if (!WasInLiquid)
             Handler.ClearAllTransientState();
 
-        if (SwimModule?.IsEnabled == true)
+        if (WaterModule?.IsEnabled == true)
         {
-            SwimModule.IsSwimming = SwimModule.CanSwim && hadSwimIntent;
-            SwimModule.IsDiving = position.y < CurrentState.SurfaceLevel;
+            WaterModule.IsSwimming = WaterModule.CanSwim && hadSwimIntent;
+            WaterModule.IsDiving = position.y < CurrentState.SurfaceLevel;
 
-            SwimModule.UpdateDiveTime();
+            WaterModule.UpdateDiveTime();
 
-            if (SwimModule.IsDrowning)
-                Events.OnDrowning?.Invoke(SwimModule.UnderwaterTimer);
+            if (WaterModule.IsDrowning)
+                Events.OnDrowning?.Invoke(WaterModule.UnderwaterTimer);
         }
     }
 

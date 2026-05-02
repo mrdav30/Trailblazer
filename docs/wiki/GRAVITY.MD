@@ -8,7 +8,7 @@ The source of truth for the behavior described here is the code in:
 - `src/Trailblazer/Navigation/Motor/Locomotion/MoveLocomotion.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotion/JumpLocomotion.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotion/FallLocomotion.cs`
-- `src/Trailblazer/Navigation/Motor/Locomotion/SwimLocomotion.cs`
+- `src/Trailblazer/Navigation/Motor/Locomotion/WaterLocomotion.cs`
 
 ## 1. Where Gravity Lives
 
@@ -78,7 +78,7 @@ Serializing a `LocomotionHandler.Forces` instance records whether an override wa
 - `MoveLocomotion.DefaultTerminalVelocity = 53`
 - `JumpLocomotion.DefaultBaseJumpHeight = 1`
 - `JumpLocomotion.DefaultExtraJumpHeight = 2`
-- `SwimLocomotion.DefaultBouyancyFactor = 1`
+- `WaterLocomotion.DefaultBouyancyFactor = 1`
 - `MoveLocomotion.DefaultWaterDragFactor = 0.0625`
 
 `TrailblazerManager` provides the fixed simulation timing:
@@ -172,7 +172,7 @@ Water does not use the same vertical rule as ground or air.
 When `CurrentState.Medium == TraversalMedium.Liquid`, Trailblazer applies buoyancy relative to gravity:
 
 ```csharp
-_forceOutput.y += gravityStep * (Handler.Swim.BuoyancyFactor - Fixed64.One);
+_forceOutput.y += gravityStep * (Handler.Water.BuoyancyFactor - Fixed64.One);
 ```
 
 Interpretation of `BuoyancyFactor`:
@@ -342,9 +342,9 @@ Higher values:
 
 ### More floating or more sinking in water
 
-- `SwimLocomotion.BuoyancyFactor`
+- `WaterLocomotion.BuoyancyFactor`
 - `MoveLocomotion.WaterDragFactor`
-- `SwimLocomotion.BreachJumpMultiplier`
+- `WaterLocomotion.BreachJumpMultiplier`
 
 ## 11. Common Misconceptions
 

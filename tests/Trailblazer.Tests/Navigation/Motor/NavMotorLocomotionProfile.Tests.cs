@@ -64,7 +64,7 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
         Assert.NotNull(agent.Motor.Handler.Fly);
         agent.Motor.Handler.Platform.Should().BeNull();
         agent.Motor.Handler.Slide.Should().BeNull();
-        agent.Motor.Handler.Swim.Should().BeNull();
+        agent.Motor.Handler.Water.Should().BeNull();
     }
 
     [Fact]
@@ -91,9 +91,9 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
         groundedAgent.Motor.GetMaxAcceleration().Should().Be(groundedAgent.Motor.Handler.Move.MaxGroundAcceleration);
 
         var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent();
-        swimmingAgent.Motor.Handler.Swim!.IsSwimming = true;
-        swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Swim!.MaxSwimAcceleration);
-        swimmingAgent.Motor.Handler.Swim.CanSwim = false;
+        swimmingAgent.Motor.Handler.Water!.IsSwimming = true;
+        swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Water!.MaxSwimAcceleration);
+        swimmingAgent.Motor.Handler.Water.CanSwim = false;
         swimmingAgent.Motor.GetMaxAcceleration().Should().Be(swimmingAgent.Motor.Handler.Move.MaxAirAcceleration);
 
         var flyingAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);

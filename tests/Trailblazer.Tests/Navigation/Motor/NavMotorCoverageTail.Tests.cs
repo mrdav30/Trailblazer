@@ -197,9 +197,9 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             .Should().Be(Vector3d.Zero);
 
         var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent();
-        swimmingAgent.Motor.Handler.Swim!.IsSwimming = true;
-        swimmingAgent.Motor.Handler.Swim!.MaxSwimSidewaysSpeed = Fixed64.One;
-        swimmingAgent.Motor.Handler.Swim.MaxSwimSpeed = Fixed64.Zero;
+        swimmingAgent.Motor.Handler.Water!.IsSwimming = true;
+        swimmingAgent.Motor.Handler.Water!.MaxSwimSidewaysSpeed = Fixed64.One;
+        swimmingAgent.Motor.Handler.Water.MaxSwimSpeed = Fixed64.Zero;
         swimmingAgent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Moderate)
             .Should().Be(Fixed64.Zero);
 
@@ -496,8 +496,8 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     public void PrivateStateHandlers_ShouldRaiseDrowning_AndClearFallWhileFlying()
     {
         var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
-        swimmingAgent.Motor.Handler.Swim!.CanDrown = true;
-        swimmingAgent.Motor.Handler.Swim.HoldBreathTime = Fixed64.Zero;
+        swimmingAgent.Motor.Handler.Water!.CanDrown = true;
+        swimmingAgent.Motor.Handler.Water.HoldBreathTime = Fixed64.Zero;
 
         Fixed64 drowningTime = Fixed64.Zero;
         swimmingAgent.Motor.Events.OnDrowning += time => drowningTime = time;
@@ -519,7 +519,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     public void PrivateJumpAndFlightHelpers_ShouldRejectWaterJumpWithoutBreach_AndPreserveHeadroom()
     {
         var waterAgent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
-        waterAgent.Motor.Handler.Swim!.CanBreachWater = false;
+        waterAgent.Motor.Handler.Water!.CanBreachWater = false;
 
         ReflectionUtility.InvokePrivate<bool>(waterAgent.Motor, "CanApplyJumpForce", new TrekRequest
         {
@@ -788,7 +788,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     public void PrivateEnvironmentalAndFallHelpers_ShouldCoverDisabledSwim_AndFallEvents()
     {
         var swimmingAgent = MockMotorAgentTestFactory.CreateWaterAgent(surfaceLevel: Fixed64.Zero);
-        swimmingAgent.Motor.Handler.Swim!.IsEnabled = false;
+        swimmingAgent.Motor.Handler.Water!.IsEnabled = false;
         swimmingAgent.Motor.Handler.Move.FrameVelocity = new Vector3d(0, -2, 0);
         ReflectionUtility.SetPrivateField(swimmingAgent.Motor, "_forceOutput", Vector3d.Zero);
 

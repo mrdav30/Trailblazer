@@ -29,7 +29,7 @@ public class LocomotionCompositionTests : IDisposable
         agent.Motor.Handler.Platform.Should().BeNull();
         agent.Motor.Handler.Jump.Should().BeNull();
         agent.Motor.Handler.Slide.Should().BeNull();
-        agent.Motor.Handler.Swim.Should().BeNull();
+        agent.Motor.Handler.Water.Should().BeNull();
         agent.Motor.Handler.Fly.Should().BeNull();
         agent.Motor.Handler.Climb.Should().BeNull();
     }
@@ -49,7 +49,7 @@ public class LocomotionCompositionTests : IDisposable
 
         motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
         motor.Handler.Jump.Should().BeNull();
-        motor.Handler.Swim.Should().BeNull();
+        motor.Handler.Water.Should().BeNull();
         motor.Handler.Fly.Should().BeNull();
         motor.Handler.Climb.Should().BeNull();
     }
@@ -81,7 +81,7 @@ public class LocomotionCompositionTests : IDisposable
 
         agent.Position.x.Should().Be(Fixed64.Zero);
         agent.Position.z.Should().Be(Fixed64.Zero);
-        agent.Motor.Handler.Swim.Should().BeNull();
+        agent.Motor.Handler.Water.Should().BeNull();
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class LocomotionCompositionTests : IDisposable
         motor.Handler.Jump.Should().BeNull();
         motor.Handler.Platform.Should().BeNull();
         motor.Handler.Slide.Should().BeNull();
-        motor.Handler.Swim.Should().BeNull();
+        motor.Handler.Water.Should().BeNull();
         motor.Handler.Fly.Should().BeNull();
         agent.Motor.Handler.Climb.Should().BeNull();
     }
@@ -145,7 +145,7 @@ public class LocomotionCompositionTests : IDisposable
         target.Motor.Handler.Jump.Should().BeNull();
         target.Motor.Handler.Platform.Should().BeNull();
         target.Motor.Handler.Slide.Should().BeNull();
-        target.Motor.Handler.Swim.Should().BeNull();
+        target.Motor.Handler.Water.Should().BeNull();
         target.Motor.Handler.Fly.Should().BeNull();
         target.Motor.Handler.Climb.Should().BeNull();
     }
@@ -166,7 +166,7 @@ public class LocomotionCompositionTests : IDisposable
         Assert.NotNull(target.Motor.Handler.Jump);
         Assert.NotNull(target.Motor.Handler.Platform);
         Assert.NotNull(target.Motor.Handler.Slide);
-        Assert.NotNull(target.Motor.Handler.Swim);
+        Assert.NotNull(target.Motor.Handler.Water);
         Assert.NotNull(target.Motor.Handler.Fly);
         Assert.NotNull(target.Motor.Handler.Climb);
     }

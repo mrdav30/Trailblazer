@@ -153,7 +153,7 @@ public class MoveLocomotion : ILocomotion
     public Fixed64 SlopeLimit = DefaultSlopeLimit;
 
     /// <summary>
-    /// Passive drag applied whenever the motor is in water, even if active swim locomotion is absent.
+    /// Passive drag applied whenever the motor is in water, even if the water locomotion is absent or inactive.
     /// </summary>
     public Fixed64 WaterDragFactor = DefaultWaterDragFactor;
 

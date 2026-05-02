@@ -16,7 +16,7 @@ public sealed class LocomotionProfile
         PlatformLocomotion? platform = null,
         JumpLocomotion? jump = null,
         SlideLocomotion? slide = null,
-        SwimLocomotion? swim = null,
+        WaterLocomotion? water = null,
         FlyLocomotion? fly = null,
         ClimbLocomotion? climb = null)
     {
@@ -25,7 +25,7 @@ public sealed class LocomotionProfile
         Platform = platform;
         Jump = jump;
         Slide = slide;
-        Swim = swim;
+        Water = water;
         Fly = fly;
         Climb = climb;
     }
@@ -56,9 +56,9 @@ public sealed class LocomotionProfile
     public SlideLocomotion? Slide { get; }
 
     /// <summary>
-    /// Optional swim locomotion.
+    /// Optional water locomotion.
     /// </summary>
-    public SwimLocomotion? Swim { get; }
+    public WaterLocomotion? Water { get; }
 
     /// <summary>
     /// Optional flight locomotion.
@@ -88,8 +88,8 @@ public sealed class LocomotionProfile
             if (Slide != null)
                 result |= LocomotionKind.Slide;
 
-            if (Swim != null)
-                result |= LocomotionKind.Swim;
+            if (Water != null)
+                result |= LocomotionKind.Water;
 
             if (Fly != null)
                 result |= LocomotionKind.Fly;

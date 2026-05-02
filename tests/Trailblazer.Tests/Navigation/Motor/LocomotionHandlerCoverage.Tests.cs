@@ -26,7 +26,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         var platform = new PlatformLocomotion();
         var jump = new JumpLocomotion();
         var slide = new SlideLocomotion();
-        var swim = new SwimLocomotion();
+        var water = new WaterLocomotion();
         var fly = new FlyLocomotion();
         var climb = new ClimbLocomotion();
 
@@ -35,7 +35,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Replace(platform);
         handler.Replace(jump);
         handler.Replace(slide);
-        handler.Replace(swim);
+        handler.Replace(water);
         handler.Replace(fly);
         handler.Replace(climb);
 
@@ -44,7 +44,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Platform.Should().BeSameAs(platform);
         handler.Jump.Should().BeSameAs(jump);
         handler.Slide.Should().BeSameAs(slide);
-        handler.Swim.Should().BeSameAs(swim);
+        handler.Water.Should().BeSameAs(water);
         handler.Fly.Should().BeSameAs(fly);
         handler.Climb.Should().BeSameAs(climb);
         handler.InstalledKinds.Should().Be(LocomotionKind.All);
@@ -110,23 +110,23 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     {
         var handler = new LocomotionHandler(LocomotionProfile.CreateMoveAndFallOnly());
         var jump = new JumpLocomotion();
-        var swim = new SwimLocomotion();
+        var water = new WaterLocomotion();
         var climb = new ClimbLocomotion();
 
         handler.Install(jump);
-        handler.Install(swim);
+        handler.Install(water);
         handler.Install(climb);
 
         var profile = handler.ToProfile();
 
         handler.Jump.Should().BeSameAs(jump);
-        handler.Swim.Should().BeSameAs(swim);
+        handler.Water.Should().BeSameAs(water);
         profile.Move.Should().BeSameAs(handler.Move);
         profile.Fall.Should().BeSameAs(handler.Fall);
         profile.Jump.Should().BeSameAs(jump);
-        profile.Swim.Should().BeSameAs(swim);
+        profile.Water.Should().BeSameAs(water);
         profile.Climb.Should().BeSameAs(climb);
-        profile.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Swim | LocomotionKind.Climb);
+        profile.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Water | LocomotionKind.Climb);
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         var originalPlatform = handler.Platform!;
         var originalJump = handler.Jump!;
         var originalSlide = handler.Slide!;
-        var originalSwim = handler.Swim!;
+        var originalWater = handler.Water!;
         var originalFly = handler.Fly!;
         var originalClimb = handler.Climb!;
 
@@ -147,9 +147,9 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         originalPlatform.ActivePlatform = new PlatformSnapshot(11, Fixed4x4.Identity);
         originalJump.RegisterJump();
         originalSlide.IsSliding = true;
-        originalSwim.IsSwimming = true;
-        originalSwim.IsDiving = true;
-        originalSwim.UnderwaterTimer = Fixed64.One;
+        originalWater.IsSwimming = true;
+        originalWater.IsDiving = true;
+        originalWater.UnderwaterTimer = Fixed64.One;
         originalFly.IsFlying = true;
         originalClimb.IsClimbing = true;
         originalClimb.IsMantling = true;
@@ -168,7 +168,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Jump.Should().BeSameAs(sharedJump);
         handler.Platform.Should().BeNull();
         handler.Slide.Should().BeNull();
-        handler.Swim.Should().BeNull();
+        handler.Water.Should().BeNull();
         handler.Fly.Should().BeNull();
         handler.Climb.Should().BeNull();
         handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump);
@@ -178,9 +178,9 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         originalPlatform.ActivePlatform.Should().BeNull();
         originalJump.IsJumping.Should().BeFalse();
         originalSlide.IsSliding.Should().BeFalse();
-        originalSwim.IsSwimming.Should().BeFalse();
-        originalSwim.IsDiving.Should().BeFalse();
-        originalSwim.UnderwaterTimer.Should().Be(Fixed64.Zero);
+        originalWater.IsSwimming.Should().BeFalse();
+        originalWater.IsDiving.Should().BeFalse();
+        originalWater.UnderwaterTimer.Should().Be(Fixed64.Zero);
         originalFly.IsFlying.Should().BeFalse();
         originalClimb.IsClimbing.Should().BeFalse();
         originalClimb.IsMantling.Should().BeFalse();
@@ -198,7 +198,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Platform.Should().BeNull();
         handler.Jump.Should().BeNull();
         handler.Slide.Should().BeNull();
-        handler.Swim.Should().BeNull();
+        handler.Water.Should().BeNull();
         handler.Fly.Should().BeNull();
         handler.Climb.Should().BeNull();
 
@@ -225,10 +225,23 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
                 typeof(PlatformLocomotion),
                 typeof(JumpLocomotion),
                 typeof(FallLocomotion),
-                typeof(SwimLocomotion),
+                typeof(WaterLocomotion),
                 typeof(FlyLocomotion),
                 typeof(ClimbLocomotion),
                 typeof(SlideLocomotion));
+    }
+
+    [Fact]
+    public void WaterApi_ShouldNotExposeLegacySwimAliases()
+    {
+        typeof(LocomotionHandler).GetProperty("Swim").Should().BeNull();
+        typeof(LocomotionProfile).GetProperty("Swim").Should().BeNull();
+        typeof(LocomotionProfileBuilder).GetProperty("Swim").Should().BeNull();
+        typeof(LocomotionProfileBuilder).GetMethod("WithSwim").Should().BeNull();
+        typeof(LocomotionProfileBuilder).GetMethod("WithoutSwim").Should().BeNull();
+        typeof(NavMotor).GetProperty("SwimModule").Should().BeNull();
+        Enum.GetNames(typeof(LocomotionKind)).Should().NotContain("Swim");
+        typeof(WaterLocomotion).Assembly.GetType("Trailblazer.Navigation.Motor.SwimLocomotion").Should().BeNull();
     }
 
     [Fact]
@@ -276,8 +289,8 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         var handler = new LocomotionHandler();
         handler.Move.FrameVelocity = Vector3d.Forward;
         handler.Fall.IsFalling = true;
-        handler.Swim!.IsSwimming = true;
-        handler.Swim.UnderwaterTimer = Fixed64.One;
+        handler.Water!.IsSwimming = true;
+        handler.Water.UnderwaterTimer = Fixed64.One;
 
         handler.ClearTransientState<MoveLocomotion>();
         handler.Move.FrameVelocity.Should().Be(Vector3d.Zero);
@@ -285,8 +298,8 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.ClearAllTransientState();
 
         handler.Fall.IsFalling.Should().BeFalse();
-        handler.Swim.IsSwimming.Should().BeFalse();
-        handler.Swim.UnderwaterTimer.Should().Be(Fixed64.Zero);
+        handler.Water.IsSwimming.Should().BeFalse();
+        handler.Water.UnderwaterTimer.Should().Be(Fixed64.Zero);
     }
 
     private sealed class CustomLocomotion : ILocomotion

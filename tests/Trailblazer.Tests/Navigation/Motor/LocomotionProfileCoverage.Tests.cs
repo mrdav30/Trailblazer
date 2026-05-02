@@ -45,11 +45,12 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
             new MoveLocomotion(),
             new FallLocomotion(),
             jump: new JumpLocomotion(),
-            swim: new SwimLocomotion());
+            water: new WaterLocomotion());
 
         coreOnly.InstalledKinds.Should().Be(LocomotionKind.Core);
         full.InstalledKinds.Should().Be(LocomotionKind.All);
-        mixed.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Swim);
+        mixed.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Water);
+        mixed.Water.Should().NotBeNull();
     }
 
     [Fact]
@@ -62,7 +63,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         Assert.NotNull(profile.Platform);
         Assert.NotNull(profile.Jump);
         Assert.NotNull(profile.Slide);
-        Assert.NotNull(profile.Swim);
+        Assert.NotNull(profile.Water);
         Assert.NotNull(profile.Fly);
         Assert.NotNull(profile.Climb);
     }
@@ -87,8 +88,8 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
             .WithJump(jump)
             .WithSlide()
             .WithoutSlide()
-            .WithSwim()
-            .WithoutSwim()
+            .WithWater()
+            .WithoutWater()
             .WithFly(fly)
             .WithoutFly()
             .WithFly(fly)
@@ -102,7 +103,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         Assert.NotNull(profile.Platform);
         profile.Jump.Should().BeSameAs(jump);
         profile.Slide.Should().BeNull();
-        profile.Swim.Should().BeNull();
+        profile.Water.Should().BeNull();
         profile.Fly.Should().BeSameAs(fly);
         profile.Climb.Should().BeSameAs(climb);
         profile.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Platform | LocomotionKind.Jump | LocomotionKind.Fly | LocomotionKind.Climb);
@@ -127,7 +128,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
     {
         var handler = new LocomotionHandler();
         handler.Remove<SlideLocomotion>().Should().BeTrue();
-        handler.Remove<SwimLocomotion>().Should().BeTrue();
+        handler.Remove<WaterLocomotion>().Should().BeTrue();
 
         var builder = LocomotionProfile.CreateBuilder(handler);
         var profile = builder.Build();
@@ -137,7 +138,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         profile.Platform.Should().BeSameAs(handler.Platform);
         profile.Jump.Should().BeSameAs(handler.Jump);
         profile.Slide.Should().BeNull();
-        profile.Swim.Should().BeNull();
+        profile.Water.Should().BeNull();
         profile.Fly.Should().BeSameAs(handler.Fly);
         profile.Climb.Should().BeSameAs(handler.Climb);
     }

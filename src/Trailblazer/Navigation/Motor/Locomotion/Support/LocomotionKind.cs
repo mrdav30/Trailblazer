@@ -39,9 +39,9 @@ public enum LocomotionKind
     Slide = 1 << 4,
 
     /// <summary>
-    /// Active swim behavior and water-specific runtime state.
+    /// Water-specific traversal behavior and runtime state, including active swimming.
     /// </summary>
-    Swim = 1 << 5,
+    Water = 1 << 5,
 
     /// <summary>
     /// Controlled airborne flight behavior.
@@ -61,7 +61,7 @@ public enum LocomotionKind
     /// <summary>
     /// The optional locomotion set used by the built-in presets.
     /// </summary>
-    Optional = Platform | Jump | Slide | Swim | Fly | Climb,
+    Optional = Platform | Jump | Slide | Water | Fly | Climb,
 
     /// <summary>
     /// The built-in locomotion set containing every shipped module.

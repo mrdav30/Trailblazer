@@ -5,13 +5,13 @@ using Trailblazer.Support;
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
-/// Handles swimming mechanics, including movement, buoyancy, water resistance, and breath control.
+/// Handles water traversal mechanics, including active swimming, buoyancy, water resistance, and breath control.
 /// </summary>
 /// <remarks>
-/// This locomotion module governs how the scout moves in water, applies drag and buoyancy forces,
-/// and tracks dive time for breath management.
+/// This locomotion module owns liquid-medium runtime state. Active swim input is one capability inside
+/// that model alongside passive floating, sinking, breach behavior, and dive-time tracking.
 /// </remarks>
-public class SwimLocomotion : ILocomotion
+public class WaterLocomotion : ILocomotion
 {
     #region Constants
 
@@ -31,7 +31,7 @@ public class SwimLocomotion : ILocomotion
     public static readonly Fixed64 DefaultMaxSwimSpeed = (Fixed64)1.5d;
 
     /// <summary>
-    /// The default maximum acceleration while swimming.
+    /// The default maximum sideways swimming speed.
     /// </summary>
     public static readonly Fixed64 DefaultMaxSwimSidewaysSpeed = (Fixed64)1d;
 
@@ -60,12 +60,12 @@ public class SwimLocomotion : ILocomotion
     #region Configuration State
 
     /// <summary>
-    /// Determines whether swimming mechanics are enabled.
+    /// Determines whether water traversal mechanics are enabled.
     /// </summary>
     private bool _isEnabled = true;
 
     /// <summary>
-    /// Determines whether the scout can actually swim.
+    /// Determines whether the scout can actively swim while in water.
     /// </summary>
     public bool CanSwim = true;
 
@@ -80,27 +80,27 @@ public class SwimLocomotion : ILocomotion
     public bool CanDrown = true;
 
     /// <summary>
-    /// The maximum swimming speed.
+    /// The maximum forward swimming speed when active swim control is engaged.
     /// </summary>
     public Fixed64 MaxSwimSpeed = DefaultMaxSwimSpeed;
 
     /// <summary>
-    /// The maximum sideways swimming speed.
+    /// The maximum sideways swimming speed when active swim control is engaged.
     /// </summary>
     public Fixed64 MaxSwimSidewaysSpeed = DefaultMaxSwimSidewaysSpeed;
 
     /// <summary>
-    /// The maximum acceleration while swimming.
+    /// The maximum acceleration while actively swimming.
     /// </summary>
     public Fixed64 MaxWaterAcceleration = DefaultMaxSwimAcceleration;
 
     /// <summary>
-    /// The acceleration multiplier applied to swimming movement.
+    /// The acceleration multiplier applied to active swimming movement.
     /// </summary>
     public Fixed64 SwimAccelerationModifier = DefaultSwimAccelerationModifier;
 
     /// <summary>
-    /// The buoyancy factor determining how strongly the scout floats in water.
+    /// The buoyancy factor determining how strongly the scout floats or sinks in water.
     /// </summary>
     public Fixed64 BuoyancyFactor = DefaultBouyancyFactor;
 
@@ -140,7 +140,7 @@ public class SwimLocomotion : ILocomotion
     }
 
     /// <summary>
-    /// Indicates whether the scout is currently swimming.
+    /// Indicates whether the scout is currently under active swimming control.
     /// </summary>
     [Transient]
     public bool IsSwimming { get; set; }
@@ -175,7 +175,9 @@ public class SwimLocomotion : ILocomotion
     {
         get
         {
-            if (!_isEnabled || !CanDrown) return false;
+            if (!_isEnabled || !CanDrown)
+                return false;
+
             return UnderwaterTimer >= HoldBreathTime;
         }
     }

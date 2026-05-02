@@ -15,6 +15,35 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 public class LocomotionHandler : IRecordable
 {
+    #region Nested Types
+
+    private enum LocomotionSlot
+    {
+        Move,
+        Platform,
+        Jump,
+        Fall,
+        Slide,
+        Water,
+        Fly,
+        Climb
+    }
+
+    #endregion
+
+    #region Fields
+
+    /// <summary>
+    /// Determines whether the scout has control over movement input.
+    /// </summary>
+    public bool IsInControl = true;
+
+    private LocomotionForces _forces = new();
+
+    #endregion
+
+    #region Initialization
+
     /// <summary>
     /// Initializes a new handler using the default locomotion profile.
     /// </summary>
@@ -29,22 +58,17 @@ public class LocomotionHandler : IRecordable
         ApplyProfile(profile ?? throw new ArgumentNullException(nameof(profile)));
     }
 
-    /// <summary>
-    /// Determines whether the scout has control over movement input.
-    /// </summary>
-    public bool IsInControl = true;
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets the currently installed locomotion kinds.
     /// </summary>
     public LocomotionKind InstalledKinds { get; private set; } = LocomotionKind.All;
 
-    private LocomotionForces _forces = new();
-
     /// <inheritdoc cref="LocomotionForces"/>
     public LocomotionForces Forces => _forces;
-
-    #region Locomotions
 
     /// <summary>
     /// Handles general movement, including speed limits, acceleration, and velocity calculations.
@@ -84,12 +108,13 @@ public class LocomotionHandler : IRecordable
     public SlideLocomotion? Slide { get; private set; }
 
     /// <summary>
-    /// Handles movement when the scout is in water, including buoyancy and water resistance.
+    /// Handles movement when the scout is in water, including active swimming, buoyancy, and water resistance.
     /// </summary>
     /// <remarks>
-    /// This locomotion tracks swim speed, dive time, and breath management.
+    /// This locomotion tracks liquid-medium state such as swim speed, floating and sinking behavior,
+    /// dive time, and breath management.
     /// </remarks>
-    public SwimLocomotion? Swim { get; private set; }
+    public WaterLocomotion? Water { get; private set; }
 
     /// <summary>
     /// Handles controlled flight while the scout is airborne.
@@ -195,7 +220,7 @@ public class LocomotionHandler : IRecordable
         ClearReplacedLocomotion(Platform, profile.Platform);
         ClearReplacedLocomotion(Jump, profile.Jump);
         ClearReplacedLocomotion(Slide, profile.Slide);
-        ClearReplacedLocomotion(Swim, profile.Swim);
+        ClearReplacedLocomotion(Water, profile.Water);
         ClearReplacedLocomotion(Fly, profile.Fly);
         ClearReplacedLocomotion(Climb, profile.Climb);
 
@@ -204,7 +229,7 @@ public class LocomotionHandler : IRecordable
         Platform = profile.Platform;
         Jump = profile.Jump;
         Slide = profile.Slide;
-        Swim = profile.Swim;
+        Water = profile.Water;
         Fly = profile.Fly;
         Climb = profile.Climb;
 
@@ -222,7 +247,7 @@ public class LocomotionHandler : IRecordable
             Platform,
             Jump,
             Slide,
-            Swim,
+            Water,
             Fly,
             Climb);
     }
@@ -241,8 +266,8 @@ public class LocomotionHandler : IRecordable
         if ((normalizedKinds & LocomotionKind.Slide) != 0)
             builder.WithSlide();
 
-        if ((normalizedKinds & LocomotionKind.Swim) != 0)
-            builder.WithSwim();
+        if ((normalizedKinds & LocomotionKind.Water) != 0)
+            builder.WithWater();
 
         if ((normalizedKinds & LocomotionKind.Fly) != 0)
             builder.WithFly();
@@ -266,8 +291,8 @@ public class LocomotionHandler : IRecordable
         if (Slide != null)
             InstalledKinds |= LocomotionKind.Slide;
 
-        if (Swim != null)
-            InstalledKinds |= LocomotionKind.Swim;
+        if (Water != null)
+            InstalledKinds |= LocomotionKind.Water;
 
         if (Fly != null)
             InstalledKinds |= LocomotionKind.Fly;
@@ -296,7 +321,7 @@ public class LocomotionHandler : IRecordable
             LocomotionSlot.Jump => Jump,
             LocomotionSlot.Fall => Fall,
             LocomotionSlot.Slide => Slide,
-            LocomotionSlot.Swim => Swim,
+            LocomotionSlot.Water => Water,
             LocomotionSlot.Fly => Fly,
             LocomotionSlot.Climb => Climb
         };
@@ -318,8 +343,8 @@ public class LocomotionHandler : IRecordable
 
         yield return Fall;
 
-        if (Swim != null)
-            yield return Swim;
+        if (Water != null)
+            yield return Water;
 
         if (Fly != null)
             yield return Fly;
@@ -337,6 +362,60 @@ public class LocomotionHandler : IRecordable
             throw new NotSupportedException($"Unsupported locomotion type '{type.Name}'.");
 
         SetLocomotion(slot, locomotion);
+    }
+
+    private static bool TryResolveLocomotionSlot(Type type, out LocomotionSlot slot)
+    {
+        if (type == typeof(MoveLocomotion))
+        {
+            slot = LocomotionSlot.Move;
+            return true;
+        }
+
+        if (type == typeof(PlatformLocomotion))
+        {
+            slot = LocomotionSlot.Platform;
+            return true;
+        }
+
+        if (type == typeof(JumpLocomotion))
+        {
+            slot = LocomotionSlot.Jump;
+            return true;
+        }
+
+        if (type == typeof(FallLocomotion))
+        {
+            slot = LocomotionSlot.Fall;
+            return true;
+        }
+
+        if (type == typeof(SlideLocomotion))
+        {
+            slot = LocomotionSlot.Slide;
+            return true;
+        }
+
+        if (type == typeof(WaterLocomotion))
+        {
+            slot = LocomotionSlot.Water;
+            return true;
+        }
+
+        if (type == typeof(FlyLocomotion))
+        {
+            slot = LocomotionSlot.Fly;
+            return true;
+        }
+
+        if (type == typeof(ClimbLocomotion))
+        {
+            slot = LocomotionSlot.Climb;
+            return true;
+        }
+
+        slot = default;
+        return false;
     }
 
     private void SetLocomotion(LocomotionSlot slot, ILocomotion? locomotion)
@@ -358,8 +437,8 @@ public class LocomotionHandler : IRecordable
             case LocomotionSlot.Slide:
                 Slide = locomotion as SlideLocomotion;
                 return;
-            case LocomotionSlot.Swim:
-                Swim = locomotion as SwimLocomotion;
+            case LocomotionSlot.Water:
+                Water = locomotion as WaterLocomotion;
                 return;
             case LocomotionSlot.Fly:
                 Fly = locomotion as FlyLocomotion;
@@ -456,7 +535,7 @@ public class LocomotionHandler : IRecordable
         JumpLocomotion? jump = Jump;
         FallLocomotion fall = Fall;
         SlideLocomotion? slide = Slide;
-        SwimLocomotion? swim = Swim;
+        WaterLocomotion? water = Water;
         FlyLocomotion? fly = Fly;
         ClimbLocomotion? climb = Climb;
 
@@ -465,7 +544,8 @@ public class LocomotionHandler : IRecordable
         RecordOptionalLocomotion(chronicler, ref jump, "jump");
         RecordDeep.Look(chronicler, ref fall, "fall");
         RecordOptionalLocomotion(chronicler, ref slide, "slide");
-        RecordOptionalLocomotion(chronicler, ref swim, "swim");
+        // Keep the serialized field id stable so existing payloads remain loadable.
+        RecordOptionalLocomotion(chronicler, ref water, "swim");
         RecordOptionalLocomotion(chronicler, ref fly, "fly");
         RecordOptionalLocomotion(chronicler, ref climb, "climb");
 
@@ -477,13 +557,11 @@ public class LocomotionHandler : IRecordable
                 platform,
                 jump,
                 slide,
-                swim,
+                water,
                 fly,
                 climb));
         }
     }
-
-    #endregion
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void RecordOptionalLocomotion<T>(
@@ -497,69 +575,5 @@ public class LocomotionHandler : IRecordable
         locomotion = local;
     }
 
-    private static bool TryResolveLocomotionSlot(Type type, out LocomotionSlot slot)
-    {
-        if (type == typeof(MoveLocomotion))
-        {
-            slot = LocomotionSlot.Move;
-            return true;
-        }
-
-        if (type == typeof(PlatformLocomotion))
-        {
-            slot = LocomotionSlot.Platform;
-            return true;
-        }
-
-        if (type == typeof(JumpLocomotion))
-        {
-            slot = LocomotionSlot.Jump;
-            return true;
-        }
-
-        if (type == typeof(FallLocomotion))
-        {
-            slot = LocomotionSlot.Fall;
-            return true;
-        }
-
-        if (type == typeof(SlideLocomotion))
-        {
-            slot = LocomotionSlot.Slide;
-            return true;
-        }
-
-        if (type == typeof(SwimLocomotion))
-        {
-            slot = LocomotionSlot.Swim;
-            return true;
-        }
-
-        if (type == typeof(FlyLocomotion))
-        {
-            slot = LocomotionSlot.Fly;
-            return true;
-        }
-
-        if (type == typeof(ClimbLocomotion))
-        {
-            slot = LocomotionSlot.Climb;
-            return true;
-        }
-
-        slot = default;
-        return false;
-    }
-
-    private enum LocomotionSlot
-    {
-        Move,
-        Platform,
-        Jump,
-        Fall,
-        Slide,
-        Swim,
-        Fly,
-        Climb
-    }
+    #endregion
 }

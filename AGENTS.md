@@ -231,21 +231,6 @@ Reset requirements are important because runtime state is shared through static 
 
 Do not leave charts, partitions, guides, or grid globals dirty after a test.
 
-## Known Hotspots and Existing TODOs
-
-These are good places to investigate before alpha, but they need disciplined changes:
-
-- [`src/Trailblazer/Pathing/PathManager.cs`](src/Trailblazer/Pathing/PathManager.cs)
-  `InitializeChart(...)` still has TODOs around queue pooling and release.
-- [`src/Trailblazer/Navigation/Steering/NavSteering.cs`](src/Trailblazer/Navigation/Steering/NavSteering.cs)
-  Movement-group logic is stubbed and combined-steering logic still has a TODO to exclude self.
-- [`src/Trailblazer/Pathing/AStar/AStarSurveyor.cs`](src/Trailblazer/Pathing/AStar/AStarSurveyor.cs)
-  There is a TODO about collection clearing/GC tradeoffs.
-- [`tests/Trailblazer.Tests/Navigation/Steering/NavSteering.Tests.cs`](tests/Trailblazer.Tests/Navigation/Steering/NavSteering.Tests.cs)
-  Contains a note about a false-positive caused by `CurrentRequest` mutation.
-- [`tests/Trailblazer.Tests/Support/AssertionExtensions.cs`](tests/Trailblazer.Tests/Support/AssertionExtensions.cs)
-  Contains useful deterministic assertions that should be reused instead of reimplemented.
-
 ## Recommended Change Workflow
 
 For both humans and AI agents, use this order:

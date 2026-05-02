@@ -141,11 +141,11 @@ By default the handler installs the built-in set:
 - `Jump`
 - `Fall`
 - `Slide`
-- `Swim`
+- `Water`
 - `Fly`
 - `Climb`
 
-`Move` and `Fall` are the required core locomotions. `Platform`, `Jump`, `Slide`, `Swim`, `Fly`,
+`Move` and `Fall` are the required core locomotions. `Platform`, `Jump`, `Slide`, `Water`, `Fly`,
 and `Climb` are optional and can be installed or removed through a locomotion profile.
 
 These locomotion objects are per-motor, not global. That means different navigators can run different movement parameters at the same time, and different navigator types can use different locomotion compositions entirely.
@@ -253,7 +253,7 @@ If jumping is allowed this frame, `ApplyJumpForce()`:
 - updates jump locomotion state
 
 Ground jumps can be influenced by the current surface normal.
-Water jumps use `Handler.Swim.BreachJumpMultiplier`.
+Water jumps use `Handler.Water.BreachJumpMultiplier`.
 
 ### 6.7 Platform Influence Output
 
@@ -355,7 +355,7 @@ It covers:
 - ending jumps on landing
 - stopping water breaches
 - firing `OnLandedFall`
-- clearing swim state when leaving water
+- clearing water locomotion state when leaving water
 
 ### 7.7 HandleSwimState(...)
 
@@ -364,7 +364,7 @@ This stage manages water-state bookkeeping.
 It can:
 
 - clear transient locomotion state on first entering water
-- honor the request-authored `Handler.Swim.IsSwimming` state while in liquid
+- honor the request-authored `Handler.Water.IsSwimming` state while in liquid
 - track diving versus surface-level swimming
 - update underwater time
 - trigger drowning events
@@ -555,7 +555,7 @@ The current test coverage around `NavMotor` behavior is concentrated in:
 - `tests/Trailblazer.Tests/Navigation/Motor/JumpLocomotion.Tests.cs`
 - `tests/Trailblazer.Tests/Navigation/Motor/FallLocomotion.Tests.cs`
 - `tests/Trailblazer.Tests/Navigation/Motor/PlatformLocomotion.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Motor/SwimLocomotion.Tests.cs`
+- `tests/Trailblazer.Tests/Navigation/Motor/WaterLocomotion.Tests.cs`
 - `tests/Trailblazer.Tests/Navigation/Motor/SlideLocomotionTests.cs`
 
 If you change the phase order, transition logic, or locomotion interaction rules, update or extend those tests in the same change.

@@ -799,7 +799,7 @@ public class NavigatorSerializationTests : IDisposable
         var targetJump = TestRequire.NotNull(targetMotor.Handler.Jump);
         var targetFall = TestRequire.NotNull(targetMotor.Handler.Fall);
         var targetSlide = TestRequire.NotNull(targetMotor.Handler.Slide);
-        var targetSwim = TestRequire.NotNull(targetMotor.Handler.Swim);
+        var targetWater = TestRequire.NotNull(targetMotor.Handler.Water);
 
         targetMotor.Handler.Move.IsEnabled.Should().BeFalse();
         targetMotor.Handler.Move.FrameVelocity.Should().Be(Vector3d.Zero);
@@ -830,10 +830,10 @@ public class NavigatorSerializationTests : IDisposable
         targetSlide.IsEnabled.Should().BeFalse();
         targetSlide.IsSliding.Should().BeFalse();
 
-        targetSwim.IsEnabled.Should().BeFalse();
-        targetSwim.IsSwimming.Should().BeFalse();
-        targetSwim.IsDiving.Should().BeFalse();
-        targetSwim.UnderwaterTimer.Should().Be(Fixed64.Zero);
+        targetWater.IsEnabled.Should().BeFalse();
+        targetWater.IsSwimming.Should().BeFalse();
+        targetWater.IsDiving.Should().BeFalse();
+        targetWater.UnderwaterTimer.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -915,7 +915,7 @@ public class NavigatorSerializationTests : IDisposable
         var jump = TestRequire.NotNull(motor.Handler.Jump);
         var fall = TestRequire.NotNull(motor.Handler.Fall);
         var slide = TestRequire.NotNull(motor.Handler.Slide);
-        var swim = TestRequire.NotNull(motor.Handler.Swim);
+        var water = TestRequire.NotNull(motor.Handler.Water);
         var fly = TestRequire.NotNull(motor.Handler.Fly);
         var platform = TestRequire.NotNull(motor.Handler.Platform);
 
@@ -934,9 +934,9 @@ public class NavigatorSerializationTests : IDisposable
 
         slide.IsSliding = true;
 
-        swim.IsSwimming = true;
-        swim.IsDiving = true;
-        swim.UnderwaterTimer = (Fixed64)7;
+        water.IsSwimming = true;
+        water.IsDiving = true;
+        water.UnderwaterTimer = (Fixed64)7;
 
         fly.MaxFlySpeed = (Fixed64)2.5f;
         fly.GravityCompensation = (Fixed64)0.75f;
@@ -1247,8 +1247,8 @@ public class NavigatorSerializationTests : IDisposable
         var actualFall = TestRequire.NotNull(actualHandler.Fall);
         var expectedSlide = TestRequire.NotNull(expectedHandler.Slide);
         var actualSlide = TestRequire.NotNull(actualHandler.Slide);
-        var expectedSwim = TestRequire.NotNull(expectedHandler.Swim);
-        var actualSwim = TestRequire.NotNull(actualHandler.Swim);
+        var expectedWater = TestRequire.NotNull(expectedHandler.Water);
+        var actualWater = TestRequire.NotNull(actualHandler.Water);
         var expectedFly = TestRequire.NotNull(expectedHandler.Fly);
         var actualFly = TestRequire.NotNull(actualHandler.Fly);
         var expectedClimb = TestRequire.NotNull(expectedHandler.Climb);
@@ -1280,9 +1280,9 @@ public class NavigatorSerializationTests : IDisposable
 
         actualSlide.IsSliding.Should().Be(expectedSlide.IsSliding);
 
-        actualSwim.IsSwimming.Should().Be(expectedSwim.IsSwimming);
-        actualSwim.IsDiving.Should().Be(expectedSwim.IsDiving);
-        actualSwim.UnderwaterTimer.Should().Be(expectedSwim.UnderwaterTimer);
+        actualWater.IsSwimming.Should().Be(expectedWater.IsSwimming);
+        actualWater.IsDiving.Should().Be(expectedWater.IsDiving);
+        actualWater.UnderwaterTimer.Should().Be(expectedWater.UnderwaterTimer);
 
         actualFly.IsEnabled.Should().Be(expectedFly.IsEnabled);
         actualFly.MaxFlySpeed.Should().Be(expectedFly.MaxFlySpeed);

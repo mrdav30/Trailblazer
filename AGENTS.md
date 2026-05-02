@@ -41,7 +41,7 @@ Keep these aligned whenever behavior or public API changes:
 | [`docs`](docs) | Design notes and high-level explanations | Start with `docs/wiki/OVERVIEW.md`; `SERIALIZATION.MD`, `PATHMANAGER.MD`, `NAVIGATOR.MD`, `NAVSTEERING.MD`, `NAVTURNING.MD`, `NAVMOTOR.MD`, and `GRAVITY.MD` are subsystem references. |
 | [`src/Trailblazer`](src/Trailblazer) | Main library project | Multi-targets `netstandard2.1` and `net8.0`. |
 | [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Chart management, A*, flow field, guide caching, voxel lookup | Most performance-sensitive and correctness-sensitive area. |
-| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Runtime navigation stack | `Navigator`, `NavSteering`, `NavTurning`, `NavMotor`, locomotions, animation hooks. |
+| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Runtime navigation stack | `Navigator`, `NavSteering`, `NavTurning`, `NavMotor`, locomotions. |
 | [`src/Trailblazer/Serialization`](src/Trailblazer/Serialization) | Chronicler serialization layer | Contains `IRecordable`, `IChronicler`, JSON/MemoryPack transports, stable-link support, and the shared `README.md` API reference. |
 | [`src/Trailblazer/Support`](src/Trailblazer/Support) | Shared helper abstractions | Small but still part of public surface area. |
 | [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests) | xUnit v3 test project | Uses FluentAssertions, Moq, FixedMathSharp, GridForge. |
@@ -92,7 +92,7 @@ Important current rules:
 - The current Trailblazer coverage is the navigation branch: `Navigator`, `NavSteering`, `NavTurning`, `NavMotor`, `LocomotionHandler`, and the locomotion types.
 - The load model is populate-existing-instance only. Hosts create and initialize runtime shells first, then Chronicler populates supported state.
 - Trailblazer intentionally does not use Chronicler as a construct-from-data object factory.
-- Host bindings such as animation handlers are not serialized.
+- Host bindings are not serialized.
 - Movement-group coordinator state is rebuild-only runtime state. Group intent is serialized per steering session, and hosts may call `PrewarmMovementGroup()` after load to seed the coordinator before the next frame.
 
 If you touch serialization work, read both:
@@ -214,7 +214,6 @@ Coverage appears lighter or absent around:
 - `PathGuideFactory`
 - `ReusableSurveyResultCache<T>`
 - `VoxelFinder`
-- animation update hooks
 - some support helpers and invalidation edge cases
 
 When touching global/static state, use the existing fixtures and patterns:

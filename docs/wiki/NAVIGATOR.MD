@@ -14,7 +14,6 @@ The code referenced here lives primarily in:
 
 - `src/Trailblazer/Main/Navigator.cs`
 - `src/Trailblazer/Main/INavigate.cs`
-- `src/Trailblazer/Navigation/Animation/*`
 
 ## 1. What Navigator Is
 
@@ -76,8 +75,6 @@ The main entry points are:
 
 - `Setup(...)`
 - `Initialize(TrekCondition condition)`
-- `BindAnimationHandler(...)`
-- `UnbindAnimationHandler()`
 - `PrewarmMovementGroup()`
 - `SyncCurrentTrekConditionToMotor()`
 - `ReplaceTrekCondition(TrekCondition state)`
@@ -128,7 +125,6 @@ Important public state includes:
 - `GlobalId`
 - `OccupantGroupId`
 - `IsLockedOn`
-- `AnimDampTime`
 
 Protected frame-local state includes:
 
@@ -216,7 +212,7 @@ This is what makes the navigator visible to scan-based steering and voxel-occupa
 
 ### 5.6 Host Bindings
 
-`Navigator` can also bind optional host integrations such as animation handlers.
+`Navigator` can also bind optional host integrations.
 
 Those bindings are not treated as navigator-owned simulation state.
 
@@ -372,7 +368,6 @@ Then it:
 5. accumulates any returned deltas
 6. runs `Turning.TrySimulateTurn(...)`
 7. if a rotation was returned, stores it in `Rotation`
-8. optionally updates animation parameters
 
 Important detail:
 
@@ -545,21 +540,6 @@ This is what makes nearby-occupant scans work for `NavSteering.ComputeCombinedSt
 `Reset()` explicitly removes the navigator from all tracked occupied voxels before deactivating it.
 
 This is important because grid occupancy is global or static infrastructure.
-
-## 12. Animation Integration
-
-If a host binds an animation handler through `BindAnimationHandler(...)`, `Simulate()` calls:
-
-- `NavAnimationUpdater.UpdateAnimationParameters(...)`
-
-The animation update uses:
-
-- current movement direction relative to the frame rotation snapshot
-- lock-on state
-- sprinting state
-- damping time
-
-Animation integration is optional. If no handler is bound, the simulation still runs normally.
 
 ## 13. Utility Methods and Extension Points
 

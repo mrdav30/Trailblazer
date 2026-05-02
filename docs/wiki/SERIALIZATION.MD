@@ -99,7 +99,6 @@ That means this runtime is not designed for:
 - `GlobalId`
 - `OccupantGroupId`
 - `IsLockedOn`
-- `AnimDampTime`
 - `StuckThresholdSpeed`
 - `IsGuideded`
 - `_frameCondition`
@@ -215,7 +214,6 @@ Out of scope today:
 
 - inline serialization of live `IGuide` instances
 - movement-group coordinator caches and memberships
-- animation handler references
 - chart registrations, path caches, or global pathing state
 - full voxel occupancy maps
 

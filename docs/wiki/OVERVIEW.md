@@ -385,4 +385,4 @@ Before runtime pathing works correctly:
 - [`GRAVITY.MD`](GRAVITY.MD) for the gravity model
 - `src/Trailblazer/Main` for host-facing lifecycle entry points such as `Navigator` and `TrailblazerManager`
 - `src/Trailblazer/Pathing` for core pathing logic, especially the `Search` and `Support` subfolders
-- `src/Trailblazer/Navigation` for steering, turning, motor flow, movement groups, and animation integration
+- `src/Trailblazer/Navigation` for steering, turning, motor flow, movement groups

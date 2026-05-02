@@ -5,7 +5,6 @@ using GridForge.Configuration;
 using GridForge.Grids;
 using System;
 using Trailblazer.Navigation;
-using Trailblazer.Navigation.Animation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
@@ -781,77 +780,6 @@ public class NavigatorTests : IDisposable
     }
 
     [Fact]
-    public void BindAnimationHandler_ShouldForwardAnimationUpdatesDuringSimulate()
-    {
-        var navigator = CreateNavigator(Vector3d.Zero);
-        var handler = new TestAnimationHandler();
-        navigator.BindAnimationHandler(handler);
-
-        navigator.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Fast, isRequestingJump: false);
-        TrailblazerManager.Simulate();
-        navigator.Simulate();
-
-        handler.LastForward.Should().Be(Fixed64.One);
-        handler.LastSideways.Should().Be(Fixed64.Zero);
-        handler.LastDampTime.Should().Be(navigator.AnimDampTime);
-        handler.LastIsSprinting.Should().BeTrue();
-        handler.UpdateCount.Should().Be(1);
-    }
-
-    [Fact]
-    public void BindAnimationHandler_ShouldRejectNull()
-    {
-        var navigator = CreateNavigator(Vector3d.Zero);
-
-        navigator.Invoking(n => n.BindAnimationHandler(null!))
-            .Should().Throw<ArgumentNullException>()
-            .WithParameterName("handler");
-    }
-
-    [Fact]
-    public void UnbindAnimationHandler_ShouldStopForwardingAnimationUpdates()
-    {
-        var navigator = CreateNavigator(Vector3d.Zero);
-        var handler = new TestAnimationHandler();
-        navigator.BindAnimationHandler(handler);
-
-        navigator.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Moderate, isRequestingJump: false);
-        TrailblazerManager.Simulate();
-        navigator.Simulate();
-        navigator.CommitFrameMotion();
-
-        navigator.UnbindAnimationHandler();
-
-        navigator.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Fast, isRequestingJump: false);
-        TrailblazerManager.Simulate();
-        navigator.Simulate();
-
-        handler.UpdateCount.Should().Be(1);
-    }
-
-    [Fact]
-    public void BindAnimationHandler_ShouldUseLocalMovementAxes_WhenLockedOnAndBackpedaling()
-    {
-        var navigator = CreateNavigator(
-            Vector3d.Zero,
-            rotation: FixedQuaternion.FromDirection(Vector3d.Right));
-        var handler = new TestAnimationHandler();
-        navigator.BindAnimationHandler(handler);
-        navigator.IsLockedOn = true;
-
-        navigator.ApplyInputTrekRequest(
-            Vector3d.Left,
-            TrekRate.Moderate,
-            facingDirection: Vector3d.Right);
-
-        TrailblazerManager.Simulate();
-        navigator.Simulate();
-
-        handler.LastForward.Should().Be(-Fixed64.One);
-        handler.LastSideways.Should().Be(Fixed64.Zero);
-    }
-
-    [Fact]
     public void ApplyInputTrekRequest_ShouldCaptureFacingDirection()
     {
         var navigator = CreateNavigator(Vector3d.Zero);
@@ -1495,36 +1423,6 @@ public class NavigatorTests : IDisposable
             source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
-    }
-
-    private sealed class TestAnimationHandler : INavAnimationHandler
-    {
-        public Fixed64 LastForward { get; private set; }
-
-        public Fixed64 LastSideways { get; private set; }
-
-        public Fixed64 LastDampTime { get; private set; }
-
-        public bool LastIsSprinting { get; private set; }
-
-        public int UpdateCount { get; private set; }
-
-        public void SetDirectionalInput(Fixed64 forward, Fixed64 sideways, Fixed64 dampTime)
-        {
-            LastForward = forward;
-            LastSideways = sideways;
-            LastDampTime = dampTime;
-            UpdateCount++;
-        }
-
-        public void SetIsSprinting(bool isSprinting)
-        {
-            LastIsSprinting = isSprinting;
-        }
-
-        public void ApplyRootMotion(Vector3d deltaPosition, Fixed64 forceMultiplier)
-        {
-        }
     }
 
     private readonly record struct ScriptedRouteTopologyFrame(

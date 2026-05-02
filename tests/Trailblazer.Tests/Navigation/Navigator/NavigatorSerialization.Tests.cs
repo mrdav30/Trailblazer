@@ -78,7 +78,6 @@ public class NavigatorSerializationTests : IDisposable
         target.GlobalId.Should().Be(source.GlobalId);
         target.OccupantGroupId.Should().Be(source.OccupantGroupId);
         target.IsLockedOn.Should().Be(source.IsLockedOn);
-        target.AnimDampTime.Should().Be(source.AnimDampTime);
         target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
         target.FrameRequest.IsRequestingSwim.Should().Be(source.FrameRequest.IsRequestingSwim);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
@@ -141,7 +140,6 @@ public class NavigatorSerializationTests : IDisposable
         target.GlobalId.Should().Be(source.GlobalId);
         target.OccupantGroupId.Should().Be(source.OccupantGroupId);
         target.IsLockedOn.Should().Be(source.IsLockedOn);
-        target.AnimDampTime.Should().Be(source.AnimDampTime);
         target.FrameRequest.FacingDirection.Should().Be(source.FrameRequest.FacingDirection);
         target.FrameRequest.IsRequestingSwim.Should().Be(source.FrameRequest.IsRequestingSwim);
         target.FrameRequest.IsRequestingClimb.Should().Be(source.FrameRequest.IsRequestingClimb);
@@ -986,7 +984,6 @@ public class NavigatorSerializationTests : IDisposable
         source.GuidedFlowFieldExtraFloodRange = 32;
         source.FootPositionAdjust = (Fixed64)0.75f;
         source.IsLockedOn = true;
-        source.AnimDampTime = (Fixed64)0.25f;
         motor.Handler.Move.FrameVelocity = new Vector3d(1, 0, 2);
         platform.ActivePlatform = new PlatformSnapshot(12, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(1, 0, 1)));
         platform.MovementTransfer = MotionTransfer.PermaLocked;

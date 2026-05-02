@@ -5,7 +5,6 @@ using GridForge.Grids;
 using System;
 using System.Runtime.CompilerServices;
 using Trailblazer.Navigation;
-using Trailblazer.Navigation.Animation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
@@ -144,6 +143,11 @@ public abstract class Navigator : INavigate, IRecordable
     public Fixed64 FootPositionAdjust { get; set; } = DefaultFootPositionAdjust;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the object is currently locked on to a target.
+    /// </summary>
+    public bool IsLockedOn { get; set; }
+
+    /// <summary>
     /// Path request mode used for guided travel.
     /// </summary>
     public SolidPathAlgorithm GuidedPathMode { get; set; } = SolidPathAlgorithm.AStar;
@@ -190,22 +194,6 @@ public abstract class Navigator : INavigate, IRecordable
 
     /// <inheritdoc/>
     public byte OccupantGroupId { get; set; } = 1;
-
-    #endregion
-
-    #region Animation
-
-    private INavAnimationHandler? _animationHandler;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the object is currently locked on to a target.
-    /// </summary>
-    public bool IsLockedOn { get; set; }
-
-    /// <summary>
-    /// Specifies the animation damping time used for smoothing transitions.
-    /// </summary>
-    public Fixed64 AnimDampTime = (Fixed64)0.1f;
 
     #endregion
 
@@ -322,20 +310,6 @@ public abstract class Navigator : INavigate, IRecordable
     #endregion
 
     #region Host Bindings
-
-    /// <summary>
-    /// Binds a host-owned animation handler to this object.
-    /// </summary>
-    public virtual void BindAnimationHandler(INavAnimationHandler handler)
-    {
-        _animationHandler = handler ?? throw new ArgumentNullException(nameof(handler));
-    }
-
-    /// <summary>
-    /// Unbinds any previously attached animation handler.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public virtual void UnbindAnimationHandler() => _animationHandler = null;
 
     /// <summary>
     /// Prewarms the steering movement-group coordinator from this object's currently loaded state.
@@ -593,17 +567,6 @@ public abstract class Navigator : INavigate, IRecordable
 
         if (Turning!.TrySimulateTurn(Position, LastPosition, Forward, Rotation, out FixedQuaternion appliedRotation))
             Rotation = appliedRotation;
-
-        if (_animationHandler is null) return;
-
-        NavAnimationUpdater.UpdateAnimationParameters(
-            _animationHandler,
-            _frameRequest.Direction,
-            _frameRequest.Rotation,
-            IsLockedOn,
-            _frameRequest.Rate == TrekRate.Fast,
-            AnimDampTime
-        );
     }
 
     /// <summary>
@@ -1050,7 +1013,6 @@ public abstract class Navigator : INavigate, IRecordable
         Guid globalId = GlobalId;
         byte occupantGroupId = OccupantGroupId;
         bool isLockedOn = IsLockedOn;
-        Fixed64 animDampTime = AnimDampTime;
         Fixed64 stuckThresholdSpeed = StuckThresholdSpeed;
         bool isGuideded = IsGuideded;
         bool guidedClimbIntent = _guidedClimbIntent;
@@ -1082,7 +1044,6 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref globalId, "globalId", Guid.Empty);
         RecordValues.Look(chronicler, ref occupantGroupId, "occupantGroupId", (byte)1);
         RecordValues.Look(chronicler, ref isLockedOn, "isLockedOn", false);
-        RecordValues.Look(chronicler, ref animDampTime, "animDampTime", (Fixed64)0.1f);
         RecordValues.Look(chronicler, ref stuckThresholdSpeed, "stuckThresholdSpeed", Fixed64.Zero);
         RecordValues.Look(chronicler, ref isGuideded, "isGuideded", false);
         RecordValues.Look(chronicler, ref guidedClimbIntent, "guidedClimbIntent", false);
@@ -1117,7 +1078,6 @@ public abstract class Navigator : INavigate, IRecordable
             GlobalId = globalId;
             OccupantGroupId = occupantGroupId;
             IsLockedOn = isLockedOn;
-            AnimDampTime = animDampTime;
             StuckThresholdSpeed = stuckThresholdSpeed;
             IsGuideded = isGuideded;
             _guidedClimbIntent = guidedClimbIntent;

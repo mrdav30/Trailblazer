@@ -11,7 +11,7 @@ The library combines:
 - flow-field generation for shared destination movement
 - cached reusable guide results
 - steering, turning, and deterministic motor simulation
-- extension points for host-owned traversal, collision, and animation systems
+- extension points for host-owned traversal, and collision systems
 
 ## Status
 
@@ -251,7 +251,7 @@ Use `VolumePathRequest` when:
 | [`src/Trailblazer`](src/Trailblazer) | Main library source |
 | [`src/Trailblazer/Main`](src/Trailblazer/Main) | Host-facing lifecycle entry points such as `Navigator` and `TrailblazerManager` |
 | [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Charts, requests, search, guides, caching, and transitions |
-| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Steering, turning, motor, movement groups, and animation flow |
+| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Steering, turning, motor, and movement groups flow |
 | [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests) | xUnit test suite |
 | [`docs`](docs) | Architecture and subsystem notes |
 

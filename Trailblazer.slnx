@@ -13,5 +13,6 @@
     <File Path="README.md" />
   </Folder>
   <Project Path="src/Trailblazer/Trailblazer.csproj" />
+  <Project Path="tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj" />
   <Project Path="tests/Trailblazer.Tests/Trailblazer.Tests.csproj" />
 </Solution>

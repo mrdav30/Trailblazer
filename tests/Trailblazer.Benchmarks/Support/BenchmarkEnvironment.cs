@@ -59,6 +59,8 @@ internal static class BenchmarkEnvironment
             return;
 
         GridForgeLogger.MinimumLevel = DiagnosticLevel.None;
+        TrailblazerLogger.MinimumLevel = DiagnosticLevel.None;
+        TrailblazerLogger.EnableDebugLogging = false;
         _loggingSuppressed = true;
     }
 

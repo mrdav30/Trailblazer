@@ -1,5 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
+using System;
 using Trailblazer.Support;
 using Xunit;
 
@@ -77,6 +78,28 @@ public sealed class ITransientExtensionsTests
         var instance = new PropDefaultTransient { Direction = Vector3d.Up };
         instance.ClearTransientState();
         instance.Direction.Should().Be(Vector3d.Forward);
+    }
+
+    [Fact]
+    public void SyncTransientState_ShouldThrowArgumentNullException_WhenOtherIsNull()
+    {
+        var target = new TestTransient();
+
+        target.Invoking(static value => value.SyncTransientState(null!))
+            .Should().Throw<ArgumentNullException>()
+            .WithParameterName("other");
+    }
+
+    [Fact]
+    public void SyncTransientState_ShouldThrowArgumentException_WhenTypesDoNotMatch()
+    {
+        var target = new TestTransient();
+        var other = new NoTransientProps();
+
+        target.Invoking(value => value.SyncTransientState(other))
+            .Should().Throw<ArgumentException>()
+            .WithParameterName("other")
+            .WithMessage("*Type mismatch*");
     }
 
     private sealed class TestTransient : ITransient

@@ -1,4 +1,5 @@
 ﻿using GridForge;
+using SwiftCollections.Diagnostics;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -9,7 +10,9 @@ public class PathingFixture : IDisposable
 {
     public PathingFixture()
     {
-        GridForgeLogger.MinimumLevel = SwiftCollections.Diagnostics.DiagnosticLevel.Error;
+        GridForgeLogger.MinimumLevel = DiagnosticLevel.Error;
+        TrailblazerLogger.MinimumLevel = DiagnosticLevel.Error;
+        TrailblazerLogger.EnableDebugLogging = false;
         TrailblazerWorldManager.Setup();
     }
 

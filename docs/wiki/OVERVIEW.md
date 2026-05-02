@@ -27,6 +27,7 @@ Trailblazer assumes:
 - traversable space is represented by `GridForge` voxels
 - pathfinding is driven by `NavigationChart` data and `SolidChartPartition` ownership
 - simulation advances in deterministic fixed steps through `TrailblazerManager`
+- runtime diagnostics flow through `TrailblazerLogger`, with verbose debug logging gated separately from warning and error output
 
 At a high level, the runtime loop is:
 

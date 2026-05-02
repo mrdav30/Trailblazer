@@ -2,9 +2,9 @@
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
+using SwiftCollections.Diagnostics;
 using SwiftCollections.Pool;
 using System;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
@@ -228,9 +228,11 @@ public class SolidChartPartition : IVoxelPartition
 
         if (!TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out VoxelGrid? grid, out Voxel? voxel))
         {
-            Debug.WriteLine($"SolidChartPartition.BindNeighbors: " +
-                $"Failed to find grid or voxel for WorldIndex {WorldIndex}. " +
-                $"Neighbors will be null.");
+            if (TrailblazerLogger.IsEnabled(DiagnosticLevel.Warning))
+            {
+                TrailblazerLogger.Warn($"Failed to find grid or voxel for WorldIndex {WorldIndex}. " +
+                    "Neighbors will be null.");
+            }
             Neighbors = null;
             return;
         }

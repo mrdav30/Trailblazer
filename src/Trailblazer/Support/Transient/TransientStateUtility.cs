@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -21,10 +20,17 @@ internal static class TransientStateUtility
 
     internal static void Sync(ITransient instance, ITransient other)
     {
-        Debug.Assert(other != null, "Target cannot be null.");
+        if (other == null)
+            throw new ArgumentNullException(nameof(other));
 
         Type sourceType = instance.GetType();
-        Debug.Assert(sourceType == other.GetType(), "Type mismatch during SyncState.");
+        Type targetType = other.GetType();
+        if (sourceType != targetType)
+        {
+            throw new ArgumentException(
+                $"Type mismatch during SyncTransientState. Expected {sourceType.FullName}, but received {targetType.FullName}.",
+                nameof(other));
+        }
 
         _syncDelegates.GetOrAdd(sourceType, BuildSyncDelegate)(instance, other);
     }

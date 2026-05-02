@@ -88,6 +88,14 @@ The package id is `Trailblazer`. Once the alpha package is published, installati
 dotnet add package Trailblazer
 ```
 
+## Diagnostics
+
+Trailblazer routes its runtime diagnostics through `TrailblazerLogger`.
+
+- `TrailblazerLogger.MinimumLevel` controls whether warning and error diagnostics are emitted.
+- `TrailblazerLogger.EnableDebugLogging` opt-ins to the verbose trace-style messages that are off by default.
+- `TrailblazerLogger.LogHandler` and `TrailblazerLogger.CustomFormatter` let hosts redirect or format Trailblazer diagnostics without modifying simulation code.
+
 ## Quick Start
 
 ### 1. Register a Navigation Chart

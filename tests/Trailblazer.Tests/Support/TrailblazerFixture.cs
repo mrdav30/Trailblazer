@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SwiftCollections.Diagnostics;
+using System;
 using Xunit;
 
 namespace Trailblazer.Tests;
@@ -8,6 +9,12 @@ namespace Trailblazer.Tests;
 /// </summary>
 public class TrailblazerFixture : IDisposable
 {
+    public TrailblazerFixture()
+    {
+        TrailblazerLogger.MinimumLevel = DiagnosticLevel.Error;
+        TrailblazerLogger.EnableDebugLogging = false;
+    }
+
     public void Dispose()
     {
         TrailblazerManager.Reset();

@@ -4,11 +4,6 @@ using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
 
-// TODO: replace this with a proper logging system that can be enabled/disabled based on build configuration or runtime settings.
-#if DEBUG
-using System.Diagnostics;
-#endif
-
 namespace Trailblazer.Navigation.Motor;
 
 /// <summary>
@@ -289,15 +284,16 @@ public class NavMotor : IRecordable
 
     private void PrepareTraversalState(TrekRequest request)
     {
-#if DEBUG
-        Debug.WriteLine($"NavMotor State: " +
-            $"Grounded={IsOnSolid}, " +
-            $"InAir={IsInGas}, " +
-            $"InWater={IsInLiquid}, " +
-            $"Flying={IsFlying}, " +
-            $"InLimbo={InLimbo}, " +
-            $"Velocity={Handler.Move.FrameVelocity}");
-#endif
+        if (TrailblazerLogger.IsDebugEnabled)
+        {
+            TrailblazerLogger.Debug($"NavMotor State: " +
+                $"Grounded={IsOnSolid}, " +
+                $"InAir={IsInGas}, " +
+                $"InWater={IsInLiquid}, " +
+                $"Flying={IsFlying}, " +
+                $"InLimbo={InLimbo}, " +
+                $"Velocity={Handler.Move.FrameVelocity}");
+        }
 
         // Calculate the slope angle for the current frame based on the movement direction and surface normal.
         FrameSlopeAngle = CurrentState.GetSignedSlopeAngle(request.Direction);

@@ -293,9 +293,9 @@ If you are integrating or extending the runtime, the key source entry points are
 To restore, build, and run the full suite:
 
 ```bash
-dotnet restore Trailblazer.sln
-dotnet build Trailblazer.sln --configuration Release
-dotnet test Trailblazer.sln --configuration Release
+dotnet restore Trailblazer.slnx
+dotnet build Trailblazer.slnx --configuration Release
+dotnet test Trailblazer.slnx --configuration Release
 ```
 
 For focused runs while iterating:

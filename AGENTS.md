@@ -179,9 +179,9 @@ Optimization rules:
 Use these baseline commands:
 
 ```bash
-dotnet restore Trailblazer.sln
-dotnet build Trailblazer.sln --configuration Release
-dotnet test Trailblazer.sln --configuration Release
+dotnet restore Trailblazer.slnx
+dotnet build Trailblazer.slnx --configuration Release
+dotnet test Trailblazer.slnx --configuration Release
 ```
 
 Important note:

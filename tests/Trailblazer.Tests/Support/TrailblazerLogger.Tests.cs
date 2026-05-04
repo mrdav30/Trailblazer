@@ -1,4 +1,5 @@
 using FluentAssertions;
+using GridForge;
 using SwiftCollections.Diagnostics;
 using System;
 using System.Collections.Generic;
@@ -25,32 +26,73 @@ public sealed class TrailblazerLoggerTests : IDisposable
     }
 
     [Fact]
-    public void Debug_ShouldNotEmit_WhenDebugLoggingIsDisabled()
+    public void DebugChannel_ShouldNotEmit_WhenDebugLoggingIsDisabled()
     {
         var entries = new List<(DiagnosticLevel Level, string Message, string Source)>();
         TrailblazerLogger.MinimumLevel = DiagnosticLevel.Info;
         TrailblazerLogger.EnableDebugLogging = false;
         TrailblazerLogger.LogHandler = (level, message, source) => entries.Add((level, message, source));
 
-        TrailblazerLogger.Debug("suppressed");
+        TrailblazerLogger.DebugChannel.Info($"suppressed");
 
         entries.Should().BeEmpty();
     }
 
     [Fact]
-    public void Debug_ShouldEmitInfo_WhenDebugLoggingIsEnabled()
+    public void DebugChannel_ShouldEmitInfo_WhenDebugLoggingIsEnabled()
     {
         var entries = new List<(DiagnosticLevel Level, string Message, string Source)>();
         TrailblazerLogger.MinimumLevel = DiagnosticLevel.Info;
         TrailblazerLogger.EnableDebugLogging = true;
         TrailblazerLogger.LogHandler = (level, message, source) => entries.Add((level, message, source));
 
-        TrailblazerLogger.Debug("visible");
+        TrailblazerLogger.DebugChannel.Info($"visible");
 
         entries.Should().ContainSingle();
         entries[0].Level.Should().Be(DiagnosticLevel.Info);
         entries[0].Message.Should().Be("visible");
-        entries[0].Source.Should().Contain(nameof(Debug_ShouldEmitInfo_WhenDebugLoggingIsEnabled));
+        entries[0].Source.Should().Contain(nameof(DebugChannel_ShouldEmitInfo_WhenDebugLoggingIsEnabled));
+    }
+
+    [Fact]
+    public void ChannelWarn_ShouldNotEvaluateFormattedExpressions_WhenWarningIsDisabled()
+    {
+        int evaluations = 0;
+        var entries = new List<(DiagnosticLevel Level, string Message, string Source)>();
+        TrailblazerLogger.MinimumLevel = DiagnosticLevel.Error;
+        TrailblazerLogger.LogHandler = (level, message, source) => entries.Add((level, message, source));
+
+        TrailblazerLogger.Channel.Warn($"suppressed {Evaluate()}");
+
+        evaluations.Should().Be(0);
+        entries.Should().BeEmpty();
+
+        string Evaluate()
+        {
+            evaluations++;
+            return "value";
+        }
+    }
+
+    [Fact]
+    public void DebugChannel_ShouldNotEvaluateFormattedExpressions_WhenDebugLoggingIsDisabled()
+    {
+        int evaluations = 0;
+        var entries = new List<(DiagnosticLevel Level, string Message, string Source)>();
+        TrailblazerLogger.MinimumLevel = DiagnosticLevel.Info;
+        TrailblazerLogger.EnableDebugLogging = false;
+        TrailblazerLogger.LogHandler = (level, message, source) => entries.Add((level, message, source));
+
+        TrailblazerLogger.DebugChannel.Info($"suppressed {Evaluate()}");
+
+        evaluations.Should().Be(0);
+        entries.Should().BeEmpty();
+
+        string Evaluate()
+        {
+            evaluations++;
+            return "value";
+        }
     }
 }
 

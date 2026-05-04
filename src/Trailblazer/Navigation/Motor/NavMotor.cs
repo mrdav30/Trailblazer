@@ -1,5 +1,6 @@
 ﻿using Chronicler;
 using FixedMathSharp;
+using GridForge;
 using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
@@ -284,16 +285,8 @@ public class NavMotor : IRecordable
 
     private void PrepareTraversalState(TrekRequest request)
     {
-        if (TrailblazerLogger.IsDebugEnabled)
-        {
-            TrailblazerLogger.Debug($"NavMotor State: " +
-                $"Grounded={IsOnSolid}, " +
-                $"InAir={IsInGas}, " +
-                $"InWater={IsInLiquid}, " +
-                $"Flying={IsFlying}, " +
-                $"InLimbo={InLimbo}, " +
-                $"Velocity={Handler.Move.FrameVelocity}");
-        }
+        TrailblazerLogger.DebugChannel.Info(
+            $"NavMotor State: Grounded={IsOnSolid}, InAir={IsInGas}, InWater={IsInLiquid}, Flying={IsFlying}, InLimbo={InLimbo}, Velocity={Handler.Move.FrameVelocity}");
 
         // Calculate the slope angle for the current frame based on the movement direction and surface normal.
         FrameSlopeAngle = CurrentState.GetSignedSlopeAngle(request.Direction);

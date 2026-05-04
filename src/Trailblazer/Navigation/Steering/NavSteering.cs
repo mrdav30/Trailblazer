@@ -3,7 +3,6 @@ using FixedMathSharp;
 using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
-using SwiftCollections.Diagnostics;
 using System;
 using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.MovementGroups;
@@ -325,8 +324,7 @@ public class NavSteering : IRecordable
         // assume the object is being controlled
         if (pathRequest == null || !pathRequest.HasValidEndpoints)
         {
-            if (TrailblazerLogger.IsEnabled(DiagnosticLevel.Warning))
-                TrailblazerLogger.Warn($"Invalid path request applied: {pathRequest}");
+            TrailblazerLogger.Channel.Warn($"Invalid path request applied: {pathRequest}");
             Arrive();
             return;
         }
@@ -505,7 +503,7 @@ public class NavSteering : IRecordable
 
         if (!CheckStuckStatus(vessel.Position, vessel.Speed, vessel.StuckThresholdSpeed))
         {
-            TrailblazerLogger.Debug("Stuck agent arriving!");
+            TrailblazerLogger.DebugChannel.Info($"Stuck agent arriving!");
             Arrive();
             return Vector3d.Zero;
         }
@@ -538,7 +536,7 @@ public class NavSteering : IRecordable
         if (!ok || !_currentRequest.HasValidEndpoints)
         {
             PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false);
-            TrailblazerLogger.Warn("Path request is using invalid endpoints.");
+            TrailblazerLogger.Channel.Warn($"Path request is using invalid endpoints.");
             return false;
         }
 
@@ -588,8 +586,7 @@ public class NavSteering : IRecordable
         if (!_currentRequest.IsValid || !PathGuideFactory.RequestGuide(_currentRequest, out _trailGuide))
         {
             PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false);
-            if (TrailblazerLogger.IsEnabled(DiagnosticLevel.Warning))
-                TrailblazerLogger.Warn($"Unable to retrieve a guide from {origin} to {Destination}.");
+            TrailblazerLogger.Channel.Warn($"Unable to retrieve a guide from {origin} to {Destination}.");
             return false;
         }
 
@@ -618,7 +615,7 @@ public class NavSteering : IRecordable
 
         if (targetDirection == Vector3d.Zero)
         {
-            TrailblazerLogger.Debug("No viable movement direction found.");
+            TrailblazerLogger.DebugChannel.Info($"No viable movement direction found.");
             return Vector3d.Zero;
         }
 
@@ -740,7 +737,7 @@ public class NavSteering : IRecordable
 
     private void HandleInvalidPath(string debugMessage)
     {
-        TrailblazerLogger.Debug(debugMessage);
+        TrailblazerLogger.DebugChannel.Info($"{debugMessage}");
         Events.OnInvalidPath?.Invoke();
         Arrive();
     }

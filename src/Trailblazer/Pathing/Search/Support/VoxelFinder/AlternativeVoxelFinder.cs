@@ -1,6 +1,6 @@
 ﻿using FixedMathSharp;
+using GridForge;
 using GridForge.Grids;
-using SwiftCollections.Diagnostics;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
@@ -96,11 +96,8 @@ public class AlternativeVoxelFinder
             iterations++;
             if (iterations > 500)
             {
-                if (TrailblazerLogger.IsEnabled(DiagnosticLevel.Error))
-                {
-                    TrailblazerLogger.Error($"Alternative voxel search exceeded the iteration safety cap for query {_worldPos} " +
-                        $"at layer {_layer} with max test distance {_maxTestDistance}.");
-                }
+                TrailblazerLogger.Channel.Error(
+                    $"Alternative voxel search exceeded the iteration safety cap for query {_worldPos} at layer {_layer} with max test distance {_maxTestDistance}.");
                 break;
             }
         }

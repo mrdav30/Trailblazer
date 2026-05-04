@@ -1,7 +1,7 @@
 ﻿using Chronicler;
 using FixedMathSharp;
+using GridForge;
 using GridForge.Grids;
-using SwiftCollections.Diagnostics;
 using System;
 using System.Runtime.CompilerServices;
 using Trailblazer.Navigation;
@@ -394,11 +394,8 @@ public abstract class Navigator : INavigate, IRecordable
 
         if (!TryCreateGuidedPathRequest(targetPosition, out IPathRequest pathRequest))
         {
-            if (TrailblazerLogger.IsEnabled(DiagnosticLevel.Warning))
-            {
-                TrailblazerLogger.Warn(
-                    $"Unable to create a {GuidedPathMode} path request for object {GlobalId} at {Position} targeting {targetPosition}.");
-            }
+            TrailblazerLogger.Channel.Warn(
+                $"Unable to create a {GuidedPathMode} path request for object {GlobalId} at {Position} targeting {targetPosition}.");
             return;
         }
 
@@ -976,10 +973,7 @@ public abstract class Navigator : INavigate, IRecordable
 
         if (curGrid!.TryAddVoxelOccupant(curVoxel!, this) == false)
         {
-            if (TrailblazerLogger.IsEnabled(DiagnosticLevel.Warning))
-            {
-                TrailblazerLogger.Warn($"Navigator {GlobalId} failed to register occupancy in voxel {curVoxel!.Index} of grid {curGrid} at position {Position}.");
-            }
+            TrailblazerLogger.Channel.Warn($"Navigator {GlobalId} failed to register occupancy in voxel {curVoxel!.Index} of grid {curGrid} at position {Position}.");
             return;
         }
 

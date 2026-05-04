@@ -1,8 +1,8 @@
 ﻿using FixedMathSharp;
+using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
-using SwiftCollections.Diagnostics;
 using SwiftCollections.Pool;
 using System;
 using System.Diagnostics.CodeAnalysis;
@@ -228,11 +228,7 @@ public class SolidChartPartition : IVoxelPartition
 
         if (!TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out VoxelGrid? grid, out Voxel? voxel))
         {
-            if (TrailblazerLogger.IsEnabled(DiagnosticLevel.Warning))
-            {
-                TrailblazerLogger.Warn($"Failed to find grid or voxel for WorldIndex {WorldIndex}. " +
-                    "Neighbors will be null.");
-            }
+            TrailblazerLogger.Channel.Warn($"Failed to find grid or voxel for WorldIndex {WorldIndex}. Neighbors will be null.");
             Neighbors = null;
             return;
         }

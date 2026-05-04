@@ -3,7 +3,6 @@ using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
-using SwiftCollections.Diagnostics;
 using System;
 using System.Threading;
 
@@ -194,11 +193,8 @@ public static class TraversalTransitionRegistry
             if (IsManualOwnershipKind(ownershipKind)
                 && CheckDuplicateManualTransition_NoLock(registered))
             {
-                if (TrailblazerLogger.IsEnabled(DiagnosticLevel.Warning))
-                {
-                    TrailblazerLogger.Warn(
-                        $"Ignored duplicate manual traversal transition '{transition.Id}' because it matches an existing manual transition.");
-                }
+                TrailblazerLogger.Channel.Warn(
+                    $"Ignored duplicate manual traversal transition '{transition.Id}' because it matches an existing manual transition.");
                 return false;
             }
 

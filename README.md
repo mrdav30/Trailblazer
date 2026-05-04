@@ -93,7 +93,8 @@ dotnet add package Trailblazer
 Trailblazer routes its runtime diagnostics through `TrailblazerLogger`.
 
 - `TrailblazerLogger.MinimumLevel` controls whether warning and error diagnostics are emitted.
-- `TrailblazerLogger.EnableDebugLogging` opt-ins to the verbose trace-style messages that are off by default.
+- `TrailblazerLogger.Channel` exposes no-unnecessary-work interpolated `Info`, `Warn`, `Error`, and dynamic `Log` helpers.
+- `TrailblazerLogger.EnableDebugLogging` opts in to verbose trace-style messages on `TrailblazerLogger.DebugChannel`, which are off by default.
 - `TrailblazerLogger.LogHandler` and `TrailblazerLogger.CustomFormatter` let hosts redirect or format Trailblazer diagnostics without modifying simulation code.
 
 ## Quick Start

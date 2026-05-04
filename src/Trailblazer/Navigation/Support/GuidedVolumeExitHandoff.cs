@@ -82,43 +82,16 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
 
     public void RecordData(IChronicler chronicler)
     {
-        string? transitionId = TransitionId;
-        Vector3d chartOriginPosition = ChartOriginPosition;
-        Vector3d targetPosition = TargetPosition;
-        SolidPathAlgorithm chartPathMode = ChartPathMode;
-        bool allowUnwalkableEndpoints = AllowUnwalkableEndpoints;
-        bool allowTraversalTransitions = AllowTraversalTransitions;
-        Fixed64 maxClimbHeight = MaxClimbHeight;
-        HeuristicMethod aStarHeuristic = AStarHeuristic;
-        int flowFieldExtraFloodRange = FlowFieldExtraFloodRange;
-        int movementGroupId = MovementGroupId;
-        bool isRequestingClimb = IsRequestingClimb;
-
-        RecordValues.Look(chronicler, ref transitionId, "transitionId", null);
-        RecordValues.Look(chronicler, ref chartOriginPosition, "chartOriginPosition", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref targetPosition, "targetPosition", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref chartPathMode, "chartPathMode", SolidPathAlgorithm.AStar);
-        RecordValues.Look(chronicler, ref allowUnwalkableEndpoints, "allowUnwalkableEndpoints", false);
-        RecordValues.Look(chronicler, ref allowTraversalTransitions, "allowTraversalTransitions", false);
-        RecordValues.Look(chronicler, ref maxClimbHeight, "maxClimbHeight", Fixed64.One);
-        RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref flowFieldExtraFloodRange, "flowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
-        RecordValues.Look(chronicler, ref movementGroupId, "movementGroupId", -1);
-        RecordValues.Look(chronicler, ref isRequestingClimb, "isRequestingClimb", false);
-
-        if (chronicler.Mode == SerializationMode.Loading)
-        {
-            TransitionId = transitionId;
-            ChartOriginPosition = chartOriginPosition;
-            TargetPosition = targetPosition;
-            ChartPathMode = chartPathMode;
-            AllowUnwalkableEndpoints = allowUnwalkableEndpoints;
-            AllowTraversalTransitions = allowTraversalTransitions;
-            MaxClimbHeight = maxClimbHeight;
-            AStarHeuristic = aStarHeuristic;
-            FlowFieldExtraFloodRange = flowFieldExtraFloodRange;
-            MovementGroupId = movementGroupId;
-            IsRequestingClimb = isRequestingClimb;
-        }
+        RecordValues.Look(chronicler, ref TransitionId, "TransitionId", null);
+        RecordValues.Look(chronicler, ref ChartOriginPosition, "ChartOriginPosition", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref TargetPosition, "TargetPosition", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref ChartPathMode, "ChartPathMode", SolidPathAlgorithm.AStar);
+        RecordValues.Look(chronicler, ref AllowUnwalkableEndpoints, "AllowUnwalkableEndpoints", false);
+        RecordValues.Look(chronicler, ref AllowTraversalTransitions, "AllowTraversalTransitions", false);
+        RecordValues.Look(chronicler, ref MaxClimbHeight, "MaxClimbHeight", Fixed64.One);
+        RecordValues.Look(chronicler, ref AStarHeuristic, "AStarHeuristic", HeuristicMethod.Manhattan);
+        RecordValues.Look(chronicler, ref FlowFieldExtraFloodRange, "FlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
+        RecordValues.Look(chronicler, ref MovementGroupId, "MovementGroupId", -1);
+        RecordValues.Look(chronicler, ref IsRequestingClimb, "IsRequestingClimb", false);
     }
 }

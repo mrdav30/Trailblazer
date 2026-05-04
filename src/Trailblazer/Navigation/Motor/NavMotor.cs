@@ -17,12 +17,14 @@ namespace Trailblazer.Navigation.Motor;
 [Serializable]
 public class NavMotor : IRecordable
 {
-    #region Fields & Properties
+    #region Fields
 
     /// <summary>
     /// Manages locomotion states and behaviors.
     /// </summary>
-    public LocomotionHandler Handler = new();
+    private LocomotionHandler _handler = new();
+
+    private bool _isInitialized;
 
     /// <inheritdoc cref="NavMotorEvents"/>
     [NonSerialized]
@@ -46,7 +48,7 @@ public class NavMotor : IRecordable
     /// <summary>
     /// Gets a value indicating whether the object has been initialized.
     /// </summary>
-    public bool IsInitialized { get; private set; }
+    public bool IsInitialized => _isInitialized;
 
     /// <inheritdoc cref="PlatformLocomotion"/>
     public PlatformLocomotion? PlatformModule => Handler.Platform;
@@ -164,6 +166,20 @@ public class NavMotor : IRecordable
     /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
     public static NavMotor CreateNew(TrekCondition initialCondition, LocomotionProfile? profile = null) => new(initialCondition, profile);
 
+    /// <summary>
+    /// Creates a new <see cref="NavMotor"/> instance without initializing it, allowing for manual setup before use.
+    /// </summary>
+    /// <param name="handler">Optional locomotion handler to associate with the new instance.</param>
+    /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
+    public static NavMotor CreateUninitialized(LocomotionHandler? handler = null)
+    {
+        var motor = new NavMotor();
+        if (handler != null)
+            motor._handler = handler;
+
+        return motor;
+    }
+
     // Parameterless constructor for serialization purposes. Not intended for direct use.
     private NavMotor() { }
 
@@ -181,12 +197,12 @@ public class NavMotor : IRecordable
     /// <param name="profile">Optional locomotion composition profile. When omitted, the default profile is used.</param>
     public void OnInitialize(TrekCondition condition, LocomotionProfile? profile = null)
     {
-        Handler = profile != null ? new LocomotionHandler(profile) : new LocomotionHandler();
+        _handler = profile != null ? new LocomotionHandler(profile) : new LocomotionHandler();
         CurrentState = new TransitState(condition);
         if (CurrentState.GroundState.HasValue && PlatformModule != null)
             PlatformModule.HandlePlatformChange(CurrentState.GroundState); // set the initial platform
 
-        IsInitialized = true;
+        _isInitialized = true;
     }
 
     /// <summary>
@@ -216,6 +232,13 @@ public class NavMotor : IRecordable
         configure(builder);
         SetLocomotionProfile(builder.Build());
     }
+
+    #endregion
+
+    #region Properties
+
+    /// <inheritdoc cref="_handler"/> 
+    public LocomotionHandler Handler => _handler;
 
     #endregion
 
@@ -1653,22 +1676,18 @@ public class NavMotor : IRecordable
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        LocomotionHandler handler = Handler;
         TrekCondition currentCondition = CurrentState?.ToTrekCondition() ?? new TrekCondition();
         TrekCondition? previousCondition = CurrentState?.PreviousState;
-        bool isInitialized = IsInitialized;
 
-        RecordDeep.Look(chronicler, ref handler, "handler");
-        RecordValues.Look(chronicler, ref currentCondition, "currentCondition");
-        RecordValues.Look(chronicler, ref previousCondition, "previousCondition");
-        RecordValues.Look(chronicler, ref isInitialized, "isInitialized", false);
+        RecordDeep.Look(chronicler, ref _handler, "Handler");
+        RecordValues.Look(chronicler, ref currentCondition, "CurrentCondition");
+        RecordValues.Look(chronicler, ref previousCondition, "PreviousCondition");
+        RecordValues.Look(chronicler, ref _isInitialized, "IsInitialized", false);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
-            Handler = handler;
             CurrentState ??= new(currentCondition, previousCondition);
             CurrentState.Update(currentCondition, previousCondition);
-            IsInitialized = isInitialized;
             AbortTraversalFrame();
         }
     }

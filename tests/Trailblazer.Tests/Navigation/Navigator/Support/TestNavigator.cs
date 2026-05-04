@@ -10,13 +10,13 @@ internal sealed class TestNavigator : Navigator
 
     public TrekCondition FrameCondition => _frameCondition;
 
-    public void SetTestSteering(NavSteering steering) => Steering = steering;
+    public void SetTestSteering(NavSteering steering) => _steering = steering;
 
     public void SetTestPosition(Vector3d position, bool syncLastPosition = true)
     {
-        Position = position;
+        _position = position;
         if (syncLastPosition)
-            LastPosition = position;
+            _lastPosition = position;
     }
 
     public override void CheckTrekCondition()

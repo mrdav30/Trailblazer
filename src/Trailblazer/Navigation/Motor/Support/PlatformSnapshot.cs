@@ -76,8 +76,8 @@ public struct PlatformSnapshot : IEquatable<PlatformSnapshot>, IRecordable
     /// <inheritdoc/>
     public void RecordData(IChronicler chronicler)
     {
-        chronicler.LookValue(ref _id, nameof(Id), 0);
-        chronicler.LookValue(ref Transform, nameof(Transform), default);
-        chronicler.LookValue(ref Inert, nameof(Inert), false);
+        chronicler.LookValue(ref _id, "Id", 0);
+        chronicler.LookValue(ref Transform, "Transform", default);
+        chronicler.LookValue(ref Inert, "Inert", false);
     }
 }

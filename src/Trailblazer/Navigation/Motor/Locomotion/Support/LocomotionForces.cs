@@ -90,13 +90,13 @@ public sealed class LocomotionForces : IRecordable
         // Serialize the presence flag first so loading knows whether to restore an override or clear it.
         bool hasGravityOverride = _gravityForceOverride.HasValue;
         Fixed64 gravityForce = _gravityForceOverride ?? GlobalForces.GravityForce;
-        RecordValues.Look(chronicler, ref hasGravityOverride, "hasGravityOverride", false);
-        RecordValues.Look(chronicler, ref gravityForce, "gravityForce", GlobalForces.GravityForce);
+        RecordValues.Look(chronicler, ref hasGravityOverride, "HasGravityOverride", false);
+        RecordValues.Look(chronicler, ref gravityForce, "GravityForce", GlobalForces.GravityForce);
 
         bool hasTerminalVelocityOverride = _terminalVelocityOverride.HasValue;
         Fixed64 terminalVelocity = _terminalVelocityOverride ?? GlobalForces.TerminalVelocity;
-        RecordValues.Look(chronicler, ref hasTerminalVelocityOverride, "hasTerminalVelocityOverride", false);
-        RecordValues.Look(chronicler, ref terminalVelocity, "terminalVelocity", GlobalForces.TerminalVelocity);
+        RecordValues.Look(chronicler, ref hasTerminalVelocityOverride, "HasTerminalVelocityOverride", false);
+        RecordValues.Look(chronicler, ref terminalVelocity, "TerminalVelocity", GlobalForces.TerminalVelocity);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

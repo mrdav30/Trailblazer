@@ -71,7 +71,7 @@ Another important rule applies across the Trailblazer `RecordData(...)` implemen
 - missing value entries restore to the declared default during load
 - deep record paths are split intentionally: reference-owned nested objects use `RecordDeep`, non-nullable structs use `RecordDeepStruct`, and optional structs use `RecordNullableDeep`
 
-This keeps payloads smaller and makes partial or older payloads deterministic.
+This keeps payloads smaller and makes partial payloads deterministic.
 
 It also means omitted entries do not preserve whatever value happened to already be present in the target runtime shell. If a field is absent from the payload, load assigns that field's declared default.
 
@@ -95,7 +95,7 @@ That means this runtime is not designed for:
 - `Acceleration`
 - `Size`
 - `FootPositionAdjust`
-- guided-request defaults such as `GuidedPathMode`, `GuidedAllowUnwalkableEndpoints`, `GuidedAllowTraversalTransitions`, and the built-in chart request tuning values
+- guided-request defaults configured through `ConfigureForGuidedTraversal(...)`, including `GuidedPathMode`, transition fallback, and the built-in chart request tuning values
 - `GlobalId`
 - `OccupantGroupId`
 - `IsLockedOn`
@@ -281,7 +281,7 @@ The current Trailblazer-focused tests verify that:
 - path-request configuration and A* waypoint progress survive round-trip
 - guides are reacquired after load instead of being serialized inline
 - partial payload loads preserve omitted branches on existing initialized runtime shells
-- older payloads missing newer fields fall back to current runtime defaults
+- payloads missing current fields fall back to declared defaults
 - invalid request payloads fail closed and clear active steering sessions instead of leaving broken live state
 - disabled locomotions clear transient runtime state on load even when serialized payloads still carry stale transient values
 - unresolved deferred links throw explicit load errors for both transports

@@ -194,16 +194,16 @@ public struct TrekRequest : IRecordable
     /// <inheritdoc/>
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref Origin, nameof(Origin), Vector3d.Zero);
-        RecordValues.Look(chronicler, ref FootPosition, nameof(FootPosition), null);
-        RecordValues.Look(chronicler, ref Rotation, nameof(Rotation), FixedQuaternion.Identity);
-        RecordValues.Look(chronicler, ref Direction, nameof(Direction), Vector3d.Zero);
-        RecordValues.Look(chronicler, ref FacingDirection, nameof(FacingDirection), null);
-        RecordValues.Look(chronicler, ref Rate, nameof(Rate), TrekRate.Stationary);
-        RecordValues.Look(chronicler, ref IsRequestingJump, nameof(IsRequestingJump), false);
-        RecordValues.Look(chronicler, ref CanAffordJump, nameof(CanAffordJump), true);
-        RecordValues.Look(chronicler, ref IsRequestingFlight, nameof(IsRequestingFlight), false);
-        RecordValues.Look(chronicler, ref IsRequestingSwim, nameof(IsRequestingSwim), false);
-        RecordValues.Look(chronicler, ref IsRequestingClimb, nameof(IsRequestingClimb), false);
+        RecordValues.Look(chronicler, ref Origin, "Origin", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref FootPosition, "FootPosition", null);
+        RecordValues.Look(chronicler, ref Rotation, "Rotation", FixedQuaternion.Identity);
+        RecordValues.Look(chronicler, ref Direction, "Direction", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref FacingDirection, "FacingDirection", null);
+        RecordValues.Look(chronicler, ref Rate, "Rate", TrekRate.Stationary);
+        RecordValues.Look(chronicler, ref IsRequestingJump, "IsRequestingJump", false);
+        RecordValues.Look(chronicler, ref CanAffordJump, "CanAffordJump", true);
+        RecordValues.Look(chronicler, ref IsRequestingFlight, "IsRequestingFlight", false);
+        RecordValues.Look(chronicler, ref IsRequestingSwim, "IsRequestingSwim", false);
+        RecordValues.Look(chronicler, ref IsRequestingClimb, "IsRequestingClimb", false);
     }
 }

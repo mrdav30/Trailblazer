@@ -265,16 +265,7 @@ public class NavTurning : IRecordable
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        bool canTurn = CanTurn;
-        Fixed64 turnRate = TurnRate;
-
-        RecordValues.Look(chronicler, ref canTurn, "canTurn", true);
-        RecordValues.Look(chronicler, ref turnRate, "turnRate", DefaultTurnRate);
-
-        if (chronicler.Mode == SerializationMode.Loading)
-        {
-            CanTurn = canTurn;
-            TurnRate = turnRate;
-        }
+        RecordValues.Look(chronicler, ref CanTurn, "CanTurn", true);
+        RecordValues.Look(chronicler, ref TurnRate, "TurnRate", DefaultTurnRate);
     }
 }

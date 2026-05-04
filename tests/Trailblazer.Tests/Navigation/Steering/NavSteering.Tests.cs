@@ -1382,21 +1382,21 @@ public class NavSteeringTests : IDisposable
 
         public void ForceMissingRequestState(Vector3d destination)
         {
-            Destination = destination;
-            TargetDirection = new Vector3d(1, 0, 0);
-            ShouldMove = true;
-            IsAtDestination = false;
+            _destination = destination;
+            _targetDirection = new Vector3d(1, 0, 0);
+            _shouldMove = true;
+            _isAtDestination = false;
         }
 
         public int GetGroupIndex() => GroupIndex;
 
         public void ForceHeadingState(Vector3d targetDirection, Fixed64 distanceToTarget)
         {
-            TargetDirection = targetDirection;
-            LastTargetDirection = targetDirection;
-            ShouldMove = true;
-            IsAtDestination = false;
-            HasLineOfSightPath = false;
+            _targetDirection = targetDirection;
+            _lastTargetDirection = targetDirection;
+            _shouldMove = true;
+            _isAtDestination = false;
+            _hasLineOfSightPath = false;
             _distanceToTarget = distanceToTarget;
         }
 

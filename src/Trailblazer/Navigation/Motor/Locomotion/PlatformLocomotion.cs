@@ -357,8 +357,8 @@ public class PlatformLocomotion : ILocomotion
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
-        RecordValues.Look(chronicler, ref HeightAdjust, "heightAdjust", DefaultHeightAdjust);
+        RecordValues.Look(chronicler, ref _isEnabled, "IsEnabled", true);
+        RecordValues.Look(chronicler, ref HeightAdjust, "HeightAdjust", DefaultHeightAdjust);
 
         bool isNewPlatform = IsNewPlatform;
         PlatformSnapshot? activePlatform = ActivePlatform;
@@ -371,16 +371,16 @@ public class PlatformLocomotion : ILocomotion
         Vector3d framePlatformVelocity = FramePlatformVelocity;
         int holdPlatformFrames = HoldPlatformFrames;
 
-        RecordValues.Look(chronicler, ref isNewPlatform, "isNewPlatform", false);
-        RecordValues.Look(chronicler, ref activePlatform, "activePlatform", null);
-        RecordValues.Look(chronicler, ref previousPlatform, "previousPlatform", null);
-        RecordValues.Look(chronicler, ref holdPlatform, "holdPlatform", null);
-        RecordValues.Look(chronicler, ref movementTransfer, "movementTransfer", MotionTransfer.None);
-        RecordValues.Look(chronicler, ref scoutLocalPoint, "scoutLocalPoint", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref scoutLocalRotation, "scoutLocalRotation", FixedQuaternion.Identity);
-        RecordValues.Look(chronicler, ref platformVelocity, "platformVelocity", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref framePlatformVelocity, "framePlatformVelocity", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref holdPlatformFrames, "holdPlatformFrames", 0);
+        RecordValues.Look(chronicler, ref isNewPlatform, "IsNewPlatform", false);
+        RecordValues.Look(chronicler, ref activePlatform, "ActivePlatform", null);
+        RecordValues.Look(chronicler, ref previousPlatform, "PreviousPlatform", null);
+        RecordValues.Look(chronicler, ref holdPlatform, "HoldPlatform", null);
+        RecordValues.Look(chronicler, ref movementTransfer, "MovementTransfer", MotionTransfer.None);
+        RecordValues.Look(chronicler, ref scoutLocalPoint, "ScoutLocalPoint", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref scoutLocalRotation, "ScoutLocalRotation", FixedQuaternion.Identity);
+        RecordValues.Look(chronicler, ref platformVelocity, "PlatformVelocity", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref framePlatformVelocity, "FramePlatformVelocity", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref holdPlatformFrames, "HoldPlatformFrames", 0);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

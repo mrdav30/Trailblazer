@@ -87,17 +87,17 @@ public class FallLocomotion : ILocomotion
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
-        RecordValues.Look(chronicler, ref MaxFallHeight, "maxFallHeight", DefaultMaxFallHeight);
-        RecordValues.Look(chronicler, ref FallControlMultiplier, "fallControlMultiplier", DefaultFallControlMultiplier);
+        RecordValues.Look(chronicler, ref _isEnabled, "IsEnabled", true);
+        RecordValues.Look(chronicler, ref MaxFallHeight, "MaxFallHeight", DefaultMaxFallHeight);
+        RecordValues.Look(chronicler, ref FallControlMultiplier, "FallControlMultiplier", DefaultFallControlMultiplier);
 
         bool isFalling = IsFalling;
         Fixed64 fallStart = FallStart;
         Fixed64 fallEnd = FallEnd;
 
-        RecordValues.Look(chronicler, ref isFalling, "isFalling", false);
-        RecordValues.Look(chronicler, ref fallStart, "fallStart", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref fallEnd, "fallEnd", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref isFalling, "IsFalling", false);
+        RecordValues.Look(chronicler, ref fallStart, "FallStart", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref fallEnd, "FallEnd", Fixed64.Zero);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

@@ -119,16 +119,16 @@ Important public state includes:
 
 In normal `Navigator` usage, the steering integration looks like this:
 
-1. `ApplyGuidedTrekRequest(...)` builds an internal `IPathRequest` from the target position plus navigator-owned defaults, including `GuidedAllowTraversalTransitions` for chart-backed modes, then forwards it to `Steering.ApplyPathRequest(...)`.
+1. `ApplyGuidedTrekRequest(...)` builds an internal `IPathRequest` from the target position plus navigator-owned defaults configured through `ConfigureForGuidedTraversal(...)`, including transition fallback for chart-backed modes, then forwards it to `Steering.ApplyPathRequest(...)`.
 2. Each simulation tick, `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
 3. The resulting heading is passed to `NavTurning` and `NavMotor`.
 
-The built-in guided modes are:
+The built-in chart-backed guided algorithms are:
 
-- `GuidedPathMode.AStar`
-- `GuidedPathMode.FlowField`
-- `GuidedPathMode.Aerial`
-- `GuidedPathMode.Swim`
+- `SolidPathAlgorithm.AStar`
+- `SolidPathAlgorithm.FlowField`
+
+When the navigator's current traversal medium is `Gas` or `Liquid`, guided routing is volume-first and uses the configured solid algorithm only for optional chart-backed exit or landing handoffs.
 
 If you use `NavSteering` directly, the essential rule is:
 
@@ -168,7 +168,7 @@ It may be:
 
 When transition-aware guided fallback is enabled, `AStarGuide` and `FlowFieldGuide` still remain the public guide shapes. The staged transition behavior stays internal to the request-resolution and guide layers.
 
-`GuidedPathMode.Aerial` and `GuidedPathMode.Swim` both use the raw-volume path flow. They stay guide-free while the direct corridor is clear, then allocate a `VolumeGuide` only when raw voxel blockers force a detour. `Swim` depends on a valid water medium, which may come from authored chart cells, `VolumeMediumRules`, or both.
+Gas and liquid guided travel both use the raw-volume path flow. They stay guide-free while the direct corridor is clear, then allocate a `VolumeGuide` only when raw voxel blockers force a detour. Liquid travel depends on a valid water medium, which may come from authored chart cells, `VolumeMediumRules`, or both.
 
 Guide lifetime is owned by `NavSteering` while the movement session is active.
 
@@ -557,7 +557,7 @@ These events are useful for:
 With a concrete `Navigator`, the usual flow is:
 
 ```csharp
-navigator.GuidedPathMode = GuidedPathMode.AStar;
+navigator.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
 navigator.ApplyGuidedTrekRequest(destination, rate: TrekRate.Moderate);
 
 TrailblazerManager.Simulate();

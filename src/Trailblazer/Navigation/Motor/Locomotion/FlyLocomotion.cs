@@ -103,16 +103,16 @@ public class FlyLocomotion : ILocomotion
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
-        RecordValues.Look(chronicler, ref CanFly, "canFly", true);
-        RecordValues.Look(chronicler, ref MaxFlySpeed, "maxFlySpeed", DefaultMaxFlySpeed);
-        RecordValues.Look(chronicler, ref MaxAscendSpeed, "maxAscendSpeed", DefaultMaxAscendSpeed);
-        RecordValues.Look(chronicler, ref MaxDescendSpeed, "maxDescendSpeed", DefaultMaxDescendSpeed);
-        RecordValues.Look(chronicler, ref MaxFlyAcceleration, "maxFlyAcceleration", DefaultMaxFlyAcceleration);
-        RecordValues.Look(chronicler, ref GravityCompensation, "gravityCompensation", DefaultGravityCompensation);
+        RecordValues.Look(chronicler, ref _isEnabled, "IsEnabled", true);
+        RecordValues.Look(chronicler, ref CanFly, "CanFly", true);
+        RecordValues.Look(chronicler, ref MaxFlySpeed, "MaxFlySpeed", DefaultMaxFlySpeed);
+        RecordValues.Look(chronicler, ref MaxAscendSpeed, "MaxAscendSpeed", DefaultMaxAscendSpeed);
+        RecordValues.Look(chronicler, ref MaxDescendSpeed, "MaxDescendSpeed", DefaultMaxDescendSpeed);
+        RecordValues.Look(chronicler, ref MaxFlyAcceleration, "MaxFlyAcceleration", DefaultMaxFlyAcceleration);
+        RecordValues.Look(chronicler, ref GravityCompensation, "GravityCompensation", DefaultGravityCompensation);
 
         bool isFlying = IsFlying;
-        RecordValues.Look(chronicler, ref isFlying, "isFlying", false);
+        RecordValues.Look(chronicler, ref isFlying, "IsFlying", false);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

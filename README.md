@@ -203,10 +203,11 @@ navigator.Initialize(new TrekCondition
 });
 
 Vector3d target = new(10, 0, 10);
-navigator.GuidedPathMode = GuidedPathMode.FlowField;
-navigator.GuidedAllowTraversalTransitions = true;
-navigator.GuidedMaxClimbHeight = Fixed64.One;
-navigator.GuidedFlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
+navigator.ConfigureForGuidedTraversal(
+    pathAlgorithm: SolidPathAlgorithm.FlowField,
+    allowTraversalTransitions: true,
+    maxClimbHeight: Fixed64.One,
+    flowFieldExtraFloodRange: FlowFieldPathRequest.DefaultExtraFloodRange);
 
 navigator.ApplyGuidedTrekRequest(
     target,
@@ -224,13 +225,13 @@ If several navigators should move as one formation, pass the same optional `grou
 
 Concrete navigator types should implement `CheckTrekCondition()` to populate ground, water, ceiling, and platform state during `CommitFrameMotion()`.
 
-Set `navigator.GuidedAllowTraversalTransitions = true;` when built-in chart-guided travel should fall back through registered `TraversalTransition` handoffs instead of failing at chart boundaries. The same opt-in also allows bounded swim-exit style handoffs from liquid volume into a follow-up chart request when the requested target is chart-backed outside the active liquid volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route is a better fit than staying in gas-volume travel.
+Call `navigator.ConfigureForGuidedTraversal(allowTraversalTransitions: true)` when built-in chart-guided travel should fall back through registered `TraversalTransition` handoffs instead of failing at chart boundaries. The same opt-in also allows bounded swim-exit style handoffs from liquid volume into a follow-up chart request when the requested target is chart-backed outside the active liquid volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route is a better fit than staying in gas-volume travel.
 
 If a navigator should use a smaller locomotion set, override `CreateLocomotionProfile()` and return a custom profile such as `LocomotionProfile.CreateMoveAndFallOnly()`.
 
 ## Choosing A Request Type
 
-When you use `Navigator.ApplyGuidedTrekRequest(...)`, the navigator creates the concrete request internally based on `GuidedPathMode` and its guided-path defaults.
+When you use `Navigator.ApplyGuidedTrekRequest(...)`, the navigator creates the concrete request internally from the current traversal medium plus the guided traversal defaults configured through `Navigator.ConfigureForGuidedTraversal(...)`.
 
 Use `AStarPathRequest` when:
 
@@ -251,7 +252,7 @@ Use `VolumePathRequest` when:
 
 - traversal should stay in raw voxel volume instead of chart-backed surface space
 - movement needs gas or liquid routing without authored chart structure
-- object-owned `Swim` and `Aerial` guidance should stay volume-first but still be allowed to hand off into chart-backed traversal at authored exits or landing zones when `GuidedAllowTraversalTransitions` is enabled
+- gas or liquid navigator guidance should stay volume-first but still be allowed to hand off into chart-backed traversal at authored exits or landing zones when guided traversal transitions are enabled
 
 ## Project Layout
 

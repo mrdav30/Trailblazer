@@ -198,7 +198,7 @@ public class NavigatorSerializationTests : IDisposable
         RegisterGuidedPathChart("NavigatorSerializationGuidedClimb");
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        source.GuidedPathMode = SolidPathAlgorithm.AStar;
+        source.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
             rate: TrekRate.Fast,
@@ -228,8 +228,7 @@ public class NavigatorSerializationTests : IDisposable
         GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
-        source.GuidedPathMode = SolidPathAlgorithm.AStar;
-        source.GuidedAllowTraversalTransitions = true;
+        source.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar, allowTraversalTransitions: true);
         source.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
 
         object sourceMode = ReflectionUtility.GetPrivateFieldFromBase<object>(source, "_guidedClimbIntentMode");
@@ -383,7 +382,7 @@ public class NavigatorSerializationTests : IDisposable
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetTrekCondition(medium: TraversalMedium.Gas);
-        source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
+        source.ConfigureForGuidedTraversal(aStarHeuristic: HeuristicMethod.Euclidean);
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
             rate: TrekRate.Fast,
@@ -424,7 +423,7 @@ public class NavigatorSerializationTests : IDisposable
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
-        source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
+        source.ConfigureForGuidedTraversal(aStarHeuristic: HeuristicMethod.Euclidean);
         source.ApplyGuidedTrekRequest(
             new Vector3d(0, 0, 2),
             rate: TrekRate.Fast,
@@ -460,10 +459,12 @@ public class NavigatorSerializationTests : IDisposable
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetWaterContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
-        source.GuidedPathMode = SolidPathAlgorithm.FlowField;
-        source.GuidedAllowTraversalTransitions = true;
-        source.GuidedMaxClimbHeight = (Fixed64)2;
-        source.GuidedFlowFieldExtraFloodRange = 12;
+        source.ConfigureForGuidedTraversal(
+                pathAlgorithm: SolidPathAlgorithm.FlowField,
+                allowTraversalTransitions: true,
+                maxClimbHeight: (Fixed64)2,
+                flowFieldExtraFloodRange: 12
+        );
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
             rate: TrekRate.Fast,
@@ -510,9 +511,11 @@ public class NavigatorSerializationTests : IDisposable
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetTrekCondition(medium: TraversalMedium.Gas);
-        source.GuidedPathMode = SolidPathAlgorithm.AStar;
-        source.GuidedAllowTraversalTransitions = true;
-        source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
+        source.ConfigureForGuidedTraversal(
+            pathAlgorithm: SolidPathAlgorithm.AStar,
+            allowTraversalTransitions: true,
+            aStarHeuristic: HeuristicMethod.Euclidean
+        );
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
             rate: TrekRate.Fast,
@@ -561,8 +564,10 @@ public class NavigatorSerializationTests : IDisposable
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetTrekCondition(medium: TraversalMedium.Gas);
-        source.GuidedPathMode = SolidPathAlgorithm.AStar;
-        source.GuidedAllowTraversalTransitions = true;
+        source.ConfigureForGuidedTraversal(
+            pathAlgorithm: SolidPathAlgorithm.AStar,
+            allowTraversalTransitions: true
+        );
         source.ApplyGuidedTrekRequest(
             new Vector3d(4, 0, 0),
             rate: TrekRate.Fast,
@@ -604,10 +609,10 @@ public class NavigatorSerializationTests : IDisposable
         source.OccupantGroupId = 9;
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "occupantGroupId");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "turning");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "motor");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "OccupantGroupId");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Steering");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Turning");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Motor");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         target.OccupantGroupId = 9;
@@ -660,15 +665,15 @@ public class NavigatorSerializationTests : IDisposable
         var source = CreateConfiguredGuidedNavigator(SolidPathAlgorithm.FlowField);
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "guidedAllowUnwalkableEndpoints");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "guidedAllowTraversalTransitions");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "guidedMaxClimbHeight");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "guidedFlowFieldExtraFloodRange");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRecheckCooldownFrames");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "stopMultiplier");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "brakingPower");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRequest", "maxClimbHeight");
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "steering", "pathRequest", "flowFieldExtraFloodRange");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "GuidedAllowUnwalkableEndpoints");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "GuidedAllowTraversalTransitions");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "GuidedMaxClimbHeight");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "GuidedFlowFieldExtraFloodRange");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Steering", "PathRecheckCooldownFrames");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Steering", "StopMultiplier");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Steering", "BrakingPower");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Steering", "PathRequest", "MaxClimbHeight");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "Steering", "PathRequest", "FlowFieldExtraFloodRange");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         NavSteering targetSteering = TestRequire.NotNull(target.Steering);
@@ -708,7 +713,7 @@ public class NavigatorSerializationTests : IDisposable
         var source = CreateConfiguredNavigator();
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "frameRequest", "FacingDirection");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "FrameRequest", "FacingDirection");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
@@ -724,7 +729,7 @@ public class NavigatorSerializationTests : IDisposable
         var source = CreateConfiguredNavigator();
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
 
-        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "frameRequest", "CanAffordJump");
+        payload = SerializationUtility.RemovePayloadEntry(payload, useMemoryPack, "FrameRequest", "CanAffordJump");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
@@ -741,16 +746,16 @@ public class NavigatorSerializationTests : IDisposable
 
         var source = CreateConfiguredGuidedNavigator(SolidPathAlgorithm.AStar);
         NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
-        source.GuidedAllowUnwalkableEndpoints = false;
+        source.ConfigureForGuidedTraversal(allowUnwalkableEndpoints: false);
         sourceSteering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject.AllowUnwalkableEndpoints = false;
         object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
         payload = SerializationUtility.SetPayloadValue(
             payload,
             useMemoryPack,
             new Vector3d(512, 0, 512),
-            "steering",
-            "pathRequest",
-            "targetPosition");
+            "Steering",
+            "PathRequest",
+            "TargetPosition");
 
         var target = CreateNavigator(new Vector3d(-4, 0, -4));
         SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
@@ -780,12 +785,12 @@ public class NavigatorSerializationTests : IDisposable
         var source = CreateConfiguredMotorAgent();
         object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
 
-        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "move", "isEnabled");
-        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "platform", "isEnabled");
-        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "jump", "isEnabled");
-        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "fall", "isEnabled");
-        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "slide", "isEnabled");
-        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "handler", "swim", "isEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Move", "IsEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Platform", "IsEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Jump", "IsEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Fall", "IsEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Slide", "IsEnabled");
+        payload = SerializationUtility.SetPayloadValue(payload, useMemoryPack, false, "Handler", "Water", "IsEnabled");
 
         var target = MockMotorAgentTestFactory.CreatePlatformAgent(
             startPosition: new Vector3d(-2, 0, -2),
@@ -976,12 +981,15 @@ public class NavigatorSerializationTests : IDisposable
             motionTransfer: MotionTransfer.PermaLocked,
             updateMotorState: true);
 
-        source.GuidedPathMode = SolidPathAlgorithm.FlowField;
-        source.GuidedAllowUnwalkableEndpoints = true;
-        source.GuidedAllowTraversalTransitions = true;
-        source.GuidedMaxClimbHeight = (Fixed64)4;
-        source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
-        source.GuidedFlowFieldExtraFloodRange = 32;
+        source.ConfigureForGuidedTraversal(
+            pathAlgorithm: SolidPathAlgorithm.FlowField,
+            allowUnwalkableEndpoints: true,
+            allowTraversalTransitions: true,
+            maxClimbHeight: (Fixed64)4,
+            aStarHeuristic: HeuristicMethod.Euclidean,
+            flowFieldExtraFloodRange: 32
+        );
+
         source.FootPositionAdjust = (Fixed64)0.75f;
         source.IsLockedOn = true;
         motor.Handler.Move.FrameVelocity = new Vector3d(1, 0, 2);
@@ -1016,12 +1024,14 @@ public class NavigatorSerializationTests : IDisposable
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetTrekCondition(medium: medium);
         NavSteering steering = TestRequire.NotNull(source.Steering);
-        source.GuidedPathMode = pathMode;
-        source.GuidedAllowUnwalkableEndpoints = true;
-        source.GuidedAllowTraversalTransitions = true;
-        source.GuidedMaxClimbHeight = (Fixed64)2;
-        source.GuidedAStarHeuristic = HeuristicMethod.Euclidean;
-        source.GuidedFlowFieldExtraFloodRange = 24;
+        source.ConfigureForGuidedTraversal(
+                pathAlgorithm: pathMode,
+                allowUnwalkableEndpoints: true,
+                allowTraversalTransitions: true,
+                maxClimbHeight: (Fixed64)2,
+                aStarHeuristic: HeuristicMethod.Euclidean,
+                flowFieldExtraFloodRange: 24
+        );
 
         steering.PathRecheckCooldownFrames = 9;
         steering.StopMultiplier = (Fixed64)0.75f;

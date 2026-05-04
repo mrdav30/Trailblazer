@@ -7,7 +7,6 @@ using System;
 using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
-using Trailblazer.Serialization;
 using SwiftCollections;
 
 namespace Trailblazer.Navigation.Steering;
@@ -79,6 +78,60 @@ public class NavSteering : IRecordable
 
     #endregion
 
+    #region Fields
+
+    /// <summary>
+    /// The final destination this agent is attempting to reach.
+    /// </summary>
+    protected Vector3d _destination;
+
+    /// <summary>
+    /// Gets the current target direction as a three-dimensional vector.
+    /// </summary>
+    protected Vector3d _targetDirection;
+
+    /// <summary>
+    /// Gets the direction vector of the most recent target interaction.
+    /// </summary>
+    protected Vector3d _lastTargetDirection;
+
+    /// <summary>
+    /// Whether the object is following a path or guide to the destination.
+    /// </summary>
+    protected bool _shouldMove;
+
+    /// <summary>
+    /// Whether the agent has become stuck and exhausted repathing attempts.
+    /// </summary>
+    protected bool _isStuck;
+
+    /// <summary>
+    /// True if the agent can reach the destination without requiring a path.
+    /// </summary>
+    protected bool _hasLineOfSightPath;
+
+    /// <summary>
+    /// Whether the currently resolved guide-backed route requires climb intent to remain engaged.
+    /// </summary>
+    protected bool _currentRouteRequestsClimbIntent;
+
+    /// <summary>
+    /// Version token that changes when the resolved route state relevant to guided climb intent changes.
+    /// </summary>
+    protected int _currentRouteTopologyVersion;
+
+    /// <summary>
+    /// Has this unit arrived at destination?
+    /// </summary>
+    protected bool _isAtDestination;
+
+    /// <summary>
+    /// Number of consecutive frames where movement failed and deceleration is occurring.
+    /// </summary>
+    protected int _stoppedFrameCount;
+
+    #endregion
+
     #region Runtime State - Pathfinding
 
     /// <summary>
@@ -86,10 +139,8 @@ public class NavSteering : IRecordable
     /// </summary>
     public bool CanPathfind = true;
 
-    /// <summary>
-    /// The final destination this agent is attempting to reach.
-    /// </summary>
-    public Vector3d Destination { get; protected set; }
+    /// <inheritdoc cref="_destination"/>
+    public Vector3d Destination => _destination;
 
     private Vector3d _requestedDestination;
 
@@ -98,15 +149,11 @@ public class NavSteering : IRecordable
     /// <inheritdoc cref="DefaultPathRecheckCooldown"/>
     public int PathRecheckCooldownFrames = DefaultPathRecheckCooldown;
 
-    /// <summary>
-    /// Gets the current target direction as a three-dimensional vector.
-    /// </summary>
-    public Vector3d TargetDirection { get; protected set; }
+    /// <inheritdoc cref="_targetDirection"/>
+    public Vector3d TargetDirection => _targetDirection;
 
-    /// <summary>
-    /// Gets the direction vector of the most recent target interaction.
-    /// </summary>
-    public Vector3d LastTargetDirection { get; protected set; }
+    /// <inheritdoc cref="_lastTargetDirection"/>
+    public Vector3d LastTargetDirection => _lastTargetDirection;
 
     /// <summary>
     /// The pathfinding configuration used for the current movement request, including size, and type.
@@ -124,30 +171,20 @@ public class NavSteering : IRecordable
     /// <inheritdoc cref="_trailGuide"/>
     public IGuide? TrailGuide => _trailGuide;
 
-    /// <summary>
-    /// Whether the object is following a path or guide to the destination.
-    /// </summary>
-    public bool ShouldMove { get; protected set; }
+    /// <inheritdoc cref="_shouldMove"/>
+    public bool ShouldMove => _shouldMove;
 
-    /// <summary>
-    /// Whether the agent has become stuck and exhausted repathing attempts.
-    /// </summary>
-    public bool IsStuck { get; protected set; }
+    /// <inheritdoc cref="_isStuck"/>
+    public bool IsStuck => _isStuck;
 
-    /// <summary>
-    /// True if the agent can reach the destination without requiring a path.
-    /// </summary>
-    public bool HasLineOfSightPath { get; protected set; }
+    /// <inheritdoc cref="_hasLineOfSightPath"/>
+    public bool HasLineOfSightPath => _hasLineOfSightPath;
 
-    /// <summary>
-    /// Whether the currently resolved guide-backed route requires climb intent to remain engaged.
-    /// </summary>
-    public bool CurrentRouteRequestsClimbIntent { get; protected set; }
+    /// <inheritdoc cref="_currentRouteRequestsClimbIntent"/>
+    public bool CurrentRouteRequestsClimbIntent => _currentRouteRequestsClimbIntent;
 
-    /// <summary>
-    /// Version token that changes when the resolved route state relevant to guided climb intent changes.
-    /// </summary>
-    public int CurrentRouteTopologyVersion { get; protected set; }
+    /// <inheritdoc cref="_currentRouteTopologyVersion"/>
+    public int CurrentRouteTopologyVersion => _currentRouteTopologyVersion;
 
     /// <summary>
     /// Current pathfinding search status.
@@ -181,10 +218,8 @@ public class NavSteering : IRecordable
     /// </summary>
     public bool HasTrailGuide => !HasLineOfSightPath && _trailGuide != null;
 
-    /// <summary>
-    /// Has this unit arrived at destination?
-    /// </summary>
-    public bool IsAtDestination { get; protected set; }
+    /// <inheritdoc cref="_isAtDestination"/>
+    public bool IsAtDestination => _isAtDestination;
 
     #endregion
 
@@ -195,10 +230,8 @@ public class NavSteering : IRecordable
     /// </summary>
     public bool CanMove = true;
 
-    /// <summary>
-    /// Number of consecutive frames where movement failed and deceleration is occurring.
-    /// </summary>
-    public int StoppedFrameCount { get; protected set; }
+    /// <inheritdoc cref="_stoppedFrameCount"/>
+    public int StoppedFrameCount => _stoppedFrameCount;
 
     /// <summary>
     /// Internal cooldown before the agent can automatically stop again (used for bursty movement).
@@ -223,28 +256,28 @@ public class NavSteering : IRecordable
     /// <summary>
     /// Multiplier used to determine how close the agent must be to its target before stopping.
     /// </summary>
-    public Fixed64 StopMultiplier { get; set; } = DefaultDirectStop;
+    public Fixed64 StopMultiplier = DefaultDirectStop;
 
     /// <summary>
     /// How far to look for group neighbors (separation/alignment/cohesion).
     /// </summary>
-    public Fixed64 GroupFactor { get; set; } = DefaultGroupFactor;
+    public Fixed64 GroupFactor = DefaultGroupFactor;
 
     /// <summary>
     /// How far to look for obstacles to avoid.
     /// </summary>
-    public Fixed64 AvoidFactor { get; set; } = DefaultAvoidFactor;
+    public Fixed64 AvoidFactor = DefaultAvoidFactor;
 
     /// <summary>
     /// Weights for separating, aligning, and cohesion in group behavior.
     /// Avoidance weight is baked in here as well.
     /// </summary>
-    public GroupBehaviorWeights BehaviorWeights { get; set; } = DefaultBehaviorWeights;
+    public GroupBehaviorWeights BehaviorWeights = DefaultBehaviorWeights;
 
     /// <summary>
     /// Friction-based deceleration rate used when slowing down on ground surfaces.
     /// </summary>
-    public Fixed64 BrakingPower { get; set; } = DefaultBrakingPower;
+    public Fixed64 BrakingPower = DefaultBrakingPower;
 
     private Fixed64 _agentRadius;
 
@@ -329,17 +362,17 @@ public class NavSteering : IRecordable
             return;
         }
 
-        HasLineOfSightPath = false;
-        IsAtDestination = false;
+        _hasLineOfSightPath = false;
+        _isAtDestination = false;
 
-        StoppedFrameCount = 0;
-        IsStuck = false;
+        _stoppedFrameCount = 0;
+        _isStuck = false;
         _stuckFrameCount = 0;
 
-        ShouldMove = true;
+        _shouldMove = true;
         // NOTE: destination can be an exact point within a voxel, not neccesarily the voxel position
         _requestedDestination = pathRequest.TargetPosition;
-        Destination = _requestedDestination;
+        _destination = _requestedDestination;
 
         ReleaseTrailGuide();
         _currentRequest = pathRequest;
@@ -399,7 +432,7 @@ public class NavSteering : IRecordable
         MovementGroupID = -1;
         GroupIndex = -1;
         _movementGroupMode = MovementGroupTravelMode.None;
-        Destination = _requestedDestination;
+        _destination = _requestedDestination;
     }
 
     /// <summary>
@@ -439,20 +472,20 @@ public class NavSteering : IRecordable
 
         LeaveMovementGroup();
 
-        StoppedFrameCount = 0;
+        _stoppedFrameCount = 0;
         _autoStopFrameCount = 0;
 
         StopMultiplier = DefaultDirectStop;
 
         _shouldRequestPathThisFrame = false;
-        HasLineOfSightPath = false;
-        ShouldMove = false;
+        _hasLineOfSightPath = false;
+        _shouldMove = false;
 
-        IsStuck = false;
+        _isStuck = false;
         _stuckFrameCount = 0;
         _repathTries = 0;
 
-        IsAtDestination = false;
+        _isAtDestination = false;
 
         _currentRequest = null;
         _trailGuide = null;
@@ -461,8 +494,8 @@ public class NavSteering : IRecordable
         _movementGroupMode = MovementGroupTravelMode.None;
         _currentRouteHasResolvedTopology = false;
         _currentRouteUsesGuideTopology = false;
-        CurrentRouteRequestsClimbIntent = false;
-        CurrentRouteTopologyVersion = 0;
+        _currentRouteRequestsClimbIntent = false;
+        _currentRouteTopologyVersion = 0;
     }
 
     internal virtual void UpdateOwnerRadius(Fixed64 radius)
@@ -549,7 +582,7 @@ public class NavSteering : IRecordable
 
         if (_currentRequest is VolumePathRequest volumeRequest)
         {
-            HasLineOfSightPath = IsVolumeDestinationInSight(
+            _hasLineOfSightPath = IsVolumeDestinationInSight(
                 origin,
                 Destination,
                 _currentRequest.UnitSize,
@@ -559,7 +592,7 @@ public class NavSteering : IRecordable
                 _currentRequest.EndNode);
 
             _pathCheckCooldown = PathRecheckCooldownFrames;
-            if (HasLineOfSightPath)
+            if (_hasLineOfSightPath)
             {
                 ReleaseTrailGuide();
                 PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
@@ -568,12 +601,12 @@ public class NavSteering : IRecordable
         }
         else
         {
-            HasLineOfSightPath = IsDestinationInSight(
+            _hasLineOfSightPath = IsDestinationInSight(
                 origin,
                 Destination,
                 _currentRequest.UnitSize,
                 _currentRequest.AllowUnwalkableEndpoints);
-            if (HasLineOfSightPath)
+            if (_hasLineOfSightPath)
             {
                 PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
                 return true;  // no path required
@@ -660,9 +693,9 @@ public class NavSteering : IRecordable
 
     private Vector3d FinalizeIdleHeading(Fixed64 speed)
     {
-        TargetDirection = Vector3d.Zero;
+        _targetDirection = Vector3d.Zero;
         if (speed <= Fixed64.Epsilon)
-            StoppedFrameCount++;
+            _stoppedFrameCount++;
 
         return FinalizeHeadingFrame();
     }
@@ -705,7 +738,7 @@ public class NavSteering : IRecordable
 
         if (_currentRequest is VolumePathRequest volumeRequest)
         {
-            HasLineOfSightPath = IsVolumeDestinationInSight(
+            _hasLineOfSightPath = IsVolumeDestinationInSight(
                 position,
                 Destination,
                 _currentRequest.UnitSize,
@@ -714,7 +747,7 @@ public class NavSteering : IRecordable
                 _currentRequest.StartNode,
                 _currentRequest.EndNode);
 
-            if (HasLineOfSightPath)
+            if (_hasLineOfSightPath)
             {
                 ReleaseTrailGuide();
                 PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
@@ -722,13 +755,13 @@ public class NavSteering : IRecordable
         }
         else
         {
-            HasLineOfSightPath = IsDestinationInSight(
+            _hasLineOfSightPath = IsDestinationInSight(
                 position,
                 Destination,
                 _currentRequest!.UnitSize,
                 _currentRequest.AllowUnwalkableEndpoints);
 
-            if (HasLineOfSightPath)
+            if (_hasLineOfSightPath)
                 PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
         }
 
@@ -744,9 +777,9 @@ public class NavSteering : IRecordable
 
     private void UpdateTargetDirection(ISteer vessel)
     {
-        LastTargetDirection = TargetDirection;
-        TargetDirection = FindTargetDirection(vessel.Position);
-        TargetDirection += ComputeCombinedSteering(
+        _lastTargetDirection = _targetDirection;
+        _targetDirection = FindTargetDirection(vessel.Position);
+        _targetDirection += ComputeCombinedSteering(
             vessel.Position,
             vessel.Velocity,
             vessel.Speed,
@@ -789,7 +822,7 @@ public class NavSteering : IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool ResetStuckStatus()
     {
-        IsStuck = false;
+        _isStuck = false;
         _stuckFrameCount = 0;
         _repathTries = 0;
         return true;
@@ -797,7 +830,7 @@ public class NavSteering : IRecordable
 
     private bool TryRecoverFromStuck(Vector3d position)
     {
-        HasLineOfSightPath = false;
+        _hasLineOfSightPath = false;
 
         if (IsInGroup)
             LeaveMovementGroup();
@@ -815,7 +848,7 @@ public class NavSteering : IRecordable
         if (!HasTrailGuide || _trailGuide!.TryGetFallbackDirection(position, out Vector3d fallback) == false)
             return false;
 
-        TargetDirection = fallback;
+        _targetDirection = fallback;
         _repathTries++;
         _stuckFrameCount = 0;
         return true;
@@ -823,14 +856,14 @@ public class NavSteering : IRecordable
 
     private void PreparePathRetry()
     {
-        TargetDirection = Vector3d.Zero;
+        _targetDirection = Vector3d.Zero;
         _shouldRequestPathThisFrame = true;
         DisposeCurrentTrailGuide();
     }
 
     private bool DeclareHardStuck()
     {
-        IsStuck = true;
+        _isStuck = true;
         DisposeCurrentTrailGuide();
         Events.OnIsStuck?.Invoke();
         return false;
@@ -869,7 +902,7 @@ public class NavSteering : IRecordable
         if (DistanceToTarget > Fixed64.Epsilon && DistanceToTarget <= slowDistance)
         {
             Fixed64 closingSpeed = DistanceToTarget / slowDistance;
-            TargetDirection *= closingSpeed; // reduce magnitude = slow down
+            _targetDirection *= closingSpeed; // reduce magnitude = slow down
         }
     }
 
@@ -884,9 +917,9 @@ public class NavSteering : IRecordable
         _currentRequest = null;
         _requestedDestination = Vector3d.Zero;
         _distanceToTarget = Fixed64.Zero;
-        IsAtDestination = true;
-        Destination = Vector3d.Zero;
-        TargetDirection = Vector3d.Zero;
+        _isAtDestination = true;
+        _destination = Vector3d.Zero;
+        _targetDirection = Vector3d.Zero;
 
         Events.OnArrive?.Invoke();
     }
@@ -896,16 +929,16 @@ public class NavSteering : IRecordable
     /// </summary>
     public virtual void StopMove()
     {
-        if (!ShouldMove)
+        if (!_shouldMove)
             return;
 
         _autoStopFrameCount = 0;
         _stuckFrameCount = 0;
-        StoppedFrameCount = 0;
+        _stoppedFrameCount = 0;
 
-        ShouldMove = false;
+        _shouldMove = false;
         _shouldRequestPathThisFrame = false;
-        HasLineOfSightPath = false;
+        _hasLineOfSightPath = false;
         PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false, force: true);
         LeaveMovementGroup();
 
@@ -1079,7 +1112,7 @@ public class NavSteering : IRecordable
                 resetFormationOffset);
         }
 
-        Destination = target.Destination;
+        _destination = target.Destination;
         _movementGroupMode = target.TravelMode;
     }
 
@@ -1105,17 +1138,17 @@ public class NavSteering : IRecordable
         if (!force
             && _currentRouteHasResolvedTopology == hasResolvedTopology
             && _currentRouteUsesGuideTopology == usesGuideTopology
-            && CurrentRouteRequestsClimbIntent == requestsClimbIntent)
+            && _currentRouteRequestsClimbIntent == requestsClimbIntent)
         {
             return;
         }
 
         _currentRouteHasResolvedTopology = hasResolvedTopology;
         _currentRouteUsesGuideTopology = usesGuideTopology;
-        CurrentRouteRequestsClimbIntent = requestsClimbIntent;
+        _currentRouteRequestsClimbIntent = requestsClimbIntent;
         unchecked
         {
-            CurrentRouteTopologyVersion++;
+            _currentRouteTopologyVersion++;
         }
     }
 
@@ -1126,119 +1159,60 @@ public class NavSteering : IRecordable
     /// <inheritdoc />
     public virtual void RecordData(IChronicler chronicler)
     {
-        bool canPathfind = CanPathfind;
-        Vector3d destination = Destination;
-        Vector3d requestedDestination = _requestedDestination;
-        Fixed64 lastUnitSize = _lastUnitSize;
-        int pathRecheckCooldownFrames = PathRecheckCooldownFrames;
-        Vector3d targetDirection = TargetDirection;
-        Vector3d lastTargetDirection = LastTargetDirection;
-        bool shouldMove = ShouldMove;
-        bool isStuck = IsStuck;
-        bool hasLineOfSightPath = HasLineOfSightPath;
-        bool currentRouteHasResolvedTopology = _currentRouteHasResolvedTopology;
-        bool currentRouteUsesGuideTopology = _currentRouteUsesGuideTopology;
-        bool currentRouteRequestsClimbIntent = CurrentRouteRequestsClimbIntent;
-        int currentRouteTopologyVersion = CurrentRouteTopologyVersion;
-        bool shouldRequestPathThisFrame = _shouldRequestPathThisFrame;
-        int pathCheckCooldown = _pathCheckCooldown;
-        Fixed64 distanceToTarget = _distanceToTarget;
-        bool isAtDestination = IsAtDestination;
-        bool canMove = CanMove;
-        int stoppedFrameCount = StoppedFrameCount;
-        int autoStopFrameCount = _autoStopFrameCount;
-        int repathTries = _repathTries;
-        int stuckFrameCount = _stuckFrameCount;
-        Fixed64 stopMultiplier = StopMultiplier;
-        Fixed64 groupFactor = GroupFactor;
-        Fixed64 avoidFactor = AvoidFactor;
-        GroupBehaviorWeights behaviorWeights = BehaviorWeights;
-        Fixed64 brakingPower = BrakingPower;
-        int movementGroupId = MovementGroupID;
-        MovementGroupTravelMode movementGroupMode = _movementGroupMode;
-
         var requestRecord = new PathRequestRecord();
         if (chronicler.Mode == SerializationMode.Saving)
             requestRecord.Capture(_currentRequest, _trailGuide);
 
-        RecordValues.Look(chronicler, ref canPathfind, "canPathfind", true);
-        RecordValues.Look(chronicler, ref destination, "destination", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref requestedDestination, "requestedDestination", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref lastUnitSize, "lastUnitSize", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref pathRecheckCooldownFrames, "pathRecheckCooldownFrames", DefaultPathRecheckCooldown);
-        RecordValues.Look(chronicler, ref targetDirection, "targetDirection", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref lastTargetDirection, "lastTargetDirection", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref shouldMove, "shouldMove", false);
-        RecordValues.Look(chronicler, ref isStuck, "isStuck", false);
-        RecordValues.Look(chronicler, ref hasLineOfSightPath, "hasLineOfSightPath", false);
-        RecordValues.Look(chronicler, ref currentRouteHasResolvedTopology, "currentRouteHasResolvedTopology", false);
-        RecordValues.Look(chronicler, ref currentRouteUsesGuideTopology, "currentRouteUsesGuideTopology", false);
-        RecordValues.Look(chronicler, ref currentRouteRequestsClimbIntent, "currentRouteRequestsClimbIntent", false);
-        RecordValues.Look(chronicler, ref currentRouteTopologyVersion, "currentRouteTopologyVersion", 0);
-        RecordValues.Look(chronicler, ref shouldRequestPathThisFrame, "shouldRequestPathThisFrame", false);
-        RecordValues.Look(chronicler, ref pathCheckCooldown, "pathCheckCooldown", 0);
-        RecordValues.Look(chronicler, ref distanceToTarget, "distanceToTarget", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref isAtDestination, "isAtDestination", false);
-        RecordValues.Look(chronicler, ref canMove, "canMove", false);
-        RecordValues.Look(chronicler, ref stoppedFrameCount, "stoppedFrameCount", 0);
-        RecordValues.Look(chronicler, ref autoStopFrameCount, "autoStopFrameCount", 0);
-        RecordValues.Look(chronicler, ref repathTries, "repathTries", 0);
-        RecordValues.Look(chronicler, ref stuckFrameCount, "stuckFrameCount", 0);
-        RecordValues.Look(chronicler, ref stopMultiplier, "stopMultiplier", DefaultDirectStop);
-        RecordValues.Look(chronicler, ref groupFactor, "groupFactor", DefaultGroupFactor);
-        RecordValues.Look(chronicler, ref avoidFactor, "avoidFactor", DefaultAvoidFactor);
-        RecordValues.Look(chronicler, ref behaviorWeights, "behaviorWeights", DefaultBehaviorWeights);
-        RecordValues.Look(chronicler, ref brakingPower, "brakingPower", DefaultBrakingPower);
-        RecordValues.Look(chronicler, ref movementGroupId, "movementGroupId", 0);
-        RecordValues.Look(chronicler, ref movementGroupMode, "movementGroupMode", MovementGroupTravelMode.None);
-        RecordDeep.Look(chronicler, ref requestRecord, "pathRequest");
+        int movementGroupId = _movementGroupSession.GroupId;
+
+        RecordValues.Look(chronicler, ref CanPathfind, "CanPathfind", true);
+        RecordValues.Look(chronicler, ref _destination, "Destination", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref _requestedDestination, "RequestedDestination", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref _lastUnitSize, "LastUnitSize", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref PathRecheckCooldownFrames, "PathRecheckCooldownFrames", DefaultPathRecheckCooldown);
+        RecordValues.Look(chronicler, ref _targetDirection, "TargetDirection", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref _lastTargetDirection, "LastTargetDirection", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref _shouldMove, "ShouldMove", false);
+        RecordValues.Look(chronicler, ref _isStuck, "IsStuck", false);
+        RecordValues.Look(chronicler, ref _hasLineOfSightPath, "HasLineOfSightPath", false);
+        RecordValues.Look(chronicler, ref _currentRouteHasResolvedTopology, "CurrentRouteHasResolvedTopology", false);
+        RecordValues.Look(chronicler, ref _currentRouteUsesGuideTopology, "CurrentRouteUsesGuideTopology", false);
+        RecordValues.Look(chronicler, ref _currentRouteRequestsClimbIntent, "CurrentRouteRequestsClimbIntent", false);
+        RecordValues.Look(chronicler, ref _currentRouteTopologyVersion, "CurrentRouteTopologyVersion", 0);
+        RecordValues.Look(chronicler, ref _shouldRequestPathThisFrame, "ShouldRequestPathThisFrame", false);
+        RecordValues.Look(chronicler, ref _pathCheckCooldown, "PathCheckCooldown", 0);
+        RecordValues.Look(chronicler, ref _distanceToTarget, "DistanceToTarget", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref _isAtDestination, "IsAtDestination", false);
+        RecordValues.Look(chronicler, ref CanMove, "CanMove", false);
+        RecordValues.Look(chronicler, ref _stoppedFrameCount, "StoppedFrameCount", 0);
+        RecordValues.Look(chronicler, ref _autoStopFrameCount, "AutoStopFrameCount", 0);
+        RecordValues.Look(chronicler, ref _repathTries, "RepathTries", 0);
+        RecordValues.Look(chronicler, ref _stuckFrameCount, "StuckFrameCount", 0);
+        RecordValues.Look(chronicler, ref StopMultiplier, "StopMultiplier", DefaultDirectStop);
+        RecordValues.Look(chronicler, ref GroupFactor, "GroupFactor", DefaultGroupFactor);
+        RecordValues.Look(chronicler, ref AvoidFactor, "AvoidFactor", DefaultAvoidFactor);
+        RecordValues.Look(chronicler, ref BehaviorWeights, "BehaviorWeights", DefaultBehaviorWeights);
+        RecordValues.Look(chronicler, ref BrakingPower, "BrakingPower", DefaultBrakingPower);
+        RecordValues.Look(chronicler, ref movementGroupId, "MovementGroupId", 0);
+        RecordValues.Look(chronicler, ref _movementGroupMode, "MovementGroupMode", MovementGroupTravelMode.None);
+        RecordDeep.Look(chronicler, ref requestRecord, "PathRequest");
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
             ReleaseTrailGuide();
             ResetMovementGroupSession();
 
-            CanPathfind = canPathfind;
-            Destination = destination;
-            _requestedDestination = requestedDestination;
-            _lastUnitSize = lastUnitSize;
-            PathRecheckCooldownFrames = pathRecheckCooldownFrames;
-            TargetDirection = targetDirection;
-            LastTargetDirection = lastTargetDirection;
-            ShouldMove = shouldMove;
-            IsStuck = isStuck;
-            HasLineOfSightPath = hasLineOfSightPath;
-            _currentRouteHasResolvedTopology = currentRouteHasResolvedTopology;
-            _currentRouteUsesGuideTopology = currentRouteUsesGuideTopology;
-            CurrentRouteRequestsClimbIntent = currentRouteRequestsClimbIntent;
-            CurrentRouteTopologyVersion = currentRouteTopologyVersion;
-            _shouldRequestPathThisFrame = shouldRequestPathThisFrame;
-            _pathCheckCooldown = pathCheckCooldown;
-            _distanceToTarget = distanceToTarget;
-            IsAtDestination = isAtDestination;
-            CanMove = canMove;
-            StoppedFrameCount = stoppedFrameCount;
-            _autoStopFrameCount = autoStopFrameCount;
-            _repathTries = repathTries;
-            _stuckFrameCount = stuckFrameCount;
-            StopMultiplier = stopMultiplier;
-            GroupFactor = groupFactor;
-            AvoidFactor = avoidFactor;
-            BehaviorWeights = behaviorWeights;
-            BrakingPower = brakingPower;
-            _movementGroupMode = movementGroupMode;
-
             _currentRequest = null;
             if (!requestRecord.TryCreateRequest(out IPathRequest? request))
             {
-                ShouldMove = false;
-                IsStuck = false;
-                HasLineOfSightPath = false;
+                _shouldMove = false;
+                _isStuck = false;
+                _hasLineOfSightPath = false;
                 _shouldRequestPathThisFrame = false;
-                Destination = Vector3d.Zero;
+                _destination = Vector3d.Zero;
                 _requestedDestination = Vector3d.Zero;
-                TargetDirection = Vector3d.Zero;
-                LastTargetDirection = Vector3d.Zero;
+                _targetDirection = Vector3d.Zero;
+                _lastTargetDirection = Vector3d.Zero;
                 _distanceToTarget = Fixed64.Zero;
                 _movementGroupMode = MovementGroupTravelMode.None;
             }

@@ -3,7 +3,7 @@ using FixedMathSharp;
 using System;
 using Trailblazer.Pathing;
 
-namespace Trailblazer.Serialization;
+namespace Trailblazer.Navigation.Steering;
 
 internal enum PathRequestRecordKind
 {
@@ -219,50 +219,19 @@ internal sealed class PathRequestRecord : IRecordable
 
     public void RecordData(IChronicler chronicler)
     {
-        PathRequestRecordKind kind = Kind;
-        Vector3d origin = Origin;
-        Vector3d targetPosition = TargetPosition;
-        Fixed64 unitSize = UnitSize;
-        bool allowUnwalkableEndpoints = AllowUnwalkableEndpoints;
-        bool allowTraversalTransitions = AllowTraversalTransitions;
-        int maxPathSearchRange = MaxPathSearchRange;
-        Fixed64 maxClimbHeight = MaxClimbHeight;
-        HeuristicMethod aStarHeuristic = AStarHeuristic;
-        int flowFieldExtraFloodRange = FlowFieldExtraFloodRange;
-        TraversalMedium medium = Medium;
-        bool hasGuide = HasGuide;
-        int waypointIndex = WaypointIndex;
-
-        RecordValues.Look(chronicler, ref kind, "kind", PathRequestRecordKind.None);
-        RecordValues.Look(chronicler, ref origin, "origin", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref targetPosition, "targetPosition", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref unitSize, "unitSize", Fixed64.One);
-        RecordValues.Look(chronicler, ref allowUnwalkableEndpoints, "allowUnwalkableEndpoints", false);
-        RecordValues.Look(chronicler, ref allowTraversalTransitions, "allowTraversalTransitions", false);
-        RecordValues.Look(chronicler, ref maxPathSearchRange, "maxPathSearchRange", 0);
-        RecordValues.Look(chronicler, ref maxClimbHeight, "maxClimbHeight", Fixed64.One);
-        RecordValues.Look(chronicler, ref aStarHeuristic, "aStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref flowFieldExtraFloodRange, "flowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
-        RecordValues.Look(chronicler, ref medium, "medium", TraversalMedium.Gas);
-        RecordValues.Look(chronicler, ref hasGuide, "hasGuide", false);
-        RecordValues.Look(chronicler, ref waypointIndex, "waypointIndex", NoWaypointIndex);
-
-        if (chronicler.Mode == SerializationMode.Loading)
-        {
-            Kind = kind;
-            Origin = origin;
-            TargetPosition = targetPosition;
-            UnitSize = unitSize;
-            AllowUnwalkableEndpoints = allowUnwalkableEndpoints;
-            AllowTraversalTransitions = allowTraversalTransitions;
-            MaxPathSearchRange = maxPathSearchRange;
-            MaxClimbHeight = maxClimbHeight;
-            AStarHeuristic = aStarHeuristic;
-            FlowFieldExtraFloodRange = flowFieldExtraFloodRange;
-            Medium = medium;
-            HasGuide = hasGuide;
-            WaypointIndex = waypointIndex;
-        }
+        RecordValues.Look(chronicler, ref Kind, "Kind", PathRequestRecordKind.None);
+        RecordValues.Look(chronicler, ref Origin, "Origin", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref TargetPosition, "TargetPosition", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref UnitSize, "UnitSize", Fixed64.One);
+        RecordValues.Look(chronicler, ref AllowUnwalkableEndpoints, "AllowUnwalkableEndpoints", false);
+        RecordValues.Look(chronicler, ref AllowTraversalTransitions, "AllowTraversalTransitions", false);
+        RecordValues.Look(chronicler, ref MaxPathSearchRange, "MaxPathSearchRange", 0);
+        RecordValues.Look(chronicler, ref MaxClimbHeight, "MaxClimbHeight", Fixed64.One);
+        RecordValues.Look(chronicler, ref AStarHeuristic, "AStarHeuristic", HeuristicMethod.Manhattan);
+        RecordValues.Look(chronicler, ref FlowFieldExtraFloodRange, "FlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
+        RecordValues.Look(chronicler, ref Medium, "Medium", TraversalMedium.Gas);
+        RecordValues.Look(chronicler, ref HasGuide, "HasGuide", false);
+        RecordValues.Look(chronicler, ref WaypointIndex, "WaypointIndex", NoWaypointIndex);
     }
 
     private void RestoreWaypointIndex(AStarGuide guide)

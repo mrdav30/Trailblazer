@@ -30,8 +30,7 @@ Keep these aligned whenever behavior or public API changes:
 
 - [`README.md`](README.md)
 - [`docs/wiki/OVERVIEW.md`](docs/wiki/OVERVIEW.md)
-- [`docs/wiki/SERIALIZATION.MD`](docs/wiki/SERIALIZATION.MD) and [`src/Trailblazer/Serialization/README.md`](src/Trailblazer/Serialization/README.md) when serialization behavior or Chronicler guidance changes
-- [`src/Trailblazer/Serialization/MIGRATION.MD`](src/Trailblazer/Serialization/MIGRATION.MD) when the extraction plan for the standalone Chronicler project changes
+- [`docs/wiki/SERIALIZATION.MD`](docs/wiki/SERIALIZATION.MD) when serialization behavior or Chronicler guidance changes
 - the relevant source and test files under [`src/Trailblazer`](src/Trailblazer) and [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests)
 
 ## Repository Map
@@ -95,14 +94,9 @@ Important current rules:
 - Host bindings are not serialized.
 - Movement-group coordinator state is rebuild-only runtime state. Group intent is serialized per steering session, and hosts may call `PrewarmMovementGroup()` after load to seed the coordinator before the next frame.
 
-If you touch serialization work, read both:
+If you touch serialization work, read:
 
 - [`docs/wiki/SERIALIZATION.MD`](docs/wiki/SERIALIZATION.MD) for Trailblazer-specific coverage and runtime behavior
-- [`src/Trailblazer/Serialization/README.md`](src/Trailblazer/Serialization/README.md) for the reusable Chronicler API surface
-
-If the work affects extraction planning, also read:
-
-- [`src/Trailblazer/Serialization/MIGRATION.MD`](src/Trailblazer/Serialization/MIGRATION.MD)
 
 ## External Dependencies
 

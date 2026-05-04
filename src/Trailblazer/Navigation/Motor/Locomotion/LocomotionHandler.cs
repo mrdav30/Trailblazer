@@ -40,6 +40,23 @@ public class LocomotionHandler : IRecordable
 
     private LocomotionForces _forces = new();
 
+    private MoveLocomotion _move = null!;
+
+    private PlatformLocomotion? _platform;
+
+    private JumpLocomotion? _jump;
+
+    private FallLocomotion _fall = null!;
+
+    private SlideLocomotion? _slide;
+
+    private WaterLocomotion? _water;
+
+    private FlyLocomotion? _fly;
+
+    private ClimbLocomotion? _climb;
+
+
     #endregion
 
     #region Initialization
@@ -73,7 +90,7 @@ public class LocomotionHandler : IRecordable
     /// <summary>
     /// Handles general movement, including speed limits, acceleration, and velocity calculations.
     /// </summary>
-    public MoveLocomotion Move { get; private set; } = null!;
+    public MoveLocomotion Move => _move;
 
     /// <summary>
     /// Manages movement when interacting with moving platforms or surfaces.
@@ -81,7 +98,7 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion maintains platform velocity tracking and movement transfer states.
     /// </remarks>
-    public PlatformLocomotion? Platform { get; private set; }
+    public PlatformLocomotion? Platform => _platform;
 
     /// <summary>
     /// Controls the airborne state when a jump is executed successfully.
@@ -89,7 +106,7 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion governs jump height, cooldown timing, and jump force calculations.
     /// </remarks>
-    public JumpLocomotion? Jump { get; private set; }
+    public JumpLocomotion? Jump => _jump;
 
     /// <summary>
     /// Handles the scout’s falling behavior when downward momentum is detected.
@@ -97,7 +114,7 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion tracks fall distance, applies landing impact logic, and determines if a scout is free-falling.
     /// </remarks>
-    public FallLocomotion Fall { get; private set; } = null!;
+    public FallLocomotion Fall => _fall;
 
     /// <summary>
     /// Manages movement when sliding down steep surfaces.
@@ -105,7 +122,7 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion determines when the scout should slide and how much control it has over movement during the slide.
     /// </remarks>
-    public SlideLocomotion? Slide { get; private set; }
+    public SlideLocomotion? Slide => _slide;
 
     /// <summary>
     /// Handles movement when the scout is in water, including active swimming, buoyancy, and water resistance.
@@ -114,17 +131,17 @@ public class LocomotionHandler : IRecordable
     /// This locomotion tracks liquid-medium state such as swim speed, floating and sinking behavior,
     /// dive time, and breath management.
     /// </remarks>
-    public WaterLocomotion? Water { get; private set; }
+    public WaterLocomotion? Water => _water;
 
     /// <summary>
     /// Handles controlled flight while the scout is airborne.
     /// </summary>
-    public FlyLocomotion? Fly { get; private set; }
+    public FlyLocomotion? Fly => _fly;
 
     /// <summary>
     /// Handles climb configuration and runtime attachment state.
     /// </summary>
-    public ClimbLocomotion? Climb { get; private set; }
+    public ClimbLocomotion? Climb => _climb;
 
     #endregion
 
@@ -224,14 +241,14 @@ public class LocomotionHandler : IRecordable
         ClearReplacedLocomotion(Fly, profile.Fly);
         ClearReplacedLocomotion(Climb, profile.Climb);
 
-        Move = profile.Move;
-        Fall = profile.Fall;
-        Platform = profile.Platform;
-        Jump = profile.Jump;
-        Slide = profile.Slide;
-        Water = profile.Water;
-        Fly = profile.Fly;
-        Climb = profile.Climb;
+        _move = profile.Move;
+        _fall = profile.Fall;
+        _platform = profile.Platform;
+        _jump = profile.Jump;
+        _slide = profile.Slide;
+        _water = profile.Water;
+        _fly = profile.Fly;
+        _climb = profile.Climb;
 
         RefreshInstalledKinds();
     }
@@ -423,28 +440,28 @@ public class LocomotionHandler : IRecordable
         switch (slot)
         {
             case LocomotionSlot.Move:
-                Move = (MoveLocomotion)locomotion!;
+                _move = (MoveLocomotion)locomotion!;
                 return;
             case LocomotionSlot.Platform:
-                Platform = locomotion as PlatformLocomotion;
+                _platform = locomotion as PlatformLocomotion;
                 return;
             case LocomotionSlot.Jump:
-                Jump = locomotion as JumpLocomotion;
+                _jump = locomotion as JumpLocomotion;
                 return;
             case LocomotionSlot.Fall:
-                Fall = (FallLocomotion)locomotion!;
+                _fall = (FallLocomotion)locomotion!;
                 return;
             case LocomotionSlot.Slide:
-                Slide = locomotion as SlideLocomotion;
+                _slide = locomotion as SlideLocomotion;
                 return;
             case LocomotionSlot.Water:
-                Water = locomotion as WaterLocomotion;
+                _water = locomotion as WaterLocomotion;
                 return;
             case LocomotionSlot.Fly:
-                Fly = locomotion as FlyLocomotion;
+                _fly = locomotion as FlyLocomotion;
                 return;
             case LocomotionSlot.Climb:
-                Climb = locomotion as ClimbLocomotion;
+                _climb = locomotion as ClimbLocomotion;
                 return;
         }
     }
@@ -520,46 +537,34 @@ public class LocomotionHandler : IRecordable
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref IsInControl, "isInControl", true);
+        RecordValues.Look(chronicler, ref IsInControl, "IsInControl", true);
         int installedKinds = (int)InstalledKinds;
-        RecordValues.Look(chronicler, ref installedKinds, "installedKinds", (int)LocomotionKind.All);
+        RecordValues.Look(chronicler, ref installedKinds, "InstalledKinds", (int)LocomotionKind.All);
 
         if (chronicler.Mode == SerializationMode.Loading)
             ConfigureInstalledKinds((LocomotionKind)installedKinds);
 
-        RecordDeep.Look(chronicler, ref _forces, "forces");
-
-        // TODO: can we prevent doing this if the aren't getter/setter properties?
-        MoveLocomotion move = Move;
-        PlatformLocomotion? platform = Platform;
-        JumpLocomotion? jump = Jump;
-        FallLocomotion fall = Fall;
-        SlideLocomotion? slide = Slide;
-        WaterLocomotion? water = Water;
-        FlyLocomotion? fly = Fly;
-        ClimbLocomotion? climb = Climb;
-
-        RecordDeep.Look(chronicler, ref move, "move");
-        RecordOptionalLocomotion(chronicler, ref platform, "platform");
-        RecordOptionalLocomotion(chronicler, ref jump, "jump");
-        RecordDeep.Look(chronicler, ref fall, "fall");
-        RecordOptionalLocomotion(chronicler, ref slide, "slide");
-        // Keep the serialized field id stable so existing payloads remain loadable.
-        RecordOptionalLocomotion(chronicler, ref water, "swim");
-        RecordOptionalLocomotion(chronicler, ref fly, "fly");
-        RecordOptionalLocomotion(chronicler, ref climb, "climb");
+        RecordDeep.Look(chronicler, ref _forces, "Forces");
+        RecordDeep.Look(chronicler, ref _move, "Move");
+        RecordOptionalLocomotion(chronicler, ref _platform, "Platform");
+        RecordOptionalLocomotion(chronicler, ref _jump, "Jump");
+        RecordDeep.Look(chronicler, ref _fall, "Fall");
+        RecordOptionalLocomotion(chronicler, ref _slide, "Slide");
+        RecordOptionalLocomotion(chronicler, ref _water, "Water");
+        RecordOptionalLocomotion(chronicler, ref _fly, "Fly");
+        RecordOptionalLocomotion(chronicler, ref _climb, "Climb");
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
             ApplyProfile(new LocomotionProfile(
-                move,
-                fall,
-                platform,
-                jump,
-                slide,
-                water,
-                fly,
-                climb));
+                _move,
+                _fall,
+                _platform,
+                _jump,
+                _slide,
+                _water,
+                _fly,
+                _climb));
         }
     }
 

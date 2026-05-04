@@ -16,8 +16,6 @@ See also:
 - `VOLUMETRAVERSAL.MD` for raw-volume traversal media and host rules
 - `CHARTS.MD` for a deeper explanation of `NavigationChart` and the chart lifecycle
 - `SERIALIZATION.MD` for Trailblazer's current serialization coverage and runtime behavior
-- `../src/Trailblazer/Serialization/README.md` for the reusable Chronicler API reference
-- `../src/Trailblazer/Serialization/MIGRATION.MD` for the planned extraction strategy for moving Chronicler into its own project
 
 ## 1. Core Model
 
@@ -158,7 +156,7 @@ Current behavior:
 - `AStarPathRequest` and `FlowFieldPathRequest` remain the public chart-backed request types.
 - Setting `AllowTraversalTransitions` lets either request use internal staged fallback through authored `TraversalTransition` handoffs when direct chart routing is not enough.
 - That fallback does not change the caller's intent: an `AStarPathRequest` still means "route this as A*," and a `FlowFieldPathRequest` still means "route this as FlowField."
-- `Navigator` exposes the same policy for built-in guided travel through `GuidedAllowTraversalTransitions`.
+- `Navigator` exposes the same policy for built-in guided travel through `ConfigureForGuidedTraversal(allowTraversalTransitions: true)`.
 - For navigator-owned volume-first travel, that same opt-in also enables bounded swim-exit handoffs from liquid volume into a follow-up chart request and bounded aerial landing handoffs into chart-backed follow-up travel.
 - The staged route is resolved internally from the request plus the live `TraversalTransitionRegistry`.
 - Surveyors stay single-mode; staged escalation happens above them.

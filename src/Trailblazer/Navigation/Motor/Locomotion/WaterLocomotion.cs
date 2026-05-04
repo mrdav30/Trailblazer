@@ -207,26 +207,26 @@ public class WaterLocomotion : ILocomotion
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
-        RecordValues.Look(chronicler, ref CanSwim, "canSwim", true);
-        RecordValues.Look(chronicler, ref CanBreachWater, "canBreachWater", true);
-        RecordValues.Look(chronicler, ref CanDrown, "canDrown", true);
-        RecordValues.Look(chronicler, ref MaxSwimSpeed, "maxSwimSpeed", DefaultMaxSwimSpeed);
-        RecordValues.Look(chronicler, ref MaxSwimSidewaysSpeed, "maxSwimSidewaysSpeed", DefaultMaxSwimSidewaysSpeed);
-        RecordValues.Look(chronicler, ref MaxWaterAcceleration, "maxWaterAcceleration", DefaultMaxSwimAcceleration);
-        RecordValues.Look(chronicler, ref SwimAccelerationModifier, "swimAccelerationModifier", DefaultSwimAccelerationModifier);
-        RecordValues.Look(chronicler, ref BuoyancyFactor, "buoyancyFactor", DefaultBouyancyFactor);
-        RecordValues.Look(chronicler, ref BreachJumpMultiplier, "breachJumpMultiplier", DefaultBreachJumpMultiplier);
-        RecordValues.Look(chronicler, ref HoldBreathTime, "holdBreathTime", DefaultHoldBreathTime);
-        RecordValues.Look(chronicler, ref BreathRegenerateIncrement, "breathRegenerateIncrement", DefaultBreathRegenerateIncrement);
+        RecordValues.Look(chronicler, ref _isEnabled, "IsEnabled", true);
+        RecordValues.Look(chronicler, ref CanSwim, "CanSwim", true);
+        RecordValues.Look(chronicler, ref CanBreachWater, "CanBreachWater", true);
+        RecordValues.Look(chronicler, ref CanDrown, "CanDrown", true);
+        RecordValues.Look(chronicler, ref MaxSwimSpeed, "MaxSwimSpeed", DefaultMaxSwimSpeed);
+        RecordValues.Look(chronicler, ref MaxSwimSidewaysSpeed, "MaxSwimSidewaysSpeed", DefaultMaxSwimSidewaysSpeed);
+        RecordValues.Look(chronicler, ref MaxWaterAcceleration, "MaxWaterAcceleration", DefaultMaxSwimAcceleration);
+        RecordValues.Look(chronicler, ref SwimAccelerationModifier, "SwimAccelerationModifier", DefaultSwimAccelerationModifier);
+        RecordValues.Look(chronicler, ref BuoyancyFactor, "BuoyancyFactor", DefaultBouyancyFactor);
+        RecordValues.Look(chronicler, ref BreachJumpMultiplier, "BreachJumpMultiplier", DefaultBreachJumpMultiplier);
+        RecordValues.Look(chronicler, ref HoldBreathTime, "HoldBreathTime", DefaultHoldBreathTime);
+        RecordValues.Look(chronicler, ref BreathRegenerateIncrement, "BreathRegenerateIncrement", DefaultBreathRegenerateIncrement);
 
         bool isSwimming = IsSwimming;
         bool isDiving = IsDiving;
         Fixed64 underwaterTimer = UnderwaterTimer;
 
-        RecordValues.Look(chronicler, ref isSwimming, "isSwimming", false);
-        RecordValues.Look(chronicler, ref isDiving, "isDiving", false);
-        RecordValues.Look(chronicler, ref underwaterTimer, "underwaterTimer", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref isSwimming, "IsSwimming", false);
+        RecordValues.Look(chronicler, ref isDiving, "IsDiving", false);
+        RecordValues.Look(chronicler, ref underwaterTimer, "UnderwaterTimer", Fixed64.Zero);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

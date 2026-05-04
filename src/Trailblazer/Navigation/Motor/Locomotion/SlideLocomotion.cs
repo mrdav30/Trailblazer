@@ -90,13 +90,13 @@ public class SlideLocomotion : ILocomotion
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
-        RecordValues.Look(chronicler, ref SlidingSpeed, "slidingSpeed", DefaultSlidingSpeed);
-        RecordValues.Look(chronicler, ref SidewaysControl, "sidewaysControl", DefaultSidewaysControl);
-        RecordValues.Look(chronicler, ref SpeedControl, "speedControl", DefaultSpeedControl);
+        RecordValues.Look(chronicler, ref _isEnabled, "IsEnabled", true);
+        RecordValues.Look(chronicler, ref SlidingSpeed, "SlidingSpeed", DefaultSlidingSpeed);
+        RecordValues.Look(chronicler, ref SidewaysControl, "SidewaysControl", DefaultSidewaysControl);
+        RecordValues.Look(chronicler, ref SpeedControl, "SpeedControl", DefaultSpeedControl);
 
         bool isSliding = IsSliding;
-        RecordValues.Look(chronicler, ref isSliding, "isSliding", false);
+        RecordValues.Look(chronicler, ref isSliding, "IsSliding", false);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

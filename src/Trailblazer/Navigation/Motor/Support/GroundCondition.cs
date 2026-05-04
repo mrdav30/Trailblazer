@@ -49,8 +49,8 @@ public struct GroundCondition : IRecordable
     /// <inheritdoc/>
     public void RecordData(IChronicler chronicler)
     {
-        chronicler.LookDeepStruct(ref Platform, nameof(Platform));
-        chronicler.LookValue(ref SurfaceFriction, nameof(SurfaceFriction), Fixed64.Zero);
-        chronicler.LookValue(ref MotionTransferState, nameof(MotionTransferState), MotionTransfer.None);
+        chronicler.LookDeepStruct(ref Platform, "Platform");
+        chronicler.LookValue(ref SurfaceFriction, "SurfaceFriction", Fixed64.Zero);
+        chronicler.LookValue(ref MotionTransferState, "MotionTransferState", MotionTransfer.None);
     }
 }

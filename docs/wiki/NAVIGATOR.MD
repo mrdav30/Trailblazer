@@ -126,6 +126,8 @@ Important public state includes:
 - `OccupantGroupId`
 - `IsLockedOn`
 
+`GuidedPathMode` and the related guided request defaults are read-only from the public API. Configure them with `ConfigureForGuidedTraversal(...)` so the navigator can keep its hosted request-building contract centralized.
+
 Protected frame-local state includes:
 
 - `_frameCondition`
@@ -304,11 +306,22 @@ It:
 - clears the current manual direction
 - stores guided request state in `_frameRequest`
 - builds a concrete `IPathRequest` from the target position, the navigator's current state, and guided-path defaults
-- optionally overrides the navigator's default `GuidedPathMode` for a single request
 - optionally accepts a shared `groupId` for grouped movement
 - forwards the request to `Steering.ApplyPathRequest(...)`
 
-`GuidedAllowTraversalTransitions` controls whether the built-in chart-backed guided modes (`AStar` and `FlowField`) may fall back through authored `TraversalTransition` handoffs. It also allows bounded swim-exit style handoffs from liquid volume into a follow-up chart request when the requested target is chart-backed outside the active liquid volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route beats staying in gas-volume travel. This keeps the public navigator surface on the existing guided modes instead of adding a separate hybrid mode.
+Use `ConfigureForGuidedTraversal(...)` to set the navigator-owned request defaults:
+
+```csharp
+navigator.ConfigureForGuidedTraversal(
+    pathAlgorithm: SolidPathAlgorithm.FlowField,
+    allowUnwalkableEndpoints: true,
+    allowTraversalTransitions: true,
+    aStarHeuristic: HeuristicMethod.Euclidean,
+    flowFieldExtraFloodRange: 12,
+    maxClimbHeight: (Fixed64)2);
+```
+
+`allowTraversalTransitions` controls whether the built-in chart-backed guided modes (`AStar` and `FlowField`) may fall back through authored `TraversalTransition` handoffs. It also allows bounded swim-exit style handoffs from liquid volume into a follow-up chart request when the requested target is chart-backed outside the active liquid volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route beats staying in gas-volume travel. This keeps the public navigator surface on the existing guided modes instead of adding a separate hybrid mode.
 
 While guided movement remains active:
 
@@ -319,22 +332,22 @@ While guided movement remains active:
 - explicit guided climb intent stays host-owned and sticky
 - auto-derived guided climb intent follows the current effective steering route topology after `Steering.GetHeading(...)`
 
-When the selected path mode is `GuidedPathMode.Aerial`, guided travel also requests controlled flight automatically. Steering may then travel directly through authored or explicitly configured gas volume, acquire a volume guide if blockers force a detour inside that space, or hand off into a chart-backed follow-up route through an authored landing transition when transition fallback is enabled and the landing route is preferable.
+When the current `TrekCondition.Medium` is `TraversalMedium.Gas`, guided travel uses volume-first routing through authored or explicitly configured gas volume. Steering may travel directly, acquire a volume guide if blockers force a detour inside that space, or hand off into a chart-backed follow-up route through an authored landing transition when transition fallback is enabled and the landing route is preferable.
 
 Guided travel through liquid does not auto-toggle a swim state. `TrekCondition.Medium` still decides that the request should use liquid-volume pathing, but active swim control is authored separately through `IsRequestingSwim` on the frame request via `ApplyGuidedTrekRequest(...)`, `ApplyInputTrekRequest(...)`, or `ToggleGuidedSwim(bool status)`.
 
-If the requested swim or aerial target sits outside the active volume medium and reaching it would require an authored exit or landing handoff, when `GuidedAllowTraversalTransitions` is disabled, the request will fail instead of silently snapping the volume endpoint onto the nearest handoff voxel.
+If the requested gas or liquid target sits outside the active volume medium and reaching it would require an authored exit or landing handoff, when guided traversal transitions are disabled, the request will fail instead of silently snapping the volume endpoint onto the nearest handoff voxel.
 
-`GuidedPathMode.Aerial` and `GuidedPathMode.Swim` remain volume-first. `GuidedAllowTraversalTransitions` does not reinterpret those modes as a new hybrid navigator flow, although `Swim` can use a bounded authored exit handoff into a normal chart-backed request and `Aerial` can use a bounded authored landing handoff into chart-backed follow-up travel.
+Gas and liquid guided travel remain volume-first. Transition fallback does not reinterpret those flows as a new hybrid navigator mode, although liquid can use a bounded authored exit handoff into a normal chart-backed request and gas can use a bounded authored landing handoff into chart-backed follow-up travel.
 
 Passing the same non-negative `groupId` to multiple navigators lets `NavSteering` preserve relative formation offsets while the group stays compact.
 
 The built-in request factory currently supports:
 
-- `GuidedPathMode.AStar`
-- `GuidedPathMode.FlowField`
-- `GuidedPathMode.Aerial`
-- `GuidedPathMode.Swim`
+- `SolidPathAlgorithm.AStar`
+- `SolidPathAlgorithm.FlowField`
+
+When `_frameCondition.Medium` is `TraversalMedium.Gas` or `TraversalMedium.Liquid`, the navigator uses `VolumePathRequest` first and uses the configured solid path algorithm only for optional chart-backed follow-up handoffs.
 
 If a project needs a different request shape, override `TryCreateGuidedPathRequest(...)`.
 
@@ -583,7 +596,7 @@ navigator.Initialize(new TrekCondition
     GroundState = new GroundCondition()
 });
 
-navigator.GuidedPathMode = GuidedPathMode.AStar;
+navigator.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
 navigator.ApplyGuidedTrekRequest(new Vector3d(5, 0, 5), rate: TrekRate.Moderate);
 
 TrailblazerManager.Simulate();

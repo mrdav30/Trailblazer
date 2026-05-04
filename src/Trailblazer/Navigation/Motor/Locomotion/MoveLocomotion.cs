@@ -186,22 +186,22 @@ public class MoveLocomotion : ILocomotion
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
-        RecordValues.Look(chronicler, ref MaxSlowSpeed, "maxSlowSpeed", DefaultMaxSlowSpeed);
-        RecordValues.Look(chronicler, ref MaxModerateSpeed, "maxModerateSpeed", DefaultMaxModerateSpeed);
-        RecordValues.Look(chronicler, ref MaxFastSpeed, "maxFastSpeed", DefaultMaxFastSpeed);
-        RecordValues.Look(chronicler, ref MaxSidewaysSpeed, "maxSidewaysSpeed", DefaultMaxSidewaysSpeed);
-        RecordValues.Look(chronicler, ref MaxBackwardsSpeed, "maxBackwardsSpeed", DefaultMaxBackwardsSpeed);
-        RecordValues.Look(chronicler, ref MaxGroundAcceleration, "maxGroundAcceleration", DefaultMaxGroundAcceleration);
-        RecordValues.Look(chronicler, ref MaxAirAcceleration, "maxAirAcceleration", DefaultMaxAirAcceleration);
-        RecordValues.Look(chronicler, ref MoveSpeedMultiplier, "moveSpeedMultiplier", Fixed64.One);
-        RecordValues.Look(chronicler, ref ModifySpeedOnSlope, "modifySpeedOnSlope", true);
-        RecordValues.Look(chronicler, ref SlopeSpeedMultiplier, "slopeSpeedMultiplier", DefaultSlopeSpeedModifier);
-        RecordValues.Look(chronicler, ref SlopeLimit, "slopeLimit", DefaultSlopeLimit);
-        RecordValues.Look(chronicler, ref WaterDragFactor, "waterDragFactor", DefaultWaterDragFactor);
+        RecordValues.Look(chronicler, ref _isEnabled, "IsEnabled", true);
+        RecordValues.Look(chronicler, ref MaxSlowSpeed, "MaxSlowSpeed", DefaultMaxSlowSpeed);
+        RecordValues.Look(chronicler, ref MaxModerateSpeed, "MaxModerateSpeed", DefaultMaxModerateSpeed);
+        RecordValues.Look(chronicler, ref MaxFastSpeed, "MaxFastSpeed", DefaultMaxFastSpeed);
+        RecordValues.Look(chronicler, ref MaxSidewaysSpeed, "MaxSidewaysSpeed", DefaultMaxSidewaysSpeed);
+        RecordValues.Look(chronicler, ref MaxBackwardsSpeed, "MaxBackwardsSpeed", DefaultMaxBackwardsSpeed);
+        RecordValues.Look(chronicler, ref MaxGroundAcceleration, "MaxGroundAcceleration", DefaultMaxGroundAcceleration);
+        RecordValues.Look(chronicler, ref MaxAirAcceleration, "MaxAirAcceleration", DefaultMaxAirAcceleration);
+        RecordValues.Look(chronicler, ref MoveSpeedMultiplier, "MoveSpeedMultiplier", Fixed64.One);
+        RecordValues.Look(chronicler, ref ModifySpeedOnSlope, "ModifySpeedOnSlope", true);
+        RecordValues.Look(chronicler, ref SlopeSpeedMultiplier, "SlopeSpeedMultiplier", DefaultSlopeSpeedModifier);
+        RecordValues.Look(chronicler, ref SlopeLimit, "SlopeLimit", DefaultSlopeLimit);
+        RecordValues.Look(chronicler, ref WaterDragFactor, "WaterDragFactor", DefaultWaterDragFactor);
 
         Vector3d frameVelocity = FrameVelocity;
-        RecordValues.Look(chronicler, ref frameVelocity, "frameVelocity", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref frameVelocity, "FrameVelocity", Vector3d.Zero);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

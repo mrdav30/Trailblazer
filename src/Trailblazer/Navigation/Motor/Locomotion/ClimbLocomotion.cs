@@ -190,14 +190,14 @@ public class ClimbLocomotion : ILocomotion
     /// <inheritdoc />
     public void RecordData(IChronicler chronicler)
     {
-        RecordValues.Look(chronicler, ref _isEnabled, "isEnabled", true);
-        RecordValues.Look(chronicler, ref CanClimb, "canClimb", true);
-        RecordValues.Look(chronicler, ref MaxClimbSpeed, "maxClimbSpeed", DefaultMaxClimbSpeed);
-        RecordValues.Look(chronicler, ref MaxClimbAcceleration, "maxClimbAcceleration", DefaultMaxClimbAcceleration);
-        RecordValues.Look(chronicler, ref GravityCompensationWhileClimbing, "gravityCompensationWhileClimbing", DefaultGravityCompensationWhileClimbing);
-        RecordValues.Look(chronicler, ref ClimbStartTolerance, "climbStartTolerance", DefaultClimbStartTolerance);
-        RecordValues.Look(chronicler, ref AllowLateralTraverse, "allowLateralTraverse", true);
-        RecordValues.Look(chronicler, ref ValidateActiveMantleWithHost, "validateActiveMantleWithHost", false);
+        RecordValues.Look(chronicler, ref _isEnabled, "IsEnabled", true);
+        RecordValues.Look(chronicler, ref CanClimb, "CanClimb", true);
+        RecordValues.Look(chronicler, ref MaxClimbSpeed, "MaxClimbSpeed", DefaultMaxClimbSpeed);
+        RecordValues.Look(chronicler, ref MaxClimbAcceleration, "MaxClimbAcceleration", DefaultMaxClimbAcceleration);
+        RecordValues.Look(chronicler, ref GravityCompensationWhileClimbing, "GravityCompensationWhileClimbing", DefaultGravityCompensationWhileClimbing);
+        RecordValues.Look(chronicler, ref ClimbStartTolerance, "ClimbStartTolerance", DefaultClimbStartTolerance);
+        RecordValues.Look(chronicler, ref AllowLateralTraverse, "AllowLateralTraverse", true);
+        RecordValues.Look(chronicler, ref ValidateActiveMantleWithHost, "ValidateActiveMantleWithHost", false);
 
         bool isClimbing = IsClimbing;
         bool isMantling = IsMantling;
@@ -212,18 +212,18 @@ public class ClimbLocomotion : ILocomotion
         bool activeAllowMantle = ActiveAllowMantle;
         Vector3d? mantleTargetPosition = MantleTargetPosition;
 
-        RecordValues.Look(chronicler, ref isClimbing, "isClimbing", false);
-        RecordValues.Look(chronicler, ref isMantling, "isMantling", false);
-        RecordValues.Look(chronicler, ref activeClimbKind, "activeClimbKind", ClimbAffordanceKind.None);
-        RecordValues.Look(chronicler, ref attachmentId, "attachmentId", null);
-        RecordValues.Look(chronicler, ref attachmentPoint, "attachmentPoint", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref attachedSurfaceNormal, "attachedSurfaceNormal", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref attachedUpDirection, "attachedUpDirection", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref activeAllowLateralTraverse, "activeAllowLateralTraverse", false);
-        RecordValues.Look(chronicler, ref activeAllowDescent, "activeAllowDescent", true);
-        RecordValues.Look(chronicler, ref activeAllowDetachJump, "activeAllowDetachJump", true);
-        RecordValues.Look(chronicler, ref activeAllowMantle, "activeAllowMantle", false);
-        RecordValues.Look(chronicler, ref mantleTargetPosition, "mantleTargetPosition", null);
+        RecordValues.Look(chronicler, ref isClimbing, "IsClimbing", false);
+        RecordValues.Look(chronicler, ref isMantling, "IsMantling", false);
+        RecordValues.Look(chronicler, ref activeClimbKind, "ActiveClimbKind", ClimbAffordanceKind.None);
+        RecordValues.Look(chronicler, ref attachmentId, "AttachmentId", null);
+        RecordValues.Look(chronicler, ref attachmentPoint, "AttachmentPoint", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref attachedSurfaceNormal, "AttachedSurfaceNormal", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref attachedUpDirection, "AttachedUpDirection", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref activeAllowLateralTraverse, "ActiveAllowLateralTraverse", false);
+        RecordValues.Look(chronicler, ref activeAllowDescent, "ActiveAllowDescent", true);
+        RecordValues.Look(chronicler, ref activeAllowDetachJump, "ActiveAllowDetachJump", true);
+        RecordValues.Look(chronicler, ref activeAllowMantle, "ActiveAllowMantle", false);
+        RecordValues.Look(chronicler, ref mantleTargetPosition, "MantleTargetPosition", null);
 
         if (chronicler.Mode == SerializationMode.Loading)
         {

@@ -3,11 +3,11 @@ using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
+using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
-using Trailblazer.Serialization;
 using Xunit;
 
-namespace Trailblazer.Tests.Serialization;
+namespace Trailblazer.Tests.Navigation.Steering;
 
 [Collection("PathingCollection")]
 public sealed class PathRequestRecordTests : IDisposable

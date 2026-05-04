@@ -38,7 +38,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void GetMaxAcceleration_ShouldThrow_WhenMotorHasNotBeenInitialized()
     {
-        var motor = CreateUninitializedMotor();
+        var motor = NavMotor.CreateUninitialized();
 
         motor.Invoking(m => m.GetMaxAcceleration())
             .Should().Throw<InvalidOperationException>()
@@ -48,7 +48,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void TryTraversal_ShouldReturnFalse_WhenMotorHasNotBeenInitialized()
     {
-        var motor = CreateUninitializedMotor();
+        var motor = NavMotor.CreateUninitialized();
         TrekRequest request = new()
         {
             Origin = Vector3d.Zero,
@@ -244,7 +244,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void SetLocomotionProfile_ShouldAllowUninitializedMotorShell()
     {
-        var motor = CreateUninitializedMotor();
+        var motor = NavMotor.CreateUninitialized();
         var profile = LocomotionProfile.CreateMoveAndFallOnly();
 
         motor.Invoking(m => m.SetLocomotionProfile(profile))
@@ -434,7 +434,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void FinalizeTraversal_ShouldIgnoreCall_WhenMotorWasNeverInitialized()
     {
-        var motor = CreateUninitializedMotor();
+        var motor = NavMotor.CreateUninitialized();
 
         motor.FinalizeTraversal(
             Vector3d.Zero,
@@ -934,12 +934,11 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void JsonRoundTrip_ShouldHydrateMissingCurrentState_ForUninitializedMotors()
     {
-        var source = CreateUninitializedMotor();
-        source.Handler = new LocomotionHandler(LocomotionProfile.CreateMoveAndFallOnly());
+        var source = NavMotor.CreateUninitialized(new LocomotionHandler(LocomotionProfile.CreateMoveAndFallOnly()));
 
         string json = JsonRecordSerializer.Serialize(source, writeIndented: true);
 
-        var target = CreateUninitializedMotor();
+        var target = NavMotor.CreateUninitialized();
         JsonRecordSerializer.Populate(target, json);
 
         target.IsInitialized.Should().BeFalse();
@@ -957,15 +956,5 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         agent.FrameRequest.Rotation = agent.Rotation;
 
         agent.Motor.TryTraversal(agent.FrameRequest, out _, out _, out _).Should().BeTrue();
-    }
-
-    private static NavMotor CreateUninitializedMotor()
-    {
-        ConstructorInfo ctor = typeof(NavMotor).GetConstructor(
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            binder: null,
-            Type.EmptyTypes,
-            modifiers: null)!;
-        return (NavMotor)ctor.Invoke(null);
     }
 }

@@ -2,6 +2,7 @@
 using FixedMathSharp;
 using GridForge;
 using GridForge.Grids;
+using GridForge.Spatial;
 using System;
 using System.Runtime.CompilerServices;
 using Trailblazer.Navigation;
@@ -31,28 +32,78 @@ public abstract class Navigator : INavigate, IRecordable
 
     #endregion
 
-    #region State - Position / Rotation / Velocity
+    #region Fields
 
-    /// <inheritdoc/>
-    public Vector3d Position { get; protected set; }
+    /// <inheritdoc cref="Position"/>
+    protected Vector3d _position;
 
-    /// <inheritdoc/>
-    public Vector3d LastPosition { get; protected set; }
+    /// <inheritdoc cref="LastPosition"/>
+    protected Vector3d _lastPosition;
 
-    /// <inheritdoc/>
-    public FixedQuaternion Rotation { get; protected set; } = FixedQuaternion.Identity;
+    /// <inheritdoc cref="Rotation"/>
+    protected FixedQuaternion _rotation = FixedQuaternion.Identity;
 
-    /// <inheritdoc/>
-    public Vector3d Forward { get; protected set; }
+    /// <inheritdoc cref="Velocity"/>
+    protected Vector3d _velocity;
 
-    /// <inheritdoc/>
-    public Vector3d Velocity { get; protected set; }
+    /// <inheritdoc cref="Speed"/>
+    protected Fixed64 _speed;
 
-    /// <inheritdoc/>
-    public Fixed64 Speed { get; protected set; }
+    /// <inheritdoc cref="Acceleration"/>
+    protected Vector3d _acceleration;   
 
-    /// <inheritdoc/>
-    public Vector3d Acceleration { get; protected set; }
+    /// <inheritdoc cref="Size"/>
+    protected Fixed64 _size = Fixed64.One;
+
+    /// <summary>
+    /// Adjustment factor for the foot position, used to determine ground contact points.
+    /// </summary>
+    protected Fixed64 _footPositionAdjust = DefaultFootPositionAdjust;
+
+    private SolidPathAlgorithm _guidedPathMode = SolidPathAlgorithm.AStar;
+
+    private bool _guidedAllowUnwalkableEndpoints;
+
+    private bool _guidedAllowTraversalTransitions;
+
+    private Fixed64 _guidedMaxClimbHeight = Fixed64.One;
+
+    private HeuristicMethod _guidedAStarHeuristic = HeuristicMethod.Manhattan;
+
+    private int _guidedFlowFieldExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
+
+    /// <summary>
+    /// Stable runtime identity used for occupancy and steering coordination.
+    /// </summary>
+    /// <remarks>
+    /// By default this is allocated deterministically from object setup order.
+    /// Hosts can override it during <see cref="Setup(Vector3d, FixedQuaternion?, Vector3d?, Fixed64?, Guid?)"/>
+    /// when a broader simulation stack already owns stable agent ids.
+    /// </remarks>
+    protected Guid _globalId;
+
+    private byte _occupantGroupId = 1;
+
+    private bool _isLockedOn;
+
+    /// <summary>
+    /// The controller responsible for managing the object's desired movement direction.
+    /// </summary>
+    protected NavSteering? _steering;
+
+    /// <summary>
+    /// The controller responsible for managing the object's rotation towards the movement direction.
+    /// </summary>
+    protected NavTurning? _turning;
+
+    /// <summary>
+    /// The controller responsible for managing the object's movement and physics interactions.
+    /// </summary>
+    protected NavMotor? _motor;
+
+    private Fixed64 _stuckThresholdSpeed;
+
+    private bool _isGuideded;
 
     /// <summary>
     /// The change in position to apply during the current simulation frame.
@@ -79,40 +130,6 @@ public abstract class Navigator : INavigate, IRecordable
     /// </summary>
     protected bool _isInitialized;
 
-    /// <summary>
-    /// Indicates whether the Navigator is currently active and ready for simulation.
-    /// </summary>
-    public bool IsActive => _isSet && _isInitialized;
-
-    #endregion
-
-    #region State - Traversal / Steering
-
-    /// <summary>
-    /// The controller responsible for managing the object's desired movement direction.
-    /// </summary>
-    public NavSteering? Steering { get; protected set; }
-
-    /// <summary>
-    /// The controller responsible for managing the object's rotation towards the movement direction.
-    /// </summary>
-    public NavTurning? Turning { get; protected set; }
-
-    /// <summary>
-    /// The controller responsible for managing the object's movement and physics interactions.
-    /// </summary>
-    public NavMotor? Motor { get; protected set; }
-
-    /// <summary>
-    /// Minimum velocity threshold used to determine if the object is considered stuck.
-    /// </summary>
-    public Fixed64 StuckThresholdSpeed { get; protected set; }
-
-    /// <summary>
-    /// Indicates whether the current traversal session is guided via a TrailGuide path (e.g., A* or flow field).
-    /// </summary>
-    public bool IsGuideded { get; protected set; }
-
     /// <inheritdoc cref="TrekCondition"/>
     protected TrekCondition _frameCondition = new();
 
@@ -129,71 +146,121 @@ public abstract class Navigator : INavigate, IRecordable
 
     #endregion
 
+    #region State - Identity / Transform
+
+    /// <inheritdoc/>
+    public Vector3d Position => _position;
+
+    /// <inheritdoc/>
+    public Vector3d LastPosition => _lastPosition;
+
+    /// <inheritdoc/>
+    public FixedQuaternion Rotation => _rotation;
+
+    /// <inheritdoc/>
+    public Vector3d Forward { get; protected set; }
+
+    /// <inheritdoc/>
+    public Vector3d Velocity => _velocity;
+
+    /// <inheritdoc/>
+    public Fixed64 Speed => _speed;
+
+    /// <inheritdoc/>
+    public Vector3d Acceleration => _acceleration;
+
+    /// <summary>
+    /// Minimum velocity threshold used to determine if the object is considered stuck.
+    /// </summary>
+    public Fixed64 StuckThresholdSpeed => _stuckThresholdSpeed;
+
+    /// <summary>
+    /// Indicates whether the Navigator is currently active and ready for simulation.
+    /// </summary>
+    public bool IsActive => _isSet && _isInitialized;
+
+    #endregion
+
+    #region State - Controllers
+
+    /// <summary>
+    /// The controller responsible for managing the object's desired movement direction.
+    /// </summary>
+    public NavSteering? Steering => _steering;
+
+    /// <summary>
+    /// The controller responsible for managing the object's rotation towards the movement direction.
+    /// </summary>
+    public NavTurning? Turning => _turning;
+
+    /// <summary>
+    /// The controller responsible for managing the object's movement and physics interactions.
+    /// </summary>
+    public NavMotor? Motor => _motor;
+
+    /// <summary>
+    /// Indicates whether the current traversal session is guided via a TrailGuide path (e.g., A* or flow field).
+    /// </summary>
+    public bool IsGuideded => _isGuideded;
+
+    #endregion
+
     #region Settings
 
     /// <inheritdoc/>
-    public Fixed64 Size { get; set; } = Fixed64.One;
+    public Fixed64 Size => _size;
 
     /// <inheritdoc/>
     public Fixed64 Radius => Size * Fixed64.Half;
 
-    /// <summary>
-    /// Adjustment factor for the foot position, used to determine ground contact points.
-    /// </summary>
-    public Fixed64 FootPositionAdjust { get; set; } = DefaultFootPositionAdjust;
+    /// <inheritdoc cref="_footPositionAdjust"/>
+    public Fixed64 FootPositionAdjust { get => _footPositionAdjust; set => _footPositionAdjust = value; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the object is currently locked on to a target.
     /// </summary>
-    public bool IsLockedOn { get; set; }
+    public bool IsLockedOn { get => _isLockedOn; set => _isLockedOn = value; }
 
     /// <summary>
     /// Path request mode used for guided travel.
     /// </summary>
-    public SolidPathAlgorithm GuidedPathMode { get; set; } = SolidPathAlgorithm.AStar;
+    public SolidPathAlgorithm GuidedPathMode => _guidedPathMode;
 
     /// <summary>
     /// Whether object-built guided requests may target unwalkable voxels.
     /// </summary>
-    public bool GuidedAllowUnwalkableEndpoints { get; set; }
+    public bool GuidedAllowUnwalkableEndpoints => _guidedAllowUnwalkableEndpoints;
 
     /// <summary>
     /// Whether object-built guided requests may use authored traversal transitions for chart fallback,
     /// bounded swim exits, or bounded aerial landing handoffs.
     /// </summary>
-    public bool GuidedAllowTraversalTransitions { get; set; }
+    public bool GuidedAllowTraversalTransitions => _guidedAllowTraversalTransitions;
 
     /// <summary>
     /// Default max climb height used when the object builds guided requests.
     /// </summary>
-    public Fixed64 GuidedMaxClimbHeight { get; set; } = Fixed64.One;
+    public Fixed64 GuidedMaxClimbHeight => _guidedMaxClimbHeight;
 
     /// <summary>
     /// Default heuristic used when the object builds A* requests.
     /// </summary>
-    public HeuristicMethod GuidedAStarHeuristic { get; set; } = HeuristicMethod.Manhattan;
+    public HeuristicMethod GuidedAStarHeuristic => _guidedAStarHeuristic;
 
     /// <summary>
     /// Default extra flood range used when the object builds flow-field requests.
     /// </summary>
-    public int GuidedFlowFieldExtraFloodRange { get; set; } = FlowFieldPathRequest.DefaultExtraFloodRange;
+    public int GuidedFlowFieldExtraFloodRange => _guidedFlowFieldExtraFloodRange;
 
     #endregion
 
     #region Voxel Occupancy
 
-    /// <summary>
-    /// Stable runtime identity used for occupancy and steering coordination.
-    /// </summary>
-    /// <remarks>
-    /// By default this is allocated deterministically from object setup order.
-    /// Hosts can override it during <see cref="Setup(Vector3d, FixedQuaternion?, Vector3d?, Fixed64?, Guid?)"/>
-    /// when a broader simulation stack already owns stable agent ids.
-    /// </remarks>
-    public Guid GlobalId { get; protected set; }
+    /// <inheritdoc cref="_globalId"/>
+    public Guid GlobalId => _globalId;
 
-    /// <inheritdoc/>
-    public byte OccupantGroupId { get; set; } = 1;
+    /// <inheritdoc />
+    public byte OccupantGroupId { get => _occupantGroupId; set => _occupantGroupId = value; }
 
     #endregion
 
@@ -238,16 +305,16 @@ public abstract class Navigator : INavigate, IRecordable
         if (globalId.HasValue && globalId.Value == Guid.Empty)
             throw new ArgumentException("Navigator globalId cannot be Guid.Empty.", nameof(globalId));
 
-        GlobalId = globalId ?? GenerateGUID();
+        _globalId = globalId ?? GenerateGUID();
 
-        LastPosition = Position = position;
-        Rotation = rotation ?? FixedQuaternion.Identity;
-        if (Rotation != FixedQuaternion.Identity)
-            Forward = Rotation.Rotate(Vector3d.Forward);
+        _lastPosition = _position = position;
+        _rotation = rotation ?? FixedQuaternion.Identity;
+        if (_rotation != FixedQuaternion.Identity)
+            Forward = _rotation.Rotate(Vector3d.Forward);
         else
             Forward = Vector3d.Forward;
-        Velocity = velocity ?? Vector3d.Zero;
-        Size = size ?? Fixed64.One;
+        _velocity = velocity ?? Vector3d.Zero;
+        _size = size ?? Fixed64.One;
 
         _isSet = true;
     }
@@ -259,12 +326,12 @@ public abstract class Navigator : INavigate, IRecordable
     {
         _frameCondition = condition.Clone();
 
-        Steering = NavSteering.CreateNew(Radius);
+        _steering = NavSteering.CreateNew(Radius);
 
-        Motor = NavMotor.CreateNew(_frameCondition, CreateLocomotionProfile());
-        Motor.SetVelocity(Velocity);
+        _motor = NavMotor.CreateNew(_frameCondition, CreateLocomotionProfile());
+        _motor.SetVelocity(Velocity);
 
-        Turning = NavTurning.CreateNew(Radius);
+        _turning = NavTurning.CreateNew(Radius);
 
         CheckVoxelOccupancy(true);
 
@@ -296,7 +363,7 @@ public abstract class Navigator : INavigate, IRecordable
     {
         _frameCondition.Reset();
         _frameRequest.Reset();
-        IsGuideded = false;
+        _isGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
         ResetGuidedClimbIntentState();
 
@@ -354,7 +421,7 @@ public abstract class Navigator : INavigate, IRecordable
     {
         if (!IsActive) return;
 
-        IsGuideded = false;
+        _isGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
         ResetGuidedClimbIntentState();
         _frameRequest.SetRequest(
@@ -408,7 +475,7 @@ public abstract class Navigator : INavigate, IRecordable
                 ? GuidedClimbIntentMode.Explicit
                 : GuidedClimbIntentMode.Auto);
 
-        IsGuideded = true;
+        _isGuideded = true;
         _frameRequest.SetRequest(
                 direction: Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
@@ -422,6 +489,31 @@ public abstract class Navigator : INavigate, IRecordable
 
         Steering!.ApplyPathRequest(pathRequest, groupId);
         CaptureGuidedRouteTopologyVersion();
+    }
+
+    /// <summary>
+    /// Configures the object-owned defaults used when building guided path requests from a target position.
+    /// </summary>
+    /// <param name="pathAlgorithm">The pathfinding algorithm to use for guided requests.</param>
+    /// <param name="allowUnwalkableEndpoints">Whether to allow object-built guided requests to target unwalkable voxels.</param>
+    /// <param name="allowTraversalTransitions">Whether to allow object-built guided requests to use authored traversal transitions for chart fallback, bounded swim exits, or bounded aerial landing handoffs.</param>
+    /// <param name="aStarHeuristic">The default heuristic to use when building A* guided requests.</param>
+    /// <param name="flowFieldExtraFloodRange">The default extra flood range to use when building flow field guided requests.</param>
+    /// <param name="maxClimbHeight">The default max climb height to use when building guided requests.</param>
+    public virtual void ConfigureForGuidedTraversal(
+        SolidPathAlgorithm? pathAlgorithm = null,
+        bool? allowUnwalkableEndpoints = null,
+        bool? allowTraversalTransitions = null,
+        HeuristicMethod? aStarHeuristic = null,
+        int? flowFieldExtraFloodRange = null,
+        Fixed64? maxClimbHeight = null)
+    {
+        _guidedPathMode = pathAlgorithm ?? _guidedPathMode;
+        _guidedAllowUnwalkableEndpoints = allowUnwalkableEndpoints ?? _guidedAllowUnwalkableEndpoints;
+        _guidedAllowTraversalTransitions = allowTraversalTransitions ?? _guidedAllowTraversalTransitions;
+        _guidedAStarHeuristic = aStarHeuristic ?? _guidedAStarHeuristic;
+        _guidedFlowFieldExtraFloodRange = flowFieldExtraFloodRange ?? _guidedFlowFieldExtraFloodRange;
+        _guidedMaxClimbHeight = maxClimbHeight ?? _guidedMaxClimbHeight;
     }
 
     /// <summary>
@@ -565,8 +657,8 @@ public abstract class Navigator : INavigate, IRecordable
             ApplyRotationDelta(rDelta);
         }
 
-        if (Turning!.TrySimulateTurn(Position, LastPosition, Forward, Rotation, out FixedQuaternion appliedRotation))
-            Rotation = appliedRotation;
+        if (Turning!.TrySimulateTurn(_position, _lastPosition, Forward, _rotation, out FixedQuaternion appliedRotation))
+            _rotation = appliedRotation;
     }
 
     /// <summary>
@@ -581,34 +673,34 @@ public abstract class Navigator : INavigate, IRecordable
         if (!IsActive)
             throw new InvalidOperationException("Navigator must be Setup and Initialized before CommitFrameMotion().");
 
-        LastPosition = Position;
-        Position += _positionDelta + _velocityDelta;
+        _lastPosition = _position;
+        _position += _positionDelta + _velocityDelta;
 
         CheckVoxelOccupancy();
 
         if (_rotationDelta != FixedQuaternion.Identity)
         {
-            Rotation *= _rotationDelta;
+            _rotation *= _rotationDelta;
             _rotationDelta = FixedQuaternion.Identity;
         }
 
-        if (Rotation != FixedQuaternion.Identity)
-            Forward = Rotation.Rotate(Vector3d.Forward);
+        if (_rotation != FixedQuaternion.Identity)
+            Forward = _rotation.Rotate(Vector3d.Forward);
         else
             Forward = Vector3d.Forward;
 
         CheckTrekCondition();
 
-        Vector3d previousVelocity = Velocity;
+        Vector3d previousVelocity = _velocity;
         Fixed64 invDelta = TrailblazerManager.InvDeltaTime;
-        Velocity = (Position - LastPosition) * invDelta;
-        Speed = Velocity != Vector3d.Zero ? Velocity.Magnitude : Fixed64.Zero;
-        Acceleration = (Velocity - previousVelocity) * invDelta;
+        _velocity = (Position - LastPosition) * invDelta;
+        _speed = _velocity != Vector3d.Zero ? _velocity.Magnitude : Fixed64.Zero;
+        _acceleration = (_velocity - previousVelocity) * invDelta;
 
-        if (Steering!.ShouldMove && Acceleration != Vector3d.Zero)
-            StuckThresholdSpeed = (Acceleration / TrailblazerManager.FrameRate).Magnitude;
+        if (Steering!.ShouldMove && _acceleration != Vector3d.Zero)
+            _stuckThresholdSpeed = (_acceleration / TrailblazerManager.FrameRate).Magnitude;
         else
-            StuckThresholdSpeed = Fixed64.Zero;
+            _stuckThresholdSpeed = Fixed64.Zero;
 
         _positionDelta = Vector3d.Zero;
         _velocityDelta = Vector3d.Zero;
@@ -783,7 +875,7 @@ public abstract class Navigator : INavigate, IRecordable
 
         _positionDelta += delta;
         // shift last position so it doesn't alter object's velocity
-        LastPosition += delta;
+        _lastPosition += delta;
     }
 
     /// <summary>
@@ -996,101 +1088,47 @@ public abstract class Navigator : INavigate, IRecordable
     /// <inheritdoc />
     public virtual void RecordData(IChronicler chronicler)
     {
-        Vector3d position = Position;
-        Vector3d lastPosition = LastPosition;
-        FixedQuaternion rotation = Rotation;
-        Vector3d velocity = Velocity;
-        Fixed64 speed = Speed;
-        Vector3d acceleration = Acceleration;
-        Fixed64 size = Size;
-        Fixed64 footPositionAdjust = FootPositionAdjust;
-        SolidPathAlgorithm guidedPathMode = GuidedPathMode;
-        bool guidedAllowUnwalkableEndpoints = GuidedAllowUnwalkableEndpoints;
-        bool guidedAllowTraversalTransitions = GuidedAllowTraversalTransitions;
-        Fixed64 guidedMaxClimbHeight = GuidedMaxClimbHeight;
-        HeuristicMethod guidedAStarHeuristic = GuidedAStarHeuristic;
-        int guidedFlowFieldExtraFloodRange = GuidedFlowFieldExtraFloodRange;
-        Guid globalId = GlobalId;
-        byte occupantGroupId = OccupantGroupId;
-        bool isLockedOn = IsLockedOn;
-        Fixed64 stuckThresholdSpeed = StuckThresholdSpeed;
-        bool isGuideded = IsGuideded;
-        bool guidedClimbIntent = _guidedClimbIntent;
-        GuidedClimbIntentMode guidedClimbIntentMode = _guidedClimbIntentMode;
-        int lastSeenGuidedRouteTopologyVersion = _lastSeenGuidedRouteTopologyVersion;
-        TrekCondition frameCondition = _frameCondition;
-        TrekRequest frameRequest = _frameRequest;
         GuidedVolumeExitHandoff? pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
         if (chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
             pendingGuidedVolumeExitHandoff = new GuidedVolumeExitHandoff();
-        NavSteering? steering = Steering;
-        NavTurning? turning = Turning;
-        NavMotor? motor = Motor;
 
-        RecordValues.Look(chronicler, ref position, "position", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref lastPosition, "lastPosition", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref rotation, "rotation", FixedQuaternion.Identity);
-        RecordValues.Look(chronicler, ref velocity, "velocity", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref speed, "speed", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref acceleration, "acceleration", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref size, "size", Fixed64.One);
-        RecordValues.Look(chronicler, ref footPositionAdjust, "footPositionAdjust", DefaultFootPositionAdjust);
-        RecordValues.Look(chronicler, ref guidedPathMode, "guidedPathMode", SolidPathAlgorithm.AStar);
-        RecordValues.Look(chronicler, ref guidedAllowUnwalkableEndpoints, "guidedAllowUnwalkableEndpoints", false);
-        RecordValues.Look(chronicler, ref guidedAllowTraversalTransitions, "guidedAllowTraversalTransitions", false);
-        RecordValues.Look(chronicler, ref guidedMaxClimbHeight, "guidedMaxClimbHeight", Fixed64.One);
-        RecordValues.Look(chronicler, ref guidedAStarHeuristic, "guidedAStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref guidedFlowFieldExtraFloodRange, "guidedFlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
-        RecordValues.Look(chronicler, ref globalId, "globalId", Guid.Empty);
-        RecordValues.Look(chronicler, ref occupantGroupId, "occupantGroupId", (byte)1);
-        RecordValues.Look(chronicler, ref isLockedOn, "isLockedOn", false);
-        RecordValues.Look(chronicler, ref stuckThresholdSpeed, "stuckThresholdSpeed", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref isGuideded, "isGuideded", false);
-        RecordValues.Look(chronicler, ref guidedClimbIntent, "guidedClimbIntent", false);
-        RecordValues.Look(chronicler, ref guidedClimbIntentMode, "guidedClimbIntentMode", GuidedClimbIntentMode.Auto);
-        RecordValues.Look(chronicler, ref lastSeenGuidedRouteTopologyVersion, "lastSeenGuidedRouteTopologyVersion", 0);
-        RecordDeepStruct.Look(chronicler, ref frameCondition, "frameCondition");
-        RecordDeepStruct.Look(chronicler, ref frameRequest, "frameRequest");
-        RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff!, "pendingGuidedVolumeExitHandoff");
-        if (steering != null)
-            RecordDeep.Look(chronicler, ref steering, "steering");
-        if (turning != null)
-            RecordDeep.Look(chronicler, ref turning, "turning");
-        if (motor != null)
-            RecordDeep.Look(chronicler, ref motor, "motor");
+        RecordValues.Look(chronicler, ref _position, "Position", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref _lastPosition, "LastPosition", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref _rotation, "Rotation", FixedQuaternion.Identity);
+        RecordValues.Look(chronicler, ref _velocity, "Velocity", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref _speed, "Speed", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref _acceleration, "Acceleration", Vector3d.Zero);
+        RecordValues.Look(chronicler, ref _size, "Size", Fixed64.One);
+        RecordValues.Look(chronicler, ref _footPositionAdjust, "FootPositionAdjust", DefaultFootPositionAdjust);
+        RecordValues.Look(chronicler, ref _guidedPathMode, "GuidedPathMode", SolidPathAlgorithm.AStar);
+        RecordValues.Look(chronicler, ref _guidedAllowUnwalkableEndpoints, "GuidedAllowUnwalkableEndpoints", false);
+        RecordValues.Look(chronicler, ref _guidedAllowTraversalTransitions, "GuidedAllowTraversalTransitions", false);
+        RecordValues.Look(chronicler, ref _guidedMaxClimbHeight, "GuidedMaxClimbHeight", Fixed64.One);
+        RecordValues.Look(chronicler, ref _guidedAStarHeuristic, "GuidedAStarHeuristic", HeuristicMethod.Manhattan);
+        RecordValues.Look(chronicler, ref _guidedFlowFieldExtraFloodRange, "GuidedFlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
+        RecordValues.Look(chronicler, ref _globalId, "GlobalId", Guid.Empty);
+        RecordValues.Look(chronicler, ref _occupantGroupId, "OccupantGroupId", (byte)1);
+        RecordValues.Look(chronicler, ref _isLockedOn, "IsLockedOn", false);
+        RecordValues.Look(chronicler, ref _stuckThresholdSpeed, "StuckThresholdSpeed", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref _isGuideded, "IsGuideded", false);
+        RecordValues.Look(chronicler, ref _guidedClimbIntent, "GuidedClimbIntent", false);
+        RecordValues.Look(chronicler, ref _guidedClimbIntentMode, "GuidedClimbIntentMode", GuidedClimbIntentMode.Auto);
+        RecordValues.Look(chronicler, ref _lastSeenGuidedRouteTopologyVersion, "LastSeenGuidedRouteTopologyVersion", 0);
+        RecordDeepStruct.Look(chronicler, ref _frameCondition, "FrameCondition");
+        RecordDeepStruct.Look(chronicler, ref _frameRequest, "FrameRequest");
+        RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff!, "PendingGuidedVolumeExitHandoff");
+        if (_steering != null)
+            RecordDeep.Look(chronicler, ref _steering, "Steering");
+        if (_turning != null)
+            RecordDeep.Look(chronicler, ref _turning, "Turning");
+        if (_motor != null)
+            RecordDeep.Look(chronicler, ref _motor, "Motor");
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
-            Position = position;
-            LastPosition = lastPosition;
-            Rotation = rotation;
-            Velocity = velocity;
-            Speed = speed;
-            Acceleration = acceleration;
-            Size = size;
-            FootPositionAdjust = footPositionAdjust;
-            GuidedPathMode = guidedPathMode;
-            GuidedAllowUnwalkableEndpoints = guidedAllowUnwalkableEndpoints;
-            GuidedAllowTraversalTransitions = guidedAllowTraversalTransitions;
-            GuidedMaxClimbHeight = guidedMaxClimbHeight;
-            GuidedAStarHeuristic = guidedAStarHeuristic;
-            GuidedFlowFieldExtraFloodRange = guidedFlowFieldExtraFloodRange;
-            GlobalId = globalId;
-            OccupantGroupId = occupantGroupId;
-            IsLockedOn = isLockedOn;
-            StuckThresholdSpeed = stuckThresholdSpeed;
-            IsGuideded = isGuideded;
-            _guidedClimbIntent = guidedClimbIntent;
-            _guidedClimbIntentMode = guidedClimbIntentMode;
-            _lastSeenGuidedRouteTopologyVersion = lastSeenGuidedRouteTopologyVersion;
-            _frameCondition = frameCondition.Clone();
-            _frameRequest = frameRequest.Clone();
             _pendingGuidedVolumeExitHandoff = pendingGuidedVolumeExitHandoff?.IsValid == true
                 ? pendingGuidedVolumeExitHandoff
                 : null;
-            Steering = steering;
-            Turning = turning;
-            Motor = motor;
 
             Forward = Rotation != FixedQuaternion.Identity
                 ? Rotation.Rotate(Vector3d.Forward)
@@ -1102,9 +1140,9 @@ public abstract class Navigator : INavigate, IRecordable
             _isSet = true;
             _isInitialized = Motor != null;
 
-            Steering?.UpdateOwnerRadius(Radius);
+            _steering?.UpdateOwnerRadius(Radius);
 
-            Turning?.OnInitialize(Radius);
+            _turning?.OnInitialize(Radius);
 
             CheckVoxelOccupancy(true);
         }

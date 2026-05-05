@@ -211,6 +211,47 @@ Once the root cause is confirmed, the fix must address whichever of these applie
 - Post-fix benchmark showing `FlowFieldCacheMiss_BelowCapacity` within 2× of
   `ColdGuide_OpenPlane64` normalized to the same grid area.
 
+### Phase 2 implementation notes — 2026-05-05
+
+Confirmed on .NET 8.0.26:
+
+- `FlowFieldCacheMiss_BelowCapacity` reproduced at ~54.0 ms / 881 KB before Phase 2 changes.
+- The prior `ColdGuide_OpenPlane64` contrast was a benchmark artifact. The benchmark class created
+  several `BenchmarkPathFixture` instances in one `GlobalSetup`; each setup disposed the previous
+  `GridWorld`, leaving earlier requests pointed at stale voxels. That stale request path measured
+  ~19.8 us / 336 B and did not represent a successful cold flow-field guide.
+
+Implemented:
+
+- `GuideCacheBenchmarks` now uses one live fixture for A* and flow-field cache scenarios.
+- `FlowFieldPathRequestBenchmarks` now uses one live fixture with spatially separated charts and
+  validates all configured flow-field requests after setup so stale requests fail fast.
+- `SolidChartPartition.IsImpassable` now skips radial clearance for units that fit inside one
+  voxel and returns the cached walkability state instead.
+- `SolidChartPartition.GetHashCode` now hashes the stored `WorldIndex` fields directly instead of
+  resolving the live `Voxel` during heap dictionary operations.
+- `FlowFieldSurveyor` compares partitions to the request start/end by `WorldIndex` instead of
+  resolving `current.Voxel` inside the flood and generation loops.
+
+Post-change short-run evidence:
+
+- Corrected `ColdGuide_OpenPlane64`: ~113.8 ms / 3.44 MB.
+- `FlowFieldCacheMiss_BelowCapacity`: ~43.9 ms / 881.8 KB.
+- The corrected 64×64 cold guide is now consistent with the 32×32 cache miss when normalized by
+  grid area, so the original 347× discrepancy is resolved.
+
+Fast-follow:
+
+- Audit the remaining benchmark classes that create multiple `BenchmarkPathFixture` instances in
+  one `GlobalSetup` (`AStarPathRequestBenchmarks`, `NavSteeringBenchmarks`,
+  `TransitionFallbackBenchmarks`, and `VolumePathRequestBenchmarks`). They may contain the same
+  stale-request measurement bug.
+- Cold flow-field generation still allocates one fresh field dictionary per result. Pooling or
+  reusing `FlowFieldSurveyResult.Fields` on reset/eviction remains the next likely allocation win.
+- `PathHeapMeta` was tested as a struct to reduce per-node metadata allocation, but the required
+  dictionary write-backs made the 32×32 benchmark slightly slower while saving only ~32 KB. Keep it
+  as a reference type unless a broader heap redesign removes those write-backs.
+
 ---
 
 ## Phase 3 — Eliminate Allocation in `SampleFlowVector`

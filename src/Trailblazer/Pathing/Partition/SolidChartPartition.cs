@@ -263,6 +263,9 @@ public class SolidChartPartition : IVoxelPartition
         if (unitSize <= Fixed64.Zero)
             return false;
 
+        if (unitSize <= TrailblazerWorldManager.VoxelSize)
+            return !IsWalkable;
+
         // Only evaluates local radial clearance from current voxel. 
         // Does not account for directional corner blocking
         CheckClearance();
@@ -410,5 +413,19 @@ public class SolidChartPartition : IVoxelPartition
     #endregion
 
     /// <inheritdoc/>
-    public override int GetHashCode() => Voxel.GetHashCode();
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            VoxelIndex voxelIndex = WorldIndex.VoxelIndex;
+            int hash = 17;
+            hash = (hash * 31) + WorldIndex.WorldSpawnToken;
+            hash = (hash * 31) + WorldIndex.GridIndex;
+            hash = (hash * 31) + WorldIndex.GridSpawnToken;
+            hash = (hash * 31) + voxelIndex.x;
+            hash = (hash * 31) + voxelIndex.y;
+            hash = (hash * 31) + voxelIndex.z;
+            return hash;
+        }
+    }
 }

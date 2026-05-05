@@ -40,6 +40,19 @@ public sealed class SolidChartPartitionTests : IDisposable
     }
 
     [Fact]
+    public void GetHashCode_ShouldUseStoredWorldIndex_WithoutResolvingVoxel()
+    {
+        var partition = new SolidChartPartition();
+
+        Action act = () => _ = partition.GetHashCode();
+
+        act.Should().NotThrow("pathing heaps hash partitions frequently and must not perform live voxel lookups");
+        int first = partition.GetHashCode();
+        int second = partition.GetHashCode();
+        second.Should().Be(first);
+    }
+
+    [Fact]
     public void ApplyAuthoredStateAndReset_ShouldTrackAndClearOwners()
     {
         var partition = new SolidChartPartition();
@@ -118,6 +131,25 @@ public sealed class SolidChartPartitionTests : IDisposable
         // unitSize <= 0 should return false without performing any clearance check.
         partition!.IsImpassable(Fixed64.Zero).Should().BeFalse();
         partition.IsImpassable(Fixed64.Zero - Fixed64.One).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsImpassable_ShouldSkipClearance_WhenUnitFitsWithinSingleVoxel()
+    {
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("IsImpassableSingleVoxel", Vector3d.Zero));
+
+        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        SolidChartPartition partition = TestRequire.Partition<SolidChartPartition>(voxel);
+
+        typeof(SolidChartPartition)
+            .GetProperty(nameof(SolidChartPartition.Neighbors))!
+            .SetValue(partition, null);
+
+        partition.IsImpassable(Fixed64.One).Should().BeFalse();
+
+        Action oversizedCheck = () => partition.IsImpassable(Fixed64.Two);
+        oversizedCheck.Should().Throw<InvalidOperationException>(
+            "units larger than one voxel still require clearance data");
     }
 
     [Fact]

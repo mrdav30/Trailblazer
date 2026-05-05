@@ -16,11 +16,17 @@ namespace Trailblazer.Benchmarks.Pathing;
 [BenchmarkCategory("Pathing", "FlowField")]
 public class FlowFieldPathRequestBenchmarks
 {
+    private static readonly Vector3d OpenPlane64Offset = Vector3d.Zero;
+    private static readonly Vector3d OpenPlane128Offset = new(160, 0, 0);
+    private static readonly Vector3d Cluster64Offset = new(0, 0, 160);
+    private static readonly Vector3d Blocker64Offset = new(160, 0, 160);
+    private static readonly Vector3d SampleVector32Offset = new(320, 0, 0);
+
     // -------------------------------------------------------------------------
     // Open plane 64x64 — cold / warm guide and raw survey
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _openPlane64Fixture;
+    private BenchmarkPathFixture _fixture;
     private FlowFieldPathRequest _openPlane64Request;
     private Vector3d _openPlane64Origin;
     private Vector3d _openPlane64Destination;
@@ -29,7 +35,6 @@ public class FlowFieldPathRequestBenchmarks
     // Open plane 128x128 — ExtraFloodRange scaling and batch many-start reuse
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _openPlane128Fixture;
     private Vector3d _openPlane128Origin;
     private Vector3d _openPlane128Destination;
     private FlowFieldPathRequest _openPlane128Request;
@@ -38,7 +43,6 @@ public class FlowFieldPathRequestBenchmarks
     // Destination cluster — many starts, one destination
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _clusterFixture;
     private FlowFieldPathRequest[] _clusterRequests;
     private Vector3d _clusterDestination;
 
@@ -46,7 +50,6 @@ public class FlowFieldPathRequestBenchmarks
     // Blocker field 64x64 — with and without enlarged ExtraFloodRange
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _blockerFloodFixture;
     private FlowFieldPathRequest _blockerDefaultFloodRequest;
     private FlowFieldPathRequest _blockerLargeFloodRequest;
 
@@ -54,7 +57,6 @@ public class FlowFieldPathRequestBenchmarks
     // SampleFlowVector diagnostic — prebuilt field
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _sampleVectorFixture;
     private SwiftDictionary<WorldVoxelIndex, FlowField> _prebuiltFields;
     private Vector3d _sampleExactPosition;
     private Vector3d _sampleFractionalPosition;
@@ -66,21 +68,22 @@ public class FlowFieldPathRequestBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        _fixture = new BenchmarkPathFixture();
+        _fixture.Setup(BenchmarkChartFactory.GridConfigForArea(maxXExclusive: 352, maxZExclusive: 224));
+
         SetupOpenPlane64();
         SetupOpenPlane128();
         SetupDestinationCluster64();
         SetupBlockerFloodScaling64();
         SetupSampleFlowVector32();
+        ValidateConfiguredRequests();
+        BenchmarkPathFixture.FlushGuideCache();
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
-        _openPlane64Fixture?.Teardown();
-        _openPlane128Fixture?.Teardown();
-        _clusterFixture?.Teardown();
-        _blockerFloodFixture?.Teardown();
-        _sampleVectorFixture?.Teardown();
+        _fixture?.Teardown();
     }
 
     // -------------------------------------------------------------------------
@@ -89,11 +92,8 @@ public class FlowFieldPathRequestBenchmarks
 
     private void SetupOpenPlane64()
     {
-        _openPlane64Fixture = new BenchmarkPathFixture();
-        _openPlane64Fixture.Setup(BenchmarkChartFactory.GridConfigForSquare(64));
-
         (_openPlane64Origin, _openPlane64Destination) =
-            BenchmarkChartFactory.RegisterOpenPlane("FFOpenPlane64", 64);
+            BenchmarkChartFactory.RegisterOpenPlane("FFOpenPlane64", 64, OpenPlane64Offset);
 
         BenchmarkPreflight.AssertFlowFieldRouteExists(
             _openPlane64Origin, _openPlane64Destination, Fixed64.One);
@@ -107,11 +107,8 @@ public class FlowFieldPathRequestBenchmarks
 
     private void SetupOpenPlane128()
     {
-        _openPlane128Fixture = new BenchmarkPathFixture();
-        _openPlane128Fixture.Setup(BenchmarkChartFactory.GridConfigForSquare(128));
-
         (_openPlane128Origin, _openPlane128Destination) =
-            BenchmarkChartFactory.RegisterOpenPlane("FFOpenPlane128", 128);
+            BenchmarkChartFactory.RegisterOpenPlane("FFOpenPlane128", 128, OpenPlane128Offset);
 
         BenchmarkPreflight.AssertFlowFieldRouteExists(
             _openPlane128Origin, _openPlane128Destination, Fixed64.One);
@@ -128,11 +125,8 @@ public class FlowFieldPathRequestBenchmarks
         const int size = 64;
         const int startCount = 32;
 
-        _clusterFixture = new BenchmarkPathFixture();
-        _clusterFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(size));
-
         var (starts, destination) =
-            BenchmarkChartFactory.RegisterDestinationCluster("FFCluster64", size, startCount);
+            BenchmarkChartFactory.RegisterDestinationCluster("FFCluster64", size, startCount, Cluster64Offset);
 
         _clusterDestination = destination;
 
@@ -153,11 +147,8 @@ public class FlowFieldPathRequestBenchmarks
 
     private void SetupBlockerFloodScaling64()
     {
-        _blockerFloodFixture = new BenchmarkPathFixture();
-        _blockerFloodFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(64));
-
         var (origin, destination) =
-            BenchmarkChartFactory.RegisterSparseBlockerField("FFBlocker64", 64);
+            BenchmarkChartFactory.RegisterSparseBlockerField("FFBlocker64", 64, Blocker64Offset);
 
         BenchmarkPreflight.AssertFlowFieldRouteExists(origin, destination, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
@@ -174,11 +165,8 @@ public class FlowFieldPathRequestBenchmarks
     {
         const int size = 32;
 
-        _sampleVectorFixture = new BenchmarkPathFixture();
-        _sampleVectorFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(size));
-
         var (origin, destination) =
-            BenchmarkChartFactory.RegisterOpenPlane("FFSampleVector32", size);
+            BenchmarkChartFactory.RegisterOpenPlane("FFSampleVector32", size, SampleVector32Offset);
 
         FlowFieldPathRequest request = FlowFieldPathRequest.Create(origin, destination, Fixed64.One);
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
@@ -188,8 +176,34 @@ public class FlowFieldPathRequestBenchmarks
                 "Preflight: Could not build flow field for SampleFlowVector benchmark.");
 
         _prebuiltFields = result.Fields;
-        _sampleExactPosition = new Vector3d(size / 2, 0, size / 2);
-        _sampleFractionalPosition = new Vector3d((Fixed64)(size / 2) + Fixed64.Half, Fixed64.Zero, (Fixed64)(size / 2) + Fixed64.Half);
+        _sampleExactPosition = new Vector3d(
+            origin.x + (Fixed64)(size / 2),
+            origin.y,
+            origin.z + (Fixed64)(size / 2));
+        _sampleFractionalPosition = new Vector3d(
+            origin.x + (Fixed64)(size / 2) + Fixed64.Half,
+            origin.y,
+            origin.z + (Fixed64)(size / 2) + Fixed64.Half);
+    }
+
+    private void ValidateConfiguredRequests()
+    {
+        EnsureFlowGuideResolves(_openPlane64Request, nameof(_openPlane64Request));
+        EnsureFlowGuideResolves(_openPlane128Request, nameof(_openPlane128Request));
+        EnsureFlowGuideResolves(_blockerDefaultFloodRequest, nameof(_blockerDefaultFloodRequest));
+        EnsureFlowGuideResolves(_blockerLargeFloodRequest, nameof(_blockerLargeFloodRequest));
+
+        for (int i = 0; i < _clusterRequests.Length; i++)
+            EnsureFlowGuideResolves(_clusterRequests[i], $"{nameof(_clusterRequests)}[{i}]");
+    }
+
+    private static void EnsureFlowGuideResolves(FlowFieldPathRequest request, string requestName)
+    {
+        if (!PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide))
+            throw new System.InvalidOperationException(
+                $"Preflight: {requestName} failed after all flow-field benchmark fixtures were configured.");
+
+        PathGuideFactory.ReturnGuide(guide);
     }
 
     // -------------------------------------------------------------------------

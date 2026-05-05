@@ -83,6 +83,7 @@ public class FlowFieldSurveyor
     private bool FloodPath()
     {
         FlowFieldPathRequest request = _request!;
+        WorldVoxelIndex startIndex = request.StartNode!.WorldIndex;
         bool targetReached = false;
 
         int iterations = 0;
@@ -98,7 +99,7 @@ public class FlowFieldSurveyor
             // Check if we found our way to the start voxel
             if (!targetReached)
             {
-                if (current.Voxel == request.StartNode)
+                if (current.WorldIndex == startIndex)
                 {
                     maxFloodRange = currentPathCost + request.ExtraFloodRange;
                     targetReached = true;
@@ -210,7 +211,7 @@ public class FlowFieldSurveyor
     private SwiftDictionary<WorldVoxelIndex, FlowField> GenerateFlowFields()
     {
         FlowFieldPathRequest request = _request!;
-        Voxel endNode = request.EndNode!;
+        WorldVoxelIndex endIndex = request.EndNode!.WorldIndex;
         SwiftDictionary<WorldVoxelIndex, FlowField> result = new(_heap.TrackedCount);
         // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
 
@@ -222,7 +223,7 @@ public class FlowFieldSurveyor
                 PathCost = GetPathCostTotal(current)
             };
 
-            if (current.Voxel == endNode)
+            if (current.WorldIndex == endIndex)
             {
                 // Ensure end voxel is include, it shouldn't point anywhere
                 currentFlow.IsGoal = true;

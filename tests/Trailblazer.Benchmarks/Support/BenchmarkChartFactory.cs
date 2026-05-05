@@ -40,28 +40,49 @@ internal static class BenchmarkChartFactory
             new Vector3d(extent, padding, padding));
     }
 
+    /// <summary>
+    /// Returns a shallow grid configuration large enough to contain surface-only benchmark charts
+    /// placed inside [0, maxXExclusive) and [0, maxZExclusive).
+    /// </summary>
+    public static GridConfiguration GridConfigForArea(int maxXExclusive, int maxZExclusive, int padding = 4)
+    {
+        return new GridConfiguration(
+            new Vector3d(-padding, -padding, -padding),
+            new Vector3d(maxXExclusive + padding, padding, maxZExclusive + padding));
+    }
+
     // -------------------------------------------------------------------------
     // Open plane
     // -------------------------------------------------------------------------
 
     /// <summary>
     /// Registers and initializes a fully walkable square chart.
-    /// Origin is (0,0,0); cells span [0, size-1] on X and Z.
+    /// Cells span [origin, origin + size - 1] on X and Z.
     /// </summary>
     /// <param name="name">Unique chart name.</param>
     /// <param name="size">Number of cells along each horizontal axis.</param>
-    /// <returns>The origin (0,0,0) and far corner (size-1, 0, size-1).</returns>
-    public static (Vector3d Origin, Vector3d FarCorner) RegisterOpenPlane(string name, int size)
+    /// <param name="origin">Optional world-space minimum corner for the chart.</param>
+    /// <returns>The resolved origin and far corner.</returns>
+    public static (Vector3d Origin, Vector3d FarCorner) RegisterOpenPlane(
+        string name,
+        int size,
+        Vector3d? origin = null)
     {
+        Vector3d minBounds = origin ?? Vector3d.Zero;
         bool[,,] data = new bool[1, size, size];
         for (int x = 0; x < size; x++)
             for (int z = 0; z < size; z++)
                 data[0, x, z] = true;
 
-        var chart = NavigationChart.From3D(name, data, Vector3d.Zero, Fixed64.One);
+        var chart = NavigationChart.From3D(name, data, minBounds, Fixed64.One);
         PathManager.Register(chart);
 
-        return (Vector3d.Zero, new Vector3d(size - 1, 0, size - 1));
+        return (
+            minBounds,
+            new Vector3d(
+                minBounds.x + (Fixed64)(size - 1),
+                minBounds.y,
+                minBounds.z + (Fixed64)(size - 1)));
     }
 
     // -------------------------------------------------------------------------
@@ -94,13 +115,18 @@ internal static class BenchmarkChartFactory
     /// <summary>
     /// Registers and initializes a square chart with regularly spaced blocked cells.
     /// Blockers appear at every other position on an offset grid, leaving navigable
-    /// paths through the field. Origin is (0,0,0).
+    /// paths through the field.
     /// </summary>
     /// <param name="name">Unique chart name.</param>
     /// <param name="size">Number of cells along each horizontal axis.</param>
+    /// <param name="origin">Optional world-space minimum corner for the chart.</param>
     /// <returns>A near-origin start and a far-corner end endpoint that are both walkable.</returns>
-    public static (Vector3d Start, Vector3d End) RegisterSparseBlockerField(string name, int size)
+    public static (Vector3d Start, Vector3d End) RegisterSparseBlockerField(
+        string name,
+        int size,
+        Vector3d? origin = null)
     {
+        Vector3d minBounds = origin ?? Vector3d.Zero;
         bool[,,] data = new bool[1, size, size];
         for (int x = 0; x < size; x++)
         {
@@ -113,10 +139,15 @@ internal static class BenchmarkChartFactory
             }
         }
 
-        var chart = NavigationChart.From3D(name, data, Vector3d.Zero, Fixed64.One);
+        var chart = NavigationChart.From3D(name, data, minBounds, Fixed64.One);
         PathManager.Register(chart);
 
-        return (Vector3d.Zero, new Vector3d(size - 1, 0, size - 1));
+        return (
+            minBounds,
+            new Vector3d(
+                minBounds.x + (Fixed64)(size - 1),
+                minBounds.y,
+                minBounds.z + (Fixed64)(size - 1)));
     }
 
     // -------------------------------------------------------------------------
@@ -164,28 +195,37 @@ internal static class BenchmarkChartFactory
     /// <param name="name">Unique chart name.</param>
     /// <param name="size">Number of cells per side.</param>
     /// <param name="startCount">How many distinct start positions to return.</param>
+    /// <param name="origin">Optional world-space minimum corner for the chart.</param>
     /// <returns>An array of start positions and the shared destination.</returns>
     public static (Vector3d[] Starts, Vector3d Destination) RegisterDestinationCluster(
         string name,
         int size,
-        int startCount)
+        int startCount,
+        Vector3d? origin = null)
     {
+        Vector3d minBounds = origin ?? Vector3d.Zero;
         bool[,,] data = new bool[1, size, size];
         for (int x = 0; x < size; x++)
             for (int z = 0; z < size; z++)
                 data[0, x, z] = true;
 
-        var chart = NavigationChart.From3D(name, data, Vector3d.Zero, Fixed64.One);
+        var chart = NavigationChart.From3D(name, data, minBounds, Fixed64.One);
         PathManager.Register(chart);
 
-        var destination = new Vector3d(size - 1, 0, size - 1);
+        var destination = new Vector3d(
+            minBounds.x + (Fixed64)(size - 1),
+            minBounds.y,
+            minBounds.z + (Fixed64)(size - 1));
         var starts = new Vector3d[startCount];
         int stride = Math.Max(1, (size - 2) / (int)Math.Ceiling(Math.Sqrt(startCount)));
         int index = 0;
         for (int z = 0; z < size - 1 && index < startCount; z += stride)
         {
             for (int x = 0; x < size - 1 && index < startCount; x += stride)
-                starts[index++] = new Vector3d(x, 0, z);
+                starts[index++] = new Vector3d(
+                    minBounds.x + (Fixed64)x,
+                    minBounds.y,
+                    minBounds.z + (Fixed64)z);
         }
 
         // Fill remaining with the first position if geometry ran out.

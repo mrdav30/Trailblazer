@@ -40,10 +40,9 @@ public class GuideCacheBenchmarks
     private const int StaleFrameBase = 10_000; // Frame offset that makes entries immediately stale.
 
     // -------------------------------------------------------------------------
-    // Flow-field fixture for flow-field cache hit
+    // Flow-field request for flow-field cache hit
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _ffFixture;
     private FlowFieldPathRequest _ffHitRequest;
 
     // -------------------------------------------------------------------------
@@ -53,22 +52,20 @@ public class GuideCacheBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
-        SetupAStarCacheFixture();
-        SetupFlowFieldCacheFixture();
+        SetupCacheFixture();
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
         _fixture?.Teardown();
-        _ffFixture?.Teardown();
     }
 
     // -------------------------------------------------------------------------
     // Setup helpers
     // -------------------------------------------------------------------------
 
-    private void SetupAStarCacheFixture()
+    private void SetupCacheFixture()
     {
         // Use a 32x32 open plane — sufficient for up to 32*32-1 = 1023 unique (start, dest) pairs.
         const int size = 32;
@@ -80,6 +77,7 @@ public class GuideCacheBenchmarks
             BenchmarkChartFactory.RegisterOpenPlane("CacheTestOpenPlane", size);
 
         BenchmarkPreflight.AssertAStarRouteExists(origin, destination, Fixed64.One);
+        BenchmarkPreflight.AssertFlowFieldRouteExists(origin, destination, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
         BenchmarkPreflight.AssertNoCacheLeak();
 
@@ -105,23 +103,11 @@ public class GuideCacheBenchmarks
             if (i < CacheCapacity)
                 _belowCapacityRequests[i] = req;
         }
-    }
-
-    private void SetupFlowFieldCacheFixture()
-    {
-        const int size = 32;
-
-        _ffFixture = new BenchmarkPathFixture();
-        _ffFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(size));
-
-        var (origin, destination) =
-            BenchmarkChartFactory.RegisterOpenPlane("CacheTestFF32", size);
-
-        BenchmarkPreflight.AssertFlowFieldRouteExists(origin, destination, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
 
         _ffHitRequest = FlowFieldPathRequest.Create(origin, destination, Fixed64.One);
+        if (_ffHitRequest == null)
+            throw new System.InvalidOperationException(
+                $"Preflight: Could not create flow-field request from {origin} -> {destination}.");
     }
 
     // -------------------------------------------------------------------------

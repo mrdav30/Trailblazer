@@ -131,13 +131,24 @@ public class GuideCacheBenchmarks
     [IterationSetup(Targets = new[]
     {
         nameof(AStarCacheMiss_BelowCapacity),
-        nameof(AStarCacheMiss_OverCapacity_Eviction),
         nameof(FlowFieldCacheMiss_BelowCapacity)
     })]
     public void FlushForColdRun()
     {
         BenchmarkPathFixture.FlushGuideCache();
         _iterationIndex = 0;
+    }
+
+    [IterationSetup(Targets = new[] { nameof(AStarCacheMiss_OverCapacity_Eviction) })]
+    public void SeedCacheForEviction()
+    {
+        BenchmarkPathFixture.FlushGuideCache();
+
+        for (int i = 0; i < CacheCapacity; i++)
+        {
+            if (PathGuideFactory.RequestGuide(_overCapacityRequests[i], out AStarGuide guide))
+                PathGuideFactory.ReturnGuide(guide);
+        }
     }
 
     [IterationSetup(Targets = new[]
@@ -168,9 +179,12 @@ public class GuideCacheBenchmarks
     {
         BenchmarkPathFixture.FlushGuideCache();
 
-        // Put one warm entry in the cache.
-        if (PathGuideFactory.RequestGuide(_hitRequest, out AStarGuide guide))
-            PathGuideFactory.ReturnGuide(guide);
+        // Seed to capacity so no-match invalidation measures the reverse index rather than a one-entry happy path.
+        for (int i = 0; i < CacheCapacity; i++)
+        {
+            if (PathGuideFactory.RequestGuide(_belowCapacityRequests[i], out AStarGuide guide))
+                PathGuideFactory.ReturnGuide(guide);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -209,32 +223,15 @@ public class GuideCacheBenchmarks
 
     /// <summary>
     /// Cache miss over the 128-entry capacity — 129 unique keys force LRU eviction.
-    /// Each benchmark method call fills the cache to capacity then adds one more entry.
+    /// Iteration setup fills the cache; the measured method adds one entry to isolate eviction cost.
     /// </summary>
     [Benchmark]
     [BenchmarkCategory("Pathing", "Cache", "AStar", "Miss", "Eviction")]
-    public int AStarCacheMiss_OverCapacity_Eviction()
+    public bool AStarCacheMiss_OverCapacity_Eviction()
     {
-        int resolved = 0;
-
-        // Fill to capacity.
-        for (int i = 0; i < CacheCapacity; i++)
-        {
-            if (PathGuideFactory.RequestGuide(_overCapacityRequests[i], out AStarGuide guide))
-            {
-                PathGuideFactory.ReturnGuide(guide);
-                resolved++;
-            }
-        }
-
-        // This 129th entry triggers LRU eviction of the oldest returned entry.
-        if (PathGuideFactory.RequestGuide(_overCapacityRequests[CacheCapacity], out AStarGuide evictionGuide))
-        {
-            PathGuideFactory.ReturnGuide(evictionGuide);
-            resolved++;
-        }
-
-        return resolved;
+        bool ok = PathGuideFactory.RequestGuide(_overCapacityRequests[CacheCapacity], out AStarGuide guide);
+        if (ok) PathGuideFactory.ReturnGuide(guide);
+        return ok;
     }
 
     // -------------------------------------------------------------------------

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
 
@@ -251,27 +250,14 @@ public static class PathGuideFactory
     {
         if (string.IsNullOrEmpty(chartKey)) return;
 
-        _cachedAStarResults.InvalidateWhere(r => UsesChart(r, chartKey));
-        _cachedFlowResults.InvalidateWhere(r => UsesChart(r, chartKey));
-        _cachedVolumeResults.InvalidateWhere(r => UsesChart(r, chartKey));
+        _cachedAStarResults.InvalidateForChart(chartKey);
+        _cachedFlowResults.InvalidateForChart(chartKey);
+        _cachedVolumeResults.InvalidateForChart(chartKey);
     }
 
     internal static void InvalidateVolumeCache()
     {
         _cachedVolumeResults.InvalidateAll();
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool UsesChart(ISurveyResult result, string chartId)
-    {
-        var charts = result.ChartsUtilized;
-        for (int i = 0; i < charts.Length; i++)
-        {
-            if (charts[i] == chartId)
-                return true;
-        }
-
-        return false;
     }
 
     /// <summary>

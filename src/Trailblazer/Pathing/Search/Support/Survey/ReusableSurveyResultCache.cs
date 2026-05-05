@@ -1,7 +1,6 @@
 ﻿using SwiftCollections;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 
 namespace Trailblazer.Pathing;
@@ -22,6 +21,11 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
     /// Active <see cref="SurveyResult"/>s cache indexed by the request's cache key.
     /// </summary>
     private readonly SwiftDictionary<int, T> _cache = new();
+
+    /// <summary>
+    /// Reverse lookup from chart key to cached request keys that reference the chart.
+    /// </summary>
+    private readonly SwiftDictionary<string, SwiftList<int>> _chartIndex = new(8, StringComparer.Ordinal);
 
     private readonly ReaderWriterLockSlim _lock = new();
 
@@ -62,13 +66,10 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
 
             if (_cache.Count >= MaxCacheSize)
             {
-                // Find least recently used
-                T evictCandidate = _cache.OrderBy(g => g.Value.LastUsedFrame)
-                    .FirstOrDefault(g => !g.Value.IsInUse).Value;
-                if (evictCandidate != null)
+                if (TryGetLeastRecentlyUsedReusableEntry(out int evictKey, out T evictCandidate))
                 {
                     _lock.EnterWriteLock();
-                    try { _cache.Remove(evictCandidate.RequestHashKey); } finally { _lock.ExitWriteLock(); }
+                    try { RemoveCachedResult(evictKey, evictCandidate); } finally { _lock.ExitWriteLock(); }
                 }
             }
 
@@ -79,7 +80,7 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
                 try
                 {
                     if (_cache.Count < MaxCacheSize)
-                        _cache[key] = result;
+                        AddCachedResult(key, result);
 
                     result.Checkout();
                     CountInUse++;
@@ -116,8 +117,12 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
                 return;
             }
 
-            if (result.RequestHashKey >= 0)
-                _cache.Remove(result.RequestHashKey);
+            if (result.RequestHashKey >= 0
+                && _cache.TryGetValue(result.RequestHashKey, out T cached)
+                && ReferenceEquals(cached, result))
+            {
+                RemoveCachedResult(result.RequestHashKey, result);
+            }
         }
         finally { _lock.ExitWriteLock(); }
     }
@@ -147,10 +152,54 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
             try
             {
                 foreach (int key in toRemove)
-                    _cache.Remove(key);
+                {
+                    if (_cache.TryGetValue(key, out T result))
+                        RemoveCachedResult(key, result);
+                }
             }
             finally { _lock.ExitWriteLock(); }
 
+        }
+        finally { _lock.ExitUpgradeableReadLock(); }
+    }
+
+    /// <summary>
+    /// Invalidates cached results that reference the specified chart key by using the chart reverse index.
+    /// </summary>
+    /// <param name="chartKey">The chart key whose dependent cached results should be removed.</param>
+    public void InvalidateForChart(string chartKey)
+    {
+        if (string.IsNullOrEmpty(chartKey)) return;
+
+        _lock.EnterUpgradeableReadLock();
+        try
+        {
+            if (!_chartIndex.TryGetValue(chartKey, out SwiftList<int> indexedKeys)
+                || indexedKeys.Count == 0)
+            {
+                return;
+            }
+
+            _lock.EnterWriteLock();
+            try
+            {
+                while (_chartIndex.TryGetValue(chartKey, out indexedKeys)
+                    && indexedKeys.Count > 0)
+                {
+                    int key = indexedKeys[indexedKeys.Count - 1];
+                    if (_cache.TryGetValue(key, out T result))
+                    {
+                        InvalidateCachedResult(key, result);
+                    }
+                    else
+                    {
+                        indexedKeys.Remove(key);
+                        if (indexedKeys.Count == 0)
+                            _chartIndex.Remove(chartKey);
+                    }
+                }
+            }
+            finally { _lock.ExitWriteLock(); }
         }
         finally { _lock.ExitUpgradeableReadLock(); }
     }
@@ -166,14 +215,6 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
                 if (kvp.Value == null || !predicate(kvp.Value))
                     continue;
 
-                if (kvp.Value.IsInUse)
-                {
-                    _lock.EnterWriteLock();
-                    try { CountInUse--; } finally { _lock.ExitWriteLock(); }
-                }
-
-                kvp.Value.Reset();
-
                 toRemove.Add(kvp.Key);
             }
 
@@ -184,7 +225,10 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
             try
             {
                 foreach (int key in toRemove)
-                    _cache.Remove(key);
+                {
+                    if (_cache.TryGetValue(key, out T result))
+                        InvalidateCachedResult(key, result);
+                }
             }
             finally { _lock.ExitWriteLock(); }
         }
@@ -193,7 +237,6 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
 
     public void InvalidateAll()
     {
-        SwiftList<int> toRemove = new();
         _lock.EnterWriteLock();
         try
         {
@@ -202,17 +245,116 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
                 if (kvp.Value == null) continue;
 
                 kvp.Value.Reset();
-
-                toRemove.Add(kvp.Key);
             }
 
-            foreach (int key in toRemove)
-                _cache.Remove(key);
-
             _cache.Clear();
+            _chartIndex.Clear();
             CountInUse = 0;
         }
         finally { _lock.ExitWriteLock(); }
+    }
+
+    private bool TryGetLeastRecentlyUsedReusableEntry(out int key, out T result)
+    {
+        key = -1;
+        result = null!;
+
+        foreach (KeyValuePair<int, T> kvp in _cache)
+        {
+            T candidate = kvp.Value;
+            if (candidate == null || candidate.IsInUse)
+                continue;
+
+            if (result == null || candidate.LastUsedFrame < result.LastUsedFrame)
+            {
+                key = kvp.Key;
+                result = candidate;
+            }
+        }
+
+        return result != null;
+    }
+
+    private void AddCachedResult(int key, T result)
+    {
+        if (_cache.TryGetValue(key, out T existing))
+            RemoveFromChartIndex(key, existing.ChartsUtilized);
+
+        _cache[key] = result;
+        AddToChartIndex(key, result.ChartsUtilized);
+    }
+
+    private void InvalidateCachedResult(int key, T result)
+    {
+        if (result.IsInUse)
+            CountInUse--;
+
+        RemoveCachedResult(key, result);
+        result.Reset();
+    }
+
+    private void RemoveCachedResult(int key, T result)
+    {
+        RemoveFromChartIndex(key, result.ChartsUtilized);
+        _cache.Remove(key);
+    }
+
+    private void AddToChartIndex(int cacheKey, string[] chartKeys)
+    {
+        if (chartKeys == null || chartKeys.Length == 0)
+            return;
+
+        for (int i = 0; i < chartKeys.Length; i++)
+        {
+            string chartKey = chartKeys[i];
+            if (string.IsNullOrEmpty(chartKey)
+                || ContainsPriorChartKey(chartKeys, i, chartKey))
+            {
+                continue;
+            }
+
+            if (!_chartIndex.TryGetValue(chartKey, out SwiftList<int> keys))
+            {
+                keys = new SwiftList<int>(1);
+                _chartIndex[chartKey] = keys;
+            }
+
+            keys.Add(cacheKey);
+        }
+    }
+
+    private void RemoveFromChartIndex(int cacheKey, string[] chartKeys)
+    {
+        if (chartKeys == null || chartKeys.Length == 0)
+            return;
+
+        for (int i = 0; i < chartKeys.Length; i++)
+        {
+            string chartKey = chartKeys[i];
+            if (string.IsNullOrEmpty(chartKey)
+                || ContainsPriorChartKey(chartKeys, i, chartKey))
+            {
+                continue;
+            }
+
+            if (!_chartIndex.TryGetValue(chartKey, out SwiftList<int> keys))
+                continue;
+
+            keys.Remove(cacheKey);
+            if (keys.Count == 0)
+                _chartIndex.Remove(chartKey);
+        }
+    }
+
+    private static bool ContainsPriorChartKey(string[] chartKeys, int exclusiveEnd, string chartKey)
+    {
+        for (int i = 0; i < exclusiveEnd; i++)
+        {
+            if (string.Equals(chartKeys[i], chartKey, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
     }
 
     public void Dispose() => _lock?.Dispose();

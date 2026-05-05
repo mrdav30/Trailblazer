@@ -1,6 +1,7 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Grids;
+using SwiftCollections;
 using System;
 using System.Collections.Generic;
 using Trailblazer.Pathing;
@@ -90,6 +91,101 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
 
         recreatedEvictedEntry.Should().BeTrue();
         rehydrated.RequestHashKey.Should().Be(0);
+    }
+
+    [Fact]
+    public void TryGetOrCreate_ShouldEvictLeastRecentlyReleasedEntry_WithoutLinqAllocation()
+    {
+        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+
+        for (int i = 0; i < 128; i++)
+        {
+            cache.TryGetOrCreate(new TestPathRequest(i), () => TestSurveyResult.Create(i), out TestSurveyResult result)
+                .Should()
+                .BeTrue();
+
+            cache.Return(result, dispose: false);
+            TrailblazerManager.Simulate();
+        }
+
+        cache.TryGetOrCreate(new TestPathRequest(0), () => TestSurveyResult.Create(0), out TestSurveyResult refreshed)
+            .Should()
+            .BeTrue();
+        cache.Return(refreshed, dispose: false);
+        TrailblazerManager.Simulate();
+
+        var evictionRequest = new TestPathRequest(999);
+        Func<TestSurveyResult> createEvictionResult = static () => TestSurveyResult.Create(999);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        bool created = cache.TryGetOrCreate(evictionRequest, createEvictionResult, out TestSurveyResult added);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        created.Should().BeTrue();
+        allocated.Should().BeLessThan(4_096);
+        cache.Return(added, dispose: false);
+
+        bool recreatedOldestEntry = false;
+        cache.TryGetOrCreate(new TestPathRequest(1), () =>
+        {
+            recreatedOldestEntry = true;
+            return TestSurveyResult.Create(1);
+        }, out TestSurveyResult rehydratedOldest).Should().BeTrue();
+
+        recreatedOldestEntry.Should().BeTrue();
+        rehydratedOldest.RequestHashKey.Should().Be(1);
+
+        bool recreatedRefreshedEntry = false;
+        cache.TryGetOrCreate(new TestPathRequest(0), () =>
+        {
+            recreatedRefreshedEntry = true;
+            return TestSurveyResult.Create(0);
+        }, out TestSurveyResult rehydratedRefreshed).Should().BeTrue();
+
+        recreatedRefreshedEntry.Should().BeFalse();
+        rehydratedRefreshed.Should().BeSameAs(refreshed);
+
+        cache.Return(rehydratedOldest, dispose: false);
+        cache.Return(rehydratedRefreshed, dispose: false);
+    }
+
+    [Fact]
+    public void InvalidateForChart_ShouldUseChartIndexAndMaintainMultiChartMembership()
+    {
+        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+        List<TestSurveyResult> results = new(128);
+
+        for (int i = 0; i < 128; i++)
+        {
+            cache.TryGetOrCreate(
+                    new TestPathRequest(i),
+                    () => TestSurveyResult.Create(i, chartsUtilized: new[] { "chart-a", "chart-b" }),
+                    out TestSurveyResult result)
+                .Should()
+                .BeTrue();
+
+            cache.Return(result, dispose: false);
+            results.Add(result);
+        }
+
+        cache.InvalidateForChart("missing-chart");
+
+        cache.Count.Should().Be(128);
+        results.Should().OnlyContain(result => result.ResetCount == 0);
+
+        cache.InvalidateForChart("chart-a");
+
+        cache.Count.Should().Be(0);
+        cache.CountInUse.Should().Be(0);
+        results.Should().OnlyContain(result => result.ResetCount == 1);
+
+        SwiftDictionary<string, SwiftList<int>> chartIndex =
+            ReflectionUtility.GetPrivateField<SwiftDictionary<string, SwiftList<int>>>(cache, "_chartIndex");
+        chartIndex.Count.Should().Be(0);
     }
 
     [Fact]
@@ -216,20 +312,24 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     {
         private readonly bool _hasPath;
 
-        private TestSurveyResult(int key, bool hasPath)
+        private TestSurveyResult(int key, bool hasPath, string[]? chartsUtilized)
         {
             _hasPath = hasPath;
             IsValid = hasPath;
             RequestHashKey = key;
             LastUsedFrame = -1;
-            ChartsUtilized = Array.Empty<string>();
+            ChartsUtilized = chartsUtilized ?? Array.Empty<string>();
         }
 
         public int ResetCount { get; private set; }
 
         public override bool HasPath => IsValid && _hasPath;
 
-        public static TestSurveyResult Create(int key, bool hasPath = true) => new(key, hasPath);
+        public static TestSurveyResult Create(
+            int key,
+            bool hasPath = true,
+            string[]? chartsUtilized = null)
+            => new(key, hasPath, chartsUtilized);
 
         public override void Reset()
         {

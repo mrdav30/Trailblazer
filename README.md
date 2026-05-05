@@ -311,6 +311,42 @@ Note:
 - the library project currently generates NuGet packages on build
 - most tests rely on global static managers, so teardown and fixture discipline matter
 
+## Benchmarks
+
+The benchmark suite lives under [`tests/Trailblazer.Benchmarks`](tests/Trailblazer.Benchmarks).
+
+It covers the layered path-request hot paths: raw A* and flow-field surveys, cold and warm guide
+resolution, guide cache lifecycle, NavSteering steady-state and first-frame costs, transition-aware
+routing, and volume-path request resolution.
+
+List all available benchmark selections:
+
+```bash
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- list
+```
+
+Run all benchmarks:
+
+```bash
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- all
+```
+
+Run a specific group using an alias:
+
+```bash
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- nav-steering
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- guide-cache
+```
+
+Filter to specific benchmark methods within a run:
+
+```bash
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request --filter '*Corridor*'
+```
+
+See [`tests/Trailblazer.Benchmarks/README.md`](tests/Trailblazer.Benchmarks/README.md) for the full command reference and benchmark design notes.
+
 ## Compatibility
 
 - `netstandard2.1`

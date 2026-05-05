@@ -22,7 +22,7 @@ public sealed class LocomotionProfile
     {
         Move = move ?? throw new ArgumentNullException(nameof(move));
         Fall = fall ?? throw new ArgumentNullException(nameof(fall));
-        Platform = platform;
+        Platform = platform ?? new PlatformLocomotion();
         Jump = jump;
         Slide = slide;
         Water = water;
@@ -41,9 +41,9 @@ public sealed class LocomotionProfile
     public FallLocomotion Fall { get; }
 
     /// <summary>
-    /// Optional moving-platform locomotion.
+    /// Required moving-platform locomotion.
     /// </summary>
-    public PlatformLocomotion? Platform { get; }
+    public PlatformLocomotion Platform { get; }
 
     /// <summary>
     /// Optional jump locomotion.
@@ -79,9 +79,6 @@ public sealed class LocomotionProfile
         {
             LocomotionKind result = LocomotionKind.Core;
 
-            if (Platform != null)
-                result |= LocomotionKind.Platform;
-
             if (Jump != null)
                 result |= LocomotionKind.Jump;
 
@@ -110,9 +107,9 @@ public sealed class LocomotionProfile
     }
 
     /// <summary>
-    /// Creates a minimal profile with only core movement and fall behavior installed.
+    /// Creates a minimal profile with only required locomotion behavior installed.
     /// </summary>
-    public static LocomotionProfile CreateMoveAndFallOnly()
+    public static LocomotionProfile CreateCoreOnly()
     {
         return new LocomotionProfileBuilder(includeOptionalLocomotions: false).Build();
     }

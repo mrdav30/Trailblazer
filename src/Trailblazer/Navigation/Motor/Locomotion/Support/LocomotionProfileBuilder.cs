@@ -18,10 +18,10 @@ public sealed class LocomotionProfileBuilder
     {
         Move = new MoveLocomotion();
         Fall = new FallLocomotion();
+        Platform = new PlatformLocomotion();
 
         if (includeOptionalLocomotions)
         {
-            Platform = new PlatformLocomotion();
             Jump = new JumpLocomotion();
             Slide = new SlideLocomotion();
             Water = new WaterLocomotion();
@@ -45,9 +45,9 @@ public sealed class LocomotionProfileBuilder
     public FallLocomotion Fall { get; private set; }
 
     /// <summary>
-    /// The optional platform locomotion to install.
+    /// The required platform locomotion to install.
     /// </summary>
-    public PlatformLocomotion? Platform { get; private set; }
+    public PlatformLocomotion Platform { get; private set; }
 
     /// <summary>
     /// The optional jump locomotion to install.
@@ -100,15 +100,6 @@ public sealed class LocomotionProfileBuilder
     public LocomotionProfileBuilder WithPlatform(PlatformLocomotion? platform = null)
     {
         Platform = platform ?? new PlatformLocomotion();
-        return this;
-    }
-
-    /// <summary>
-    /// Removes platform locomotion.
-    /// </summary>
-    public LocomotionProfileBuilder WithoutPlatform()
-    {
-        Platform = null;
         return this;
     }
 
@@ -233,7 +224,7 @@ public sealed class LocomotionProfileBuilder
             .SetClimb(handler.Climb);
     }
 
-    private LocomotionProfileBuilder SetPlatform(PlatformLocomotion? platform)
+    private LocomotionProfileBuilder SetPlatform(PlatformLocomotion platform)
     {
         Platform = platform;
         return this;

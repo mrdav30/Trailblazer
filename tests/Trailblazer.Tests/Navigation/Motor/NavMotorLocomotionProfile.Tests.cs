@@ -25,7 +25,7 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
         agent.FrameRequest.Rotation = agent.Rotation;
 
         agent.Motor.TryTraversal(agent.FrameRequest, out _, out _, out _).Should().BeTrue();
-        Action act = () => agent.Motor.SetLocomotionProfile(LocomotionProfile.CreateMoveAndFallOnly());
+        Action act = () => agent.Motor.SetLocomotionProfile(LocomotionProfile.CreateCoreOnly());
 
         act.Should().Throw<InvalidOperationException>();
         agent.Motor.AbortTraversalFrame();
@@ -53,7 +53,7 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Solid,
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
 
         agent.Motor.ConfigureLocomotions(builder => builder
             .WithJump()
@@ -62,7 +62,7 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
         agent.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Fly);
         Assert.NotNull(agent.Motor.Handler.Jump);
         Assert.NotNull(agent.Motor.Handler.Fly);
-        agent.Motor.Handler.Platform.Should().BeNull();
+        Assert.NotNull(agent.Motor.Handler.Platform);
         agent.Motor.Handler.Slide.Should().BeNull();
         agent.Motor.Handler.Water.Should().BeNull();
     }
@@ -133,7 +133,7 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
 
         var jumpLessAgent = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Solid,
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
         jumpLessAgent.Motor.GetVerticalJumpSpeed().Should().Be(Fixed64.Zero);
 
         var jumpAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();

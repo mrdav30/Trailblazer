@@ -21,12 +21,12 @@ public class LocomotionCompositionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Solid,
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
 
         agent.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
         Assert.NotNull(agent.Motor.Handler.Move);
         Assert.NotNull(agent.Motor.Handler.Fall);
-        agent.Motor.Handler.Platform.Should().BeNull();
+        Assert.NotNull(agent.Motor.Handler.Platform);
         agent.Motor.Handler.Jump.Should().BeNull();
         agent.Motor.Handler.Slide.Should().BeNull();
         agent.Motor.Handler.Water.Should().BeNull();
@@ -58,7 +58,7 @@ public class LocomotionCompositionTests : IDisposable
     public void Given_MinimalProfile_When_JumpRequested_Then_JumpIsIgnored()
     {
         var agent = MockMotorAgentTestFactory.CreateJumpReadyAgent(
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
 
         agent.FrameRequest.IsRequestingJump = true;
         agent.Simulate();
@@ -72,7 +72,7 @@ public class LocomotionCompositionTests : IDisposable
     public void Given_MinimalProfile_When_SwimInputRequested_Then_InputDoesNotMoveAgent()
     {
         var agent = MockMotorAgentTestFactory.CreateWaterAgent(
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
 
         TrailblazerManager.Simulate();
         agent.FrameRequest.Direction = Vector3d.Forward;
@@ -91,7 +91,7 @@ public class LocomotionCompositionTests : IDisposable
         var platform = MockMotorAgentTestFactory.CreatePlatformTransform(
             platformRotation: FixedQuaternion.FromEulerAngles(slopeAngle, Fixed64.Zero, Fixed64.Zero));
 
-        var profile = LocomotionProfile.CreateMoveAndFallOnly();
+        var profile = LocomotionProfile.CreateCoreOnly();
         profile.Move.SlopeLimit = (Fixed64)45;
 
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
@@ -113,11 +113,11 @@ public class LocomotionCompositionTests : IDisposable
         var motor = TestRequire.NotNull(agent.Motor);
         TestRequire.NotNull(motor.Handler.Jump).RegisterJump();
 
-        motor.SetLocomotionProfile(LocomotionProfile.CreateMoveAndFallOnly());
+        motor.SetLocomotionProfile(LocomotionProfile.CreateCoreOnly());
 
         motor.Handler.InstalledKinds.Should().Be(LocomotionKind.Core);
         motor.Handler.Jump.Should().BeNull();
-        motor.Handler.Platform.Should().BeNull();
+        Assert.NotNull(motor.Handler.Platform);
         motor.Handler.Slide.Should().BeNull();
         motor.Handler.Water.Should().BeNull();
         motor.Handler.Fly.Should().BeNull();
@@ -131,7 +131,7 @@ public class LocomotionCompositionTests : IDisposable
     {
         var source = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Solid,
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
         source.Motor.Handler.Move.MaxFastSpeed = (Fixed64)2;
         source.Motor.Handler.Fall.IsFalling = true;
         object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
@@ -143,7 +143,7 @@ public class LocomotionCompositionTests : IDisposable
         target.Motor.Handler.Move.MaxFastSpeed.Should().Be((Fixed64)2);
         target.Motor.Handler.Fall.IsFalling.Should().BeTrue();
         target.Motor.Handler.Jump.Should().BeNull();
-        target.Motor.Handler.Platform.Should().BeNull();
+        Assert.NotNull(target.Motor.Handler.Platform);
         target.Motor.Handler.Slide.Should().BeNull();
         target.Motor.Handler.Water.Should().BeNull();
         target.Motor.Handler.Fly.Should().BeNull();
@@ -159,7 +159,7 @@ public class LocomotionCompositionTests : IDisposable
         object payload = SerializationUtility.SerializeRecord(source.Motor, useMemoryPack);
 
         var target = MockMotorAgentTestFactory.CreateJumpReadyAgent(
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
         SerializationUtility.PopulateRecord(target.Motor, payload, useMemoryPack);
 
         target.Motor.Handler.InstalledKinds.Should().Be(LocomotionKind.All);
@@ -179,7 +179,7 @@ public class LocomotionCompositionTests : IDisposable
 
         protected override LocomotionProfile CreateLocomotionProfile()
         {
-            return LocomotionProfile.CreateMoveAndFallOnly();
+            return LocomotionProfile.CreateCoreOnly();
         }
     }
 }

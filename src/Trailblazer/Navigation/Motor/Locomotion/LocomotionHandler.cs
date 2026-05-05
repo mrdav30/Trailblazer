@@ -42,11 +42,11 @@ public class LocomotionHandler : IRecordable
 
     private MoveLocomotion _move = null!;
 
-    private PlatformLocomotion? _platform;
+    private FallLocomotion _fall = null!;
+
+    private PlatformLocomotion _platform = null!;
 
     private JumpLocomotion? _jump;
-
-    private FallLocomotion _fall = null!;
 
     private SlideLocomotion? _slide;
 
@@ -55,7 +55,6 @@ public class LocomotionHandler : IRecordable
     private FlyLocomotion? _fly;
 
     private ClimbLocomotion? _climb;
-
 
     #endregion
 
@@ -98,7 +97,7 @@ public class LocomotionHandler : IRecordable
     /// <remarks>
     /// This locomotion maintains platform velocity tracking and movement transfer states.
     /// </remarks>
-    public PlatformLocomotion? Platform => _platform;
+    public PlatformLocomotion Platform => _platform;
 
     /// <summary>
     /// Controls the airborne state when a jump is executed successfully.
@@ -211,8 +210,12 @@ public class LocomotionHandler : IRecordable
     public bool Remove<T>() where T : class, ILocomotion
     {
         Type type = typeof(T);
-        if (type == typeof(MoveLocomotion) || type == typeof(FallLocomotion))
+        if (type == typeof(MoveLocomotion)
+            || type == typeof(PlatformLocomotion)
+            || type == typeof(FallLocomotion))
+        {
             return false;
+        }
 
         ILocomotion? locomotion = GetLocomotion(type);
         if (locomotion == null)
@@ -274,9 +277,6 @@ public class LocomotionHandler : IRecordable
         LocomotionKind normalizedKinds = kinds | LocomotionKind.Core;
         var builder = new LocomotionProfileBuilder(includeOptionalLocomotions: false);
 
-        if ((normalizedKinds & LocomotionKind.Platform) != 0)
-            builder.WithPlatform();
-
         if ((normalizedKinds & LocomotionKind.Jump) != 0)
             builder.WithJump();
 
@@ -298,9 +298,6 @@ public class LocomotionHandler : IRecordable
     private void RefreshInstalledKinds()
     {
         InstalledKinds = LocomotionKind.Core;
-
-        if (Platform != null)
-            InstalledKinds |= LocomotionKind.Platform;
 
         if (Jump != null)
             InstalledKinds |= LocomotionKind.Jump;
@@ -352,8 +349,7 @@ public class LocomotionHandler : IRecordable
     public IEnumerable<ILocomotion> GetLocomotions()
     {
         yield return Move;
-        if (Platform != null)
-            yield return Platform;
+        yield return Platform;
 
         if (Jump != null)
             yield return Jump;
@@ -443,7 +439,7 @@ public class LocomotionHandler : IRecordable
                 _move = (MoveLocomotion)locomotion!;
                 return;
             case LocomotionSlot.Platform:
-                _platform = locomotion as PlatformLocomotion;
+                _platform = (PlatformLocomotion)locomotion!;
                 return;
             case LocomotionSlot.Jump:
                 _jump = locomotion as JumpLocomotion;
@@ -546,7 +542,7 @@ public class LocomotionHandler : IRecordable
 
         RecordDeep.Look(chronicler, ref _forces, "Forces");
         RecordDeep.Look(chronicler, ref _move, "Move");
-        RecordOptionalLocomotion(chronicler, ref _platform, "Platform");
+        RecordDeep.Look(chronicler, ref _platform, "Platform");
         RecordOptionalLocomotion(chronicler, ref _jump, "Jump");
         RecordDeep.Look(chronicler, ref _fall, "Fall");
         RecordOptionalLocomotion(chronicler, ref _slide, "Slide");

@@ -20,7 +20,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     [Fact]
     public void Replace_ShouldSupportEveryBuiltInLocomotionType()
     {
-        var handler = new LocomotionHandler(LocomotionProfile.CreateMoveAndFallOnly());
+        var handler = new LocomotionHandler(LocomotionProfile.CreateCoreOnly());
         var move = new MoveLocomotion();
         var fall = new FallLocomotion();
         var platform = new PlatformLocomotion();
@@ -67,7 +67,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     [Fact]
     public void CompositionQueries_ShouldReflectInstalledAndUnsupportedTypes()
     {
-        var handler = new LocomotionHandler(LocomotionProfile.CreateMoveAndFallOnly());
+        var handler = new LocomotionHandler(LocomotionProfile.CreateCoreOnly());
 
         handler.Has(LocomotionKind.Core).Should().BeTrue();
         handler.Has(LocomotionKind.Jump).Should().BeFalse();
@@ -97,6 +97,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Jump!.RegisterJump();
 
         handler.Remove<MoveLocomotion>().Should().BeFalse();
+        handler.Remove<PlatformLocomotion>().Should().BeFalse();
         handler.Remove<FallLocomotion>().Should().BeFalse();
         handler.Remove<JumpLocomotion>().Should().BeTrue();
         handler.Remove<JumpLocomotion>().Should().BeFalse();
@@ -108,7 +109,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     [Fact]
     public void InstallAndToProfile_ShouldReflectCurrentComposition()
     {
-        var handler = new LocomotionHandler(LocomotionProfile.CreateMoveAndFallOnly());
+        var handler = new LocomotionHandler(LocomotionProfile.CreateCoreOnly());
         var jump = new JumpLocomotion();
         var water = new WaterLocomotion();
         var climb = new ClimbLocomotion();
@@ -156,17 +157,19 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
 
         var sharedMove = new MoveLocomotion { FrameVelocity = Vector3d.Right };
         var sharedFall = new FallLocomotion { IsFalling = true };
+        var sharedPlatform = new PlatformLocomotion();
         var sharedJump = new JumpLocomotion();
 
         handler.ApplyProfile(new LocomotionProfile(
             sharedMove,
             sharedFall,
+            platform: sharedPlatform,
             jump: sharedJump));
 
         handler.Move.Should().BeSameAs(sharedMove);
         handler.Fall.Should().BeSameAs(sharedFall);
+        handler.Platform.Should().BeSameAs(sharedPlatform);
         handler.Jump.Should().BeSameAs(sharedJump);
-        handler.Platform.Should().BeNull();
         handler.Slide.Should().BeNull();
         handler.Water.Should().BeNull();
         handler.Fly.Should().BeNull();
@@ -195,7 +198,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
 
         handler.ConfigureInstalledKinds(LocomotionKind.None);
         handler.InstalledKinds.Should().Be(LocomotionKind.Core);
-        handler.Platform.Should().BeNull();
+        Assert.NotNull(handler.Platform);
         handler.Jump.Should().BeNull();
         handler.Slide.Should().BeNull();
         handler.Water.Should().BeNull();
@@ -203,7 +206,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
         handler.Climb.Should().BeNull();
 
         handler.ConfigureInstalledKinds(LocomotionKind.Platform | LocomotionKind.Fly);
-        handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Platform | LocomotionKind.Fly);
+        handler.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Fly);
         Assert.NotNull(handler.Platform);
         Assert.NotNull(handler.Fly);
 
@@ -248,7 +251,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     public void SyncTransientState_ShouldCopyEnabledInstalledLocomotionsOnly()
     {
         var target = new LocomotionHandler();
-        var source = new LocomotionHandler(LocomotionProfile.CreateMoveAndFallOnly());
+        var source = new LocomotionHandler(LocomotionProfile.CreateCoreOnly());
 
         target.IsInControl = false;
         target.Move.FrameVelocity = Vector3d.Zero;

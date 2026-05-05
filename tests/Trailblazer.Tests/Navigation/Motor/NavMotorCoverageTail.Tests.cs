@@ -129,7 +129,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     {
         var moveAndFallOnly = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Gas,
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
 
         moveAndFallOnly.Motor.IsJumping.Should().BeFalse();
         moveAndFallOnly.Motor.IsFalling.Should().BeFalse();
@@ -205,8 +205,8 @@ public sealed class NavMotorCoverageTailTests : IDisposable
 
         var fallbackProfileAgent = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Gas,
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
-        fallbackProfileAgent.Motor.SetLocomotionProfile(LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
+        fallbackProfileAgent.Motor.SetLocomotionProfile(LocomotionProfile.CreateCoreOnly());
 
         var staleTraversalAgent = MockMotorAgentTestFactory.CreateJumpReadyAgent();
         staleTraversalAgent.FrameRequest.Origin = staleTraversalAgent.Position;
@@ -224,11 +224,11 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     public void SetLocomotionProfile_ShouldNotTouchPlatformState_WhenNavigatorIsNotGrounded()
     {
         var airborneAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);
-        var profile = LocomotionProfile.CreateMoveAndFallOnly();
+        var profile = LocomotionProfile.CreateCoreOnly();
 
         airborneAgent.Motor.SetLocomotionProfile(profile);
 
-        airborneAgent.Motor.Handler.Platform.Should().BeNull();
+        airborneAgent.Motor.Handler.Platform.ActivePlatform.Should().BeNull();
         airborneAgent.Motor.IsInGas.Should().BeTrue();
     }
 
@@ -245,27 +245,27 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     public void SetLocomotionProfile_ShouldAllowUninitializedMotorShell()
     {
         var motor = NavMotor.CreateUninitialized();
-        var profile = LocomotionProfile.CreateMoveAndFallOnly();
+        var profile = LocomotionProfile.CreateCoreOnly();
 
         motor.Invoking(m => m.SetLocomotionProfile(profile))
             .Should().NotThrow();
 
-        motor.Handler.Platform.Should().BeNull();
+        Assert.NotNull(motor.Handler.Platform);
         motor.IsInitialized.Should().BeFalse();
     }
 
     [Fact]
-    public void SetLocomotionProfile_ShouldNotRequirePlatformModule_WhenGroundedProfileOmitsPlatform()
+    public void SetLocomotionProfile_ShouldKeepRequiredPlatformModule_WhenGroundedProfileUsesCoreProfile()
     {
         var groundedAgent = MockMotorAgentTestFactory.CreateMockAgent(
             startingMedium: TraversalMedium.Solid,
-            profile: LocomotionProfile.CreateMoveAndFallOnly());
+            profile: LocomotionProfile.CreateCoreOnly());
 
-        groundedAgent.Motor.Invoking(motor => motor.SetLocomotionProfile(LocomotionProfile.CreateMoveAndFallOnly()))
+        groundedAgent.Motor.Invoking(motor => motor.SetLocomotionProfile(LocomotionProfile.CreateCoreOnly()))
             .Should().NotThrow();
 
         groundedAgent.Motor.IsOnSolid.Should().BeTrue();
-        groundedAgent.Motor.Handler.Platform.Should().BeNull();
+        Assert.NotNull(groundedAgent.Motor.Handler.Platform);
     }
 
     [Fact]
@@ -934,7 +934,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void JsonRoundTrip_ShouldHydrateMissingCurrentState_ForUninitializedMotors()
     {
-        var source = NavMotor.CreateUninitialized(new LocomotionHandler(LocomotionProfile.CreateMoveAndFallOnly()));
+        var source = NavMotor.CreateUninitialized(new LocomotionHandler(LocomotionProfile.CreateCoreOnly()));
 
         string json = JsonRecordSerializer.Serialize(source, writeIndented: true);
 

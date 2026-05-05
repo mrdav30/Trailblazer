@@ -227,7 +227,7 @@ Concrete navigator types should implement `CheckTrekCondition()` to populate gro
 
 Call `navigator.ConfigureForGuidedTraversal(allowTraversalTransitions: true)` when built-in chart-guided travel should fall back through registered `TraversalTransition` handoffs instead of failing at chart boundaries. The same opt-in also allows bounded swim-exit style handoffs from liquid volume into a follow-up chart request when the requested target is chart-backed outside the active liquid volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route is a better fit than staying in gas-volume travel.
 
-If a navigator should use a smaller locomotion set, override `CreateLocomotionProfile()` and return a custom profile such as `LocomotionProfile.CreateMoveAndFallOnly()`.
+If a navigator should use a smaller locomotion set, override `CreateLocomotionProfile()` and return a custom profile such as `LocomotionProfile.CreateCoreOnly()`. Core locomotion always includes move, platform, and fall behavior.
 
 ## Choosing A Request Type
 

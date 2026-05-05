@@ -56,12 +56,12 @@ public enum LocomotionKind
     /// <summary>
     /// The required locomotion set used by all motors.
     /// </summary>
-    Core = Move | Fall,
+    Core = Move | Platform | Fall,
 
     /// <summary>
     /// The optional locomotion set used by the built-in presets.
     /// </summary>
-    Optional = Platform | Jump | Slide | Water | Fly | Climb,
+    Optional = Jump | Slide | Water | Fly | Climb,
 
     /// <summary>
     /// The built-in locomotion set containing every shipped module.

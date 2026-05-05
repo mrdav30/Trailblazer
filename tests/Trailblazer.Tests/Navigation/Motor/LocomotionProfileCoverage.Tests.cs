@@ -39,7 +39,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
     [Fact]
     public void InstalledKinds_ShouldReflectInstalledModules()
     {
-        var coreOnly = LocomotionProfile.CreateMoveAndFallOnly();
+        var coreOnly = LocomotionProfile.CreateCoreOnly();
         var full = LocomotionProfile.CreateDefault();
         var mixed = new LocomotionProfile(
             new MoveLocomotion(),
@@ -50,6 +50,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         coreOnly.InstalledKinds.Should().Be(LocomotionKind.Core);
         full.InstalledKinds.Should().Be(LocomotionKind.All);
         mixed.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Water);
+        Assert.NotNull(mixed.Platform);
         mixed.Water.Should().NotBeNull();
     }
 
@@ -73,6 +74,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
     {
         var move = new MoveLocomotion();
         var fall = new FallLocomotion();
+        var platform = new PlatformLocomotion();
         var jump = new JumpLocomotion();
         var fly = new FlyLocomotion();
         var climb = new ClimbLocomotion();
@@ -80,9 +82,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         var profile = new LocomotionProfileBuilder(includeOptionalLocomotions: false)
             .WithMove(move)
             .WithFall(fall)
-            .WithPlatform()
-            .WithoutPlatform()
-            .WithPlatform()
+            .WithPlatform(platform)
             .WithJump(jump)
             .WithoutJump()
             .WithJump(jump)
@@ -106,7 +106,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
         profile.Water.Should().BeNull();
         profile.Fly.Should().BeSameAs(fly);
         profile.Climb.Should().BeSameAs(climb);
-        profile.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Platform | LocomotionKind.Jump | LocomotionKind.Fly | LocomotionKind.Climb);
+        profile.InstalledKinds.Should().Be(LocomotionKind.Core | LocomotionKind.Jump | LocomotionKind.Fly | LocomotionKind.Climb);
     }
 
     [Fact]

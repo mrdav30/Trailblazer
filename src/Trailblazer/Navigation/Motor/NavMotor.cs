@@ -51,7 +51,7 @@ public class NavMotor : IRecordable
     public bool IsInitialized => _isInitialized;
 
     /// <inheritdoc cref="PlatformLocomotion"/>
-    public PlatformLocomotion? PlatformModule => Handler.Platform;
+    public PlatformLocomotion PlatformModule => Handler.Platform;
 
     /// <inheritdoc cref="JumpLocomotion"/>
     public JumpLocomotion? JumpModule => Handler.Jump;
@@ -199,7 +199,7 @@ public class NavMotor : IRecordable
     {
         _handler = profile != null ? new LocomotionHandler(profile) : new LocomotionHandler();
         CurrentState = new TransitState(condition);
-        if (CurrentState.GroundState.HasValue && PlatformModule != null)
+        if (CurrentState.GroundState.HasValue)
             PlatformModule.HandlePlatformChange(CurrentState.GroundState); // set the initial platform
 
         _isInitialized = true;
@@ -217,7 +217,7 @@ public class NavMotor : IRecordable
 
         Handler.ApplyProfile(profile);
 
-        if (CurrentState?.GroundState.HasValue == true && PlatformModule != null)
+        if (CurrentState?.GroundState.HasValue == true)
             PlatformModule.HandlePlatformChange(CurrentState.GroundState);
     }
 
@@ -318,7 +318,7 @@ public class NavMotor : IRecordable
         _forceOutput = Handler.Move.FrameVelocity;
 
         // Update platform velocity prior to applying jump force.
-        PlatformModule?.UpdatePlatformVelocity();
+        PlatformModule.UpdatePlatformVelocity();
 
         if (InLimbo)
             Handler.IsInControl = false;
@@ -711,10 +711,11 @@ public class NavMotor : IRecordable
 
     private Vector3d ApplyPlatformTransferVelocity(Vector3d desiredVelocity)
     {
-        if (PlatformModule?.IsEnabled == true
-            && PlatformModule.MovementTransfer == MotionTransfer.PermaTransfer)
+        PlatformLocomotion platformModule = PlatformModule;
+        if (platformModule.IsEnabled
+            && platformModule.MovementTransfer == MotionTransfer.PermaTransfer)
         {
-            desiredVelocity += PlatformModule.FramePlatformVelocity;
+            desiredVelocity += platformModule.FramePlatformVelocity;
             desiredVelocity.y = Fixed64.Zero;
         }
 
@@ -1210,9 +1211,7 @@ public class NavMotor : IRecordable
         ref Vector3d positionDelta,
         ref FixedQuaternion rotationDelta)
     {
-        PlatformLocomotion? platformModule = PlatformModule;
-        if (platformModule == null)
-            return;
+        PlatformLocomotion platformModule = PlatformModule;
 
         // Do not apply platform movement if we just jumped or if the platform is not actively driving us.
         bool isMovingWithPlatform = platformModule.IsActive
@@ -1285,7 +1284,7 @@ public class NavMotor : IRecordable
 
         CurrentState.Update(conditonRefresh, CurrentState.ToTrekCondition());
 
-        PlatformModule?.HandlePlatformChange(CurrentState.GroundState);
+        PlatformModule.HandlePlatformChange(CurrentState.GroundState);
         HandlePlatformTransitions();
 
         // Ceiling check runs last so platform inertia inherited this frame cannot bypass the clamp.
@@ -1362,10 +1361,11 @@ public class NavMotor : IRecordable
 
     private void FinalizePlatformMovement(Vector3d position, FixedQuaternion rotation)
     {
-        if (PlatformModule?.IsActive != true || (!IsOnSolid && !PlatformModule.IsLockedToPlatform))
+        PlatformLocomotion platformModule = PlatformModule;
+        if (!platformModule.IsActive || (!IsOnSolid && !platformModule.IsLockedToPlatform))
             return;
 
-        PlatformModule.HandlePlatformMovement(position, rotation);
+        platformModule.HandlePlatformMovement(position, rotation);
     }
 
     private void CheckJumpStatus(Vector3d position)
@@ -1391,39 +1391,40 @@ public class NavMotor : IRecordable
     private void HandlePlatformTransitions()
     {
         // Don't process platform state when in water
-        if (PlatformModule?.IsEnabled != true || IsInLiquid)
+        PlatformLocomotion platformModule = PlatformModule;
+        if (!platformModule.IsEnabled || IsInLiquid)
             return;
 
         bool isReleasing = false;
-        if (PlatformModule.IsHoldingPlatform)
-            isReleasing = PlatformModule.TickHoldOnPlatform();
+        if (platformModule.IsHoldingPlatform)
+            isReleasing = platformModule.TickHoldOnPlatform();
 
         if (isReleasing)
         {
-            Handler.Move.FrameVelocity -= PlatformModule.PlatformVelocity;
+            Handler.Move.FrameVelocity -= platformModule.PlatformVelocity;
             return;
         }
 
-        if (!PlatformModule.InteriaApplied) return;
+        if (!platformModule.InteriaApplied) return;
 
         if (WasOnSolid && IsInGas)
         {
             // Scout just left the ground, so it inherits platform inertia into its new velocity.
-            PlatformModule.FramePlatformVelocity = PlatformModule.PlatformVelocity;
-            Handler.Move.FrameVelocity += PlatformModule.PlatformVelocity;
+            platformModule.FramePlatformVelocity = platformModule.PlatformVelocity;
+            Handler.Move.FrameVelocity += platformModule.PlatformVelocity;
             return;
         }
 
         if (WasInGas && IsOnSolid)
         {
-            if (PlatformModule.IsNewPlatform)
+            if (platformModule.IsNewPlatform)
                 // If object landed on a new platform, we have to wait for two frames
                 // before we know the new velocity of the platform under the object
-                PlatformModule.SetHoldPlatform(PlatformModule.ActivePlatform);
+                platformModule.SetHoldPlatform(platformModule.ActivePlatform);
             else
                 // If the platform isn’t new, we assume the object landed back on the same platform
                 // and subtract platform velocity to prevent doubling the effect.
-                Handler.Move.FrameVelocity -= PlatformModule.PlatformVelocity;
+                Handler.Move.FrameVelocity -= platformModule.PlatformVelocity;
         }
     }
 

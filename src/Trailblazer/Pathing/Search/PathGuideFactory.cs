@@ -122,6 +122,13 @@ public static class PathGuideFactory
             return false;
         }
 
+        if (request is AStarPathRequest unreachableAStar
+            && SolidPartitionReachability.IsProvablyUnreachable(unreachableAStar))
+        {
+            result = null;
+            return false;
+        }
+
         result = request switch
         {
             AStarPathRequest a => RequestAStar(a),
@@ -140,6 +147,9 @@ public static class PathGuideFactory
     /// <returns>A valid AStarGuide instance.</returns>
     public static AStarGuide? RequestAStar(AStarPathRequest request)
     {
+        if (SolidPartitionReachability.IsProvablyUnreachable(request))
+            return null;
+
         bool pathFound = _cachedAStarResults.TryGetOrCreate(request,
             () => ResolveAStarResult(request),
             out AStarSurveyResult result);

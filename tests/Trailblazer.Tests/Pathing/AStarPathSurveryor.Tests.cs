@@ -195,6 +195,71 @@ public class AStarSurveryorTests : IDisposable
     }
 
     [Fact]
+    public void AStar_ShouldFastFailRepeatedClearanceDisconnectedRequest()
+    {
+        bool[,,] data = BuildSingleVoxelChoke();
+        PathTestFactory.RegisterFromData("ChokeFastFail", data, Vector3d.Zero);
+
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
+            new Vector3d(0, 0, 2),
+            new Vector3d(6, 0, 2),
+            Fixed64.Two));
+
+        SolidPartitionReachability.IsProvablyUnreachable(request).Should().BeTrue();
+
+        PathGuideFactory.RequestGuide(request, out AStarGuide? firstGuide).Should().BeFalse();
+        firstGuide.Should().BeNull();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        bool success = PathGuideFactory.RequestGuide(request, out AStarGuide? secondGuide);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        success.Should().BeFalse();
+        secondGuide.Should().BeNull();
+        allocated.Should().BeLessThan(768);
+
+        PathManager.UnloadChart("ChokeFastFail");
+    }
+
+    [Fact]
+    public void AStar_ShouldReevaluateFastFail_WhenChartChangesMakeRouteReachable()
+    {
+        bool[,,] blocked = BuildSingleVoxelChoke();
+        PathTestFactory.RegisterFromData("ChokeReevalBlocked", blocked, Vector3d.Zero);
+
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
+            new Vector3d(0, 0, 2),
+            new Vector3d(6, 0, 2),
+            Fixed64.Two));
+
+        PathGuideFactory.RequestGuide(request, out AStarGuide? blockedGuide).Should().BeFalse();
+        blockedGuide.Should().BeNull();
+
+        PathManager.UnloadChart("ChokeReevalBlocked");
+
+        bool[,,] open = new bool[1, 7, 5];
+        for (int x = 0; x < 7; x++)
+        {
+            for (int z = 0; z < 5; z++)
+                open[0, x, z] = true;
+        }
+
+        PathTestFactory.RegisterFromData("ChokeReevalOpen", open, Vector3d.Zero);
+
+        AStarGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide),
+            createdGuide);
+        guide.ActiveWaypoints.Last().IsGoal.Should().BeTrue();
+
+        PathGuideFactory.ReturnGuide(guide);
+        PathManager.UnloadChart("ChokeReevalOpen");
+    }
+
+    [Fact]
     public void AStar_ShouldNotReuseStalePathData()
     {
         var data = new bool[1, 3, 1]
@@ -895,5 +960,21 @@ public class AStarSurveryorTests : IDisposable
 
         PathGuideFactory.ReturnGuide(guide);
         PathManager.UnloadChart("GuideSpline");
+    }
+
+    private static bool[,,] BuildSingleVoxelChoke()
+    {
+        bool[,,] data = new bool[1, 7, 5];
+        for (int x = 0; x < 7; x++)
+        {
+            for (int z = 0; z < 5; z++)
+            {
+                bool isChokeColumn = x == 3;
+                bool isCenterRow = z == 2;
+                data[0, x, z] = !isChokeColumn || isCenterRow;
+            }
+        }
+
+        return data;
     }
 }

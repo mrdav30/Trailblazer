@@ -60,6 +60,7 @@ public class AStarPathRequestBenchmarks
     private BenchmarkPathFixture _chokeFixture;
     private Vector3d _chokeOrigin;
     private Vector3d _chokeDestination;
+    private AStarPathRequest _chokeUnitSize2Request;
 
     // -------------------------------------------------------------------------
     // GlobalSetup / GlobalCleanup
@@ -202,6 +203,15 @@ public class AStarPathRequestBenchmarks
         BenchmarkPreflight.AssertAStarRouteExists(_chokeOrigin, _chokeDestination, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
         BenchmarkPreflight.AssertNoCacheLeak();
+
+        _chokeUnitSize2Request = AStarPathRequest.Create(
+            _chokeOrigin,
+            _chokeDestination,
+            Fixed64.Two);
+
+        if (_chokeUnitSize2Request == null)
+            throw new System.InvalidOperationException(
+                "Preflight: choke-point unit-size-2 request could not be created.");
     }
 
     // -------------------------------------------------------------------------
@@ -217,8 +227,7 @@ public class AStarPathRequestBenchmarks
         nameof(ColdGuide_BlockerField64),
         nameof(ColdGuide_Heuristic_Manhattan),
         nameof(ColdGuide_Heuristic_Octile),
-        nameof(ColdGuide_Heuristic_Euclidean),
-        nameof(FailedRoute_ChokeUnitSize2)
+        nameof(ColdGuide_Heuristic_Euclidean)
     })]
     public void FlushForColdRun()
     {
@@ -363,13 +372,7 @@ public class AStarPathRequestBenchmarks
     [BenchmarkCategory("Pathing", "AStar", "Failed")]
     public bool FailedRoute_ChokeUnitSize2()
     {
-        AStarPathRequest request = AStarPathRequest.Create(
-            _chokeOrigin, _chokeDestination, Fixed64.Two);
-
-        if (request == null)
-            return false;
-
-        bool ok = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+        bool ok = PathGuideFactory.RequestGuide(_chokeUnitSize2Request, out AStarGuide guide);
         if (ok) PathGuideFactory.ReturnGuide(guide);
         return ok;
     }

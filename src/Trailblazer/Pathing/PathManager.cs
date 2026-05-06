@@ -159,6 +159,8 @@ public static class PathManager
 
         if (PathGuideFactory.IsPooling)
             PathGuideFactory.FlushCache(true);
+
+        SolidPartitionReachability.Invalidate();
     }
 
     /// <summary>
@@ -187,6 +189,8 @@ public static class PathManager
 
         if (PathGuideFactory.IsPooling)
             PathGuideFactory.FlushCache(true);
+
+        SolidPartitionReachability.Invalidate();
     }
 
     #endregion
@@ -771,6 +775,7 @@ public static class PathManager
 
             chart.IsInitialized = true;
             affectedChartKeys.Add(chart.Name);
+            SolidPartitionReachability.Invalidate();
 
             RefreshManagedManualTransitionsForVoxels(touchedVoxelIndices);
             RefreshManagedGeneratedTransitionsForCharts(world, affectedChartKeys);
@@ -882,6 +887,7 @@ public static class PathManager
             TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
             RemoveChartFromRegistry(chart.Name);
             chart.IsInitialized = false;
+            SolidPartitionReachability.Invalidate();
 
             RefreshManagedManualTransitionsForVoxels(touchedVoxelIndices);
             RefreshManagedGeneratedTransitionsForCharts(world, affectedChartKeys, chart.Name);
@@ -1232,6 +1238,7 @@ public static class PathManager
                 part.BindNeighbors();
 
             chart.IsInitialized = false;
+            SolidPartitionReachability.Invalidate();
         }
         finally
         {
@@ -1258,6 +1265,7 @@ public static class PathManager
         _initializedChartTouchCountsByGridIndex.Clear();
         _activeAuthoredGasCellCount = 0;
         _activeAuthoredLiquidCellCount = 0;
+        SolidPartitionReachability.Invalidate();
     }
 
     private static bool DoBoundsOverlap(
@@ -2254,6 +2262,9 @@ public static class PathManager
     {
         foreach (SolidChartPartition part in partitionsToRebind)
             part.BindNeighbors();
+
+        if (partitionsToRebind.Count > 0 || invalidatedChartKeys.Count > 0)
+            SolidPartitionReachability.Invalidate();
 
         foreach (string chartKey in invalidatedChartKeys)
             PathGuideFactory.InvalidateCacheFor(chartKey);

@@ -501,6 +501,41 @@ Rules:
 - New test confirming that a transitionally reachable route (chart changes state) correctly
   re-evaluates rather than fast-failing from stale connectivity data.
 
+### Implementation Notes
+
+- Added a conservative solid-partition reachability snapshot in `SolidPartitionReachability`.
+  The check is keyed by unit size and max climb height, and it returns inconclusive when a
+  request allows traversal transitions, unwalkable endpoints, missing chart state, or any other
+  condition that could still require full A* evaluation.
+- Stamped reachability component IDs directly onto `SolidChartPartition` instances during
+  snapshot construction. The hot repeated-failure path can then compare component IDs without a
+  dictionary lookup or allocation.
+- Invalidated reachability snapshots from chart initialization, unload, reset, rebind, live-state
+  cleanup, and partition walkability changes so a route that becomes reachable is re-evaluated.
+- Applied the fast-fail in `PathGuideFactory` before A* survey creation, leaving `AStarSurveyor`
+  as the pure search implementation and preserving traversal-transition fallback behavior.
+- Aligned the benchmark harness by prebuilding the failed unit-size-2 request and removing this
+  failed-route case from per-iteration guide-cache flushing. Failed routes are not guide-cached,
+  and the previous iteration setup forced `InvocationCount=1`, which obscured the steady-state
+  fast-fail cost.
+
+Short-run evidence:
+
+- Baseline before Phase 5 changes:
+  - `FailedRoute_ChokeUnitSize2`: ~130.4 us / 1.07 KB.
+- Post-change:
+  - `FailedRoute_ChokeUnitSize2`: ~74.7 ns / 0 B.
+
+Fast-follow:
+
+- The first request for a new `(unitSize, maxClimbHeight)` snapshot still pays the component
+  flood-fill cost. Current failed-route steady state is effectively free, but if runtime workloads
+  create many distinct clearance/climb combinations, consider eager chart-time snapshots or a
+  bounded snapshot policy.
+- `AStarPathRequestBenchmarks` still carries some broader multi-fixture setup shape from earlier
+  benchmark coverage. If full-class runs show stale-world artifacts, consolidate its fixture setup
+  the way the Phase 4 transition benchmark was consolidated.
+
 ---
 
 ## Phase 6 — Eliminate Fixed Allocation in Combined Steering Per Tick

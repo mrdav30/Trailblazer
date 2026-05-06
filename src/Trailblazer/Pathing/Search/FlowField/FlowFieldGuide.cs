@@ -98,7 +98,7 @@ public class FlowFieldGuide : IGuide
         if (FlowMap == null || !FlowMap.HasPath || fields == null)
             return false;
 
-        direction = FlowFieldSurveyor.SampleFlowVector(origin, fields);
+        direction = FlowFieldSurveyor.SampleFlowVector(origin, FlowMap);
         if (direction == Vector3d.Zero)
             return false;
 

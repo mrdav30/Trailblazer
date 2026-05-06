@@ -24,6 +24,8 @@ public class FlowFieldSurveyResult : SurveyResult
     /// </remarks>
     public SwiftDictionary<WorldVoxelIndex, FlowField>? Fields { get; private set; }
 
+    internal FlowFieldSamplingGrid[] SamplingGrids { get; private set; } = Array.Empty<FlowFieldSamplingGrid>();
+
     /// <inheritdoc/>
     public override bool HasPath => IsValid && Fields != null && Fields.Count > 0;
 
@@ -49,12 +51,22 @@ public class FlowFieldSurveyResult : SurveyResult
         string[] chartsUtilized,
         int key)
     {
+        return Create(fields, chartsUtilized, key, Array.Empty<FlowFieldSamplingGrid>());
+    }
+
+    internal static FlowFieldSurveyResult Create(
+        SwiftDictionary<WorldVoxelIndex, FlowField> fields,
+        string[] chartsUtilized,
+        int key,
+        FlowFieldSamplingGrid[] samplingGrids)
+    {
         return new FlowFieldSurveyResult()
         {
             IsValid = true,
             IsInUse = false,
             ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
             Fields = fields,
+            SamplingGrids = samplingGrids ?? Array.Empty<FlowFieldSamplingGrid>(),
             LastUsedFrame = -1,
             RequestHashKey = key
         };
@@ -65,5 +77,6 @@ public class FlowFieldSurveyResult : SurveyResult
     {
         base.Reset();
         Fields = null;
+        SamplingGrids = Array.Empty<FlowFieldSamplingGrid>();
     }
 }

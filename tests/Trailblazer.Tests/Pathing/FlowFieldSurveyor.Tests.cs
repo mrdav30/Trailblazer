@@ -498,6 +498,60 @@ public class FlowFieldSurveyorTests : IDisposable
     }
 
     [Fact]
+    public void SampleFlowVector_ShouldAllocateZeroBytes_WhenSamplingExactVoxelFromSurveyResult()
+    {
+        FlowFieldSurveyResult result = CreateOpenFlowField("SampleExactNoAlloc");
+        Vector3d sample = new(2, 0, 2);
+
+        FlowFieldSurveyor.SampleFlowVector(sample, result).Should().NotBe(Vector3d.Zero);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(sample, result);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        flow.Should().NotBe(Vector3d.Zero);
+        allocated.Should().Be(0);
+
+        PathManager.UnloadChart("SampleExactNoAlloc");
+    }
+
+    [Fact]
+    public void SampleFlowVector_ShouldAllocateZeroBytes_WhenSamplingFractionalPositionFromSurveyResult()
+    {
+        FlowFieldSurveyResult result = CreateOpenFlowField("SampleFractionalNoAlloc");
+        Vector3d sample = new Vector3d((Fixed64)2 + Fixed64.Half, Fixed64.Zero, (Fixed64)2 + Fixed64.Half);
+
+        FlowFieldSurveyor.SampleFlowVector(sample, result).Should().NotBe(Vector3d.Zero);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(sample, result);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        flow.Should().NotBe(Vector3d.Zero);
+        allocated.Should().Be(0);
+
+        PathManager.UnloadChart("SampleFractionalNoAlloc");
+    }
+
+    [Fact]
+    public void SampleFlowVector_ShouldAllocateZeroBytes_WhenSamplingOutsideSurveyResult()
+    {
+        FlowFieldSurveyResult result = CreateOpenFlowField("SampleOutsideNoAlloc");
+        Vector3d sample = new(10, 0, 10);
+
+        FlowFieldSurveyor.SampleFlowVector(sample, result).Should().Be(Vector3d.Zero);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        Vector3d flow = FlowFieldSurveyor.SampleFlowVector(sample, result);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        flow.Should().Be(Vector3d.Zero);
+        allocated.Should().Be(0);
+
+        PathManager.UnloadChart("SampleOutsideNoAlloc");
+    }
+
+    [Fact]
     public void FlowField_Direction_ShouldAlwaysPointTowardLowerCost()
     {
         bool[,,] data = new bool[1, 5, 5];
@@ -1052,5 +1106,26 @@ public class FlowFieldSurveyorTests : IDisposable
         Assert.NotNull(leg);
         heap.Add(leg, 0);
         heap.SetClosed(leg);
+    }
+
+    private static FlowFieldSurveyResult CreateOpenFlowField(string chartKey)
+    {
+        bool[,,] data = new bool[1, 5, 5];
+        for (int x = 0; x < 5; x++)
+            for (int z = 0; z < 5; z++)
+                data[0, x, z] = true;
+
+        PathTestFactory.RegisterFromData(chartKey, data, Vector3d.Zero);
+
+        Vector3d start = new(2, 0, 2);
+        Vector3d goal = new(4, 0, 4);
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreate(start, goal, out FlowFieldPathRequest? createdRequest),
+            createdRequest);
+
+        FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+        result.HasPath.Should().BeTrue();
+        result.Fields.Should().NotBeNull();
+        return result;
     }
 }

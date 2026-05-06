@@ -2,7 +2,6 @@ using BenchmarkDotNet.Attributes;
 using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
-using SwiftCollections;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks.Pathing;
@@ -57,7 +56,7 @@ public class FlowFieldPathRequestBenchmarks
     // SampleFlowVector diagnostic — prebuilt field
     // -------------------------------------------------------------------------
 
-    private SwiftDictionary<WorldVoxelIndex, FlowField> _prebuiltFields;
+    private FlowFieldSurveyResult _prebuiltResult;
     private Vector3d _sampleExactPosition;
     private Vector3d _sampleFractionalPosition;
 
@@ -175,7 +174,7 @@ public class FlowFieldPathRequestBenchmarks
             throw new System.InvalidOperationException(
                 "Preflight: Could not build flow field for SampleFlowVector benchmark.");
 
-        _prebuiltFields = result.Fields;
+        _prebuiltResult = result;
         _sampleExactPosition = new Vector3d(
             origin.x + (Fixed64)(size / 2),
             origin.y,
@@ -338,7 +337,7 @@ public class FlowFieldPathRequestBenchmarks
     [BenchmarkCategory("Pathing", "FlowField", "Sample")]
     public Vector3d SampleFlowVector_ExactVoxel()
     {
-        return FlowFieldSurveyor.SampleFlowVector(_sampleExactPosition, _prebuiltFields);
+        return FlowFieldSurveyor.SampleFlowVector(_sampleExactPosition, _prebuiltResult);
     }
 
     /// <summary>SampleFlowVector at a fractional (between-voxel) position.</summary>
@@ -346,6 +345,6 @@ public class FlowFieldPathRequestBenchmarks
     [BenchmarkCategory("Pathing", "FlowField", "Sample")]
     public Vector3d SampleFlowVector_FractionalPosition()
     {
-        return FlowFieldSurveyor.SampleFlowVector(_sampleFractionalPosition, _prebuiltFields);
+        return FlowFieldSurveyor.SampleFlowVector(_sampleFractionalPosition, _prebuiltResult);
     }
 }

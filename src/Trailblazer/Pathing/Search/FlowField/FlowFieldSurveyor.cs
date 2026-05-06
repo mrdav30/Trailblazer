@@ -34,6 +34,8 @@ public class FlowFieldSurveyor
 
     private readonly SwiftHashSet<string> _chartKeys = new();
 
+    private readonly SwiftList<FlowFieldSamplingGrid> _samplingGrids = new();
+
     private FlowFieldPathRequest? _request;
 
     /// <summary>
@@ -69,7 +71,14 @@ public class FlowFieldSurveyor
 
             SwiftDictionary<WorldVoxelIndex, FlowField> flowFields = GenerateFlowFields();
             string[] chartsUsed = _chartKeys.ToArray();
-            FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(flowFields, chartsUsed, request.RequestCacheKey);
+            FlowFieldSamplingGrid[] samplingGrids = _samplingGrids.Count == 0
+                ? Array.Empty<FlowFieldSamplingGrid>()
+                : _samplingGrids.ToArray();
+            FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(
+                flowFields,
+                chartsUsed,
+                request.RequestCacheKey,
+                samplingGrids);
             ClearWorkingState();
             return result;
         }
@@ -217,6 +226,8 @@ public class FlowFieldSurveyor
 
         foreach (SolidChartPartition current in _heap.EnumerateClosed())
         {
+            FlowFieldSamplingGrid samplingGrid = GetOrAddSamplingGrid(current.GlobalIndex, current.VoxelPosition);
+
             FlowField currentFlow = new()
             {
                 GlobalIndex = current.GlobalIndex,
@@ -227,7 +238,7 @@ public class FlowFieldSurveyor
             {
                 // Ensure end voxel is include, it shouldn't point anywhere
                 currentFlow.IsGoal = true;
-                result.Add(current.GlobalIndex, currentFlow);
+                AddFlowField(result, samplingGrid, current.GlobalIndex, currentFlow);
                 continue;
             }
 
@@ -237,7 +248,7 @@ public class FlowFieldSurveyor
             SolidChartPartition?[]? neighbors = current.Neighbors;
             if (neighbors == null)
             {
-                result.Add(current.GlobalIndex, currentFlow);
+                AddFlowField(result, samplingGrid, current.GlobalIndex, currentFlow);
                 ChartOwnerUtility.AddOwners(_chartKeys, current.ChartOwners);
                 continue;
             }
@@ -274,11 +285,21 @@ public class FlowFieldSurveyor
                     currentFlow.Direction = raw.Normalize();
             }
 
-            result.Add(current.GlobalIndex, currentFlow);
+            AddFlowField(result, samplingGrid, current.GlobalIndex, currentFlow);
             ChartOwnerUtility.AddOwners(_chartKeys, current.ChartOwners);
         }
 
         return result;
+    }
+
+    private static void AddFlowField(
+        SwiftDictionary<WorldVoxelIndex, FlowField> fields,
+        FlowFieldSamplingGrid samplingGrid,
+        WorldVoxelIndex index,
+        FlowField field)
+    {
+        fields.Add(index, field);
+        samplingGrid.AddDirection(index, field.Direction);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -302,42 +323,90 @@ public class FlowFieldSurveyor
     {
         _heap.FastClear();
         _chartKeys.Clear();
+        _samplingGrids.Clear();
+    }
+
+    private FlowFieldSamplingGrid GetOrAddSamplingGrid(WorldVoxelIndex index, Vector3d worldPosition)
+    {
+        for (int i = 0; i < _samplingGrids.Count; i++)
+        {
+            if (_samplingGrids[i].MatchesGrid(index))
+                return _samplingGrids[i];
+        }
+
+        FlowFieldSamplingGrid samplingGrid = new(
+            index,
+            worldPosition,
+            TrailblazerWorldManager.VoxelSize,
+            _samplingGrids.Count == 0 ? _heap.TrackedCount : 0);
+        _samplingGrids.Add(samplingGrid);
+        return samplingGrid;
     }
 
     /// <summary>
     /// Samples an interpolated flow direction from a given world position using bilinear interpolation.
     /// Helps agents move smoothly between grid cells.
     /// </summary>
+    /// <remarks>
+    /// Prefer <see cref="SampleFlowVector(Vector3d, FlowFieldSurveyResult)"/> when a survey result is available; that overload uses cached sampling metadata.
+    /// </remarks>
     /// <param name="worldPosition">The world-space position to sample from.</param>
     /// <param name="fields">A dictionary of flow field data.</param>
     /// <returns>An interpolated directional vector.</returns>
     public static Vector3d SampleFlowVector(Vector3d worldPosition, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
+        return SampleFlowVector(worldPosition, fields, samplingGrids: null);
+    }
+
+    /// <summary>
+    /// Samples an interpolated flow direction from a survey result using direct index arithmetic.
+    /// </summary>
+    /// <param name="worldPosition">The world-space position to sample from.</param>
+    /// <param name="result">The flow-field survey result to sample.</param>
+    /// <returns>An interpolated directional vector.</returns>
+    public static Vector3d SampleFlowVector(Vector3d worldPosition, FlowFieldSurveyResult result)
+    {
+        if (result == null || !result.HasPath || result.Fields == null)
+            return Vector3d.Zero;
+
+        return SampleFlowVector(worldPosition, result.Fields, result.SamplingGrids);
+    }
+
+    private static Vector3d SampleFlowVector(
+        Vector3d worldPosition,
+        SwiftDictionary<WorldVoxelIndex, FlowField> fields,
+        FlowFieldSamplingGrid[]? samplingGrids)
+    {
         if (fields == null || fields.Count == 0)
             return Vector3d.Zero;
 
+        Fixed64 voxelSize = TrailblazerWorldManager.VoxelSize;
+
         // Get bottom-left corner of the square the agent is standing in
         Vector3d corner = new(
-            FixedMath.Floor(worldPosition.x / TrailblazerWorldManager.VoxelSize) * TrailblazerWorldManager.VoxelSize,
-            FixedMath.Floor(worldPosition.y / TrailblazerWorldManager.VoxelSize) * TrailblazerWorldManager.VoxelSize,
-            FixedMath.Floor(worldPosition.z / TrailblazerWorldManager.VoxelSize) * TrailblazerWorldManager.VoxelSize
+            FixedMath.Floor(worldPosition.x / voxelSize) * voxelSize,
+            FixedMath.Floor(worldPosition.y / voxelSize) * voxelSize,
+            FixedMath.Floor(worldPosition.z / voxelSize) * voxelSize
         );
 
         // Compute normalized offset in cell (0..1)
-        Fixed64 dx = (worldPosition.x - corner.x) / TrailblazerWorldManager.VoxelSize;
-        Fixed64 dz = (worldPosition.z - corner.z) / TrailblazerWorldManager.VoxelSize;
+        Fixed64 dx = (worldPosition.x - corner.x) / voxelSize;
+        Fixed64 dz = (worldPosition.z - corner.z) / voxelSize;
+
+        if (dx == Fixed64.Zero && dz == Fixed64.Zero)
+            return GetFlowDirection(corner, fields, samplingGrids);
 
         // Sample the 4 surrounding voxel centers
         Vector3d bottomLeft = corner;
-        Vector3d bottomRight = corner + new Vector3d(TrailblazerWorldManager.VoxelSize, Fixed64.Zero, Fixed64.Zero);
-        Vector3d topLeft = corner + new Vector3d(Fixed64.Zero, Fixed64.Zero, TrailblazerWorldManager.VoxelSize);
-        Vector3d topRight = corner + new Vector3d(TrailblazerWorldManager.VoxelSize, Fixed64.Zero, TrailblazerWorldManager.VoxelSize);
+        Vector3d bottomRight = corner + new Vector3d(voxelSize, Fixed64.Zero, Fixed64.Zero);
+        Vector3d topLeft = corner + new Vector3d(Fixed64.Zero, Fixed64.Zero, voxelSize);
+        Vector3d topRight = corner + new Vector3d(voxelSize, Fixed64.Zero, voxelSize);
 
         // Get flow vectors
-        Vector3d f00 = GetFlowDirection(bottomLeft, fields);
-        Vector3d f10 = GetFlowDirection(bottomRight, fields);
-        Vector3d f01 = GetFlowDirection(topLeft, fields);
-        Vector3d f11 = GetFlowDirection(topRight, fields);
+        Vector3d f00 = GetFlowDirection(bottomLeft, fields, samplingGrids);
+        Vector3d f10 = GetFlowDirection(bottomRight, fields, samplingGrids);
+        Vector3d f01 = GetFlowDirection(topLeft, fields, samplingGrids);
+        Vector3d f11 = GetFlowDirection(topRight, fields, samplingGrids);
 
         // Bilinear interpolation
         Vector3d zHigh = f00 * (Fixed64.One - dx) + f10 * dx;
@@ -402,6 +471,23 @@ public class FlowFieldSurveyor
             if (fields.TryGetValue(voxel.WorldIndex, out FlowField field))
                 return field.Direction;
         }
+        return Vector3d.Zero;
+    }
+
+    private static Vector3d GetFlowDirection(
+        Vector3d position,
+        SwiftDictionary<WorldVoxelIndex, FlowField> fields,
+        FlowFieldSamplingGrid[]? samplingGrids)
+    {
+        if (samplingGrids == null || samplingGrids.Length == 0)
+            return GetFlowDirection(position, fields);
+
+        for (int i = 0; i < samplingGrids.Length; i++)
+        {
+            if (samplingGrids[i].TryGetDirection(position, out Vector3d direction))
+                return direction;
+        }
+
         return Vector3d.Zero;
     }
 

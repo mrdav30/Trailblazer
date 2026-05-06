@@ -301,6 +301,45 @@ copy paths.
 - `SampleFlowVector` allocates zero bytes per call in both the exact and fractional cases.
 - Unit tests covering exact, fractional, and out-of-field positions.
 
+### Phase 3 implementation notes — 2026-05-05
+
+Confirmed on .NET 8.0.26:
+
+- Baseline `SampleFlowVector_ExactVoxel`: ~1.58 us / 1.56 KB.
+- Baseline `SampleFlowVector_FractionalPosition`: ~1.62 us / 1.56 KB.
+- A first direct-index attempt removed the world-manager calls but still allocated about 280 B per
+  `WorldVoxelIndex` dictionary lookup, so the final hot path avoids `WorldVoxelIndex` hashing
+  during sampling as well.
+
+Implemented:
+
+- `FlowFieldSurveyResult` now carries compact per-grid sampling metadata generated with the flow
+  result.
+- `FlowFieldGuide.TryGetMovementDirection` samples through the survey-result overload, which
+  converts world positions to local voxel keys with fixed-point arithmetic and then reads cached
+  directions directly.
+- Exact voxel samples now early-out after one lookup instead of doing all four bilinear corner
+  reads.
+- Added allocation tests for exact, fractional, and out-of-field survey-result sampling.
+- Updated the `SampleFlowVector_*` benchmarks to measure the result-aware runtime path.
+
+Post-change short-run evidence:
+
+- `SampleFlowVector_ExactVoxel`: ~176 ns / 0 B.
+- `SampleFlowVector_FractionalPosition`: ~520 ns / 0 B.
+- `FlowFieldCacheMiss_BelowCapacity`: ~45.3 ms / 1.13 MB. This is a small cold-allocation increase
+  from storing the sampling maps, but it keeps per-frame sampling allocation-free.
+
+Fast-follow:
+
+- The legacy `SampleFlowVector(Vector3d, fields)` compatibility overload still falls back to
+  world-manager voxel lookup because it does not receive the survey-result sampling metadata.
+  Keep internal hot paths on the result overload, and consider deprecating or replacing the
+  fields-only overload before public API freeze.
+- Revisit the sampling-map storage when addressing cold flow-field allocation. A pooled map or a
+  dense planar direction buffer could reduce the extra cold-result memory while preserving the
+  zero-allocation sampling path.
+
 ---
 
 ## Phase 4 — Fix Warm Transition-Aware Guide Paths

@@ -60,6 +60,46 @@ public class FlowFieldTransitionFallbackTests : IDisposable
     }
 
     [Fact]
+    public void FlowFieldRequest_ShouldReuseTransitionFallbackPlan_ForSecondIdenticalRequest()
+    {
+        RegisterTwoPointChart("WarmJumpStart", Vector3d.Zero);
+        RegisterTwoPointChart("WarmJumpEnd", new Vector3d(3, 0, 0));
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "warm-jump-gap",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
+            pathCostModifier: 4)).Should().BeTrue();
+
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(4, 0, 0),
+            Fixed64.One,
+            allowTraversalTransitions: true));
+
+        FlowFieldGuide firstGuide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out FlowFieldGuide? createdFirstGuide),
+            createdFirstGuide);
+        firstGuide.IsStaged.Should().BeTrue();
+        PathGuideFactory.ReturnGuide(firstGuide);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        FlowFieldGuide secondGuide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out FlowFieldGuide? createdSecondGuide),
+            createdSecondGuide);
+        secondGuide.IsStaged.Should().BeTrue();
+        PathGuideFactory.ReturnGuide(secondGuide);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        allocated.Should().BeLessThan(2_048);
+    }
+
+    [Fact]
     public void FlowFieldRequest_ShouldUseTransitionFallback_ForChartToWaterToChartRoute()
     {
         RegisterTwoPointChart("WaterStart", new Vector3d(-2, 0, 0));

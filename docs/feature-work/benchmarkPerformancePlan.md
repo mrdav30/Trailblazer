@@ -417,6 +417,49 @@ gap as well as a performance gap.
 - New `TransitionFallbackBenchmarks` warm-guide regression test that asserts sub-microsecond
   cost on a second identical request.
 
+### Phase 4 implementation notes — 2026-05-06
+
+Phase 4 had two separate causes:
+
+- `WarmGuide_FlowField_JumpLink` was rebuilding the transition `HybridRoutePlan` after the direct
+  flow-field result failed the start-voxel containment check.
+- `WarmGuide_AStar_SwimPath` was a benchmark harness artifact. The benchmark created multiple
+  fixtures in one setup pass, so later fixture setup reset the world after earlier requests were
+  created and primed.
+
+Changes:
+
+- Added `HybridRoutePlanSurveyResult` and a dedicated reusable cache for deterministic
+  transition route plans.
+- Added `ReusableSurveyResultCache<T>.TryCheckout(...)` so hot paths can reuse an existing
+  cached result without allocating a creation callback or running a miss resolver.
+- Updated `RequestFlowField` to return a cached transition fallback plan before repeating the
+  known direct flow-field miss.
+- Reworked `TransitionFallbackBenchmarks` to use one world fixture, offset each scenario in the
+  same grid, and prime all requests only after all charts and transitions are registered.
+- Added/tightened a warm flow-field transition fallback allocation regression test.
+
+Short-run evidence:
+
+- Baseline before Phase 4 changes:
+  - `WarmGuide_AStar_JumpLink`: ~195 ns / 408 B.
+  - `WarmGuide_AStar_SwimPath`: ~5.87 us / 3.40 KB.
+  - `WarmGuide_FlowField_JumpLink`: ~11.86 us / 15.1 KB.
+- Comparison baseline:
+  - `FlowFieldCacheHit`: ~258 ns / 664 B.
+- Post-change:
+  - `WarmGuide_AStar_JumpLink`: ~190 ns / 408 B.
+  - `WarmGuide_AStar_SwimPath`: ~194 ns / 408 B.
+  - `WarmGuide_FlowField_JumpLink`: ~178 ns / 320 B.
+
+Fast-follow:
+
+- The transition route-plan cache indexes chart invalidation through segment endpoint owners.
+  This matches the current route-step shape, but if future hybrid routing records exact
+  per-segment chart usage, switch the cache key metadata to that richer source.
+- Warm staged flow-field requests still allocate a small `FlowFieldGuide` wrapper. It is now below
+  the alpha budget, so guide-object pooling should wait for evidence from broader benchmarks.
+
 ---
 
 ## Phase 5 — Add Fast-Fail for Unreachable A* Routes

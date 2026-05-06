@@ -54,13 +54,7 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
         {
             if (_cache.TryGetValue(key, out result) && result.HasPath)
             {
-                _lock.EnterWriteLock();
-                try
-                {
-                    result.Checkout();
-                    CountInUse++;
-                }
-                finally { _lock.ExitWriteLock(); }
+                CheckoutCachedResult(result);
                 return true;
             }
 
@@ -159,6 +153,31 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
             }
             finally { _lock.ExitWriteLock(); }
 
+        }
+        finally { _lock.ExitUpgradeableReadLock(); }
+    }
+
+    /// <summary>
+    /// Attempts to check out an existing cached result without invoking a creation callback.
+    /// </summary>
+    /// <param name="request">The path request used as the cache key.</param>
+    /// <param name="result">The checked-out cached result.</param>
+    /// <returns><c>true</c> when a valid cached result was found; otherwise, <c>false</c>.</returns>
+    public bool TryCheckout(IPathRequest request, out T result)
+    {
+        int key = request.RequestCacheKey;
+
+        _lock.EnterUpgradeableReadLock();
+        try
+        {
+            if (_cache.TryGetValue(key, out result) && result.HasPath)
+            {
+                CheckoutCachedResult(result);
+                return true;
+            }
+
+            result = null!;
+            return false;
         }
         finally { _lock.ExitUpgradeableReadLock(); }
     }
@@ -282,6 +301,17 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
 
         _cache[key] = result;
         AddToChartIndex(key, result.ChartsUtilized);
+    }
+
+    private void CheckoutCachedResult(T result)
+    {
+        _lock.EnterWriteLock();
+        try
+        {
+            result.Checkout();
+            CountInUse++;
+        }
+        finally { _lock.ExitWriteLock(); }
     }
 
     private void InvalidateCachedResult(int key, T result)

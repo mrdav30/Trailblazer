@@ -1,4 +1,6 @@
-﻿using System;
+﻿using GridForge.Grids;
+using SwiftCollections;
+using System;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Trailblazer.Pathing;
@@ -49,13 +51,21 @@ public static class PathGuideFactory
     /// </summary>
     public static int ActiveVolumeGuideCount => _cachedVolumeResults.Count;
 
+    private static readonly ReusableSurveyResultCache<HybridRoutePlanSurveyResult> _cachedHybridRoutePlans = new();
+
+    /// <summary>
+    /// Returns the number of cached transition route plans currently tracked.
+    /// </summary>
+    public static int ActiveHybridRoutePlanCount => _cachedHybridRoutePlans.Count;
+
     /// <summary>
     /// Indicates whether any pathing guides are currently pooled and available.
     /// </summary>
     public static bool IsPooling =>
         ActiveAStarGuideCount > 0
         || ActiveFlowGuideCount > 0
-        || ActiveVolumeGuideCount > 0;
+        || ActiveVolumeGuideCount > 0
+        || ActiveHybridRoutePlanCount > 0;
 
     /// <summary>
     /// Indicates whether any guides are currently in use (checked out from the pool and not yet returned).
@@ -63,7 +73,8 @@ public static class PathGuideFactory
     public static bool AnyInUse =>
         _cachedAStarResults.CountInUse > 0
         || _cachedFlowResults.CountInUse > 0
-        || _cachedVolumeResults.CountInUse > 0;
+        || _cachedVolumeResults.CountInUse > 0
+        || _cachedHybridRoutePlans.CountInUse > 0;
 
     /// <summary>
     /// Attempts to remove guides from the pool that haven't been used for a configured number of frames.
@@ -76,6 +87,7 @@ public static class PathGuideFactory
         _cachedAStarResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
         _cachedFlowResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
         _cachedVolumeResults.EvictStaleEntries(currentFrame, MaxFramesUnused);
+        _cachedHybridRoutePlans.EvictStaleEntries(currentFrame, MaxFramesUnused);
     }
 
     /// <summary>
@@ -147,6 +159,13 @@ public static class PathGuideFactory
     /// <returns>A valid FlowFieldGuide instance.</returns>
     public static FlowFieldGuide? RequestFlowField(FlowFieldPathRequest request)
     {
+        if (request.AllowTraversalTransitions
+            && TryGetCachedTransitionFallbackFlowPlan(request, out HybridRoutePlan? cachedRoutePlan))
+        {
+            FlowFieldGuide cachedGuide = new();
+            return cachedGuide.InitializeStaged(cachedRoutePlan) ? cachedGuide : null;
+        }
+
         bool pathFound = _cachedFlowResults.TryGetOrCreate(request,
             () => FlowFieldSurveyor.Shared.FindPath(request),
             out FlowFieldSurveyResult result);
@@ -253,6 +272,7 @@ public static class PathGuideFactory
         _cachedAStarResults.InvalidateForChart(chartKey);
         _cachedFlowResults.InvalidateForChart(chartKey);
         _cachedVolumeResults.InvalidateForChart(chartKey);
+        _cachedHybridRoutePlans.InvalidateForChart(chartKey);
     }
 
     internal static void InvalidateVolumeCache()
@@ -269,6 +289,7 @@ public static class PathGuideFactory
         _cachedAStarResults.InvalidateAll();
         _cachedFlowResults.InvalidateAll();
         _cachedVolumeResults.InvalidateAll();
+        _cachedHybridRoutePlans.InvalidateAll();
     }
 
     private static AStarSurveyResult ResolveAStarResult(AStarPathRequest request)
@@ -314,15 +335,110 @@ public static class PathGuideFactory
     {
         guide = null;
 
+        if (!TryGetTransitionFallbackFlowPlan(request, out HybridRoutePlan? routePlan))
+            return false;
+
+        guide = new FlowFieldGuide();
+        return guide.InitializeStaged(routePlan);
+    }
+
+    private static bool TryGetTransitionFallbackFlowPlan(
+        FlowFieldPathRequest request,
+        [NotNullWhen(true)] out HybridRoutePlan? routePlan)
+    {
+        routePlan = null;
+        bool pathFound = _cachedHybridRoutePlans.TryGetOrCreate(
+            request,
+            () => ResolveTransitionFallbackFlowPlan(request),
+            out HybridRoutePlanSurveyResult result);
+
+        if (!pathFound || result.RoutePlan == null)
+            return false;
+
+        routePlan = result.RoutePlan;
+        _cachedHybridRoutePlans.Return(result, dispose: false);
+        return true;
+    }
+
+    private static bool TryGetCachedTransitionFallbackFlowPlan(
+        FlowFieldPathRequest request,
+        [NotNullWhen(true)] out HybridRoutePlan? routePlan)
+    {
+        routePlan = null;
+        if (!_cachedHybridRoutePlans.TryCheckout(request, out HybridRoutePlanSurveyResult result))
+            return false;
+
+        try
+        {
+            routePlan = result.RoutePlan;
+            return routePlan != null;
+        }
+        finally
+        {
+            _cachedHybridRoutePlans.Return(result, dispose: false);
+        }
+    }
+
+    private static HybridRoutePlanSurveyResult ResolveTransitionFallbackFlowPlan(FlowFieldPathRequest request)
+    {
         HybridPathRequest? hybridRequest = HybridPathRequest.CreateFromFlowField(request);
         HybridRoutePlan? routePlan = hybridRequest?.RoutePlan;
         if (routePlan == null
             || routePlan.DirectedTransitions.Length == 0)
         {
-            return false;
+            return HybridRoutePlanSurveyResult.Empty;
         }
 
-        guide = new FlowFieldGuide();
-        return guide.InitializeStaged(routePlan);
+        return HybridRoutePlanSurveyResult.Create(
+            routePlan,
+            CollectRoutePlanChartKeys(routePlan),
+            request.RequestCacheKey);
+    }
+
+    private static string[] CollectRoutePlanChartKeys(HybridRoutePlan routePlan)
+    {
+        if (routePlan == null || routePlan.Steps.Length == 0)
+            return Array.Empty<string>();
+
+        SwiftHashSet<string> chartKeys = new();
+        for (int i = 0; i < routePlan.Steps.Length; i++)
+        {
+            HybridRouteStep step = routePlan.Steps[i];
+            if (step.Kind != HybridRouteStepKind.PathSegment)
+                continue;
+
+            AddRequestEndpointChartOwners(chartKeys, step.SegmentRequest);
+        }
+
+        if (chartKeys.Count == 0)
+            return Array.Empty<string>();
+
+        string[] result = new string[chartKeys.Count];
+        int index = 0;
+        foreach (string chartKey in chartKeys)
+            result[index++] = chartKey;
+
+        return result;
+    }
+
+    private static void AddRequestEndpointChartOwners(SwiftHashSet<string> chartKeys, IPathRequest request)
+    {
+        if (request == null)
+            return;
+
+        AddVoxelChartOwners(chartKeys, request.StartNode);
+        AddVoxelChartOwners(chartKeys, request.EndNode);
+    }
+
+    private static void AddVoxelChartOwners(SwiftHashSet<string> chartKeys, Voxel? voxel)
+    {
+        if (voxel == null)
+            return;
+
+        if (voxel.TryGetPartition(out SolidChartPartition? solidPartition) && solidPartition != null)
+            ChartOwnerUtility.AddOwners(chartKeys, solidPartition.ChartOwners);
+
+        if (voxel.TryGetPartition(out VolumeChartPartition? volumePartition) && volumePartition != null)
+            ChartOwnerUtility.AddOwners(chartKeys, volumePartition.ChartOwners);
     }
 }

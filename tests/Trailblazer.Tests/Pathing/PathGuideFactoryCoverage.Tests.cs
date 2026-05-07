@@ -222,6 +222,23 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         PathGuideFactory.TotalFlowGuideCount.Should().Be(0);
     }
 
+    [Fact]
+    public void FlowFieldCacheHit_ShouldAllocateWithinFiftyBytesOfAStarHit()
+    {
+        RegisterSolidLine("GuideFactoryWarmHitAllocation", Vector3d.Zero, 4);
+
+        AStarPathRequest aStarRequest = TestRequire.NotNull(
+            AStarPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(
+            FlowFieldPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+
+        const int iterations = 256;
+        long aStarAllocated = MeasureWarmHitAllocation<AStarGuide>(aStarRequest, iterations);
+        long flowFieldAllocated = MeasureWarmHitAllocation<FlowFieldGuide>(flowFieldRequest, iterations);
+
+        flowFieldAllocated.Should().BeLessThanOrEqualTo(aStarAllocated + (50L * iterations));
+    }
+
     private static void RegisterSolidLine(string chartName, Vector3d minBounds, int length)
     {
         var data = new bool[1, length, 1];
@@ -240,6 +257,28 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
                 medium,
                 chartNamePrefix);
         }
+    }
+
+    private static long MeasureWarmHitAllocation<T>(IPathRequest request, int iterations)
+        where T : class, IGuide
+    {
+        T warmGuide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out T? createdWarmGuide), createdWarmGuide);
+        PathGuideFactory.ReturnGuide(warmGuide);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < iterations; i++)
+        {
+            if (!PathGuideFactory.RequestGuide(request, out T? guide) || guide == null)
+                throw new InvalidOperationException($"Expected warm {typeof(T).Name} cache hit.");
+
+            PathGuideFactory.ReturnGuide(guide);
+        }
+
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     private sealed class UnknownRequest : IPathRequest

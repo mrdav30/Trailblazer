@@ -200,9 +200,8 @@ public static class PathGuideFactory
             () => FlowFieldSurveyor.Shared.FindPath(request),
             out FlowFieldSurveyResult result);
 
-        // Make sure the start voxel is within the current fields collection
-        // Note: for flow fields, the world-scoped index of the start voxel is used as the key to check for path validity,
-        // since the flow field is generated around the start position and may not cover the entire map.
+        // Make sure the start voxel is within the current fields collection. This dictionary probe is on the warm
+        // cache-hit path, so GridForge's WorldVoxelIndex hash must stay allocation-free to keep FlowField hits near A*.
         if (pathFound
             && result.Fields != null
             && request.StartNode != null

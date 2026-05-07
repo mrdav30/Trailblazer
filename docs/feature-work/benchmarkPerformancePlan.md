@@ -606,15 +606,14 @@ Short-run evidence:
 
 Fast-follow:
 
-- Publish SwiftCollections, GridForge, and Chronicler packages containing the upstream fixes, then
-  switch Trailblazer/GridForge/Chronicler project references back to package references.
+- Resolved before Phase 7: SwiftCollections 4.0.3, GridForge 6.0.2, and Chronicler 0.2.0 were
+  published with the Phase 6 upstream fixes, and Trailblazer returned to package references.
 - `NavSteeringBenchmarks` still has independent setup fixtures for direct LOS and guided path
   scenarios. Phase 6 fixed the density setup because it affected the active benchmark; consolidate
   the rest of the class before relying on full-class navigation benchmark runs.
-- While the temporary local project references are active, `dotnet test Trailblazer.slnx -c Release`
-  still prints Debug builds for sibling repo references and one run hung after test discovery.
-  Prefer `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj -c Release` for Release
-  verification until the local-reference publishing loop is resolved.
+- Phase 7 temporarily reintroduced a local GridForge project reference for the new
+  `WorldVoxelIndex.GetHashCode` fix. Switch Trailblazer back to the published GridForge package
+  after that fix is released.
 
 ---
 
@@ -658,6 +657,48 @@ allocation inside `Initialize`.
 - If fixable without changing the guide interface: reduce `FlowFieldGuide` allocation to within
   50 B of `AStarGuide` on a warm hit.
 
+### Phase 7 implementation notes — 2026-05-07
+
+Confirmed:
+
+- With the newly published Phase 6 packages before this change, the old gap narrowed but still
+  reproduced: `AStarCacheHit` measured ~326.1 ns / 408 B and `FlowFieldCacheHit` measured
+  ~214.7 ns / 544 B.
+- The remaining 136 B allocation gap was not from `FlowFieldGuide.Initialize` or the guide object
+  graph. It came from the required `result.Fields.ContainsKey(request.StartNode.WorldIndex)`
+  validation on the FlowField warm-hit path.
+- `WorldVoxelIndex.GetHashCode` in GridForge passed a nested `VoxelIndex` struct into
+  `SwiftHashTools.CombineHashCodes(...)`, selecting the `params object[]` overload and allocating
+  an object array plus boxed values for every dictionary probe.
+
+Implemented:
+
+- Updated GridForge `WorldVoxelIndex.GetHashCode` to feed the nested voxel hash into the
+  four-integer `SwiftHashTools.CombineHashCodes` overload.
+- Added a GridForge allocation regression test for `WorldVoxelIndex.GetHashCode`.
+- Added a Trailblazer regression test that keeps `FlowFieldCacheHit` allocation within 50 bytes
+  per request of `AStarCacheHit`.
+- Documented the warm-hit dictionary-probe invariant in `PathGuideFactory`.
+- Temporarily switched Trailblazer source, test, and benchmark projects to the local GridForge
+  project reference for verification until the next GridForge package is published.
+
+Short-run evidence:
+
+- GridForge targeted test failed before the fix at ~40,960 B across 256 hash calls and passed
+  after the fix.
+- Trailblazer focused allocation guard passed in Release.
+- Post-change `guide-cache --filter *CacheHit* --job short` with local GridForge:
+  - `AStarCacheHit`: ~338.9 ns / 408 B.
+  - `FlowFieldCacheHit`: ~173.5 ns / 384 B.
+
+Fast-follow:
+
+- Publish a new GridForge package containing the `WorldVoxelIndex.GetHashCode` fix, then switch
+  Trailblazer's local GridForge project references back to package references.
+- `AStarCacheHit` still allocates ~408 B. The likely remaining sources are request cache-key
+  recomputation and the captured creation callback passed into `ReusableSurveyResultCache`; keep
+  this as a separate warm-hit cache cleanup rather than widening Phase 7.
+
 ---
 
 ## Summary
@@ -670,7 +711,7 @@ allocation inside `Initialize`.
 | 4 | 🟠 High | `WarmGuide_FlowField_JumpLink`, `WarmGuide_AStar_SwimPath` | Cache staged transition results; fix swim-path cache key |
 | 5 | 🟡 Medium | `FailedRoute_ChokeUnitSize2` | Add reachability pre-check before A* expansion |
 | 6 | 🟡 Medium | `CombinedSteering_Density*` | Reuse scan buffers; add upstream allocation-free GridForge/SwiftCollections paths |
-| 7 | 🔵 Low | `FlowFieldCacheHit` | Reduce FF warm-hit object graph size |
+| 7 | 🔵 Low | `FlowFieldCacheHit` | Fix GridForge `WorldVoxelIndex` hash allocation |
 
 Phases 1 and 4 are the highest-ROI starting points: Phase 1 requires no design changes and
 directly eliminates the LINQ dependency in a shared hot path; Phase 4 addresses the most
@@ -684,3 +725,5 @@ anomaly is not yet confirmed.
   seed all three result caches to 128 entries each. Extending that benchmark to full A*/FlowField/
   Volume pressure should wait until the phase 2 flow-field cold-miss anomaly is understood,
   otherwise setup cost will dominate the invalidation measurement.
+- A* warm cache hits still allocate ~408 B per request after Phase 7. Investigate request cache-key
+  hashing and captured survey-result factory callbacks as a future cache-hit cleanup.

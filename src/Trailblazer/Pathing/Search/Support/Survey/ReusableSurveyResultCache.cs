@@ -34,7 +34,13 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
     /// </summary>
     public int Count => _cache.Count;
 
-    public int CountInUse { get; private set; }
+    private int _countInUse;
+
+    public int CountInUse
+    {
+        get => _countInUse;
+        private set => _countInUse = Math.Max(0, value);
+    }
 
     /// <summary>
     /// Attempts to retrieve a valid <see cref="SurveyResult"/> from the cache, 

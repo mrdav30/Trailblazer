@@ -3,6 +3,7 @@ using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
+using System.IO;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -82,14 +83,14 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
 
         PathGuideFactory.RequestGuide(request, out _).Should().BeTrue();
-        PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
         PathGuideFactory.AnyInUse.Should().BeTrue();
 
         PathGuideFactory.FlushCache();
-        PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
 
         PathGuideFactory.FlushCache(force: true);
-        PathGuideFactory.ActiveAStarGuideCount.Should().Be(0);
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
         PathGuideFactory.AnyInUse.Should().BeFalse();
 
         AStarGuide guide = TestRequire.Created(
@@ -99,7 +100,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         PathGuideFactory.IsPooling.Should().BeTrue();
 
         PathGuideFactory.CullExpiredGuides(currentFrame: 601);
-        PathGuideFactory.ActiveAStarGuideCount.Should().Be(0);
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
         PathGuideFactory.IsPooling.Should().BeFalse();
     }
 
@@ -113,10 +114,10 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
             PathGuideFactory.RequestGuide(aStarRequest, out AStarGuide? createdAStarGuide),
             createdAStarGuide);
         PathGuideFactory.ReturnGuide(aStarGuide);
-        PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
 
         PathGuideFactory.InvalidateCacheFor("GuideFactoryInvalidateSolid");
-        PathGuideFactory.ActiveAStarGuideCount.Should().Be(0);
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
 
         RegisterVolumeLine(new Vector3d(0, 0, 2), TraversalMedium.Gas, 3, "GuideFactoryInvalidateVolume");
         VolumePathRequest volumeRequest = TestRequire.NotNull(VolumePathRequest.Create(
@@ -128,10 +129,10 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
             PathGuideFactory.RequestGuide(volumeRequest, out VolumeGuide? createdVolumeGuide),
             createdVolumeGuide);
         PathGuideFactory.ReturnGuide(volumeGuide);
-        PathGuideFactory.ActiveVolumeGuideCount.Should().Be(1);
+        PathGuideFactory.TotalVolumeGuideCount.Should().Be(1);
 
         PathGuideFactory.InvalidateVolumeCache();
-        PathGuideFactory.ActiveVolumeGuideCount.Should().Be(0);
+        PathGuideFactory.TotalVolumeGuideCount.Should().Be(0);
     }
 
     [Fact]
@@ -148,13 +149,13 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
             PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide),
             createdGuide);
         PathGuideFactory.ReturnGuide(guide);
-        PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
 
         PathGuideFactory.InvalidateCacheFor(string.Empty);
-        PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
 
         PathGuideFactory.InvalidateCacheFor(null!);
-        PathGuideFactory.ActiveAStarGuideCount.Should().Be(1);
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
     }
 
     [Fact]
@@ -171,7 +172,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
 
         PathGuideFactory.RequestGuide(request, out VolumeGuide? guide).Should().BeFalse();
         guide.Should().BeNull();
-        PathGuideFactory.ActiveVolumeGuideCount.Should().Be(0);
+        PathGuideFactory.TotalVolumeGuideCount.Should().Be(0);
     }
 
     [Fact]
@@ -188,18 +189,21 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
             new Vector3d(4, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One));
+        disconnectedRequest.RequestCacheKey.Should().Be(cachedRequest.RequestCacheKey);
 
         FlowFieldGuide cachedGuide = TestRequire.Created(
             PathGuideFactory.RequestGuide(cachedRequest, out FlowFieldGuide? createdCachedGuide),
             createdCachedGuide);
+        PathGuideFactory.AnyInUse.Should().BeTrue();
+
         PathGuideFactory.ReturnGuide(cachedGuide);
-        PathGuideFactory.ActiveFlowGuideCount.Should().Be(1);
-        PathGuideFactory.AnyInUse.Should().BeFalse();
+
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(1);
+        PathGuideFactory.InUseFlowGuideCount.Should().Be(0);
 
         PathGuideFactory.RequestGuide(disconnectedRequest, out FlowFieldGuide? disconnectedGuide).Should().BeFalse();
         disconnectedGuide.Should().BeNull();
-        PathGuideFactory.ActiveFlowGuideCount.Should().Be(1);
-        PathGuideFactory.AnyInUse.Should().BeFalse();
+        PathGuideFactory.InUseFlowGuideCount.Should().Be(0);
     }
 
     [Fact]
@@ -215,7 +219,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
             allowTraversalTransitions: true));
         PathGuideFactory.RequestGuide(request, out FlowFieldGuide? guide).Should().BeFalse();
         guide.Should().BeNull();
-        PathGuideFactory.ActiveFlowGuideCount.Should().Be(0);
+        PathGuideFactory.TotalFlowGuideCount.Should().Be(0);
     }
 
     private static void RegisterSolidLine(string chartName, Vector3d minBounds, int length)

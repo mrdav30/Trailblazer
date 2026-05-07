@@ -27,7 +27,12 @@ public static class PathGuideFactory
     /// <summary>
     /// Returns the number of active (pooled or in-use) A* results currently tracked.
     /// </summary>
-    public static int ActiveAStarGuideCount => _cachedAStarResults.Count;
+    public static int TotalAStarGuideCount => _cachedAStarResults.Count;
+
+    /// <summary>
+    /// Returns only the number of active (in-use) A* results currently tracked.
+    /// </summary>
+    public static int InUseAStarGuideCount => _cachedAStarResults.CountInUse;
 
     /// <summary>
     /// A shared cache for FlowField survey results, keyed by request parameters.
@@ -38,7 +43,12 @@ public static class PathGuideFactory
     /// <summary>
     /// Returns the number of active (pooled or in-use) FlowField guides currently tracked.
     /// </summary>
-    public static int ActiveFlowGuideCount => _cachedFlowResults.Count;
+    public static int TotalFlowGuideCount => _cachedFlowResults.Count;
+
+    /// <summary>
+    /// Returns only the number of active (in-use) FlowField guides currently tracked.
+    /// </summary>
+    public static int InUseFlowGuideCount => _cachedFlowResults.CountInUse;
 
     /// <summary>
     /// A shared cache for raw-volume survey results, keyed by request parameters.
@@ -49,32 +59,42 @@ public static class PathGuideFactory
     /// <summary>
     /// Returns the number of active raw-volume guides currently tracked.
     /// </summary>
-    public static int ActiveVolumeGuideCount => _cachedVolumeResults.Count;
+    public static int TotalVolumeGuideCount => _cachedVolumeResults.Count;
+
+    /// <summary>
+    /// Returns only the number of active (in-use) raw-volume guides currently tracked.
+    /// </summary>
+    public static int InUseVolumeGuideCount => _cachedVolumeResults.CountInUse;
 
     private static readonly ReusableSurveyResultCache<HybridRoutePlanSurveyResult> _cachedHybridRoutePlans = new();
 
     /// <summary>
     /// Returns the number of cached transition route plans currently tracked.
     /// </summary>
-    public static int ActiveHybridRoutePlanCount => _cachedHybridRoutePlans.Count;
+    public static int TotalHybridRoutePlanCount => _cachedHybridRoutePlans.Count;
+
+    /// <summary>
+    /// Returns only the number of active (in-use) hybrid route plans currently tracked.
+    /// </summary>
+    public static int InUseHybridRoutePlanCount => _cachedHybridRoutePlans.CountInUse;
 
     /// <summary>
     /// Indicates whether any pathing guides are currently pooled and available.
     /// </summary>
     public static bool IsPooling =>
-        ActiveAStarGuideCount > 0
-        || ActiveFlowGuideCount > 0
-        || ActiveVolumeGuideCount > 0
-        || ActiveHybridRoutePlanCount > 0;
+        TotalAStarGuideCount > 0
+        || TotalFlowGuideCount > 0
+        || TotalVolumeGuideCount > 0
+        || TotalHybridRoutePlanCount > 0;
 
     /// <summary>
     /// Indicates whether any guides are currently in use (checked out from the pool and not yet returned).
     /// </summary>
     public static bool AnyInUse =>
-        _cachedAStarResults.CountInUse > 0
-        || _cachedFlowResults.CountInUse > 0
-        || _cachedVolumeResults.CountInUse > 0
-        || _cachedHybridRoutePlans.CountInUse > 0;
+        InUseAStarGuideCount > 0
+        || InUseFlowGuideCount > 0
+        || InUseVolumeGuideCount > 0
+        || InUseHybridRoutePlanCount > 0;
 
     /// <summary>
     /// Attempts to remove guides from the pool that haven't been used for a configured number of frames.

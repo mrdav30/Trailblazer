@@ -1321,15 +1321,15 @@ public class PathingNavigationMapTests : IDisposable
         Assert.NotNull(guide);
         PathGuideFactory.ReturnGuide(guide);
 
-        Assert.Equal(1, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalAStarGuideCount);
 
         PathManager.UnloadChart("UnrelatedAStarChart");
 
-        Assert.Equal(1, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalAStarGuideCount);
 
         PathManager.UnloadChart("AStarCacheChart");
 
-        Assert.Equal(0, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(0, PathGuideFactory.TotalAStarGuideCount);
     }
 
     [Fact]
@@ -1358,15 +1358,15 @@ public class PathingNavigationMapTests : IDisposable
         Assert.NotNull(guide);
         PathGuideFactory.ReturnGuide(guide);
 
-        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalVolumeGuideCount);
 
         PathManager.UnloadChart("UnrelatedVolumeChart");
 
-        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalVolumeGuideCount);
 
         PathManager.UnloadChart("VolumeCacheChart");
 
-        Assert.Equal(0, PathGuideFactory.ActiveVolumeGuideCount);
+        Assert.Equal(0, PathGuideFactory.TotalVolumeGuideCount);
     }
 
     [Fact]
@@ -1401,15 +1401,15 @@ public class PathingNavigationMapTests : IDisposable
         Assert.NotNull(guide);
         PathGuideFactory.ReturnGuide(guide);
 
-        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalVolumeGuideCount);
 
         PathManager.UnloadChart("UnrelatedSurfaceBackedVolumeChart");
 
-        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalVolumeGuideCount);
 
         PathManager.UnloadChart("SurfaceBackedVolumeChart");
 
-        Assert.Equal(0, PathGuideFactory.ActiveVolumeGuideCount);
+        Assert.Equal(0, PathGuideFactory.TotalVolumeGuideCount);
     }
 
     [Fact]
@@ -1443,16 +1443,16 @@ public class PathingNavigationMapTests : IDisposable
         PathGuideFactory.ReturnGuide(overlappedGuide);
         PathGuideFactory.ReturnGuide(unrelatedGuide);
 
-        Assert.Equal(2, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(2, PathGuideFactory.TotalAStarGuideCount);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("OverlapAStarChart", new Vector3d(1, 0, 0)));
         PathManager.InitializeChart("OverlapAStarChart");
 
-        Assert.Equal(1, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalAStarGuideCount);
 
         PathManager.UnloadChart("UnrelatedAStarChart");
 
-        Assert.Equal(0, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(0, PathGuideFactory.TotalAStarGuideCount);
     }
 
     [Fact]
@@ -1491,11 +1491,11 @@ public class PathingNavigationMapTests : IDisposable
         PathGuideFactory.ReturnGuide(overlappedGuide);
         PathGuideFactory.ReturnGuide(unrelatedGuide);
 
-        Assert.Equal(2, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(2, PathGuideFactory.TotalAStarGuideCount);
 
         Assert.True(PathManager.TryUpdateChartCell("HiddenAStarChart", 1, 1, 1, NavigationChartCell.Solid));
 
-        Assert.Equal(2, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(2, PathGuideFactory.TotalAStarGuideCount);
     }
 
     [Fact]
@@ -1535,11 +1535,11 @@ public class PathingNavigationMapTests : IDisposable
         PathGuideFactory.ReturnGuide(overlappedGuide);
         PathGuideFactory.ReturnGuide(unrelatedGuide);
 
-        Assert.Equal(2, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(2, PathGuideFactory.TotalAStarGuideCount);
 
         Assert.True(PathManager.TryUpdateChartCell("DynamicWinnerChart", 1, 1, 1, NavigationChartCell.Solid));
 
-        Assert.Equal(1, PathGuideFactory.ActiveAStarGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalAStarGuideCount);
     }
 
     [Fact]
@@ -1571,16 +1571,16 @@ public class PathingNavigationMapTests : IDisposable
         PathGuideFactory.ReturnGuide(overlappedGuide);
         PathGuideFactory.ReturnGuide(unrelatedGuide);
 
-        Assert.Equal(2, PathGuideFactory.ActiveFlowGuideCount);
+        Assert.Equal(2, PathGuideFactory.TotalFlowGuideCount);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("OverlapFlowChart", new Vector3d(1, 0, 0)));
         PathManager.InitializeChart("OverlapFlowChart");
 
-        Assert.Equal(1, PathGuideFactory.ActiveFlowGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalFlowGuideCount);
 
         PathManager.UnloadChart("UnrelatedFlowChart");
 
-        Assert.Equal(0, PathGuideFactory.ActiveFlowGuideCount);
+        Assert.Equal(0, PathGuideFactory.TotalFlowGuideCount);
     }
 
     [Fact]
@@ -1616,16 +1616,16 @@ public class PathingNavigationMapTests : IDisposable
         PathGuideFactory.ReturnGuide(overlappedGuide);
         PathGuideFactory.ReturnGuide(unrelatedGuide);
 
-        Assert.Equal(2, PathGuideFactory.ActiveVolumeGuideCount);
+        Assert.Equal(2, PathGuideFactory.TotalVolumeGuideCount);
 
         PathManager.Register(BuildSingleTraversalPointChart("OverlapVolumeChart", new Vector3d(1, 0, 0), TraversalMedia.Gas));
         PathManager.InitializeChart("OverlapVolumeChart");
 
-        Assert.Equal(1, PathGuideFactory.ActiveVolumeGuideCount);
+        Assert.Equal(1, PathGuideFactory.TotalVolumeGuideCount);
 
         PathManager.UnloadChart("UnrelatedVolumeChart");
 
-        Assert.Equal(0, PathGuideFactory.ActiveVolumeGuideCount);
+        Assert.Equal(0, PathGuideFactory.TotalVolumeGuideCount);
     }
 
     [Fact]

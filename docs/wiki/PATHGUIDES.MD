@@ -268,9 +268,9 @@ The main entry points are:
 
 Useful status properties:
 
-- `ActiveAStarGuideCount`
-- `ActiveFlowGuideCount`
-- `ActiveVolumeGuideCount`
+- `TotalAStarGuideCount`
+- `TotalFlowGuideCount`
+- `TotalVolumeGuideCount`
 - `IsPooling`
 - `AnyInUse`
 

@@ -13,51 +13,34 @@ namespace Trailblazer;
 /// </remarks>
 public static class TrailblazerLogger
 {
-    private static readonly DiagnosticChannel _channel = CreateChannel();
-    private static readonly DiagnosticChannel _debugChannel = CreateChannel();
-    private static Action<DiagnosticLevel, string, string> _logHandler = DefaultLogHandler;
-    private static Func<DiagnosticLevel, string, string, string> _customFormatter = DefaultLogFormatter;
-    private static bool _enableDebugLogging;
-
-    static TrailblazerLogger()
-    {
-        RefreshDebugMinimumLevel();
-    }
+    private static readonly TrailblazerDiagnosticLogger _logger = new();
 
     /// <summary>
     /// Gets or sets a value indicating whether verbose debug diagnostics should be emitted.
     /// </summary>
     public static bool EnableDebugLogging
     {
-        get => _enableDebugLogging;
-        set
-        {
-            _enableDebugLogging = value;
-            RefreshDebugMinimumLevel();
-        }
+        get => _logger.EnableDebugLogging;
+        set => _logger.EnableDebugLogging = value;
     }
 
     /// <summary>
     /// Gets the diagnostic channel used for Trailblazer warnings and errors.
     /// </summary>
-    public static DiagnosticChannel Channel => _channel;
+    public static DiagnosticChannel Channel => _logger.Channel;
 
     /// <summary>
     /// Gets the diagnostic channel used for verbose debug diagnostics.
     /// </summary>
-    public static DiagnosticChannel DebugChannel => _debugChannel;
+    public static DiagnosticChannel DebugChannel => _logger.DebugChannel;
 
     /// <summary>
     /// Gets or sets the minimum severity required for non-debug diagnostics to be emitted.
     /// </summary>
     public static DiagnosticLevel MinimumLevel
     {
-        get => _channel.MinimumLevel;
-        set
-        {
-            _channel.MinimumLevel = value;
-            RefreshDebugMinimumLevel();
-        }
+        get => _logger.MinimumLevel;
+        set => _logger.MinimumLevel = value;
     }
 
     /// <summary>
@@ -66,8 +49,8 @@ public static class TrailblazerLogger
     /// </summary>
     public static Action<DiagnosticLevel, string, string> LogHandler
     {
-        get => _logHandler;
-        set => _logHandler = value ?? DefaultLogHandler;
+        get => _logger.LogHandler;
+        set => _logger.LogHandler = value;
     }
 
     /// <summary>
@@ -76,8 +59,18 @@ public static class TrailblazerLogger
     /// </summary>
     public static Func<DiagnosticLevel, string, string, string> CustomFormatter
     {
-        get => _customFormatter;
-        set => _customFormatter = value ?? DefaultLogFormatter;
+        get => _logger.CustomFormatter;
+        set => _logger.CustomFormatter = value;
+    }
+
+    /// <summary>
+    /// Determines whether non-debug diagnostics at the specified level are currently enabled.
+    /// </summary>
+    /// <param name="level">The diagnostic level to evaluate.</param>
+    /// <returns><see langword="true"/> when messages at <paramref name="level"/> will be emitted; otherwise, <see langword="false"/>.</returns>
+    public static bool IsEnabled(DiagnosticLevel level)
+    {
+        return _logger.IsEnabled(level);
     }
 
     /// <summary>
@@ -85,11 +78,7 @@ public static class TrailblazerLogger
     /// </summary>
     public static void DefaultLogHandler(DiagnosticLevel level, string message, string source)
     {
-        string entry = CustomFormatter(level, message, source);
-        if (level == DiagnosticLevel.Error)
-            Console.Error.WriteLine(entry);
-        else
-            Console.WriteLine(entry);
+        _logger.DefaultLogHandler(level, message, source);
     }
 
     /// <summary>
@@ -97,33 +86,14 @@ public static class TrailblazerLogger
     /// </summary>
     public static string DefaultLogFormatter(DiagnosticLevel level, string message, string source)
     {
-        if (string.IsNullOrWhiteSpace(source))
-            return $"[{level}] Trailblazer: {message}";
-
-        return $"[{level}] Trailblazer.{source}: {message}";
+        return _logger.DefaultLogFormatter(level, message, source);
     }
 
-    private static DiagnosticChannel CreateChannel()
+    private sealed class TrailblazerDiagnosticLogger : DiagnosticLogger
     {
-        return new DiagnosticChannel("Trailblazer")
+        public TrailblazerDiagnosticLogger()
+            : base("Trailblazer")
         {
-            MinimumLevel = DiagnosticLevel.Warning,
-            Sink = HandleDiagnosticEvent
-        };
-    }
-
-    private static void HandleDiagnosticEvent(in DiagnosticEvent diagnostic)
-    {
-        _logHandler(
-            diagnostic.Level,
-            diagnostic.Message,
-            string.IsNullOrWhiteSpace(diagnostic.Source) ? diagnostic.Channel : diagnostic.Source);
-    }
-
-    private static void RefreshDebugMinimumLevel()
-    {
-        _debugChannel.MinimumLevel = _enableDebugLogging
-            ? _channel.MinimumLevel
-            : DiagnosticLevel.None;
+        }
     }
 }

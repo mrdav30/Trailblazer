@@ -94,6 +94,19 @@ public sealed class TrailblazerLoggerTests : IDisposable
             return "value";
         }
     }
+
+    [Fact]
+    public void IsEnabled_ShouldUseMainChannelMinimumLevel()
+    {
+        TrailblazerLogger.MinimumLevel = DiagnosticLevel.Warning;
+
+        TrailblazerLogger.IsEnabled(DiagnosticLevel.Info).Should().BeFalse();
+        TrailblazerLogger.IsEnabled(DiagnosticLevel.Warning).Should().BeTrue();
+        TrailblazerLogger.IsEnabled(DiagnosticLevel.Error).Should().BeTrue();
+
+        TrailblazerLogger.MinimumLevel = DiagnosticLevel.None;
+        TrailblazerLogger.IsEnabled(DiagnosticLevel.Error).Should().BeFalse();
+    }
 }
 
 [CollectionDefinition("TrailblazerLoggerCollection", DisableParallelization = true)]

@@ -96,16 +96,20 @@ internal static class BenchmarkChartFactory
     /// <param name="name">Unique chart name.</param>
     /// <param name="length">Number of walkable cells.</param>
     /// <returns>The start (0,0,0) and end (length-1, 0, 0) endpoints.</returns>
-    public static (Vector3d Start, Vector3d End) RegisterLongCorridor(string name, int length)
+    public static (Vector3d Start, Vector3d End) RegisterLongCorridor(
+        string name,
+        int length,
+        Vector3d? origin = null)
     {
+        Vector3d minBounds = origin ?? Vector3d.Zero;
         bool[,,] data = new bool[1, length, 1];
         for (int x = 0; x < length; x++)
             data[0, x, 0] = true;
 
-        var chart = NavigationChart.From3D(name, data, Vector3d.Zero, Fixed64.One);
+        var chart = NavigationChart.From3D(name, data, minBounds, Fixed64.One);
         PathManager.Register(chart);
 
-        return (Vector3d.Zero, new Vector3d(length - 1, 0, 0));
+        return (minBounds, minBounds + new Vector3d(length - 1, 0, 0));
     }
 
     // -------------------------------------------------------------------------
@@ -160,8 +164,11 @@ internal static class BenchmarkChartFactory
     /// </summary>
     /// <param name="name">Unique chart name.</param>
     /// <returns>Endpoints on opposite sides of the choke.</returns>
-    public static (Vector3d Start, Vector3d End) RegisterChokePoint(string name)
+    public static (Vector3d Start, Vector3d End) RegisterChokePoint(
+        string name,
+        Vector3d? origin = null)
     {
+        Vector3d minBounds = origin ?? Vector3d.Zero;
         // 7 wide, 5 deep. A single-voxel gap at column x=3.
         const int sizeX = 7;
         const int sizeZ = 5;
@@ -177,10 +184,12 @@ internal static class BenchmarkChartFactory
             }
         }
 
-        var chart = NavigationChart.From3D(name, data, Vector3d.Zero, Fixed64.One);
+        var chart = NavigationChart.From3D(name, data, minBounds, Fixed64.One);
         PathManager.Register(chart);
 
-        return (new Vector3d(0, 0, sizeZ / 2), new Vector3d(sizeX - 1, 0, sizeZ / 2));
+        return (
+            minBounds + new Vector3d(0, 0, sizeZ / 2),
+            minBounds + new Vector3d(sizeX - 1, 0, sizeZ / 2));
     }
 
     // -------------------------------------------------------------------------
@@ -247,9 +256,14 @@ internal static class BenchmarkChartFactory
     /// <param name="size">Side length of the registered open plane.</param>
     /// <param name="count">Number of unique positions to generate.</param>
     /// <param name="destination">A fixed destination position used for all requests.</param>
-    public static Vector3d[] GenerateUniqueStartPositions(int size, int count, out Vector3d destination)
+    public static Vector3d[] GenerateUniqueStartPositions(
+        int size,
+        int count,
+        out Vector3d destination,
+        Vector3d? origin = null)
     {
-        destination = new Vector3d(size - 1, 0, size - 1);
+        Vector3d minBounds = origin ?? Vector3d.Zero;
+        destination = minBounds + new Vector3d(size - 1, 0, size - 1);
         var positions = new Vector3d[count];
         int index = 0;
         for (int z = 0; z < size && index < count; z++)
@@ -259,7 +273,7 @@ internal static class BenchmarkChartFactory
                 // Skip the destination cell itself.
                 if (x == size - 1 && z == size - 1)
                     continue;
-                positions[index++] = new Vector3d(x, 0, z);
+                positions[index++] = minBounds + new Vector3d(x, 0, z);
             }
         }
 
@@ -268,5 +282,43 @@ internal static class BenchmarkChartFactory
                 $"Open plane of size {size} provides only {index} unique positions but {count} were requested.");
 
         return positions;
+    }
+
+    /// <summary>
+    /// Returns unique adjacent start/destination pairs inside an already-registered open plane.
+    /// Each pair has roughly equivalent route cost, which keeps cache-pressure benchmarks from
+    /// mixing eviction overhead with path-length differences.
+    /// </summary>
+    public static void GenerateAdjacentRequestPairs(
+        int size,
+        int count,
+        Vector3d[] starts,
+        Vector3d[] destinations,
+        Vector3d? origin = null)
+    {
+        if (starts == null)
+            throw new ArgumentNullException(nameof(starts));
+
+        if (destinations == null)
+            throw new ArgumentNullException(nameof(destinations));
+
+        if (starts.Length < count || destinations.Length < count)
+            throw new ArgumentException("Start and destination buffers must be at least count elements long.");
+
+        Vector3d minBounds = origin ?? Vector3d.Zero;
+        int index = 0;
+        for (int z = 0; z < size && index < count; z++)
+        {
+            for (int x = 0; x < size - 1 && index < count; x++)
+            {
+                starts[index] = minBounds + new Vector3d(x, 0, z);
+                destinations[index] = minBounds + new Vector3d(x + 1, 0, z);
+                index++;
+            }
+        }
+
+        if (index < count)
+            throw new InvalidOperationException(
+                $"Open plane of size {size} provides only {index} adjacent pairs but {count} were requested.");
     }
 }

@@ -19,11 +19,15 @@ namespace Trailblazer.Benchmarks.Pathing;
 [BenchmarkCategory("Pathing", "Volume")]
 public class VolumePathRequestBenchmarks
 {
+    private static readonly Vector3d DirectCorridorOffset = Vector3d.Zero;
+    private static readonly Vector3d LShapeOffset = new(16, 0, 0);
+
+    private BenchmarkPathFixture _fixture;
+
     // -------------------------------------------------------------------------
     // Direct gas corridor — 5 adjacent gas voxels in a straight line
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _directCorridorFixture;
     private VolumePathRequest _directCorridorRequest;
     private Vector3d _directCorridorOrigin;
     private Vector3d _directCorridorDestination;
@@ -32,7 +36,6 @@ public class VolumePathRequestBenchmarks
     // L-shape gas path — 7 gas voxels forming an L, producing waypoints
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _lShapeFixture;
     private VolumePathRequest _lShapeRequest;
     private Vector3d _lShapeOrigin;
     private Vector3d _lShapeDestination;
@@ -44,15 +47,21 @@ public class VolumePathRequestBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        _fixture = new BenchmarkPathFixture();
+        _fixture.Setup(new GridConfiguration(
+            new Vector3d(-4, -4, -4),
+            new Vector3d(32, 6, 8)));
+
         SetupDirectGasCorridor();
         SetupLShapeGasPath();
+        ValidateConfiguredRequests();
+        BenchmarkPathFixture.FlushGuideCache();
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
-        _directCorridorFixture?.Teardown();
-        _lShapeFixture?.Teardown();
+        _fixture?.Teardown();
     }
 
     // -------------------------------------------------------------------------
@@ -63,18 +72,13 @@ public class VolumePathRequestBenchmarks
     {
         // Five adjacent gas voxels in a straight line along X.
         // Adjacent voxels are required for VolumeSurveyor to find a path.
-        _directCorridorFixture = new BenchmarkPathFixture();
-        _directCorridorFixture.Setup(new GridConfiguration(
-            new Vector3d(-4, -4, -4),
-            new Vector3d(10, 4, 4)));
-
         var positions = new[]
         {
-            new Vector3d(0, 1, 0),
-            new Vector3d(1, 1, 0),
-            new Vector3d(2, 1, 0),
-            new Vector3d(3, 1, 0),
-            new Vector3d(4, 1, 0),
+            DirectCorridorOffset + new Vector3d(0, 1, 0),
+            DirectCorridorOffset + new Vector3d(1, 1, 0),
+            DirectCorridorOffset + new Vector3d(2, 1, 0),
+            DirectCorridorOffset + new Vector3d(3, 1, 0),
+            DirectCorridorOffset + new Vector3d(4, 1, 0),
         };
 
         for (int i = 0; i < positions.Length; i++)
@@ -111,19 +115,14 @@ public class VolumePathRequestBenchmarks
         //   (0,1,0) → (1,1,0) → (2,1,0) → (2,1,1) → (2,1,2) → (2,1,3)
         //
         // The direction change forces VolumeSurveyor to generate an intermediate waypoint.
-        _lShapeFixture = new BenchmarkPathFixture();
-        _lShapeFixture.Setup(new GridConfiguration(
-            new Vector3d(-4, -4, -4),
-            new Vector3d(8, 6, 8)));
-
         var positions = new[]
         {
-            new Vector3d(0, 1, 0),
-            new Vector3d(1, 1, 0),
-            new Vector3d(2, 1, 0),
-            new Vector3d(2, 1, 1),
-            new Vector3d(2, 1, 2),
-            new Vector3d(2, 1, 3),
+            LShapeOffset + new Vector3d(0, 1, 0),
+            LShapeOffset + new Vector3d(1, 1, 0),
+            LShapeOffset + new Vector3d(2, 1, 0),
+            LShapeOffset + new Vector3d(2, 1, 1),
+            LShapeOffset + new Vector3d(2, 1, 2),
+            LShapeOffset + new Vector3d(2, 1, 3),
         };
 
         for (int i = 0; i < positions.Length; i++)
@@ -149,6 +148,37 @@ public class VolumePathRequestBenchmarks
 
         VolumeGuide primeGuide = PathGuideFactory.RequestVolume(_lShapeRequest);
         if (primeGuide != null) PathGuideFactory.ReturnGuide(primeGuide);
+    }
+
+    private void ValidateConfiguredRequests()
+    {
+        EnsureVolumeSurveyResolves(_directCorridorRequest, nameof(_directCorridorRequest));
+        EnsureVolumeSurveyResolves(_lShapeRequest, nameof(_lShapeRequest));
+        EnsureVolumeGuideResolves(_directCorridorRequest, nameof(_directCorridorRequest));
+        EnsureVolumeGuideResolves(_lShapeRequest, nameof(_lShapeRequest));
+        BenchmarkPreflight.AssertNoCacheLeak();
+    }
+
+    private static void EnsureVolumeSurveyResolves(VolumePathRequest request, string requestName)
+    {
+        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        if (!result.HasPath)
+            throw new System.InvalidOperationException(
+                $"Preflight: raw volume survey for {requestName} failed after all volume benchmark charts were configured.");
+    }
+
+    private static void EnsureVolumeGuideResolves(VolumePathRequest request, string requestName)
+    {
+        VolumeGuide guide = PathGuideFactory.RequestVolume(request);
+        if (guide == null)
+            throw new System.InvalidOperationException(
+                $"Preflight: volume guide request for {requestName} failed after all volume benchmark charts were configured.");
+
+        if (guide.ActiveWaypoints.Length == 0)
+            throw new System.InvalidOperationException(
+                $"Preflight: volume guide request for {requestName} returned no waypoints.");
+
+        PathGuideFactory.ReturnGuide(guide);
     }
 
     // -------------------------------------------------------------------------

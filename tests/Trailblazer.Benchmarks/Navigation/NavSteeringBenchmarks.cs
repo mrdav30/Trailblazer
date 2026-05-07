@@ -22,11 +22,17 @@ internal static class NavSteeringConstants
 [BenchmarkCategory("Navigation", "Steering")]
 public class NavSteeringBenchmarks
 {
+    private static readonly Vector3d DirectOffset = Vector3d.Zero;
+    private static readonly Vector3d AStarGuidedOffset = new(48, 0, 0);
+    private static readonly Vector3d FlowFieldGuidedOffset = new(96, 0, 0);
+    private static readonly Vector3d DensityOffset = new(0, 0, 64);
+
+    private BenchmarkPathFixture _fixture;
+
     // -------------------------------------------------------------------------
     // LOS / direct-path scenario — open plane 32x32
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _directFixture;
     private BenchmarkSteerAgent _directAgent;
     private NavSteering _directSteer;
     private AStarPathRequest _directRequest;
@@ -35,7 +41,6 @@ public class NavSteeringBenchmarks
     // Guided A* scenario — open plane 32x32 (agent midway, destination at far corner)
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _astarGuidedFixture;
     private BenchmarkSteerAgent _astarGuidedAgent;
     private NavSteering _astarGuidedSteer;
     private AStarPathRequest _astarGuidedRequest;
@@ -44,7 +49,6 @@ public class NavSteeringBenchmarks
     // Guided flow-field scenario — open plane 32x32
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _ffGuidedFixture;
     private BenchmarkSteerAgent _ffGuidedAgent;
     private NavSteering _ffGuidedSteer;
     private FlowFieldPathRequest _ffGuidedRequest;
@@ -53,7 +57,6 @@ public class NavSteeringBenchmarks
     // Occupant-density steering scan — 32 / 128 / 512 occupants
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _densityFixture;
     private BenchmarkSteerAgent _density32Agent;
     private NavSteering _density32Steer;
     private BenchmarkOccupant[] _density32Occupants;
@@ -74,10 +77,14 @@ public class NavSteeringBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        _fixture = new BenchmarkPathFixture();
+        _fixture.Setup(BenchmarkChartFactory.GridConfigForArea(maxXExclusive: 196, maxZExclusive: 264));
+
         SetupDirectLos();
         SetupGuidedAStar();
         SetupGuidedFlowField();
         SetupOccupantDensities();
+        ValidateConfiguredRequests();
     }
 
     [GlobalCleanup]
@@ -87,10 +94,7 @@ public class NavSteeringBenchmarks
         RemoveOccupants(_density128Occupants);
         RemoveOccupants(_density512Occupants);
 
-        _densityFixture?.Teardown();
-        _directFixture?.Teardown();
-        _astarGuidedFixture?.Teardown();
-        _ffGuidedFixture?.Teardown();
+        _fixture?.Teardown();
     }
 
     // -------------------------------------------------------------------------
@@ -101,13 +105,11 @@ public class NavSteeringBenchmarks
     {
         const int size = 32;
 
-        _directFixture = new BenchmarkPathFixture();
-        _directFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(size));
-        BenchmarkChartFactory.RegisterOpenPlane("SteeringDirect32", size);
+        BenchmarkChartFactory.RegisterOpenPlane("SteeringDirect32", size, DirectOffset);
 
         // Agent at origin, destination 2 cells away — short LOS, no guide needed.
-        var start = Vector3d.Zero;
-        var end = new Vector3d(2, 0, 0);
+        Vector3d start = DirectOffset;
+        Vector3d end = DirectOffset + new Vector3d(2, 0, 0);
 
         BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
@@ -127,13 +129,11 @@ public class NavSteeringBenchmarks
     {
         const int size = 32;
 
-        _astarGuidedFixture = new BenchmarkPathFixture();
-        _astarGuidedFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(size));
-        BenchmarkChartFactory.RegisterOpenPlane("SteeringAStarGuided32", size);
+        BenchmarkChartFactory.RegisterOpenPlane("SteeringAStarGuided32", size, AStarGuidedOffset);
 
         // Place the agent off-centre so LOS to the far corner is unlikely to be trivially direct.
-        var start = new Vector3d(1, 0, 1);
-        var end = new Vector3d(size - 1, 0, size - 1);
+        Vector3d start = AStarGuidedOffset + new Vector3d(1, 0, 1);
+        Vector3d end = AStarGuidedOffset + new Vector3d(size - 1, 0, size - 1);
 
         BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
@@ -156,12 +156,10 @@ public class NavSteeringBenchmarks
     {
         const int size = 32;
 
-        _ffGuidedFixture = new BenchmarkPathFixture();
-        _ffGuidedFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(size));
-        BenchmarkChartFactory.RegisterOpenPlane("SteeringFFGuided32", size);
+        BenchmarkChartFactory.RegisterOpenPlane("SteeringFFGuided32", size, FlowFieldGuidedOffset);
 
-        var start = new Vector3d(1, 0, 1);
-        var end = new Vector3d(size - 1, 0, size - 1);
+        Vector3d start = FlowFieldGuidedOffset + new Vector3d(1, 0, 1);
+        Vector3d end = FlowFieldGuidedOffset + new Vector3d(size - 1, 0, size - 1);
 
         BenchmarkPreflight.AssertFlowFieldRouteExists(start, end, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
@@ -181,17 +179,41 @@ public class NavSteeringBenchmarks
     private void SetupOccupantDensities()
     {
         const int size = 196;
+        BenchmarkChartFactory.RegisterOpenPlane("SteeringDensityShared", size, DensityOffset);
 
-        _densityFixture = new BenchmarkPathFixture();
-        _densityFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(size));
-        BenchmarkChartFactory.RegisterOpenPlane("SteeringDensityShared", size);
-
-        SetupOccupantDensityScenario(32, 8, 4, 0, 0,
+        SetupOccupantDensityScenario(32, 8, 4, 0, 64,
             out _density32Agent, out _density32Steer, out _density32Occupants);
-        SetupOccupantDensityScenario(128, 16, 8, 64, 0,
+        SetupOccupantDensityScenario(128, 16, 8, 64, 64,
             out _density128Agent, out _density128Steer, out _density128Occupants);
-        SetupOccupantDensityScenario(512, 32, 16, 128, 0,
+        SetupOccupantDensityScenario(512, 32, 16, 128, 64,
             out _density512Agent, out _density512Steer, out _density512Occupants);
+    }
+
+    private void ValidateConfiguredRequests()
+    {
+        EnsureAStarGuideResolves(_directRequest, nameof(_directRequest));
+        EnsureAStarGuideResolves(_astarGuidedRequest, nameof(_astarGuidedRequest));
+        EnsureFlowFieldGuideResolves(_ffGuidedRequest, nameof(_ffGuidedRequest));
+        BenchmarkPathFixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak();
+    }
+
+    private static void EnsureAStarGuideResolves(AStarPathRequest request, string requestName)
+    {
+        if (!PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+            throw new System.InvalidOperationException(
+                $"Preflight: {requestName} failed after all nav-steering benchmark charts were configured.");
+
+        PathGuideFactory.ReturnGuide(guide);
+    }
+
+    private static void EnsureFlowFieldGuideResolves(FlowFieldPathRequest request, string requestName)
+    {
+        if (!PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide))
+            throw new System.InvalidOperationException(
+                $"Preflight: {requestName} failed after all nav-steering benchmark charts were configured.");
+
+        PathGuideFactory.ReturnGuide(guide);
     }
 
     private static void SetupOccupantDensityScenario(

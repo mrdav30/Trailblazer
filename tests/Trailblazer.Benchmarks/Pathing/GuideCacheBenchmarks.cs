@@ -84,20 +84,28 @@ public class GuideCacheBenchmarks
         // Single warm-hit request.
         _hitRequest = AStarPathRequest.Create(origin, destination, Fixed64.One);
 
-        // Unique start positions for cache-miss and eviction scenarios.
-        // We need 129+ positions so: use spread-out positions across the plane.
-        Vector3d[] uniqueStarts = BenchmarkChartFactory.GenerateUniqueStartPositions(
-            size, CacheCapacity + 1, out Vector3d cacheDest);
+        // Unique adjacent pairs for cache-miss and eviction scenarios. Keeping each route to
+        // roughly the same length isolates cache behavior from A* search-length differences.
+        Vector3d[] cacheStarts = new Vector3d[CacheCapacity + 1];
+        Vector3d[] cacheDestinations = new Vector3d[CacheCapacity + 1];
+        BenchmarkChartFactory.GenerateAdjacentRequestPairs(
+            size,
+            CacheCapacity + 1,
+            cacheStarts,
+            cacheDestinations);
 
         _belowCapacityRequests = new AStarPathRequest[CacheCapacity];
         _overCapacityRequests = new AStarPathRequest[CacheCapacity + 1];
 
         for (int i = 0; i < CacheCapacity + 1; i++)
         {
-            AStarPathRequest req = AStarPathRequest.Create(uniqueStarts[i], cacheDest, Fixed64.One);
+            AStarPathRequest req = AStarPathRequest.Create(
+                cacheStarts[i],
+                cacheDestinations[i],
+                Fixed64.One);
             if (req == null)
                 throw new System.InvalidOperationException(
-                    $"Preflight: Could not create A* request from cache-pressure start {uniqueStarts[i]}.");
+                    $"Preflight: Could not create A* request from cache-pressure pair {cacheStarts[i]} -> {cacheDestinations[i]}.");
             _overCapacityRequests[i] = req;
 
             if (i < CacheCapacity)

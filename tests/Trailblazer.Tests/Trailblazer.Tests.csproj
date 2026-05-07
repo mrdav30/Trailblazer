@@ -12,6 +12,7 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj" />
+		<ProjectReference Include="..\Trailblazer.Benchmarks\Trailblazer.Benchmarks.csproj" />
 		<PackageReference Include="Chronicler.Core" Version="0.2.0" />
 		<PackageReference Include="FixedMathSharp" Version="3.0.1" />
 		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="2.1.1" />

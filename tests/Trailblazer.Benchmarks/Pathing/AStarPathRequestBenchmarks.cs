@@ -1,6 +1,5 @@
 using BenchmarkDotNet.Attributes;
 using FixedMathSharp;
-using GridForge.Configuration;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks.Pathing;
@@ -13,11 +12,20 @@ namespace Trailblazer.Benchmarks.Pathing;
 [BenchmarkCategory("Pathing", "AStar")]
 public class AStarPathRequestBenchmarks
 {
+    private static readonly Vector3d OpenPlane32Offset = Vector3d.Zero;
+    private static readonly Vector3d Corridor64Offset = new(0, 0, 80);
+    private static readonly Vector3d Corridor256Offset = new(0, 0, 88);
+    private static readonly Vector3d Corridor1024Offset = new(0, 0, 96);
+    private static readonly Vector3d Blocker64Offset = new(128, 0, 0);
+    private static readonly Vector3d Heuristic64Offset = new(48, 0, 0);
+    private static readonly Vector3d ChokeOffset = new(1040, 0, 0);
+
+    private BenchmarkPathFixture _fixture;
+
     // -------------------------------------------------------------------------
     // Small open-plane scenario (32x32)
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _openPlane32Fixture;
     private AStarPathRequest _openPlane32Request;
     private Vector3d _openPlane32Origin;
     private Vector3d _openPlane32Destination;
@@ -26,20 +34,16 @@ public class AStarPathRequestBenchmarks
     // Corridor scenarios
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _corridor64Fixture;
     private AStarPathRequest _corridor64Request;
 
-    private BenchmarkPathFixture _corridor256Fixture;
     private AStarPathRequest _corridor256Request;
 
-    private BenchmarkPathFixture _corridor1024Fixture;
     private AStarPathRequest _corridor1024Request;
 
     // -------------------------------------------------------------------------
     // Sparse blocker field (64x64)
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _blockerFixture;
     private AStarPathRequest _blockerRequest;
     private Vector3d _blockerOrigin;
     private Vector3d _blockerDestination;
@@ -48,7 +52,6 @@ public class AStarPathRequestBenchmarks
     // Heuristic comparison (64x64 open plane)
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _heuristicFixture;
     private AStarPathRequest _manhattanRequest;
     private AStarPathRequest _octileRequest;
     private AStarPathRequest _euclideanRequest;
@@ -57,7 +60,6 @@ public class AStarPathRequestBenchmarks
     // Choke-point failure scenario
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _chokeFixture;
     private Vector3d _chokeOrigin;
     private Vector3d _chokeDestination;
     private AStarPathRequest _chokeUnitSize2Request;
@@ -69,6 +71,9 @@ public class AStarPathRequestBenchmarks
     [GlobalSetup]
     public void GlobalSetup()
     {
+        _fixture = new BenchmarkPathFixture();
+        _fixture.Setup(BenchmarkChartFactory.GridConfigForArea(maxXExclusive: 1052, maxZExclusive: 112));
+
         SetupOpenPlane32();
         SetupCorridor64();
         SetupCorridor256();
@@ -76,18 +81,14 @@ public class AStarPathRequestBenchmarks
         SetupBlockerField64();
         SetupHeuristics64();
         SetupChokePoint();
+        ValidateConfiguredRequests();
+        BenchmarkPathFixture.FlushGuideCache();
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
-        _openPlane32Fixture?.Teardown();
-        _corridor64Fixture?.Teardown();
-        _corridor256Fixture?.Teardown();
-        _corridor1024Fixture?.Teardown();
-        _blockerFixture?.Teardown();
-        _heuristicFixture?.Teardown();
-        _chokeFixture?.Teardown();
+        _fixture?.Teardown();
     }
 
     // -------------------------------------------------------------------------
@@ -96,11 +97,8 @@ public class AStarPathRequestBenchmarks
 
     private void SetupOpenPlane32()
     {
-        _openPlane32Fixture = new BenchmarkPathFixture();
-        _openPlane32Fixture.Setup(BenchmarkChartFactory.GridConfigForSquare(32));
-
         (_openPlane32Origin, _openPlane32Destination) =
-            BenchmarkChartFactory.RegisterOpenPlane("AStarOpenPlane32", 32);
+            BenchmarkChartFactory.RegisterOpenPlane("AStarOpenPlane32", 32, OpenPlane32Offset);
 
         BenchmarkPreflight.AssertAStarRouteExists(
             _openPlane32Origin, _openPlane32Destination, Fixed64.One);
@@ -114,10 +112,10 @@ public class AStarPathRequestBenchmarks
 
     private void SetupCorridor64()
     {
-        _corridor64Fixture = new BenchmarkPathFixture();
-        _corridor64Fixture.Setup(BenchmarkChartFactory.GridConfigForCorridor(64));
-
-        var (start, end) = BenchmarkChartFactory.RegisterLongCorridor("AStarCorridor64", 64);
+        var (start, end) = BenchmarkChartFactory.RegisterLongCorridor(
+            "AStarCorridor64",
+            64,
+            Corridor64Offset);
 
         BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
@@ -128,10 +126,10 @@ public class AStarPathRequestBenchmarks
 
     private void SetupCorridor256()
     {
-        _corridor256Fixture = new BenchmarkPathFixture();
-        _corridor256Fixture.Setup(BenchmarkChartFactory.GridConfigForCorridor(256));
-
-        var (start, end) = BenchmarkChartFactory.RegisterLongCorridor("AStarCorridor256", 256);
+        var (start, end) = BenchmarkChartFactory.RegisterLongCorridor(
+            "AStarCorridor256",
+            256,
+            Corridor256Offset);
 
         BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
@@ -142,10 +140,10 @@ public class AStarPathRequestBenchmarks
 
     private void SetupCorridor1024()
     {
-        _corridor1024Fixture = new BenchmarkPathFixture();
-        _corridor1024Fixture.Setup(BenchmarkChartFactory.GridConfigForCorridor(1024));
-
-        var (start, end) = BenchmarkChartFactory.RegisterLongCorridor("AStarCorridor1024", 1024);
+        var (start, end) = BenchmarkChartFactory.RegisterLongCorridor(
+            "AStarCorridor1024",
+            1024,
+            Corridor1024Offset);
 
         BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
@@ -156,11 +154,8 @@ public class AStarPathRequestBenchmarks
 
     private void SetupBlockerField64()
     {
-        _blockerFixture = new BenchmarkPathFixture();
-        _blockerFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(64));
-
         (_blockerOrigin, _blockerDestination) =
-            BenchmarkChartFactory.RegisterSparseBlockerField("AStarBlocker64", 64);
+            BenchmarkChartFactory.RegisterSparseBlockerField("AStarBlocker64", 64, Blocker64Offset);
 
         BenchmarkPreflight.AssertAStarRouteExists(
             _blockerOrigin, _blockerDestination, Fixed64.One);
@@ -173,11 +168,8 @@ public class AStarPathRequestBenchmarks
 
     private void SetupHeuristics64()
     {
-        _heuristicFixture = new BenchmarkPathFixture();
-        _heuristicFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(64));
-
         var (origin, destination) =
-            BenchmarkChartFactory.RegisterOpenPlane("AStarHeuristic64", 64);
+            BenchmarkChartFactory.RegisterOpenPlane("AStarHeuristic64", 64, Heuristic64Offset);
 
         BenchmarkPreflight.AssertAStarRouteExists(origin, destination, Fixed64.One);
         BenchmarkPathFixture.FlushGuideCache();
@@ -193,11 +185,8 @@ public class AStarPathRequestBenchmarks
 
     private void SetupChokePoint()
     {
-        _chokeFixture = new BenchmarkPathFixture();
-        _chokeFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(16));
-
         (_chokeOrigin, _chokeDestination) =
-            BenchmarkChartFactory.RegisterChokePoint("AStarChoke");
+            BenchmarkChartFactory.RegisterChokePoint("AStarChoke", ChokeOffset);
 
         // A size-1 agent can pass; this preflight confirms the route exists.
         BenchmarkPreflight.AssertAStarRouteExists(_chokeOrigin, _chokeDestination, Fixed64.One);
@@ -212,6 +201,49 @@ public class AStarPathRequestBenchmarks
         if (_chokeUnitSize2Request == null)
             throw new System.InvalidOperationException(
                 "Preflight: choke-point unit-size-2 request could not be created.");
+    }
+
+    private void ValidateConfiguredRequests()
+    {
+        EnsureAStarSurveyResolves(_openPlane32Request, nameof(_openPlane32Request));
+        EnsureAStarGuideResolves(_openPlane32Request, nameof(_openPlane32Request));
+        EnsureAStarGuideResolves(_corridor64Request, nameof(_corridor64Request));
+        EnsureAStarGuideResolves(_corridor256Request, nameof(_corridor256Request));
+        EnsureAStarGuideResolves(_corridor1024Request, nameof(_corridor1024Request));
+        EnsureAStarGuideResolves(_blockerRequest, nameof(_blockerRequest));
+        EnsureAStarGuideResolves(_manhattanRequest, nameof(_manhattanRequest));
+        EnsureAStarGuideResolves(_octileRequest, nameof(_octileRequest));
+        EnsureAStarGuideResolves(_euclideanRequest, nameof(_euclideanRequest));
+
+        if (PathGuideFactory.RequestGuide(_chokeUnitSize2Request, out AStarGuide blockedGuide))
+        {
+            PathGuideFactory.ReturnGuide(blockedGuide);
+            throw new System.InvalidOperationException(
+                "Preflight: unit-size-2 choke request unexpectedly resolved after all A* benchmark charts were configured.");
+        }
+
+        BenchmarkPreflight.AssertNoCacheLeak();
+    }
+
+    private static void EnsureAStarSurveyResolves(AStarPathRequest request, string requestName)
+    {
+        AStarSurveyResult result = AStarSurveyor.Shared.FindPath(request);
+        if (!result.HasPath)
+            throw new System.InvalidOperationException(
+                $"Preflight: raw A* survey for {requestName} failed after all A* benchmark charts were configured.");
+    }
+
+    private static void EnsureAStarGuideResolves(AStarPathRequest request, string requestName)
+    {
+        if (!PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+            throw new System.InvalidOperationException(
+                $"Preflight: guide request for {requestName} failed after all A* benchmark charts were configured.");
+
+        if (guide.ActiveWaypoints.Length == 0)
+            throw new System.InvalidOperationException(
+                $"Preflight: guide request for {requestName} returned no waypoints.");
+
+        PathGuideFactory.ReturnGuide(guide);
     }
 
     // -------------------------------------------------------------------------

@@ -283,6 +283,10 @@ public class NavSteering : IRecordable
 
     private readonly MovementGroupSession _movementGroupSession = new();
 
+    private readonly SwiftList<ISteer> _nearbySteerAgents = new();
+
+    private readonly GridScanScratch _scanScratch = new();
+
     private MovementGroupTravelMode _movementGroupMode;
 
     #endregion
@@ -1019,11 +1023,17 @@ public class NavSteering : IRecordable
         ISteer? closest = null;
         Fixed64 closestDistSq = avoidRadius * avoidRadius;
 
-        bool condition(IVoxelOccupant other) =>
-            other.GlobalId != id;
-        foreach (IVoxelOccupant entity in GridScanManager.ScanRadius(TrailblazerWorldManager.World, position, scanRadius, condition))
+        GridScanManager.ScanRadiusInto<ISteer>(
+            TrailblazerWorldManager.World,
+            position,
+            scanRadius,
+            _nearbySteerAgents,
+            _scanScratch);
+
+        for (int i = 0; i < _nearbySteerAgents.Count; i++)
         {
-            if (entity is not ISteer other || other.Radius <= Fixed64.Zero)
+            ISteer other = _nearbySteerAgents[i];
+            if (other.Radius <= Fixed64.Zero)
                 continue;
 
             if (other.GlobalId == id)

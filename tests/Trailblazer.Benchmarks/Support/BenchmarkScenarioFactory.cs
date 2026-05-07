@@ -66,7 +66,9 @@ internal static class BenchmarkScenarioFactory
         int width,
         int depth,
         int y = 0,
-        int groupCount = 8)
+        int groupCount = 8,
+        int originX = 0,
+        int originZ = 0)
     {
         BenchmarkOccupant[] occupants = new BenchmarkOccupant[count];
 
@@ -78,7 +80,7 @@ internal static class BenchmarkScenarioFactory
             for (int x = 0; x < width && index < count; x++)
             {
                 occupants[index++] = new BenchmarkOccupant(
-                    new Vector3d(x, y, z),
+                    new Vector3d(originX + x, y, originZ + z),
                     (byte)(groupId++ % groupCount));
             }
         }

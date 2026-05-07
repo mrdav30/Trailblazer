@@ -4,7 +4,9 @@ using FluentAssertions;
 using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Spatial;
 using Moq;
+using SwiftCollections;
 using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.MovementGroups;
@@ -21,8 +23,8 @@ public class NavSteeringTests : IDisposable
     {
         if (TrailblazerWorldManager.IsActive)
             TrailblazerWorldManager.Reset();
-        else
-            TrailblazerWorldManager.Setup();
+
+        TrailblazerWorldManager.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         TrailblazerWorldManager.TryAddGrid(config, out _);
@@ -578,6 +580,231 @@ public class NavSteeringTests : IDisposable
 
         // Cleanup
         grid!.TryRemoveVoxelOccupant(neighbor);
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldAvoidSteadyStateAllocation()
+    {
+        var data = new bool[1, 10, 5];
+        for (int x = 0; x < 10; x++)
+        {
+            for (int z = 0; z < 5; z++)
+                data[0, x, z] = true;
+        }
+
+        var world = new GridWorld();
+        TrailblazerWorldManager.AttachWorld(world, takeOwnership: true);
+        NavigationChart chart = NavigationChart.From3D("CombinedSteeringAllocation", data, Vector3d.Zero, Fixed64.One);
+        PathManager.Register(world, chart);
+
+        var agent = new MockSteerAgent(new Vector3d(4, 0, 2))
+        {
+            Speed = Fixed64.One,
+            Velocity = Vector3d.Right,
+            Size = Fixed64.One
+        };
+
+        var steer = new NavSteering(agent.Radius);
+        var neighbors = new MockSteerAgent?[32];
+
+        for (int i = 0; i < neighbors.Length; i++)
+        {
+            int x = i % 8;
+            int z = i / 8;
+            var neighbor = new MockSteerAgent(new Vector3d(x, 0, z))
+            {
+                Velocity = Vector3d.Right,
+                Size = Fixed64.One
+            };
+
+            if (TrailblazerWorldManager.TryGetGrid(neighbor.Position, out VoxelGrid? grid))
+            {
+                grid!.TryAddVoxelOccupant(neighbor);
+                neighbors[i] = neighbor;
+            }
+        }
+
+        try
+        {
+            steer.ComputeCombinedSteering(
+                agent.Position,
+                agent.Velocity,
+                agent.Speed,
+                agent.Size,
+                agent.GlobalId);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            const int iterations = 256;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < iterations; i++)
+            {
+                _ = steer.ComputeCombinedSteering(
+                    agent.Position,
+                    agent.Velocity,
+                    agent.Speed,
+                    agent.Size,
+                    agent.GlobalId);
+            }
+
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            allocated.Should().BeLessThan(512);
+        }
+        finally
+        {
+            for (int i = 0; i < neighbors.Length; i++)
+            {
+                MockSteerAgent? neighbor = neighbors[i];
+                if (neighbor != null && TrailblazerWorldManager.TryGetGrid(neighbor.Position, out VoxelGrid? grid))
+                    grid!.TryRemoveVoxelOccupant(neighbor);
+            }
+
+            PathManager.UnloadChart("CombinedSteeringAllocation");
+        }
+    }
+
+    [Fact]
+    public void ScanRadiusInto_ShouldAvoidRepeatedAllocation_ForSteeringOccupants()
+    {
+        var data = new bool[1, 10, 5];
+        for (int x = 0; x < 10; x++)
+        {
+            for (int z = 0; z < 5; z++)
+                data[0, x, z] = true;
+        }
+
+        var world = new GridWorld();
+        TrailblazerWorldManager.AttachWorld(world, takeOwnership: true);
+        NavigationChart chart = NavigationChart.From3D("ScanRadiusIntoSteerAllocation", data, Vector3d.Zero, Fixed64.One);
+        PathManager.Register(world, chart);
+
+        var neighbors = new MockSteerAgent?[32];
+        var results = new SwiftList<ISteer>();
+        var scratch = new GridScanScratch();
+
+        for (int i = 0; i < neighbors.Length; i++)
+        {
+            int x = i % 8;
+            int z = i / 8;
+            var neighbor = new MockSteerAgent(new Vector3d(x, 0, z))
+            {
+                Velocity = Vector3d.Right,
+                Size = Fixed64.One
+            };
+
+            if (TrailblazerWorldManager.TryGetGrid(neighbor.Position, out VoxelGrid? grid))
+            {
+                grid!.TryAddVoxelOccupant(neighbor);
+                neighbors[i] = neighbor;
+            }
+        }
+
+        try
+        {
+            GridScanManager.ScanRadiusInto<ISteer>(world, new Vector3d(4, 0, 2), (Fixed64)5, results, scratch);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            const int iterations = 256;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < iterations; i++)
+                GridScanManager.ScanRadiusInto<ISteer>(world, new Vector3d(4, 0, 2), (Fixed64)5, results, scratch);
+
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            allocated.Should().BeLessThan(512);
+        }
+        finally
+        {
+            for (int i = 0; i < neighbors.Length; i++)
+            {
+                MockSteerAgent? neighbor = neighbors[i];
+                if (neighbor != null && TrailblazerWorldManager.TryGetGrid(neighbor.Position, out VoxelGrid? grid))
+                    grid!.TryRemoveVoxelOccupant(neighbor);
+            }
+
+            PathManager.UnloadChart("ScanRadiusIntoSteerAllocation");
+        }
+    }
+
+    [Fact]
+    public void ComputeCombinedSteering_ShouldAvoidSteadyStateAllocation_WhenNearbyOccupantsDoNotSteer()
+    {
+        var data = new bool[1, 10, 5];
+        for (int x = 0; x < 10; x++)
+        {
+            for (int z = 0; z < 5; z++)
+                data[0, x, z] = true;
+        }
+
+        var world = new GridWorld();
+        TrailblazerWorldManager.AttachWorld(world, takeOwnership: true);
+        NavigationChart chart = NavigationChart.From3D("CombinedSteeringNonSteerAllocation", data, Vector3d.Zero, Fixed64.One);
+        PathManager.Register(world, chart);
+
+        var agent = new MockSteerAgent(new Vector3d(4, 0, 2))
+        {
+            Speed = Fixed64.One,
+            Velocity = Vector3d.Right,
+            Size = Fixed64.One
+        };
+
+        var steer = new NavSteering(agent.Radius);
+        var occupants = new NonSteeringOccupant?[32];
+
+        for (int i = 0; i < occupants.Length; i++)
+        {
+            int x = i % 8;
+            int z = i / 8;
+            var occupant = new NonSteeringOccupant(new Vector3d(x, 0, z));
+
+            if (TrailblazerWorldManager.TryGetGrid(occupant.Position, out VoxelGrid? grid))
+            {
+                grid!.TryAddVoxelOccupant(occupant);
+                occupants[i] = occupant;
+            }
+        }
+
+        try
+        {
+            steer.ComputeCombinedSteering(
+                agent.Position,
+                agent.Velocity,
+                agent.Speed,
+                agent.Size,
+                agent.GlobalId);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            _ = steer.ComputeCombinedSteering(
+                agent.Position,
+                agent.Velocity,
+                agent.Speed,
+                agent.Size,
+                agent.GlobalId);
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            allocated.Should().BeLessThan(512);
+        }
+        finally
+        {
+            for (int i = 0; i < occupants.Length; i++)
+            {
+                NonSteeringOccupant? occupant = occupants[i];
+                if (occupant != null && TrailblazerWorldManager.TryGetGrid(occupant.Position, out VoxelGrid? grid))
+                    grid!.TryRemoveVoxelOccupant(occupant);
+            }
+
+            PathManager.UnloadChart("CombinedSteeringNonSteerAllocation");
+        }
     }
 
     [Fact]
@@ -1459,6 +1686,20 @@ public class NavSteeringTests : IDisposable
         {
             fallbackDirection = _fallbackDirection;
             return true;
+        }
+    }
+
+    private sealed class NonSteeringOccupant : IVoxelOccupant
+    {
+        public Guid GlobalId { get; } = Guid.NewGuid();
+
+        public byte OccupantGroupId { get; } = 1;
+
+        public Vector3d Position { get; }
+
+        public NonSteeringOccupant(Vector3d position)
+        {
+            Position = position;
         }
     }
 }

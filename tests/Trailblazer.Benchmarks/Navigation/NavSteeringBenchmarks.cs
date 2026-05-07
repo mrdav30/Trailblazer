@@ -53,20 +53,19 @@ public class NavSteeringBenchmarks
     // Occupant-density steering scan — 32 / 128 / 512 occupants
     // -------------------------------------------------------------------------
 
-    private BenchmarkPathFixture _density32Fixture;
+    private BenchmarkPathFixture _densityFixture;
     private BenchmarkSteerAgent _density32Agent;
     private NavSteering _density32Steer;
     private BenchmarkOccupant[] _density32Occupants;
 
-    private BenchmarkPathFixture _density128Fixture;
     private BenchmarkSteerAgent _density128Agent;
     private NavSteering _density128Steer;
     private BenchmarkOccupant[] _density128Occupants;
 
-    private BenchmarkPathFixture _density512Fixture;
     private BenchmarkSteerAgent _density512Agent;
     private NavSteering _density512Steer;
     private BenchmarkOccupant[] _density512Occupants;
+    private Vector3d _combinedSteeringSink;
 
     // -------------------------------------------------------------------------
     // GlobalSetup / GlobalCleanup
@@ -78,9 +77,7 @@ public class NavSteeringBenchmarks
         SetupDirectLos();
         SetupGuidedAStar();
         SetupGuidedFlowField();
-        SetupOccupantDensity32();
-        SetupOccupantDensity128();
-        SetupOccupantDensity512();
+        SetupOccupantDensities();
     }
 
     [GlobalCleanup]
@@ -90,12 +87,10 @@ public class NavSteeringBenchmarks
         RemoveOccupants(_density128Occupants);
         RemoveOccupants(_density512Occupants);
 
+        _densityFixture?.Teardown();
         _directFixture?.Teardown();
         _astarGuidedFixture?.Teardown();
         _ffGuidedFixture?.Teardown();
-        _density32Fixture?.Teardown();
-        _density128Fixture?.Teardown();
-        _density512Fixture?.Teardown();
     }
 
     // -------------------------------------------------------------------------
@@ -183,23 +178,38 @@ public class NavSteeringBenchmarks
         _ffGuidedSteer.GetHeading(_ffGuidedAgent);
     }
 
-    private void SetupOccupantDensity(
+    private void SetupOccupantDensities()
+    {
+        const int size = 196;
+
+        _densityFixture = new BenchmarkPathFixture();
+        _densityFixture.Setup(BenchmarkChartFactory.GridConfigForSquare(size));
+        BenchmarkChartFactory.RegisterOpenPlane("SteeringDensityShared", size);
+
+        SetupOccupantDensityScenario(32, 8, 4, 0, 0,
+            out _density32Agent, out _density32Steer, out _density32Occupants);
+        SetupOccupantDensityScenario(128, 16, 8, 64, 0,
+            out _density128Agent, out _density128Steer, out _density128Occupants);
+        SetupOccupantDensityScenario(512, 32, 16, 128, 0,
+            out _density512Agent, out _density512Steer, out _density512Occupants);
+    }
+
+    private static void SetupOccupantDensityScenario(
         int occupantCount,
         int gridWidth,
         int gridDepth,
-        string chartName,
-        out BenchmarkPathFixture fixture,
+        int originX,
+        int originZ,
         out BenchmarkSteerAgent agent,
         out NavSteering steer,
         out BenchmarkOccupant[] occupants)
     {
-        int size = System.Math.Max(gridWidth, gridDepth) + 4;
-
-        fixture = new BenchmarkPathFixture();
-        fixture.Setup(BenchmarkChartFactory.GridConfigForSquare(size));
-        BenchmarkChartFactory.RegisterOpenPlane(chartName, size);
-
-        occupants = BenchmarkScenarioFactory.CreateOccupants(occupantCount, gridWidth, gridDepth);
+        occupants = BenchmarkScenarioFactory.CreateOccupants(
+            occupantCount,
+            gridWidth,
+            gridDepth,
+            originX: originX,
+            originZ: originZ);
 
         // Register each occupant with the VoxelGrid so the steering scan can find them.
         foreach (BenchmarkOccupant occupant in occupants)
@@ -209,30 +219,9 @@ public class NavSteeringBenchmarks
         }
 
         // Place the measured agent in the middle of the occupant cloud.
-        var agentPos = new Vector3d(gridWidth / 2, 0, gridDepth / 2);
+        var agentPos = new Vector3d(originX + gridWidth / 2, 0, originZ + gridDepth / 2);
         agent = new BenchmarkSteerAgent(agentPos) { Speed = Fixed64.One };
         steer = NavSteering.CreateNew(agent.Radius);
-    }
-
-    private void SetupOccupantDensity32()
-    {
-        SetupOccupantDensity(32, 8, 4, "SteeringDensity32",
-            out _density32Fixture, out _density32Agent, out _density32Steer,
-            out _density32Occupants);
-    }
-
-    private void SetupOccupantDensity128()
-    {
-        SetupOccupantDensity(128, 16, 8, "SteeringDensity128",
-            out _density128Fixture, out _density128Agent, out _density128Steer,
-            out _density128Occupants);
-    }
-
-    private void SetupOccupantDensity512()
-    {
-        SetupOccupantDensity(512, 32, 16, "SteeringDensity512",
-            out _density512Fixture, out _density512Agent, out _density512Steer,
-            out _density512Occupants);
     }
 
     private static void RemoveOccupants(BenchmarkOccupant[] occupants)
@@ -354,9 +343,9 @@ public class NavSteeringBenchmarks
     /// <summary>Combined-steering scan with 32 occupants in the world.</summary>
     [Benchmark]
     [BenchmarkCategory("Navigation", "Steering", "Density")]
-    public Vector3d CombinedSteering_Density32()
+    public void CombinedSteering_Density32()
     {
-        return _density32Steer.ComputeCombinedSteering(
+        _combinedSteeringSink = _density32Steer.ComputeCombinedSteering(
             _density32Agent.Position,
             _density32Agent.Velocity,
             _density32Agent.Speed,
@@ -367,9 +356,9 @@ public class NavSteeringBenchmarks
     /// <summary>Combined-steering scan with 128 occupants in the world.</summary>
     [Benchmark]
     [BenchmarkCategory("Navigation", "Steering", "Density")]
-    public Vector3d CombinedSteering_Density128()
+    public void CombinedSteering_Density128()
     {
-        return _density128Steer.ComputeCombinedSteering(
+        _combinedSteeringSink = _density128Steer.ComputeCombinedSteering(
             _density128Agent.Position,
             _density128Agent.Velocity,
             _density128Agent.Speed,
@@ -380,9 +369,9 @@ public class NavSteeringBenchmarks
     /// <summary>Combined-steering scan with 512 occupants in the world.</summary>
     [Benchmark]
     [BenchmarkCategory("Navigation", "Steering", "Density")]
-    public Vector3d CombinedSteering_Density512()
+    public void CombinedSteering_Density512()
     {
-        return _density512Steer.ComputeCombinedSteering(
+        _combinedSteeringSink = _density512Steer.ComputeCombinedSteering(
             _density512Agent.Position,
             _density512Agent.Velocity,
             _density512Agent.Speed,

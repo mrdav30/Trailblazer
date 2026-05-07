@@ -541,10 +541,12 @@ Fast-follow:
 ## Phase 6 — Eliminate Fixed Allocation in Combined Steering Per Tick
 
 **Severity:** 🟡 Medium  
-**Affected benchmarks:** `CombinedSteering_Density32/128/512` (19–25 µs, **3,992 B** constant
-regardless of occupant count)  
+**Affected benchmarks:** `CombinedSteering_Density32/128/512` (baseline 22–29 µs,
+**3,992 B** constant regardless of occupant count)  
 **Primary files:** `src/Trailblazer/Navigation/Steering/NavSteering.cs`,
-`src/Trailblazer/Navigation/MovementGroups/`
+`GridForge/src/GridForge/Grids/Managers/GridScanManager.cs`,
+`GridForge/src/GridForge/Utility/GridTracer.cs`,
+`SwiftCollections/src/SwiftCollections/Utility/SwiftHashTools.cs`
 
 ### Problem
 
@@ -557,25 +559,43 @@ pressure per update frame — before any path guide work.
 
 ### Investigation
 
-Profile or instrument `GetHeading` and the group steering path to identify the exact allocation
-site. Likely candidates:
+Resolved root causes:
 
-- A `new Navigator[]` or `new ISteer[]` result set allocated to hold the nearby occupant scan
-  results from `GridScanManager.ScanRadius`.
-- A `new MovementGroupSession()` or similar per-call state object.
-- Array construction inside the group-behavior weight combination step.
+- Trailblazer called GridForge's iterator/LINQ scan API for every combined-steering tick.
+- GridForge's hot scan path needed caller-owned result and scratch storage to avoid iterator,
+  pool, and temporary hash-set churn.
+- SwiftCollections boxed value-type keys/items through generic null guards in
+  `SwiftDictionary<TKey,TValue>` and `SwiftHashSet<T>` insert paths.
+- `SwiftHashTools.CombineHashCodes(int, int, int)` was falling through the `params object[]`
+  overload, allocating an object array and boxed coordinates for every spatial-grid hash.
+- The density benchmark harness created three density fixtures in sequence, leaving only the
+  last world active. The Phase 6 density scenarios now share one active world with separated
+  occupant clouds so 32/128/512 measure their own populations.
 
 ### Fix
 
-Once the allocation site is confirmed:
+Implemented:
 
-- If the allocation is a result buffer for the occupant scan, replace it with a pre-allocated
-  per-instance `SwiftList<ISteer>` cleared at the start of each tick.
-- If it is a per-call struct or object, evaluate whether it can be stack-allocated or stored as
-  a field on `NavSteering` and reused.
+- Added GridForge `ScanRadiusInto` overloads and `GridScanScratch` so hot callers can reuse
+  `SwiftList`/`SwiftHashSet` storage.
+- Updated `NavSteering` to reuse a per-instance `SwiftList<ISteer>` and `GridScanScratch` for
+  combined-steering neighbor scans.
+- Added SwiftCollections generic null guards for type-parameter collection paths, plus integer
+  `SwiftHashTools.CombineHashCodes` overloads for allocation-free coordinate hashing.
+- Temporarily switched Trailblazer, GridForge, and Chronicler project files to local
+  GridForge/SwiftCollections/Chronicler project references while validating the upstream package
+  fixes.
 
-A 100-agent scene producing zero Gen0 allocation from `GetHeading` under steady-state navigation
-is the target.
+Short-run evidence:
+
+- Baseline before Phase 6 changes:
+  - `CombinedSteering_Density32`: ~22.39 us / 3.90 KB.
+  - `CombinedSteering_Density128`: ~25.21 us / 3.90 KB.
+  - `CombinedSteering_Density512`: ~28.96 us / 3.90 KB.
+- Post-change, with local GridForge and SwiftCollections projects:
+  - `CombinedSteering_Density32`: ~1.613 us / 0 B.
+  - `CombinedSteering_Density128`: ~3.629 us / 0 B.
+  - `CombinedSteering_Density512`: ~9.182 us / 0 B.
 
 ### Deliverables
 
@@ -583,6 +603,18 @@ is the target.
 - Density scaling benchmark shows cost grows only from the occupant scan itself, not from a
   fixed allocation.
 - Existing nav-steering tests remain green in Release.
+
+Fast-follow:
+
+- Publish SwiftCollections, GridForge, and Chronicler packages containing the upstream fixes, then
+  switch Trailblazer/GridForge/Chronicler project references back to package references.
+- `NavSteeringBenchmarks` still has independent setup fixtures for direct LOS and guided path
+  scenarios. Phase 6 fixed the density setup because it affected the active benchmark; consolidate
+  the rest of the class before relying on full-class navigation benchmark runs.
+- While the temporary local project references are active, `dotnet test Trailblazer.slnx -c Release`
+  still prints Debug builds for sibling repo references and one run hung after test discovery.
+  Prefer `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj -c Release` for Release
+  verification until the local-reference publishing loop is resolved.
 
 ---
 
@@ -637,7 +669,7 @@ allocation inside `Initialize`.
 | 3 | 🟡 Medium | `SampleFlowVector_*` | Eliminate per-call world-manager allocation |
 | 4 | 🟠 High | `WarmGuide_FlowField_JumpLink`, `WarmGuide_AStar_SwimPath` | Cache staged transition results; fix swim-path cache key |
 | 5 | 🟡 Medium | `FailedRoute_ChokeUnitSize2` | Add reachability pre-check before A* expansion |
-| 6 | 🟡 Medium | `CombinedSteering_Density*` | Identify and pool fixed per-tick allocation |
+| 6 | 🟡 Medium | `CombinedSteering_Density*` | Reuse scan buffers; add upstream allocation-free GridForge/SwiftCollections paths |
 | 7 | 🔵 Low | `FlowFieldCacheHit` | Reduce FF warm-hit object graph size |
 
 Phases 1 and 4 are the highest-ROI starting points: Phase 1 requires no design changes and

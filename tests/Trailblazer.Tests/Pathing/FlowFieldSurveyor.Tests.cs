@@ -249,6 +249,37 @@ public class FlowFieldSurveyorTests : IDisposable
     }
 
     [Fact]
+    public void FlowFieldSurveyor_FindPath_ShouldKeepOpenPlane16ColdAllocationsUnderBudget()
+    {
+        TrailblazerWorldManager.Reset();
+        TrailblazerWorldManager.Setup();
+        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-1, -1, -1), new Vector3d(20, 4, 20)), out _);
+
+        bool[,,] data = new bool[1, 16, 16];
+        for (int x = 0; x < 16; x++)
+            for (int z = 0; z < 16; z++)
+                data[0, x, z] = true;
+
+        PathTestFactory.RegisterFromData("FlowOpenPlane16Alloc", data, Vector3d.Zero);
+
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(15, 0, 15), out FlowFieldPathRequest? createdRequest),
+            createdRequest);
+
+        FlowFieldSurveyor.Shared.FindPath(request).HasPath.Should().BeTrue();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.HasPath.Should().BeTrue();
+        TestRequire.NotNull(result.Fields).Count.Should().Be(256);
+        allocated.Should().BeLessThan(180_000);
+
+        PathManager.UnloadChart("FlowOpenPlane16Alloc");
+    }
+
+    [Fact]
     public void TryGetNearestFlowAnchor_ShouldReturnFalse_ForNullAndStaleFields()
     {
         FlowFieldSurveyor.TryGetNearestFlowAnchor(
@@ -1014,6 +1045,39 @@ public class FlowFieldSurveyorTests : IDisposable
         PathManager.UnloadChart("FlowDiagLegsNegative");
     }
 
+    [Theory]
+    [InlineData(1, 0, -1)]
+    [InlineData(-1, 0, 1)]
+    public void FlowFieldSurveyor_HasValidDiagonalLegs_ShouldUseGridAxesForHorizontalDiagonals(int dx, int dy, int dz)
+    {
+        bool[,,] data = new bool[3, 3, 3];
+        for (int y = 0; y < 3; y++)
+            for (int x = 0; x < 3; x++)
+                for (int z = 0; z < 3; z++)
+                    data[y, x, z] = true;
+
+        PathTestFactory.RegisterFromData("FlowDiagLegsAxes", data, Vector3d.Zero);
+
+        Voxel currentVoxel = TestRequire.VoxelAt(new Vector3d(1, 1, 1));
+        SolidChartPartition current = TestRequire.Partition<SolidChartPartition>(currentVoxel);
+
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreate(new Vector3d(1, 1, 1), new Vector3d(1 + dx, 1 + dy, 1 + dz), out FlowFieldPathRequest? createdRequest),
+            createdRequest);
+
+        FlowFieldSurveyor surveyor = new();
+        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
+
+        PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        SpatialDirection diagonal = FindDirection(dx, dy, dz);
+
+        MarkRequiredLegsClosed(current, diagonal, heap, closeVerticalLeg: true);
+
+        ReflectionUtility.InvokePrivate<bool>(surveyor, "HasValidDiagonalLegs", current, diagonal).Should().BeTrue();
+
+        PathManager.UnloadChart("FlowDiagLegsAxes");
+    }
+
     [Fact]
     public void FlowFieldSurveyor_GetPathCostTotal_ShouldReturnMaxValue_WhenPartitionIsNotTracked()
     {
@@ -1092,13 +1156,13 @@ public class FlowFieldSurveyorTests : IDisposable
         (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
         if (dx != 0)
-            CloseLeg(neighbors[(int)(dx > 0 ? SpatialDirection.North : SpatialDirection.West)], heap);
+            CloseLeg(neighbors[(int)DiagonalTraversalLegs.ForXOffset(dx)], heap);
 
         if (dy != 0 && closeVerticalLeg)
-            CloseLeg(neighbors[(int)(dy > 0 ? SpatialDirection.Above : SpatialDirection.Below)], heap);
+            CloseLeg(neighbors[(int)DiagonalTraversalLegs.ForYOffset(dy)], heap);
 
         if (dz != 0)
-            CloseLeg(neighbors[(int)(dz > 0 ? SpatialDirection.East : SpatialDirection.South)], heap);
+            CloseLeg(neighbors[(int)DiagonalTraversalLegs.ForZOffset(dz)], heap);
     }
 
     private static void CloseLeg(SolidChartPartition? leg, PathHeap<SolidChartPartition> heap)

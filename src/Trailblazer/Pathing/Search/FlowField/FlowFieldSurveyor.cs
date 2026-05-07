@@ -15,6 +15,8 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public class FlowFieldSurveyor
 {
+    private static readonly Vector3d[] _normalizedDirectionByNeighbor = CreateNormalizedDirectionLookup();
+
     #region Singleton Instances
 
     /// <summary>
@@ -35,6 +37,8 @@ public class FlowFieldSurveyor
     private readonly SwiftHashSet<string> _chartKeys = new();
 
     private readonly SwiftList<FlowFieldSamplingGrid> _samplingGrids = new();
+
+    private readonly SwiftList<FlowFieldSamplingGridBuilder> _samplingGridBuilders = new();
 
     private FlowFieldPathRequest? _request;
 
@@ -188,13 +192,13 @@ public class FlowFieldSurveyor
     {
         (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
-        if (dx != 0 && !IsLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
+        if (dx != 0 && !IsLegClear(current, DiagonalTraversalLegs.ForXOffset(dx)))
             return false;
 
-        if (dy != 0 && !IsLegClear(current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below))
+        if (dy != 0 && !IsLegClear(current, DiagonalTraversalLegs.ForYOffset(dy)))
             return false;
 
-        if (dz != 0 && !IsLegClear(current, dz > 0 ? SpatialDirection.East : SpatialDirection.South))
+        if (dz != 0 && !IsLegClear(current, DiagonalTraversalLegs.ForZOffset(dz)))
             return false;
 
         return true;
@@ -221,12 +225,14 @@ public class FlowFieldSurveyor
     {
         FlowFieldPathRequest request = _request!;
         WorldVoxelIndex endIndex = request.EndNode!.WorldIndex;
+        PrepareSamplingGrids();
+
         SwiftDictionary<WorldVoxelIndex, FlowField> result = new(_heap.TrackedCount);
         // Fixed64 totalDistance = Fixed64.One + _startDistanceMetric; // + 1 for end part
 
         foreach (SolidChartPartition current in _heap.EnumerateClosed())
         {
-            FlowFieldSamplingGrid samplingGrid = GetOrAddSamplingGrid(current.GlobalIndex, current.VoxelPosition);
+            FlowFieldSamplingGrid samplingGrid = GetSamplingGrid(current.GlobalIndex);
 
             FlowField currentFlow = new()
             {
@@ -245,6 +251,7 @@ public class FlowFieldSurveyor
             // Go through all neighbours and find the one with the lowest distance
             SolidChartPartition? minPartition = null;
             int minCost = int.MaxValue;
+            int minDirectionIndex = -1;
             SolidChartPartition?[]? neighbors = current.Neighbors;
             if (neighbors == null)
             {
@@ -263,27 +270,24 @@ public class FlowFieldSurveyor
                 if (ExceedsMaxClimbHeight(current, nPart))
                     continue;
 
-                if (i > 6 && !HasValidDiagonalLegs(current, (SpatialDirection)i))
+                if (SpatialAwareness.IsDiagonalNeighbor((SpatialDirection)i)
+                    && !HasValidDiagonalLegs(current, (SpatialDirection)i))
+                {
                     continue;
+                }
 
                 int cost = GetPathCostTotal(nPart);
                 if (cost < minCost)
                 {
                     minPartition = nPart;
                     minCost = cost;
+                    minDirectionIndex = i;
                 }
             }
 
             // If we found a valid neighbour, point in its direction by applying distance-weighted blending
             if (minPartition != null)
-            {
-                Vector3d raw = minPartition.VoxelPosition - current.VoxelPosition;
-
-                if (raw == Vector3d.Zero)
-                    currentFlow.Direction = Vector3d.Zero;
-                else
-                    currentFlow.Direction = raw.Normalize();
-            }
+                currentFlow.Direction = _normalizedDirectionByNeighbor[minDirectionIndex];
 
             AddFlowField(result, samplingGrid, current.GlobalIndex, currentFlow);
             ChartOwnerUtility.AddOwners(_chartKeys, current.ChartOwners);
@@ -324,9 +328,38 @@ public class FlowFieldSurveyor
         _heap.FastClear();
         _chartKeys.Clear();
         _samplingGrids.Clear();
+        _samplingGridBuilders.Clear();
     }
 
-    private FlowFieldSamplingGrid GetOrAddSamplingGrid(WorldVoxelIndex index, Vector3d worldPosition)
+    private void PrepareSamplingGrids()
+    {
+        _samplingGridBuilders.Clear();
+        _samplingGrids.Clear();
+
+        foreach (SolidChartPartition current in _heap.EnumerateClosed())
+        {
+            FlowFieldSamplingGridBuilder builder = GetOrAddSamplingGridBuilder(current.GlobalIndex, current.VoxelPosition);
+            builder.Include(current.GlobalIndex);
+        }
+
+        for (int i = 0; i < _samplingGridBuilders.Count; i++)
+            _samplingGrids.Add(_samplingGridBuilders[i].Create(TrailblazerWorldManager.VoxelSize));
+    }
+
+    private FlowFieldSamplingGridBuilder GetOrAddSamplingGridBuilder(WorldVoxelIndex index, Vector3d worldPosition)
+    {
+        for (int i = 0; i < _samplingGridBuilders.Count; i++)
+        {
+            if (_samplingGridBuilders[i].MatchesGrid(index))
+                return _samplingGridBuilders[i];
+        }
+
+        FlowFieldSamplingGridBuilder builder = new(index, worldPosition, TrailblazerWorldManager.VoxelSize);
+        _samplingGridBuilders.Add(builder);
+        return builder;
+    }
+
+    private FlowFieldSamplingGrid GetSamplingGrid(WorldVoxelIndex index)
     {
         for (int i = 0; i < _samplingGrids.Count; i++)
         {
@@ -334,13 +367,19 @@ public class FlowFieldSurveyor
                 return _samplingGrids[i];
         }
 
-        FlowFieldSamplingGrid samplingGrid = new(
-            index,
-            worldPosition,
-            TrailblazerWorldManager.VoxelSize,
-            _samplingGrids.Count == 0 ? _heap.TrackedCount : 0);
-        _samplingGrids.Add(samplingGrid);
-        return samplingGrid;
+        throw new InvalidOperationException("Flow-field sampling grid was not prepared for the closed partition.");
+    }
+
+    private static Vector3d[] CreateNormalizedDirectionLookup()
+    {
+        Vector3d[] directions = new Vector3d[SpatialAwareness.DirectionOffsets.Length];
+        for (int i = 0; i < directions.Length; i++)
+        {
+            (int x, int y, int z) = SpatialAwareness.DirectionOffsets[i];
+            directions[i] = new Vector3d((Fixed64)x, (Fixed64)y, (Fixed64)z).Normalize();
+        }
+
+        return directions;
     }
 
     /// <summary>
@@ -512,5 +551,77 @@ public class FlowFieldSurveyor
                 return field;
         }
         return default;
+    }
+
+    private sealed class FlowFieldSamplingGridBuilder
+    {
+        private readonly WorldVoxelIndex _sampleIndex;
+        private readonly Vector3d _originWorldPosition;
+        private int _minX;
+        private int _minY;
+        private int _minZ;
+        private int _maxX;
+        private int _maxY;
+        private int _maxZ;
+
+        public int Count { get; private set; }
+
+        public FlowFieldSamplingGridBuilder(
+            WorldVoxelIndex sampleIndex,
+            Vector3d sampleWorldPosition,
+            Fixed64 voxelSize)
+        {
+            _sampleIndex = sampleIndex;
+            VoxelIndex localIndex = sampleIndex.VoxelIndex;
+            _originWorldPosition = new Vector3d(
+                sampleWorldPosition.x - (voxelSize * (Fixed64)localIndex.x),
+                sampleWorldPosition.y - (voxelSize * (Fixed64)localIndex.y),
+                sampleWorldPosition.z - (voxelSize * (Fixed64)localIndex.z));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool MatchesGrid(WorldVoxelIndex index)
+        {
+            return index.WorldSpawnToken == _sampleIndex.WorldSpawnToken
+                && index.GridIndex == _sampleIndex.GridIndex
+                && index.GridSpawnToken == _sampleIndex.GridSpawnToken;
+        }
+
+        public void Include(WorldVoxelIndex index)
+        {
+            VoxelIndex localIndex = index.VoxelIndex;
+            if (Count == 0)
+            {
+                _minX = _maxX = localIndex.x;
+                _minY = _maxY = localIndex.y;
+                _minZ = _maxZ = localIndex.z;
+            }
+            else
+            {
+                if (localIndex.x < _minX) _minX = localIndex.x;
+                if (localIndex.y < _minY) _minY = localIndex.y;
+                if (localIndex.z < _minZ) _minZ = localIndex.z;
+                if (localIndex.x > _maxX) _maxX = localIndex.x;
+                if (localIndex.y > _maxY) _maxY = localIndex.y;
+                if (localIndex.z > _maxZ) _maxZ = localIndex.z;
+            }
+
+            Count++;
+        }
+
+        public FlowFieldSamplingGrid Create(Fixed64 voxelSize)
+        {
+            return new FlowFieldSamplingGrid(
+                _sampleIndex,
+                _originWorldPosition,
+                voxelSize,
+                _minX,
+                _minY,
+                _minZ,
+                _maxX,
+                _maxY,
+                _maxZ,
+                Count);
+        }
     }
 }

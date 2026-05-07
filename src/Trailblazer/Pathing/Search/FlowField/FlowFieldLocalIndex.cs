@@ -20,6 +20,12 @@ internal readonly struct FlowFieldLocalIndex : IEquatable<FlowFieldLocalIndex>
         _z = z;
     }
 
+    public int X => _x;
+
+    public int Y => _y;
+
+    public int Z => _z;
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static FlowFieldLocalIndex FromVoxelIndex(VoxelIndex index)
     {

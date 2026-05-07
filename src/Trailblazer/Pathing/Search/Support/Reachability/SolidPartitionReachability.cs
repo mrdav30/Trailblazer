@@ -272,13 +272,13 @@ internal static class SolidPartitionReachability
     {
         (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
-        if (dx != 0 && !IsLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West, passablePartitions))
+        if (dx != 0 && !IsLegClear(current, DiagonalTraversalLegs.ForXOffset(dx), passablePartitions))
             return false;
 
-        if (dy != 0 && !IsLegClear(current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below, passablePartitions))
+        if (dy != 0 && !IsLegClear(current, DiagonalTraversalLegs.ForYOffset(dy), passablePartitions))
             return false;
 
-        if (dz != 0 && !IsLegClear(current, dz > 0 ? SpatialDirection.East : SpatialDirection.South, passablePartitions))
+        if (dz != 0 && !IsLegClear(current, DiagonalTraversalLegs.ForZOffset(dz), passablePartitions))
             return false;
 
         return true;
@@ -292,13 +292,13 @@ internal static class SolidPartitionReachability
     {
         (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
-        if (dx != 0 && !IsMarkedLegClear(current, dx > 0 ? SpatialDirection.North : SpatialDirection.West, snapshotId, version))
+        if (dx != 0 && !IsMarkedLegClear(current, DiagonalTraversalLegs.ForXOffset(dx), snapshotId, version))
             return false;
 
-        if (dy != 0 && !IsMarkedLegClear(current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below, snapshotId, version))
+        if (dy != 0 && !IsMarkedLegClear(current, DiagonalTraversalLegs.ForYOffset(dy), snapshotId, version))
             return false;
 
-        if (dz != 0 && !IsMarkedLegClear(current, dz > 0 ? SpatialDirection.East : SpatialDirection.South, snapshotId, version))
+        if (dz != 0 && !IsMarkedLegClear(current, DiagonalTraversalLegs.ForZOffset(dz), snapshotId, version))
             return false;
 
         return true;

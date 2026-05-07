@@ -194,6 +194,66 @@ Exit criteria:
   benchmark machine, or document why the algorithmic cost is inherent.
 - Add focused tests around reused result state and invalidation so stale fields cannot leak.
 
+### Phase 2 Notes - 2026-05-07
+
+Implemented:
+
+- Replaced the duplicate sparse sampling-direction dictionary with bounded dense sampling buffers
+  for dense flow fields, with sparse dictionary fallback when the closed field bounds are too wide
+  for the number of fields.
+- Added a prepass over the closed flood set to build per-grid sampling bounds before result
+  materialization. This keeps open-plane sampling metadata compact without changing public
+  `Fields` lookup behavior.
+- Cached the normalized direction vector for each deterministic `SpatialDirection` once and reused
+  it during flow-vector generation instead of normalizing every field direction.
+- Fixed a flow-field generation edge check that skipped the `SouthWest` diagonal because it used
+  `i > 6` instead of GridForge's diagonal predicate.
+- Fixed the diagonal leg axis mapping shared by flow-field, A*, volume, and reachability checks.
+  GridForge offsets use X for East/West and Z for North/South; the previous helper logic had those
+  positive-axis legs swapped in several pathing components.
+
+Verification:
+
+- Added `FlowFieldSurveyor_FindPath_ShouldKeepOpenPlane16ColdAllocationsUnderBudget`, which failed
+  at 203,808 B before the sampling metadata change and now stays below the 180,000 B guard.
+- Added `FlowFieldSurveyor_HasValidDiagonalLegs_ShouldUseGridAxesForHorizontalDiagonals`, which
+  failed before the shared diagonal-leg mapping fix and now passes for the southeast and northwest
+  horizontal diagonal cases.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~FlowFieldSurveyor`
+  passed with 43 tests.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~AStar`
+  passed with 65 tests.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~Volume`
+  passed with 106 tests.
+- `dotnet test Trailblazer.slnx --configuration Release` passed with 906 tests.
+
+Benchmarks:
+
+| Benchmark | Phase 1 verified | Phase 2 result | Signal |
+| --- | ---: | ---: | --- |
+| `ColdGuide_OpenPlane64` | 116.349 ms, 3.25 MB | 114.993 ms, 2.36 MB | Allocation down materially; time flat. |
+| `ColdGuide_OpenPlane128` | 796.391 ms, 12.98 MB | 803.909 ms, 9.45 MB | Allocation down materially; time slightly worse within short-run noise. |
+| `RawSurvey_OpenPlane64` | 113.219 ms, 3.24 MB | 114.605 ms, 2.36 MB | Confirms improvement is memory-focused, not flood-time-focused. |
+| `FlowFieldCacheMiss_BelowCapacity` | 44.092 ms, 812.8 KB | 44.381 ms, 578.86 KB | Cache miss allocation down about 29%; time flat. |
+| `SampleFlowVector_ExactVoxel` | 183.7 ns, 0 B | 169.2 ns, 0 B | Sampling stayed allocation-free. |
+| `SampleFlowVector_FractionalPosition` | 530.8 ns, 0 B | 514.1 ns, 0 B | Sampling stayed allocation-free. |
+
+Remaining findings:
+
+- The 128x128 cold path is still a multi-frame hitch. The dense sampling change removed duplicate
+  metadata storage, but the dominant time remains flood expansion plus public result dictionary
+  materialization.
+- `FlowFieldSurveyResult.Reset()` does not currently unlock meaningful reuse by itself because the
+  cache does not recycle reset flow-field result instances on raw cold surveys. Retaining fields
+  there would add stale-state risk without an accompanying result-pool design.
+- `PathHeap` still allocates per tracked partition metadata during cold surveys. A lower-allocation
+  heap metadata design is the next likely cold-flow-field allocation target, but it would touch A*
+  and volume surveyors too and should be handled as a separate focused phase.
+- Reducing the global survey lock scope still requires splitting shared mutable surveyor scratch
+  state into per-call or pooled state. The current phase kept lock behavior unchanged.
+- BenchmarkDotNet still reports high-priority permission warnings in WSL and `MinIterationTime`
+  warnings for short cache-miss scenarios. Continue handling those under Phase 5 scenario design.
+
 ## Phase 3 - Remove Warm Guide Allocation
 
 **Severity:** Medium  

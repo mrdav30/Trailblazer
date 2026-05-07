@@ -174,13 +174,13 @@ public sealed class VolumeSurveyor
 
         (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
 
-        if (dx != 0 && !IsLegClear(grid!, current, dx > 0 ? SpatialDirection.North : SpatialDirection.West))
+        if (dx != 0 && !IsLegClear(grid!, current, DiagonalTraversalLegs.ForXOffset(dx)))
             return false;
 
-        if (dy != 0 && !IsLegClear(grid!, current, dy > 0 ? SpatialDirection.Above : SpatialDirection.Below))
+        if (dy != 0 && !IsLegClear(grid!, current, DiagonalTraversalLegs.ForYOffset(dy)))
             return false;
 
-        if (dz != 0 && !IsLegClear(grid!, current, dz > 0 ? SpatialDirection.East : SpatialDirection.South))
+        if (dz != 0 && !IsLegClear(grid!, current, DiagonalTraversalLegs.ForZOffset(dz)))
             return false;
 
         return true;

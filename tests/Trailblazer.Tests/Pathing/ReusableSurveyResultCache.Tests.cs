@@ -189,6 +189,26 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     }
 
     [Fact]
+    public void EvictStaleEntries_ShouldNotAllocate_WhenNoEntriesAreStale()
+    {
+        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+
+        for (int i = 0; i < 32; i++)
+        {
+            cache.TryGetOrCreate(new TestPathRequest(i), () => TestSurveyResult.Create(i), out TestSurveyResult result)
+                .Should()
+                .BeTrue();
+
+            cache.Return(result, dispose: false);
+        }
+
+        long allocated = MeasureAllocatedBytes(() => cache.EvictStaleEntries(currentFrame: 0, expiration: 600));
+
+        allocated.Should().BeLessThan(64);
+        cache.Count.Should().Be(32);
+    }
+
+    [Fact]
     public void TryGetOrCreate_ShouldReturnUncachedResult_WhenCacheIsFullAndAllEntriesAreInUse()
     {
         using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
@@ -306,6 +326,17 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         public bool TrySetDestination(Vector3d destination, bool resetSearchRange = false) => false;
 
         public bool TrySetUnitSize(Fixed64 unitSize) => false;
+    }
+
+    private static long MeasureAllocatedBytes(Action action)
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        action();
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     private sealed class TestSurveyResult : SurveyResult

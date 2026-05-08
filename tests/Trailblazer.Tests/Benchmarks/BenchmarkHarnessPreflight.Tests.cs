@@ -1,5 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
+using System;
 using Trailblazer.Benchmarks.Navigation;
 using Trailblazer.Benchmarks.Pathing;
 using Xunit;
@@ -74,5 +75,65 @@ public sealed class BenchmarkHarnessPreflightTests
         {
             benchmarks.GlobalCleanup();
         }
+    }
+
+    [Fact]
+    public void GuideCacheBenchmarks_ShouldSeedMixedCachePressureScenarios_AfterGlobalSetup()
+    {
+        var benchmarks = new GuideCacheBenchmarks();
+
+        try
+        {
+            benchmarks.GlobalSetup();
+
+            benchmarks.SeedMixedCacheForInvalidation();
+            CacheInvalidationCardinality noMatch = benchmarks.MeasureInvalidateMixedCacheFor_NoMatchingChart();
+            noMatch.EntriesScanned.Should().Be(0);
+            noMatch.EntriesMatched.Should().Be(0);
+            noMatch.EntriesRemoved.Should().Be(0);
+
+            long noMatchAllocated = MeasureAllocatedBytes(() => benchmarks.MeasureInvalidateMixedCacheFor_NoMatchingChart());
+            noMatchAllocated.Should().BeLessThan(128);
+
+            benchmarks.SeedMixedCacheForInvalidation();
+            CacheInvalidationCardinality solid = benchmarks.MeasureInvalidateMixedCacheFor_MatchingSolidChart();
+            solid.EntriesMatched.Should().Be(GuideCacheBenchmarks.MixedCacheEntriesPerFamily * 2);
+            solid.EntriesRemoved.Should().Be(solid.EntriesMatched);
+
+            benchmarks.SeedMixedCacheForInvalidation();
+            CacheInvalidationCardinality volume = benchmarks.MeasureInvalidateMixedCacheFor_MatchingVolumeChart();
+            volume.EntriesMatched.Should().Be(GuideCacheBenchmarks.MixedCacheEntriesPerFamily);
+            volume.EntriesRemoved.Should().Be(volume.EntriesMatched);
+
+            benchmarks.SeedMixedCacheForInvalidation();
+            CacheInvalidationCardinality hybrid = benchmarks.MeasureInvalidateMixedCacheFor_MatchingHybridChart();
+            hybrid.EntriesMatched.Should().Be(GuideCacheBenchmarks.MixedCacheEntriesPerFamily);
+            hybrid.EntriesRemoved.Should().Be(hybrid.EntriesMatched);
+
+            benchmarks.SeedMixedCacheForCull();
+            CacheCullCardinality freshCull = benchmarks.MeasureCullMixedCache_NoStale();
+            freshCull.EntriesRemoved.Should().Be(0);
+
+            benchmarks.SeedMixedCacheForCullWithActiveQuarter();
+            CacheCullCardinality staleCull = benchmarks.MeasureCullMixedCache_StaleWithActiveQuarter();
+            staleCull.EntriesRemoved.Should().BeGreaterThan(0);
+            staleCull.ActiveEntriesRemaining.Should().Be(GuideCacheBenchmarks.MixedActiveEntriesPerFamily * 3);
+        }
+        finally
+        {
+            benchmarks.ReturnMixedActiveGuides();
+            benchmarks.GlobalCleanup();
+        }
+    }
+
+    private static long MeasureAllocatedBytes(Action action)
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        action();
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 }

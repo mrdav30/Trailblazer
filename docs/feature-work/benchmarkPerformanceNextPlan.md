@@ -3,7 +3,7 @@
 ## Purpose
 
 This document captures the next phase of Trailblazer performance work after completing phases 1
-through 7 in `benchmarkPerformancePlan.md`.
+through 7 in `done\benchmarkPerformancePlan.md`.
 
 The previous phase plan closed the planned alpha-hardening items. This plan starts from the fresh
 full benchmark run on 2026-05-07 and focuses on the remaining high-value work: making the benchmark
@@ -294,6 +294,63 @@ Exit criteria:
 - `ManyStartWarmReuse_32Starts` no longer scales linearly in allocation per requester.
 - Existing allocation guards remain deterministic and stable under Release.
 
+### Phase 3 Notes - 2026-05-07
+
+Implemented:
+
+- Added allocation guards for A*, flow-field, and volume warm guide hits, request cache-key reads,
+  reusable survey-result cache checkout, and guide-wrapper pool rent/release.
+- Replaced tuple-based request hash composition with `PathRequestHashBuilder` so A*, flow-field,
+  volume, and hybrid request keys avoid tuple/interface allocation and randomized string hashing.
+- Added reusable guide-wrapper pools for A*, flow-field, and volume guide instances. Returning a
+  guide now returns the shared survey result first, resets only wrapper state, then keeps the
+  wrapper available for the next warm hit.
+- Split A*, flow-field, and volume miss paths into cold helper methods. JIT disassembly showed the
+  captured `TryGetOrCreate` miss delegate allocated a display class at warm-hit method entry even
+  when `TryCheckout` returned immediately.
+- Reused a fixed guide buffer in `ManyStartWarmReuse_32Starts` so the benchmark measures warm reuse
+  instead of allocating a per-invocation returned-guide array.
+- Added request construction and request cache-key benchmarks for A*, flow-field, and volume
+  requests.
+
+Verification:
+
+- `WarmGuideHits_ShouldAllocateNearZero_WhenReturnedGuidesCanBeReused` initially failed at 178,176 B
+  over 256 A* warm hits, then at 6,144 B after guide pooling exposed the warm-hit display-class
+  allocation. It now passes under the 1,024 B guard for A*, flow-field, and volume combined.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~PathGuideFactoryCoverageTests`
+  passed with 13 tests.
+
+Short-run benchmark evidence:
+
+| Benchmark | Phase 3 result | Signal |
+| --- | ---: | --- |
+| `AStarCacheHit` | 275.1 ns, 0 B | Cache checkout plus pooled wrapper is allocation-free. |
+| `FlowFieldCacheHit` | 130.8 ns, 0 B | Cache checkout plus pooled wrapper is allocation-free. |
+| `WarmGuide_OpenPlane32` | 282.5 ns, 0 B | A* warm guide allocation removed. |
+| `WarmGuide_OpenPlane64` | 135.9 ns, 0 B | Flow-field warm guide allocation removed. |
+| `WarmGuide_OpenPlane128` | 7.767 us, 0 B | Allocation removed; time needs canonical rerun because short-run setup showed first-workload noise. |
+| `WarmGuide_DirectGasCorridor` | 117.6 ns, 0 B | Volume warm guide allocation removed. |
+| `WarmGuide_LShapeGasPath` | 124.7 ns, 0 B | Volume alternate shape stayed allocation-free. |
+| `WarmGuide_AStar_JumpLink` | 119.7 ns, 0 B | Transition fallback A* warm path allocation removed. |
+| `WarmGuide_FlowField_JumpLink` | 134.4 ns, 0 B | Transition fallback flow-field warm path allocation removed. |
+| `ManyStartWarmReuse_32Starts` | 4.142 us, 0 B | Allocation no longer scales per requester. |
+| `RequestCacheKey_OpenPlane32` | 9.93 ns, 0 B | A* key read/hash path is allocation-free. |
+| `RequestCacheKey_OpenPlane64` | 8.78 ns, 0 B | Flow-field key read/hash path is allocation-free. |
+| `RequestCacheKey_DirectGasCorridor` | 8.84 ns, 0 B | Volume key read/hash path is allocation-free. |
+| `RequestConstruction_OpenPlane32` | 555.1 ns, 112 B | Construction still allocates the request object, as expected. |
+| `RequestConstruction_OpenPlane64` | 499.2 ns, 112 B | Construction still allocates the request object, as expected. |
+| `RequestConstruction_DirectGasCorridor` | 627.8 ns, 104 B | Construction still allocates the request object, as expected. |
+
+Fast-follow observations:
+
+- Benchmark filter arguments that include `*Request*` overmatch benchmark class names containing
+  `Request`; prefer category filters such as `--anyCategories Warm Request` for targeted reruns.
+- `WarmGuide_OpenPlane128` should be watched in a canonical run because the short-run result had
+  unusual first-workload JIT/setup behavior despite reporting 0 B.
+- Transition request construction/cache-key microbenchmarks are still worth adding under Phase 5;
+  Phase 3 covered A*, flow-field, and volume request objects.
+
 ## Phase 4 - Measure Mixed Cache Pressure
 
 **Severity:** Medium  
@@ -315,6 +372,69 @@ Exit criteria:
 - Dynamic chart invalidation remains bounded by affected entries, not total cache size.
 - No-match invalidation stays allocation-free under mixed cache pressure.
 
+### Phase 4 Notes - 2026-05-08
+
+Implemented:
+
+- Added mixed guide-cache pressure benchmarks that populate A*, flow-field, volume, and hybrid
+  transition route-plan caches in the same fixture.
+- Added no-match and matching-chart mixed invalidation variants for the shared solid chart, shared
+  gas-volume chart, and shared hybrid destination chart.
+- Added mixed cull variants for all-fresh entries and a stale set with one active A*/flow/volume
+  guide per four entries. Hybrid route plans are returned immediately by the staged flow guide path,
+  so they participate as stale returned cache entries rather than active checked-out guide entries.
+- Added cardinality result helpers that report indexed entries scanned, entries matched, and entries
+  removed. The benchmark methods return scalar removal counts so BenchmarkDotNet does not allocate
+  just to consume a custom return struct.
+- Added benchmark preflight coverage for the mixed pressure setup and cardinality expectations.
+- Fixed a small runtime allocation surfaced by the cull benchmark: `ReusableSurveyResultCache<T>`
+  now allocates its stale-removal list only after it finds the first stale reusable entry.
+
+Verification:
+
+- `GuideCacheBenchmarks_ShouldSeedMixedCachePressureScenarios_AfterGlobalSetup` first failed on
+  missing mixed benchmark APIs, then exposed two setup issues: duplicate flow-field request keys in
+  the generated pressure set and hybrid transition route plans without chart-owner metadata when
+  the synthetic route started or ended exactly on a transition anchor. Both are now guarded.
+- `EvictStaleEntries_ShouldNotAllocate_WhenNoEntriesAreStale` failed at 184 B before the lazy
+  stale-removal list change and now passes below the 64 B guard.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~BenchmarkHarnessPreflightTests`
+  passed with 4 tests.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~ReusableSurveyResultCacheTests`
+  passed with 7 tests.
+
+Short-run benchmark evidence:
+
+| Benchmark | Phase 4 result | Signal |
+| --- | ---: | --- |
+| `CullMixedCache_NoStale` | 16.48 us, 0 B | No-stale cull is now allocation-free under mixed pressure. |
+| `CullMixedCache_StaleWithActiveQuarter` | 40.62 us, 2.25 KB | Removes stale returned entries while preserving active A*/flow/volume guides. |
+| `InvalidateMixedCacheFor_NoMatchingChart` | 18.10 us, 288 B reported | Direct allocation guard is allocation-free; BDN includes one-invocation setup noise for this mutation-style benchmark. |
+| `InvalidateMixedCacheFor_MatchingSolidChart` | 79.72 us, 0 B | Removes the 64 indexed A*/flow-field entries for the shared solid chart. |
+| `InvalidateMixedCacheFor_MatchingVolumeChart` | 12.50 us, 288 B | Removes the 32 indexed volume entries for the shared gas-volume chart. |
+| `InvalidateMixedCacheFor_MatchingHybridChart` | 80.85 us, 576 B | Removes the 32 indexed hybrid route-plan entries for the shared destination chart. |
+
+Cardinality covered by preflight:
+
+| Variant | Indexed entries scanned | Entries removed |
+| --- | ---: | ---: |
+| No matching chart | 0 | 0 |
+| Matching solid chart | 64 | 64 |
+| Matching volume chart | 32 | 32 |
+| Matching hybrid chart | 32 | 32 |
+
+Fast-follow observations:
+
+- A full 128 entries per cache family made benchmark iteration setup dominate wall time because it
+  required repeated cold flow-field and hybrid route-plan generation. Phase 4 therefore uses an
+  aggregate 128-entry mixed pressure set, 32 entries per family, and keeps the existing A* capacity
+  benchmarks for true 128-entry single-family pressure.
+- A synthetic cache seed hook or a dedicated internal `ReusableSurveyResultCache<T>` benchmark would
+  let us measure full-capacity mixed invalidation without timing real path generation in setup.
+- BenchmarkDotNet still reports `MinIterationTime` warnings for these one-invocation mutation
+  benchmarks. Treat the direct allocation guards and cardinality preflights as the authority for
+  correctness/allocation claims, and use the short-run numbers as comparative smoke-test signal.
+
 ## Phase 5 - Add Scenario Benchmarks
 
 **Severity:** Medium  
@@ -334,7 +454,8 @@ New benchmarks to add:
 - First-frame navigation setup with enough operations per iteration to remove BenchmarkDotNet
   `MinIterationTime` warnings.
 - Reachability snapshot first-hit cost for distinct `(unitSize, maxClimbHeight)` combinations.
-- Cache-key/request creation microbenchmarks for A*, flow-field, volume, and transition requests.
+- Transition request creation/cache-key microbenchmarks, plus scenario-level request churn where
+  hosts create requests every fixed step.
 - Flow-field flood-range sweep: 32x32, 64x64, 128x128, blocker field, and large flood range.
 
 Exit criteria:

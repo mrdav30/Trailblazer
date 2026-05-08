@@ -135,17 +135,20 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
     /// <param name="expiration">The number of frames after which a <see cref="SurveyResult"/> is considered stale.</param>
     internal void EvictStaleEntries(int currentFrame, int expiration)
     {
-        SwiftList<int> toRemove = new();
+        SwiftList<int>? toRemove = null;
         _lock.EnterUpgradeableReadLock();
         try
         {
             foreach (KeyValuePair<int, T> kvp in _cache)
             {
                 if (!kvp.Value.IsInUse && currentFrame - kvp.Value.LastUsedFrame > expiration)
+                {
+                    toRemove ??= new SwiftList<int>();
                     toRemove.Add(kvp.Key);
+                }
             }
 
-            if (toRemove.Count == 0)
+            if (toRemove == null || toRemove.Count == 0)
                 return;
 
             _lock.EnterWriteLock();

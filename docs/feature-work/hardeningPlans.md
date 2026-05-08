@@ -1,4 +1,4 @@
-# Hardening Phase Plan
+# Hardening Plans
 
 ## Purpose
 

@@ -17,7 +17,9 @@ public readonly struct PathingScenarioSummary
         int guidesResolved = 0,
         int failedRoutes = 0,
         int chartUpdates = 0,
-        int fieldsVisited = 0)
+        int fieldsVisited = 0,
+        int maxPathSearchRange = 0,
+        int extraFloodRange = 0)
     {
         RequestsAttempted = requestsAttempted;
         RequestsCreated = requestsCreated;
@@ -26,6 +28,8 @@ public readonly struct PathingScenarioSummary
         FailedRoutes = failedRoutes;
         ChartUpdates = chartUpdates;
         FieldsVisited = fieldsVisited;
+        MaxPathSearchRange = maxPathSearchRange;
+        ExtraFloodRange = extraFloodRange;
     }
 
     public int RequestsAttempted { get; }
@@ -41,6 +45,16 @@ public readonly struct PathingScenarioSummary
     public int ChartUpdates { get; }
 
     public int FieldsVisited { get; }
+
+    /// <summary>
+    /// Gets the effective search range carried by the measured flow-field flood request.
+    /// </summary>
+    public int MaxPathSearchRange { get; }
+
+    /// <summary>
+    /// Gets the extra flood range carried by the measured flow-field flood request.
+    /// </summary>
+    public int ExtraFloodRange { get; }
 }
 
 /// <summary>
@@ -620,7 +634,9 @@ public class PathingScenarioBenchmarks
         return new PathingScenarioSummary(
             requestsAttempted: operations,
             guidesResolved: paths,
-            fieldsVisited: fieldsVisited);
+            fieldsVisited: fieldsVisited,
+            maxPathSearchRange: request.MaxPathSearchRange,
+            extraFloodRange: request.ExtraFloodRange);
     }
 
     private static AStarPathRequest CreateReachabilityRequest(

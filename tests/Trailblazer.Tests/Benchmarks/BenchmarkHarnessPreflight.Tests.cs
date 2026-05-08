@@ -3,6 +3,7 @@ using FluentAssertions;
 using System;
 using Trailblazer.Benchmarks.Navigation;
 using Trailblazer.Benchmarks.Pathing;
+using Trailblazer.Pathing;
 using Xunit;
 
 namespace Trailblazer.Tests.Benchmarks;
@@ -182,8 +183,29 @@ public sealed class BenchmarkHarnessPreflightTests
             transitionChurn.RequestsCreated.Should().Be(PathingScenarioBenchmarks.TransitionChurnRequestCount);
             transitionChurn.CacheKeysRead.Should().Be(PathingScenarioBenchmarks.TransitionChurnRequestCount);
 
-            benchmarks.MeasureFlowFieldFloodOpen32().FieldsVisited.Should().BeGreaterThan(0);
-            benchmarks.MeasureFlowFieldFloodBlocker64Large().FieldsVisited.Should().BeGreaterThan(0);
+            PathingScenarioSummary floodOpen32 = benchmarks.MeasureFlowFieldFloodOpen32();
+            PathingScenarioSummary floodOpen64 = benchmarks.MeasureFlowFieldFloodOpen64();
+            PathingScenarioSummary floodOpen128 = benchmarks.MeasureFlowFieldFloodOpen128();
+            PathingScenarioSummary floodBlocker64Default = benchmarks.MeasureFlowFieldFloodBlocker64Default();
+            PathingScenarioSummary floodBlocker64Large = benchmarks.MeasureFlowFieldFloodBlocker64Large();
+
+            floodOpen32.GuidesResolved.Should().BeGreaterThan(0);
+            floodOpen64.GuidesResolved.Should().BeGreaterThan(0);
+            floodOpen128.GuidesResolved.Should().BeGreaterThan(0);
+            int open32FieldsPerSurvey = floodOpen32.FieldsVisited / floodOpen32.GuidesResolved;
+            int open64FieldsPerSurvey = floodOpen64.FieldsVisited / floodOpen64.GuidesResolved;
+            int open128FieldsPerSurvey = floodOpen128.FieldsVisited / floodOpen128.GuidesResolved;
+
+            floodOpen32.FieldsVisited.Should().BeGreaterThan(0);
+            open64FieldsPerSurvey.Should().BeGreaterThan(open32FieldsPerSurvey);
+            open128FieldsPerSurvey.Should().BeGreaterThan(open64FieldsPerSurvey);
+            floodOpen32.MaxPathSearchRange.Should().BeGreaterThan(0);
+            floodOpen64.MaxPathSearchRange.Should().Be(floodOpen32.MaxPathSearchRange);
+            floodOpen128.MaxPathSearchRange.Should().Be(floodOpen64.MaxPathSearchRange);
+            floodOpen32.ExtraFloodRange.Should().Be(FlowFieldPathRequest.DefaultExtraFloodRange);
+            floodBlocker64Default.ExtraFloodRange.Should().Be(FlowFieldPathRequest.DefaultExtraFloodRange);
+            floodBlocker64Large.ExtraFloodRange.Should().Be(FlowFieldPathRequest.DefaultExtraFloodRange * 4);
+            floodBlocker64Large.FieldsVisited.Should().BeGreaterThanOrEqualTo(floodBlocker64Default.FieldsVisited);
         }
         finally
         {

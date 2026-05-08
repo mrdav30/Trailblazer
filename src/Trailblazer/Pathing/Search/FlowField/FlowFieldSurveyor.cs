@@ -383,21 +383,6 @@ public class FlowFieldSurveyor
     }
 
     /// <summary>
-    /// Samples an interpolated flow direction from a given world position using bilinear interpolation.
-    /// Helps agents move smoothly between grid cells.
-    /// </summary>
-    /// <remarks>
-    /// Prefer <see cref="SampleFlowVector(Vector3d, FlowFieldSurveyResult)"/> when a survey result is available; that overload uses cached sampling metadata.
-    /// </remarks>
-    /// <param name="worldPosition">The world-space position to sample from.</param>
-    /// <param name="fields">A dictionary of flow field data.</param>
-    /// <returns>An interpolated directional vector.</returns>
-    public static Vector3d SampleFlowVector(Vector3d worldPosition, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
-    {
-        return SampleFlowVector(worldPosition, fields, samplingGrids: null);
-    }
-
-    /// <summary>
     /// Samples an interpolated flow direction from a survey result using direct index arithmetic.
     /// </summary>
     /// <param name="worldPosition">The world-space position to sample from.</param>

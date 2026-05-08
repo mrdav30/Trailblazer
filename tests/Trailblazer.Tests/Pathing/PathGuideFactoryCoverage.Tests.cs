@@ -239,6 +239,105 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         flowFieldAllocated.Should().BeLessThanOrEqualTo(aStarAllocated + (50L * iterations));
     }
 
+    [Fact]
+    public void WarmGuideHits_ShouldAllocateNearZero_WhenReturnedGuidesCanBeReused()
+    {
+        RegisterSolidLine("GuideFactoryWarmReuseSolid", Vector3d.Zero, 4);
+        RegisterVolumeLine(new Vector3d(0, 0, 4), TraversalMedium.Gas, 4, "GuideFactoryWarmReuseVolume");
+
+        AStarPathRequest aStarRequest = TestRequire.NotNull(
+            AStarPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(
+            FlowFieldPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+        VolumePathRequest volumeRequest = TestRequire.NotNull(
+            VolumePathRequest.Create(new Vector3d(0, 0, 4), new Vector3d(3, 0, 4), Fixed64.One, medium: TraversalMedium.Gas));
+
+        const int iterations = 256;
+
+        long aStarAllocated = MeasureWarmHitAllocation<AStarGuide>(aStarRequest, iterations);
+        long flowFieldAllocated = MeasureWarmHitAllocation<FlowFieldGuide>(flowFieldRequest, iterations);
+        long volumeAllocated = MeasureWarmHitAllocation<VolumeGuide>(volumeRequest, iterations);
+
+        string allocationSummary = $"A*={aStarAllocated}, FlowField={flowFieldAllocated}, Volume={volumeAllocated} bytes.";
+        aStarAllocated.Should().BeLessThan(1_024, allocationSummary);
+        flowFieldAllocated.Should().BeLessThan(1_024, allocationSummary);
+        volumeAllocated.Should().BeLessThan(1_024, allocationSummary);
+    }
+
+    [Fact]
+    public void RequestCacheKeys_ShouldNotAllocateSteadyState()
+    {
+        RegisterSolidLine("GuideFactoryRequestKeySolid", Vector3d.Zero, 4);
+        RegisterVolumeLine(new Vector3d(0, 0, 4), TraversalMedium.Gas, 4, "GuideFactoryRequestKeyVolume");
+
+        AStarPathRequest aStarRequest = TestRequire.NotNull(
+            AStarPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(
+            FlowFieldPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+        VolumePathRequest volumeRequest = TestRequire.NotNull(
+            VolumePathRequest.Create(new Vector3d(0, 0, 4), new Vector3d(3, 0, 4), Fixed64.One, medium: TraversalMedium.Gas));
+
+        const int iterations = 1_024;
+
+        long aggregate = 0;
+        long allocated = MeasureAllocatedBytes(() =>
+        {
+            for (int i = 0; i < iterations; i++)
+            {
+                aggregate += aStarRequest.RequestCacheKey;
+                aggregate += flowFieldRequest.RequestCacheKey;
+                aggregate += volumeRequest.RequestCacheKey;
+            }
+        });
+
+        aggregate.Should().NotBe(0);
+        allocated.Should().BeLessThan(128);
+    }
+
+    [Fact]
+    public void ReusableSurveyResultCacheWarmCheckout_ShouldNotAllocateSteadyState()
+    {
+        var request = new UnknownRequest { IsValidValue = true };
+        var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
+
+        cache.TryGetOrCreate(request, () => FakeSurveyResult.Create(request.RequestCacheKey), out FakeSurveyResult result).Should().BeTrue();
+        cache.Return(result, dispose: false);
+
+        const int iterations = 256;
+        long allocated = MeasureAllocatedBytes(() =>
+        {
+            for (int i = 0; i < iterations; i++)
+            {
+                if (!cache.TryCheckout(request, out FakeSurveyResult warmResult))
+                    throw new InvalidOperationException("Expected cache warm hit.");
+
+                cache.Return(warmResult, dispose: false);
+            }
+        });
+
+        allocated.Should().BeLessThan(1_024);
+    }
+
+    [Fact]
+    public void GuidePoolRentRelease_ShouldNotAllocateSteadyState()
+    {
+        var pool = new GuidePool<FakeGuide>(() => new FakeGuide(), static guide => guide.Reset());
+        FakeGuide warmGuide = pool.Rent();
+        pool.Release(warmGuide);
+
+        const int iterations = 256;
+        long allocated = MeasureAllocatedBytes(() =>
+        {
+            for (int i = 0; i < iterations; i++)
+            {
+                FakeGuide guide = pool.Rent();
+                pool.Release(guide);
+            }
+        });
+
+        allocated.Should().BeLessThan(128);
+    }
+
     private static void RegisterSolidLine(string chartName, Vector3d minBounds, int length)
     {
         var data = new bool[1, length, 1];
@@ -281,6 +380,17 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
+    private static long MeasureAllocatedBytes(Action action)
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        action();
+        return GC.GetAllocatedBytesForCurrentThread() - before;
+    }
+
     private sealed class UnknownRequest : IPathRequest
     {
         public Vector3d Origin => OriginValue;
@@ -312,5 +422,38 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         public bool TrySetDestination(Vector3d destination, bool resetSearchRange = false) => false;
 
         public bool TrySetUnitSize(Fixed64 unitSize) => false;
+    }
+
+    private sealed class FakeSurveyResult : SurveyResult
+    {
+        public override bool HasPath => IsValid;
+
+        public static FakeSurveyResult Create(int requestKey)
+        {
+            return new FakeSurveyResult
+            {
+                IsValid = true,
+                RequestHashKey = requestKey
+            };
+        }
+    }
+
+    private sealed class FakeGuide : IGuide
+    {
+        public void Reset()
+        {
+        }
+
+        public bool TryGetMovementDirection(Vector3d origin, out Vector3d direction)
+        {
+            direction = Vector3d.Zero;
+            return false;
+        }
+
+        public bool TryGetFallbackDirection(Vector3d from, out Vector3d fallbackDirection)
+        {
+            fallbackDirection = Vector3d.Zero;
+            return false;
+        }
     }
 }

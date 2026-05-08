@@ -1,38 +1,9 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
-using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
-
-/// <summary>
-/// Specifies the heuristic method used for estimating distances in pathfinding algorithms.
-/// </summary>
-/// <remarks>
-/// Use this enumeration to select the distance calculation strategy appropriate for the grid or
-/// coordinate system in use. 
-/// Manhattan is typically used for four-directional grids, Octile for eight-directional
-/// grids, and Euclidean for continuous or diagonal movement scenarios.
-/// </remarks>
-public enum HeuristicMethod
-{
-    /// <summary>
-    /// Represents the Manhattan distance metric, also known as the L1 norm, used to calculate the distance between
-    /// points as the sum of the absolute differences of their coordinates.
-    /// </summary>
-    Manhattan,
-    /// <summary>
-    /// Represents the Octile distance metric, which is a modification of the Manhattan distance that accounts for 
-    /// diagonal movement in grid-based pathfinding.
-    /// </summary>
-    Octile,
-    /// <summary>
-    /// Represents the Euclidean distance metric used for measuring straight-line distance between points in Euclidean space.
-    /// </summary>
-    Euclidean
-    //Chebyshev?
-}
 
 /// <summary>
 /// A pathfinding request used for A* trail generation, including options for climb height, heuristic weighting,
@@ -164,16 +135,16 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        return (
-            StartNode?.SpawnToken ?? 0,
-            EndNode?.SpawnToken ?? 0,
-            UnitSize,
-            AllowUnwalkableEndpoints,
-            AllowTraversalTransitions,
-            Heuristic,
-            MaxClimbHeight,
-            MaxPathSearchRange,
-            AllowTraversalTransitions ? TraversalTransitionRegistry.RegistryVersion : 0
-        ).CombineHashCodes();
+        PathRequestHashBuilder hash = PathRequestHashBuilder.Create();
+        hash.Add(StartNode?.SpawnToken ?? 0);
+        hash.Add(EndNode?.SpawnToken ?? 0);
+        hash.Add(UnitSize.GetHashCode());
+        hash.Add(AllowUnwalkableEndpoints);
+        hash.Add(AllowTraversalTransitions);
+        hash.Add((int)Heuristic);
+        hash.Add(MaxClimbHeight.GetHashCode());
+        hash.Add(MaxPathSearchRange);
+        hash.Add(AllowTraversalTransitions ? TraversalTransitionRegistry.RegistryVersion : 0);
+        return hash.ToHashCode();
     }
 }

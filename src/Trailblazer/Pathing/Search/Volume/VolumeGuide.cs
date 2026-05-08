@@ -150,4 +150,11 @@ public sealed class VolumeGuide : IWaypointGuide
         waypoint = ActiveWaypoints[index];
         return true;
     }
+
+    internal void ResetForReuse()
+    {
+        TrailMap = null;
+        CurrentWaypointIndex = 0;
+        _lastTriedIndex = 0;
+    }
 }

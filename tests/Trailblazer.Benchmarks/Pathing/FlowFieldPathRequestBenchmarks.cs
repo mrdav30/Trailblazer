@@ -43,6 +43,7 @@ public class FlowFieldPathRequestBenchmarks
     // -------------------------------------------------------------------------
 
     private FlowFieldPathRequest[] _clusterRequests;
+    private FlowFieldGuide[] _clusterGuideBuffer;
     private Vector3d _clusterDestination;
 
     // -------------------------------------------------------------------------
@@ -130,6 +131,7 @@ public class FlowFieldPathRequestBenchmarks
         _clusterDestination = destination;
 
         _clusterRequests = new FlowFieldPathRequest[startCount];
+        _clusterGuideBuffer = new FlowFieldGuide[startCount];
         for (int i = 0; i < startCount; i++)
         {
             _clusterRequests[i] = FlowFieldPathRequest.Create(starts[i], destination, Fixed64.One);
@@ -298,6 +300,22 @@ public class FlowFieldPathRequestBenchmarks
         return ok;
     }
 
+    /// <summary>Constructs a flow-field request for the 64x64 open plane.</summary>
+    [Benchmark]
+    [BenchmarkCategory("Pathing", "FlowField", "Request")]
+    public FlowFieldPathRequest RequestConstruction_OpenPlane64()
+    {
+        return FlowFieldPathRequest.Create(_openPlane64Origin, _openPlane64Destination, Fixed64.One);
+    }
+
+    /// <summary>Reads the cache key for a pre-created 64x64 open-plane flow-field request.</summary>
+    [Benchmark]
+    [BenchmarkCategory("Pathing", "FlowField", "Request", "Key")]
+    public int RequestCacheKey_OpenPlane64()
+    {
+        return _openPlane64Request.RequestCacheKey;
+    }
+
     // -------------------------------------------------------------------------
     // Many-start batch reuse (N starts sharing one destination field)
     // -------------------------------------------------------------------------
@@ -311,7 +329,7 @@ public class FlowFieldPathRequestBenchmarks
     [BenchmarkCategory("Pathing", "FlowField", "Warm", "Showcase")]
     public int ManyStartWarmReuse_32Starts()
     {
-        FlowFieldGuide[] guides = new FlowFieldGuide[_clusterRequests.Length];
+        FlowFieldGuide[] guides = _clusterGuideBuffer;
         int resolved = 0;
 
         for (int i = 0; i < _clusterRequests.Length; i++)
@@ -323,7 +341,10 @@ public class FlowFieldPathRequestBenchmarks
         }
 
         for (int i = 0; i < resolved; i++)
+        {
             PathGuideFactory.ReturnGuide(guides[i]);
+            guides[i] = null;
+        }
 
         return resolved;
     }

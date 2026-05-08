@@ -173,4 +173,13 @@ public class AStarGuide : IWaypointGuide
         waypoint = ActiveWaypoints[index];
         return true;
     }
+
+    internal void ResetForReuse()
+    {
+        TrailMap = AStarSurveyResult.Empty;
+        _smoothedWaypoints = null;
+        CurrentWaypointIndex = 0;
+        UseSplineSmoothing = false;
+        _lastTriedIndex = 0;
+    }
 }

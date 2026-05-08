@@ -68,6 +68,15 @@ public static class PathGuideFactory
 
     private static readonly ReusableSurveyResultCache<HybridRoutePlanSurveyResult> _cachedHybridRoutePlans = new();
 
+    private static readonly GuidePool<AStarGuide> _aStarGuides =
+        new(static () => new AStarGuide(), static guide => guide.ResetForReuse());
+
+    private static readonly GuidePool<FlowFieldGuide> _flowFieldGuides =
+        new(static () => new FlowFieldGuide(), static guide => guide.ResetForReuse());
+
+    private static readonly GuidePool<VolumeGuide> _volumeGuides =
+        new(static () => new VolumeGuide(), static guide => guide.ResetForReuse());
+
     /// <summary>
     /// Returns the number of cached transition route plans currently tracked.
     /// </summary>
@@ -120,8 +129,14 @@ public static class PathGuideFactory
     public static bool RequestGuide<T>(IPathRequest request, [NotNullWhen(true)] out T? result) where T : class, IGuide
     {
         result = default;
-        if (!RequestGuide(request, out IGuide? guide) || guide is not T typedGuide)
+        if (!RequestGuide(request, out IGuide? guide))
             return false;
+
+        if (guide is not T typedGuide)
+        {
+            ReturnGuide(guide);
+            return false;
+        }
 
         result = typedGuide;
         return true;
@@ -170,6 +185,14 @@ public static class PathGuideFactory
         if (SolidPartitionReachability.IsProvablyUnreachable(request))
             return null;
 
+        if (_cachedAStarResults.TryCheckout(request, out AStarSurveyResult cachedResult))
+            return RentAStarGuide(cachedResult);
+
+        return RequestAStarMiss(request);
+    }
+
+    private static AStarGuide? RequestAStarMiss(AStarPathRequest request)
+    {
         bool pathFound = _cachedAStarResults.TryGetOrCreate(request,
             () => ResolveAStarResult(request),
             out AStarSurveyResult result);
@@ -177,9 +200,7 @@ public static class PathGuideFactory
         if (!pathFound)
             return null;
 
-        AStarGuide guide = new();
-        guide.Initialize(result);
-        return guide;
+        return RentAStarGuide(result);
     }
 
     /// <summary>
@@ -192,10 +213,27 @@ public static class PathGuideFactory
         if (request.AllowTraversalTransitions
             && TryGetCachedTransitionFallbackFlowPlan(request, out HybridRoutePlan? cachedRoutePlan))
         {
-            FlowFieldGuide cachedGuide = new();
-            return cachedGuide.InitializeStaged(cachedRoutePlan) ? cachedGuide : null;
+            FlowFieldGuide cachedGuide = _flowFieldGuides.Rent();
+            if (cachedGuide.InitializeStaged(cachedRoutePlan))
+                return cachedGuide;
+
+            ReturnFlowFieldGuide(cachedGuide, dispose: false);
+            return null;
         }
 
+        if (_cachedFlowResults.TryCheckout(request, out FlowFieldSurveyResult cachedResult))
+        {
+            if (TryRentFlowFieldGuide(request, cachedResult, out FlowFieldGuide? cachedGuide))
+                return cachedGuide;
+
+            _cachedFlowResults.Return(cachedResult, dispose: false);
+        }
+
+        return RequestFlowFieldMiss(request);
+    }
+
+    private static FlowFieldGuide? RequestFlowFieldMiss(FlowFieldPathRequest request)
+    {
         bool pathFound = _cachedFlowResults.TryGetOrCreate(request,
             () => FlowFieldSurveyor.Shared.FindPath(request),
             out FlowFieldSurveyResult result);
@@ -207,9 +245,7 @@ public static class PathGuideFactory
             && request.StartNode != null
             && result.Fields.ContainsKey(request.StartNode.WorldIndex))
         {
-            FlowFieldGuide guide = new();
-            guide.Initialize(result);
-            return guide;
+            return RentFlowFieldGuide(result);
         }
 
         if (pathFound)
@@ -228,6 +264,14 @@ public static class PathGuideFactory
     /// </summary>
     public static VolumeGuide? RequestVolume(VolumePathRequest request)
     {
+        if (_cachedVolumeResults.TryCheckout(request, out VolumeSurveyResult cachedResult))
+            return RentVolumeGuide(cachedResult);
+
+        return RequestVolumeMiss(request);
+    }
+
+    private static VolumeGuide? RequestVolumeMiss(VolumePathRequest request)
+    {
         bool pathFound = _cachedVolumeResults.TryGetOrCreate(request,
             () => VolumeSurveyor.Shared.FindPath(request),
             out VolumeSurveyResult result);
@@ -235,9 +279,7 @@ public static class PathGuideFactory
         if (!pathFound)
             return null;
 
-        VolumeGuide guide = new();
-        guide.Initialize(result);
-        return guide;
+        return RentVolumeGuide(result);
     }
 
     /// <summary>
@@ -272,15 +314,18 @@ public static class PathGuideFactory
         {
             case AStarGuide a:
                 _cachedAStarResults.Return(a.TrailMap, dispose);
+                ReturnAStarGuide(a, dispose);
                 break;
             case FlowFieldGuide f:
                 f.ReleaseStagedResources(dispose);
                 if (f.FlowMap != null)
                     _cachedFlowResults.Return(f.FlowMap, dispose);
+                ReturnFlowFieldGuide(f, dispose);
                 break;
             case VolumeGuide v:
                 if (v.TrailMap != null)
                     _cachedVolumeResults.Return(v.TrailMap, dispose);
+                ReturnVolumeGuide(v, dispose);
                 break;
         }
     }
@@ -319,6 +364,88 @@ public static class PathGuideFactory
         _cachedFlowResults.InvalidateAll();
         _cachedVolumeResults.InvalidateAll();
         _cachedHybridRoutePlans.InvalidateAll();
+        ClearGuidePools();
+    }
+
+    private static AStarGuide? RentAStarGuide(AStarSurveyResult result)
+    {
+        AStarGuide guide = _aStarGuides.Rent();
+        if (guide.Initialize(result))
+            return guide;
+
+        ReturnAStarGuide(guide, dispose: false);
+        _cachedAStarResults.Return(result, dispose: false);
+        return null;
+    }
+
+    private static FlowFieldGuide? RentFlowFieldGuide(FlowFieldSurveyResult result)
+    {
+        FlowFieldGuide guide = _flowFieldGuides.Rent();
+        if (guide.Initialize(result))
+            return guide;
+
+        ReturnFlowFieldGuide(guide, dispose: false);
+        _cachedFlowResults.Return(result, dispose: false);
+        return null;
+    }
+
+    private static bool TryRentFlowFieldGuide(
+        FlowFieldPathRequest request,
+        FlowFieldSurveyResult result,
+        [NotNullWhen(true)] out FlowFieldGuide? guide)
+    {
+        guide = null;
+        if (result.Fields == null
+            || request.StartNode == null
+            || !result.Fields.ContainsKey(request.StartNode.WorldIndex))
+        {
+            return false;
+        }
+
+        guide = RentFlowFieldGuide(result);
+        return guide != null;
+    }
+
+    private static VolumeGuide? RentVolumeGuide(VolumeSurveyResult result)
+    {
+        VolumeGuide guide = _volumeGuides.Rent();
+        if (guide.Initialize(result))
+            return guide;
+
+        ReturnVolumeGuide(guide, dispose: false);
+        _cachedVolumeResults.Return(result, dispose: false);
+        return null;
+    }
+
+    private static void ReturnAStarGuide(AStarGuide guide, bool dispose)
+    {
+        if (dispose || guide.GetType() != typeof(AStarGuide))
+            _aStarGuides.Destroy(guide);
+        else
+            _aStarGuides.Release(guide);
+    }
+
+    private static void ReturnFlowFieldGuide(FlowFieldGuide guide, bool dispose)
+    {
+        if (dispose || guide.GetType() != typeof(FlowFieldGuide))
+            _flowFieldGuides.Destroy(guide);
+        else
+            _flowFieldGuides.Release(guide);
+    }
+
+    private static void ReturnVolumeGuide(VolumeGuide guide, bool dispose)
+    {
+        if (dispose)
+            _volumeGuides.Destroy(guide);
+        else
+            _volumeGuides.Release(guide);
+    }
+
+    private static void ClearGuidePools()
+    {
+        _aStarGuides.Clear();
+        _flowFieldGuides.Clear();
+        _volumeGuides.Clear();
     }
 
     private static AStarSurveyResult ResolveAStarResult(AStarPathRequest request)
@@ -367,8 +494,15 @@ public static class PathGuideFactory
         if (!TryGetTransitionFallbackFlowPlan(request, out HybridRoutePlan? routePlan))
             return false;
 
-        guide = new FlowFieldGuide();
-        return guide.InitializeStaged(routePlan);
+        FlowFieldGuide stagedGuide = _flowFieldGuides.Rent();
+        if (stagedGuide.InitializeStaged(routePlan))
+        {
+            guide = stagedGuide;
+            return true;
+        }
+
+        ReturnFlowFieldGuide(stagedGuide, dispose: false);
+        return false;
     }
 
     private static bool TryGetTransitionFallbackFlowPlan(

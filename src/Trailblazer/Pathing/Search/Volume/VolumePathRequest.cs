@@ -1,6 +1,5 @@
 using FixedMathSharp;
 using GridForge.Grids;
-using SwiftCollections;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -316,15 +315,15 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        return (
-            StartNode?.SpawnToken ?? 0,
-            EndNode?.SpawnToken ?? 0,
-            UnitSize,
-            AllowUnwalkableEndpoints,
-            Heuristic,
-            Medium,
-            MaxPathSearchRange,
-            VolumeMediumRules.RegistryVersion
-        ).CombineHashCodes();
+        PathRequestHashBuilder hash = PathRequestHashBuilder.Create();
+        hash.Add(StartNode?.SpawnToken ?? 0);
+        hash.Add(EndNode?.SpawnToken ?? 0);
+        hash.Add(UnitSize.GetHashCode());
+        hash.Add(AllowUnwalkableEndpoints);
+        hash.Add((int)Heuristic);
+        hash.Add((int)Medium);
+        hash.Add(MaxPathSearchRange);
+        hash.Add(VolumeMediumRules.RegistryVersion);
+        return hash.ToHashCode();
     }
 }

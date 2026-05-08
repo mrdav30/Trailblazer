@@ -1,6 +1,5 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
-using SwiftCollections;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -130,15 +129,15 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
     public override int GetHashCode()
     {
         // Note: For FlowFields we don't care about the start voxel (only that the FlowField contains it)
-        return (
-            EndNode?.SpawnToken ?? 0,
-            UnitSize,
-            AllowUnwalkableEndpoints,
-            AllowTraversalTransitions,
-            MaxClimbHeight,
-            ExtraFloodRange,
-            MaxPathSearchRange,
-            AllowTraversalTransitions ? TraversalTransitionRegistry.RegistryVersion : 0
-        ).CombineHashCodes();
+        PathRequestHashBuilder hash = PathRequestHashBuilder.Create();
+        hash.Add(EndNode?.SpawnToken ?? 0);
+        hash.Add(UnitSize.GetHashCode());
+        hash.Add(AllowUnwalkableEndpoints);
+        hash.Add(AllowTraversalTransitions);
+        hash.Add(MaxClimbHeight.GetHashCode());
+        hash.Add(ExtraFloodRange);
+        hash.Add(MaxPathSearchRange);
+        hash.Add(AllowTraversalTransitions ? TraversalTransitionRegistry.RegistryVersion : 0);
+        return hash.ToHashCode();
     }
 }

@@ -1,6 +1,5 @@
 using FixedMathSharp;
 using GridForge.Grids;
-using SwiftCollections;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -319,25 +318,25 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     /// <returns>A hash code representing the current path request.</returns>
     public override int GetHashCode()
     {
-        int transitionHash = 17;
+        PathRequestHashBuilder transitionHash = PathRequestHashBuilder.Create();
         if (RoutePlan != null)
         {
             for (int i = 0; i < RoutePlan.DirectedTransitions.Length; i++)
-                transitionHash = HashCode.Combine(transitionHash, RoutePlan.DirectedTransitions[i].Id);
+                transitionHash.AddOrdinalString(RoutePlan.DirectedTransitions[i].Id);
         }
 
-        return (
-            StartNode?.SpawnToken ?? 0,
-            EndNode?.SpawnToken ?? 0,
-            UnitSize,
-            ChartRequestKind,
-            AllowUnwalkableEndpoints,
-            Heuristic,
-            MaxClimbHeight,
-            ExtraFloodRange,
-            MaxPathSearchRange,
-            transitionHash
-        ).CombineHashCodes();
+        PathRequestHashBuilder hash = PathRequestHashBuilder.Create();
+        hash.Add(StartNode?.SpawnToken ?? 0);
+        hash.Add(EndNode?.SpawnToken ?? 0);
+        hash.Add(UnitSize.GetHashCode());
+        hash.Add((int)ChartRequestKind);
+        hash.Add(AllowUnwalkableEndpoints);
+        hash.Add((int)Heuristic);
+        hash.Add(MaxClimbHeight.GetHashCode());
+        hash.Add(ExtraFloodRange);
+        hash.Add(MaxPathSearchRange);
+        hash.Add(transitionHash.ToHashCode());
+        return hash.ToHashCode();
     }
 
     /// <summary>

@@ -358,6 +358,22 @@ public class AStarPathRequestBenchmarks
         return ok;
     }
 
+    /// <summary>Constructs an A* request for the 32x32 open plane.</summary>
+    [Benchmark]
+    [BenchmarkCategory("Pathing", "AStar", "Request")]
+    public AStarPathRequest RequestConstruction_OpenPlane32()
+    {
+        return AStarPathRequest.Create(_openPlane32Origin, _openPlane32Destination, Fixed64.One);
+    }
+
+    /// <summary>Reads the cache key for a pre-created 32x32 open-plane A* request.</summary>
+    [Benchmark]
+    [BenchmarkCategory("Pathing", "AStar", "Request", "Key")]
+    public int RequestCacheKey_OpenPlane32()
+    {
+        return _openPlane32Request.RequestCacheKey;
+    }
+
     // -------------------------------------------------------------------------
     // Heuristic comparison
     // -------------------------------------------------------------------------

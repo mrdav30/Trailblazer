@@ -382,4 +382,13 @@ public class FlowFieldGuide : IGuide
         Fixed64 completionDistance = TrailblazerWorldManager.VoxelSize * Fixed64.Half;
         return (target - origin).SqrMagnitude <= completionDistance * completionDistance;
     }
+
+    internal void ResetForReuse()
+    {
+        FlowMap = null;
+        _stagedPlan = null;
+        _stagedStepIndex = 0;
+        _activeStageGuide = null;
+        _activeStageGuideStepIndex = -1;
+    }
 }

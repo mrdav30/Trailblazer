@@ -34,7 +34,9 @@ are joined with `-`. Pass one or more aliases as leading arguments before any Be
 | `a-star-path-request` | `AStarPathRequestBenchmarks` |
 | `flow-field-path-request` | `FlowFieldPathRequestBenchmarks` |
 | `guide-cache` | `GuideCacheBenchmarks` |
+| `navigation-scenario` | `NavigationScenarioBenchmarks` |
 | `nav-steering` | `NavSteeringBenchmarks` |
+| `pathing-scenario` | `PathingScenarioBenchmarks` |
 | `transition-fallback` | `TransitionFallbackBenchmarks` |
 | `volume-path-request` | `VolumePathRequestBenchmarks` |
 
@@ -133,6 +135,38 @@ Key benchmarks:
 - `SteadyState_DirectLOS_EveryFrameRecheck` — every-frame LOS recheck cost
 - `FirstFrame_GuidedAStar` — cold first-frame cost including guide resolution
 - `CombinedSteering_Density512` — occupant-density scan at maximum tested density
+
+### Navigation scenario workloads
+
+**Class**: `NavigationScenarioBenchmarks` | **Alias**: `navigation-scenario`  
+**Categories**: `Navigation`, `Scenario`
+
+Covers: first-frame and steady fixed-step updates for 100-agent and 500-agent mixed workloads
+containing direct LOS, A\*, flow-field, and combined-steering agents.
+
+Key benchmarks:
+
+- `FirstFrameMixedSteering_100Agents` — batched cold first-frame guide and steering setup
+- `FirstFrameMixedSteering_500Agents` — larger first-frame hitch shape
+- `FixedStepMixedSteering_100Agents` — steady per-agent mixed frame cost
+- `FixedStepMixedSteering_500Agents` — larger steady per-agent mixed frame cost
+
+### Pathing scenario workloads
+
+**Class**: `PathingScenarioBenchmarks` | **Alias**: `pathing-scenario`  
+**Categories**: `Pathing`, `Scenario`
+
+Covers: dynamic chart invalidation plus A\* repath waves, shared flow-field guide checkout for
+100 and 500 starts, reachability snapshot first-hit checks, transition request construction and
+cache-key reads, transition request churn, and raw flow-field flood-range sweeps.
+
+Key benchmarks:
+
+- `DynamicObstacleUpdate_RepathWave64` — one chart update followed by 64 A\* guide requests
+- `FlowFieldSharing_500Starts` — many starts sharing one cached destination field
+- `ReachabilityFirstHit_ClearanceCombos` — distinct `(unitSize, maxClimbHeight)` snapshot keys
+- `TransitionRequestChurn_64Requests` — host-style request creation every fixed step
+- `FlowFieldFloodRange_OpenPlane128` — large raw flow-field flood and allocation shape
 
 ### Transition-aware and volume routing
 

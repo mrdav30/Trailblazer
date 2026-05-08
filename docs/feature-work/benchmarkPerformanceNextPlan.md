@@ -463,6 +463,77 @@ Exit criteria:
 - Scenario benchmarks have clear preflight assertions and route-shape counters.
 - The suite distinguishes cold hitches, steady-state per-frame work, and cache lifecycle pressure.
 
+### Phase 5 Notes - 2026-05-08
+
+Implemented:
+
+- Added `NavigationScenarioBenchmarks` with 100-agent and 500-agent mixed first-frame and steady
+  fixed-step workloads. Each mixed set includes direct LOS, A\*, flow-field, and combined-steering
+  agents, and exposes preflight counters for route shape, guide-backed agents, and non-zero
+  headings.
+- Added `PathingScenarioBenchmarks` covering dynamic chart update plus a 64-request A\* repath
+  wave, 100-start and 500-start shared flow-field guide checkout, reachability snapshot first-hit
+  checks for four `(unitSize, maxClimbHeight)` combinations, transition request construction and
+  cache-key reads, transition request churn, and flow-field flood sweeps over open and blocker
+  charts.
+- Added benchmark harness preflight tests for the scenario classes. The first red run confirmed the
+  tests were guarding missing scenario APIs; the passing run now verifies chart updates, guide
+  resolution counts, failed reachability routes, transition request churn, and sampled flood fields.
+- Fixed a benchmark-only realism issue: `BenchmarkOccupant` now implements `ISteer`, so existing
+  and new combined-steering scans measure actual steerable occupants instead of scanning past
+  non-`ISteer` fixtures.
+- Updated the benchmark README with `navigation-scenario` and `pathing-scenario` aliases and suite
+  descriptions.
+
+Verification:
+
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~BenchmarkHarnessPreflightTests`
+  passed with 6 tests.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~PathingScenarioBenchmarks_ShouldKeepScenarioRoutesValid`
+  passed after the final sharing-batch adjustment.
+- `dotnet build Trailblazer.slnx --configuration Release` passed with 0 warnings and 0 errors.
+- `dotnet test Trailblazer.slnx --configuration Release` passed with 914 tests.
+- `dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- navigation-scenario --filter '*' --job short --runtimes net8.0`
+  completed all 4 navigation scenario benchmarks.
+- `dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- pathing-scenario --filter '*' --job short --runtimes net8.0`
+  completed all 14 pathing scenario benchmarks with no `MinIterationTime` warnings after batching
+  the flow-field sharing methods.
+
+Short-run benchmark evidence:
+
+| Benchmark | Phase 5 result | Signal |
+| --- | ---: | --- |
+| `FirstFrameMixedSteering_100Agents` | 18.746 ms, 39.60 KB | Cold mixed first-frame hitch shape is now visible. |
+| `FirstFrameMixedSteering_500Agents` | 12.459 ms, 18.89 KB | Larger mixed first-frame scenario is covered; short-run result needs canonical rerun. |
+| `FixedStepMixedSteering_100Agents` | 3.794 us, 20 B | Steady mixed frame is near allocation-free. |
+| `FixedStepMixedSteering_500Agents` | 3.759 us, 20 B | Steady mixed frame scales without obvious per-agent allocation. |
+| `DynamicObstacleUpdate_RepathWave64` | 32.587 ms, 174.05 KB | Chart invalidation plus repath wave is now measured as one scenario. |
+| `FlowFieldSharing_100Starts` | 144.8 ns, 0 B | Shared destination guide checkout remains effectively allocation-free. |
+| `FlowFieldSharing_500Starts` | 173.3 ns, 23 B | Larger shared checkout stays near-zero allocation after batching. |
+| `ReachabilityFirstHit_ClearanceCombos` | 30.473 ms, 9.18 MB | First-hit snapshot cost is now visible for clearance/climb churn. |
+| `TransitionRequestConstruction_AStarJumpLink` | 537.5 ns, 112 B | Transition-aware A\* request construction baseline. |
+| `TransitionRequestConstruction_FlowFieldJumpLink` | 535.4 ns, 112 B | Transition-aware flow-field request construction baseline. |
+| `TransitionRequestChurn_64Requests` | 529.8 ns, 112 B | Host-style request churn baseline. |
+| `TransitionRequestCacheKey_AStarJumpLink` | 10.15 ns, 0 B | Transition-aware A\* key reads stay allocation-free. |
+| `TransitionRequestCacheKey_FlowFieldJumpLink` | 9.28 ns, 0 B | Transition-aware flow-field key reads stay allocation-free. |
+| `FlowFieldFloodRange_OpenPlane32` | 94.864 ms, 591.54 KB | Flood sweep now includes the 32x32 case. |
+| `FlowFieldFloodRange_OpenPlane64` | 772.230 ms, 2.36 MB | 64x64 open-plane sweep is unexpectedly time-heavy in this combined scenario. |
+| `FlowFieldFloodRange_OpenPlane128` | 82.098 ms, 9.45 MB | Allocation scales with field size, but time does not in this short run. |
+| `FlowFieldFloodRange_Blocker64Default` | 587.352 ms, 2.36 MB | Blocker field sweep is covered. |
+| `FlowFieldFloodRange_Blocker64Large` | 585.001 ms, 2.36 MB | Enlarged flood range is covered; similar cost in this setup. |
+
+Fast-follow observations:
+
+- The flood sweep allocation scales as expected by field size, but short-run time does not:
+  `OpenPlane64` and blocker 64 are much slower than `OpenPlane128`. Before using the time deltas as
+  optimization targets, inspect the generated field counts, effective `MaxPathSearchRange`, and
+  route coverage for each sweep.
+- First-frame mixed navigation is useful as a hitch detector, but the first short run is noisy and
+  should be rerun canonically before comparing changes.
+- `BenchmarkOccupant` implementing `ISteer` may move existing `NavSteeringBenchmarks` density
+  numbers because those scans now include real steerable occupants. Treat future density numbers as
+  the corrected baseline.
+
 ## Phase 6 - API Cleanup Before Alpha
 
 **Severity:** Low to Medium  

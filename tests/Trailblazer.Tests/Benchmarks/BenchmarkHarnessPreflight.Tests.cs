@@ -126,6 +126,71 @@ public sealed class BenchmarkHarnessPreflightTests
         }
     }
 
+    [Fact]
+    public void NavigationScenarioBenchmarks_ShouldKeepMixedAgentFramesValid_AfterGlobalSetup()
+    {
+        var benchmarks = new NavigationScenarioBenchmarks();
+
+        try
+        {
+            benchmarks.GlobalSetup();
+
+            benchmarks.PrepareFirstFrameMixedSteering();
+            NavigationScenarioSummary firstFrame100 = benchmarks.MeasureFirstFrameMixedSteering100();
+            firstFrame100.AgentsProcessed.Should().Be(NavigationScenarioBenchmarks.MixedAgentCount100);
+            firstFrame100.DirectLosAgents.Should().BeGreaterThan(0);
+            firstFrame100.AStarAgents.Should().BeGreaterThan(0);
+            firstFrame100.FlowFieldAgents.Should().BeGreaterThan(0);
+            firstFrame100.CombinedSteeringAgents.Should().BeGreaterThan(0);
+            firstFrame100.GuideBackedAgents.Should().BeGreaterThan(0);
+
+            NavigationScenarioSummary steady500 = benchmarks.MeasureFixedStepMixedSteering500();
+            steady500.AgentsProcessed.Should().Be(NavigationScenarioBenchmarks.MixedAgentCount500);
+            steady500.NonZeroHeadings.Should().BeGreaterThan(0);
+            steady500.CombinedSteeringAgents.Should().BeGreaterThan(0);
+        }
+        finally
+        {
+            benchmarks.GlobalCleanup();
+        }
+    }
+
+    [Fact]
+    public void PathingScenarioBenchmarks_ShouldKeepScenarioRoutesValid_AfterGlobalSetup()
+    {
+        var benchmarks = new PathingScenarioBenchmarks();
+
+        try
+        {
+            benchmarks.GlobalSetup();
+
+            benchmarks.PrepareDynamicObstacleRepathWave();
+            PathingScenarioSummary dynamicWave = benchmarks.MeasureDynamicObstacleUpdateRepathWave();
+            dynamicWave.ChartUpdates.Should().Be(1);
+            dynamicWave.GuidesResolved.Should().Be(PathingScenarioBenchmarks.DynamicRepathWaveCount);
+
+            benchmarks.PrepareFlowFieldSharing();
+            PathingScenarioSummary flowSharing = benchmarks.MeasureFlowFieldSharing500();
+            flowSharing.GuidesResolved.Should().Be(PathingScenarioBenchmarks.FlowSharingCount500);
+
+            benchmarks.PrepareReachabilityFirstHit();
+            PathingScenarioSummary reachability = benchmarks.MeasureReachabilityFirstHitClearanceCombos();
+            reachability.RequestsAttempted.Should().Be(PathingScenarioBenchmarks.ReachabilityComboCount);
+            reachability.FailedRoutes.Should().Be(PathingScenarioBenchmarks.ReachabilityComboCount);
+
+            PathingScenarioSummary transitionChurn = benchmarks.MeasureTransitionRequestChurn();
+            transitionChurn.RequestsCreated.Should().Be(PathingScenarioBenchmarks.TransitionChurnRequestCount);
+            transitionChurn.CacheKeysRead.Should().Be(PathingScenarioBenchmarks.TransitionChurnRequestCount);
+
+            benchmarks.MeasureFlowFieldFloodOpen32().FieldsVisited.Should().BeGreaterThan(0);
+            benchmarks.MeasureFlowFieldFloodBlocker64Large().FieldsVisited.Should().BeGreaterThan(0);
+        }
+        finally
+        {
+            benchmarks.GlobalCleanup();
+        }
+    }
+
     private static long MeasureAllocatedBytes(Action action)
     {
         GC.Collect();

@@ -178,6 +178,37 @@ public sealed class BenchmarkHarnessPreflightTests
             PathingScenarioSummary reachability = benchmarks.MeasureReachabilityFirstHitClearanceCombos();
             reachability.RequestsAttempted.Should().Be(PathingScenarioBenchmarks.ReachabilityComboCount);
             reachability.FailedRoutes.Should().Be(PathingScenarioBenchmarks.ReachabilityComboCount);
+            reachability.ReachabilitySnapshotBuilds.Should().Be(PathingScenarioBenchmarks.ReachabilityComboCount);
+            reachability.ReachabilitySnapshotsRetained.Should().Be(1);
+
+            benchmarks.PrepareReachabilityFirstHit();
+            PathingScenarioSummary reachabilityWorkload = benchmarks.MeasureReachabilityFirstHitWorkloadCombos();
+            reachabilityWorkload.RequestsAttempted.Should().Be(PathingScenarioBenchmarks.ReachabilityWorkloadComboCount);
+            reachabilityWorkload.FailedRoutes.Should().Be(PathingScenarioBenchmarks.ReachabilityWorkloadComboCount);
+            reachabilityWorkload.ReachabilitySnapshotBuilds.Should().Be(PathingScenarioBenchmarks.ReachabilityWorkloadComboCount);
+            reachabilityWorkload.ReachabilitySnapshotsRetained.Should().Be(1);
+            reachabilityWorkload.ReachabilityScratchCapacity.Should().BeGreaterThan(0);
+
+            benchmarks.PrepareReachabilityFirstHit();
+            benchmarks.MeasureReachabilityFirstHitWorkloadCombos();
+            benchmarks.PrepareReachabilityFirstHit();
+            long reachabilityWorkloadAllocated =
+                MeasureAllocatedBytes(() => benchmarks.MeasureReachabilityFirstHitWorkloadCombos());
+            reachabilityWorkloadAllocated.Should().BeLessThan(2_000_000);
+
+            benchmarks.PrepareReachabilitySteadyHit();
+            PathingScenarioSummary reachabilitySteady = benchmarks.MeasureReachabilitySteadyHitActiveCombo();
+            reachabilitySteady.RequestsAttempted.Should().Be(PathingScenarioBenchmarks.ReachabilitySteadyHitOperations);
+            reachabilitySteady.FailedRoutes.Should().Be(PathingScenarioBenchmarks.ReachabilitySteadyHitOperations);
+            reachabilitySteady.ReachabilitySnapshotBuilds.Should().Be(0);
+            reachabilitySteady.ReachabilitySnapshotsRetained.Should().Be(1);
+            reachabilitySteady.ReachabilityScratchCapacity.Should().BeGreaterThan(0);
+
+            benchmarks.PrepareReachabilityInvalidation();
+            PathingScenarioSummary reachabilityInvalidation = benchmarks.MeasureReachabilityInvalidation();
+            reachabilityInvalidation.ChartUpdates.Should().Be(2);
+            reachabilityInvalidation.ReachabilitySnapshotsRetained.Should().Be(0);
+            reachabilityInvalidation.ReachabilityScratchCapacity.Should().BeGreaterThan(0);
 
             PathingScenarioSummary transitionChurn = benchmarks.MeasureTransitionRequestChurn();
             transitionChurn.RequestsCreated.Should().Be(PathingScenarioBenchmarks.TransitionChurnRequestCount);

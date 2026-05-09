@@ -514,6 +514,56 @@ Exit criteria:
 - Eviction or pooling is added only if measured workloads justify the complexity.
 - Snapshot invalidation remains deterministic and chart-safe.
 
+Implemented deliverables:
+
+- Added reachability scenario coverage for a 32-key clearance/climb workload, active-key steady
+  hits, and deterministic chart-update invalidation.
+- Replaced misleading multi-key snapshot bookkeeping with a single active snapshot policy. This
+  matches `SolidChartPartition`, which stores one reachability component marker at a time, and
+  avoids claiming stale keys are still resident after another key overwrites partition markers.
+- Reused reachability snapshot scratch containers under the existing reachability lock. This keeps
+  first-hit allocation low while retaining only one active snapshot key plus scratch capacity sized
+  to the largest observed topology.
+- Fixed the underlying `SwiftDictionary.Clear()` tombstone-reset issue in SwiftCollections. Without
+  that lower-level fix, pooling a large dictionary preserved deleted probe markers and made repeated
+  reachability builds pathologically slow.
+- Added preflight guards for snapshot build counts, retained snapshot count, retained scratch
+  capacity, invalidation clearing, and warmed 32-key first-hit allocation.
+
+Benchmark evidence:
+
+```bash
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- pathing-scenario --filter '*Reachability*' -j Short -i --memory --join
+```
+
+| Benchmark | Before pooling | Before allocation | Phase 6 result | Phase 6 allocation |
+| --- | ---: | ---: | ---: | ---: |
+| `ReachabilityFirstHit_ClearanceCombos` | 30.743 ms | 9,180,914 B | 29.933 ms | 1,182 B |
+| `ReachabilityFirstHit_WorkloadCombos` | 32.100 ms | 7,476,839 B | 27.838 ms | 1,025 B |
+| `ReachabilitySteadyHit_ActiveCombo` | 297.5 ns | 1 B | 2.988 us | 1 B |
+| `ReachabilityInvalidate_ActiveSnapshot` | 821.539 us | 7,756 B | 93.812 us | 7,756 B |
+
+The steady-hit short-run result is noisy because the operation is below BenchmarkDotNet's preferred
+iteration-time floor; the median stayed near the previous sub-microsecond shape. The first-hit and
+invalidation results are the useful phase signal: first-hit allocation dropped from multi-megabyte
+per route to roughly 1 KB per route after scratch reuse, and invalidation retains no active
+snapshot.
+
+Verification:
+
+- `dotnet test tests/SwiftCollections.Tests/SwiftCollections.Tests.csproj --configuration Release --filter FullyQualifiedName~Clear_ResetsTombstones_ForReuse` passed 1 test.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter "FullyQualifiedName~AStar_ShouldRebuildReachabilitySnapshot_WhenClearanceKeyChanges|FullyQualifiedName~PathingScenarioBenchmarks_ShouldKeepScenarioRoutesValid_AfterGlobalSetup"` passed 2 tests.
+- `dotnet test Trailblazer.slnx --configuration Release` passed 922 tests.
+- `dotnet test SwiftCollections.slnx --configuration Release` passed 830 tests.
+
+Fast-follow:
+
+- First-hit CPU remains `O(all initialized solid authored cells)` for each distinct active
+  clearance/climb key. If alpha hosts churn many unique keys on very large worlds in one frame,
+  evaluate chart-scoped dirty snapshots or host-side canonical clearance tiers.
+- Trailblazer and GridForge are temporarily linked to the local SwiftCollections project so the
+  tombstone fix is included before a new SwiftCollections package is published.
+
 ## Phase 7 - Transition Route Metadata
 
 **Severity:** Low to Medium  

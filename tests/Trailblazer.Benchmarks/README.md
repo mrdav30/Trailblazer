@@ -160,14 +160,18 @@ Key benchmarks:
 **Categories**: `Pathing`, `Scenario`
 
 Covers: dynamic chart invalidation plus A\* repath waves, shared flow-field guide checkout for
-100 and 500 starts, reachability snapshot first-hit checks, transition request construction and
-cache-key reads, transition request churn, and raw flow-field flood-range sweeps.
+100 and 500 starts, reachability snapshot first-hit/steady-hit/invalidation checks, transition
+request construction and cache-key reads, transition request churn, and raw flow-field flood-range
+sweeps.
 
 Key benchmarks:
 
 - `DynamicObstacleUpdate_RepathWave64` — one chart update followed by 64 A\* guide requests
 - `FlowFieldSharing_500Starts` — many starts sharing one cached destination field
 - `ReachabilityFirstHit_ClearanceCombos` — distinct `(unitSize, maxClimbHeight)` snapshot keys
+- `ReachabilityFirstHit_WorkloadCombos` — 32 distinct host-shaped reachability snapshot keys
+- `ReachabilitySteadyHit_ActiveCombo` — repeated unreachable checks against the active snapshot
+- `ReachabilityInvalidate_ActiveSnapshot` — chart-update invalidation of the active snapshot
 - `TransitionRequestChurn_64Requests` — host-style request creation every fixed step
 - `FlowFieldFloodRange_OpenPlane128` — large raw flow-field flood and allocation shape
 

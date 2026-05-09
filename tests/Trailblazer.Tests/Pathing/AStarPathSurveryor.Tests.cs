@@ -226,6 +226,31 @@ public class AStarSurveryorTests : IDisposable
     }
 
     [Fact]
+    public void AStar_ShouldRebuildReachabilitySnapshot_WhenClearanceKeyChanges()
+    {
+        bool[,,] data = BuildSingleVoxelChoke();
+        PathTestFactory.RegisterFromData("ChokeKeySwitch", data, Vector3d.Zero);
+
+        AStarPathRequest lowClimbRequest = TestRequire.NotNull(AStarPathRequest.Create(
+            new Vector3d(0, 0, 2),
+            new Vector3d(6, 0, 2),
+            Fixed64.Two));
+        lowClimbRequest.MaxClimbHeight = Fixed64.Zero;
+
+        AStarPathRequest highClimbRequest = TestRequire.NotNull(AStarPathRequest.Create(
+            new Vector3d(0, 0, 2),
+            new Vector3d(6, 0, 2),
+            Fixed64.Two));
+        highClimbRequest.MaxClimbHeight = Fixed64.One;
+
+        SolidPartitionReachability.IsProvablyUnreachable(lowClimbRequest).Should().BeTrue();
+        SolidPartitionReachability.IsProvablyUnreachable(highClimbRequest).Should().BeTrue();
+        SolidPartitionReachability.IsProvablyUnreachable(lowClimbRequest).Should().BeTrue();
+
+        PathManager.UnloadChart("ChokeKeySwitch");
+    }
+
+    [Fact]
     public void AStarSurveyor_FindPath_ShouldKeepOpenPlane16ColdAllocationsUnderBudget()
     {
         TrailblazerWorldManager.Reset();

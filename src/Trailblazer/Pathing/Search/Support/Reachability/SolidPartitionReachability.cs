@@ -14,11 +14,21 @@ internal static class SolidPartitionReachability
 {
     private static readonly object _lock = new();
 
-    private static readonly SwiftDictionary<ReachabilitySnapshotKey, int> _snapshotIdsByKey = new();
+    private static readonly SwiftDictionary<WorldVoxelIndex, SolidChartPartition> _passablePartitions = new();
 
-    private static readonly SwiftDictionary<int, int> _snapshotVersionsById = new();
+    private static readonly SwiftList<SolidChartPartition> _componentRoots = new();
 
-    private static int _nextSnapshotId;
+    private static readonly SwiftQueue<SolidChartPartition> _componentQueue = new();
+
+    private static ReachabilitySnapshotKey _activeSnapshotKey;
+
+    private static bool _hasActiveSnapshot;
+
+    private static int _activeSnapshotId;
+
+    private static int _activeSnapshotVersion = -1;
+
+    private static long _snapshotBuildCount;
 
     private static int _version;
 
@@ -30,9 +40,25 @@ internal static class SolidPartitionReachability
         lock (_lock)
         {
             unchecked { _version++; }
-            _snapshotIdsByKey.Clear();
-            _snapshotVersionsById.Clear();
-            _nextSnapshotId = 0;
+            _hasActiveSnapshot = false;
+            _activeSnapshotVersion = -1;
+        }
+    }
+
+    /// <summary>
+    /// Captures reachability snapshot state for benchmarks and regression tests.
+    /// </summary>
+    internal static SolidPartitionReachabilityStats CaptureStats()
+    {
+        lock (_lock)
+        {
+            return new SolidPartitionReachabilityStats(
+                _hasActiveSnapshot ? 1 : 0,
+                _version,
+                _snapshotBuildCount,
+                _passablePartitions.Capacity,
+                _componentRoots.Capacity,
+                _componentQueue.Capacity);
         }
     }
 
@@ -96,21 +122,30 @@ internal static class SolidPartitionReachability
 
     private static int EnsureSnapshot(ReachabilitySnapshotKey key)
     {
-        if (!_snapshotIdsByKey.TryGetValue(key, out int snapshotId))
+        if (!_hasActiveSnapshot || !_activeSnapshotKey.Equals(key))
         {
-            snapshotId = ++_nextSnapshotId;
-            _snapshotIdsByKey[key] = snapshotId;
+            _activeSnapshotKey = key;
+            _activeSnapshotId = GetNextSnapshotId(_activeSnapshotId);
+            _activeSnapshotVersion = -1;
+            _hasActiveSnapshot = true;
         }
 
-        if (_snapshotVersionsById.TryGetValue(snapshotId, out int snapshotVersion)
-            && snapshotVersion == _version)
-        {
-            return snapshotId;
-        }
+        if (_activeSnapshotVersion == _version)
+            return _activeSnapshotId;
 
-        BuildSnapshot(snapshotId, key.UnitSize, key.MaxClimbHeight, _version);
-        _snapshotVersionsById[snapshotId] = _version;
-        return snapshotId;
+        BuildSnapshot(_activeSnapshotId, key.UnitSize, key.MaxClimbHeight, _version);
+        _activeSnapshotVersion = _version;
+        _snapshotBuildCount++;
+        return _activeSnapshotId;
+    }
+
+    private static int GetNextSnapshotId(int current)
+    {
+        unchecked
+        {
+            int next = current + 1;
+            return next == 0 ? 1 : next;
+        }
     }
 
     private static void BuildSnapshot(
@@ -119,36 +154,54 @@ internal static class SolidPartitionReachability
         Fixed64 maxClimbHeight,
         int version)
     {
-        SwiftDictionary<WorldVoxelIndex, SolidChartPartition> passablePartitions = new();
-        SwiftList<SolidChartPartition> componentRoots = new();
+        // Snapshot construction runs under the reachability lock, so these scratch containers
+        // can be reused without exposing partition references after the build completes.
+        _passablePartitions.Clear();
+        _componentRoots.Clear();
+        _componentQueue.Clear();
 
-        foreach (NavigationChart chart in PathManager.AllCharts)
+        try
         {
-            if (chart == null || !chart.IsInitialized)
-                continue;
-
-            foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
+            foreach (NavigationChart chart in PathManager.AllCharts)
             {
-                if (!cell.HasSolid
-                    || !TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel)
-                    || voxel == null
-                    || !voxel.TryGetPartition(out SolidChartPartition? partition)
-                    || partition == null
-                    || partition.Neighbors == null)
+                if (chart == null || !chart.IsInitialized)
+                    continue;
+
+                foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
                 {
-                    continue;
+                    if (!cell.HasSolid
+                        || !TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel)
+                        || voxel == null
+                        || !voxel.TryGetPartition(out SolidChartPartition? partition)
+                        || partition == null
+                        || partition.Neighbors == null)
+                    {
+                        continue;
+                    }
+
+                    partition.SetReachabilityComponent(snapshotId, version, 0);
+                    if (partition.IsImpassable(unitSize) || _passablePartitions.ContainsKey(partition.WorldIndex))
+                        continue;
+
+                    _passablePartitions[partition.WorldIndex] = partition;
+                    _componentRoots.Add(partition);
                 }
-
-                partition.SetReachabilityComponent(snapshotId, version, 0);
-                if (partition.IsImpassable(unitSize) || passablePartitions.ContainsKey(partition.WorldIndex))
-                    continue;
-
-                passablePartitions[partition.WorldIndex] = partition;
-                componentRoots.Add(partition);
             }
-        }
 
-        AssignComponents(snapshotId, version, passablePartitions, componentRoots, maxClimbHeight);
+            AssignComponents(
+                snapshotId,
+                version,
+                _passablePartitions,
+                _componentRoots,
+                _componentQueue,
+                maxClimbHeight);
+        }
+        finally
+        {
+            _componentQueue.Clear();
+            _componentRoots.Clear();
+            _passablePartitions.Clear();
+        }
     }
 
     private static void AssignComponents(
@@ -156,9 +209,9 @@ internal static class SolidPartitionReachability
         int version,
         SwiftDictionary<WorldVoxelIndex, SolidChartPartition> passablePartitions,
         SwiftList<SolidChartPartition> componentRoots,
+        SwiftQueue<SolidChartPartition> queue,
         Fixed64 maxClimbHeight)
     {
-        SwiftQueue<SolidChartPartition> queue = new();
         int componentId = 0;
 
         for (int i = 0; i < componentRoots.Count; i++)
@@ -334,6 +387,58 @@ internal static class SolidPartitionReachability
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Snapshot counters used by benchmarks and tests to verify reachability cache policy.
+    /// </summary>
+    internal readonly struct SolidPartitionReachabilityStats
+    {
+        internal SolidPartitionReachabilityStats(
+            int activeSnapshotCount,
+            int version,
+            long snapshotBuildCount,
+            int passablePartitionCapacity,
+            int componentRootCapacity,
+            int componentQueueCapacity)
+        {
+            ActiveSnapshotCount = activeSnapshotCount;
+            Version = version;
+            SnapshotBuildCount = snapshotBuildCount;
+            PassablePartitionCapacity = passablePartitionCapacity;
+            ComponentRootCapacity = componentRootCapacity;
+            ComponentQueueCapacity = componentQueueCapacity;
+        }
+
+        /// <summary>
+        /// Gets the number of snapshot keys currently retained by the reachability cache.
+        /// </summary>
+        internal int ActiveSnapshotCount { get; }
+
+        /// <summary>
+        /// Gets the current topology version tracked by the reachability cache.
+        /// </summary>
+        internal int Version { get; }
+
+        /// <summary>
+        /// Gets the number of connectivity snapshots built since process start.
+        /// </summary>
+        internal long SnapshotBuildCount { get; }
+
+        /// <summary>
+        /// Gets the retained capacity of the passable-partition scratch map.
+        /// </summary>
+        internal int PassablePartitionCapacity { get; }
+
+        /// <summary>
+        /// Gets the retained capacity of the component-root scratch list.
+        /// </summary>
+        internal int ComponentRootCapacity { get; }
+
+        /// <summary>
+        /// Gets the retained capacity of the component queue.
+        /// </summary>
+        internal int ComponentQueueCapacity { get; }
     }
 
     private readonly struct ReachabilitySnapshotKey : IEquatable<ReachabilitySnapshotKey>

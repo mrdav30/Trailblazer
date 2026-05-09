@@ -19,7 +19,10 @@ public readonly struct PathingScenarioSummary
         int chartUpdates = 0,
         int fieldsVisited = 0,
         int maxPathSearchRange = 0,
-        int extraFloodRange = 0)
+        int extraFloodRange = 0,
+        long reachabilitySnapshotBuilds = 0,
+        int reachabilitySnapshotsRetained = 0,
+        int reachabilityScratchCapacity = 0)
     {
         RequestsAttempted = requestsAttempted;
         RequestsCreated = requestsCreated;
@@ -30,6 +33,9 @@ public readonly struct PathingScenarioSummary
         FieldsVisited = fieldsVisited;
         MaxPathSearchRange = maxPathSearchRange;
         ExtraFloodRange = extraFloodRange;
+        ReachabilitySnapshotBuilds = reachabilitySnapshotBuilds;
+        ReachabilitySnapshotsRetained = reachabilitySnapshotsRetained;
+        ReachabilityScratchCapacity = reachabilityScratchCapacity;
     }
 
     public int RequestsAttempted { get; }
@@ -55,6 +61,21 @@ public readonly struct PathingScenarioSummary
     /// Gets the extra flood range carried by the measured flow-field flood request.
     /// </summary>
     public int ExtraFloodRange { get; }
+
+    /// <summary>
+    /// Gets the reachability snapshots built by the measured operation.
+    /// </summary>
+    public long ReachabilitySnapshotBuilds { get; }
+
+    /// <summary>
+    /// Gets the reachability snapshot keys retained after the measured operation.
+    /// </summary>
+    public int ReachabilitySnapshotsRetained { get; }
+
+    /// <summary>
+    /// Gets the retained reachability scratch container capacity after the measured operation.
+    /// </summary>
+    public int ReachabilityScratchCapacity { get; }
 }
 
 /// <summary>
@@ -69,6 +90,8 @@ public class PathingScenarioBenchmarks
     public const int FlowSharingCount100 = 100;
     public const int FlowSharingCount500 = 500;
     public const int ReachabilityComboCount = 4;
+    public const int ReachabilityWorkloadComboCount = 32;
+    public const int ReachabilitySteadyHitOperations = 1024;
     public const int TransitionChurnRequestCount = 64;
 
     private const int DynamicPlaneSize = 64;
@@ -105,6 +128,7 @@ public class PathingScenarioBenchmarks
     private FlowFieldGuide[] _flowSharingGuideBuffer;
 
     private AStarPathRequest[] _reachabilityRequests;
+    private AStarPathRequest[] _reachabilityWorkloadRequests;
 
     private Vector3d _transitionOrigin;
     private Vector3d _transitionDestination;
@@ -171,7 +195,8 @@ public class PathingScenarioBenchmarks
 
     [IterationSetup(Targets = new[]
     {
-        nameof(ReachabilityFirstHit_ClearanceCombos)
+        nameof(ReachabilityFirstHit_ClearanceCombos),
+        nameof(ReachabilityFirstHit_WorkloadCombos)
     })]
     public void PrepareReachabilityFirstHit()
     {
@@ -188,6 +213,26 @@ public class PathingScenarioBenchmarks
             ReachabilityInvalidateY,
             ReachabilityInvalidateZ,
             NavigationChartCell.Solid);
+    }
+
+    [IterationSetup(Targets = new[]
+    {
+        nameof(ReachabilitySteadyHit_ActiveCombo)
+    })]
+    public void PrepareReachabilitySteadyHit()
+    {
+        PrepareReachabilityFirstHit();
+        RequestExpectedUnreachable(_reachabilityWorkloadRequests[0], "reachability steady seed");
+    }
+
+    [IterationSetup(Targets = new[]
+    {
+        nameof(ReachabilityInvalidate_ActiveSnapshot)
+    })]
+    public void PrepareReachabilityInvalidation()
+    {
+        PrepareReachabilityFirstHit();
+        MeasureReachabilityFirstHitWorkloadCombos();
     }
 
     /// <summary>
@@ -231,6 +276,38 @@ public class PathingScenarioBenchmarks
     public int ReachabilityFirstHit_ClearanceCombos()
     {
         return MeasureReachabilityFirstHitClearanceCombos().FailedRoutes;
+    }
+
+    /// <summary>
+    /// First unreachable-route checks for a wider host-shaped set of snapshot keys.
+    /// </summary>
+    [Benchmark(OperationsPerInvoke = ReachabilityWorkloadComboCount)]
+    [BenchmarkCategory("Pathing", "Scenario", "Reachability")]
+    public int ReachabilityFirstHit_WorkloadCombos()
+    {
+        return MeasureReachabilityFirstHitWorkloadCombos().FailedRoutes;
+    }
+
+    /// <summary>
+    /// Repeats the active unreachable-route snapshot key to measure steady hit cost.
+    /// </summary>
+    [Benchmark(OperationsPerInvoke = ReachabilitySteadyHitOperations)]
+    [InvocationCount(1)]
+    [BenchmarkCategory("Pathing", "Scenario", "Reachability")]
+    public int ReachabilitySteadyHit_ActiveCombo()
+    {
+        return MeasureReachabilitySteadyHitActiveCombo().FailedRoutes;
+    }
+
+    /// <summary>
+    /// Invalidates an active reachability snapshot through deterministic chart updates.
+    /// </summary>
+    [Benchmark(OperationsPerInvoke = 2)]
+    [InvocationCount(1)]
+    [BenchmarkCategory("Pathing", "Scenario", "Reachability", "Invalidation")]
+    public int ReachabilityInvalidate_ActiveSnapshot()
+    {
+        return MeasureReachabilityInvalidation().ChartUpdates;
     }
 
     /// <summary>
@@ -368,10 +445,61 @@ public class PathingScenarioBenchmarks
 
     public PathingScenarioSummary MeasureReachabilityFirstHitClearanceCombos()
     {
+        return MeasureReachabilityRequests(_reachabilityRequests, _reachabilityRequests.Length);
+    }
+
+    public PathingScenarioSummary MeasureReachabilityFirstHitWorkloadCombos()
+    {
+        return MeasureReachabilityRequests(_reachabilityWorkloadRequests, _reachabilityWorkloadRequests.Length);
+    }
+
+    public PathingScenarioSummary MeasureReachabilitySteadyHitActiveCombo()
+    {
+        return MeasureReachabilityRequestRepeated(
+            _reachabilityWorkloadRequests[0],
+            ReachabilitySteadyHitOperations);
+    }
+
+    public PathingScenarioSummary MeasureReachabilityInvalidation()
+    {
+        int changed = PathManager.TryUpdateChartCell(
+            ReachabilityChartName,
+            ReachabilityInvalidateX,
+            ReachabilityInvalidateY,
+            ReachabilityInvalidateZ,
+            NavigationChartCell.Empty)
+            ? 1
+            : 0;
+
+        changed += PathManager.TryUpdateChartCell(
+            ReachabilityChartName,
+            ReachabilityInvalidateX,
+            ReachabilityInvalidateY,
+            ReachabilityInvalidateZ,
+            NavigationChartCell.Solid)
+            ? 1
+            : 0;
+
+        SolidPartitionReachability.SolidPartitionReachabilityStats stats =
+            SolidPartitionReachability.CaptureStats();
+
+        return new PathingScenarioSummary(
+            chartUpdates: changed,
+            reachabilitySnapshotsRetained: stats.ActiveSnapshotCount,
+            reachabilityScratchCapacity: GetReachabilityScratchCapacity(stats));
+    }
+
+    private static PathingScenarioSummary MeasureReachabilityRequests(
+        AStarPathRequest[] requests,
+        int count)
+    {
+        SolidPartitionReachability.SolidPartitionReachabilityStats before =
+            SolidPartitionReachability.CaptureStats();
+
         int failed = 0;
-        for (int i = 0; i < _reachabilityRequests.Length; i++)
+        for (int i = 0; i < count; i++)
         {
-            bool ok = PathGuideFactory.RequestGuide(_reachabilityRequests[i], out AStarGuide guide);
+            bool ok = PathGuideFactory.RequestGuide(requests[i], out AStarGuide guide);
             if (ok)
             {
                 PathGuideFactory.ReturnGuide(guide);
@@ -381,9 +509,54 @@ public class PathingScenarioBenchmarks
             failed++;
         }
 
+        SolidPartitionReachability.SolidPartitionReachabilityStats after =
+            SolidPartitionReachability.CaptureStats();
+
         return new PathingScenarioSummary(
-            requestsAttempted: _reachabilityRequests.Length,
-            failedRoutes: failed);
+            requestsAttempted: count,
+            failedRoutes: failed,
+            reachabilitySnapshotBuilds: after.SnapshotBuildCount - before.SnapshotBuildCount,
+            reachabilitySnapshotsRetained: after.ActiveSnapshotCount,
+            reachabilityScratchCapacity: GetReachabilityScratchCapacity(after));
+    }
+
+    private static PathingScenarioSummary MeasureReachabilityRequestRepeated(
+        AStarPathRequest request,
+        int count)
+    {
+        SolidPartitionReachability.SolidPartitionReachabilityStats before =
+            SolidPartitionReachability.CaptureStats();
+
+        int failed = 0;
+        for (int i = 0; i < count; i++)
+        {
+            bool ok = PathGuideFactory.RequestGuide(request, out AStarGuide guide);
+            if (ok)
+            {
+                PathGuideFactory.ReturnGuide(guide);
+                continue;
+            }
+
+            failed++;
+        }
+
+        SolidPartitionReachability.SolidPartitionReachabilityStats after =
+            SolidPartitionReachability.CaptureStats();
+
+        return new PathingScenarioSummary(
+            requestsAttempted: count,
+            failedRoutes: failed,
+            reachabilitySnapshotBuilds: after.SnapshotBuildCount - before.SnapshotBuildCount,
+            reachabilitySnapshotsRetained: after.ActiveSnapshotCount,
+            reachabilityScratchCapacity: GetReachabilityScratchCapacity(after));
+    }
+
+    private static int GetReachabilityScratchCapacity(
+        SolidPartitionReachability.SolidPartitionReachabilityStats stats)
+    {
+        return stats.PassablePartitionCapacity
+            + stats.ComponentRootCapacity
+            + stats.ComponentQueueCapacity;
     }
 
     public PathingScenarioSummary MeasureTransitionRequestChurn()
@@ -491,6 +664,15 @@ public class PathingScenarioBenchmarks
         _reachabilityRequests[1] = CreateReachabilityRequest(start, end, Fixed64.One, Fixed64.One);
         _reachabilityRequests[2] = CreateReachabilityRequest(start, end, (Fixed64)2, Fixed64.Zero);
         _reachabilityRequests[3] = CreateReachabilityRequest(start, end, (Fixed64)2, Fixed64.One);
+
+        _reachabilityWorkloadRequests = new AStarPathRequest[ReachabilityWorkloadComboCount];
+        for (int i = 0; i < _reachabilityWorkloadRequests.Length; i++)
+        {
+            Fixed64 unitSize = (Fixed64)(1 + (i & 3));
+            Fixed64 maxClimbHeight = (Fixed64)(i >> 2);
+            _reachabilityWorkloadRequests[i] =
+                CreateReachabilityRequest(start, end, unitSize, maxClimbHeight);
+        }
     }
 
     private void SetupTransitionRequests()
@@ -557,6 +739,26 @@ public class PathingScenarioBenchmarks
         PathingScenarioSummary reachability = MeasureReachabilityFirstHitClearanceCombos();
         if (reachability.FailedRoutes != ReachabilityComboCount)
             throw new InvalidOperationException("Preflight: reachability split-island routes unexpectedly resolved.");
+
+        PrepareReachabilityFirstHit();
+        PathingScenarioSummary reachabilityWorkload = MeasureReachabilityFirstHitWorkloadCombos();
+        if (reachabilityWorkload.FailedRoutes != ReachabilityWorkloadComboCount
+            || reachabilityWorkload.ReachabilitySnapshotsRetained != 1)
+        {
+            throw new InvalidOperationException("Preflight: reachability workload split-island routes unexpectedly resolved.");
+        }
+
+        PrepareReachabilitySteadyHit();
+        PathingScenarioSummary reachabilitySteady = MeasureReachabilitySteadyHitActiveCombo();
+        if (reachabilitySteady.FailedRoutes != ReachabilitySteadyHitOperations
+            || reachabilitySteady.ReachabilitySnapshotBuilds != 0)
+        {
+            throw new InvalidOperationException("Preflight: reachability steady-hit scenario rebuilt unexpectedly.");
+        }
+
+        PrepareReachabilityInvalidation();
+        if (MeasureReachabilityInvalidation().ReachabilitySnapshotsRetained != 0)
+            throw new InvalidOperationException("Preflight: reachability invalidation retained an active snapshot.");
 
         EnsureAStarGuideResolves(_transitionAStarRequest, "transition A* jump");
         EnsureFlowFieldGuideResolves(_transitionFlowFieldRequest, "transition flow-field jump");
@@ -665,6 +867,15 @@ public class PathingScenarioBenchmarks
             throw new InvalidOperationException($"Preflight: {requestName} A* guide failed.");
 
         PathGuideFactory.ReturnGuide(guide);
+    }
+
+    private static void RequestExpectedUnreachable(AStarPathRequest request, string requestName)
+    {
+        if (PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+        {
+            PathGuideFactory.ReturnGuide(guide);
+            throw new InvalidOperationException($"Preflight: {requestName} A* guide unexpectedly resolved.");
+        }
     }
 
     private static void EnsureFlowFieldGuideResolves(FlowFieldPathRequest request, string requestName)

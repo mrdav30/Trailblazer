@@ -44,7 +44,7 @@ internal static class HybridWaypointFlattener
 
                     case HybridRouteStepKind.PathSegment:
                         if (!TryAppendSegmentWaypoints(
-                            step.SegmentRequest,
+                            step,
                             waypoints,
                             borrowedGuides,
                             utilizedCharts,
@@ -76,14 +76,16 @@ internal static class HybridWaypointFlattener
     }
 
     private static bool TryAppendSegmentWaypoints(
-        IPathRequest request,
+        HybridRouteStep step,
         SwiftList<AStarWaypoint> destination,
         SwiftList<IGuide> borrowedGuides,
         SwiftList<string> utilizedCharts,
         SwiftHashSet<string> utilizedChartSet,
         ref int pathCostOffset)
     {
-        switch (request)
+        AddChartKeys(utilizedCharts, utilizedChartSet, step.SegmentChartKeys);
+
+        switch (step.SegmentRequest)
         {
             case AStarPathRequest aStarRequest:
                 AStarSurveyResult aStarResult = AStarSurveyor.Shared.FindPath(aStarRequest);
@@ -100,6 +102,9 @@ internal static class HybridWaypointFlattener
                     return false;
 
                 borrowedGuides.Add(volumeGuide);
+                if (volumeGuide.TrailMap != null)
+                    AddChartKeys(utilizedCharts, utilizedChartSet, volumeGuide.TrailMap.ChartsUtilized);
+
                 AppendWaypoints(destination, volumeGuide.ActiveWaypoints, ref pathCostOffset);
                 return true;
 

@@ -635,7 +635,10 @@ public static class PathGuideFactory
             if (step.Kind != HybridRouteStepKind.PathSegment)
                 continue;
 
-            AddRequestEndpointChartOwners(chartKeys, step.SegmentRequest);
+            if (step.SegmentChartKeys.Length > 0)
+                AddChartKeys(chartKeys, step.SegmentChartKeys);
+            else
+                AddRequestEndpointChartOwners(chartKeys, step.SegmentRequest);
         }
 
         if (chartKeys.Count == 0)
@@ -647,6 +650,19 @@ public static class PathGuideFactory
             result[index++] = chartKey;
 
         return result;
+    }
+
+    private static void AddChartKeys(SwiftHashSet<string> chartKeys, string[] segmentChartKeys)
+    {
+        if (chartKeys == null || segmentChartKeys == null)
+            return;
+
+        for (int i = 0; i < segmentChartKeys.Length; i++)
+        {
+            string chartKey = segmentChartKeys[i];
+            if (!string.IsNullOrEmpty(chartKey))
+                chartKeys.Add(chartKey);
+        }
     }
 
     private static void AddRequestEndpointChartOwners(SwiftHashSet<string> chartKeys, IPathRequest request)

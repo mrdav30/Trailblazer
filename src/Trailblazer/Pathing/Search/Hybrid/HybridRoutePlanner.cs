@@ -374,7 +374,7 @@ internal static class HybridRoutePlanner
             return false;
 
         pathCost = surveyResult.Waypoints[^1].PathCost;
-        step = HybridRouteStep.Segment(chartRequest);
+        step = HybridRouteStep.Segment(chartRequest, chartKeys: surveyResult.ChartsUtilized);
         return true;
     }
 
@@ -415,7 +415,7 @@ internal static class HybridRoutePlanner
         }
 
         pathCost = startField.PathCost;
-        step = HybridRouteStep.Segment(chartRequest);
+        step = HybridRouteStep.Segment(chartRequest, chartKeys: surveyResult.ChartsUtilized);
         return true;
     }
 
@@ -451,7 +451,7 @@ internal static class HybridRoutePlanner
             return false;
 
         pathCost = surveyResult.Waypoints![^1].PathCost;
-        step = HybridRouteStep.Segment(volumeRequest);
+        step = HybridRouteStep.Segment(volumeRequest, chartKeys: surveyResult.ChartsUtilized);
         return true;
     }
 

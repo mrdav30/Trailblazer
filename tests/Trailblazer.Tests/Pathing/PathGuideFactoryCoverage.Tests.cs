@@ -21,6 +21,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
+        TraversalTransitionRegistry.Reset();
         TrailblazerWorldManager.Reset();
         TrailblazerManager.Reset();
         GC.SuppressFinalize(this);
@@ -223,6 +224,83 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     }
 
     [Fact]
+    public void FlowTransitionFallbackPlan_ShouldInvalidateForIntermediateSegmentChart_WhenBoundaryAnchorsAreUsed()
+    {
+        RegisterSolidPoint("GuideFactoryBoundaryStart", Vector3d.Zero);
+        RegisterSolidPoint("GuideFactoryBoundaryBridge", new Vector3d(1, 0, 0));
+        RegisterSolidPoint("GuideFactoryBoundaryEntry", new Vector3d(2, 0, 0));
+        RegisterSolidPoint("GuideFactoryBoundaryExit", new Vector3d(4, 0, 0));
+        RegisterSolidPoint("GuideFactoryBoundaryEnd", new Vector3d(5, 0, 0));
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "guide-factory-boundary-hop",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
+            pathCostModifier: 4)).Should().BeTrue();
+
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(5, 0, 0),
+            Fixed64.One,
+            allowTraversalTransitions: true));
+
+        FlowFieldGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out FlowFieldGuide? createdGuide),
+            createdGuide);
+        guide.IsStaged.Should().BeTrue();
+        PathGuideFactory.ReturnGuide(guide);
+
+        PathGuideFactory.TotalHybridRoutePlanCount.Should().Be(1);
+
+        PathGuideFactory.InvalidateCacheFor("GuideFactoryBoundaryBridge");
+
+        PathGuideFactory.TotalHybridRoutePlanCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void AStarTransitionFallbackResult_ShouldInvalidateForVolumeSegmentChart()
+    {
+        RegisterSolidPoint("GuideFactoryAStarFallbackStart", new Vector3d(-1, 0, 0));
+        RegisterSolidPoint("GuideFactoryAStarFallbackEnd", new Vector3d(3, 0, 0));
+        RegisterVolumePoint("GuideFactoryAStarFallbackWaterEntry", new Vector3d(0, 0, 0), TraversalMedia.Liquid);
+        RegisterVolumePoint("GuideFactoryAStarFallbackWaterMiddle", new Vector3d(1, 0, 0), TraversalMedia.Liquid);
+        RegisterVolumePoint("GuideFactoryAStarFallbackWaterExit", new Vector3d(2, 0, 0), TraversalMedia.Liquid);
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "guide-factory-water-entry",
+            type: TraversalTransitionType.SwimEntry,
+            source: TraversalTransitionAnchor.Solid(new Vector3d(-1, 0, 0)),
+            destination: TraversalTransitionAnchor.Liquid(new Vector3d(0, 0, 0)),
+            pathCostModifier: 2)).Should().BeTrue();
+
+        TraversalTransitionRegistry.Register(new TraversalTransition(
+            id: "guide-factory-water-exit",
+            type: TraversalTransitionType.SwimExit,
+            source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
+            pathCostModifier: 1)).Should().BeTrue();
+
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
+            new Vector3d(-1, 0, 0),
+            new Vector3d(3, 0, 0),
+            Fixed64.One,
+            HeuristicMethod.Manhattan,
+            allowTraversalTransitions: true));
+
+        AStarGuide guide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide),
+            createdGuide);
+        PathGuideFactory.ReturnGuide(guide);
+
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
+
+        PathGuideFactory.InvalidateCacheFor("GuideFactoryAStarFallbackWaterMiddle");
+
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
+    }
+
+    [Fact]
     public void FlowFieldCacheHit_ShouldAllocateWithinFiftyBytesOfAStarHit()
     {
         RegisterSolidLine("GuideFactoryWarmHitAllocation", Vector3d.Zero, 4);
@@ -345,6 +423,22 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
             data[0, i, 0] = true;
 
         PathTestFactory.RegisterFromData(chartName, data, minBounds);
+    }
+
+    private static void RegisterSolidPoint(string chartName, Vector3d position)
+    {
+        var data = new bool[1, 1, 1];
+        data[0, 0, 0] = true;
+
+        PathTestFactory.RegisterFromData(chartName, data, position);
+    }
+
+    private static void RegisterVolumePoint(string chartName, Vector3d position, TraversalMedia media)
+    {
+        var data = new NavigationChartCell[1, 1, 1];
+        data[0, 0, 0] = new NavigationChartCell(media);
+
+        PathManager.Register(NavigationChart.From3D(chartName, data, position, Fixed64.One));
     }
 
     private static void RegisterVolumeLine(Vector3d start, TraversalMedium medium, int length, string chartNamePrefix)

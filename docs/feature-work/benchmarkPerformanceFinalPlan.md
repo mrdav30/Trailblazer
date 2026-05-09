@@ -586,6 +586,27 @@ Exit criteria:
 - Transition route metadata stays as small as possible for alpha.
 - Any metadata expansion is justified by a concrete invalidation or diagnostic gap.
 
+Phase 7 result:
+
+- Found a concrete invalidation gap in transition fallback routes: endpoint-owner metadata missed
+  charts traversed inside a staged segment, so invalidating an intermediate chart could leave a
+  cached hybrid flow route plan or A* transition-fallback result resident.
+- Added exact per-segment chart keys to `HybridRouteStep` using the survey results already computed
+  during route planning. This keeps route metadata limited to real segment ownership and avoids a
+  broader route diagnostics model.
+- Updated hybrid route-plan cache indexing to prefer the segment survey chart keys, with endpoint
+  owner fallback for manually constructed or older route steps.
+- Updated hybrid waypoint flattening to carry volume segment chart keys into A* transition fallback
+  results, closing the matching volume-cache invalidation gap.
+- Added focused regression coverage for boundary-anchor transition fallback routes and volume
+  segment invalidation through `PathGuideFactory`.
+
+Verification:
+
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~PathGuideFactoryCoverageTests` passed 15 tests.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter "FullyQualifiedName~PathGuideFactoryCoverageTests|FullyQualifiedName~AStarTransitionFallbackTests|FullyQualifiedName~FlowFieldTransitionFallbackTests|FullyQualifiedName~HybridWaypointFlattenerTests|FullyQualifiedName~HybridRoutePlannerTests"` passed 46 tests.
+- `dotnet test Trailblazer.slnx --configuration Release` passed 924 tests.
+
 ## Phase 8 - A* Heuristic Investigation
 
 **Severity:** Medium  

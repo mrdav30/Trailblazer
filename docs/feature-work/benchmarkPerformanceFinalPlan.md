@@ -341,6 +341,70 @@ Exit criteria:
 - Cold and warm benchmark results do not regress from scratch-state pooling.
 - No stale survey state can leak across failed, empty, or successful results.
 
+### Phase 4 Notes - 2026-05-09
+
+Status: complete.
+
+Scratch inventory:
+
+- `AStarSurveyor` keeps `_heap`, `_meta`, `_rawPath`, `_waypoints`, `_chartKeys`, and `_request`
+  as reusable per-surveyor scratch.
+- `FlowFieldSurveyor` keeps `_heap`, `_chartKeys`, `_samplingGrids`, `_samplingGridBuilders`, and
+  `_request` as reusable per-surveyor scratch. Its normalized direction lookup is immutable shared
+  data and does not need locking.
+- `VolumeSurveyor` keeps `_heap`, `_meta`, `_rawPath`, `_waypoints`, `_chartKeys`, and `_request`
+  as reusable per-surveyor scratch.
+- None of the mutable survey scratch above is truly shared across surveyor types. The previous
+  global lock serialized independent A*, flow-field, and volume surveys only because the lock lived
+  outside the surveyor instances.
+
+Implemented deliverables:
+
+- Replaced the static global survey lock with a focused `SurveyorLock` instance on each shared
+  surveyor.
+- Kept the existing per-surveyor scratch reuse model, so no steady-state scratch allocation was
+  added and deterministic expansion order remains unchanged.
+- Preserved serialization for concurrent calls to the same shared surveyor instance, which still
+  protects that surveyor's reusable scratch fields.
+- Added coverage proving the old `GlobalLock` is gone, each shared surveyor has an independent
+  scratch lock, and mixed concurrent A*, flow-field, and volume requests complete without stale
+  survey state leaking between results.
+
+Benchmark evidence:
+
+```bash
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- flow-field-path-request --filter '*RawSurvey_OpenPlane64*' --job short --runtimes net8.0
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request --filter '*RawSurvey_OpenPlane32*' --job short --runtimes net8.0
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- volume-path-request --filter '*RawSurvey_DirectGasCorridor*' --job short --runtimes net8.0
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- flow-field-path-request --filter '*WarmGuide_OpenPlane128*' --job short --runtimes net8.0
+```
+
+| Benchmark | Phase 4 result | Allocation |
+| --- | ---: | ---: |
+| `RawSurvey_OpenPlane64` | 9.628 ms | 2.13 MB |
+| `RawSurvey_OpenPlane32` | 2.000 ms | 4.04 KB |
+| `RawSurvey_DirectGasCorridor` | 66.51 us | 328 B |
+| `WarmGuide_OpenPlane128` | 147.3 ns | 0 B |
+
+The short-run flow-field result remains in the post-Phase-3 range, and the warm guide hit remains
+allocation-free. BenchmarkDotNet still reports the known high-priority permission warning under WSL,
+plus `MinIterationTime` warnings for the tiny short-run raw survey checks; these do not indicate a
+new Phase 4 regression.
+
+Verification:
+
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~SurveyorLockTests` passed 2 tests.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter "FullyQualifiedName~Surveyor"` passed 64 tests.
+- `dotnet build Trailblazer.slnx --configuration Release` passed with 0 warnings and 0 errors.
+- `dotnet test Trailblazer.slnx --configuration Release` passed 919 tests.
+
+Fast-follow:
+
+- No new fast-follow items were found in this phase. A more aggressive per-call or pooled scratch
+  model could widen concurrency for multiple calls to the same surveyor type, but the current shared
+  surveyor API still relies on mutable reusable scratch and should remain serialized per type until
+  a measured workload justifies the added ownership complexity.
+
 ## Phase 5 - Cache Benchmark Infrastructure
 
 **Severity:** Medium  

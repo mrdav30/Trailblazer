@@ -33,6 +33,8 @@ public sealed class VolumeSurveyor
     /// </remarks>
     public static VolumeSurveyor Shared => _instance.Value;
 
+    private readonly SurveyorLock _scratchLock = new();
+
     private readonly PathHeap<Voxel> _heap = new();
 
     private readonly SwiftDictionary<Voxel, VolumeVoxelMeta> _meta = new();
@@ -50,7 +52,7 @@ public sealed class VolumeSurveyor
     /// </summary>
     /// <remarks>
     /// Returns an empty result if the request is null, has zero displacement, or does not specify
-    /// valid endpoints. The method is thread-safe and synchronizes access using a global lock.
+    /// valid endpoints. The method is thread-safe and synchronizes access to reusable scratch state.
     /// </remarks>
     /// <param name="request">The pathfinding request that defines the start and end points, as well as any constraints or options for the
     /// path search. Cannot be null, must have valid endpoints, and must specify a non-zero displacement.</param>
@@ -60,7 +62,7 @@ public sealed class VolumeSurveyor
     /// </returns>
     public VolumeSurveyResult FindPath(VolumePathRequest request)
     {
-        lock (SurveyorLock.GlobalLock)
+        lock (_scratchLock)
         {
             if (request == null || request.HasZeroDisplacement || !request.HasValidEndpoints)
                 return VolumeSurveyResult.Empty;

@@ -62,6 +62,8 @@ public class AStarSurveyor
 
     #endregion
 
+    private readonly SurveyorLock _scratchLock = new();
+
     private readonly PathHeap<SolidChartPartition> _heap = new();
 
     private readonly SwiftDictionary<Voxel, AStarVoxelMeta> _meta = new();
@@ -82,7 +84,7 @@ public class AStarSurveyor
     /// <returns>The list of path waypoints if successful; otherwise null.</returns>
     public AStarSurveyResult FindPath(AStarPathRequest request)
     {
-        lock (SurveyorLock.GlobalLock)
+        lock (_scratchLock)
         {
             if (request == null
                 || request.HasZeroDisplacement

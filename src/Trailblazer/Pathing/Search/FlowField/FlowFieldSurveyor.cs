@@ -32,6 +32,8 @@ public class FlowFieldSurveyor
 
     #endregion
 
+    private readonly SurveyorLock _scratchLock = new();
+
     private readonly PathHeap<SolidChartPartition> _heap = new();
 
     private readonly SwiftHashSet<string> _chartKeys = new();
@@ -49,7 +51,7 @@ public class FlowFieldSurveyor
     /// <returns>A dictionary of flow fields indexed by spawn token.</returns>
     public FlowFieldSurveyResult FindPath(FlowFieldPathRequest request)
     {
-        lock (SurveyorLock.GlobalLock)
+        lock (_scratchLock)
         {
             if (request == null
             || request.HasZeroDisplacement

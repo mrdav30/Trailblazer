@@ -1,6 +1,6 @@
 ﻿namespace Trailblazer.Pathing;
 
-internal static class SurveyorLock
-{
-    public static readonly object GlobalLock = new();
-}
+/// <summary>
+/// Serializes access to one surveyor's reusable scratch state.
+/// </summary>
+internal sealed class SurveyorLock { }

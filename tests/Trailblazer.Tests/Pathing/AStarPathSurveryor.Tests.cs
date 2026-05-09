@@ -226,6 +226,41 @@ public class AStarSurveryorTests : IDisposable
     }
 
     [Fact]
+    public void AStarSurveyor_FindPath_ShouldKeepOpenPlane16ColdAllocationsUnderBudget()
+    {
+        TrailblazerWorldManager.Reset();
+        TrailblazerWorldManager.Setup();
+        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-1, -1, -1), new Vector3d(20, 4, 20)), out _);
+
+        bool[,,] data = new bool[1, 16, 16];
+        for (int x = 0; x < 16; x++)
+            for (int z = 0; z < 16; z++)
+                data[0, x, z] = true;
+
+        PathTestFactory.RegisterFromData("AStarOpenPlane16Alloc", data, Vector3d.Zero);
+
+        AStarPathRequest request = TestRequire.Created(
+            AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(15, 0, 15), out AStarPathRequest? createdRequest),
+            createdRequest);
+
+        AStarSurveyor.Shared.FindPath(request).HasPath.Should().BeTrue();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        AStarSurveyResult result = AStarSurveyor.Shared.FindPath(request);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.HasPath.Should().BeTrue();
+        TestRequire.NotNull(result.Waypoints).Should().NotBeEmpty();
+        allocated.Should().BeLessThan(120_000);
+
+        PathManager.UnloadChart("AStarOpenPlane16Alloc");
+    }
+
+    [Fact]
     public void AStar_ShouldReevaluateFastFail_WhenChartChangesMakeRouteReachable()
     {
         bool[,,] blocked = BuildSingleVoxelChoke();

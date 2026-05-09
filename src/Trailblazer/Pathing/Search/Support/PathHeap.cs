@@ -1,14 +1,13 @@
-﻿using SwiftCollections;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("Trailblazer.Tests")]
+[assembly: InternalsVisibleTo("Trailblazer.Benchmarks")]
 
 namespace Trailblazer.Pathing;
 
-internal sealed class PathHeapMeta
+internal struct PathHeapMeta
 {
     public uint HeapIndex;
 
@@ -29,7 +28,7 @@ internal sealed class PathHeap<TNode> where TNode : class
 
     private TNode[] _items;
 
-    private readonly SwiftDictionary<TNode, PathHeapMeta> _meta;
+    private readonly PathHeapMetadata<TNode> _meta;
 
     public uint CurrentHeapVersion { get; private set; } = 1;
 
@@ -82,7 +81,10 @@ internal sealed class PathHeap<TNode> where TNode : class
     public void UpdatePathCost(TNode item, int pathCost)
     {
         if (_meta.TryGetValue(item, out PathHeapMeta meta))
+        {
             meta.PathCost = pathCost;
+            _meta[item] = meta;
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -112,6 +114,7 @@ internal sealed class PathHeap<TNode> where TNode : class
             PathHeapMeta tempMeta = _meta[temp];
             _items[0] = temp;
             tempMeta.HeapIndex = 0;
+            _meta[temp] = tempMeta;
             _items[HeapCount] = null!;
 
             if (HeapCount > 1)
@@ -119,6 +122,7 @@ internal sealed class PathHeap<TNode> where TNode : class
         }
 
         meta.HeapVersion--;
+        _meta[result] = meta;
         return true;
     }
 
@@ -133,7 +137,10 @@ internal sealed class PathHeap<TNode> where TNode : class
     public void SetClosed(TNode item)
     {
         if (_meta.TryGetValue(item, out PathHeapMeta meta))
+        {
             meta.ClosedHeapVersion = CurrentHeapVersion;
+            _meta[item] = meta;
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -157,6 +164,7 @@ internal sealed class PathHeap<TNode> where TNode : class
                 break;
 
             Swap(item, parent);
+            meta = _meta[item];
             index = meta.HeapIndex;
         }
     }
@@ -188,19 +196,14 @@ internal sealed class PathHeap<TNode> where TNode : class
                 break;
 
             Swap(item, _items[lowest]);
+            meta = _meta[item];
             index = meta.HeapIndex;
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public IEnumerable<TNode> EnumerateClosed()
-    {
-        foreach (KeyValuePair<TNode, PathHeapMeta> kvp in _meta)
-        {
-            if (kvp.Value.ClosedHeapVersion == CurrentHeapVersion)
-                yield return kvp.Key;
-        }
-    }
+    public PathHeapMetadata<TNode>.ClosedEnumerable EnumerateClosed()
+        => _meta.EnumerateClosed(CurrentHeapVersion);
 
     public void FastClear()
     {
@@ -243,5 +246,7 @@ internal sealed class PathHeap<TNode> where TNode : class
 
         metaA.HeapIndex = indexB;
         metaB.HeapIndex = indexA;
+        _meta[itemA] = metaA;
+        _meta[itemB] = metaB;
     }
 }

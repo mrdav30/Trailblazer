@@ -200,6 +200,33 @@ public class PathHeapTests : IDisposable
         Assert.True(heap.Capacity > originalCapacity);
     }
 
+    [Fact]
+    public void Heap_ReusedCapacity_ShouldNotAllocatePerNodeMetadata()
+    {
+        const int nodeCount = 4096;
+        var heap = new PathHeap<HeapNode>();
+        HeapNode[] nodes = Enumerable.Range(0, nodeCount)
+            .Select(i => new HeapNode($"node-{i}"))
+            .ToArray();
+
+        for (int i = 0; i < nodes.Length; i++)
+            heap.Add(nodes[i], pathCost: i);
+
+        heap.FastClear();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < nodes.Length; i++)
+            heap.Add(nodes[i], pathCost: i);
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.True(allocated < 4096, $"Expected reused heap metadata to avoid per-node allocation, but allocated {allocated} bytes.");
+    }
+
     private static SolidChartPartition CreateAttachedPartition(Vector3d position)
     {
         Voxel voxel = TestRequire.VoxelAt(position);

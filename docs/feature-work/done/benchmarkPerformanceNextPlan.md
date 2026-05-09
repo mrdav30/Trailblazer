@@ -1,5 +1,9 @@
 # Benchmark Performance Next Plan
 
+**Status:** Complete. Remaining work was extracted to
+[`benchmarkPerformanceFinalPlan.md`](../benchmarkPerformanceFinalPlan.md) when this plan was
+archived.
+
 ## Purpose
 
 This document captures the next phase of Trailblazer performance work after completing phases 1
@@ -550,6 +554,47 @@ Keep these as fast-follow cleanup unless they block the earlier phases:
   project references back to package references and rerun cache-hit allocation guards.
 - Reconsider reachability snapshot policy if real workloads create many distinct clearance/climb
   combinations.
+
+### Phase 6 Notes - 2026-05-08
+
+Implemented:
+
+- Removed the legacy `FlowFieldSurveyor.SampleFlowVector(Vector3d, fields)` overload before alpha.
+  The result-aware `SampleFlowVector(Vector3d, FlowFieldSurveyResult)` overload is now the public
+  sampling path and uses result-owned `FlowFieldSamplingGrid` metadata.
+- Updated flow-field tests to use result-aware sampling. No deprecated compatibility API or
+  compatibility documentation was retained because the library is still pre-alpha.
+- Added flow-field flood diagnostics to `PathingScenarioSummary`: `MaxPathSearchRange` and
+  `ExtraFloodRange`. The pathing scenario preflight now checks open 32/64/128 field-count scaling,
+  successful survey coverage, blocker large-flood configuration, and the effective request range
+  used by each flood sweep.
+
+Verification:
+
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~FlowFieldSurveyorTests`
+  passed with 45 tests.
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~BenchmarkHarnessPreflightTests`
+  passed with 6 tests.
+- `dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- pathing-scenario --filter '*FlowFieldFloodRange*' --job short --runtimes net8.0`
+  completed all 5 flood-range scenario benchmarks. WSL still reported the expected BenchmarkDotNet
+  high-priority permission warning.
+- `dotnet build Trailblazer.slnx --configuration Release` passed with 0 warnings and 0 errors.
+- `dotnet test Trailblazer.slnx --configuration Release` passed with 916 tests.
+
+Short-run flood evidence:
+
+| Benchmark | Phase 6 result | Signal |
+| --- | ---: | --- |
+| `FlowFieldFloodRange_OpenPlane32` | 111.53 ms, 577.68 KB | Small open sweep remains stable. |
+| `FlowFieldFloodRange_OpenPlane64` | 729.78 ms, 2.25 MB | 64x64 sweep remains the anomalously slow open case. |
+| `FlowFieldFloodRange_OpenPlane128` | 80.07 ms, 9.02 MB | Allocation scales by field size, but short-run time remains inverted. |
+| `FlowFieldFloodRange_Blocker64Default` | 680.68 ms, 2.25 MB | Blocker sweep is close to the slow 64x64 open case. |
+| `FlowFieldFloodRange_Blocker64Large` | 594.16 ms, 2.25 MB | Larger extra flood range does not increase allocation in this fixture. |
+
+Remaining work:
+
+- All open fast-follow and carry-forward items were moved into
+  [`benchmarkPerformanceFinalPlan.md`](../benchmarkPerformanceFinalPlan.md).
 
 ## Suggested Verification Commands
 

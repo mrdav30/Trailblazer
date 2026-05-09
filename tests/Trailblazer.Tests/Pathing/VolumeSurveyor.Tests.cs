@@ -367,6 +367,44 @@ public sealed class VolumeSurveyorTests : IDisposable
         ReflectionUtility.GetPrivateField<SwiftHashSet<string>>(surveyor, "_chartKeys").Should().BeEmpty();
     }
 
+    [Fact]
+    public void VolumeSurveyor_FindPath_ShouldKeepOpenPlane8ColdAllocationsUnderBudget()
+    {
+        TrailblazerWorldManager.Reset();
+        TrailblazerWorldManager.Setup();
+        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-1, -1, -1), new Vector3d(12, 4, 12)), out _);
+
+        NavigationChartCell[,,] data = new NavigationChartCell[1, 8, 8];
+        for (int x = 0; x < 8; x++)
+            for (int z = 0; z < 8; z++)
+                data[0, x, z] = NavigationChartCell.Gas;
+
+        NavigationChart chart = NavigationChart.From3D("VolumeOpenPlane8Alloc", data, Vector3d.Zero, Fixed64.One);
+        PathManager.Register(chart);
+
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
+            Vector3d.Zero,
+            new Vector3d(7, 0, 7),
+            Fixed64.One,
+            medium: TraversalMedium.Gas));
+
+        VolumeSurveyor.Shared.FindPath(request).HasPath.Should().BeTrue();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.HasPath.Should().BeTrue();
+        TestRequire.NotNull(result.Waypoints).Should().NotBeEmpty();
+        allocated.Should().BeLessThan(160_000);
+
+        PathManager.UnloadChart("VolumeOpenPlane8Alloc");
+    }
+
     private static void AddOpen(Vector3d position)
     {
         PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "VolumeOpen");

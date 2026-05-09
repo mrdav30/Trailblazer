@@ -36,6 +36,7 @@ are joined with `-`. Pass one or more aliases as leading arguments before any Be
 | `guide-cache` | `GuideCacheBenchmarks` |
 | `navigation-scenario` | `NavigationScenarioBenchmarks` |
 | `nav-steering` | `NavSteeringBenchmarks` |
+| `path-heap` | `PathHeapBenchmarks` |
 | `pathing-scenario` | `PathingScenarioBenchmarks` |
 | `transition-fallback` | `TransitionFallbackBenchmarks` |
 | `volume-path-request` | `VolumePathRequestBenchmarks` |
@@ -167,6 +168,19 @@ Key benchmarks:
 - `ReachabilityFirstHit_ClearanceCombos` — distinct `(unitSize, maxClimbHeight)` snapshot keys
 - `TransitionRequestChurn_64Requests` — host-style request creation every fixed step
 - `FlowFieldFloodRange_OpenPlane128` — large raw flow-field flood and allocation shape
+
+### Path heap metadata
+
+**Class**: `PathHeapBenchmarks` | **Alias**: `path-heap`  
+**Categories**: `Pathing`, `Heap`
+
+Covers: reusable path-heap metadata add, lookup, path-cost read, removal, close marking, closed
+enumeration, and fast-clear replay without full survey setup cost.
+
+Key benchmarks:
+
+- `MetadataReplay_Structured4096` — reproduces the 4096-node structured-key replay at 8192 and
+  32768 metadata-capacity warmup shapes
 
 ### Transition-aware and volume routing
 

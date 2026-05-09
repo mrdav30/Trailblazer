@@ -1,4 +1,6 @@
-﻿using GridForge.Grids;
+﻿using FixedMathSharp;
+using GridForge.Grids;
+using GridForge.Spatial;
 using SwiftCollections;
 using System;
 using System.Diagnostics.CodeAnalysis;
@@ -365,6 +367,69 @@ public static class PathGuideFactory
         _cachedVolumeResults.InvalidateAll();
         _cachedHybridRoutePlans.InvalidateAll();
         ClearGuidePools();
+    }
+
+    internal static bool TrySeedAStarCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
+    {
+        return _cachedAStarResults.TrySeed(
+            AStarSurveyResult.Create(CreateSeedWaypoints(), chartKeys, requestKey),
+            checkout);
+    }
+
+    internal static bool TrySeedFlowFieldCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
+    {
+        WorldVoxelIndex index = default;
+        var fields = new SwiftDictionary<WorldVoxelIndex, FlowField>(1)
+        {
+            [index] = new FlowField
+            {
+                GlobalIndex = index,
+                IsGoal = true
+            }
+        };
+
+        return _cachedFlowResults.TrySeed(
+            FlowFieldSurveyResult.Create(fields, chartKeys, requestKey),
+            checkout);
+    }
+
+    internal static bool TrySeedVolumeCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
+    {
+        return _cachedVolumeResults.TrySeed(
+            VolumeSurveyResult.Create(CreateSeedWaypoints(), chartKeys, requestKey),
+            checkout);
+    }
+
+    internal static bool TrySeedHybridRoutePlanCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
+    {
+        var routePlan = new HybridRoutePlan(
+            new[] { HybridRouteStep.Waypoint(Vector3d.Zero) },
+            Array.Empty<TraversalTransition>(),
+            totalPathCost: 0);
+
+        return _cachedHybridRoutePlans.TrySeed(
+            HybridRoutePlanSurveyResult.Create(routePlan, chartKeys, requestKey),
+            checkout);
+    }
+
+    internal static int CountIndexedCacheEntriesForBenchmark(string chartKey)
+    {
+        return _cachedAStarResults.CountIndexedEntriesForChart(chartKey)
+            + _cachedFlowResults.CountIndexedEntriesForChart(chartKey)
+            + _cachedVolumeResults.CountIndexedEntriesForChart(chartKey)
+            + _cachedHybridRoutePlans.CountIndexedEntriesForChart(chartKey);
+    }
+
+    private static AStarWaypoint[] CreateSeedWaypoints()
+    {
+        return new[]
+        {
+            new AStarWaypoint
+            {
+                Position = Vector3d.Zero,
+                IsGoal = true
+            }
+        };
     }
 
     private static AStarGuide? RentAStarGuide(AStarSurveyResult result)

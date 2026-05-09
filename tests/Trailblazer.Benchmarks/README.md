@@ -112,13 +112,15 @@ Key benchmarks:
 **Categories**: `Pathing`, `Cache`
 
 Covers: A\* and flow-field cache hits, misses below and above the 128-entry LRU capacity,
-`InvalidateCacheFor`, `CullExpiredGuides` with no stale and many stale entries, and
-`FlushCache` force versus soft modes.
+`InvalidateCacheFor`, full-capacity mixed-family invalidation, `CullExpiredGuides` with no stale
+and many stale entries, mixed-family culling, and `FlushCache` force versus soft modes.
 
 Key benchmarks:
 
 - `AStarCacheHit` — baseline cache hit (marked `Baseline = true`)
 - `AStarCacheMiss_OverCapacity_Eviction` — exercises LRU eviction above the 128-entry threshold
+- `InvalidateMixedCacheFor_*` — isolates chart invalidation with 128 seeded entries per cache family
+- `CullMixedCache_*` — isolates mixed-family stale culling with 128 seeded entries per cache family
 - `CullExpiredGuides_ManyStale` — cost of scanning 128 stale entries at frame 10000
 
 ### NavSteering frame-facing hot paths

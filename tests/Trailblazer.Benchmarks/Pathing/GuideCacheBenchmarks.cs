@@ -15,23 +15,27 @@ public class GuideCacheBenchmarks
 {
     // Capacity threshold from ReusableSurveyResultCache — 128 entries before LRU eviction.
     private const int CacheCapacity = 128;
-    public const int MixedCacheEntriesPerFamily = CacheCapacity / 4;
+    public const int MixedCacheEntriesPerFamily = CacheCapacity;
     public const int MixedActiveEntriesPerFamily = MixedCacheEntriesPerFamily / MixedActiveStride;
 
     private const int MixedActiveStride = 4;
-    private const int MixedSolidSize = 8;
-    private const int MixedVolumeSize = 8;
-    private const int MixedHybridLength = MixedCacheEntriesPerFamily + 1;
     private const string MixedSolidChartKey = "MixedCacheSolid";
     private const string MixedVolumeChartKey = "MixedCacheVolume";
     private const string MixedHybridSourceChartKey = "MixedCacheHybridSource";
     private const string MixedHybridDestinationChartKey = "MixedCacheHybridDestination";
     private const string MixedNoMatchChartKey = "MixedCacheChartThatDoesNotExist";
+    private const int MixedAStarCacheKeyBase = 100_000;
+    private const int MixedFlowFieldCacheKeyBase = 200_000;
+    private const int MixedVolumeCacheKeyBase = 300_000;
+    private const int MixedHybridCacheKeyBase = 400_000;
 
-    private static readonly Vector3d MixedSolidOffset = new(40, 0, 0);
-    private static readonly Vector3d MixedVolumeOffset = new(40, 1, 40);
-    private static readonly Vector3d MixedHybridSourceOffset = new(90, 0, 0);
-    private static readonly Vector3d MixedHybridDestinationOffset = new(90, 0, 4);
+    private static readonly string[] MixedSolidChartKeys = { MixedSolidChartKey };
+    private static readonly string[] MixedVolumeChartKeys = { MixedVolumeChartKey };
+    private static readonly string[] MixedHybridChartKeys =
+    {
+        MixedHybridSourceChartKey,
+        MixedHybridDestinationChartKey
+    };
 
     // -------------------------------------------------------------------------
     // Shared A* fixture for hit / miss / eviction / invalidation / cull
@@ -66,14 +70,6 @@ public class GuideCacheBenchmarks
     // -------------------------------------------------------------------------
     // Mixed pressure scenario: all cache families populated in one aggregate pressure set.
     // -------------------------------------------------------------------------
-
-    private AStarPathRequest[] _mixedAStarRequests;
-    private FlowFieldPathRequest[] _mixedFlowFieldRequests;
-    private VolumePathRequest[] _mixedVolumeRequests;
-    private FlowFieldPathRequest[] _mixedHybridRequests;
-    private AStarGuide[] _mixedActiveAStarGuides;
-    private FlowFieldGuide[] _mixedActiveFlowFieldGuides;
-    private VolumeGuide[] _mixedActiveVolumeGuides;
 
     // -------------------------------------------------------------------------
     // GlobalSetup / GlobalCleanup
@@ -149,144 +145,13 @@ public class GuideCacheBenchmarks
             throw new System.InvalidOperationException(
                 $"Preflight: Could not create flow-field request from {origin} -> {destination}.");
 
-        SetupMixedCachePressureRequests();
+        ValidateMixedCachePressureSeedPlan();
     }
 
-    private void SetupMixedCachePressureRequests()
+    private static void ValidateMixedCachePressureSeedPlan()
     {
-        SetupMixedSolidRequests();
-        SetupMixedVolumeRequests();
-        SetupMixedHybridRequests();
-
-        _mixedActiveAStarGuides = new AStarGuide[MixedActiveEntriesPerFamily];
-        _mixedActiveFlowFieldGuides = new FlowFieldGuide[MixedActiveEntriesPerFamily];
-        _mixedActiveVolumeGuides = new VolumeGuide[MixedActiveEntriesPerFamily];
-    }
-
-    private void SetupMixedSolidRequests()
-    {
-        BenchmarkChartFactory.RegisterOpenPlane(MixedSolidChartKey, MixedSolidSize, MixedSolidOffset);
-
-        int adjacentPairCount = MixedSolidSize * (MixedSolidSize - 1);
-        Vector3d[] aStarStarts = new Vector3d[adjacentPairCount];
-        Vector3d[] aStarDestinations = new Vector3d[adjacentPairCount];
-        BenchmarkChartFactory.GenerateAdjacentRequestPairs(
-            MixedSolidSize,
-            adjacentPairCount,
-            aStarStarts,
-            aStarDestinations,
-            MixedSolidOffset);
-
-        _mixedAStarRequests = new AStarPathRequest[MixedCacheEntriesPerFamily];
-        int aStarCount = 0;
-        for (int i = 0; i < adjacentPairCount && aStarCount < MixedCacheEntriesPerFamily; i++)
-        {
-            AStarPathRequest request = AStarPathRequest.Create(aStarStarts[i], aStarDestinations[i], Fixed64.One)
-                ?? throw new System.InvalidOperationException(
-                    $"Preflight: Could not create mixed A* request {i}.");
-
-            if (ContainsRequestKey(_mixedAStarRequests, aStarCount, request.RequestCacheKey))
-                continue;
-
-            _mixedAStarRequests[aStarCount++] = request;
-        }
-
-        if (aStarCount != MixedCacheEntriesPerFamily)
-            throw new System.InvalidOperationException("Preflight: Could not create enough unique mixed A* request keys.");
-
-        int flowCandidateCount = (MixedSolidSize * MixedSolidSize) - 1;
-        Vector3d[] flowDestinations = BenchmarkChartFactory.GenerateUniqueStartPositions(
-            MixedSolidSize,
-            flowCandidateCount,
-            out Vector3d flowStart,
-            MixedSolidOffset);
-
-        _mixedFlowFieldRequests = new FlowFieldPathRequest[MixedCacheEntriesPerFamily];
-        int flowFieldCount = 0;
-        for (int i = 0; i < flowCandidateCount && flowFieldCount < MixedCacheEntriesPerFamily; i++)
-        {
-            FlowFieldPathRequest request = FlowFieldPathRequest.Create(flowStart, flowDestinations[i], Fixed64.One)
-                ?? throw new System.InvalidOperationException(
-                    $"Preflight: Could not create mixed flow-field request {i}.");
-
-            if (ContainsRequestKey(_mixedFlowFieldRequests, flowFieldCount, request.RequestCacheKey))
-                continue;
-
-            _mixedFlowFieldRequests[flowFieldCount++] = request;
-        }
-
-        if (flowFieldCount != MixedCacheEntriesPerFamily)
-            throw new System.InvalidOperationException("Preflight: Could not create enough unique mixed flow-field request keys.");
-    }
-
-    private void SetupMixedVolumeRequests()
-    {
-        RegisterGasPlane(MixedVolumeChartKey, MixedVolumeOffset, MixedVolumeSize);
-
-        int adjacentPairCount = MixedVolumeSize * (MixedVolumeSize - 1);
-        Vector3d[] volumeStarts = new Vector3d[adjacentPairCount];
-        Vector3d[] volumeDestinations = new Vector3d[adjacentPairCount];
-        BenchmarkChartFactory.GenerateAdjacentRequestPairs(
-            MixedVolumeSize,
-            adjacentPairCount,
-            volumeStarts,
-            volumeDestinations,
-            MixedVolumeOffset);
-
-        _mixedVolumeRequests = new VolumePathRequest[MixedCacheEntriesPerFamily];
-        int volumeCount = 0;
-        for (int i = 0; i < adjacentPairCount && volumeCount < MixedCacheEntriesPerFamily; i++)
-        {
-            VolumePathRequest request = VolumePathRequest.Create(
-                    volumeStarts[i],
-                    volumeDestinations[i],
-                    Fixed64.One,
-                    medium: TraversalMedium.Gas)
-                ?? throw new System.InvalidOperationException(
-                    $"Preflight: Could not create mixed volume request {i}.");
-
-            if (ContainsRequestKey(_mixedVolumeRequests, volumeCount, request.RequestCacheKey))
-                continue;
-
-            _mixedVolumeRequests[volumeCount++] = request;
-        }
-
-        if (volumeCount != MixedCacheEntriesPerFamily)
-            throw new System.InvalidOperationException("Preflight: Could not create enough unique mixed volume request keys.");
-    }
-
-    private void SetupMixedHybridRequests()
-    {
-        RegisterSolidCorridor(MixedHybridSourceChartKey, MixedHybridSourceOffset, MixedHybridLength);
-        RegisterSolidPlane(MixedHybridDestinationChartKey, MixedHybridDestinationOffset, MixedHybridLength, depth: 2);
-
-        _mixedHybridRequests = new FlowFieldPathRequest[MixedCacheEntriesPerFamily];
-        for (int i = 0; i < MixedCacheEntriesPerFamily; i++)
-        {
-            Vector3d source = MixedHybridSourceOffset + new Vector3d(i, 0, 0);
-            Vector3d sourceAnchor = MixedHybridSourceOffset + new Vector3d(i + 1, 0, 0);
-            Vector3d destinationAnchor = MixedHybridDestinationOffset + new Vector3d(i, 0, 0);
-            Vector3d destination = MixedHybridDestinationOffset + new Vector3d(i, 0, 1);
-
-            TraversalTransitionRegistry.Register(new TraversalTransition(
-                id: $"mixed-cache-jump-{i}",
-                type: TraversalTransitionType.Jump,
-                source: TraversalTransitionAnchor.Solid(sourceAnchor),
-                destination: TraversalTransitionAnchor.Solid(destinationAnchor),
-                pathCostModifier: 1));
-
-            _mixedHybridRequests[i] = FlowFieldPathRequest.Create(
-                    source,
-                    destination,
-                    Fixed64.One,
-                    allowTraversalTransitions: true)
-                ?? throw new System.InvalidOperationException(
-                    $"Preflight: Could not create mixed hybrid flow-field request {i}.");
-
-            if (ContainsRequestKey(_mixedHybridRequests, i, _mixedHybridRequests[i].RequestCacheKey))
-                throw new System.InvalidOperationException(
-                    $"Preflight: Mixed hybrid request {i} produced a duplicate request key.");
-        }
+        if (MixedCacheEntriesPerFamily != CacheCapacity)
+            throw new System.InvalidOperationException("Preflight: mixed cache pressure must exercise full per-family capacity.");
     }
 
     // -------------------------------------------------------------------------
@@ -377,11 +242,9 @@ public class GuideCacheBenchmarks
     }
 
     [IterationCleanup(Targets = new[] { nameof(CullMixedCache_StaleWithActiveQuarter) })]
-    public void ReturnMixedActiveGuides()
+    public void ClearMixedCachePressure()
     {
-        ReturnGuides(_mixedActiveAStarGuides);
-        ReturnGuides(_mixedActiveFlowFieldGuides);
-        ReturnGuides(_mixedActiveVolumeGuides);
+        BenchmarkPathFixture.FlushGuideCache();
     }
 
     // -------------------------------------------------------------------------
@@ -491,7 +354,7 @@ public class GuideCacheBenchmarks
 
     public CacheInvalidationCardinality MeasureInvalidateMixedCacheFor_NoMatchingChart()
     {
-        return InvalidateMixedCacheFor(MixedNoMatchChartKey, expectedIndexedEntries: 0);
+        return InvalidateMixedCacheFor(MixedNoMatchChartKey);
     }
 
     /// <summary>
@@ -507,9 +370,7 @@ public class GuideCacheBenchmarks
 
     public CacheInvalidationCardinality MeasureInvalidateMixedCacheFor_MatchingSolidChart()
     {
-        return InvalidateMixedCacheFor(
-            MixedSolidChartKey,
-            expectedIndexedEntries: MixedCacheEntriesPerFamily * 2);
+        return InvalidateMixedCacheFor(MixedSolidChartKey);
     }
 
     /// <summary>
@@ -525,9 +386,7 @@ public class GuideCacheBenchmarks
 
     public CacheInvalidationCardinality MeasureInvalidateMixedCacheFor_MatchingVolumeChart()
     {
-        return InvalidateMixedCacheFor(
-            MixedVolumeChartKey,
-            expectedIndexedEntries: MixedCacheEntriesPerFamily);
+        return InvalidateMixedCacheFor(MixedVolumeChartKey);
     }
 
     /// <summary>
@@ -543,9 +402,7 @@ public class GuideCacheBenchmarks
 
     public CacheInvalidationCardinality MeasureInvalidateMixedCacheFor_MatchingHybridChart()
     {
-        return InvalidateMixedCacheFor(
-            MixedHybridDestinationChartKey,
-            expectedIndexedEntries: MixedCacheEntriesPerFamily);
+        return InvalidateMixedCacheFor(MixedHybridDestinationChartKey);
     }
 
     // -------------------------------------------------------------------------
@@ -625,63 +482,65 @@ public class GuideCacheBenchmarks
 
     private void SeedMixedCachePressure(bool keepActiveRatio)
     {
-        ReturnMixedActiveGuides();
+        ClearMixedCachePressure();
         BenchmarkPathFixture.FlushGuideCache();
-
-        int activeAStarIndex = 0;
-        int activeFlowFieldIndex = 0;
-        int activeVolumeIndex = 0;
 
         for (int i = 0; i < MixedCacheEntriesPerFamily; i++)
         {
-            SeedAStarMixedEntry(i, keepActiveRatio, ref activeAStarIndex);
-            SeedFlowFieldMixedEntry(i, keepActiveRatio, ref activeFlowFieldIndex);
-            SeedVolumeMixedEntry(i, keepActiveRatio, ref activeVolumeIndex);
+            SeedAStarMixedEntry(i, keepActiveRatio);
+            SeedFlowFieldMixedEntry(i, keepActiveRatio);
+            SeedVolumeMixedEntry(i, keepActiveRatio);
             SeedHybridMixedEntry(i);
         }
 
-        EnsureMixedCacheSeeded();
+        EnsureMixedCacheSeeded(keepActiveRatio);
     }
 
-    private void SeedAStarMixedEntry(int index, bool keepActiveRatio, ref int activeIndex)
+    private static void SeedAStarMixedEntry(int index, bool keepActiveRatio)
     {
-        if (!PathGuideFactory.RequestGuide(_mixedAStarRequests[index], out AStarGuide guide))
+        bool checkout = keepActiveRatio && ShouldKeepActive(index);
+        if (!PathGuideFactory.TrySeedAStarCacheForBenchmark(
+            MixedAStarCacheKeyBase + index,
+            MixedSolidChartKeys,
+            checkout))
+        {
             throw new System.InvalidOperationException($"Preflight: mixed A* cache seed {index} failed.");
-
-        if (keepActiveRatio && ShouldKeepActive(index))
-            _mixedActiveAStarGuides[activeIndex++] = guide;
-        else
-            PathGuideFactory.ReturnGuide(guide);
+        }
     }
 
-    private void SeedFlowFieldMixedEntry(int index, bool keepActiveRatio, ref int activeIndex)
+    private static void SeedFlowFieldMixedEntry(int index, bool keepActiveRatio)
     {
-        if (!PathGuideFactory.RequestGuide(_mixedFlowFieldRequests[index], out FlowFieldGuide guide))
+        bool checkout = keepActiveRatio && ShouldKeepActive(index);
+        if (!PathGuideFactory.TrySeedFlowFieldCacheForBenchmark(
+            MixedFlowFieldCacheKeyBase + index,
+            MixedSolidChartKeys,
+            checkout))
+        {
             throw new System.InvalidOperationException($"Preflight: mixed flow-field cache seed {index} failed.");
-
-        if (keepActiveRatio && ShouldKeepActive(index))
-            _mixedActiveFlowFieldGuides[activeIndex++] = guide;
-        else
-            PathGuideFactory.ReturnGuide(guide);
+        }
     }
 
-    private void SeedVolumeMixedEntry(int index, bool keepActiveRatio, ref int activeIndex)
+    private static void SeedVolumeMixedEntry(int index, bool keepActiveRatio)
     {
-        if (!PathGuideFactory.RequestGuide(_mixedVolumeRequests[index], out VolumeGuide guide))
+        bool checkout = keepActiveRatio && ShouldKeepActive(index);
+        if (!PathGuideFactory.TrySeedVolumeCacheForBenchmark(
+            MixedVolumeCacheKeyBase + index,
+            MixedVolumeChartKeys,
+            checkout))
+        {
             throw new System.InvalidOperationException($"Preflight: mixed volume cache seed {index} failed.");
-
-        if (keepActiveRatio && ShouldKeepActive(index))
-            _mixedActiveVolumeGuides[activeIndex++] = guide;
-        else
-            PathGuideFactory.ReturnGuide(guide);
+        }
     }
 
-    private void SeedHybridMixedEntry(int index)
+    private static void SeedHybridMixedEntry(int index)
     {
-        if (!PathGuideFactory.RequestGuide(_mixedHybridRequests[index], out FlowFieldGuide guide))
+        if (!PathGuideFactory.TrySeedHybridRoutePlanCacheForBenchmark(
+            MixedHybridCacheKeyBase + index,
+            MixedHybridChartKeys,
+            checkout: false))
+        {
             throw new System.InvalidOperationException($"Preflight: mixed hybrid route-plan cache seed {index} failed.");
-
-        PathGuideFactory.ReturnGuide(guide);
+        }
     }
 
     private static bool ShouldKeepActive(int index)
@@ -689,7 +548,7 @@ public class GuideCacheBenchmarks
         return index % MixedActiveStride == 0;
     }
 
-    private static void EnsureMixedCacheSeeded()
+    private static void EnsureMixedCacheSeeded(bool keepActiveRatio)
     {
         if (PathGuideFactory.TotalAStarGuideCount != MixedCacheEntriesPerFamily
             || PathGuideFactory.TotalFlowGuideCount != MixedCacheEntriesPerFamily
@@ -703,30 +562,34 @@ public class GuideCacheBenchmarks
                 $"Volume={PathGuideFactory.TotalVolumeGuideCount}, " +
                 $"Hybrid={PathGuideFactory.TotalHybridRoutePlanCount}.");
         }
-    }
 
-    private static bool ContainsRequestKey<T>(T[] requests, int count, int requestKey) where T : IPathRequest
-    {
-        for (int i = 0; i < count; i++)
+        int expectedActiveEntries = keepActiveRatio
+            ? MixedActiveEntriesPerFamily * 3
+            : 0;
+        int activeEntries = PathGuideFactory.InUseAStarGuideCount
+            + PathGuideFactory.InUseFlowGuideCount
+            + PathGuideFactory.InUseVolumeGuideCount
+            + PathGuideFactory.InUseHybridRoutePlanCount;
+
+        if (activeEntries != expectedActiveEntries)
         {
-            if (requests[i].RequestCacheKey == requestKey)
-                return true;
+            throw new System.InvalidOperationException(
+                "Preflight: mixed cache pressure active count did not match target cardinality. " +
+                $"Expected={expectedActiveEntries}, Actual={activeEntries}.");
         }
-
-        return false;
     }
 
     private static CacheInvalidationCardinality InvalidateMixedCacheFor(
-        string chartKey,
-        int expectedIndexedEntries)
+        string chartKey)
     {
+        int indexedEntries = PathGuideFactory.CountIndexedCacheEntriesForBenchmark(chartKey);
         CacheCounts before = CacheCounts.Capture();
         PathGuideFactory.InvalidateCacheFor(chartKey);
         CacheCounts after = CacheCounts.Capture();
 
         return new CacheInvalidationCardinality(
-            entriesScanned: expectedIndexedEntries,
-            entriesMatched: expectedIndexedEntries,
+            entriesScanned: indexedEntries,
+            entriesMatched: indexedEntries,
             entriesRemoved: before.TotalEntries - after.TotalEntries);
     }
 
@@ -743,53 +606,6 @@ public class GuideCacheBenchmarks
             activeEntriesRemaining: after.ActiveEntries);
     }
 
-    private static void ReturnGuides<T>(T[] guides) where T : class, IGuide
-    {
-        if (guides == null)
-            return;
-
-        for (int i = 0; i < guides.Length; i++)
-        {
-            T guide = guides[i];
-            if (guide == null)
-                continue;
-
-            PathGuideFactory.ReturnGuide(guide);
-            guides[i] = null;
-        }
-    }
-
-    private static void RegisterGasPlane(string chartName, Vector3d origin, int size)
-    {
-        NavigationChartCell[,,] data = new NavigationChartCell[1, size, size];
-        for (int x = 0; x < size; x++)
-            for (int z = 0; z < size; z++)
-                data[0, x, z] = new NavigationChartCell(TraversalMedia.Gas);
-
-        NavigationChart chart = NavigationChart.From3D(chartName, data, origin, Fixed64.One);
-        PathManager.Register(chart);
-    }
-
-    private static void RegisterSolidCorridor(string chartName, Vector3d origin, int length)
-    {
-        bool[,,] data = new bool[1, length, 1];
-        for (int x = 0; x < length; x++)
-            data[0, x, 0] = true;
-
-        NavigationChart chart = NavigationChart.From3D(chartName, data, origin, Fixed64.One);
-        PathManager.Register(chart);
-    }
-
-    private static void RegisterSolidPlane(string chartName, Vector3d origin, int length, int depth)
-    {
-        bool[,,] data = new bool[1, length, depth];
-        for (int x = 0; x < length; x++)
-            for (int z = 0; z < depth; z++)
-                data[0, x, z] = true;
-
-        NavigationChart chart = NavigationChart.From3D(chartName, data, origin, Fixed64.One);
-        PathManager.Register(chart);
-    }
 }
 
 public readonly struct CacheInvalidationCardinality

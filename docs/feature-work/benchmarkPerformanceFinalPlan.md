@@ -430,6 +430,67 @@ Exit criteria:
 - Mutation benchmarks either avoid `MinIterationTime` warnings or clearly defer to direct
   allocation/cardinality guards.
 
+### Phase 5 Notes - 2026-05-09
+
+Status: complete.
+
+Implemented deliverables:
+
+- Added internal cache seeding support to `ReusableSurveyResultCache<T>` so benchmark and test
+  fixtures can populate exact request-key/chart-owner shapes without running path generation.
+- Added internal `PathGuideFactory` seed helpers for A*, flow-field, volume, and hybrid route-plan
+  caches. These remain internal and do not change the public runtime API.
+- Updated mixed guide-cache benchmarks from 32 entries per family to full cache capacity: 128 A*,
+  128 flow-field, 128 volume, and 128 hybrid route-plan entries.
+- Switched mixed invalidation cardinality to read the cache chart index before mutation, so
+  `EntriesScanned`, `EntriesMatched`, and `EntriesRemoved` are pinned by the actual seeded cache
+  shape.
+- Removed the old mixed-cache real route generation setup from `GuideCacheBenchmarks`; the mixed
+  pressure benchmarks now isolate cache behavior from cold survey setup cost.
+- Fixed a small measured allocation in stale culling by reusing a per-cache stale-key buffer.
+
+Cardinality shape:
+
+| Scenario | Entries seeded | Indexed/matched entries | Expected removal |
+| --- | ---: | ---: | ---: |
+| Mixed no-match invalidation | 512 total | 0 | 0 |
+| Mixed solid invalidation | 512 total | 256 | 256 |
+| Mixed volume invalidation | 512 total | 128 | 128 |
+| Mixed hybrid destination invalidation | 512 total | 128 | 128 |
+| Mixed fresh cull | 512 total | n/a | 0 |
+| Mixed stale cull with active quarter | 512 total, 96 active | n/a | 416 |
+
+Benchmark evidence:
+
+```bash
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- guide-cache --filter '*InvalidateMixedCacheFor*' --job short --runtimes net8.0
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- guide-cache --filter '*CullMixedCache*' --job short --runtimes net8.0
+```
+
+| Benchmark | Phase 5 result | Allocation |
+| --- | ---: | ---: |
+| `InvalidateMixedCacheFor_NoMatchingChart` | 9.538 us | 0 B |
+| `InvalidateMixedCacheFor_MatchingSolidChart` | 99.059 us | 0 B |
+| `InvalidateMixedCacheFor_MatchingVolumeChart` | 60.839 us | 0 B |
+| `InvalidateMixedCacheFor_MatchingHybridChart` | 79.580 us | 0 B |
+| `CullMixedCache_NoStale` | 53.70 us | 0 B |
+| `CullMixedCache_StaleWithActiveQuarter` | 157.91 us | 0 B |
+
+BenchmarkDotNet still reports `MinIterationTime` warnings for these mutation benchmarks. The warning
+is expected because the measured operations are intentionally tiny and cardinality/allocation guards
+are the authority for this phase.
+
+Verification:
+
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter "FullyQualifiedName~ReusableSurveyResultCacheTests|FullyQualifiedName~BenchmarkHarnessPreflightTests.GuideCacheBenchmarks_ShouldSeedMixedCachePressureScenarios_AfterGlobalSetup"` passed 10 tests.
+- `dotnet build Trailblazer.slnx --configuration Release` passed with 0 warnings and 0 errors.
+- `dotnet test Trailblazer.slnx --configuration Release` passed 921 tests.
+
+Fast-follow:
+
+- No new fast-follow items were found. The cache seed helpers are internal-only; remove or revisit
+  them only if the benchmark project stops using Trailblazer internals.
+
 ## Phase 6 - Reachability Snapshot Policy
 
 **Severity:** Medium  

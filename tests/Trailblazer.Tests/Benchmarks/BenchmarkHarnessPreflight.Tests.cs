@@ -122,7 +122,7 @@ public sealed class BenchmarkHarnessPreflightTests
         }
         finally
         {
-            benchmarks.ReturnMixedActiveGuides();
+            benchmarks.ClearMixedCachePressure();
             benchmarks.GlobalCleanup();
         }
     }

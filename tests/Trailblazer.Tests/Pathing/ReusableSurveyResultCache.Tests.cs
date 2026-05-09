@@ -189,6 +189,36 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     }
 
     [Fact]
+    public void TrySeed_ShouldPopulateChartIndexAndTrackCheckedOutEntries()
+    {
+        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+
+        TestSurveyResult released = TestSurveyResult.Create(
+            10,
+            chartsUtilized: new[] { "chart-a", "chart-b", "chart-a" });
+        TestSurveyResult active = TestSurveyResult.Create(
+            11,
+            chartsUtilized: new[] { "chart-a" });
+
+        cache.TrySeed(released, checkout: false).Should().BeTrue();
+        cache.TrySeed(active, checkout: true).Should().BeTrue();
+
+        cache.Count.Should().Be(2);
+        cache.CountInUse.Should().Be(1);
+        released.IsInUse.Should().BeFalse();
+        active.IsInUse.Should().BeTrue();
+        cache.CountIndexedEntriesForChart("chart-a").Should().Be(2);
+        cache.CountIndexedEntriesForChart("chart-b").Should().Be(1);
+
+        cache.InvalidateForChart("chart-a");
+
+        cache.Count.Should().Be(0);
+        cache.CountInUse.Should().Be(0);
+        released.ResetCount.Should().Be(1);
+        active.ResetCount.Should().Be(1);
+    }
+
+    [Fact]
     public void EvictStaleEntries_ShouldNotAllocate_WhenNoEntriesAreStale()
     {
         using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
@@ -206,6 +236,26 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
 
         allocated.Should().BeLessThan(64);
         cache.Count.Should().Be(32);
+    }
+
+    [Fact]
+    public void EvictStaleEntries_ShouldNotAllocate_WhenEntriesAreStale()
+    {
+        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+
+        for (int i = 0; i < 32; i++)
+        {
+            cache.TryGetOrCreate(new TestPathRequest(i), () => TestSurveyResult.Create(i), out TestSurveyResult result)
+                .Should()
+                .BeTrue();
+
+            cache.Return(result, dispose: false);
+        }
+
+        long allocated = MeasureAllocatedBytes(() => cache.EvictStaleEntries(currentFrame: 10_000, expiration: 600));
+
+        allocated.Should().BeLessThan(128);
+        cache.Count.Should().Be(0);
     }
 
     [Fact]

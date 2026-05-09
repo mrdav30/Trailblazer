@@ -27,6 +27,8 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
     /// </summary>
     private readonly SwiftDictionary<string, SwiftList<int>> _chartIndex = new(8, StringComparer.Ordinal);
 
+    private readonly SwiftList<int> _staleKeys = new(MaxCacheSize);
+
     private readonly ReaderWriterLockSlim _lock = new();
 
     /// <summary>
@@ -135,27 +137,25 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
     /// <param name="expiration">The number of frames after which a <see cref="SurveyResult"/> is considered stale.</param>
     internal void EvictStaleEntries(int currentFrame, int expiration)
     {
-        SwiftList<int>? toRemove = null;
         _lock.EnterUpgradeableReadLock();
         try
         {
+            _staleKeys.Clear();
             foreach (KeyValuePair<int, T> kvp in _cache)
             {
                 if (!kvp.Value.IsInUse && currentFrame - kvp.Value.LastUsedFrame > expiration)
-                {
-                    toRemove ??= new SwiftList<int>();
-                    toRemove.Add(kvp.Key);
-                }
+                    _staleKeys.Add(kvp.Key);
             }
 
-            if (toRemove == null || toRemove.Count == 0)
+            if (_staleKeys.Count == 0)
                 return;
 
             _lock.EnterWriteLock();
             try
             {
-                foreach (int key in toRemove)
+                for (int i = 0; i < _staleKeys.Count; i++)
                 {
+                    int key = _staleKeys[i];
                     if (_cache.TryGetValue(key, out T result))
                         RemoveCachedResult(key, result);
                 }
@@ -163,7 +163,11 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
             finally { _lock.ExitWriteLock(); }
 
         }
-        finally { _lock.ExitUpgradeableReadLock(); }
+        finally
+        {
+            _staleKeys.Clear();
+            _lock.ExitUpgradeableReadLock();
+        }
     }
 
     /// <summary>
@@ -189,6 +193,67 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
             return false;
         }
         finally { _lock.ExitUpgradeableReadLock(); }
+    }
+
+    /// <summary>
+    /// Seeds a valid result directly into the cache for internal benchmark and test fixtures.
+    /// </summary>
+    /// <remarks>
+    /// This intentionally does not evict entries; callers use it to create exact cache-pressure
+    /// shapes and should choose unique request keys up to the cache capacity.
+    /// </remarks>
+    internal bool TrySeed(T result, bool checkout)
+    {
+        if (result == null || !result.HasPath || result.RequestHashKey < 0)
+            return false;
+
+        int key = result.RequestHashKey;
+
+        _lock.EnterWriteLock();
+        try
+        {
+            if (_cache.TryGetValue(key, out T existing))
+            {
+                if (existing.IsInUse)
+                    CountInUse--;
+
+                RemoveCachedResult(key, existing);
+                if (!ReferenceEquals(existing, result))
+                    existing.Reset();
+            }
+            else if (_cache.Count >= MaxCacheSize)
+            {
+                return false;
+            }
+
+            if (result.IsInUse)
+                result.Release();
+
+            if (checkout)
+            {
+                result.Checkout();
+                CountInUse++;
+            }
+
+            AddCachedResult(key, result);
+            return true;
+        }
+        finally { _lock.ExitWriteLock(); }
+    }
+
+    internal int CountIndexedEntriesForChart(string chartKey)
+    {
+        if (string.IsNullOrEmpty(chartKey))
+            return 0;
+
+        _lock.EnterReadLock();
+        try
+        {
+            return _chartIndex.TryGetValue(chartKey, out SwiftList<int> keys)
+                ? keys.Count
+                : 0;
+        }
+        finally { _lock.ExitReadLock(); }
     }
 
     /// <summary>

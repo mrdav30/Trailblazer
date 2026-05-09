@@ -197,7 +197,9 @@ public class AStarSurveyor
     private bool IsLegClear(SolidChartPartition current, SpatialDirection legDir)
     {
         SolidChartPartition? leg = current.Neighbors?[(int)legDir] ?? null;
-        return leg != null && _heap.IsClosed(leg) && !leg.IsImpassable(_request!.UnitSize);
+        // Diagonal legality is a topology check, not a search-order check. Requiring closed legs
+        // makes admissible heuristics flood open planes before diagonal routes can form.
+        return leg != null && !leg.IsImpassable(_request!.UnitSize);
     }
 
     /// <summary>
@@ -221,17 +223,17 @@ public class AStarSurveyor
             return true;
         }
 
-        int pathCost = CalculatePathCost(neighbor, cost);
+        int pathCost = CalculatePathCost(neighbor, cost, out int heuristicCost);
         if (!_heap.Contains(neighbor))
         {
             SetPathPartitionData(neighbor, current.GlobalIndex, cost, pathCost);
-            _heap.Add(neighbor, pathCost);
+            _heap.Add(neighbor, pathCost, heuristicCost);
         }
         else if (_meta.TryGetValue(neighbor.Voxel, out AStarVoxelMeta neighborData)
             && neighborData.MovementCost > cost)
         {
             SetPathPartitionData(neighbor, current.GlobalIndex, cost, pathCost);
-            _heap.UpdatePathCost(neighbor, pathCost);
+            _heap.UpdatePathCost(neighbor, pathCost, heuristicCost);
             _heap.SortUp(neighbor);
         }
 
@@ -343,9 +345,16 @@ public class AStarSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private int CalculatePathCost(SolidChartPartition partition, int movementCost)
+    private int CalculatePathCost(SolidChartPartition partition, int movementCost) =>
+        CalculatePathCost(partition, movementCost, out _);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int CalculatePathCost(
+        SolidChartPartition partition,
+        int movementCost,
+        out int heuristicCost)
     {
-        int heuristicCost = CalculateHeuristic(
+        heuristicCost = CalculateHeuristic(
             partition.VoxelPosition,
             _request!.EndNode!.WorldPosition,
             _request.Heuristic);
@@ -389,11 +398,12 @@ public class AStarSurveyor
                 heuristicCost = (dst.x + dst.y + dst.z) * StraightCost;
                 break;
             case HeuristicMethod.Octile:
-                // Find the max of the three distances
                 Fixed64 maxXY = FixedMath.Max(dst.x, dst.y);
                 Fixed64 max = FixedMath.Max(maxXY, dst.z);
-                // Calculate the heuristic cost using the max and sum of other distances
-                heuristicCost = (max * DiagonalCost) + ((dst.x + dst.y + dst.z - max - max) * StraightCost);
+                Fixed64 minXY = FixedMath.Min(dst.x, dst.y);
+                Fixed64 min = FixedMath.Min(minXY, dst.z);
+                Fixed64 middle = dst.x + dst.y + dst.z - max - min;
+                heuristicCost = (middle * DiagonalCost) + ((max - middle) * StraightCost);
                 break;
             case HeuristicMethod.Euclidean:
                 // Calculate the squared distance and find the square root

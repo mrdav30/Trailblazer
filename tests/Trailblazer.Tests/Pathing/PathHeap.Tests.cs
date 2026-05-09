@@ -65,6 +65,22 @@ public class PathHeapTests : IDisposable
     }
 
     [Fact]
+    public void AStarHeap_ShouldPreferLowerTieBreakCost_WhenPathCostsMatch()
+    {
+        var heap = new PathHeap<SolidChartPartition>();
+
+        SolidChartPartition farther = CreateAttachedPartition(new Vector3d(0, 0, 0));
+        SolidChartPartition closer = CreateAttachedPartition(new Vector3d(1, 0, 0));
+
+        heap.Add(farther, pathCost: 10, tieBreakCost: 20);
+        heap.Add(closer, pathCost: 10, tieBreakCost: 5);
+
+        heap.RemoveFirst(out SolidChartPartition? first);
+
+        Assert.Equal(closer, TestRequire.NotNull(first));
+    }
+
+    [Fact]
     public void Heap_ShouldTrackVoxelPathCostAndClosedState()
     {
         var heap = new PathHeap<Voxel>();

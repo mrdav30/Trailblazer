@@ -1,5 +1,7 @@
 using FixedMathSharp;
 using FluentAssertions;
+using GridForge.Configuration;
+using GridForge.Grids;
 using System;
 using Trailblazer.Benchmarks.Navigation;
 using Trailblazer.Benchmarks.Pathing;
@@ -34,6 +36,50 @@ public sealed class BenchmarkHarnessPreflightTests
         finally
         {
             benchmarks.GlobalCleanup();
+        }
+    }
+
+    [Fact]
+    public void AStarHeuristicBenchmarks_ShouldKeepEquivalentRouteShapeWithoutOpenPlaneChurn()
+    {
+        try
+        {
+            TrailblazerWorldManager.Setup();
+            TrailblazerWorldManager.TryAddGrid(
+                new GridConfiguration(new Vector3d(44, -4, -4), new Vector3d(120, 8, 72)),
+                out _).Should().BeTrue();
+
+            Vector3d origin = new(48, 0, 0);
+            Vector3d destination = RegisterOpenPlane("PreflightAStarHeuristic64", 64, origin);
+
+            AStarHeuristicSummary manhattan = MeasureAStarHeuristic(
+                origin,
+                destination,
+                HeuristicMethod.Manhattan);
+            AStarHeuristicSummary octile = MeasureAStarHeuristic(
+                origin,
+                destination,
+                HeuristicMethod.Octile);
+            AStarHeuristicSummary euclidean = MeasureAStarHeuristic(
+                origin,
+                destination,
+                HeuristicMethod.Euclidean);
+
+            octile.RouteCost.Should().BeLessThanOrEqualTo(manhattan.RouteCost);
+            euclidean.RouteCost.Should().BeLessThanOrEqualTo(manhattan.RouteCost);
+            octile.WaypointCount.Should().BeGreaterThan(0);
+            euclidean.WaypointCount.Should().BeGreaterThan(0);
+
+            int acceptedClosedNodeBudget = manhattan.ClosedNodes + 2;
+            string summary = $"{manhattan}; {octile}; {euclidean}";
+            octile.ClosedNodes.Should().BeLessThanOrEqualTo(acceptedClosedNodeBudget, summary);
+            euclidean.ClosedNodes.Should().BeLessThanOrEqualTo(acceptedClosedNodeBudget, summary);
+        }
+        finally
+        {
+            PathManager.Reset();
+            TrailblazerWorldManager.Reset();
+            TrailblazerManager.Reset();
         }
     }
 
@@ -254,4 +300,70 @@ public sealed class BenchmarkHarnessPreflightTests
         action();
         return GC.GetAllocatedBytesForCurrentThread() - before;
     }
+
+    private static Vector3d RegisterOpenPlane(string chartName, int size, Vector3d minBounds)
+    {
+        bool[,,] data = new bool[1, size, size];
+        for (int x = 0; x < size; x++)
+            for (int z = 0; z < size; z++)
+                data[0, x, z] = true;
+
+        PathTestFactory.RegisterFromData(chartName, data, minBounds);
+        return new Vector3d(
+            minBounds.x + (Fixed64)(size - 1),
+            minBounds.y,
+            minBounds.z + (Fixed64)(size - 1));
+    }
+
+    private static AStarHeuristicSummary MeasureAStarHeuristic(
+        Vector3d origin,
+        Vector3d destination,
+        HeuristicMethod heuristic)
+    {
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
+            origin,
+            destination,
+            Fixed64.One,
+            heuristic));
+        AStarSurveyResult result = AStarSurveyor.Shared.FindPath(request);
+        result.HasPath.Should().BeTrue();
+
+        int closedNodes = CountClosedNodes(request);
+        return new AStarHeuristicSummary(
+            heuristic,
+            closedNodes,
+            result.Waypoints[^1].PathCost,
+            result.Waypoints.Length);
+    }
+
+    private static int CountClosedNodes(AStarPathRequest request)
+    {
+        var surveyor = new AStarSurveyor();
+        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
+
+        PathHeap<SolidChartPartition> heap =
+            ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
+        SwiftCollections.SwiftDictionary<Voxel, AStarVoxelMeta> meta =
+            ReflectionUtility.GetPrivateField<SwiftCollections.SwiftDictionary<Voxel, AStarVoxelMeta>>(
+                surveyor,
+                "_meta");
+
+        request.StartNode!.TryGetPartition(out SolidChartPartition? startPartition).Should().BeTrue();
+        meta[request.StartNode] = new AStarVoxelMeta { PathCost = 0 };
+        heap.Add(TestRequire.NotNull(startPartition), pathCost: 0);
+
+        ReflectionUtility.InvokePrivate<bool>(surveyor, "TracePath").Should().BeTrue();
+
+        int closedNodes = 0;
+        foreach (SolidChartPartition _ in heap.EnumerateClosed())
+            closedNodes++;
+
+        return closedNodes;
+    }
+
+    private readonly record struct AStarHeuristicSummary(
+        HeuristicMethod Heuristic,
+        int ClosedNodes,
+        int RouteCost,
+        int WaypointCount);
 }

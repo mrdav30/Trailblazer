@@ -95,7 +95,7 @@ Use `AStarPathRequest` when you want a concrete waypoint trail.
 
 Additional configuration includes:
 
-- `Heuristic` with `Manhattan`, `Octile`, or `Euclidean`
+- `Heuristic` with `Manhattan`, `Octile`, or `Euclidean`; `Octile` is the closest fit for diagonal-enabled chart grids, while `Manhattan` remains available for axis-biased routing
 - `MaxClimbHeight` for vertical step restrictions
 
 Factory helpers:

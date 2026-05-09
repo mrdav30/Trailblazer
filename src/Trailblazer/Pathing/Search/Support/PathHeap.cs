@@ -16,6 +16,8 @@ internal struct PathHeapMeta
     public uint ClosedHeapVersion;
 
     public int PathCost;
+
+    public int TieBreakCost;
 }
 
 /// <summary>
@@ -44,7 +46,7 @@ internal sealed class PathHeap<TNode> where TNode : class
         _meta = new(DefaultCapacity);
     }
 
-    public void Add(TNode item, int pathCost)
+    public void Add(TNode item, int pathCost, int tieBreakCost = 0)
     {
         if (Contains(item))
             return;
@@ -56,7 +58,8 @@ internal sealed class PathHeap<TNode> where TNode : class
         {
             HeapIndex = HeapCount,
             HeapVersion = CurrentHeapVersion,
-            PathCost = pathCost
+            PathCost = pathCost,
+            TieBreakCost = tieBreakCost
         };
 
         _meta[item] = meta;
@@ -78,11 +81,12 @@ internal sealed class PathHeap<TNode> where TNode : class
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void UpdatePathCost(TNode item, int pathCost)
+    public void UpdatePathCost(TNode item, int pathCost, int tieBreakCost = 0)
     {
         if (_meta.TryGetValue(item, out PathHeapMeta meta))
         {
             meta.PathCost = pathCost;
+            meta.TieBreakCost = tieBreakCost;
             _meta[item] = meta;
         }
     }
@@ -160,7 +164,7 @@ internal sealed class PathHeap<TNode> where TNode : class
             uint parentIndex = (index - 1) / 2;
             TNode parent = _items[parentIndex];
 
-            if (meta.PathCost >= _meta[parent].PathCost)
+            if (!HasHigherPriority(meta, _meta[parent]))
                 break;
 
             Swap(item, parent);
@@ -181,13 +185,13 @@ internal sealed class PathHeap<TNode> where TNode : class
             uint lowest = index;
 
             if (left < HeapCount
-                && _meta[_items[left]].PathCost < _meta[_items[lowest]].PathCost)
+                && HasHigherPriority(_meta[_items[left]], _meta[_items[lowest]]))
             {
                 lowest = left;
             }
 
             if (right < HeapCount
-                && _meta[_items[right]].PathCost < _meta[_items[lowest]].PathCost)
+                && HasHigherPriority(_meta[_items[right]], _meta[_items[lowest]]))
             {
                 lowest = right;
             }
@@ -230,6 +234,14 @@ internal sealed class PathHeap<TNode> where TNode : class
 
         _items = newArray;
         _meta.EnsureCapacity(newCapacity);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool HasHigherPriority(PathHeapMeta candidate, PathHeapMeta current)
+    {
+        return candidate.PathCost < current.PathCost
+            || (candidate.PathCost == current.PathCost
+                && candidate.TieBreakCost < current.TieBreakCost);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

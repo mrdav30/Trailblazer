@@ -629,6 +629,45 @@ Exit criteria:
 - The slower Octile/Euclidean results are explained with route-shape and closed-node evidence.
 - Any heuristic change preserves path correctness and deterministic tie-breaking.
 
+Phase 8 result:
+
+- Reran the 64x64 heuristic benchmark slice and reproduced the slowdown:
+  `Manhattan` was about 999 us, `Octile` about 9.60 ms, and `Euclidean` about 10.43 ms in the
+  short-run harness.
+- Captured route-shape evidence before the fix:
+  `Manhattan` closed 249 nodes, produced route cost 12600, and emitted 127 waypoints;
+  `Octile` closed 4092 nodes, produced route cost 11833, and emitted 54 waypoints;
+  `Euclidean` closed 3970 nodes, produced route cost 12600, and emitted 99 waypoints.
+- Root cause was A* diagonal edge validation requiring the side-leg voxels to already be closed.
+  Exact diagonal-aware heuristics therefore flooded most of the open plane before diagonal routes
+  could form.
+- Fixed A* diagonal validation to require clear side legs rather than closed side legs, preserving
+  corner-cut rejection while removing the search-order dependency.
+- Added deterministic heap tie-breaking on `(pathCost, heuristicCost)` so equal-cost frontier
+  plateaus prefer nodes closer to the target without changing the stored path cost.
+- Corrected the Octile heuristic formula for uneven planar deltas.
+- Kept the public default heuristic unchanged for alpha compatibility, but updated overview
+  guidance to call out `Octile` as the closest fit for diagonal-enabled chart grids.
+
+Post-fix evidence:
+
+| Heuristic | Before mean | After mean | Before closed nodes | After closed nodes | After route cost | After waypoints |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Manhattan` | 999.3 us | 1.225 ms | 249 | 62 | 8883 | 4 |
+| `Octile` | 9.602 ms | 477.3 us | 4092 | 62 | 8883 | 4 |
+| `Euclidean` | 10.432 ms | 504.9 us | 3970 | 62 | 8883 | 4 |
+
+Benchmark command:
+
+```bash
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request --filter '*Heuristic*' -j Short -i --memory --join
+```
+
+Verification:
+
+- `dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter "FullyQualifiedName~PathHeapTests|FullyQualifiedName~AStarSurveryorTests|FullyQualifiedName~BenchmarkHarnessPreflightTests.AStarHeuristicBenchmarks_ShouldKeepEquivalentRouteShapeWithoutOpenPlaneChurn|FullyQualifiedName~BenchmarkHarnessPreflightTests.AStarPathRequestBenchmarks_ShouldKeepAllConfiguredRequestsValid_AfterGlobalSetup"` passed 52 tests.
+- `dotnet test Trailblazer.slnx --configuration Release` passed 927 tests.
+
 ## Phase 9 - Package Reference Restore
 
 **Severity:** Low  

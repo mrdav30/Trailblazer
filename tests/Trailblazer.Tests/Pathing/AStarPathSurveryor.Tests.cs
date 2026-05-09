@@ -761,6 +761,17 @@ public class AStarSurveryorTests : IDisposable
         result.Should().Be(Fixed64.MAX_VALUE.CeilToInt());
     }
 
+    [Fact]
+    public void CalculateHeuristic_ShouldUseOctileCost_ForUnevenPlanarDeltas()
+    {
+        int result = AStarSurveyor.CalculateHeuristic(
+            Vector3d.Zero,
+            new Vector3d(3, 0, 1),
+            HeuristicMethod.Octile);
+
+        result.Should().Be((AStarSurveyor.DiagonalCost * 1) + (AStarSurveyor.StraightCost * 2));
+    }
+
     /// <summary>
     /// Covers the <c>chartsUtilized ?? Array.Empty&lt;string&gt;()</c> null-coalescing branch
     /// in <c>AStarSurveyResult.Create</c> when the caller passes <c>null</c>.

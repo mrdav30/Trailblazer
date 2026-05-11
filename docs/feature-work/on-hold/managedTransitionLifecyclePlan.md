@@ -5,7 +5,7 @@
 This plan covers optional runtime follow-up item 3 from `hardeningPhasePlan.md`:
 
 > If hosts need richer automatic lifecycle behavior for manually registered transitions, revisit
-> managed manual regeneration and whether `ManagedChartTransitionState` should broaden into a more
+> managed manual regeneration and whether `NavigationChartRegistration` should share a broader
 > general managed transition dependency model.
 
 The goal is to improve host ergonomics for manually owned transition sets without weakening the
@@ -17,7 +17,7 @@ shape.
 Trailblazer currently has two managed transition stories:
 
 1. Chart-generated transitions
-   These are tracked per chart through `ManagedChartTransitionState` in `PathManager`.
+   These are tracked per registered chart through `NavigationChartRegistration` in `PathManager`.
 2. Manually registered transitions
    These live in `TraversalTransitionRegistry` and participate in managed suppression/reactivation,
    but they do not have a higher-level owner-scoped regeneration model.
@@ -34,8 +34,9 @@ Important current limitation:
 - manual transitions are lifecycle-managed only at the individual transition level
 - there is no owner/group abstraction for host-managed transition sets
 - there is no host-facing regeneration path comparable to chart-generated transitions
-- `ManagedChartTransitionState` is chart-specific today: it stores only a transition id prefix,
-  priority, and the current registered ids
+- `NavigationChartRegistration` is chart-registration-specific today: it stores chart identity,
+  registration order, initialization state, a generated transition id prefix, and the current
+  registered generated transition ids
 
 ## Relevance Assessment
 
@@ -55,13 +56,14 @@ Why it is not urgent:
 - the current manual model already handles the important correctness case: active versus suppressed
   behavior tracks endpoint support correctly
 - focused manual-transition lifecycle tests are currently green
-- broadening `ManagedChartTransitionState` today would be speculative because the overlap between
-  chart-generated and host-managed transitions is still shallow
+- broadening `NavigationChartRegistration` into a shared host-managed transition model today would
+  be speculative because the overlap between chart-generated and host-managed transitions is still
+  shallow
 
 Recommendation:
 
 - keep this item active as a host-driven ergonomics and lifecycle track
-- do not generalize `ManagedChartTransitionState` yet
+- do not generalize `NavigationChartRegistration` yet
 - only unify the chart-generated and host-managed state shapes if later implementation proves the
   shared abstraction is real rather than aspirational
 
@@ -132,8 +134,8 @@ Preferred behavior:
 
 ### Phase 5. Reevaluate The Shared Abstraction
 
-Only after the host-managed group model is real, decide whether `ManagedChartTransitionState`
-should broaden into a shared dependency-state type.
+Only after the host-managed group model is real, decide whether `NavigationChartRegistration`
+should delegate to or share a dedicated dependency-state type.
 
 Use this gate:
 

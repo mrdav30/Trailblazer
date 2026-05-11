@@ -145,7 +145,7 @@ world lifetime ownership can create a context directly with `TrailblazerWorldCon
 `TrailblazerWorldContext.CreateOwned(...)`; chart registries, guide caches, transitions, and navigator
 state are being moved behind that context in follow-up phases.
 
-`PathManager.Register(chart)` can initialize the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step.
+`PathManager.Register(chart)` can initialize the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step. Initialization and registration order are live registration state, not authored chart data; use `PathManager.IsChartInitialized(...)` or `TryGetNavigationChartRegistration(...)` when integration code needs to inspect that state.
 
 `NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell surface or volume traversal metadata, cost modifiers, mixed media such as `Solid | Liquid` or `Solid | Gas`, or transition hints. The `bool[,,]` overload emits solid cells by default, or a single authored gas/liquid medium when you pass `TraversalMedium.Gas` or `TraversalMedium.Liquid`. Raw 3D travel runs through `VolumePathRequest`, while chart-backed `AStarPathRequest` and `FlowFieldPathRequest` requests can opt into registered transition fallback through `AllowTraversalTransitions`.
 

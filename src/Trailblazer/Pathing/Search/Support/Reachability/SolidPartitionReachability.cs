@@ -164,7 +164,7 @@ internal static class SolidPartitionReachability
         {
             foreach (NavigationChart chart in PathManager.AllCharts)
             {
-                if (chart == null || !chart.IsInitialized)
+                if (chart == null || !PathManager.IsChartInitialized(chart.Name))
                     continue;
 
                 foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())

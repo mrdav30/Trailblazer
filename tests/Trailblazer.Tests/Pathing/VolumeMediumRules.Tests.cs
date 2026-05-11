@@ -126,29 +126,46 @@ public sealed class VolumeMediumRulesTests : IDisposable
     }
 }
 
-public sealed class ManagedChartTransitionStateTests
+public sealed class NavigationChartRegistrationValueTests
 {
     [Fact]
-    public void ManagedChartTransitionState_Constructor_ShouldThrow_ForNullOrWhitespacePrefix()
+    public void NavigationChartRegistration_Constructor_ShouldThrow_ForNullOrWhitespacePrefix()
     {
-        Action nullPrefix = () => _ = new ManagedChartTransitionState(null!, priority: 0);
+        NavigationChart chart = CreateChart(priority: 0);
+
+        Action nullPrefix = () => _ = new NavigationChartRegistration(chart, registrationOrder: 1, null!);
         nullPrefix.Should().Throw<ArgumentException>();
 
-        Action emptyPrefix = () => _ = new ManagedChartTransitionState(string.Empty, priority: 0);
+        Action emptyPrefix = () => _ = new NavigationChartRegistration(chart, registrationOrder: 1, string.Empty);
         emptyPrefix.Should().Throw<ArgumentException>();
 
-        Action whitespace = () => _ = new ManagedChartTransitionState("   ", priority: 0);
+        Action whitespace = () => _ = new NavigationChartRegistration(chart, registrationOrder: 1, "   ");
         whitespace.Should().Throw<ArgumentException>();
     }
 
     [Fact]
-    public void ManagedChartTransitionState_ShouldStoreProperties()
+    public void NavigationChartRegistration_ShouldStoreProperties()
     {
-        var state = new ManagedChartTransitionState("prefix", priority: 3);
+        NavigationChart chart = CreateChart(priority: 3);
+        var state = new NavigationChartRegistration(chart, registrationOrder: 7, "prefix");
         state.TransitionIdPrefix.Should().Be("prefix");
         state.Priority.Should().Be(3);
+        state.RegistrationOrder.Should().Be(7);
+        state.Chart.Should().BeSameAs(chart);
         Assert.NotNull(state.TransitionIds);
         state.TransitionIds.Count.Should().Be(0);
+    }
+
+    private static NavigationChart CreateChart(int priority)
+    {
+        bool[,,] data =
+        {
+            {
+                { true }
+            }
+        };
+
+        return NavigationChart.From3D("RegistrationValueChart", data, Vector3d.Zero, Fixed64.One, priority: priority);
     }
 }
 

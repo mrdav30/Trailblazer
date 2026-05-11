@@ -62,8 +62,8 @@ public static class PathManager
 
                 NavigationChart[] charts = new NavigationChart[_navigationChartMap.Count];
                 int index = 0;
-                foreach (NavigationChart chart in _navigationChartMap.Values)
-                    charts[index++] = chart;
+                foreach (NavigationChartRegistration registration in _navigationChartMap.Values)
+                    charts[index++] = registration.Chart;
                 return charts;
             }
             finally { _navigationChartMapLock.ExitReadLock(); }
@@ -73,9 +73,7 @@ public static class PathManager
     /// <summary>
     /// Internal dictionary of all registered navigation charts, keyed by their unique names.
     /// </summary>
-    private static readonly SwiftDictionary<string, NavigationChart> _navigationChartMap = new();
-
-    private static readonly SwiftDictionary<string, ManagedChartTransitionState> _managedGeneratedTransitionsByChart = new(8, StringComparer.Ordinal);
+    private static readonly SwiftDictionary<string, NavigationChartRegistration> _navigationChartMap = new();
 
     private static readonly SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates = new();
 
@@ -147,9 +145,7 @@ public static class PathManager
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            MarkRegisteredChartsUninitialized_NoLock();
             _navigationChartMap.Clear();
-            _managedGeneratedTransitionsByChart.Clear();
             _nextChartRegistrationOrder = 0;
         }
         finally
@@ -177,9 +173,7 @@ public static class PathManager
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            MarkRegisteredChartsUninitialized_NoLock();
             _navigationChartMap.Clear();
-            _managedGeneratedTransitionsByChart.Clear();
             _nextChartRegistrationOrder = 0;
         }
         finally
@@ -276,18 +270,17 @@ public static class PathManager
             if (_navigationChartMap.ContainsKey(chart.Name))
                 return false;
 
-            chart.RegistrationOrder = unchecked(++_nextChartRegistrationOrder);
-            _navigationChartMap.Add(chart.Name, chart);
+            var registration = new NavigationChartRegistration(
+                chart,
+                unchecked(++_nextChartRegistrationOrder),
+                generatedTransitionIdPrefix);
+            _navigationChartMap.Add(chart.Name, registration);
         }
         finally { _navigationChartMapLock.ExitWriteLock(); }
 
-        if (!TryRegisterManagedGeneratedTransitions(
-            chart,
-            generatedTransitionIdPrefix,
-            precomputedGeneratedTransitions))
+        if (!TryRegisterManagedGeneratedTransitions(chart.Name, precomputedGeneratedTransitions))
         {
             RemoveChartFromRegistry(chart.Name);
-            chart.IsInitialized = false;
             return false;
         }
 
@@ -320,8 +313,69 @@ public static class PathManager
     public static bool TryGetNavigationChart(string name, out NavigationChart chart)
     {
         _navigationChartMapLock.EnterReadLock();
-        try { return _navigationChartMap.TryGetValue(name, out chart); }
+        try
+        {
+            if (_navigationChartMap.TryGetValue(name, out NavigationChartRegistration registration))
+            {
+                chart = registration.Chart;
+                return true;
+            }
+
+            chart = null!;
+            return false;
+        }
+        finally
+        {
+            _navigationChartMapLock.ExitReadLock();
+        }
+    }
+
+    /// <summary>
+    /// Attempts to retrieve live registration state for a chart by name.
+    /// </summary>
+    /// <param name="name">The registered chart name.</param>
+    /// <param name="registration">The live chart registration.</param>
+    /// <returns>True when a registration exists; otherwise, false.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryGetNavigationChartRegistration(
+        string name,
+        out NavigationChartRegistration registration)
+    {
+        _navigationChartMapLock.EnterReadLock();
+        try { return TryGetNavigationChartRegistration_NoLock(name, out registration); }
         finally { _navigationChartMapLock.ExitReadLock(); }
+    }
+
+    /// <summary>
+    /// Gets whether a registered chart is currently initialized into live voxel state.
+    /// </summary>
+    /// <param name="name">The registered chart name.</param>
+    /// <returns>True when the chart has an initialized live registration; otherwise, false.</returns>
+    public static bool IsChartInitialized(string name)
+    {
+        return TryGetNavigationChartRegistration(name, out NavigationChartRegistration registration)
+            && registration.IsInitialized;
+    }
+
+    /// <summary>
+    /// Gets whether an authored chart's current registration is initialized.
+    /// </summary>
+    /// <param name="chart">The authored chart to inspect.</param>
+    /// <returns>True when the chart is registered and initialized; otherwise, false.</returns>
+    public static bool IsChartInitialized(NavigationChart chart)
+    {
+        return chart != null && IsChartInitialized(chart.Name);
+    }
+
+    private static bool TryGetNavigationChartRegistration_NoLock(
+        string name,
+        out NavigationChartRegistration registration)
+    {
+        if (_navigationChartMap.TryGetValue(name, out registration))
+            return true;
+
+        registration = null!;
+        return false;
     }
 
     /// <summary>
@@ -574,20 +628,21 @@ public static class PathManager
     public static bool TryUpdateChartCell(GridWorld world, string chartName, int x, int y, int z, NavigationChartCell cell)
     {
         LinkWorld(world);
-        if (!TryGetNavigationChart(chartName, out NavigationChart chart))
+        if (!TryGetNavigationChartRegistration(chartName, out NavigationChartRegistration registration))
             return false;
 
-        return TryUpdateChartCell(world, chart, x, y, z, cell);
+        return TryUpdateChartCell(world, registration, x, y, z, cell);
     }
 
     private static bool TryUpdateChartCell(
         GridWorld world,
-        NavigationChart chart,
+        NavigationChartRegistration registration,
         int x,
         int y,
         int z,
         NavigationChartCell cell)
     {
+        NavigationChart chart = registration.Chart;
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> invalidatedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
         SwiftHashSet<string> managedChartsToRefresh = SwiftHashSetPool<string>.Shared.Rent();
@@ -595,7 +650,7 @@ public static class PathManager
         {
             bool changed = TryApplyChartCellUpdate(
                 world,
-                chart,
+                registration,
                 x,
                 y,
                 z,
@@ -641,13 +696,13 @@ public static class PathManager
     public static bool TryUpdateChartCell(GridWorld world, string chartName, Vector3d worldPosition, NavigationChartCell cell)
     {
         LinkWorld(world);
-        if (!TryGetNavigationChart(chartName, out NavigationChart chart)
-            || !chart.TryWorldToIndex(worldPosition, out int x, out int y, out int z))
+        if (!TryGetNavigationChartRegistration(chartName, out NavigationChartRegistration registration)
+            || !registration.Chart.TryWorldToIndex(worldPosition, out int x, out int y, out int z))
         {
             return false;
         }
 
-        return TryUpdateChartCell(world, chart, x, y, z, cell);
+        return TryUpdateChartCell(world, registration, x, y, z, cell);
     }
 
     /// <summary>
@@ -675,9 +730,13 @@ public static class PathManager
         SwiftThrowHelper.ThrowIfNull(updates, nameof(updates));
         LinkWorld(world);
 
-        if (updates.Count == 0 || !TryGetNavigationChart(chartName, out NavigationChart chart))
+        if (updates.Count == 0
+            || !TryGetNavigationChartRegistration(chartName, out NavigationChartRegistration registration))
+        {
             return 0;
+        }
 
+        NavigationChart chart = registration.Chart;
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
         SwiftHashSet<string> invalidatedChartKeys = SwiftHashSetPool<string>.Shared.Rent();
         SwiftHashSet<string> managedChartsToRefresh = SwiftHashSetPool<string>.Shared.Rent();
@@ -690,7 +749,7 @@ public static class PathManager
                 NavigationChartCellUpdate update = updates[i];
                 if (TryApplyChartCellUpdate(
                     world,
-                    chart,
+                    registration,
                     update.X,
                     update.Y,
                     update.Z,
@@ -736,12 +795,13 @@ public static class PathManager
     {
         LinkWorld(world);
         if (string.IsNullOrEmpty(chartKey)
-            || !TryGetNavigationChart(chartKey, out var chart)
-            || chart.IsInitialized)
+            || !TryGetNavigationChartRegistration(chartKey, out NavigationChartRegistration registration)
+            || registration.IsInitialized)
         {
             return;
         }
 
+        NavigationChart chart = registration.Chart;
         PathManagerExternalGridBridge.FlushPendingGridChanges();
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
@@ -765,7 +825,7 @@ public static class PathManager
                     state.AddChartOwnersTo(affectedChartKeys);
 
                 NavigationChartCell previousEffectiveCell = state.EffectiveCell;
-                state.AddOwner(chart.Name, cell, chart.Priority, chart.RegistrationOrder);
+                state.AddOwner(chart.Name, cell, chart.Priority, registration.RegistrationOrder);
                 ApplyResolvedVoxelState(world, voxel, state, previousEffectiveCell, partitionsToRebind);
                 TrackInitializedChartGridTouch(voxel.GridIndex, chart.Name);
             }
@@ -773,7 +833,7 @@ public static class PathManager
             foreach (SolidChartPartition part in partitionsToRebind)
                 part.BindNeighbors();
 
-            chart.IsInitialized = true;
+            registration.IsInitialized = true;
             affectedChartKeys.Add(chart.Name);
             SolidPartitionReachability.Invalidate();
 
@@ -812,10 +872,10 @@ public static class PathManager
     public static void UnloadChart(GridWorld world, string chartKey)
     {
         LinkWorld(world);
-        if (!TryGetNavigationChart(chartKey, out NavigationChart chart))
+        if (!TryGetNavigationChartRegistration(chartKey, out NavigationChartRegistration registration))
             return;
 
-        UnloadChart(world, chart);
+        UnloadChart(world, registration);
     }
 
     /// <summary>
@@ -838,13 +898,21 @@ public static class PathManager
         if (chart == null)
             return;
 
+        if (!TryGetNavigationChartRegistration(chart.Name, out NavigationChartRegistration registration))
+            return;
+
+        UnloadChart(world, registration);
+    }
+
+    private static void UnloadChart(GridWorld world, NavigationChartRegistration registration)
+    {
+        NavigationChart chart = registration.Chart;
         string[] generatedTransitionIds = RemoveManagedGeneratedTransitions(chart.Name);
 
-        if (!chart.IsInitialized)
+        if (!registration.IsInitialized)
         {
             RemoveChartFromRegistry(chart.Name);
             TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
-            chart.IsInitialized = false;
             return;
         }
 
@@ -885,8 +953,8 @@ public static class PathManager
                 part.BindNeighbors();
 
             TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
+            registration.IsInitialized = false;
             RemoveChartFromRegistry(chart.Name);
-            chart.IsInitialized = false;
             SolidPartitionReachability.Invalidate();
 
             RefreshManagedManualTransitionsForVoxels(touchedVoxelIndices);
@@ -976,13 +1044,13 @@ public static class PathManager
             for (int i = 0; i < charts.Length; i++)
             {
                 NavigationChart chart = charts[i];
-                if (!_managedGeneratedTransitionsByChart.TryGetValue(chart.Name, out ManagedChartTransitionState state)
-                    || state.TransitionIds.Count == 0)
+                if (!TryGetNavigationChartRegistration_NoLock(chart.Name, out NavigationChartRegistration registration)
+                    || registration.TransitionIds.Count == 0)
                 {
                     continue;
                 }
 
-                foreach (string transitionId in state.TransitionIds)
+                foreach (string transitionId in registration.TransitionIds)
                     transitionIds.Add(transitionId);
             }
         }
@@ -1007,16 +1075,14 @@ public static class PathManager
             if (_navigationChartMap.Count == 0)
                 return Array.Empty<NavigationChart>();
 
-            SwiftList<NavigationChart> initializedCharts = new();
-            foreach (NavigationChart chart in _navigationChartMap.Values)
+            SwiftList<NavigationChartRegistration> initializedCharts = new();
+            foreach (NavigationChartRegistration registration in _navigationChartMap.Values)
             {
-                if (chart.IsInitialized)
-                    initializedCharts.Add(chart);
+                if (registration.IsInitialized)
+                    initializedCharts.Add(registration);
             }
 
-            NavigationChart[] snapshot = initializedCharts.ToArray();
-            Array.Sort(snapshot, CompareChartsByRegistrationOrder);
-            return snapshot;
+            return BuildInitializedChartSelectionSnapshot(initializedCharts);
         }
         finally
         {
@@ -1034,21 +1100,20 @@ public static class PathManager
             if (_navigationChartMap.Count == 0)
                 return Array.Empty<NavigationChart>();
 
-            SwiftList<NavigationChart> initializedCharts = new();
-            foreach (NavigationChart chart in _navigationChartMap.Values)
+            SwiftList<NavigationChartRegistration> initializedCharts = new();
+            foreach (NavigationChartRegistration registration in _navigationChartMap.Values)
             {
-                if (!chart.IsInitialized
+                NavigationChart chart = registration.Chart;
+                if (!registration.IsInitialized
                     || !DoBoundsOverlap(chart.MinBounds, chart.MaxBounds, boundsMin, boundsMax))
                 {
                     continue;
                 }
 
-                initializedCharts.Add(chart);
+                initializedCharts.Add(registration);
             }
 
-            NavigationChart[] snapshot = initializedCharts.ToArray();
-            Array.Sort(snapshot, CompareChartsByRegistrationOrder);
-            return snapshot;
+            return BuildInitializedChartSelectionSnapshot(initializedCharts);
         }
         finally
         {
@@ -1064,7 +1129,7 @@ public static class PathManager
             if (_navigationChartMap.Count == 0)
                 return Array.Empty<NavigationChart>();
 
-            SwiftDictionary<string, NavigationChart> selectedCharts = new(4, StringComparer.Ordinal);
+            SwiftDictionary<string, NavigationChartRegistration> selectedCharts = new(4, StringComparer.Ordinal);
             AddInitializedChartsTouchingGrid_NoLock(gridIndex, selectedCharts);
             return BuildInitializedChartSelectionSnapshot_NoLock(selectedCharts);
         }
@@ -1084,7 +1149,7 @@ public static class PathManager
             if (_navigationChartMap.Count == 0)
                 return Array.Empty<NavigationChart>();
 
-            SwiftDictionary<string, NavigationChart> selectedCharts = new(4, StringComparer.Ordinal);
+            SwiftDictionary<string, NavigationChartRegistration> selectedCharts = new(4, StringComparer.Ordinal);
             AddInitializedChartsWithAuthoredCellsIntersectingBounds_NoLock(boundsMin, boundsMax, selectedCharts);
             return BuildInitializedChartSelectionSnapshot_NoLock(selectedCharts);
         }
@@ -1103,7 +1168,7 @@ public static class PathManager
             if (_navigationChartMap.Count == 0)
                 return Array.Empty<NavigationChart>();
 
-            SwiftDictionary<string, NavigationChart> selectedCharts = new(8, StringComparer.Ordinal);
+            SwiftDictionary<string, NavigationChartRegistration> selectedCharts = new(8, StringComparer.Ordinal);
             for (int i = 0; i < rebuildRequests.Length; i++)
             {
                 ExternalGridChartRebuildRequest rebuildRequest = rebuildRequests[i];
@@ -1132,7 +1197,7 @@ public static class PathManager
 
     private static void AddInitializedChartsTouchingGrid_NoLock(
         ushort gridIndex,
-        SwiftDictionary<string, NavigationChart> selectedCharts)
+        SwiftDictionary<string, NavigationChartRegistration> selectedCharts)
     {
         if (!_initializedChartTouchCountsByGridIndex.TryGetValue(gridIndex, out SwiftDictionary<string, int> chartTouches)
             || chartTouches.Count == 0)
@@ -1143,47 +1208,48 @@ public static class PathManager
         foreach (KeyValuePair<string, int> pair in chartTouches)
         {
             if (pair.Value <= 0
-                || !_navigationChartMap.TryGetValue(pair.Key, out NavigationChart chart)
-                || !chart.IsInitialized)
+                || !_navigationChartMap.TryGetValue(pair.Key, out NavigationChartRegistration registration)
+                || !registration.IsInitialized)
             {
                 continue;
             }
 
-            selectedCharts[chart.Name] = chart;
+            selectedCharts[registration.Chart.Name] = registration;
         }
     }
 
     private static void AddInitializedChartsWithAuthoredCellsIntersectingBounds_NoLock(
         Vector3d boundsMin,
         Vector3d boundsMax,
-        SwiftDictionary<string, NavigationChart> selectedCharts)
+        SwiftDictionary<string, NavigationChartRegistration> selectedCharts)
     {
-        foreach (NavigationChart chart in _navigationChartMap.Values)
+        foreach (NavigationChartRegistration registration in _navigationChartMap.Values)
         {
-            if (!chart.IsInitialized
+            NavigationChart chart = registration.Chart;
+            if (!registration.IsInitialized
                 || !DoBoundsOverlap(chart.MinBounds, chart.MaxBounds, boundsMin, boundsMax)
                 || !ChartHasAuthoredCellInsideBounds(chart, boundsMin, boundsMax))
             {
                 continue;
             }
 
-            selectedCharts[chart.Name] = chart;
+            selectedCharts[chart.Name] = registration;
         }
     }
 
     private static NavigationChart[] BuildInitializedChartSelectionSnapshot_NoLock(
-        SwiftDictionary<string, NavigationChart> selectedCharts)
+        SwiftDictionary<string, NavigationChartRegistration> selectedCharts)
     {
         if (selectedCharts.Count == 0)
             return Array.Empty<NavigationChart>();
 
-        NavigationChart[] snapshot = new NavigationChart[selectedCharts.Count];
+        NavigationChartRegistration[] snapshot = new NavigationChartRegistration[selectedCharts.Count];
         int index = 0;
-        foreach (NavigationChart chart in selectedCharts.Values)
-            snapshot[index++] = chart;
+        foreach (NavigationChartRegistration registration in selectedCharts.Values)
+            snapshot[index++] = registration;
 
-        Array.Sort(snapshot, CompareChartsByRegistrationOrder);
-        return snapshot;
+        Array.Sort(snapshot, CompareRegistrationsByRegistrationOrder);
+        return CopyCharts(snapshot);
     }
 
     private static bool ChartHasAuthoredCellInsideBounds(
@@ -1202,6 +1268,20 @@ public static class PathManager
 
     private static void ClearInitializedChartLiveStatePreservingRegistration(GridWorld world, NavigationChart chart)
     {
+        if (chart == null
+            || !TryGetNavigationChartRegistration(chart.Name, out NavigationChartRegistration registration))
+        {
+            return;
+        }
+
+        ClearInitializedChartLiveStatePreservingRegistration(world, registration);
+    }
+
+    private static void ClearInitializedChartLiveStatePreservingRegistration(
+        GridWorld world,
+        NavigationChartRegistration registration)
+    {
+        NavigationChart chart = registration.Chart;
         PathGuideFactory.InvalidateCacheFor(chart.Name);
 
         SwiftHashSet<SolidChartPartition> partitionsToRebind = PartitionSetPool.Rent();
@@ -1237,7 +1317,7 @@ public static class PathManager
             foreach (SolidChartPartition part in partitionsToRebind)
                 part.BindNeighbors();
 
-            chart.IsInitialized = false;
+            registration.IsInitialized = false;
             SolidPartitionReachability.Invalidate();
         }
         finally
@@ -1305,13 +1385,29 @@ public static class PathManager
             voxel.TryRemovePartition<VolumeChartPartition>();
     }
 
-    private static void MarkRegisteredChartsUninitialized_NoLock()
+    private static NavigationChart[] BuildInitializedChartSelectionSnapshot(
+        SwiftList<NavigationChartRegistration> registrations)
     {
-        foreach (NavigationChart chart in _navigationChartMap.Values)
-            chart.IsInitialized = false;
+        if (registrations.Count == 0)
+            return Array.Empty<NavigationChart>();
+
+        NavigationChartRegistration[] snapshot = registrations.ToArray();
+        Array.Sort(snapshot, CompareRegistrationsByRegistrationOrder);
+        return CopyCharts(snapshot);
     }
 
-    private static int CompareChartsByRegistrationOrder(NavigationChart left, NavigationChart right)
+    private static NavigationChart[] CopyCharts(NavigationChartRegistration[] registrations)
+    {
+        NavigationChart[] charts = new NavigationChart[registrations.Length];
+        for (int i = 0; i < registrations.Length; i++)
+            charts[i] = registrations[i].Chart;
+
+        return charts;
+    }
+
+    private static int CompareRegistrationsByRegistrationOrder(
+        NavigationChartRegistration left,
+        NavigationChartRegistration right)
     {
         return left.RegistrationOrder.CompareTo(right.RegistrationOrder);
     }
@@ -1372,12 +1468,15 @@ public static class PathManager
     };
 
     private static bool TryRegisterManagedGeneratedTransitions(
-        NavigationChart chart,
-        string transitionIdPrefix,
+        string chartName,
         TraversalTransition[]? precomputedGeneratedTransitions)
     {
+        if (!TryGetNavigationChartRegistration(chartName, out NavigationChartRegistration registration))
+            return false;
+
+        NavigationChart chart = registration.Chart;
         TraversalTransition[] generatedTransitions = precomputedGeneratedTransitions
-            ?? GeneratedTraversalTransitionBuilder.BuildTransitions(chart, transitionIdPrefix);
+            ?? GeneratedTraversalTransitionBuilder.BuildTransitions(chart, registration.TransitionIdPrefix);
         int transitionCount = generatedTransitions.Length;
         if (transitionCount > 0
             && !TraversalTransitionRegistry.RegisterGeneratedRange(
@@ -1394,30 +1493,24 @@ public static class PathManager
         for (int i = 0; i < transitionCount; i++)
             registeredTransitionIds[i] = generatedTransitions[i].Id;
 
-        RememberManagedGeneratedTransitions(
-            chart.Name,
-            transitionIdPrefix,
-            chart.Priority,
-            registeredTransitionIds,
-            transitionCount);
+        RememberManagedGeneratedTransitions(chart.Name, registeredTransitionIds, transitionCount);
         return true;
     }
 
     private static void RememberManagedGeneratedTransitions(
         string chartName,
-        string transitionIdPrefix,
-        int priority,
         string[] transitionIds,
         int transitionCount)
     {
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            var state = new ManagedChartTransitionState(transitionIdPrefix, priority);
-            for (int i = 0; i < transitionCount; i++)
-                state.TransitionIds.Add(transitionIds[i]);
+            if (!TryGetNavigationChartRegistration_NoLock(chartName, out NavigationChartRegistration registration))
+                return;
 
-            _managedGeneratedTransitionsByChart[chartName] = state;
+            registration.TransitionIds.Clear();
+            for (int i = 0; i < transitionCount; i++)
+                registration.TransitionIds.Add(transitionIds[i]);
         }
         finally { _navigationChartMapLock.ExitWriteLock(); }
     }
@@ -1427,21 +1520,22 @@ public static class PathManager
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            if (!_managedGeneratedTransitionsByChart.TryGetValue(chartName, out ManagedChartTransitionState state))
+            if (!TryGetNavigationChartRegistration_NoLock(chartName, out NavigationChartRegistration registration))
                 return Array.Empty<string>();
 
-            _managedGeneratedTransitionsByChart.Remove(chartName);
-            return CopyTransitionIds(state.TransitionIds);
+            string[] transitionIds = CopyTransitionIds(registration.TransitionIds);
+            registration.TransitionIds.Clear();
+            return transitionIds;
         }
         finally { _navigationChartMapLock.ExitWriteLock(); }
     }
 
     private static bool TryGetManagedGeneratedTransitionState(
         string chartName,
-        out ManagedChartTransitionState state)
+        out NavigationChartRegistration state)
     {
         _navigationChartMapLock.EnterReadLock();
-        try { return _managedGeneratedTransitionsByChart.TryGetValue(chartName, out state); }
+        try { return TryGetNavigationChartRegistration_NoLock(chartName, out state); }
         finally { _navigationChartMapLock.ExitReadLock(); }
     }
 
@@ -1504,7 +1598,7 @@ public static class PathManager
     private static void RefreshManagedGeneratedTransitionsForChart(GridWorld world, string chartName)
     {
         if (!TryGetNavigationChart(chartName, out NavigationChart chart)
-            || !TryGetManagedGeneratedTransitionState(chartName, out ManagedChartTransitionState state))
+            || !TryGetManagedGeneratedTransitionState(chartName, out NavigationChartRegistration state))
         {
             return;
         }
@@ -1537,7 +1631,7 @@ public static class PathManager
     private static TraversalTransition[] CollectManagedGeneratedTransitionsForChart(
         GridWorld world,
         NavigationChart chart,
-        ManagedChartTransitionState state,
+        NavigationChartRegistration state,
         SwiftHashSet<string> desiredTransitionIds,
         SwiftHashSet<string> activeTransitionIds)
     {
@@ -1601,7 +1695,7 @@ public static class PathManager
         {
             if (string.IsNullOrEmpty(chartName)
                 || !TryGetNavigationChart(chartName, out NavigationChart chart)
-                || !TryGetManagedGeneratedTransitionState(chartName, out ManagedChartTransitionState state)
+                || !TryGetManagedGeneratedTransitionState(chartName, out NavigationChartRegistration state)
                 || !chart.TryWorldToIndex(worldPosition, out int x, out int y, out int z))
             {
                 continue;
@@ -1615,7 +1709,7 @@ public static class PathManager
         GridWorld world,
         string chartName,
         NavigationChart chart,
-        ManagedChartTransitionState state,
+        NavigationChartRegistration state,
         int x,
         int y,
         int z)
@@ -1666,7 +1760,7 @@ public static class PathManager
         GridWorld world,
         string chartName,
         NavigationChart chart,
-        ManagedChartTransitionState state,
+        NavigationChartRegistration state,
         int firstX,
         int firstY,
         int firstZ,
@@ -1764,7 +1858,7 @@ public static class PathManager
     }
 
     private static string[] GetObsoleteManagedGeneratedTransitionIds(
-        ManagedChartTransitionState state,
+        NavigationChartRegistration state,
         string[] potentialTransitionIds,
         TraversalTransition[] desiredTransitions)
     {
@@ -1799,7 +1893,7 @@ public static class PathManager
     }
 
     private static TraversalTransition[] GetMissingManagedGeneratedTransitions(
-        ManagedChartTransitionState state,
+        NavigationChartRegistration state,
         TraversalTransition[] desiredTransitions)
     {
         if (desiredTransitions.Length == 0)
@@ -1820,7 +1914,7 @@ public static class PathManager
 
     private static void ApplyManagedGeneratedTransitionDelta(
         string chartName,
-        ManagedChartTransitionState state,
+        NavigationChartRegistration state,
         SwiftHashSet<string> desiredTransitionIds,
         SwiftHashSet<string> activeTransitionIds,
         TraversalTransition[] missingTransitions)
@@ -1846,7 +1940,7 @@ public static class PathManager
     }
 
     private static string[] GetObsoleteManagedGeneratedTransitionIds(
-        ManagedChartTransitionState state,
+        NavigationChartRegistration state,
         SwiftHashSet<string> desiredTransitionIds)
     {
         if (state.TransitionIds.Count == 0)
@@ -1865,7 +1959,7 @@ public static class PathManager
     }
 
     private static void SyncManagedGeneratedTransitionSuppressions(
-        ManagedChartTransitionState state,
+        NavigationChartRegistration state,
         SwiftHashSet<string> activeTransitionIds)
     {
         if (state.TransitionIds.Count == 0)
@@ -1895,7 +1989,7 @@ public static class PathManager
     private static void CollectManagedGeneratedTransitionsForPair(
         GridWorld world,
         NavigationChart chart,
-        ManagedChartTransitionState state,
+        NavigationChartRegistration state,
         int firstX,
         int firstY,
         int firstZ,
@@ -2036,7 +2130,7 @@ public static class PathManager
         int secondY,
         int secondZ)
     {
-        if (!chart.IsInitialized)
+        if (!IsChartInitialized(chartName))
             return false;
 
         return IsChartEffectiveOwnerAtPosition(world, chartName, chart.GetWorldPosition(firstX, firstY, firstZ))
@@ -2058,7 +2152,7 @@ public static class PathManager
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            if (!_managedGeneratedTransitionsByChart.TryGetValue(chartName, out ManagedChartTransitionState state))
+            if (!TryGetNavigationChartRegistration_NoLock(chartName, out NavigationChartRegistration state))
                 return;
 
             for (int i = 0; i < transitions.Length; i++)
@@ -2074,7 +2168,7 @@ public static class PathManager
         _navigationChartMapLock.EnterWriteLock();
         try
         {
-            if (!_managedGeneratedTransitionsByChart.TryGetValue(chartName, out ManagedChartTransitionState state))
+            if (!TryGetNavigationChartRegistration_NoLock(chartName, out NavigationChartRegistration state))
                 return;
 
             for (int i = 0; i < transitionIds.Length; i++)
@@ -2147,7 +2241,7 @@ public static class PathManager
 
     private static bool TryApplyChartCellUpdate(
         GridWorld world,
-        NavigationChart chart,
+        NavigationChartRegistration registration,
         int x,
         int y,
         int z,
@@ -2156,12 +2250,13 @@ public static class PathManager
         SwiftHashSet<string> invalidatedChartKeys,
         SwiftHashSet<string> managedChartsToRefresh)
     {
+        NavigationChart chart = registration.Chart;
         if (!chart.TrySetCell(x, y, z, cell, out NavigationChartCell previousCell))
             return false;
 
         TrackManagedChartRefresh(chart, managedChartsToRefresh);
 
-        if (!chart.IsInitialized)
+        if (!registration.IsInitialized)
             return true;
 
         if (!TryGetChartUpdateVoxelContext(
@@ -2179,7 +2274,7 @@ public static class PathManager
             return true;
         }
 
-        TryUpdateResolvedVoxelStateForChartCell(chart, cell, voxel!.WorldIndex, ref state);
+        TryUpdateResolvedVoxelStateForChartCell(registration, cell, voxel!.WorldIndex, ref state);
         TrackInitializedChartGridTouchDelta(voxel.GridIndex, chart.Name, previousCell, cell);
 
         ApplyResolvedVoxelState(world, voxel, state, previousEffectiveCell, partitionsToRebind);
@@ -2235,15 +2330,16 @@ public static class PathManager
     }
 
     private static void TryUpdateResolvedVoxelStateForChartCell(
-        NavigationChart chart,
+        NavigationChartRegistration registration,
         NavigationChartCell cell,
         WorldVoxelIndex voxelIndex,
         ref ResolvedChartVoxelState? state)
     {
+        NavigationChart chart = registration.Chart;
         if (cell.HasTraversalData)
         {
             state ??= new ResolvedChartVoxelState();
-            state.AddOwner(chart.Name, cell, chart.Priority, chart.RegistrationOrder);
+            state.AddOwner(chart.Name, cell, chart.Priority, registration.RegistrationOrder);
             _resolvedChartVoxelStates[voxelIndex] = state;
             return;
         }

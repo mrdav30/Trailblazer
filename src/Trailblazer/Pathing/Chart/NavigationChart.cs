@@ -78,17 +78,6 @@ public class NavigationChart
     private bool _generatedTransitionCellIndicesDirty;
 
     /// <summary>
-    /// Indicates whether this chart has been fully initialized and is ready for queries.
-    /// </summary>
-    public bool IsInitialized { get; internal set; }
-
-    /// <summary>
-    /// Tracks when the chart was registered relative to other charts.
-    /// Higher values win same-priority overlap ties.
-    /// </summary>
-    public int RegistrationOrder { get; internal set; }
-
-    /// <summary>
     /// Creates a new navigation chart using a pre-flattened map array and spatial parameters.
     /// </summary>
     /// <param name="name">The chart's unique identifier.</param>

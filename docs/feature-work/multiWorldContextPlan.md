@@ -89,7 +89,7 @@ The core problem is not just public API shape. The mutable state behind the API 
 | Chart registry | `PathManager._navigationChartMap` | Chart names, init state, and registration order are global. |
 | Authored cell resolution | `PathManager._resolvedChartVoxelStates` | `WorldVoxelIndex` keys collide across separate `GridWorld` instances. |
 | Partition pools | `PathManager.PartitionPool`, `VolumeChartPartitionPool` | Released partitions can be reused across worlds without context ownership. |
-| Chart live state | `NavigationChart.IsInitialized`, `RegistrationOrder` | The same authored chart cannot be registered independently in two worlds. |
+| Chart live state | `PathManager._navigationChartMap` registrations | Authored chart state is split from live state, but registrations remain process-wide until Phase 3. |
 | Transition registry | `TraversalTransitionRegistry` | Manual/generated transitions and registry versions are process-wide. |
 | Transition query caches | `TraversalTransitionQuery` | Cached directed-transition arrays are keyed only by one global registry version. |
 | Volume medium rules | `VolumeMediumRules` | Host gas/liquid rules are global, not per world. |
@@ -286,27 +286,40 @@ Exit criteria:
 
 ## Phase 2 - Split Authored Charts From Live Registrations
 
-**Status:** Not started  
+**Status:** Complete  
 **Goal:** Make `NavigationChart` reusable across contexts.
 
-- [ ] Add `NavigationChartRegistration` to hold a `NavigationChart`, registration order,
+- [x] Add `NavigationChartRegistration` to hold a `NavigationChart`, registration order,
   initialized state, managed generated transition ids, and generated transition prefix.
-- [ ] Move `NavigationChart.IsInitialized` and `NavigationChart.RegistrationOrder` reads and writes
+- [x] Move `NavigationChart.IsInitialized` and `NavigationChart.RegistrationOrder` reads and writes
   out of core pathing logic and into `NavigationChartRegistration`.
-- [ ] Change overlap resolution to use registration data from the owning context.
-- [ ] Keep authored chart cell data, bounds, priority, and cached authored-cell indexes on
+- [x] Change overlap resolution to use registration data from the owning context.
+- [x] Keep authored chart cell data, bounds, priority, and cached authored-cell indexes on
   `NavigationChart`.
-- [ ] Update tests that assert chart initialization to query the context registration state instead
+- [x] Update tests that assert chart initialization to query the context registration state instead
   of chart instance fields.
-- [ ] Add a test that the same `NavigationChart` instance can be registered in two contexts with
-  independent initialization state.
-- [ ] Confirm same-priority overlap resolution still runs in stable O(number of local owners for the
+- [x] Add a test that the same `NavigationChart` instance can be represented by independent live
+  registrations with independent initialization state.
+- [x] Confirm same-priority overlap resolution still runs in stable O(number of local owners for the
   voxel) time and never scans charts from other contexts.
+
+Phase notes:
+
+- `NavigationChart` now represents authored data only; initialization state, registration order,
+  generated transition id ownership, and generated transition prefixes live on
+  `NavigationChartRegistration`.
+- The static `PathManager` registry now stores registrations while it remains the compatibility
+  facade. Phase 3 moves that registration map into `PathingWorldState` so the same chart name and
+  the same authored chart instance can be registered through separate context-owned pathing
+  services.
+- Overlap resolution still uses per-voxel owner state, priority, and registration order, so
+  same-priority ties remain deterministic without scanning unrelated charts.
 
 Exit criteria:
 
 - Authored chart data is world-agnostic.
-- Live chart state is fully context-local.
+- Live chart state is no longer stored on authored chart instances; full context locality lands when
+  Phase 3 moves the registration map behind `TrailblazerWorldContext`.
 - Same-priority overlap tie behavior remains deterministic within each context.
 
 ## Phase 3 - Move Pathing State Behind The Context
@@ -316,7 +329,7 @@ Exit criteria:
 world-local.
 
 - [ ] Add `PathingWorldState` and move these `PathManager` fields into it:
-  `_navigationChartMap`, `_managedGeneratedTransitionsByChart`, `_resolvedChartVoxelStates`,
+  `_navigationChartMap` as the `NavigationChartRegistration` map, `_resolvedChartVoxelStates`,
   `_initializedChartTouchCountsByGridIndex`, `_activeAuthoredGasCellCount`,
   `_activeAuthoredLiquidCellCount`, `_nextChartRegistrationOrder`, and the chart lock.
 - [ ] Move `PartitionPool` and `VolumeChartPartitionPool` into `PathingWorldState` so partition

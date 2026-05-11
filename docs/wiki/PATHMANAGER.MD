@@ -202,7 +202,7 @@ When it runs, it:
 7. records any existing owners for later cache invalidation
 8. adds the current chart as an owner
 9. rebinds neighbors for every touched path partition
-10. marks `chart.IsInitialized = true`
+10. marks the chart's `NavigationChartRegistration` initialized
 11. invalidates cached guides for any previously owning chart keys collected during the process
 
 ### 6.2 Partition Reuse

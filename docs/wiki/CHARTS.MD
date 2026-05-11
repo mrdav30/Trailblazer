@@ -59,7 +59,11 @@ Important fields:
 - `MaxBounds`: exclusive upper world bound
 - `Interval`: spacing between chart cells
 - `SizeX`, `SizeY`, `SizeZ`: chart dimensions
-- `IsInitialized`: whether the chart has been pushed into live partition state
+
+Live registration state, including initialization and registration order, is stored by
+`PathManager` on a `NavigationChartRegistration` instead of on the authored chart instance. Query
+initialization through `PathManager.IsChartInitialized(...)` when integration code needs to observe
+that state.
 
 The core factory today is:
 
@@ -146,7 +150,7 @@ That enables patterns like:
 The precedence rules are:
 
 - higher `NavigationChart.Priority` wins
-- same-priority ties fall back to later chart registration order
+- same-priority ties fall back to later `NavigationChartRegistration` order
 
 This ownership model is one of the reasons `PathManager.InitializeChart(...)` and `UnloadChart(...)` are more involved than a simple add/remove operation.
 
@@ -171,6 +175,8 @@ That means:
 - chart creation is cheap relative to full runtime activation
 - a chart is not pathable until initialization has run
 - `PathManager.Register(chart)` performs that initialization by default, while `initializeChart: false` keeps the chart inert until a later explicit activation step
+- the initialized flag belongs to the live registration, so authored chart data can be reused across
+  registrations without carrying runtime state from one registration to another
 
 Registered charts are not frozen, though.
 

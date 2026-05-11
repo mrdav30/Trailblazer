@@ -86,8 +86,8 @@ public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
 
         worldA.Reset();
 
-        chartA.IsInitialized.Should().BeFalse();
-        chartB.IsInitialized.Should().BeTrue();
+        PathManager.IsChartInitialized(chartA).Should().BeFalse();
+        PathManager.IsChartInitialized(chartB).Should().BeTrue();
     }
 
     [Fact]

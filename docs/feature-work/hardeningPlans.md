@@ -13,7 +13,7 @@ These are valid future hardening items, but they should stay demand-driven rathe
   grid-bounds pruning.
   Tracked here: [closestTransitionLookupPlan.md](./closestTransitionLookupPlan.md)
 2. If hosts need richer automatic lifecycle behavior for manually registered transitions, revisit
-  managed manual regeneration and whether `ManagedChartTransitionState` should broaden into a more
+  managed manual regeneration and whether `NavigationChartRegistration` should share a broader
   general managed transition dependency model.
   Tracked here: [managedTransitionLifecyclePlan.md](./managedTransitionLifecyclePlan.md)
 

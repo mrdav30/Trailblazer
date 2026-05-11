@@ -36,7 +36,7 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(PathManager.TryGetNavigationChart("TestMap", out var retrieved));
         Assert.Equal(map, retrieved);
-        Assert.False(map.IsInitialized);
+        Assert.False(PathManager.IsChartInitialized(map));
         Voxel voxel = TestRequire.VoxelAt(new Vector3d(0, 0, 0));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
 
@@ -52,7 +52,7 @@ public class PathingNavigationMapTests : IDisposable
         var map = PathTestFactory.BuildSinglePointMap("InitMap", new Vector3d(0, 0, 0));
         Assert.True(PathManager.Register(map));
 
-        Assert.True(map.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(map));
         Voxel voxel = TestRequire.VoxelAt(new Vector3d(0, 0, 0));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
@@ -72,8 +72,8 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(PathManager.Register(duplicate, initializeChart: false));
         Assert.True(PathManager.TryGetNavigationChart("DuplicateChart", out var retrieved));
         Assert.Same(original, retrieved);
-        Assert.False(original.IsInitialized);
-        Assert.False(duplicate.IsInitialized);
+        Assert.False(PathManager.IsChartInitialized(original));
+        Assert.False(PathManager.IsChartInitialized(duplicate));
 
         PathManager.UnloadChart("DuplicateChart");
     }
@@ -118,13 +118,13 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(PathManager.Register(first, initializeChart: false));
         Assert.True(PathManager.Register(second, initializeChart: false));
-        Assert.False(first.IsInitialized);
-        Assert.False(second.IsInitialized);
+        Assert.False(PathManager.IsChartInitialized(first));
+        Assert.False(PathManager.IsChartInitialized(second));
 
         PathManager.InitializeAllCharts();
 
-        Assert.True(first.IsInitialized);
-        Assert.True(second.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(first));
+        Assert.True(PathManager.IsChartInitialized(second));
         Voxel firstVoxel = TestRequire.VoxelAt(Vector3d.Zero);
         Assert.True(firstVoxel.TryGetPartition<SolidChartPartition>(out _));
         Voxel secondVoxel = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
@@ -425,7 +425,7 @@ public class PathingNavigationMapTests : IDisposable
 
         PathManager.UnloadChart(map);
 
-        Assert.False(map.IsInitialized);
+        Assert.False(PathManager.IsChartInitialized(map));
         Assert.True(PathManager.Register(map));
 
         PathManager.InitializeChart(map.Name);
@@ -444,13 +444,13 @@ public class PathingNavigationMapTests : IDisposable
 
         var map = PathTestFactory.BuildSinglePointMap("ResettableMap", new Vector3d(0, 0, 0));
         Assert.True(PathManager.Register(map));
-        Assert.True(map.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(map));
 
         PathManager.Reset();
 
-        Assert.False(map.IsInitialized);
+        Assert.False(PathManager.IsChartInitialized(map));
         Assert.True(PathManager.Register(map));
-        Assert.True(map.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(map));
         Voxel voxel = TestRequire.VoxelAt(new Vector3d(0, 0, 0));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
@@ -967,7 +967,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.Register(buildResult));
         NavigationChart chart = TestRequire.Created(PathManager.TryGetNavigationChart(buildResult.Chart.Name, out NavigationChart? createdchart), createdchart);
         Assert.Same(buildResult.Chart, chart);
-        Assert.True(chart.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(chart));
         Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
         Voxel waterVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
@@ -1653,7 +1653,7 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.False(PathManager.Register(buildResult));
         Assert.False(PathManager.IsChartRegistered(buildResult.Chart.Name));
-        Assert.False(buildResult.Chart.IsInitialized);
+        Assert.False(PathManager.IsChartInitialized(buildResult.Chart));
         Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
         Assert.True(TraversalTransitionRegistry.IsRegistered(preRegisteredTransition.Id));
         Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
@@ -1920,7 +1920,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.IsChartRegistered(sourceChart.Name));
         Assert.True(PathManager.IsChartRegistered(destinationChart.Name));
         NavigationChart removedSourceChart = TestRequire.Created(PathManager.TryGetNavigationChart(sourceChart.Name, out NavigationChart? createdremovedSourceChart), createdremovedSourceChart);
-        Assert.True(removedSourceChart.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(removedSourceChart));
         Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
         Assert.False(TraversalTransitionRegistry.IsActive(manual.Id));
         Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
@@ -1994,8 +1994,8 @@ public class PathingNavigationMapTests : IDisposable
         NavigationChart leftChart = PathTestFactory.RegisterSingleWalkablePoint("ChangedLeftChart", Vector3d.Zero);
         NavigationChart rightChart = PathTestFactory.RegisterSingleWalkablePoint("ChangedRightChart", new Vector3d(10, 0, 0));
 
-        Assert.True(leftChart.IsInitialized);
-        Assert.True(rightChart.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(leftChart));
+        Assert.True(PathManager.IsChartInitialized(rightChart));
         Voxel leftVoxel = TestRequire.VoxelAt(Vector3d.Zero);
         Voxel rightVoxel = TestRequire.VoxelAt(new Vector3d(10, 0, 0));
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
@@ -2004,8 +2004,8 @@ public class PathingNavigationMapTests : IDisposable
         TrailblazerWorldManager.IncrementGridVersion(rightGridIndex, false);
         FlushExternalGridBridge();
 
-        Assert.True(leftChart.IsInitialized);
-        Assert.True(rightChart.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(leftChart));
+        Assert.True(PathManager.IsChartInitialized(rightChart));
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(rightVoxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell leftCell));
@@ -2027,14 +2027,14 @@ public class PathingNavigationMapTests : IDisposable
 
         NavigationChart leftChart = PathTestFactory.RegisterSingleWalkablePoint("UnchangedChart", Vector3d.Zero);
 
-        Assert.True(leftChart.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(leftChart));
         Voxel leftVoxel = TestRequire.VoxelAt(Vector3d.Zero);
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
 
         TrailblazerWorldManager.IncrementGridVersion(farGridIndex, false);
         FlushExternalGridBridge();
 
-        Assert.True(leftChart.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(leftChart));
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell cell));
         Assert.True(cell.HasSolid);
@@ -2048,14 +2048,14 @@ public class PathingNavigationMapTests : IDisposable
 
         NavigationChart deferredChart = PathTestFactory.BuildSinglePointMap("DeferredGridChangeChart", Vector3d.Zero);
         Assert.True(PathManager.Register(deferredChart, initializeChart: false));
-        Assert.False(deferredChart.IsInitialized);
+        Assert.False(PathManager.IsChartInitialized(deferredChart));
         Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         TrailblazerWorldManager.IncrementGridVersion(gridIndex, false);
         FlushExternalGridBridge();
 
-        Assert.False(deferredChart.IsInitialized);
+        Assert.False(PathManager.IsChartInitialized(deferredChart));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
 
@@ -2073,11 +2073,11 @@ public class PathingNavigationMapTests : IDisposable
 
         var chart = NavigationChart.From3D("DeferredGridUpdateChart", data, Vector3d.Zero, Fixed64.One);
         Assert.True(PathManager.Register(chart));
-        Assert.True(chart.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(chart));
 
         Assert.True(TrailblazerWorldManager.TryRemoveGrid(gridIndex));
         FlushExternalGridBridge();
-        Assert.True(chart.IsInitialized);
+        Assert.True(PathManager.IsChartInitialized(chart));
         Assert.False(PathManager.TryGetEffectiveCell(Vector3d.Zero, out _));
 
         Assert.True(PathManager.TryUpdateChartCell(chart.Name, 0, 0, 0, NavigationChartCell.Liquid));

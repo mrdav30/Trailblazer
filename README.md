@@ -138,6 +138,13 @@ instance you want it to use. After that, convenience APIs such as `PathManager.R
 configured world automatically. If you need to bind a world opportunistically before manager startup, use
 the explicit overloads such as `PathManager.Register(world, chart)`.
 
+Trailblazer is migrating toward explicit multi-world ownership through `TrailblazerWorldContext`.
+Today, `TrailblazerManager.Initialize(world)` creates a default context for compatibility while the
+static pathing APIs continue to route through the legacy facade. Hosts that need explicit clock and
+world lifetime ownership can create a context directly with `TrailblazerWorldContext.Attach(world)` or
+`TrailblazerWorldContext.CreateOwned(...)`; chart registries, guide caches, transitions, and navigator
+state are being moved behind that context in follow-up phases.
+
 `PathManager.Register(chart)` can initialize the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step.
 
 `NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell surface or volume traversal metadata, cost modifiers, mixed media such as `Solid | Liquid` or `Solid | Gas`, or transition hints. The `bool[,,]` overload emits solid cells by default, or a single authored gas/liquid medium when you pass `TraversalMedium.Gas` or `TraversalMedium.Liquid`. Raw 3D travel runs through `VolumePathRequest`, while chart-backed `AStarPathRequest` and `FlowFieldPathRequest` requests can opt into registered transition fallback through `AllowTraversalTransitions`.

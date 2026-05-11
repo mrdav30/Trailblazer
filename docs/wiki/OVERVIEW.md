@@ -24,7 +24,8 @@ Trailblazer assumes:
 - world-space math uses `FixedMathSharp` types such as `Fixed64`, `Vector3d`, and `FixedQuaternion`
 - traversable space is represented by `GridForge` voxels
 - pathfinding is driven by `NavigationChart` data and `SolidChartPartition` ownership
-- simulation advances in deterministic fixed steps through `TrailblazerManager`
+- simulation advances in deterministic fixed steps through `TrailblazerManager` or an explicit
+  `TrailblazerWorldContext`
 - runtime diagnostics flow through `TrailblazerLogger.Channel`, with verbose debug logging gated separately through `TrailblazerLogger.DebugChannel`
 
 At a high level, the runtime loop is:
@@ -56,7 +57,15 @@ Important details:
 - charts can author both solid and raw-volume traversal data; runtime gas and liquid routing still flow through `VolumePathRequest`
 - world bounds are derived from `MinBounds`, `Interval`, and the source array size
 
-### 2.2 PathManager
+### 2.2 TrailblazerWorldContext
+
+`TrailblazerWorldContext` is the new explicit owner for one `GridWorld` and its deterministic
+simulation clock. In the current migration phase it provides context construction, attach/owned-world
+lifetime, independent frame rate and frame count, and context-local lifecycle hooks. `TrailblazerManager`
+creates a default context when initialized with a `GridWorld` so existing static integrations keep
+working while pathing, guide caches, transitions, and navigator state move behind explicit contexts.
+
+### 2.3 PathManager
 
 `PathManager` is the global chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell and closest-active-transition query helpers, exposes neighbor and direct-travel utilities, and participates in guide-cache maintenance.
 

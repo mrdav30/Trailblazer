@@ -1,38 +1,30 @@
-﻿using FixedMathSharp;
+using FixedMathSharp;
 using GridForge.Grids;
-using SwiftCollections;
 using System;
-using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
-using Trailblazer.Support;
 
 namespace Trailblazer;
 
 /// <summary>
-/// Provides global simulation parameters and timing management for the Trailblazer system.
+/// Provides legacy static simulation parameters and timing management for the default Trailblazer context.
 /// </summary>
 /// <remarks>
-/// This static class handles fixed-time updates, frame progression, and ordered internal lifecycle hooks.
-/// Subsystems should register maintenance work through those hooks instead of being hard-wired into the manager.
+/// This static class remains as a compatibility facade while Trailblazer migrates to explicit
+/// <see cref="TrailblazerWorldContext"/> ownership. New multi-world integrations should keep and
+/// simulate their own context handles directly.
 /// </remarks>
 public static class TrailblazerManager
 {
     #region Hook Management Fields
 
-    internal static readonly LifecycleHookHandler HookHandler = new();
+    private static readonly TrailblazerClock _clock = new();
+
+    private static readonly TrailblazerLifecycleHooks _lifecycleHooks = new();
 
     private static readonly object _initializationLock = new();
 
-    private static readonly SwiftList<OrderedLifecycleHook> _simulateHooks = new();
-
-    private static readonly SwiftList<OrderedLifecycleHook> _lateSimulateHooks = new();
-
-    private static readonly SwiftList<OrderedLifecycleHook> _visualizeHooks = new();
-
-    private static readonly SwiftList<OrderedLifecycleHook> _resetHooks = new();
-
-    private static readonly SwiftList<OrderedLifecycleHook> _frameRateChangedHooks = new();
+    private static TrailblazerWorldContext? _defaultContext;
 
     private static volatile bool _isInitialized;
 
@@ -41,54 +33,87 @@ public static class TrailblazerManager
     #region FrameRate and Time Properties
 
     /// <summary>
-    /// The fixed simulation frame rate.
+    /// Gets the fixed simulation frame rate.
     /// </summary>
     /// <remarks>
-    /// This determines how frequently physics and movement updates occur.
+    /// When <see cref="DefaultContext"/> is active this value comes from that context; otherwise it
+    /// comes from the compatibility static clock.
     /// </remarks>
-    public static int FrameRate { get; private set; } = 32;
+    public static int FrameRate => TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+        ? context.FrameRate
+        : _clock.FrameRate;
 
     /// <summary>
-    /// The fixed time step for each simulation frame.
+    /// Gets the fixed time step for each simulation frame.
     /// </summary>
-    /// <remarks>
-    /// This value is derived from <see cref="FrameRate"/> to ensure a consistent time step across updates.
-    /// </remarks>
-    public static Fixed64 DeltaTime { get; private set; } = Fixed64.One / (Fixed64)FrameRate;
+    public static Fixed64 DeltaTime => TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+        ? context.DeltaTime
+        : _clock.DeltaTime;
 
     /// <summary>
     /// Gets the reciprocal of the current simulation delta time as a fixed-point value.
     /// </summary>
-    /// <remarks>
-    /// This property is useful for converting time-based calculations to rate-based calculations within the simulation. 
-    /// The value is updated in sync with the simulation's delta time and may change each frame.
-    /// </remarks>
-    public static Fixed64 InvDeltaTime => Fixed64.One / DeltaTime;
+    public static Fixed64 InvDeltaTime => TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+        ? context.InvDeltaTime
+        : _clock.InvDeltaTime;
 
     /// <summary>
-    /// The number of frames elapsed since the simulation started.
+    /// Gets the number of frames elapsed since the simulation started.
     /// </summary>
-    public static int FrameCount { get; private set; }
+    public static int FrameCount => TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+        ? context.FrameCount
+        : _clock.FrameCount;
 
     /// <summary>
-    /// The total simulation time since start (in seconds).
+    /// Gets the total simulation time since start, in seconds.
     /// </summary>
-    public static Fixed64 TotalTime { get; private set; }
+    public static Fixed64 TotalTime => TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+        ? context.TotalTime
+        : _clock.TotalTime;
 
     /// <summary>
-    /// The total simulation time since the last late simulate frame (in seconds).
+    /// Gets the total simulation time since the last late-simulate frame, in seconds.
     /// </summary>
-    public static Fixed64 AccumulatedTime { get; private set; }
+    public static Fixed64 AccumulatedTime => TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+        ? context.AccumulatedTime
+        : _clock.AccumulatedTime;
 
     /// <summary>
     /// Gets a value indicating whether accumulation should be reset to its initial state.
     /// </summary>
-    public static bool ResetAccumulation { get; private set; }
+    public static bool ResetAccumulation => TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+        ? context.ResetAccumulation
+        : _clock.ResetAccumulation;
 
     /// <summary>
     /// Gets the expected accumulation value used for calculations or comparisons.
     /// </summary>
-    public static Fixed64 ExpectedAccumulation { get; private set; }
+    public static Fixed64 ExpectedAccumulation => TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+        ? context.ExpectedAccumulation
+        : _clock.ExpectedAccumulation;
+
+    /// <summary>
+    /// Gets the default world context used by the legacy static facade.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the static facade has not been initialized with an active <see cref="GridWorld"/>.
+    /// </exception>
+    public static TrailblazerWorldContext DefaultContext
+    {
+        get
+        {
+            if (TryGetActiveDefaultContext(out TrailblazerWorldContext context))
+                return context;
+
+            throw new InvalidOperationException(
+                "TrailblazerManager does not have a default context. Call Initialize(GridWorld) first.");
+        }
+    }
+
+    /// <summary>
+    /// Gets whether the legacy static facade has an active default context.
+    /// </summary>
+    public static bool HasDefaultContext => TryGetActiveDefaultContext(out _);
 
     #endregion
 
@@ -119,11 +144,12 @@ public static class TrailblazerManager
     }
 
     /// <summary>
-    /// Initializes Trailblazer against the supplied grid world.
+    /// Initializes Trailblazer against the supplied grid world as the default context.
     /// </summary>
-    /// <param name="world">The single active GridForge world Trailblazer should use.</param>
+    /// <param name="world">The GridForge world for the legacy default context.</param>
     public static void Initialize(GridWorld world)
     {
+        AttachDefaultContext(world);
         TrailblazerWorldManager.AttachWorld(world);
         Initialize();
     }
@@ -142,45 +168,40 @@ public static class TrailblazerManager
     public static void Simulate()
     {
         EnsureInitialized();
-        FrameCount++;
-        TotalTime += DeltaTime;
-        HookHandler.InvokeHooks(_simulateHooks);
+        if (TryGetActiveDefaultContext(out TrailblazerWorldContext context))
+            context.Simulate();
+        else
+            _clock.Simulate();
+
+        _lifecycleHooks.InvokeSimulate();
     }
 
     /// <summary>
     /// Performs late simulation processing and invokes all registered late simulation hooks.
     /// </summary>
-    /// <remarks>
-    /// This method should be called after the main simulation step to execute any logic that must occur at the end of the simulation cycle. 
-    /// It resets accumulation state and triggers all hooks registered for late simulation. 
-    /// </remarks>
     public static void LateSimulate()
     {
         EnsureInitialized();
-        ResetAccumulation = true;
-        HookHandler.InvokeHooks(_lateSimulateHooks);
+        if (TryGetActiveDefaultContext(out TrailblazerWorldContext context))
+            context.LateSimulate();
+        else
+            _clock.LateSimulate();
+
+        _lifecycleHooks.InvokeLateSimulate();
     }
 
     /// <summary>
     /// Performs a visualization update by accumulating time and invoking registered visualization hooks.
     /// </summary>
-    /// <remarks>
-    /// This method should be called once per update cycle to ensure that all visualization hooks 
-    /// are executed with the current accumulated time. 
-    /// If accumulation is reset, the accumulated time is cleared before proceeding. 
-    /// </remarks>
     public static void Visualize()
     {
         EnsureInitialized();
-        if (ResetAccumulation)
-        {
-            AccumulatedTime = Fixed64.Zero;
-            ResetAccumulation = false;
-        }
+        if (TryGetActiveDefaultContext(out TrailblazerWorldContext context))
+            context.Visualize();
+        else
+            _clock.Visualize();
 
-        AccumulatedTime += DeltaTime;
-        ExpectedAccumulation = AccumulatedTime / DeltaTime;
-        HookHandler.InvokeHooks(_visualizeHooks);
+        _lifecycleHooks.InvokeVisualize();
     }
 
     /// <summary>
@@ -189,12 +210,12 @@ public static class TrailblazerManager
     public static void Reset()
     {
         EnsureInitialized();
-        FrameCount = 0;
-        TotalTime = Fixed64.Zero;
-        AccumulatedTime = Fixed64.Zero;
-        ExpectedAccumulation = Fixed64.Zero;
-        ResetAccumulation = false;
-        HookHandler.InvokeHooks(_resetHooks);
+        _clock.Reset();
+
+        if (TryGetActiveDefaultContext(out TrailblazerWorldContext context))
+            context.Reset();
+
+        _lifecycleHooks.InvokeReset();
     }
 
     #endregion
@@ -219,9 +240,12 @@ public static class TrailblazerManager
         }
 
         EnsureInitialized();
-        FrameRate = frameRate;
-        DeltaTime = Fixed64.One / (Fixed64)FrameRate;
-        HookHandler.InvokeHooks(_frameRateChangedHooks);
+        _clock.SetFrameRate(frameRate);
+
+        if (TryGetActiveDefaultContext(out TrailblazerWorldContext context))
+            context.SetFrameRate(frameRate);
+
+        _lifecycleHooks.InvokeFrameRateChanged();
     }
 
     /// <summary>
@@ -229,10 +253,11 @@ public static class TrailblazerManager
     /// </summary>
     /// <param name="timestamp">The timestamp value, in fixed-point format, for which to determine the frame index.</param>
     /// <returns>The zero-based index of the frame that contains the specified timestamp.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetFrameFromTime(Fixed64 timestamp)
     {
-        return (timestamp * InvDeltaTime).FloorToInt();
+        return TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+            ? context.GetFrameFromTime(timestamp)
+            : _clock.GetFrameFromTime(timestamp);
     }
 
     #endregion
@@ -246,7 +271,7 @@ public static class TrailblazerManager
     }
 
     internal static IDisposable RegisterOnSimulateCore(string owner, int order, Action callback) =>
-        HookHandler.RegisterHook(_simulateHooks, owner, order, callback);
+        _lifecycleHooks.RegisterOnSimulate(owner, order, callback);
 
     internal static IDisposable RegisterOnLateSimulate(string owner, int order, Action callback)
     {
@@ -255,7 +280,7 @@ public static class TrailblazerManager
     }
 
     internal static IDisposable RegisterOnLateSimulateCore(string owner, int order, Action callback) =>
-        HookHandler.RegisterHook(_lateSimulateHooks, owner, order, callback);
+        _lifecycleHooks.RegisterOnLateSimulate(owner, order, callback);
 
     internal static IDisposable RegisterOnVisualize(string owner, int order, Action callback)
     {
@@ -264,7 +289,7 @@ public static class TrailblazerManager
     }
 
     internal static IDisposable RegisterOnVisualizeCore(string owner, int order, Action callback) =>
-        HookHandler.RegisterHook(_visualizeHooks, owner, order, callback);
+        _lifecycleHooks.RegisterOnVisualize(owner, order, callback);
 
     internal static IDisposable RegisterOnReset(string owner, int order, Action callback)
     {
@@ -273,7 +298,7 @@ public static class TrailblazerManager
     }
 
     internal static IDisposable RegisterOnResetCore(string owner, int order, Action callback) =>
-        HookHandler.RegisterHook(_resetHooks, owner, order, callback);
+        _lifecycleHooks.RegisterOnReset(owner, order, callback);
 
     internal static IDisposable RegisterOnFrameRateChanged(string owner, int order, Action callback)
     {
@@ -282,7 +307,40 @@ public static class TrailblazerManager
     }
 
     internal static IDisposable RegisterOnFrameRateChangedCore(string owner, int order, Action callback) =>
-        HookHandler.RegisterHook(_frameRateChangedHooks, owner, order, callback);
+        _lifecycleHooks.RegisterOnFrameRateChanged(owner, order, callback);
 
     #endregion
+
+    private static void AttachDefaultContext(GridWorld world)
+    {
+        if (world == null)
+            throw new ArgumentNullException(nameof(world));
+
+        lock (_initializationLock)
+        {
+            if (TryGetActiveDefaultContext(out TrailblazerWorldContext current)
+                && ReferenceEquals(current.World, world))
+            {
+                return;
+            }
+
+            _defaultContext?.Dispose();
+            TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+            context.SetFrameRate(_clock.FrameRate);
+            _defaultContext = context;
+        }
+    }
+
+    private static bool TryGetActiveDefaultContext(out TrailblazerWorldContext context)
+    {
+        TrailblazerWorldContext? current = _defaultContext;
+        if (current != null && !current.IsDisposed && current.World.IsActive)
+        {
+            context = current;
+            return true;
+        }
+
+        context = null!;
+        return false;
+    }
 }

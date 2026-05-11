@@ -11,9 +11,9 @@ namespace Trailblazer.Support;
 /// to callers that still expect a global grid entry point.
 /// </summary>
 /// <remarks>
-/// Trailblazer remains a single-world runtime today. 
-/// GridForge stores world state in <see cref="GridWorld"/>, so this bridge keeps Trailblazer's existing static architecture
-/// pointed at one explicit configured world instead of an implicit engine-global singleton.
+/// This is a compatibility bridge for legacy static APIs while Trailblazer migrates to explicit
+/// <see cref="Trailblazer.TrailblazerWorldContext"/> ownership. New multi-world integrations should
+/// keep and pass their context handles directly instead of relying on this ambient active world.
 /// </remarks>
 public static class TrailblazerWorldManager
 {

@@ -217,14 +217,21 @@ public class TrailblazerManagerTests : IDisposable
 
     private static int GetLifecycleHookCount(string fieldName)
     {
-        FieldInfo field = typeof(TrailblazerManager).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException($"Unable to find TrailblazerManager field '{fieldName}'.");
+        string propertyName = fieldName switch
+        {
+            "_simulateHooks" => "SimulateHookCount",
+            "_resetHooks" => "ResetHookCount",
+            _ => throw new ArgumentOutOfRangeException(nameof(fieldName), fieldName, "Unsupported lifecycle hook field.")
+        };
+
+        FieldInfo field = typeof(TrailblazerManager).GetField("_lifecycleHooks", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("Unable to find TrailblazerManager lifecycle hook storage.");
         object hooks = field.GetValue(null)
-            ?? throw new InvalidOperationException($"TrailblazerManager field '{fieldName}' was null.");
-        PropertyInfo countProperty = hooks.GetType().GetProperty("Count")
-            ?? throw new InvalidOperationException($"Lifecycle hook collection '{fieldName}' does not expose a Count property.");
+            ?? throw new InvalidOperationException("TrailblazerManager lifecycle hook storage was null.");
+        PropertyInfo countProperty = hooks.GetType().GetProperty(propertyName, BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException($"Lifecycle hook storage does not expose '{propertyName}'.");
 
         return (int)(countProperty.GetValue(hooks)
-            ?? throw new InvalidOperationException($"Lifecycle hook collection '{fieldName}' returned a null Count value."));
+            ?? throw new InvalidOperationException($"Lifecycle hook storage '{propertyName}' returned a null Count value."));
     }
 }

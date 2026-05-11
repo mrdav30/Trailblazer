@@ -210,26 +210,34 @@ voxel indexes, request results, registry versions, or frame counters must move b
 
 ## Phase 0 - Baseline And Isolation Tests
 
-**Status:** Not started  
+**Status:** Complete  
 **Goal:** Lock in the desired behavior before moving static state.
 
-- [ ] Add a small `tests/Trailblazer.Tests/Worlds` test area for world-context behavior.
-- [ ] Add a red test showing two contexts can register charts with the same chart name without
+- [x] Add a small `tests/Trailblazer.Tests/Worlds` test area for world-context behavior.
+- [x] Add a red test showing two contexts can register charts with the same chart name without
   collision.
-- [ ] Add a red test showing guide caches do not reuse results across two worlds with equivalent
+- [x] Add a red test showing guide caches do not reuse results across two worlds with equivalent
   voxel spawn tokens or equivalent request coordinates.
-- [ ] Add a red test showing a `GridWorld.Reset()` event for world A clears only context A pathing
+- [x] Add a red test showing a `GridWorld.Reset()` event for world A clears only context A pathing
   state.
-- [ ] Add a red test showing `TrailblazerWorldContext.FrameCount` advances independently per world.
-- [ ] Add a red test showing `MovementGroupCoordinator` state is context-local when two worlds use
+- [x] Add a red test showing `TrailblazerWorldContext.FrameCount` advances independently per world.
+- [x] Add a red test showing `MovementGroupCoordinator` state is context-local when two worlds use
   the same group id.
-- [ ] Add a red test showing a navigator deregisters from its own context's world during reset.
-- [ ] Add `rg`-based test or CI note that tracks remaining production references to
+- [x] Add a red test showing a navigator deregisters from its own context's world during reset.
+- [x] Add `rg`-based test or CI note that tracks remaining production references to
   `TrailblazerWorldManager` so removal progress is visible.
-- [ ] Capture current steady-state allocation expectations for request cache keys, warm guide
+- [x] Capture current steady-state allocation expectations for request cache keys, warm guide
   checkout/return, and navigator steady-state steering so the migration does not mask regressions.
-- [ ] Add a short architecture test or review checklist that fails any new production reference to
+- [x] Add a short architecture test or review checklist that fails any new production reference to
   engine-specific namespaces or wall-clock timing APIs in simulation code.
+
+Phase notes:
+
+- Phase 0 acceptance coverage lives in `MultiWorldPhase0AcceptanceTests`. Five future-phase
+  behaviors remain skipped with `Category=MultiWorldPhase0Red`; independent context frame counts are
+  now unskipped and passing after Phase 1.
+- Baselines and focused verification commands are recorded in
+  `multiWorldPhase0Baseline.md`.
 
 Exit criteria:
 
@@ -241,25 +249,33 @@ Exit criteria:
 
 ## Phase 1 - Introduce The Context Shell
 
-**Status:** Not started  
+**Status:** Complete  
 **Goal:** Add the public context type without moving all pathing state at once.
 
-- [ ] Create `TrailblazerWorldContext` with `GridWorld`, `VoxelSize`, ownership, `Reset()`, and
+- [x] Create `TrailblazerWorldContext` with `GridWorld`, `VoxelSize`, ownership, `Reset()`, and
   `Dispose()` semantics.
-- [ ] Add `Attach(GridWorld world, bool takeOwnership = false)` and `CreateOwned(...)` factories.
-- [ ] Extract context-local clock data from `TrailblazerManager` into `TrailblazerClock`.
-- [ ] Extract lifecycle hook storage into `TrailblazerLifecycleHooks`.
-- [ ] Let `TrailblazerWorldContext.Simulate()` run its own ordered simulate hooks and cull its own
-  guide caches once those caches move in a later phase.
-- [ ] Keep `TrailblazerManager` as a default-context facade for current tests and examples.
-- [ ] Mark `TrailblazerWorldManager` as a compatibility bridge in XML docs and route it through the
+- [x] Add `Attach(GridWorld world, bool takeOwnership = false)` and `CreateOwned(...)` factories.
+- [x] Extract context-local clock data from `TrailblazerManager` into `TrailblazerClock`.
+- [x] Extract lifecycle hook storage into `TrailblazerLifecycleHooks`.
+- [x] Let `TrailblazerWorldContext.Simulate()` run its own ordered simulate hooks; guide cache
+  culling remains in the guide-cache migration phase once caches move behind the context.
+- [x] Keep `TrailblazerManager` as a default-context facade for current tests and examples.
+- [x] Mark `TrailblazerWorldManager` as a compatibility bridge in XML docs and route it through the
   default context where possible.
-- [ ] Add tests for context construction, ownership disposal, independent frame rate, independent
+- [x] Add tests for context construction, ownership disposal, independent frame rate, independent
   frame count, and default-context facade behavior.
-- [ ] Verify context construction and simulation do not introduce engine-specific dependencies,
+- [x] Verify context construction and simulation do not introduce engine-specific dependencies,
   background threads, timers, or wall-clock behavior.
-- [ ] Document facade deprecation in XML comments so developers see the context-first path from
+- [x] Document facade deprecation in XML comments so developers see the context-first path from
   IntelliSense.
+
+Phase notes:
+
+- `TrailblazerManager.Initialize(world)` now creates a default `TrailblazerWorldContext` and keeps
+  the existing `TrailblazerWorldManager` attached for compatibility.
+- `TrailblazerManager` clock properties delegate to the active default context when one exists;
+  otherwise they use a compatibility static clock for existing tests that initialize no world.
+- No pathing registries, guide caches, transitions, or navigator state moved in this phase.
 
 Exit criteria:
 

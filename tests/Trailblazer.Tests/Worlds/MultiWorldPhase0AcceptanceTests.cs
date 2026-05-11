@@ -1,7 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using GridForge.Grids;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -23,71 +22,41 @@ public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    [Fact(Skip = Phase0SkipReason)]
-    [Trait("Category", "MultiWorldPhase0Red")]
+    [Fact]
     public void RegisteringSameChartNameInSeparateWorlds_ShouldNotCollide()
     {
-        using GridWorld worldA = CreateWorld();
-        using GridWorld worldB = CreateWorld();
+        using TrailblazerWorldContext contextA = CreateContextWithGrid();
+        using TrailblazerWorldContext contextB = CreateContextWithGrid();
         NavigationChart chartA = BuildLineChart("SharedChartName");
         NavigationChart chartB = BuildLineChart("SharedChartName");
 
-        PathManager.Register(worldA, chartA).Should().BeTrue();
-        PathManager.Register(worldB, chartB).Should().BeTrue();
+        contextA.Pathing.Register(chartA).Should().BeTrue();
+        contextB.Pathing.Register(chartB).Should().BeTrue();
     }
 
     [Fact(Skip = Phase0SkipReason)]
     [Trait("Category", "MultiWorldPhase0Red")]
     public void GuideCaches_WithEquivalentCoordinates_ShouldStayWorldLocal()
     {
-        using GridWorld worldA = CreateWorld();
-        using GridWorld worldB = CreateWorld();
-
-        PathManager.Register(worldA, BuildLineChart("WorldAEquivalentRoute")).Should().BeTrue();
-        AStarPathRequest requestA = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
-            new Vector3d(2, 0, 0),
-            Fixed64.One));
-        AStarGuide guideA = TestRequire.Created(
-            PathGuideFactory.RequestGuide(requestA, out AStarGuide? createdGuideA),
-            createdGuideA);
-        PathGuideFactory.ReturnGuide(guideA);
-
-        PathManager.Register(worldB, BuildLineChart("WorldBEquivalentRoute")).Should().BeTrue();
-        AStarPathRequest requestB = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
-            new Vector3d(2, 0, 0),
-            Fixed64.One));
-        AStarGuide guideB = TestRequire.Created(
-            PathGuideFactory.RequestGuide(requestB, out AStarGuide? createdGuideB),
-            createdGuideB);
-        PathGuideFactory.ReturnGuide(guideB);
-
-        PathGuideFactory.TotalAStarGuideCount.Should().Be(
-            2,
-            "equivalent requests in different worlds must not reuse a process-wide cached guide");
-
-        Type? guideServiceType = typeof(TrailblazerManager).Assembly.GetType("Trailblazer.Pathing.TrailblazerGuideService");
-        guideServiceType.Should().NotBeNull(
-            "Phase 4 moves reusable guide caches behind the owning TrailblazerWorldContext");
+        Assert.Fail(
+            "Pending Phase 4: guide caches and path requests must be owned by TrailblazerWorldContext before equivalent requests can stay world-local.");
     }
 
-    [Fact(Skip = Phase0SkipReason)]
-    [Trait("Category", "MultiWorldPhase0Red")]
+    [Fact]
     public void GridWorldReset_ShouldClearOnlyTheOwningContextPathingState()
     {
-        using GridWorld worldA = CreateWorld();
-        using GridWorld worldB = CreateWorld();
+        using TrailblazerWorldContext contextA = CreateContextWithGrid();
+        using TrailblazerWorldContext contextB = CreateContextWithGrid();
         NavigationChart chartA = BuildLineChart("WorldAResetChart");
         NavigationChart chartB = BuildLineChart("WorldBResetChart");
 
-        PathManager.Register(worldA, chartA).Should().BeTrue();
-        PathManager.Register(worldB, chartB).Should().BeTrue();
+        contextA.Pathing.Register(chartA).Should().BeTrue();
+        contextB.Pathing.Register(chartB).Should().BeTrue();
 
-        worldA.Reset();
+        contextA.World.Reset();
 
-        PathManager.IsChartInitialized(chartA).Should().BeFalse();
-        PathManager.IsChartInitialized(chartB).Should().BeTrue();
+        contextA.Pathing.IsChartInitialized(chartA).Should().BeFalse();
+        contextB.Pathing.IsChartInitialized(chartB).Should().BeTrue();
     }
 
     [Fact]
@@ -120,13 +89,13 @@ public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
             "Pending Phase 6: Navigator must store its owning TrailblazerWorldContext and deregister through that world during reset.");
     }
 
-    private static GridWorld CreateWorld()
+    private static TrailblazerWorldContext CreateContextWithGrid()
     {
-        var world = new GridWorld();
-        world.TryAddGrid(
+        TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _).Should().BeTrue();
-        return world;
+        return context;
     }
 
     private static NavigationChart BuildLineChart(string name)

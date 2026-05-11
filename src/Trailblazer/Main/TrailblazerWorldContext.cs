@@ -2,6 +2,7 @@ using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
 using System;
+using Trailblazer.Pathing;
 
 namespace Trailblazer;
 
@@ -27,12 +28,18 @@ public sealed class TrailblazerWorldContext : IDisposable
     {
         World = world;
         _ownsWorld = ownsWorld;
+        Pathing = new TrailblazerPathingService(this);
     }
 
     /// <summary>
     /// Gets the explicit GridForge world owned or referenced by this context.
     /// </summary>
     public GridWorld World { get; }
+
+    /// <summary>
+    /// Gets this context's world-local pathing service.
+    /// </summary>
+    public TrailblazerPathingService Pathing { get; }
 
     /// <summary>
     /// Gets whether this context has been disposed.
@@ -276,6 +283,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         if (_disposed)
             return;
 
+        Pathing.Dispose();
         _disposed = true;
 
         if (_ownsWorld && World.IsActive)

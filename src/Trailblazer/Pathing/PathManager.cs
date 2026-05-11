@@ -18,10 +18,8 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public static class PathManager
 {
-    static PathManager()
-    {
-        PathManagerExternalGridBridge.Register();
-    }
+    [ThreadStatic]
+    private static PathingWorldState? _activeState;
 
     #region Pools
 
@@ -30,18 +28,12 @@ public static class PathManager
     /// <summary>
     /// Pool of reusable <see cref="SolidChartPartition"/> instances used for partitioning the navigation grid.
     /// </summary>
-    internal static readonly SwiftObjectPool<SolidChartPartition> PartitionPool = new(
-        () => new SolidChartPartition(),
-        actionOnRelease: partition => partition.Reset()
-    );
+    internal static SwiftObjectPool<SolidChartPartition> PartitionPool => ActiveState.PartitionPool;
 
     /// <summary>
     /// Pool of reusable <see cref="VolumeChartPartition"/> instances used for authored raw-volume traversal.
     /// </summary>
-    internal static readonly SwiftObjectPool<VolumeChartPartition> VolumeChartPartitionPool = new(
-        () => new VolumeChartPartition(),
-        actionOnRelease: partition => partition.Reset()
-    );
+    internal static SwiftObjectPool<VolumeChartPartition> VolumeChartPartitionPool => ActiveState.VolumeChartPartitionPool;
 
     #endregion
 
@@ -73,23 +65,77 @@ public static class PathManager
     /// <summary>
     /// Internal dictionary of all registered navigation charts, keyed by their unique names.
     /// </summary>
-    private static readonly SwiftDictionary<string, NavigationChartRegistration> _navigationChartMap = new();
+    private static SwiftDictionary<string, NavigationChartRegistration> _navigationChartMap =>
+        ActiveState.NavigationChartMap;
 
-    private static readonly SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates = new();
+    private static SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> _resolvedChartVoxelStates =>
+        ActiveState.ResolvedChartVoxelStates;
 
-    private static readonly SwiftDictionary<ushort, SwiftDictionary<string, int>> _initializedChartTouchCountsByGridIndex = new();
+    private static SwiftDictionary<ushort, SwiftDictionary<string, int>> _initializedChartTouchCountsByGridIndex =>
+        ActiveState.InitializedChartTouchCountsByGridIndex;
 
     /// <summary>
     /// Lock for managing concurrent access to <c>_navigationChartMap</c> operations.
     /// Ensures thread safety for read/write operations.
     /// </summary>
-    private static readonly ReaderWriterLockSlim _navigationChartMapLock = new();
+    private static ReaderWriterLockSlim _navigationChartMapLock => ActiveState.NavigationChartMapLock;
 
-    private static int _activeAuthoredGasCellCount;
+    private static int _activeAuthoredGasCellCount
+    {
+        get => ActiveState.ActiveAuthoredGasCellCount;
+        set => ActiveState.ActiveAuthoredGasCellCount = value;
+    }
 
-    private static int _activeAuthoredLiquidCellCount;
+    private static int _activeAuthoredLiquidCellCount
+    {
+        get => ActiveState.ActiveAuthoredLiquidCellCount;
+        set => ActiveState.ActiveAuthoredLiquidCellCount = value;
+    }
 
-    private static int _nextChartRegistrationOrder;
+    private static int _nextChartRegistrationOrder
+    {
+        get => ActiveState.NextChartRegistrationOrder;
+        set => ActiveState.NextChartRegistrationOrder = value;
+    }
+
+    internal static PathingWorldState ActiveState => _activeState ?? GetDefaultState();
+
+    internal static IDisposable EnterState(PathingWorldState state)
+    {
+        return new PathingWorldStateScope(state);
+    }
+
+    private static PathingWorldState GetDefaultState()
+    {
+        if (TrailblazerManager.HasDefaultContext)
+            return TrailblazerManager.DefaultContext.Pathing.State;
+
+        if (TrailblazerWorldManager.IsActive)
+        {
+            TrailblazerManager.Initialize(TrailblazerWorldManager.World);
+            return TrailblazerManager.DefaultContext.Pathing.State;
+        }
+
+        throw new InvalidOperationException(
+            "Trailblazer requires an active pathing context. Create a TrailblazerWorldContext and use its Pathing service, " +
+            "or initialize the default facade with TrailblazerManager.Initialize(world).");
+    }
+
+    private sealed class PathingWorldStateScope : IDisposable
+    {
+        private readonly PathingWorldState? _previousState;
+
+        public PathingWorldStateScope(PathingWorldState state)
+        {
+            _previousState = _activeState;
+            _activeState = state;
+        }
+
+        public void Dispose()
+        {
+            _activeState = _previousState;
+        }
+    }
 
     #endregion
 
@@ -98,21 +144,41 @@ public static class PathManager
     /// <summary>
     /// Gets whether Trailblazer currently has an active configured grid world.
     /// </summary>
-    public static bool HasConfiguredWorld => TrailblazerWorldManager.IsActive;
+    public static bool HasConfiguredWorld => TrailblazerManager.HasDefaultContext || TrailblazerWorldManager.IsActive;
 
     /// <summary>
     /// Gets the active configured grid world.
     /// </summary>
-    public static GridWorld ConfiguredWorld => TrailblazerWorldManager.World;
+    public static GridWorld ConfiguredWorld => GetConfiguredWorld();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void LinkWorld(GridWorld world)
     {
-        TrailblazerWorldManager.AttachWorld(world);
+        if (_activeState != null)
+        {
+            if (!ReferenceEquals(_activeState.World, world))
+                throw new InvalidOperationException("The supplied GridWorld does not belong to the active Trailblazer pathing context.");
+
+            return;
+        }
+
+        if (TrailblazerManager.HasDefaultContext)
+        {
+            if (!ReferenceEquals(TrailblazerManager.DefaultContext.World, world))
+            {
+                throw new InvalidOperationException(
+                    "PathManager GridWorld overloads are default-context compatibility APIs. " +
+                    "Use TrailblazerWorldContext.Pathing for independent multi-world pathing state.");
+            }
+
+            return;
+        }
+
+        TrailblazerManager.Initialize(world);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static GridWorld GetConfiguredWorld() => TrailblazerWorldManager.World;
+    private static GridWorld GetConfiguredWorld() => ActiveState.World;
 
     internal static void RegisterTrailblazerLifecycleHooks()
     {
@@ -124,7 +190,9 @@ public static class PathManager
 
     internal static void Tick()
     {
-        PathManagerExternalGridBridge.FlushPendingGridChanges();
+        if (HasConfiguredWorld)
+            ActiveState.ExternalGridBridge.FlushPendingGridChanges();
+
         PathGuideFactory.CullExpiredGuides(TrailblazerManager.FrameCount);
     }
 
@@ -133,30 +201,18 @@ public static class PathManager
     /// </summary>
     public static void Reset()
     {
-        VolumeMediumRules.Reset();
-        TraversalTransitionRegistry.Reset();
-        if (HasConfiguredWorld)
-            ClearLiveGridState(GetConfiguredWorld());
-        else
-            ClearLiveGridState();
-
-        PathManagerExternalGridBridge.ResetDiagnostics();
-
-        _navigationChartMapLock.EnterWriteLock();
-        try
+        if (!HasConfiguredWorld)
         {
-            _navigationChartMap.Clear();
-            _nextChartRegistrationOrder = 0;
-        }
-        finally
-        {
-            _navigationChartMapLock.ExitWriteLock();
+            VolumeMediumRules.Reset();
+            TraversalTransitionRegistry.Reset();
+            if (PathGuideFactory.IsPooling)
+                PathGuideFactory.FlushCache(true);
+
+            SolidPartitionReachability.Invalidate();
+            return;
         }
 
-        if (PathGuideFactory.IsPooling)
-            PathGuideFactory.FlushCache(true);
-
-        SolidPartitionReachability.Invalidate();
+        ResetPathingState(ActiveState, resetSharedGlobalRegistries: true, flushGuideCache: true);
     }
 
     /// <summary>
@@ -165,26 +221,46 @@ public static class PathManager
     public static void Reset(GridWorld world)
     {
         LinkWorld(world);
-        VolumeMediumRules.Reset();
-        TraversalTransitionRegistry.Reset();
-        ClearLiveGridState(world);
-        PathManagerExternalGridBridge.ResetDiagnostics();
+        ResetPathingState(ActiveState, resetSharedGlobalRegistries: true, flushGuideCache: true);
+    }
 
-        _navigationChartMapLock.EnterWriteLock();
-        try
+    internal static void ResetPathingState(
+        PathingWorldState state,
+        bool resetSharedGlobalRegistries,
+        bool flushGuideCache)
+    {
+        using (EnterState(state))
         {
-            _navigationChartMap.Clear();
-            _nextChartRegistrationOrder = 0;
-        }
-        finally
-        {
-            _navigationChartMapLock.ExitWriteLock();
-        }
+            if (resetSharedGlobalRegistries)
+            {
+                VolumeMediumRules.Reset();
+                TraversalTransitionRegistry.Reset();
+            }
 
-        if (PathGuideFactory.IsPooling)
-            PathGuideFactory.FlushCache(true);
+            ClearLiveGridState(state.World);
+            PathManagerExternalGridBridge.ResetDiagnostics();
 
-        SolidPartitionReachability.Invalidate();
+            _navigationChartMapLock.EnterWriteLock();
+            try
+            {
+                _navigationChartMap.Clear();
+                _nextChartRegistrationOrder = 0;
+            }
+            finally
+            {
+                _navigationChartMapLock.ExitWriteLock();
+            }
+
+            _resolvedChartVoxelStates.Clear();
+            _initializedChartTouchCountsByGridIndex.Clear();
+            _activeAuthoredGasCellCount = 0;
+            _activeAuthoredLiquidCellCount = 0;
+
+            if (flushGuideCache && PathGuideFactory.IsPooling)
+                PathGuideFactory.FlushCache(true);
+
+            SolidPartitionReachability.Invalidate();
+        }
     }
 
     #endregion
@@ -200,7 +276,9 @@ public static class PathManager
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="chart"/> is null.</exception>
     public static bool Register(NavigationChart chart, bool initializeChart = true)
     {
-        return Register(GetConfiguredWorld(), chart, initializeChart);
+        PathingWorldState state = ActiveState;
+        using (EnterState(state))
+            return Register(state.World, chart, initializeChart);
     }
 
     /// <summary>
@@ -214,6 +292,7 @@ public static class PathManager
     public static bool Register(GridWorld world, NavigationChart chart, bool initializeChart = true)
     {
         SwiftThrowHelper.ThrowIfNull(chart, nameof(chart));
+        ThrowIfDirectWorldRegisterCall();
         LinkWorld(world);
 
         return RegisterChartInternal(
@@ -233,7 +312,9 @@ public static class PathManager
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="buildResult"/> is null.</exception>
     public static bool Register(TraversalBuildResult buildResult, bool initializeChart = true)
     {
-        return Register(GetConfiguredWorld(), buildResult, initializeChart);
+        PathingWorldState state = ActiveState;
+        using (EnterState(state))
+            return Register(state.World, buildResult, initializeChart);
     }
 
     /// <summary>
@@ -247,6 +328,7 @@ public static class PathManager
     public static bool Register(GridWorld world, TraversalBuildResult buildResult, bool initializeChart = true)
     {
         SwiftThrowHelper.ThrowIfNull(buildResult, nameof(buildResult));
+        ThrowIfDirectWorldRegisterCall();
         LinkWorld(world);
 
         return RegisterChartInternal(
@@ -255,6 +337,17 @@ public static class PathManager
             buildResult.GeneratedTransitionIdPrefix,
             buildResult.GeneratedTransitions,
             initializeChart);
+    }
+
+    private static void ThrowIfDirectWorldRegisterCall()
+    {
+        if (_activeState != null)
+            return;
+
+        throw new InvalidOperationException(
+            "PathManager.Register(world, ...) is no longer a multi-world registration API. " +
+            "Create a TrailblazerWorldContext for that GridWorld and call context.Pathing.Register(...), " +
+            "or initialize the single default facade and call PathManager.Register(chart).");
     }
 
     private static bool RegisterChartInternal(
@@ -2413,8 +2506,11 @@ public static class PathManager
             if (!voxel.TryGetPartition(out SolidChartPartition? solidPartition))
             {
                 solidPartition = PartitionPool.Rent();
+                solidPartition.SetOwner(ActiveState);
                 voxel.TryAddPartition(solidPartition);
             }
+            else if (solidPartition!.OwnerState == null)
+                solidPartition.SetOwner(ActiveState);
 
             solidPartition!.ApplyAuthoredState(state, state?.EffectiveChartOwner, effectiveCell);
             if (solidPresenceChanged)
@@ -2431,8 +2527,11 @@ public static class PathManager
             if (!voxel.TryGetPartition(out VolumeChartPartition? volumePartition))
             {
                 volumePartition = VolumeChartPartitionPool.Rent();
+                volumePartition.SetOwner(ActiveState);
                 voxel.TryAddPartition(volumePartition);
             }
+            else if (volumePartition!.OwnerState == null)
+                volumePartition.SetOwner(ActiveState);
 
             volumePartition!.ApplyAuthoredState(state, state?.EffectiveChartOwner, effectiveCell);
         }

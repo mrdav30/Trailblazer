@@ -70,8 +70,9 @@ phase, add it to the phase. If it does not block the phase, hardening-track it a
 ## Context Ingested
 
 - `README.md` documents explicit `GridWorld` creation and `TrailblazerManager.Initialize(world)`.
-- `docs/wiki/OVERVIEW.md` still describes `PathManager` as a global chart registry and
-  `TrailblazerManager` as the fixed-step owner.
+- `docs/wiki/OVERVIEW.md` originally described `PathManager` as a global chart registry and
+  `TrailblazerManager` as the fixed-step owner; Phase 3 updates the pathing wording to the
+  context-owned model.
 - `src/Trailblazer/Support/TrailblazerWorldManager.cs` confirms the current bridge owns a single
   `_world`, forwards one active world's grid events, and exposes ambient world lookup helpers.
 - `src/Trailblazer/Pathing/PathManager.cs` already has many `GridWorld world` overloads, but they
@@ -79,9 +80,10 @@ phase, add it to the phase. If it does not block the phase, hardening-track it a
 - `rg` found 73 source, test, and benchmark files referencing `TrailblazerWorldManager`; 28
   production files reference it directly.
 
-## Current Failure Mode
+## Original Failure Mode
 
-The core problem is not just public API shape. The mutable state behind the API is shared:
+The core problem at the start of this plan was not just public API shape. The mutable state behind
+the API was shared:
 
 | Area | Current owner | Multi-world issue |
 | --- | --- | --- |
@@ -324,31 +326,47 @@ Exit criteria:
 
 ## Phase 3 - Move Pathing State Behind The Context
 
-**Status:** Not started  
+**Status:** Complete  
 **Goal:** Make chart registration, partition ownership, grid event handling, and pathing utilities
 world-local.
 
-- [ ] Add `PathingWorldState` and move these `PathManager` fields into it:
+- [x] Add `PathingWorldState` and move these `PathManager` fields into it:
   `_navigationChartMap` as the `NavigationChartRegistration` map, `_resolvedChartVoxelStates`,
   `_initializedChartTouchCountsByGridIndex`, `_activeAuthoredGasCellCount`,
   `_activeAuthoredLiquidCellCount`, `_nextChartRegistrationOrder`, and the chart lock.
-- [ ] Move `PartitionPool` and `VolumeChartPartitionPool` into `PathingWorldState` so partition
+- [x] Move `PartitionPool` and `VolumeChartPartitionPool` into `PathingWorldState` so partition
   object lifetime is owned by the context that attached the partition.
-- [ ] Convert `PathManagerExternalGridBridge` into a context-owned event bridge subscribed to that
+- [x] Convert `PathManagerExternalGridBridge` into a context-owned event bridge subscribed to that
   context's `GridWorld`.
-- [ ] Change pathing methods to operate on `TrailblazerPathingService` or `PathingWorldState`
+- [x] Change pathing methods to operate on `TrailblazerPathingService` or `PathingWorldState`
   instead of static fields.
-- [ ] Keep static `PathManager` as a thin default-context facade while source migration continues.
-- [ ] Update `SolidChartPartition` and `VolumeChartPartition` so voxel lookup and pool release use
+- [x] Keep static `PathManager` as a thin default-context facade while source migration continues.
+- [x] Update `SolidChartPartition` and `VolumeChartPartition` so voxel lookup and pool release use
   their owning context, not `TrailblazerWorldManager`.
-- [ ] Ensure `ClearLiveGridState`, chart unload, chart mutation, generated transition refresh, and
+- [x] Ensure `ClearLiveGridState`, chart unload, chart mutation, generated transition refresh, and
   external grid rebuild operate only on the owning context.
-- [ ] Add multi-world tests for same chart names, same `WorldVoxelIndex` values, independent chart
+- [x] Add multi-world tests for same chart names, same `WorldVoxelIndex` values, independent chart
   unload, independent grid rebuild, and independent chart mutation.
-- [ ] Review every moved dictionary/list for expected complexity and allocation behavior. Prefer
+- [x] Review every moved dictionary/list for expected complexity and allocation behavior. Prefer
   direct context-owned indexes over repeated scans when the data can grow with chart or grid count.
-- [ ] If a required optimization is discovered but does not block correctness, record it in
+- [x] If a required optimization is discovered but does not block correctness, record it in
   `docs/feature-work/hardeningPlans.md` rather than hiding it as a partial migration shortcut.
+
+Phase notes:
+
+- `TrailblazerWorldContext.Pathing` now owns `PathingWorldState`, including chart registrations,
+  resolved voxel state, initialized chart touch counts, authored volume counters, partition pools,
+  registration ordering, and grid bridge diagnostics.
+- `PathingWorldGridBridge` subscribes directly to one `GridWorld` and forwards grid add/remove/change
+  and reset events through the owning state. The old static bridge remains as a compatibility wrapper
+  over the active state for existing focused diagnostics tests.
+- `SolidChartPartition` and `VolumeChartPartition` now remember their owning pathing state for voxel
+  lookup and pool release.
+- Direct `PathManager.Register(world, ...)` calls now throw with context-first guidance unless they
+  are executing inside a context-owned pathing service. Static `PathManager.Register(chart)` remains
+  the single-world default-context facade.
+- No out-of-scope hardening item was added in this phase; transition registry, guide caches,
+  reachability state, and volume medium rules are still intentionally tracked in Phase 4.
 
 Exit criteria:
 

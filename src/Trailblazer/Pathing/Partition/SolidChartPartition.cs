@@ -35,6 +35,8 @@ public class SolidChartPartition : IVoxelPartition
     /// </summary>
     public WorldVoxelIndex WorldIndex { get; private set; }
 
+    internal PathingWorldState? OwnerState { get; private set; }
+
     /// <summary>
     /// Back-compat alias for code that still refers to the pre-v6 name.
     /// </summary>
@@ -47,7 +49,7 @@ public class SolidChartPartition : IVoxelPartition
     {
         get
         {
-            if (TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out Voxel? voxel)
+            if (TryGetGridAndVoxel(WorldIndex, out _, out Voxel? voxel)
                 && voxel != null)
                 return voxel;
             throw new InvalidOperationException($"Partition at {WorldIndex} is not attached to a valid voxel!");
@@ -149,6 +151,8 @@ public class SolidChartPartition : IVoxelPartition
     /// <param name="parentIndex">The index to assign as the parent of the current voxel.</param>
     public void SetParentIndex(WorldVoxelIndex parentIndex) => WorldIndex = parentIndex;
 
+    internal void SetOwner(PathingWorldState ownerState) => OwnerState = ownerState;
+
     /// <summary>
     /// Attaches a partition to a specified <see cref="Voxel"/>, updating its state and invoking initialization logic.
     /// </summary>
@@ -182,7 +186,11 @@ public class SolidChartPartition : IVoxelPartition
         voxel.OnObstacleAdded -= HandleChange;
         voxel.OnObstacleRemoved -= HandleChange;
 
-        PathManager.PartitionPool.Release(this);
+        PathingWorldState? ownerState = OwnerState;
+        if (ownerState != null)
+            ownerState.PartitionPool.Release(this);
+        else
+            PathManager.PartitionPool.Release(this);
     }
 
     /// <summary>
@@ -192,6 +200,7 @@ public class SolidChartPartition : IVoxelPartition
     internal void Reset()
     {
         WorldIndex = default;
+        OwnerState = null;
 
         _isClearanceValid = false;
 
@@ -241,7 +250,7 @@ public class SolidChartPartition : IVoxelPartition
     {
         Neighbors = new SolidChartPartition?[26];
 
-        if (!TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out VoxelGrid? grid, out Voxel? voxel))
+        if (!TryGetGridAndVoxel(WorldIndex, out VoxelGrid? grid, out Voxel? voxel))
         {
             TrailblazerLogger.Channel.Warn($"Failed to find grid or voxel for WorldIndex {WorldIndex}. Neighbors will be null.");
             Neighbors = null;
@@ -278,7 +287,8 @@ public class SolidChartPartition : IVoxelPartition
         if (unitSize <= Fixed64.Zero)
             return false;
 
-        if (unitSize <= TrailblazerWorldManager.VoxelSize)
+        Fixed64 voxelSize = OwnerState?.World.VoxelSize ?? TrailblazerWorldManager.VoxelSize;
+        if (unitSize <= voxelSize)
             return !IsWalkable;
 
         // Only evaluates local radial clearance from current voxel. 
@@ -286,7 +296,7 @@ public class SolidChartPartition : IVoxelPartition
         CheckClearance();
 
         // How many voxels wide our agent is, in cell terms
-        int required = (unitSize / TrailblazerWorldManager.VoxelSize).CeilToInt();
+        int required = (unitSize / voxelSize).CeilToInt();
         // If there aren't at least that many free voxels around, it can't go
 
         return required > _clearanceRadiusInVoxels;
@@ -317,8 +327,20 @@ public class SolidChartPartition : IVoxelPartition
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool TryGetClearanceOrigin([MaybeNullWhen(false)] out Voxel origin)
     {
-        return TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out origin)
+        return TryGetGridAndVoxel(WorldIndex, out _, out origin)
             && IsWalkable;
+    }
+
+    private bool TryGetGridAndVoxel(
+        WorldVoxelIndex voxelIndex,
+        out VoxelGrid? grid,
+        out Voxel? voxel)
+    {
+        PathingWorldState? ownerState = OwnerState;
+        if (ownerState != null)
+            return ownerState.World.TryGetGridAndVoxel(voxelIndex, out grid, out voxel);
+
+        return TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out grid, out voxel);
     }
 
     private byte ComputeClearanceRadius()

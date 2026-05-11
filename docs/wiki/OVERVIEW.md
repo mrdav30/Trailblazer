@@ -67,7 +67,7 @@ working while pathing, guide caches, transitions, and navigator state move behin
 
 ### 2.3 PathManager
 
-`PathManager` is the global chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell and closest-active-transition query helpers, exposes neighbor and direct-travel utilities, and participates in guide-cache maintenance.
+`TrailblazerWorldContext.Pathing` is the context-local chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell query helpers, owns chart partition pools, and handles grid rebuild events for its `GridWorld`. The static `PathManager` remains as a default-context compatibility facade for single-world integrations and still exposes closest-active-transition and direct-travel utilities while later phases move transitions and guide services behind the context.
 
 Explicit handoff data between chart-backed traversal and raw-volume traversal is registered separately through `TraversalTransitionRegistry`.
 

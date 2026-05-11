@@ -1,6 +1,6 @@
 # PathManager Reference
 
-This document is the detailed reference for Trailblazer's global chart registry and pathing utility layer.
+This document is the detailed reference for Trailblazer's context-owned chart registry and pathing utility layer.
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
 If you want the pathing-first request and guide model, read `PATHING.MD`.
@@ -17,7 +17,7 @@ The code referenced here lives primarily in:
 
 ## 1. What PathManager Is
 
-`PathManager` is the global coordination layer for registered navigation charts and voxel-backed pathing utilities.
+`TrailblazerWorldContext.Pathing` is the context-owned coordination layer for registered navigation charts and voxel-backed pathing utilities. `PathManager` remains as the single default-context compatibility facade while the public API migration continues.
 
 It is responsible for:
 
@@ -66,8 +66,9 @@ That ownership model is why initialization and unload logic are more complex tha
 
 The main entry points are:
 
-- `Register(NavigationChart chart, bool initializeChart = true)`
-- `Register(TraversalBuildResult buildResult, bool initializeChart = true)`
+- `TrailblazerWorldContext.Pathing.Register(NavigationChart chart, bool initializeChart = true)`
+- `TrailblazerWorldContext.Pathing.Register(TraversalBuildResult buildResult, bool initializeChart = true)`
+- `PathManager.Register(NavigationChart chart, bool initializeChart = true)` for the default context facade
 - `IsChartRegistered(string name)`
 - `TryGetNavigationChart(string name, out NavigationChart chart)`
 - `TryGetEffectiveCell(GlobalVoxelIndex voxelIndex, out NavigationChartCell cell)`
@@ -97,24 +98,26 @@ Important internal infrastructure includes:
 - `PartitionSetPool`
 - `Tick(int currentFrame)`
 
-## 4. Global State and Ownership
+## 4. Context State and Ownership
 
-`PathManager` is static and global.
+Pathing state is owned by `PathingWorldState` behind each `TrailblazerWorldContext`.
 
 It owns:
 
-- the chart registry `_navigationChartMap`
-- the registry lock `_navigationChartMapLock`
-- the reusable `SolidChartPartition` pool
-- the reusable `VolumeChartPartition` pool
-- the pooled partition-set helper used during initialization and unload
+- the chart registration map
+- the registry lock
+- live resolved authored-cell state by `WorldVoxelIndex`
+- initialized chart touch counts by grid index
+- reusable `SolidChartPartition` and `VolumeChartPartition` pools
+- grid event diagnostics and pending grid rebuild work
 
 That means:
 
-- the manager is process-global for the current simulation
-- tests and teardown must clean it explicitly
-- chart lifecycle mistakes can leak pathing state into later frames or tests
-- transition registry state also resets through `PathManager.Reset()`
+- two contexts can register the same chart names independently
+- partitions release back to the pool owned by the context that attached them
+- a grid reset or grid rebuild event affects only the pathing state for the owning `GridWorld`
+- the static `PathManager` facade should only be used for one configured default context
+- transition registry state still resets through `PathManager.Reset()` until the transition phase moves it behind the context
 
 ## 5. Chart Registration Lifecycle
 

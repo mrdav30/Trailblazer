@@ -7,51 +7,108 @@ using System;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Owns the external-grid event bridge for <see cref="PathManager"/>, including diagnostics and
+/// Provides compatibility access to the active context's external-grid bridge diagnostics and
 /// event-signature tracking.
 /// </summary>
 internal static class PathManagerExternalGridBridge
 {
-    private static readonly SwiftDictionary<ushort, ExternalGridEventObservation> _eventObservationsByGridIndex = new();
+    private static SwiftDictionary<ushort, ExternalGridEventObservation> _eventObservationsByGridIndex =>
+        PathManager.ActiveState.ExternalGridEventObservationsByGridIndex;
 
-    private static readonly SwiftDictionary<ushort, PendingExternalGridChange> _pendingGridChangesByGridIndex = new();
+    private static SwiftDictionary<ushort, PendingExternalGridChange> _pendingGridChangesByGridIndex =>
+        PathManager.ActiveState.PendingGridChangesByGridIndex;
 
-    private static readonly SwiftList<ushort> _pendingGridChangeOrder = new();
+    private static SwiftList<ushort> _pendingGridChangeOrder =>
+        PathManager.ActiveState.PendingGridChangeOrder;
 
-    private static int _gridEventsReceived;
+    private static int _gridEventsReceived
+    {
+        get => PathManager.ActiveState.GridEventsReceived;
+        set => PathManager.ActiveState.GridEventsReceived = value;
+    }
 
-    private static int _gridAddEventsReceived;
+    private static int _gridAddEventsReceived
+    {
+        get => PathManager.ActiveState.GridAddEventsReceived;
+        set => PathManager.ActiveState.GridAddEventsReceived = value;
+    }
 
-    private static int _gridRemoveEventsReceived;
+    private static int _gridRemoveEventsReceived
+    {
+        get => PathManager.ActiveState.GridRemoveEventsReceived;
+        set => PathManager.ActiveState.GridRemoveEventsReceived = value;
+    }
 
-    private static int _gridChangeEventsReceived;
+    private static int _gridChangeEventsReceived
+    {
+        get => PathManager.ActiveState.GridChangeEventsReceived;
+        set => PathManager.ActiveState.GridChangeEventsReceived = value;
+    }
 
-    private static int _distinctObservedGridSlots;
+    private static int _distinctObservedGridSlots
+    {
+        get => PathManager.ActiveState.DistinctObservedGridSlots;
+        set => PathManager.ActiveState.DistinctObservedGridSlots = value;
+    }
 
-    private static int _duplicateGridEventSignaturesObserved;
+    private static int _duplicateGridEventSignaturesObserved
+    {
+        get => PathManager.ActiveState.DuplicateGridEventSignaturesObserved;
+        set => PathManager.ActiveState.DuplicateGridEventSignaturesObserved = value;
+    }
 
-    private static int _duplicateGridAddEventSignaturesObserved;
+    private static int _duplicateGridAddEventSignaturesObserved
+    {
+        get => PathManager.ActiveState.DuplicateGridAddEventSignaturesObserved;
+        set => PathManager.ActiveState.DuplicateGridAddEventSignaturesObserved = value;
+    }
 
-    private static int _duplicateGridRemoveEventSignaturesObserved;
+    private static int _duplicateGridRemoveEventSignaturesObserved
+    {
+        get => PathManager.ActiveState.DuplicateGridRemoveEventSignaturesObserved;
+        set => PathManager.ActiveState.DuplicateGridRemoveEventSignaturesObserved = value;
+    }
 
-    private static int _duplicateGridChangeEventSignaturesObserved;
+    private static int _duplicateGridChangeEventSignaturesObserved
+    {
+        get => PathManager.ActiveState.DuplicateGridChangeEventSignaturesObserved;
+        set => PathManager.ActiveState.DuplicateGridChangeEventSignaturesObserved = value;
+    }
 
-    private static int _maxGridEventStreak;
+    private static int _maxGridEventStreak
+    {
+        get => PathManager.ActiveState.MaxGridEventStreak;
+        set => PathManager.ActiveState.MaxGridEventStreak = value;
+    }
 
-    private static int _gridRebuildPassesExecuted;
+    private static int _gridRebuildPassesExecuted
+    {
+        get => PathManager.ActiveState.GridRebuildPassesExecuted;
+        set => PathManager.ActiveState.GridRebuildPassesExecuted = value;
+    }
 
-    private static int _gridEventsIgnoredForNoIntersectingCharts;
+    private static int _gridEventsIgnoredForNoIntersectingCharts
+    {
+        get => PathManager.ActiveState.GridEventsIgnoredForNoIntersectingCharts;
+        set => PathManager.ActiveState.GridEventsIgnoredForNoIntersectingCharts = value;
+    }
 
-    private static int _totalChartsSelectedForGridRebuild;
+    private static int _totalChartsSelectedForGridRebuild
+    {
+        get => PathManager.ActiveState.TotalChartsSelectedForGridRebuild;
+        set => PathManager.ActiveState.TotalChartsSelectedForGridRebuild = value;
+    }
 
-    private static int _maxChartsSelectedForSingleGridEvent;
+    private static int _maxChartsSelectedForSingleGridEvent
+    {
+        get => PathManager.ActiveState.MaxChartsSelectedForSingleGridEvent;
+        set => PathManager.ActiveState.MaxChartsSelectedForSingleGridEvent = value;
+    }
 
     internal static void Register()
     {
-        TrailblazerWorldManager.OnReset += HandleGridReset;
-        TrailblazerWorldManager.OnActiveGridAdded += HandleGridAdded;
-        TrailblazerWorldManager.OnActiveGridRemoved += HandleGridRemoved;
-        TrailblazerWorldManager.OnActiveGridChange += HandleGridChanged;
+        // Context-owned bridges subscribe directly to their GridWorld. This no-op remains for
+        // compatibility with older tests that force PathManager static initialization.
     }
 
     internal static ExternalGridBridgeDiagnosticsSnapshot GetDiagnosticsSnapshot()
@@ -366,109 +423,4 @@ internal static class PathManagerExternalGridBridge
             left.z >= right.z ? left.z : right.z);
     }
 
-    private enum ExternalGridEventKind : byte
-    {
-        Added,
-        Removed,
-        Changed
-    }
-
-    private readonly struct ExternalGridEventSignature : IEquatable<ExternalGridEventSignature>
-    {
-        public ExternalGridEventSignature(
-            ExternalGridEventKind eventKind,
-            int gridSpawnToken,
-            uint gridVersion,
-            GridConfiguration configuration,
-            Vector3d boundsMin,
-            Vector3d boundsMax)
-        {
-            EventKind = eventKind;
-            GridSpawnToken = gridSpawnToken;
-            GridVersion = gridVersion;
-            Configuration = configuration;
-            BoundsMin = boundsMin;
-            BoundsMax = boundsMax;
-        }
-
-        public ExternalGridEventKind EventKind { get; }
-
-        public int GridSpawnToken { get; }
-
-        public uint GridVersion { get; }
-
-        public GridConfiguration Configuration { get; }
-
-        public Vector3d BoundsMin { get; }
-
-        public Vector3d BoundsMax { get; }
-
-        public bool Equals(ExternalGridEventSignature other)
-        {
-            return EventKind == other.EventKind
-                && GridSpawnToken == other.GridSpawnToken
-                && GridVersion == other.GridVersion
-                && Configuration.Equals(other.Configuration)
-                && BoundsMin == other.BoundsMin
-                && BoundsMax == other.BoundsMax;
-        }
-    }
-
-    private readonly struct ExternalGridEventObservation
-    {
-        public ExternalGridEventObservation(
-            ExternalGridEventSignature signature,
-            int identicalEventStreak)
-        {
-            Signature = signature;
-            IdenticalEventStreak = identicalEventStreak;
-        }
-
-        public ExternalGridEventSignature Signature { get; }
-
-        public int IdenticalEventStreak { get; }
-    }
-
-    private readonly struct PendingExternalGridChange
-    {
-        public PendingExternalGridChange(
-            int gridSpawnToken,
-            uint gridVersion,
-            Vector3d boundsMin,
-            Vector3d boundsMax,
-            bool requiresLiveGridTouchSelection,
-            bool requiresAuthoredCellBoundsSelection)
-        {
-            GridSpawnToken = gridSpawnToken;
-            GridVersion = gridVersion;
-            BoundsMin = boundsMin;
-            BoundsMax = boundsMax;
-            RequiresLiveGridTouchSelection = requiresLiveGridTouchSelection;
-            RequiresAuthoredCellBoundsSelection = requiresAuthoredCellBoundsSelection;
-        }
-
-        public int GridSpawnToken { get; }
-
-        public uint GridVersion { get; }
-
-        public Vector3d BoundsMin { get; }
-
-        public Vector3d BoundsMax { get; }
-
-        public bool RequiresLiveGridTouchSelection { get; }
-
-        public bool RequiresAuthoredCellBoundsSelection { get; }
-
-        public bool HasSelectionCriteria => RequiresLiveGridTouchSelection || RequiresAuthoredCellBoundsSelection;
-
-        public ExternalGridChartRebuildRequest ToRebuildRequest(ushort gridIndex)
-        {
-            return new ExternalGridChartRebuildRequest(
-                gridIndex,
-                BoundsMin,
-                BoundsMax,
-                RequiresLiveGridTouchSelection,
-                RequiresAuthoredCellBoundsSelection);
-        }
-    }
 }

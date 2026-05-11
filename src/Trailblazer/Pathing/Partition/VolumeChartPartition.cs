@@ -23,6 +23,8 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// </summary>
     public WorldVoxelIndex WorldIndex { get; private set; }
 
+    internal PathingWorldState? OwnerState { get; private set; }
+
     /// <summary>
     /// Back-compat alias for code that still refers to the pre-v6 name.
     /// </summary>
@@ -70,6 +72,8 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// <param name="parentIndex">The index representing the parent voxel to assign. Must be a valid WorldVoxelIndex.</param>
     public void SetParentIndex(WorldVoxelIndex parentIndex) => WorldIndex = parentIndex;
 
+    internal void SetOwner(PathingWorldState ownerState) => OwnerState = ownerState;
+
     /// <summary>
     /// Initializes the obstacle's state based on the specified voxel and subscribes to voxel change events.
     /// </summary>
@@ -103,7 +107,11 @@ public sealed class VolumeChartPartition : IVoxelPartition
         voxel.OnObstacleAdded -= HandleChange;
         voxel.OnObstacleRemoved -= HandleChange;
 
-        PathManager.VolumeChartPartitionPool.Release(this);
+        PathingWorldState? ownerState = OwnerState;
+        if (ownerState != null)
+            ownerState.VolumeChartPartitionPool.Release(this);
+        else
+            PathManager.VolumeChartPartitionPool.Release(this);
     }
 
     /// <summary>
@@ -152,6 +160,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
     internal void Reset()
     {
         WorldIndex = default;
+        OwnerState = null;
         VoxelPosition = default;
         IsWalkable = false;
         PathCostModifier = 0;
@@ -165,7 +174,13 @@ public sealed class VolumeChartPartition : IVoxelPartition
     {
         get
         {
-            if (TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out Voxel? voxel)
+            PathingWorldState? ownerState = OwnerState;
+            Voxel? voxel;
+            bool found = ownerState != null
+                ? ownerState.World.TryGetGridAndVoxel(WorldIndex, out _, out voxel)
+                : TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out voxel);
+
+            if (found
                 && voxel != null)
                 return voxel;
 

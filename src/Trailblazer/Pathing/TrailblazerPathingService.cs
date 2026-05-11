@@ -1,0 +1,227 @@
+using FixedMathSharp;
+using GridForge;
+using GridForge.Configuration;
+using GridForge.Grids;
+using GridForge.Spatial;
+using System;
+using System.Collections.Generic;
+
+namespace Trailblazer.Pathing;
+
+/// <summary>
+/// Context-owned pathing API for chart registration, live chart state, and local pathing queries.
+/// </summary>
+public sealed class TrailblazerPathingService
+{
+    private readonly TrailblazerWorldContext _context;
+
+    internal TrailblazerPathingService(TrailblazerWorldContext context)
+    {
+        _context = context;
+        State = new PathingWorldState(context);
+    }
+
+    internal PathingWorldState State { get; }
+
+    /// <summary>
+    /// Gets a snapshot of all charts registered to this context.
+    /// </summary>
+    public IEnumerable<NavigationChart> AllCharts
+    {
+        get
+        {
+            EnsureUsable();
+            using (PathManager.EnterState(State))
+                return PathManager.AllCharts;
+        }
+    }
+
+    /// <inheritdoc cref="PathManager.Register(NavigationChart,bool)"/>
+    public bool Register(NavigationChart chart, bool initializeChart = true)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.Register(_context.World, chart, initializeChart);
+    }
+
+    /// <inheritdoc cref="PathManager.Register(TraversalBuildResult,bool)"/>
+    public bool Register(TraversalBuildResult buildResult, bool initializeChart = true)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.Register(_context.World, buildResult, initializeChart);
+    }
+
+    /// <inheritdoc cref="PathManager.IsChartRegistered(string)"/>
+    public bool IsChartRegistered(string name)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.IsChartRegistered(name);
+    }
+
+    /// <inheritdoc cref="PathManager.TryGetNavigationChart(string,out NavigationChart)"/>
+    public bool TryGetNavigationChart(string name, out NavigationChart chart)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.TryGetNavigationChart(name, out chart);
+    }
+
+    /// <inheritdoc cref="PathManager.TryGetNavigationChartRegistration(string,out NavigationChartRegistration)"/>
+    public bool TryGetNavigationChartRegistration(string name, out NavigationChartRegistration registration)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.TryGetNavigationChartRegistration(name, out registration);
+    }
+
+    /// <inheritdoc cref="PathManager.IsChartInitialized(string)"/>
+    public bool IsChartInitialized(string name)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.IsChartInitialized(name);
+    }
+
+    /// <inheritdoc cref="PathManager.IsChartInitialized(NavigationChart)"/>
+    public bool IsChartInitialized(NavigationChart chart)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.IsChartInitialized(chart);
+    }
+
+    /// <inheritdoc cref="PathManager.InitializeAllCharts()"/>
+    public void InitializeAllCharts()
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            PathManager.InitializeAllCharts(_context.World);
+    }
+
+    /// <inheritdoc cref="PathManager.InitializeChart(string)"/>
+    public void InitializeChart(string chartKey)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            PathManager.InitializeChart(_context.World, chartKey);
+    }
+
+    /// <inheritdoc cref="PathManager.UnloadChart(string)"/>
+    public void UnloadChart(string chartKey)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            PathManager.UnloadChart(_context.World, chartKey);
+    }
+
+    /// <inheritdoc cref="PathManager.UnloadChart(NavigationChart)"/>
+    public void UnloadChart(NavigationChart chart)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            PathManager.UnloadChart(_context.World, chart);
+    }
+
+    /// <inheritdoc cref="PathManager.TryGetEffectiveCell(GridWorld,Vector3d,out NavigationChartCell)"/>
+    public bool TryGetEffectiveCell(Vector3d worldPosition, out NavigationChartCell cell)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.TryGetEffectiveCell(_context.World, worldPosition, out cell);
+    }
+
+    /// <inheritdoc cref="PathManager.TryGetEffectiveCell(WorldVoxelIndex,out NavigationChartCell)"/>
+    public bool TryGetEffectiveCell(WorldVoxelIndex voxelIndex, out NavigationChartCell cell)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.TryGetEffectiveCell(voxelIndex, out cell);
+    }
+
+    /// <inheritdoc cref="PathManager.TryGetEffectiveChartOwner(GridWorld,Vector3d,out string?)"/>
+    public bool TryGetEffectiveChartOwner(Vector3d worldPosition, out string? chartName)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.TryGetEffectiveChartOwner(_context.World, worldPosition, out chartName);
+    }
+
+    /// <inheritdoc cref="PathManager.TryGetEffectiveChartOwner(WorldVoxelIndex,out string?)"/>
+    public bool TryGetEffectiveChartOwner(WorldVoxelIndex voxelIndex, out string? chartName)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.TryGetEffectiveChartOwner(voxelIndex, out chartName);
+    }
+
+    /// <inheritdoc cref="PathManager.TryUpdateChartCell(string,int,int,int,NavigationChartCell)"/>
+    public bool TryUpdateChartCell(string chartName, int x, int y, int z, NavigationChartCell cell)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.TryUpdateChartCell(_context.World, chartName, x, y, z, cell);
+    }
+
+    /// <inheritdoc cref="PathManager.TryUpdateChartCell(string,Vector3d,NavigationChartCell)"/>
+    public bool TryUpdateChartCell(string chartName, Vector3d worldPosition, NavigationChartCell cell)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.TryUpdateChartCell(_context.World, chartName, worldPosition, cell);
+    }
+
+    /// <inheritdoc cref="PathManager.ApplyChartUpdates(string,IReadOnlyList{NavigationChartCellUpdate})"/>
+    public int ApplyChartUpdates(string chartName, IReadOnlyList<NavigationChartCellUpdate> updates)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.ApplyChartUpdates(_context.World, chartName, updates);
+    }
+
+    /// <summary>
+    /// Flushes pending grid event rebuild work for this context.
+    /// </summary>
+    public void FlushPendingGridChanges()
+    {
+        EnsureUsable();
+        State.ExternalGridBridge.FlushPendingGridChanges();
+    }
+
+    /// <summary>
+    /// Gets diagnostics for this context's external-grid bridge.
+    /// </summary>
+    internal ExternalGridBridgeDiagnosticsSnapshot GetExternalGridBridgeDiagnosticsSnapshot()
+    {
+        EnsureUsable();
+        return State.ExternalGridBridge.GetDiagnosticsSnapshot();
+    }
+
+    internal void HandleGridChanged(GridEventInfo eventInfo)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            PathManagerExternalGridBridge.HandleGridChanged(eventInfo);
+    }
+
+    internal void Reset()
+    {
+        EnsureUsable();
+        PathManager.ResetPathingState(State, resetSharedGlobalRegistries: false, flushGuideCache: false);
+    }
+
+    internal void Dispose()
+    {
+        State.ExternalGridBridge.Dispose();
+        PathManager.ResetPathingState(State, resetSharedGlobalRegistries: false, flushGuideCache: false);
+    }
+
+    private void EnsureUsable()
+    {
+        if (_context.IsDisposed)
+            throw new ObjectDisposedException(nameof(TrailblazerWorldContext));
+        if (!_context.World.IsActive)
+            throw new InvalidOperationException("TrailblazerPathingService is bound to an inactive GridWorld.");
+    }
+}

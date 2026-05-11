@@ -594,8 +594,9 @@ public class NavSteeringTests : IDisposable
 
         var world = new GridWorld();
         TrailblazerWorldManager.AttachWorld(world, takeOwnership: true);
+        TrailblazerManager.Initialize(world);
         NavigationChart chart = NavigationChart.From3D("CombinedSteeringAllocation", data, Vector3d.Zero, Fixed64.One);
-        PathManager.Register(world, chart);
+        PathManager.Register(chart);
 
         var agent = new MockSteerAgent(new Vector3d(4, 0, 2))
         {
@@ -678,8 +679,9 @@ public class NavSteeringTests : IDisposable
 
         var world = new GridWorld();
         TrailblazerWorldManager.AttachWorld(world, takeOwnership: true);
+        TrailblazerManager.Initialize(world);
         NavigationChart chart = NavigationChart.From3D("ScanRadiusIntoSteerAllocation", data, Vector3d.Zero, Fixed64.One);
-        PathManager.Register(world, chart);
+        PathManager.Register(chart);
 
         var neighbors = new MockSteerAgent?[32];
         var results = new SwiftList<ISteer>();
@@ -744,8 +746,9 @@ public class NavSteeringTests : IDisposable
 
         var world = new GridWorld();
         TrailblazerWorldManager.AttachWorld(world, takeOwnership: true);
+        TrailblazerManager.Initialize(world);
         NavigationChart chart = NavigationChart.From3D("CombinedSteeringNonSteerAllocation", data, Vector3d.Zero, Fixed64.One);
-        PathManager.Register(world, chart);
+        PathManager.Register(chart);
 
         var agent = new MockSteerAgent(new Vector3d(4, 0, 2))
         {

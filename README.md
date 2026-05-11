@@ -135,15 +135,16 @@ PathManager.Register(chart);
 
 Call `TrailblazerManager.Initialize(world)` once during startup to attach Trailblazer to the `GridWorld`
 instance you want it to use. After that, convenience APIs such as `PathManager.Register(chart)` use the
-configured world automatically. If you need to bind a world opportunistically before manager startup, use
-the explicit overloads such as `PathManager.Register(world, chart)`.
+configured default context automatically.
 
 Trailblazer is migrating toward explicit multi-world ownership through `TrailblazerWorldContext`.
-Today, `TrailblazerManager.Initialize(world)` creates a default context for compatibility while the
-static pathing APIs continue to route through the legacy facade. Hosts that need explicit clock and
-world lifetime ownership can create a context directly with `TrailblazerWorldContext.Attach(world)` or
-`TrailblazerWorldContext.CreateOwned(...)`; chart registries, guide caches, transitions, and navigator
-state are being moved behind that context in follow-up phases.
+Today, `TrailblazerManager.Initialize(world)` creates a default context for compatibility, and static
+pathing APIs route through that context. Hosts that need more than one world should create contexts
+directly with `TrailblazerWorldContext.Attach(world)` or `TrailblazerWorldContext.CreateOwned(...)`
+and register charts through `context.Pathing.Register(...)`. Chart registries, live voxel ownership,
+partition pools, and grid rebuild handling are context-local; guide caches, transitions, and navigator
+state are being moved behind that context in follow-up phases. `PathManager.Register(world, ...)` is no
+longer a multi-world registration path.
 
 `PathManager.Register(chart)` can initialize the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step. Initialization and registration order are live registration state, not authored chart data; use `PathManager.IsChartInitialized(...)` or `TryGetNavigationChartRegistration(...)` when integration code needs to inspect that state.
 

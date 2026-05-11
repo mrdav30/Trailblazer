@@ -95,7 +95,7 @@ public static class TrailblazerWorldManager
                 {
                     throw new InvalidOperationException(
                         "Trailblazer requires an active GridWorld. Call TrailblazerManager.Initialize(world), " +
-                        "or PathManager.Register(world, ...) first.");
+                        "or create a TrailblazerWorldContext and use its Pathing service.");
                 }
 
                 return _world;

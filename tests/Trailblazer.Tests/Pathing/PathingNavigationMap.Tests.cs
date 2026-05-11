@@ -1869,7 +1869,7 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
-    public void GlobalGridReset_ShouldHardResetPathManagerChartsAndTransitions()
+    public void GlobalGridReset_ShouldHardResetDefaultContextPathingState()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         TrailblazerWorldManager.TryAddGrid(config, out _);
@@ -1886,12 +1886,12 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(TraversalTransitionRegistry.Register(manual));
         Assert.True(PathManager.IsChartRegistered(sourceChart.Name));
         Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
+        TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 
         TrailblazerWorldManager.Reset();
 
-        Assert.False(PathManager.IsChartRegistered(sourceChart.Name));
-        Assert.False(TraversalTransitionRegistry.IsRegistered(manual.Id));
-        Assert.Empty(PathManager.AllCharts);
+        Assert.False(context.Pathing.State.NavigationChartMap.ContainsKey(sourceChart.Name));
+        Assert.Empty(context.Pathing.State.NavigationChartMap);
     }
 
     [Fact]

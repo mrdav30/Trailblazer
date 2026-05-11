@@ -371,10 +371,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     {
         TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
-        SwiftDictionary<string, NavigationChartRegistration> states =
-            ReflectionUtility.GetPrivateStaticField<SwiftDictionary<string, NavigationChartRegistration>>(
-                typeof(PathManager),
-                "_navigationChartMap");
+        SwiftDictionary<string, NavigationChartRegistration> states = PathManager.ActiveState.NavigationChartMap;
 
         ReflectionUtility.InvokePrivateStatic<string[]>(
             typeof(PathManager),
@@ -434,10 +431,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     {
         TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
-        SwiftDictionary<string, NavigationChartRegistration> states =
-            ReflectionUtility.GetPrivateStaticField<SwiftDictionary<string, NavigationChartRegistration>>(
-                typeof(PathManager),
-                "_navigationChartMap");
+        SwiftDictionary<string, NavigationChartRegistration> states = PathManager.ActiveState.NavigationChartMap;
 
         NavigationChartRegistration state = CreateRegistration("DeltaChart", "delta-prefix", priority: 5);
         state.TransitionIds.Add("obsolete-id");
@@ -519,9 +513,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         ResolvedChartVoxelState resolvedState = new();
         resolvedState.AddOwner(chart.Name, NavigationChartCell.Solid, priority: 0, registrationOrder: 1);
         SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> resolvedStates =
-            ReflectionUtility.GetPrivateStaticField<SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState>>(
-                typeof(PathManager),
-                "_resolvedChartVoxelStates");
+            PathManager.ActiveState.ResolvedChartVoxelStates;
         Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
         resolvedStates[voxel.WorldIndex] = resolvedState;
 
@@ -720,9 +712,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
 
         SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> resolvedStates =
-            ReflectionUtility.GetPrivateStaticField<SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState>>(
-                typeof(PathManager),
-                "_resolvedChartVoxelStates");
+            PathManager.ActiveState.ResolvedChartVoxelStates;
 
         ResolvedChartVoxelState? state = null;
         ReflectionUtility.InvokePrivateStatic<object>(

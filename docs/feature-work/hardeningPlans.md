@@ -16,3 +16,14 @@ These are valid future hardening items, but they should stay demand-driven rathe
   managed manual regeneration and whether `ManagedChartTransitionState` should broaden into a more
   general managed transition dependency model.
   Tracked here: [managedTransitionLifecyclePlan.md](./managedTransitionLifecyclePlan.md)
+
+## Issues to Track
+
+These are the issues we should track and close before we can release to alpha.
+
+When implementation work uncovers an issue outside the active plan, record it here instead of
+folding unrelated cleanup into the current patch. Include the observed problem, why it is outside
+scope, the likely subsystem owner, and the smallest useful validation signal such as a focused test,
+benchmark, or doc update.
+
+- N/A

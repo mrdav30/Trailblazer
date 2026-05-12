@@ -366,7 +366,7 @@ Phase notes:
   are executing inside a context-owned pathing service. Static `PathManager.Register(chart)` remains
   the single-world default-context facade.
 - No out-of-scope hardening item was added in this phase; transition registry, guide caches,
-  reachability state, and volume medium rules are still intentionally tracked in Phase 4.
+  reachability state, and volume medium rules were intentionally deferred to Phase 4.
 
 Exit criteria:
 
@@ -377,30 +377,50 @@ Exit criteria:
 
 ## Phase 4 - Scope Transitions, Volume Rules, Reachability, And Guides
 
-**Status:** Not started  
+**Status:** Complete  
 **Goal:** Remove the highest-risk cross-world cache and registry collisions.
 
-- [ ] Convert `TraversalTransitionRegistry` storage into `TraversalTransitionRegistryState`.
-- [ ] Move `TraversalTransitionQuery` caches into `TraversalTransitionQueryCache` owned by the
+- [x] Convert `TraversalTransitionRegistry` storage into `TraversalTransitionRegistryState`.
+- [x] Move `TraversalTransitionQuery` caches into `TraversalTransitionQueryCache` owned by the
   registry state.
-- [ ] Make transition registration, generated-transition registration, suppression, active-state
+- [x] Make transition registration, generated-transition registration, suppression, active-state
   rebuild, and resolved endpoint lookup context-local.
-- [ ] Convert `VolumeMediumRules` storage into `VolumeMediumRulesState`.
-- [ ] Ensure gas/liquid host rules invalidate only the owning context's volume guide cache and
+- [x] Convert `VolumeMediumRules` storage into `VolumeMediumRulesState`.
+- [x] Ensure gas/liquid host rules invalidate only the owning context's volume guide cache and
   managed manual transitions.
-- [ ] Convert `SolidPartitionReachability` into `SolidPartitionReachabilityState`.
-- [ ] Move `PathGuideFactory` caches, guide pools, hybrid route plan caches, and stale eviction into
+- [x] Convert `SolidPartitionReachability` into `SolidPartitionReachabilityState`.
+- [x] Move `PathGuideFactory` caches, guide pools, hybrid route plan caches, and stale eviction into
   `TrailblazerGuideService`.
-- [ ] Keep guide object pools context-local unless profiling proves cross-context pooling is needed.
-- [ ] Add tests for transition ids reused across contexts, registry versions scoped per context,
+- [x] Keep guide object pools context-local unless profiling proves cross-context pooling is needed.
+- [x] Add tests for transition ids reused across contexts, registry versions scoped per context,
   volume rules scoped per context, reachability snapshots scoped per context, and cache invalidation
   scoped per context.
-- [ ] Add a benchmark preflight that creates two contexts in one process and verifies both still
+- [x] Add a benchmark preflight that creates two contexts in one process and verifies both still
   resolve non-trivial routes after all setup is complete.
-- [ ] Preserve or improve warm-guide allocation behavior. Any unavoidable regression must be
+- [x] Preserve or improve warm-guide allocation behavior. Any unavoidable regression must be
   measured, explained in the phase notes, and tracked with a follow-up benchmark target.
-- [ ] Keep transition lookup indexes context-local and prefiltered by the dimensions used by the
+- [x] Keep transition lookup indexes context-local and prefiltered by the dimensions used by the
   current query path; avoid introducing broad scans across all registered transitions.
+
+Phase notes:
+
+- `TrailblazerWorldContext` now exposes `Transitions`, `VolumeRules`, and `Guides` services over
+  the same owning `PathingWorldState` used by `Pathing`.
+- `TraversalTransitionRegistry` and `TraversalTransitionQuery` remain static default-context
+  facades, but their mutable storage, indexes, registry version, and directed-query caches now live
+  in `TraversalTransitionRegistryState` and `TraversalTransitionQueryCache`.
+- `VolumeMediumRules` remains a default-context facade over `VolumeMediumRulesState`. Host gas and
+  liquid rules invalidate only the owning context's volume cache and managed manual transitions.
+- `PathGuideFactory` remains a default-context facade over context-owned guide caches and guide
+  pools. `TrailblazerWorldContext.Simulate()` now culls stale guides using the owning context's
+  frame count.
+- `SolidPartitionReachability` snapshot data is context-owned and builds from the active context's
+  chart registry and `GridWorld`, not from ambient global chart/world state.
+- The Phase 0 guide-cache acceptance test is now unskipped. Movement groups and navigator reset
+  remain intentionally skipped for Phase 6.
+- No out-of-scope hardening item was added in this phase. Request creation and surveyor ambient-world
+  lookup remain intentionally tracked in Phase 5; the Phase 4 preflight attaches the compatibility
+  ambient world only at the request-creation boundary.
 
 Exit criteria:
 

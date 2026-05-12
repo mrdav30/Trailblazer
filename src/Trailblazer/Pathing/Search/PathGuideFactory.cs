@@ -8,7 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Provides access to pooled and reusable IGuide instances for the built-in pathing strategies.
+/// Provides default-context access to pooled and reusable IGuide instances for the built-in pathing strategies.
 /// Handles guide request routing, instantiation, and lifecycle management.
 /// </summary>
 public static class PathGuideFactory
@@ -24,7 +24,10 @@ public static class PathGuideFactory
     /// A shared cache for A* survey results, keyed by request parameters. 
     /// This allows for efficient reuse of recently computed paths without needing to re-run the A* algorithm for identical requests.
     /// </summary>
-    private static readonly ReusableSurveyResultCache<AStarSurveyResult> _cachedAStarResults = new();
+    private static TrailblazerGuideState GuideState => PathManager.ActiveState.GuideState;
+
+    private static ReusableSurveyResultCache<AStarSurveyResult> _cachedAStarResults =>
+        GuideState.CachedAStarResults;
 
     /// <summary>
     /// Returns the number of active (pooled or in-use) A* results currently tracked.
@@ -40,7 +43,8 @@ public static class PathGuideFactory
     /// A shared cache for FlowField survey results, keyed by request parameters.
     /// This allows for efficient reuse of recently computed flow fields without needing to re-run the flow field generation for identical requests.
     /// </summary>
-    private static readonly ReusableSurveyResultCache<FlowFieldSurveyResult> _cachedFlowResults = new();
+    private static ReusableSurveyResultCache<FlowFieldSurveyResult> _cachedFlowResults =>
+        GuideState.CachedFlowResults;
 
     /// <summary>
     /// Returns the number of active (pooled or in-use) FlowField guides currently tracked.
@@ -56,7 +60,8 @@ public static class PathGuideFactory
     /// A shared cache for raw-volume survey results, keyed by request parameters.
     /// This allows for efficient reuse of recently computed raw-volume data without needing to re-run the volume generation for identical requests.
     /// </summary>
-    private static readonly ReusableSurveyResultCache<VolumeSurveyResult> _cachedVolumeResults = new();
+    private static ReusableSurveyResultCache<VolumeSurveyResult> _cachedVolumeResults =>
+        GuideState.CachedVolumeResults;
 
     /// <summary>
     /// Returns the number of active raw-volume guides currently tracked.
@@ -68,16 +73,14 @@ public static class PathGuideFactory
     /// </summary>
     public static int InUseVolumeGuideCount => _cachedVolumeResults.CountInUse;
 
-    private static readonly ReusableSurveyResultCache<HybridRoutePlanSurveyResult> _cachedHybridRoutePlans = new();
+    private static ReusableSurveyResultCache<HybridRoutePlanSurveyResult> _cachedHybridRoutePlans =>
+        GuideState.CachedHybridRoutePlans;
 
-    private static readonly GuidePool<AStarGuide> _aStarGuides =
-        new(static () => new AStarGuide(), static guide => guide.ResetForReuse());
+    private static GuidePool<AStarGuide> _aStarGuides => GuideState.AStarGuides;
 
-    private static readonly GuidePool<FlowFieldGuide> _flowFieldGuides =
-        new(static () => new FlowFieldGuide(), static guide => guide.ResetForReuse());
+    private static GuidePool<FlowFieldGuide> _flowFieldGuides => GuideState.FlowFieldGuides;
 
-    private static readonly GuidePool<VolumeGuide> _volumeGuides =
-        new(static () => new VolumeGuide(), static guide => guide.ResetForReuse());
+    private static GuidePool<VolumeGuide> _volumeGuides => GuideState.VolumeGuides;
 
     /// <summary>
     /// Returns the number of cached transition route plans currently tracked.

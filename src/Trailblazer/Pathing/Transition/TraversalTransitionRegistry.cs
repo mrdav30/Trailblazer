@@ -9,15 +9,16 @@ using System.Threading;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Global registry for authored traversal transitions.
+/// Default-context facade for authored traversal transitions.
 /// </summary>
 /// <remarks>
-/// Registration resolves transition endpoints to the current voxel grid and keeps transitions
+/// Context-owned transition storage lives in <see cref="TraversalTransitionRegistryState"/>.
+/// Registration resolves transition endpoints to the active pathing context and keeps transitions
 /// registered even while their resolved endpoints are temporarily unsupported. Manual transitions
 /// participate in the same active versus suppressed lifecycle model as chart-generated transitions.
 /// External <see cref="GridWorld"/> add and remove events are reevaluated through
-/// <see cref="PathManager"/>'s grid-lifecycle bridge, and external world reset is treated as a hard
-/// pathing reset.
+/// the owning context's grid-lifecycle bridge, and external world reset is treated as a hard
+/// reset for that context's pathing state.
 /// </remarks>
 public static class TraversalTransitionRegistry
 {
@@ -26,35 +27,47 @@ public static class TraversalTransitionRegistry
     /// </summary>
     public const int DefaultManualPriority = 1;
 
-    private static readonly SwiftDictionary<string, RegisteredTraversalTransition> _transitions =
-        new(8, StringComparer.Ordinal);
+    private static TraversalTransitionRegistryState State => PathManager.ActiveState.TransitionRegistryState;
 
-    private static readonly SwiftHashSet<string> _activeTransitionIds = new();
+    private static SwiftDictionary<string, RegisteredTraversalTransition> _transitions => State.Transitions;
 
-    private static readonly SwiftHashSet<string> _suppressedManagedTransitionIds = new();
+    private static SwiftHashSet<string> _activeTransitionIds => State.ActiveTransitionIds;
 
-    private static readonly SwiftDictionary<WorldVoxelIndex, SwiftHashSet<string>> _managedManualTransitionIdsByVoxel = new();
+    private static SwiftHashSet<string> _suppressedManagedTransitionIds => State.SuppressedManagedTransitionIds;
 
-    private static readonly SwiftDictionary<WorldVoxelIndex, SwiftHashSet<string>> _outgoingTransitionIdsByVoxel = new();
+    private static SwiftDictionary<WorldVoxelIndex, SwiftHashSet<string>> _managedManualTransitionIdsByVoxel =>
+        State.ManagedManualTransitionIdsByVoxel;
 
-    private static readonly SwiftDictionary<WorldVoxelIndex, SwiftHashSet<string>> _incomingTransitionIdsByVoxel = new();
+    private static SwiftDictionary<WorldVoxelIndex, SwiftHashSet<string>> _outgoingTransitionIdsByVoxel =>
+        State.OutgoingTransitionIdsByVoxel;
 
-    private static readonly SwiftDictionary<int, SwiftHashSet<string>> _transitionIdsBySourceGrid = new();
+    private static SwiftDictionary<WorldVoxelIndex, SwiftHashSet<string>> _incomingTransitionIdsByVoxel =>
+        State.IncomingTransitionIdsByVoxel;
 
-    private static readonly SwiftDictionary<int, SwiftHashSet<string>> _transitionIdsByDestinationGrid = new();
+    private static SwiftDictionary<int, SwiftHashSet<string>> _transitionIdsBySourceGrid =>
+        State.TransitionIdsBySourceGrid;
 
-    private static readonly ReaderWriterLockSlim _transitionLock = new();
+    private static SwiftDictionary<int, SwiftHashSet<string>> _transitionIdsByDestinationGrid =>
+        State.TransitionIdsByDestinationGrid;
 
-    private static int _registryVersion;
+    private static ReaderWriterLockSlim _transitionLock => State.TransitionLock;
 
-    private static int _registrationOrder;
+    private static int _registrationOrder
+    {
+        get => State.RegistrationOrder;
+        set => State.RegistrationOrder = value;
+    }
 
-    private static TraversalTransition[] _allTransitionsSnapshot = Array.Empty<TraversalTransition>();
+    private static TraversalTransition[] _allTransitionsSnapshot
+    {
+        get => State.AllTransitionsSnapshot;
+        set => State.AllTransitionsSnapshot = value;
+    }
 
     /// <summary>
     /// Monotonic version used to invalidate cache keys when transition topology changes.
     /// </summary>
-    public static int RegistryVersion => _registryVersion;
+    public static int RegistryVersion => State.RegistryVersion;
 
     /// <summary>
     /// Returns a snapshot of all currently active transitions after precedence is applied.
@@ -156,7 +169,7 @@ public static class TraversalTransitionRegistry
             }
 
             RebuildActiveState_NoLock();
-            Interlocked.Increment(ref _registryVersion);
+            State.IncrementRegistryVersion();
             return true;
         }
         finally
@@ -210,7 +223,7 @@ public static class TraversalTransitionRegistry
             }
 
             RebuildActiveState_NoLock();
-            Interlocked.Increment(ref _registryVersion);
+            State.IncrementRegistryVersion();
             return true;
         }
         finally
@@ -305,7 +318,7 @@ public static class TraversalTransitionRegistry
             RemoveManagedManualDependencyIndexes_NoLock(registered);
             _suppressedManagedTransitionIds.Remove(id);
             RebuildActiveState_NoLock();
-            Interlocked.Increment(ref _registryVersion);
+            State.IncrementRegistryVersion();
             return true;
         }
         finally { _transitionLock.ExitWriteLock(); }
@@ -347,7 +360,7 @@ public static class TraversalTransitionRegistry
                 return;
 
             RebuildActiveState_NoLock();
-            Interlocked.Increment(ref _registryVersion);
+            State.IncrementRegistryVersion();
         }
         finally { _transitionLock.ExitWriteLock(); }
     }
@@ -388,6 +401,9 @@ public static class TraversalTransitionRegistry
 
     internal static void Reset()
     {
+        if (!PathManager.TryGetActiveState(out _))
+            return;
+
         _transitionLock.EnterWriteLock();
         try
         {
@@ -401,7 +417,7 @@ public static class TraversalTransitionRegistry
             _transitionIdsByDestinationGrid.Clear();
             _registrationOrder = 0;
             _allTransitionsSnapshot = Array.Empty<TraversalTransition>();
-            Interlocked.Increment(ref _registryVersion);
+            State.IncrementRegistryVersion();
         }
         finally { _transitionLock.ExitWriteLock(); }
     }
@@ -591,13 +607,15 @@ public static class TraversalTransitionRegistry
         out WorldVoxelIndex voxelIndex)
     {
         voxelIndex = anchor.VoxelIndex;
-        if (!TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out _))
+        GridWorld world = PathManager.ActiveState.World;
+        if (!world.TryGetGridAndVoxel(voxelIndex, out _, out _))
             return false;
 
         if (!anchor.HasPointOverride)
             return true;
 
         return TraversalTransitionAnchor.TryResolveVoxelIndex(
+                world,
                 anchor.PointOverride,
                 out WorldVoxelIndex pointOverrideVoxelIndex)
             && pointOverrideVoxelIndex == voxelIndex;
@@ -630,7 +648,7 @@ public static class TraversalTransitionRegistry
                 return;
 
             RebuildActiveState_NoLock();
-            Interlocked.Increment(ref _registryVersion);
+            State.IncrementRegistryVersion();
         }
         finally
         {
@@ -664,7 +682,7 @@ public static class TraversalTransitionRegistry
                 return;
 
             RebuildActiveState_NoLock();
-            Interlocked.Increment(ref _registryVersion);
+            State.IncrementRegistryVersion();
         }
         finally
         {
@@ -706,7 +724,7 @@ public static class TraversalTransitionRegistry
                 return;
 
             RebuildActiveState_NoLock();
-            Interlocked.Increment(ref _registryVersion);
+            State.IncrementRegistryVersion();
         }
         finally
         {
@@ -773,7 +791,7 @@ public static class TraversalTransitionRegistry
 
     private static bool DoesResolvedEndpointSupportMedium(WorldVoxelIndex voxelIndex, TraversalMedium medium)
     {
-        if (!TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel? voxel)
+        if (!PathManager.ActiveState.World.TryGetGridAndVoxel(voxelIndex, out _, out Voxel? voxel)
             || voxel == null)
             return false;
 

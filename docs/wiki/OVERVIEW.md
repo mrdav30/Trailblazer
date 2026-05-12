@@ -60,16 +60,19 @@ Important details:
 ### 2.2 TrailblazerWorldContext
 
 `TrailblazerWorldContext` is the new explicit owner for one `GridWorld` and its deterministic
-simulation clock. In the current migration phase it provides context construction, attach/owned-world
-lifetime, independent frame rate and frame count, and context-local lifecycle hooks. `TrailblazerManager`
-creates a default context when initialized with a `GridWorld` so existing static integrations keep
-working while pathing, guide caches, transitions, and navigator state move behind explicit contexts.
+simulation clock. It provides context construction, attach/owned-world lifetime, independent frame
+rate and frame count, context-local lifecycle hooks, pathing state, transitions, volume rules,
+reachability snapshots, and guide caches. `TrailblazerManager` creates a default context when
+initialized with a `GridWorld` so existing static integrations keep working while navigator state
+moves behind explicit contexts.
 
 ### 2.3 PathManager
 
-`TrailblazerWorldContext.Pathing` is the context-local chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell query helpers, owns chart partition pools, and handles grid rebuild events for its `GridWorld`. The static `PathManager` remains as a default-context compatibility facade for single-world integrations and still exposes closest-active-transition and direct-travel utilities while later phases move transitions and guide services behind the context.
+`TrailblazerWorldContext.Pathing` is the context-local chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell query helpers, owns chart partition pools, and handles grid rebuild events for its `GridWorld`. The static `PathManager` remains as a default-context compatibility facade for single-world integrations and still exposes closest-active-transition and direct-travel utilities while request and navigation binding continue to migrate.
 
-Explicit handoff data between chart-backed traversal and raw-volume traversal is registered separately through `TraversalTransitionRegistry`.
+Explicit handoff data between chart-backed traversal and raw-volume traversal is registered through
+`TrailblazerWorldContext.Transitions`. `TraversalTransitionRegistry` remains as the default-context
+compatibility facade.
 
 See also:
 
@@ -231,18 +234,15 @@ Guide behavior in practice:
 
 ## 5. Guide Caching and Lifetime
 
-`PathGuideFactory` is the main entry point for guide resolution.
+`TrailblazerWorldContext.Guides` is the main entry point for guide resolution.
+`PathGuideFactory` remains as the default-context compatibility facade.
 
 Supported operations:
 
 - `RequestGuide(IPathRequest request, out IGuide result)`
 - `RequestGuide<T>(IPathRequest request, out T result)`
-- `RequestAStar(AStarPathRequest request)`
-- `RequestFlowField(FlowFieldPathRequest request)`
-- `RequestVolume(VolumePathRequest request)`
 - `ReturnGuide(IGuide guide, bool dispose = false)`
 - `InvalidateCacheFor(string chartKey)`
-- `CullExpiredGuides(int currentFrame)`
 - `FlushCache(bool force = false)`
 
 Internally, it uses `ReusableSurveyResultCache<T>` for:
@@ -254,7 +254,7 @@ Internally, it uses `ReusableSurveyResultCache<T>` for:
 
 Lifetime rules matter:
 
-- if you request a guide directly, return it with `PathGuideFactory.ReturnGuide(...)`
+- if you request a guide directly, return it with `context.Guides.ReturnGuide(...)`
 - `NavSteering` handles this automatically when it owns the guide lifecycle
 - unloaded charts invalidate all cached results that reference them
 - `InvalidateCacheFor(...)` is chart-targeted, so unrelated cached A*, FlowField, and Volume guides remain reusable
@@ -341,16 +341,17 @@ You can use the pathing layer without the full navigation stack:
 For a pathing-first guide that does not assume `Navigator`, read [`PATHING.MD`](PATHING.MD).
 
 ```csharp
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
 
-if (PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+if (context.Guides.RequestGuide(request, out AStarGuide guide))
 {
     if (guide.TryGetMovementDirection(origin, out Vector3d heading))
     {
         // Consume the heading in your own movement system.
     }
 
-    PathGuideFactory.ReturnGuide(guide);
+    context.Guides.ReturnGuide(guide);
 }
 ```
 

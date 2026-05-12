@@ -8,29 +8,56 @@ using SwiftCollections;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Caches conservative solid-partition connectivity snapshots for fast unreachable-route rejection.
+/// Default-context facade for conservative solid-partition connectivity snapshots used for fast unreachable-route rejection.
 /// </summary>
 internal static class SolidPartitionReachability
 {
-    private static readonly object _lock = new();
+    private static SolidPartitionReachabilityState State => PathManager.ActiveState.ReachabilityState;
 
-    private static readonly SwiftDictionary<WorldVoxelIndex, SolidChartPartition> _passablePartitions = new();
+    private static object _lock => State.Lock;
 
-    private static readonly SwiftList<SolidChartPartition> _componentRoots = new();
+    private static SwiftDictionary<WorldVoxelIndex, SolidChartPartition> _passablePartitions =>
+        State.PassablePartitions;
 
-    private static readonly SwiftQueue<SolidChartPartition> _componentQueue = new();
+    private static SwiftList<SolidChartPartition> _componentRoots => State.ComponentRoots;
 
-    private static ReachabilitySnapshotKey _activeSnapshotKey;
+    private static SwiftQueue<SolidChartPartition> _componentQueue => State.ComponentQueue;
 
-    private static bool _hasActiveSnapshot;
+    private static ReachabilitySnapshotKey _activeSnapshotKey
+    {
+        get => State.ActiveSnapshotKey;
+        set => State.ActiveSnapshotKey = value;
+    }
 
-    private static int _activeSnapshotId;
+    private static bool _hasActiveSnapshot
+    {
+        get => State.HasActiveSnapshot;
+        set => State.HasActiveSnapshot = value;
+    }
 
-    private static int _activeSnapshotVersion = -1;
+    private static int _activeSnapshotId
+    {
+        get => State.ActiveSnapshotId;
+        set => State.ActiveSnapshotId = value;
+    }
 
-    private static long _snapshotBuildCount;
+    private static int _activeSnapshotVersion
+    {
+        get => State.ActiveSnapshotVersion;
+        set => State.ActiveSnapshotVersion = value;
+    }
 
-    private static int _version;
+    private static long _snapshotBuildCount
+    {
+        get => State.SnapshotBuildCount;
+        set => State.SnapshotBuildCount = value;
+    }
+
+    private static int _version
+    {
+        get => State.Version;
+        set => State.Version = value;
+    }
 
     /// <summary>
     /// Clears cached connectivity snapshots after live solid topology changes.
@@ -162,6 +189,7 @@ internal static class SolidPartitionReachability
 
         try
         {
+            GridWorld world = PathManager.ActiveState.World;
             foreach (NavigationChart chart in PathManager.AllCharts)
             {
                 if (chart == null || !PathManager.IsChartInitialized(chart.Name))
@@ -170,7 +198,7 @@ internal static class SolidPartitionReachability
                 foreach ((Vector3d position, NavigationChartCell cell) in chart.GetAuthoredCells())
                 {
                     if (!cell.HasSolid
-                        || !TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel)
+                        || !world.TryGetVoxel(position, out Voxel? voxel)
                         || voxel == null
                         || !voxel.TryGetPartition(out SolidChartPartition? partition)
                         || partition == null
@@ -441,37 +469,4 @@ internal static class SolidPartitionReachability
         internal int ComponentQueueCapacity { get; }
     }
 
-    private readonly struct ReachabilitySnapshotKey : IEquatable<ReachabilitySnapshotKey>
-    {
-        internal ReachabilitySnapshotKey(Fixed64 unitSize, Fixed64 maxClimbHeight)
-        {
-            UnitSize = unitSize;
-            MaxClimbHeight = maxClimbHeight;
-        }
-
-        internal Fixed64 UnitSize { get; }
-
-        internal Fixed64 MaxClimbHeight { get; }
-
-        public bool Equals(ReachabilitySnapshotKey other)
-        {
-            return UnitSize == other.UnitSize && MaxClimbHeight == other.MaxClimbHeight;
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return obj is ReachabilitySnapshotKey other && Equals(other);
-        }
-
-        public override int GetHashCode()
-        {
-            unchecked
-            {
-                int hash = 17;
-                hash = (hash * 31) + UnitSize.GetHashCode();
-                hash = (hash * 31) + MaxClimbHeight.GetHashCode();
-                return hash;
-            }
-        }
-    }
 }

@@ -18,6 +18,7 @@ Relevant code:
 
 - `src/Trailblazer/Pathing/Search/Support/Guide/IGuide.cs`
 - `src/Trailblazer/Pathing/Search/Support/Guide/IWaypointGuide.cs`
+- `src/Trailblazer/Pathing/Search/TrailblazerGuideService.cs`
 - `src/Trailblazer/Pathing/Search/PathGuideFactory.cs`
 - `src/Trailblazer/Pathing/Search/AStar/AStarGuide.cs`
 - `src/Trailblazer/Pathing/Search/FlowField/FlowFieldGuide.cs`
@@ -48,13 +49,13 @@ The main design split is:
 - `IPathRequest` describes path intent
 - `SurveyResult` stores reusable computed data
 - `IGuide` exposes movement directions to consumers
-- `PathGuideFactory` bridges requests into guide instances
+- `TrailblazerWorldContext.Guides` bridges requests into guide instances
 
 ## 2. Survey Results Versus Guide Instances
 
 This distinction matters a lot.
 
-`PathGuideFactory` caches survey results, not guide objects.
+`TrailblazerWorldContext.Guides` caches survey results, not guide objects.
 
 That means:
 
@@ -64,7 +65,7 @@ That means:
 
 Practical consequence:
 
-- return guides with `PathGuideFactory.ReturnGuide(...)` so the backing survey result can be released back to the cache
+- return guides with `context.Guides.ReturnGuide(...)` so the backing survey result can be released back to the cache
 
 ## 3. Shared Contracts
 
@@ -233,9 +234,10 @@ Important limitations:
 
 In practice, `HybridGuide` exists mainly for internal guide composition and serialization restoration paths rather than for public consumption.
 
-## 5. `PathGuideFactory`
+## 5. Context Guide Service And `PathGuideFactory`
 
-`PathGuideFactory` is the guide-layer entry point.
+`TrailblazerWorldContext.Guides` is the context-owned guide-layer entry point.
+`PathGuideFactory` remains as the single default-context compatibility facade.
 
 It is responsible for:
 
@@ -256,15 +258,14 @@ It is not responsible for:
 
 The main entry points are:
 
-- `RequestGuide(IPathRequest request, out IGuide result)`
-- `RequestGuide<T>(IPathRequest request, out T result)`
-- `RequestAStar(AStarPathRequest request)`
-- `RequestFlowField(FlowFieldPathRequest request)`
-- `RequestVolume(VolumePathRequest request)`
-- `ReturnGuide(IGuide guide, bool dispose = false)`
-- `InvalidateCacheFor(string chartKey)`
-- `CullExpiredGuides(int currentFrame)`
-- `FlushCache(bool force = false)`
+- `context.Guides.RequestGuide(IPathRequest request, out IGuide result)`
+- `context.Guides.RequestGuide<T>(IPathRequest request, out T result)`
+- `context.Guides.ReturnGuide(IGuide guide, bool dispose = false)`
+- `context.Guides.InvalidateCacheFor(string chartKey)`
+- `context.Guides.FlushCache(bool force = false)`
+
+The static `PathGuideFactory` exposes the same operations for the configured default context while
+the public API migration continues.
 
 Useful status properties:
 
@@ -353,13 +354,14 @@ Important nuance:
 
 ## 6. Cache And Lifetime Rules
 
-`PathGuideFactory` uses one cache per reusable survey-result family:
+Each `TrailblazerWorldContext` uses one cache per reusable survey-result family:
 
 - `_cachedAStarResults`
 - `_cachedFlowResults`
 - `_cachedVolumeResults`
 
-These caches store survey results keyed by `request.RequestCacheKey`.
+These caches store survey results keyed by `request.RequestCacheKey`. Because the caches are
+context-local, equivalent request keys from different worlds do not share survey results.
 
 Guide lifetime rules:
 
@@ -384,13 +386,13 @@ Invalidation sources include:
 
 - chart ownership changes during `PathManager.InitializeChart(...)`
 - chart unload through `PathManager.UnloadChart(...)`
-- full teardown through `PathManager.Reset()`
+- full teardown through `PathManager.Reset()` for the default context or `GridWorld.Reset()` for a context-owned world
 - request-hash changes caused by transition-registry versioning
 
 Maintenance behavior:
 
 - `CullExpiredGuides(...)` removes stale, unused cached results
-- `PathManager.Tick()` calls it using `TrailblazerManager.FrameCount`
+- `TrailblazerWorldContext.Simulate()` culls that context's stale guides using the context frame count
 - `FlushCache(force: false)` only clears caches when nothing is checked out
 - `FlushCache(force: true)` clears everything
 
@@ -399,19 +401,21 @@ Maintenance behavior:
 ### 8.1 Minimal Direct Usage
 
 ```csharp
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
 
-if (PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+if (context.Guides.RequestGuide(request, out AStarGuide guide))
 {
     guide.TryGetMovementDirection(origin, out Vector3d heading);
-    PathGuideFactory.ReturnGuide(guide);
+    context.Guides.ReturnGuide(guide);
 }
 ```
 
 ### 8.2 Polymorphic Usage
 
 ```csharp
-if (PathGuideFactory.RequestGuide(request, out IGuide guide))
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+if (context.Guides.RequestGuide(request, out IGuide guide))
 {
     if (guide is IWaypointGuide waypointGuide)
     {
@@ -422,7 +426,7 @@ if (PathGuideFactory.RequestGuide(request, out IGuide guide))
         guide.TryGetMovementDirection(origin, out Vector3d heading);
     }
 
-    PathGuideFactory.ReturnGuide(guide);
+    context.Guides.ReturnGuide(guide);
 }
 ```
 

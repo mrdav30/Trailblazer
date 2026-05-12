@@ -66,7 +66,9 @@ Important overlap rule:
 
 ## 3. `VolumeMediumRules`
 
-`VolumeMediumRules` is the host-facing supplemental configuration point for constrained raw-volume traversal.
+`TrailblazerWorldContext.VolumeRules` is the context-owned supplemental configuration point for
+constrained raw-volume traversal. `VolumeMediumRules` remains as the single default-context
+compatibility facade.
 
 Its public surface is:
 
@@ -139,33 +141,35 @@ Use `SetGasVoxelRule(...)` or `SetLiquidVoxelRule(...)` when:
 Examples:
 
 ```csharp
-VolumeMediumRules.SetGasVoxelPartition<MyGasVolumePartition>();
-VolumeMediumRules.SetLiquidVoxelPartition<MyLiquidVolumePartition>();
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+context.VolumeRules.SetGasVoxelPartition<MyGasVolumePartition>();
+context.VolumeRules.SetLiquidVoxelPartition<MyLiquidVolumePartition>();
 ```
 
 ```csharp
-VolumeMediumRules.SetGasVoxelRule(voxel =>
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+context.VolumeRules.SetGasVoxelRule(voxel =>
     voxel != null
     && voxel.HasPartition<MyGasVolumePartition>());
 
-VolumeMediumRules.SetLiquidVoxelRule(voxel =>
+context.VolumeRules.SetLiquidVoxelRule(voxel =>
     voxel != null
     && voxel.HasPartition<MyLiquidVolumePartition>());
 ```
 
-### 3.4 Global Lifetime
+### 3.4 Context Lifetime
 
-`VolumeMediumRules` is static and global.
+Volume rule storage is context-local through `VolumeMediumRulesState`.
 
 Important lifecycle rules:
 
-- `PathManager.Reset()` clears the installed gas and liquid rules
-- `PathManager.Reset()` also clears authored `VolumeChartPartition` state by unloading charts
-- changing a host rule invalidates cached volume guides
+- `PathManager.Reset()` clears the default context's installed gas and liquid rules
+- `GridWorld.Reset()` clears only the volume rules and authored `VolumeChartPartition` state owned by that world context
+- changing a host rule invalidates only the owning context's cached volume guides
 - unloading a chart invalidates only cached volume guides whose `ChartsUtilized` includes that chart
 - overlapping chart initialization invalidates cached volume guides for the already-active chart owners touched by the change
 
-That means tests, world reloads, and runtime bootstrap code must reapply host rules when needed.
+That means tests, world reloads, and runtime bootstrap code must reapply host rules to each context that needs them.
 
 ## 4. Raw-Volume Endpoint Resolution
 
@@ -325,8 +329,8 @@ Use `TraversalMedium.Gas` when movement should stay chart-optional and 3D, but s
 - Charts can author liquid or gas volume for you.
 - `TraversalMedium.Gas` and `TraversalMedium.Liquid` still respect blockers and clearance.
 - `TraversalMedium.Gas` and `TraversalMedium.Liquid` fail until valid authored or host-configured gas or liquid membership exists.
-- `VolumeMediumRules` is global static state.
-- `PathManager.Reset()` clears both host volume rules and authored volume partitions.
+- `VolumeMediumRules` is a default-context compatibility facade; use `context.VolumeRules` for multi-world hosts.
+- `PathManager.Reset()` clears default-context host volume rules and authored volume partitions.
 - Volume traversal does not require charts, but it still depends on real voxels existing.
 - `allowUnwalkableEndpoints` only relaxes endpoints; it does not make the whole route ignore blocked voxels.
 
@@ -354,7 +358,7 @@ High-risk changes include:
 - direct-path validation in raw volume
 - medium matching versus base traversability
 - cache invalidation for authored volume topology
-- reset behavior for global rules
+- reset behavior for context-owned rules
 
 ## 12. Where To Read Next
 

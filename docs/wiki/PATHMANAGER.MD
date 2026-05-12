@@ -29,8 +29,7 @@ It is responsible for:
 - computing search-size hints for path requests
 - maintaining pooled `SolidChartPartition` instances
 - maintaining pooled `VolumeChartPartition` instances
-- triggering guide-cache cleanup through `Tick(...)`
-- clearing global transition and volume-rule state during `Reset()`
+- clearing context-owned transition, volume-rule, reachability, and guide-cache state during `Reset()`
 
 It is not responsible for:
 
@@ -109,6 +108,10 @@ It owns:
 - live resolved authored-cell state by `WorldVoxelIndex`
 - initialized chart touch counts by grid index
 - reusable `SolidChartPartition` and `VolumeChartPartition` pools
+- traversal transition registry state and directed-query caches
+- raw-volume medium rule state
+- solid-partition reachability snapshots
+- guide result caches and guide pools
 - grid event diagnostics and pending grid rebuild work
 
 That means:
@@ -117,7 +120,6 @@ That means:
 - partitions release back to the pool owned by the context that attached them
 - a grid reset or grid rebuild event affects only the pathing state for the owning `GridWorld`
 - the static `PathManager` facade should only be used for one configured default context
-- transition registry state still resets through `PathManager.Reset()` until the transition phase moves it behind the context
 
 ## 5. Chart Registration Lifecycle
 
@@ -125,7 +127,7 @@ That means:
 
 `PathManager` currently exposes two registration flows.
 
-`Register(NavigationChart chart, bool initializeChart = true)` adds a chart to the global registry by its `Name`.
+`Register(NavigationChart chart, bool initializeChart = true)` adds a chart to the owning context registry by its `Name`.
 
 Behavior:
 
@@ -143,7 +145,7 @@ Behavior:
 - registers generated transitions as managed transitions that inherit the owning chart priority
 - initializes the built chart by default after chart and transition registration succeed
 - generated transitions stay registered but suppressed until their authored pair is active in the current effective world state
-- generated transitions are tied to that chart's lifetime and are unregistered automatically when the chart unloads or `PathManager.Reset()` clears global state
+- generated transitions are tied to that chart's lifetime and are unregistered automatically when the chart unloads or the owning context resets
 
 ### 5.2 IsChartRegistered(...) and TryGetNavigationChart(...)
 
@@ -268,9 +270,9 @@ Current safety rule:
 
 Current behavior:
 
-- external `GridWorld.Reset()` is treated as simulation teardown and calls `PathManager.Reset()`
+- external `GridWorld.Reset()` is treated as simulation teardown and clears only the owning context's pathing state
 - external grid add, remove, and change notifications are queued in the bridge and coalesced until
-  the next `PathManager.Tick()`
+  the owning context flushes pending grid changes
 - the queued burst expands into one final chart set and each selected chart is rebuilt at most once
   for that tick
 - changed and removed grids prefer the live grid-touch index so rebuild selection stays tied to
@@ -347,7 +349,9 @@ That means:
 `Reset()` currently:
 
 - clears the chart registry
-- flushes guide caches if pooling is active
+- clears context-owned transition and volume-rule registries
+- flushes context-owned guide caches if pooling is active
+- invalidates context-owned reachability snapshots
 - clears chart initialization state on registered chart instances
 
 It will walk live voxels and remove partitions itself.
@@ -356,13 +360,9 @@ That means the accurate teardown pattern is just call `Reset()`.
 
 ### 8.2 Tick(...)
 
-`Tick()` is an internal bridge from `TrailblazerManager` to guide-cache cleanup.
-
-It currently forwards to:
-
-- `PathGuideFactory.CullExpiredGuides(currentFrame)`
-
-So while `PathManager` does not own guide caches directly, it does participate in their frame-based maintenance.
+`Tick()` is an internal default-context bridge from `TrailblazerManager` to pending grid event work.
+Guide cache culling now runs from `TrailblazerWorldContext.Simulate()` using the owning context's
+frame count.
 
 ## 9. Utility Methods
 

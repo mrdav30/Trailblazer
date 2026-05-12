@@ -10,9 +10,9 @@ namespace Trailblazer;
 /// Owns Trailblazer runtime state for one explicit <see cref="GridWorld"/>.
 /// </summary>
 /// <remarks>
-/// This is the context-first host API for multi-world Trailblazer usage. Phase 1 owns world
-/// lifetime and deterministic clock state; later phases move pathing, guide, transition, and
-/// navigation coordination state behind this context.
+/// This is the context-first host API for multi-world Trailblazer usage. It owns world lifetime,
+/// deterministic clock state, pathing state, transition state, volume rules, reachability snapshots,
+/// and guide caches. Later phases move navigation coordination state behind this context.
 /// </remarks>
 public sealed class TrailblazerWorldContext : IDisposable
 {
@@ -29,6 +29,9 @@ public sealed class TrailblazerWorldContext : IDisposable
         World = world;
         _ownsWorld = ownsWorld;
         Pathing = new TrailblazerPathingService(this);
+        Transitions = new TrailblazerTransitionService(this, Pathing.State);
+        VolumeRules = new TrailblazerVolumeRulesService(this, Pathing.State);
+        Guides = new TrailblazerGuideService(this, Pathing.State);
     }
 
     /// <summary>
@@ -40,6 +43,21 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// Gets this context's world-local pathing service.
     /// </summary>
     public TrailblazerPathingService Pathing { get; }
+
+    /// <summary>
+    /// Gets this context's world-local traversal transition service.
+    /// </summary>
+    public TrailblazerTransitionService Transitions { get; }
+
+    /// <summary>
+    /// Gets this context's world-local raw-volume medium rule service.
+    /// </summary>
+    public TrailblazerVolumeRulesService VolumeRules { get; }
+
+    /// <summary>
+    /// Gets this context's world-local path guide service.
+    /// </summary>
+    public TrailblazerGuideService Guides { get; }
 
     /// <summary>
     /// Gets whether this context has been disposed.
@@ -192,6 +210,7 @@ public sealed class TrailblazerWorldContext : IDisposable
     {
         ThrowIfDisposed();
         _clock.Simulate();
+        Guides.CullExpiredGuides(_clock.FrameCount);
         _hooks.InvokeSimulate();
     }
 

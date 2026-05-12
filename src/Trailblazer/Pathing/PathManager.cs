@@ -100,6 +100,31 @@ public static class PathManager
 
     internal static PathingWorldState ActiveState => _activeState ?? GetDefaultState();
 
+    internal static bool TryGetActiveState(out PathingWorldState? state)
+    {
+        if (_activeState != null)
+        {
+            state = _activeState;
+            return true;
+        }
+
+        if (TrailblazerManager.HasDefaultContext)
+        {
+            state = TrailblazerManager.DefaultContext.Pathing.State;
+            return true;
+        }
+
+        if (TrailblazerWorldManager.IsActive)
+        {
+            TrailblazerManager.Initialize(TrailblazerWorldManager.World);
+            state = TrailblazerManager.DefaultContext.Pathing.State;
+            return true;
+        }
+
+        state = null;
+        return false;
+    }
+
     internal static IDisposable EnterState(PathingWorldState state)
     {
         return new PathingWorldStateScope(state);
@@ -192,8 +217,6 @@ public static class PathManager
     {
         if (HasConfiguredWorld)
             ActiveState.ExternalGridBridge.FlushPendingGridChanges();
-
-        PathGuideFactory.CullExpiredGuides(TrailblazerManager.FrameCount);
     }
 
     /// <summary>
@@ -202,17 +225,9 @@ public static class PathManager
     public static void Reset()
     {
         if (!HasConfiguredWorld)
-        {
-            VolumeMediumRules.Reset();
-            TraversalTransitionRegistry.Reset();
-            if (PathGuideFactory.IsPooling)
-                PathGuideFactory.FlushCache(true);
-
-            SolidPartitionReachability.Invalidate();
             return;
-        }
 
-        ResetPathingState(ActiveState, resetSharedGlobalRegistries: true, flushGuideCache: true);
+        ResetPathingState(ActiveState, resetScopedRegistries: true, flushGuideCache: true);
     }
 
     /// <summary>
@@ -221,17 +236,17 @@ public static class PathManager
     public static void Reset(GridWorld world)
     {
         LinkWorld(world);
-        ResetPathingState(ActiveState, resetSharedGlobalRegistries: true, flushGuideCache: true);
+        ResetPathingState(ActiveState, resetScopedRegistries: true, flushGuideCache: true);
     }
 
     internal static void ResetPathingState(
         PathingWorldState state,
-        bool resetSharedGlobalRegistries,
+        bool resetScopedRegistries,
         bool flushGuideCache)
     {
         using (EnterState(state))
         {
-            if (resetSharedGlobalRegistries)
+            if (resetScopedRegistries)
             {
                 VolumeMediumRules.Reset();
                 TraversalTransitionRegistry.Reset();

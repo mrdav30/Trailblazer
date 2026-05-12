@@ -18,29 +18,51 @@ internal static class TraversalTransitionQuery
         Destination
     }
 
-    private static readonly object _cacheLock = new();
+    private static TraversalTransitionQueryCache Cache => PathManager.ActiveState.TransitionQueryCache;
 
-    private static int _cachedRegistryVersion = -1;
+    private static object _cacheLock => Cache.CacheLock;
 
-    private static TraversalTransition[] _allDirectedTransitions = Array.Empty<TraversalTransition>();
+    private static int _cachedRegistryVersion
+    {
+        get => Cache.CachedRegistryVersion;
+        set => Cache.CachedRegistryVersion = value;
+    }
 
-    private static bool _hasAllDirectedTransitions;
+    private static TraversalTransition[] _allDirectedTransitions
+    {
+        get => Cache.AllDirectedTransitions;
+        set => Cache.AllDirectedTransitions = value;
+    }
 
-    private static readonly SwiftDictionary<TraversalTransitionType, TraversalTransition[]> _directedTransitionsByType = new();
+    private static bool _hasAllDirectedTransitions
+    {
+        get => Cache.HasAllDirectedTransitions;
+        set => Cache.HasAllDirectedTransitions = value;
+    }
 
-    private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsByMediumPair = new();
+    private static SwiftDictionary<TraversalTransitionType, TraversalTransition[]> _directedTransitionsByType =>
+        Cache.DirectedTransitionsByType;
 
-    private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsFromSourceGrid = new();
+    private static SwiftDictionary<int, TraversalTransition[]> _directedTransitionsByMediumPair =>
+        Cache.DirectedTransitionsByMediumPair;
 
-    private static readonly SwiftDictionary<long, TraversalTransition[]> _directedTransitionsFromSourceGridByType = new();
+    private static SwiftDictionary<int, TraversalTransition[]> _directedTransitionsFromSourceGrid =>
+        Cache.DirectedTransitionsFromSourceGrid;
 
-    private static readonly SwiftDictionary<long, TraversalTransition[]> _directedTransitionsFromSourceGridByMediumPair = new();
+    private static SwiftDictionary<long, TraversalTransition[]> _directedTransitionsFromSourceGridByType =>
+        Cache.DirectedTransitionsFromSourceGridByType;
 
-    private static readonly SwiftDictionary<int, TraversalTransition[]> _directedTransitionsToDestinationGrid = new();
+    private static SwiftDictionary<long, TraversalTransition[]> _directedTransitionsFromSourceGridByMediumPair =>
+        Cache.DirectedTransitionsFromSourceGridByMediumPair;
 
-    private static readonly SwiftDictionary<long, TraversalTransition[]> _directedTransitionsToDestinationGridByMediumPair = new();
+    private static SwiftDictionary<int, TraversalTransition[]> _directedTransitionsToDestinationGrid =>
+        Cache.DirectedTransitionsToDestinationGrid;
 
-    private static readonly SwiftDictionary<TraversalTransitionType, int[]> _sourceGridIndicesByType = new();
+    private static SwiftDictionary<long, TraversalTransition[]> _directedTransitionsToDestinationGridByMediumPair =>
+        Cache.DirectedTransitionsToDestinationGridByMediumPair;
+
+    private static SwiftDictionary<TraversalTransitionType, int[]> _sourceGridIndicesByType =>
+        Cache.SourceGridIndicesByType;
 
     public static TraversalTransition[] GetDirectedTransitions()
     {

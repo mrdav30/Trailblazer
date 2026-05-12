@@ -56,7 +56,7 @@ can begin climb or mantle behavior as the agent leaves liquid.
 
 It contains:
 
-- `Id`: stable identifier in the global registry
+- `Id`: stable identifier in the owning context's registry
 - `Type`: semantic handoff kind
 - `Source`: where the handoff starts
 - `Destination`: where the handoff ends
@@ -112,13 +112,14 @@ Important nuance:
 
 ## 3. `TraversalTransitionRegistry`
 
-`TraversalTransitionRegistry` is the global store for authored transitions.
+`TrailblazerWorldContext.Transitions` is the context-owned store for authored transitions.
+`TraversalTransitionRegistry` remains as the single default-context compatibility facade.
 
 It is responsible for:
 
 - registering transitions by stable id
 - tracking whether a registered transition is currently active after precedence is applied
-- resolving authored anchor positions to real voxel indices
+- resolving authored anchor positions to real voxel indices in the owning context's `GridWorld`
 - exposing transition lookup APIs by id, position, and voxel
 - tracking a monotonic `RegistryVersion` for cache invalidation
 
@@ -175,11 +176,12 @@ Useful mental model:
 
 ### 3.3 Lifetime And Reset
 
-`TraversalTransitionRegistry` is static and global.
+Transition storage is context-local through `TraversalTransitionRegistryState`.
 
 Important lifecycle rules:
 
-- `PathManager.Reset()` clears the registry
+- `PathManager.Reset()` clears the default context registry
+- `GridWorld.Reset()` clears only the transition registry owned by that world context
 - `PathManager.UnloadChart(...)` unregisters chart-managed generated transitions for that chart regardless of registration path
 - manually registered transitions remain registered until explicit unregister or `PathManager.Reset()`,
   but they can be suppressed and later reactivated as local topology changes alter their endpoint support
@@ -187,8 +189,8 @@ Important lifecycle rules:
   reevaluate the managed manual transitions touching the affected voxels
 - external grid add, remove, and change notifications rebuild only the overlapping initialized chart
   state and then reevaluate managed transitions
-- external `GridWorld.Reset()` is treated as simulation teardown and hard resets
-  `PathManager`, which also clears the registry
+- external `GridWorld.Reset()` is treated as simulation teardown and hard resets that context's
+  pathing state, transition registry, volume rules, reachability snapshots, and guide caches
 
 The registry remarks in code are important here: endpoint voxels are resolved at registration time, not lazily every time a request is planned.
 
@@ -246,7 +248,8 @@ The query layer exposes:
 
 ### 4.3 Versioned Cache Refresh
 
-`TraversalTransitionRegistry.RegistryVersion` is part of the transition story.
+`TraversalTransitionRegistry.RegistryVersion` is part of the transition story. Through
+`TrailblazerWorldContext.Transitions`, this version is local to the owning context.
 
 It is used to:
 
@@ -295,7 +298,8 @@ Important nuance:
 Use this when two chart regions should remain disconnected in normal voxel connectivity, but a specific authored gap should be traversable.
 
 ```csharp
-TraversalTransitionRegistry.Register(new TraversalTransition(
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+context.Transitions.Register(new TraversalTransition(
     id: "bridge-gap-jump",
     type: TraversalTransitionType.Jump,
     source: TraversalTransitionAnchor.Solid(new Vector3d(10, 0, 4)),
@@ -308,13 +312,14 @@ TraversalTransitionRegistry.Register(new TraversalTransition(
 Use this when solid pathing should hand off into constrained liquid traversal and later back onto a chart.
 
 ```csharp
-TraversalTransitionRegistry.Register(new TraversalTransition(
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+context.Transitions.Register(new TraversalTransition(
     id: "shore-entry",
     type: TraversalTransitionType.SwimEntry,
     source: TraversalTransitionAnchor.Solid(new Vector3d(-1, 0, 0)),
     destination: TraversalTransitionAnchor.Liquid(new Vector3d(0, 0, 0))));
 
-TraversalTransitionRegistry.Register(new TraversalTransition(
+context.Transitions.Register(new TraversalTransition(
     id: "shore-exit",
     type: TraversalTransitionType.SwimExit,
     source: TraversalTransitionAnchor.Liquid(new Vector3d(4, 0, 0)),
@@ -354,7 +359,8 @@ This is especially important in worlds with:
 - A registered transition can still be unusable if its surrounding chart or volume segments cannot be built.
 - Bidirectional behavior is query-time expansion, not two separate registry entries.
 - Volume anchors depend on `VolumeMediumRules` and the raw `TraversalMedium` implied by their anchor medium.
-- `PathManager.Reset()` clears the registry.
+- `PathManager.Reset()` clears the default context registry; context reset from `GridWorld.Reset()`
+  clears only the owning context registry.
 - If world topology changes after registration, rebuild your transitions.
 
 ## 9. AI And Contributor Notes

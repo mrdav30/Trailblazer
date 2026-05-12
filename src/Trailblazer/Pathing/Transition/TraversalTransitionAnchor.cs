@@ -148,7 +148,15 @@ public readonly struct TraversalTransitionAnchor
 
     internal static bool TryResolveVoxelIndex(Vector3d position, out WorldVoxelIndex voxelIndex)
     {
-        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel))
+        return TryResolveVoxelIndex(PathManager.ActiveState.World, position, out voxelIndex);
+    }
+
+    internal static bool TryResolveVoxelIndex(
+        GridWorld world,
+        Vector3d position,
+        out WorldVoxelIndex voxelIndex)
+    {
+        if (world.TryGetVoxel(position, out Voxel? voxel))
         {
             voxelIndex = voxel!.WorldIndex;
             return true;
@@ -198,7 +206,7 @@ public readonly struct TraversalTransitionAnchor
 
     private static Vector3d GetVoxelWorldPosition(WorldVoxelIndex voxelIndex)
     {
-        if (TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out _, out Voxel? voxel)
+        if (PathManager.ActiveState.World.TryGetGridAndVoxel(voxelIndex, out _, out Voxel? voxel)
             && voxel != null)
             return voxel.WorldPosition;
 

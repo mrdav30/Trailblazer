@@ -1,14 +1,14 @@
 using GridForge.Grids;
 using GridForge.Spatial;
 using System.Runtime.CompilerServices;
-using System.Threading;
 
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Holds authored and host-configured membership rules for raw volume traversal media.
+/// Default-context facade for authored and host-configured membership rules for raw volume traversal media.
 /// </summary>
 /// <remarks>
+/// Context-owned rule storage lives in <see cref="VolumeMediumRulesState"/>.
 /// Trailblazer can derive raw-volume membership from authored <see cref="VolumeChartPartition"/> data
 /// created during chart initialization. Hosts can also install supplemental gas and
 /// liquid rules for engine-specific partitioning or bespoke world logic. These rules are
@@ -25,23 +25,19 @@ public static class VolumeMediumRules
     /// <returns>true if the voxel meets the criteria defined by the rule; otherwise, false.</returns>
     public delegate bool VoxelRule(Voxel voxel);
 
-    private static VoxelRule? _gasVoxelRule;
-
-    private static VoxelRule? _liquidVoxelRule;
-
-    private static int _registryVersion;
+    private static VolumeMediumRulesState State => PathManager.ActiveState.VolumeRulesState;
 
     /// <summary>
     /// Indicates whether a gas rule is currently configured.
     /// </summary>
-    public static bool HasGasVoxelRule => _gasVoxelRule != null;
+    public static bool HasGasVoxelRule => State.GasVoxelRule != null;
 
     /// <summary>
     /// Indicates whether a liquid rule is currently configured.
     /// </summary>
-    public static bool HasLiquidVoxelRule => _liquidVoxelRule != null;
+    public static bool HasLiquidVoxelRule => State.LiquidVoxelRule != null;
 
-    internal static int RegistryVersion => _registryVersion;
+    internal static int RegistryVersion => State.RegistryVersion;
 
     /// <summary>
     /// Uses a host-defined voxel partition type to add gas membership on eligible voxels.
@@ -59,7 +55,7 @@ public static class VolumeMediumRules
     /// </summary>
     public static void SetGasVoxelRule(VoxelRule rule)
     {
-        _gasVoxelRule = rule;
+        State.GasVoxelRule = rule;
         InvalidateRuleConfiguration();
     }
 
@@ -68,7 +64,7 @@ public static class VolumeMediumRules
     /// </summary>
     public static void ClearGasVoxelRule()
     {
-        _gasVoxelRule = null;
+        State.GasVoxelRule = null;
         InvalidateRuleConfiguration();
     }
 
@@ -88,7 +84,7 @@ public static class VolumeMediumRules
     /// </summary>
     public static void SetLiquidVoxelRule(VoxelRule rule)
     {
-        _liquidVoxelRule = rule;
+        State.LiquidVoxelRule = rule;
         InvalidateRuleConfiguration();
     }
 
@@ -97,14 +93,17 @@ public static class VolumeMediumRules
     /// </summary>
     public static void ClearLiquidVoxelRule()
     {
-        _liquidVoxelRule = null;
+        State.LiquidVoxelRule = null;
         InvalidateRuleConfiguration();
     }
 
     internal static void Reset()
     {
-        _gasVoxelRule = null;
-        _liquidVoxelRule = null;
+        if (!PathManager.TryGetActiveState(out _))
+            return;
+
+        State.GasVoxelRule = null;
+        State.LiquidVoxelRule = null;
         InvalidateRuleConfiguration();
     }
 
@@ -113,8 +112,8 @@ public static class VolumeMediumRules
     {
         return medium switch
         {
-            TraversalMedium.Gas => _gasVoxelRule != null || PathManager.HasAuthoredVolumeMedium(TraversalMedium.Gas),
-            TraversalMedium.Liquid => _liquidVoxelRule != null || PathManager.HasAuthoredVolumeMedium(TraversalMedium.Liquid),
+            TraversalMedium.Gas => State.GasVoxelRule != null || PathManager.HasAuthoredVolumeMedium(TraversalMedium.Gas),
+            TraversalMedium.Liquid => State.LiquidVoxelRule != null || PathManager.HasAuthoredVolumeMedium(TraversalMedium.Liquid),
             _ => false
         };
     }
@@ -132,8 +131,9 @@ public static class VolumeMediumRules
         if (!hasTrailblazerPartition)
             return false;
 
-        bool hostGasMatch = _gasVoxelRule?.Invoke(voxel) == true;
-        bool hostLiquidMatch = _liquidVoxelRule?.Invoke(voxel) == true;
+        VolumeMediumRulesState state = State;
+        bool hostGasMatch = state.GasVoxelRule?.Invoke(voxel) == true;
+        bool hostLiquidMatch = state.LiquidVoxelRule?.Invoke(voxel) == true;
         bool authoredGasMatch = volumeChartPartition?.SupportsMedium(TraversalMedium.Gas) == true;
         bool authoredLiquidMatch = volumeChartPartition?.SupportsMedium(TraversalMedium.Liquid) == true;
 
@@ -148,7 +148,7 @@ public static class VolumeMediumRules
 
     private static void InvalidateRuleConfiguration()
     {
-        Interlocked.Increment(ref _registryVersion);
+        State.IncrementRegistryVersion();
         TraversalTransitionRegistry.RefreshManagedManualTransitions();
         PathGuideFactory.InvalidateVolumeCache();
     }

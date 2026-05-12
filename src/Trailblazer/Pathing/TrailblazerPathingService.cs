@@ -208,13 +208,13 @@ public sealed class TrailblazerPathingService
     internal void Reset()
     {
         EnsureUsable();
-        PathManager.ResetPathingState(State, resetSharedGlobalRegistries: false, flushGuideCache: false);
+        PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);
     }
 
     internal void Dispose()
     {
         State.ExternalGridBridge.Dispose();
-        PathManager.ResetPathingState(State, resetSharedGlobalRegistries: false, flushGuideCache: false);
+        PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);
     }
 
     private void EnsureUsable()

@@ -22,8 +22,8 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 - Deterministic fixed-point math through `FixedMathSharp`
 - Engine-agnostic architecture with no required renderer or physics engine
 - Dual pathing strategies: waypoint-based A* and destination-centric flow fields
-- Chart registration and invalidation through `PathManager`
-- Reusable guide caching through `PathGuideFactory`
+- Context-owned chart registration and invalidation through `TrailblazerWorldContext.Pathing`
+- Context-owned guide caching through `TrailblazerWorldContext.Guides`
 - Runtime steering, group movement, stuck detection, repathing, and local avoidance hooks
 - Deterministic turning and locomotion-aware movement through `NavTurning` and `NavMotor`
 - Multi-targeted library build for `netstandard2.1` and `net8.0`
@@ -34,11 +34,11 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 
 - `NavigationChart` and `NavigationChartCell` for defining chart-backed surface space with optional per-cell cost and hint metadata
 - `TraversalAuthoringMap`, `TraversalLegend`, and `TraversalBuildResult` for tokenized `string[,,]` authoring that can build and apply a chart plus generated transitions
-- `TraversalTransition` and `TraversalTransitionRegistry` for explicit chart-to-chart and chart-to-volume handoff data
-- `PathManager` for chart registration, initialization, unloading, effective-state queries, closest-active-transition queries, and path utilities
+- `TraversalTransition` and `TrailblazerWorldContext.Transitions` for explicit chart-to-chart and chart-to-volume handoff data
+- `TrailblazerWorldContext.Pathing` for chart registration, initialization, unloading, effective-state queries, closest-active-transition queries, and path utilities
 - `AStarPathRequest`, `FlowFieldPathRequest`, and `VolumePathRequest` for request configuration
 - `AStarSurveyor` and `FlowFieldSurveyor` for raw path generation
-- `PathGuideFactory` and `ReusableSurveyResultCache<T>` for guide reuse
+- `TrailblazerWorldContext.Guides`, `PathGuideFactory`, and `ReusableSurveyResultCache<T>` for guide reuse
 - `AStarGuide`, `FlowFieldGuide`, and `VolumeGuide` for runtime direction queries
 
 ### Navigation Layer
@@ -142,9 +142,9 @@ Today, `TrailblazerManager.Initialize(world)` creates a default context for comp
 pathing APIs route through that context. Hosts that need more than one world should create contexts
 directly with `TrailblazerWorldContext.Attach(world)` or `TrailblazerWorldContext.CreateOwned(...)`
 and register charts through `context.Pathing.Register(...)`. Chart registries, live voxel ownership,
-partition pools, and grid rebuild handling are context-local; guide caches, transitions, and navigator
-state are being moved behind that context in follow-up phases. `PathManager.Register(world, ...)` is no
-longer a multi-world registration path.
+partition pools, grid rebuild handling, transition registries, volume-medium rules, reachability
+snapshots, and guide caches are context-local. Navigator state is being moved behind that context in a
+follow-up phase. `PathManager.Register(world, ...)` is no longer a multi-world registration path.
 
 `PathManager.Register(chart)` can initialize the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step. Initialization and registration order are live registration state, not authored chart data; use `PathManager.IsChartInitialized(...)` or `TryGetNavigationChartRegistration(...)` when integration code needs to inspect that state.
 
@@ -169,14 +169,14 @@ Vector3d destination = new(2, 0, 2);
 
 var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
 
-if (PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+if (TrailblazerManager.DefaultContext.Guides.RequestGuide(request, out AStarGuide guide))
 {
     if (guide.TryGetMovementDirection(origin, out Vector3d heading))
     {
         // Use the heading in your own movement code.
     }
 
-    PathGuideFactory.ReturnGuide(guide);
+    TrailblazerManager.DefaultContext.Guides.ReturnGuide(guide);
 }
 ```
 

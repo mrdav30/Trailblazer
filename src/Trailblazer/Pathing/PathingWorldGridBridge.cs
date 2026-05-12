@@ -61,7 +61,7 @@ internal sealed class PathingWorldGridBridge : IDisposable
 
     private void HandleGridReset()
     {
-        PathManager.ResetPathingState(_state, resetSharedGlobalRegistries: false, flushGuideCache: false);
+        PathManager.ResetPathingState(_state, resetScopedRegistries: true, flushGuideCache: true);
     }
 
     public void Dispose()

@@ -47,6 +47,16 @@ internal sealed class PathingWorldState
 
     internal int NextChartRegistrationOrder { get; set; }
 
+    internal TraversalTransitionRegistryState TransitionRegistryState { get; } = new();
+
+    internal TraversalTransitionQueryCache TransitionQueryCache { get; } = new();
+
+    internal VolumeMediumRulesState VolumeRulesState { get; } = new();
+
+    internal SolidPartitionReachabilityState ReachabilityState { get; } = new();
+
+    internal TrailblazerGuideState GuideState { get; } = new();
+
     internal SwiftDictionary<ushort, ExternalGridEventObservation> ExternalGridEventObservationsByGridIndex { get; } = new();
 
     internal SwiftDictionary<ushort, PendingExternalGridChange> PendingGridChangesByGridIndex { get; } = new();

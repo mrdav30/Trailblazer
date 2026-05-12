@@ -34,12 +34,31 @@ public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
         contextB.Pathing.Register(chartB).Should().BeTrue();
     }
 
-    [Fact(Skip = Phase0SkipReason)]
-    [Trait("Category", "MultiWorldPhase0Red")]
+    [Fact]
     public void GuideCaches_WithEquivalentCoordinates_ShouldStayWorldLocal()
     {
-        Assert.Fail(
-            "Pending Phase 4: guide caches and path requests must be owned by TrailblazerWorldContext before equivalent requests can stay world-local.");
+        using TrailblazerWorldContext contextA = CreateContextWithGrid();
+        using TrailblazerWorldContext contextB = CreateContextWithGrid();
+        NavigationChart chartA = BuildLineChart("SharedGuideChart");
+        NavigationChart chartB = BuildLineChart("SharedGuideChart");
+        contextA.Pathing.Register(chartA).Should().BeTrue();
+        contextB.Pathing.Register(chartB).Should().BeTrue();
+
+        AStarPathRequest requestA = CreateAStarRequest(contextA, Vector3d.Zero, new Vector3d(2, 0, 0));
+        AStarPathRequest requestB = CreateAStarRequest(contextB, Vector3d.Zero, new Vector3d(2, 0, 0));
+
+        TrailblazerWorldManager.AttachWorld(contextA.World);
+        AStarGuide guideA = TestRequire.Created(contextA.Guides.RequestGuide(requestA, out AStarGuide? createdGuideA), createdGuideA);
+        contextA.Guides.ReturnGuide(guideA);
+
+        TrailblazerWorldManager.AttachWorld(contextB.World);
+        AStarGuide guideB = TestRequire.Created(contextB.Guides.RequestGuide(requestB, out AStarGuide? createdGuideB), createdGuideB);
+        contextB.Guides.ReturnGuide(guideB);
+
+        contextA.Guides.InvalidateCacheFor("SharedGuideChart");
+
+        contextA.Guides.TotalAStarGuideCount.Should().Be(0);
+        contextB.Guides.TotalAStarGuideCount.Should().Be(1);
     }
 
     [Fact]
@@ -110,5 +129,14 @@ public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
         };
 
         return NavigationChart.From3D(name, data, Vector3d.Zero, Fixed64.One);
+    }
+
+    private static AStarPathRequest CreateAStarRequest(
+        TrailblazerWorldContext context,
+        Vector3d source,
+        Vector3d destination)
+    {
+        TrailblazerWorldManager.AttachWorld(context.World);
+        return TestRequire.NotNull(AStarPathRequest.Create(source, destination, Fixed64.One));
     }
 }

@@ -26,6 +26,12 @@ public static class PathGuideFactory
     /// </summary>
     private static TrailblazerGuideState GuideState => PathManager.ActiveState.GuideState;
 
+    private static AStarSurveyor _aStarSurveyor => GuideState.AStarSurveyor;
+
+    private static FlowFieldSurveyor _flowFieldSurveyor => GuideState.FlowFieldSurveyor;
+
+    private static VolumeSurveyor _volumeSurveyor => GuideState.VolumeSurveyor;
+
     private static ReusableSurveyResultCache<AStarSurveyResult> _cachedAStarResults =>
         GuideState.CachedAStarResults;
 
@@ -162,6 +168,12 @@ public static class PathGuideFactory
             return false;
         }
 
+        if (!ReferenceEquals(request.Context, PathManager.ActiveState.Context))
+        {
+            result = null;
+            return false;
+        }
+
         if (request is AStarPathRequest unreachableAStar
             && SolidPartitionReachability.IsProvablyUnreachable(unreachableAStar))
         {
@@ -240,7 +252,7 @@ public static class PathGuideFactory
     private static FlowFieldGuide? RequestFlowFieldMiss(FlowFieldPathRequest request)
     {
         bool pathFound = _cachedFlowResults.TryGetOrCreate(request,
-            () => FlowFieldSurveyor.Shared.FindPath(request),
+            () => _flowFieldSurveyor.FindPath(request),
             out FlowFieldSurveyResult result);
 
         // Make sure the start voxel is within the current fields collection. This dictionary probe is on the warm
@@ -278,7 +290,7 @@ public static class PathGuideFactory
     private static VolumeGuide? RequestVolumeMiss(VolumePathRequest request)
     {
         bool pathFound = _cachedVolumeResults.TryGetOrCreate(request,
-            () => VolumeSurveyor.Shared.FindPath(request),
+            () => _volumeSurveyor.FindPath(request),
             out VolumeSurveyResult result);
 
         if (!pathFound)
@@ -518,7 +530,7 @@ public static class PathGuideFactory
 
     private static AStarSurveyResult ResolveAStarResult(AStarPathRequest request)
     {
-        AStarSurveyResult directResult = AStarSurveyor.Shared.FindPath(request);
+        AStarSurveyResult directResult = _aStarSurveyor.FindPath(request);
         if (directResult.HasPath || !request.AllowTraversalTransitions)
             return directResult;
 
@@ -549,7 +561,7 @@ public static class PathGuideFactory
             return false;
         }
 
-        result = AStarSurveyResult.Create(flattenedWaypoints!, chartKeys, request.RequestCacheKey);
+        result = AStarSurveyResult.Create(request.Context, flattenedWaypoints!, chartKeys, request.RequestCacheKey);
         return true;
     }
 
@@ -621,6 +633,7 @@ public static class PathGuideFactory
         }
 
         return HybridRoutePlanSurveyResult.Create(
+            request.Context,
             routePlan,
             CollectRoutePlanChartKeys(routePlan),
             request.RequestCacheKey);

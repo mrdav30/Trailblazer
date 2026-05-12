@@ -13,6 +13,8 @@ namespace Trailblazer.Pathing;
 /// </remarks>
 public abstract class SurveyResult : ISurveyResult
 {
+    internal TrailblazerWorldContext? Context { get; set; }
+
     /// <inheritdoc/>
     public bool IsValid { get; protected set; }
 
@@ -38,7 +40,7 @@ public abstract class SurveyResult : ISurveyResult
     public void Release()
     {
         IsInUse = false;
-        LastUsedFrame = TrailblazerManager.FrameCount;
+        LastUsedFrame = Context?.FrameCount ?? TrailblazerManager.FrameCount;
     }
 
     /// <inheritdoc/>
@@ -46,6 +48,7 @@ public abstract class SurveyResult : ISurveyResult
     {
         IsValid = false;
         IsInUse = false;
+        Context = null;
         ChartsUtilized = Array.Empty<string>();
         LastUsedFrame = -1;
         RequestHashKey = -1;

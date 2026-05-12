@@ -343,6 +343,8 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
             RequestCacheKey = key;
         }
 
+        public TrailblazerWorldContext Context => TrailblazerManager.DefaultContext;
+
         public Vector3d Origin => Vector3d.Zero;
 
         public Voxel StartNode => null!;

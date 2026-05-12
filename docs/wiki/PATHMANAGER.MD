@@ -30,6 +30,7 @@ It is responsible for:
 - maintaining pooled `SolidChartPartition` instances
 - maintaining pooled `VolumeChartPartition` instances
 - clearing context-owned transition, volume-rule, reachability, and guide-cache state during `Reset()`
+- providing the context-local world and pathing state used by request endpoint resolution
 
 It is not responsible for:
 
@@ -38,7 +39,8 @@ It is not responsible for:
 - steering behavior
 - movement execution
 
-Those responsibilities belong to `NavigationChart`, the surveyors, `NavSteering`, and the navigation stack.
+Those responsibilities belong to `NavigationChart`, context-bound path requests, the surveyors,
+`NavSteering`, and the navigation stack.
 
 ## 2. Core Design Model
 

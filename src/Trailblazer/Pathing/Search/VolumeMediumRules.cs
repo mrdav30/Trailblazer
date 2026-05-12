@@ -110,16 +110,29 @@ public static class VolumeMediumRules
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool IsConfigured(TraversalMedium medium)
     {
+        return IsConfigured(PathManager.ActiveState, medium);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsConfigured(PathingWorldState pathingState, TraversalMedium medium)
+    {
+        VolumeMediumRulesState state = pathingState.VolumeRulesState;
         return medium switch
         {
-            TraversalMedium.Gas => State.GasVoxelRule != null || PathManager.HasAuthoredVolumeMedium(TraversalMedium.Gas),
-            TraversalMedium.Liquid => State.LiquidVoxelRule != null || PathManager.HasAuthoredVolumeMedium(TraversalMedium.Liquid),
+            TraversalMedium.Gas => state.GasVoxelRule != null || PathManager.HasAuthoredVolumeMedium(pathingState, TraversalMedium.Gas),
+            TraversalMedium.Liquid => state.LiquidVoxelRule != null || PathManager.HasAuthoredVolumeMedium(pathingState, TraversalMedium.Liquid),
             _ => false
         };
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool Matches(Voxel voxel, TraversalMedium medium)
+    {
+        return Matches(PathManager.ActiveState, voxel, medium);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool Matches(PathingWorldState pathingState, Voxel voxel, TraversalMedium medium)
     {
         if (voxel == null)
             return false;
@@ -131,7 +144,7 @@ public static class VolumeMediumRules
         if (!hasTrailblazerPartition)
             return false;
 
-        VolumeMediumRulesState state = State;
+        VolumeMediumRulesState state = pathingState.VolumeRulesState;
         bool hostGasMatch = state.GasVoxelRule?.Invoke(voxel) == true;
         bool hostLiquidMatch = state.LiquidVoxelRule?.Invoke(voxel) == true;
         bool authoredGasMatch = volumeChartPartition?.SupportsMedium(TraversalMedium.Gas) == true;

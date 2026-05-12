@@ -153,7 +153,9 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// </summary>
     internal bool IsImpassable(Fixed64 unitSize)
     {
-        return !VolumeVoxelFinder.HasClearance(Voxel, unitSize);
+        PathingWorldState? ownerState = OwnerState;
+        TrailblazerWorldContext context = ownerState?.Context ?? PathRequestContextResolver.DefaultContext;
+        return !VolumeVoxelFinder.HasClearance(context, Voxel, unitSize);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -175,10 +177,9 @@ public sealed class VolumeChartPartition : IVoxelPartition
         get
         {
             PathingWorldState? ownerState = OwnerState;
-            Voxel? voxel;
+            Voxel? voxel = null;
             bool found = ownerState != null
-                ? ownerState.World.TryGetGridAndVoxel(WorldIndex, out _, out voxel)
-                : TrailblazerWorldManager.TryGetGridAndVoxel(WorldIndex, out _, out voxel);
+                && ownerState.World.TryGetGridAndVoxel(WorldIndex, out _, out voxel);
 
             if (found
                 && voxel != null)

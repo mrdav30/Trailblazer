@@ -47,11 +47,9 @@ public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
         AStarPathRequest requestA = CreateAStarRequest(contextA, Vector3d.Zero, new Vector3d(2, 0, 0));
         AStarPathRequest requestB = CreateAStarRequest(contextB, Vector3d.Zero, new Vector3d(2, 0, 0));
 
-        TrailblazerWorldManager.AttachWorld(contextA.World);
         AStarGuide guideA = TestRequire.Created(contextA.Guides.RequestGuide(requestA, out AStarGuide? createdGuideA), createdGuideA);
         contextA.Guides.ReturnGuide(guideA);
 
-        TrailblazerWorldManager.AttachWorld(contextB.World);
         AStarGuide guideB = TestRequire.Created(contextB.Guides.RequestGuide(requestB, out AStarGuide? createdGuideB), createdGuideB);
         contextB.Guides.ReturnGuide(guideB);
 
@@ -136,7 +134,6 @@ public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
         Vector3d source,
         Vector3d destination)
     {
-        TrailblazerWorldManager.AttachWorld(context.World);
-        return TestRequire.NotNull(AStarPathRequest.Create(source, destination, Fixed64.One));
+        return TestRequire.NotNull(AStarPathRequest.Create(context, source, destination, Fixed64.One));
     }
 }

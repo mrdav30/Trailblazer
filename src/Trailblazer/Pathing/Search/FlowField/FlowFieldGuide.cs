@@ -41,6 +41,8 @@ public class FlowFieldGuide : IGuide
     /// </summary>
     private IGuide? _activeStageGuide;
 
+    private TrailblazerWorldContext? _activeStageGuideContext;
+
     /// <summary>
     /// The index of the currently active step guide within the staged plan.
     /// </summary>
@@ -120,10 +122,12 @@ public class FlowFieldGuide : IGuide
         }
 
         SwiftDictionary<WorldVoxelIndex, FlowField>? fields = FlowMap?.Fields;
+        TrailblazerWorldContext? context = FlowMap?.Context;
         if (FlowMap == null
             || !FlowMap.HasPath
             || fields == null
-            || !TrailblazerWorldManager.TryGetVoxel(origin, out Voxel? currentVoxel)
+            || context == null
+            || !context.World.TryGetVoxel(origin, out Voxel? currentVoxel)
             || currentVoxel == null
             || !fields.ContainsKey(currentVoxel.WorldIndex))
         {
@@ -141,10 +145,12 @@ public class FlowFieldGuide : IGuide
             return TryGetStagedFallbackDirection(origin, out fallbackDirection);
 
         SwiftDictionary<WorldVoxelIndex, FlowField>? fields = FlowMap?.Fields;
+        TrailblazerWorldContext? context = FlowMap?.Context;
         if (FlowMap == null
             || !FlowMap.HasPath
             || fields == null
-            || !TrailblazerWorldManager.TryGetVoxel(origin, out Voxel? currentVoxel)
+            || context == null
+            || !context.World.TryGetVoxel(origin, out Voxel? currentVoxel)
             || currentVoxel == null
             || !fields.ContainsKey(currentVoxel.WorldIndex))
         {
@@ -164,10 +170,12 @@ public class FlowFieldGuide : IGuide
     {
         if (_activeStageGuide != null)
         {
-            PathGuideFactory.ReturnGuide(_activeStageGuide, dispose);
+            (_activeStageGuideContext?.Guides ?? PathRequestContextResolver.DefaultContext.Guides)
+                .ReturnGuide(_activeStageGuide, dispose);
             _activeStageGuide = null;
         }
 
+        _activeStageGuideContext = null;
         _activeStageGuideStepIndex = -1;
         _stagedPlan = null;
         _stagedStepIndex = 0;
@@ -330,8 +338,10 @@ public class FlowFieldGuide : IGuide
         if (_activeStageGuide == null)
             return;
 
-        PathGuideFactory.ReturnGuide(_activeStageGuide, dispose);
+        (_activeStageGuideContext?.Guides ?? PathRequestContextResolver.DefaultContext.Guides)
+            .ReturnGuide(_activeStageGuide, dispose);
         _activeStageGuide = null;
+        _activeStageGuideContext = null;
         _activeStageGuideStepIndex = -1;
     }
 
@@ -355,12 +365,14 @@ public class FlowFieldGuide : IGuide
         }
 
         ReleaseActiveStageGuide(dispose: false);
-        if (!PathGuideFactory.RequestGuide(currentStep.SegmentRequest, out _activeStageGuide)
+        TrailblazerWorldContext context = currentStep.SegmentRequest.Context;
+        if (!context.Guides.RequestGuide(currentStep.SegmentRequest, out _activeStageGuide)
             || _activeStageGuide == null)
         {
             return false;
         }
 
+        _activeStageGuideContext = context;
         _activeStageGuideStepIndex = _stagedStepIndex;
         guide = _activeStageGuide;
         return true;
@@ -379,7 +391,10 @@ public class FlowFieldGuide : IGuide
             ? currentStep.WaypointPosition
             : currentStep.SegmentRequest.TargetPosition;
 
-        Fixed64 completionDistance = TrailblazerWorldManager.VoxelSize * Fixed64.Half;
+        TrailblazerWorldContext context = currentStep.Kind == HybridRouteStepKind.PathSegment
+            ? currentStep.SegmentRequest.Context
+            : PathRequestContextResolver.DefaultContext;
+        Fixed64 completionDistance = context.VoxelSize * Fixed64.Half;
         return (target - origin).SqrMagnitude <= completionDistance * completionDistance;
     }
 
@@ -389,6 +404,7 @@ public class FlowFieldGuide : IGuide
         _stagedPlan = null;
         _stagedStepIndex = 0;
         _activeStageGuide = null;
+        _activeStageGuideContext = null;
         _activeStageGuideStepIndex = -1;
     }
 }

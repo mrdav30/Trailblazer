@@ -92,6 +92,7 @@ All guide requests implement `IPathRequest`. Shared request state includes:
 - `HasValidEndpoints`
 - `IsValid`
 - `RequestCacheKey`
+- `Context`
 
 Shared request behavior is provided by `PathRequest`:
 
@@ -99,7 +100,11 @@ Shared request behavior is provided by `PathRequest`:
   state, and clears `MaxPathSearchRange` when the new endpoints cannot be resolved
 - `TrySetOrigin(...)` and `TrySetDestination(...)` update endpoints without recreating the request
 - `TrySetUnitSize(...)` revalidates the request for a different agent footprint
-- successful creation or endpoint reset derives `MaxPathSearchRange` using `PathManager.TryGetMaxSearchSize(...)`
+- successful creation or endpoint reset derives `MaxPathSearchRange` from the request's
+  `TrailblazerWorldContext`
+
+Prefer context-bound factories. Compatibility overloads without a context use the configured
+default context.
 
 ### 3.1 AStarPathRequest
 
@@ -113,7 +118,7 @@ Additional configuration includes:
 Factory helpers:
 
 ```csharp
-AStarPathRequest.TryCreate(origin, destination, out var request);
+AStarPathRequest.TryCreate(context, origin, destination, out var request);
 ```
 
 ### 3.2 FlowFieldPathRequest
@@ -128,7 +133,7 @@ Additional configuration includes:
 Factory helpers:
 
 ```csharp
-FlowFieldPathRequest.TryCreate(origin, destination, out var request);
+FlowFieldPathRequest.TryCreate(context, origin, destination, out var request);
 ```
 
 One important difference from A*:
@@ -156,7 +161,7 @@ Related support type:
 Factory helpers:
 
 ```csharp
-VolumePathRequest.TryCreate(origin, destination, Fixed64.One, out var request);
+VolumePathRequest.TryCreate(context, origin, destination, Fixed64.One, out var request);
 ```
 
 ### 3.4 Transition Fallback For Chart Requests
@@ -342,7 +347,7 @@ For a pathing-first guide that does not assume `Navigator`, read [`PATHING.MD`](
 
 ```csharp
 TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
-var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
+var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
 
 if (context.Guides.RequestGuide(request, out AStarGuide guide))
 {
@@ -365,10 +370,10 @@ This is useful when:
 
 Before runtime pathing works correctly:
 
-1. Set up `GridForge` global grids.
+1. Create or attach a `TrailblazerWorldContext` for the target `GridWorld`.
 2. Build `NavigationChart` data for the relevant walkable space.
-3. Register the chart with `PathManager.Register(...)`.
-4. If you registered with `initializeChart: false`, call `PathManager.InitializeChart(chart.Name)` before requesting guides or simulating navigators.
+3. Register the chart with `context.Pathing.Register(...)`.
+4. If you registered with `initializeChart: false`, call `context.Pathing.InitializeChart(chart.Name)` before requesting guides or simulating navigators.
 5. Create and initialize your `Navigator`, or request guides directly.
 6. Keep traversal state up to date through your concrete navigator's `CheckTrekCondition()` implementation.
 7. Unload charts or clear caches during teardown.

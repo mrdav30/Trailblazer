@@ -238,6 +238,8 @@ In practice, `HybridGuide` exists mainly for internal guide composition and seri
 
 `TrailblazerWorldContext.Guides` is the context-owned guide-layer entry point.
 `PathGuideFactory` remains as the single default-context compatibility facade.
+Requests carry their owning `TrailblazerWorldContext`; `context.Guides` only accepts requests from
+that same context so guide caches cannot be polluted by another world.
 
 It is responsible for:
 
@@ -362,6 +364,7 @@ Each `TrailblazerWorldContext` uses one cache per reusable survey-result family:
 
 These caches store survey results keyed by `request.RequestCacheKey`. Because the caches are
 context-local, equivalent request keys from different worlds do not share survey results.
+The request key does not include a world id; world separation comes from the cache owner.
 
 Guide lifetime rules:
 
@@ -402,7 +405,7 @@ Maintenance behavior:
 
 ```csharp
 TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
-var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
+var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
 
 if (context.Guides.RequestGuide(request, out AStarGuide guide))
 {

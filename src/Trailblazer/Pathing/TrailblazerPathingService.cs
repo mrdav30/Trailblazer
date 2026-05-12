@@ -198,6 +198,23 @@ public sealed class TrailblazerPathingService
         return State.ExternalGridBridge.GetDiagnosticsSnapshot();
     }
 
+    internal bool TryGetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)
+    {
+        EnsureUsable();
+        GridWorld world = _context.World;
+        if (!world.TryGetGrid(start.WorldIndex.GridIndex, out VoxelGrid? startGrid)
+            || !world.TryGetGrid(end.WorldIndex.GridIndex, out VoxelGrid? endGrid))
+        {
+            maxSearchSize = 0;
+            return false;
+        }
+
+        maxSearchSize = startGrid == endGrid
+            ? startGrid!.Size
+            : startGrid!.Size + endGrid!.Size;
+        return true;
+    }
+
     internal void HandleGridChanged(GridEventInfo eventInfo)
     {
         EnsureUsable();

@@ -71,7 +71,7 @@ internal static class HybridWaypointFlattener
         finally
         {
             for (int i = 0; i < borrowedGuides.Count; i++)
-                PathGuideFactory.ReturnGuide(borrowedGuides[i]);
+                ReturnBorrowedGuide(borrowedGuides[i]);
         }
     }
 
@@ -88,7 +88,7 @@ internal static class HybridWaypointFlattener
         switch (step.SegmentRequest)
         {
             case AStarPathRequest aStarRequest:
-                AStarSurveyResult aStarResult = AStarSurveyor.Shared.FindPath(aStarRequest);
+                AStarSurveyResult aStarResult = aStarRequest.Context.Pathing.State.GuideState.AStarSurveyor.FindPath(aStarRequest);
                 if (!aStarResult.HasPath)
                     return false;
 
@@ -97,8 +97,8 @@ internal static class HybridWaypointFlattener
                 return true;
 
             case VolumePathRequest volumeRequest:
-                VolumeGuide? volumeGuide = PathGuideFactory.RequestVolume(volumeRequest);
-                if (volumeGuide == null)
+                if (!volumeRequest.Context.Guides.RequestGuide(volumeRequest, out VolumeGuide? volumeGuide)
+                    || volumeGuide == null)
                     return false;
 
                 borrowedGuides.Add(volumeGuide);
@@ -111,6 +111,19 @@ internal static class HybridWaypointFlattener
             default:
                 return false;
         }
+    }
+
+    private static void ReturnBorrowedGuide(IGuide guide)
+    {
+        TrailblazerWorldContext? context = guide switch
+        {
+            AStarGuide aStarGuide => aStarGuide.TrailMap.Context,
+            FlowFieldGuide flowFieldGuide => flowFieldGuide.FlowMap?.Context,
+            VolumeGuide volumeGuide => volumeGuide.TrailMap?.Context,
+            _ => null
+        };
+
+        (context?.Guides ?? PathRequestContextResolver.DefaultContext.Guides).ReturnGuide(guide);
     }
 
     private static void AppendWaypoints(

@@ -487,6 +487,8 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
 
     private sealed class UnknownRequest : IPathRequest
     {
+        public TrailblazerWorldContext Context => TrailblazerManager.DefaultContext;
+
         public Vector3d Origin => OriginValue;
         public Voxel StartNode => StartNodeValue;
         public Vector3d TargetPosition => TargetValue;

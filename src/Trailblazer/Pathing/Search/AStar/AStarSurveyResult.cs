@@ -41,12 +41,20 @@ public class AStarSurveyResult : SurveyResult
     public static AStarSurveyResult Create(
         AStarWaypoint[] waypoints,
         string[] chartsUtilized,
+        int key) =>
+        Create(PathManager.TryGetActiveState(out PathingWorldState? state) ? state!.Context : null, waypoints, chartsUtilized, key);
+
+    internal static AStarSurveyResult Create(
+        TrailblazerWorldContext? context,
+        AStarWaypoint[] waypoints,
+        string[] chartsUtilized,
         int key)
     {
         return new AStarSurveyResult()
         {
             IsValid = true,
             IsInUse = false,
+            Context = context,
             ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
             Waypoints = waypoints,
             LastUsedFrame = -1,

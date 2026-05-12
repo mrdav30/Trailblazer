@@ -17,6 +17,9 @@ namespace Trailblazer.Pathing;
 public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathRequest>
 {
     /// <inheritdoc/>
+    public TrailblazerWorldContext Context { get; private set; } = null!;
+
+    /// <inheritdoc/>
     public Vector3d Origin { get; private set; }
 
     /// <inheritdoc/>
@@ -105,7 +108,33 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {
+        return TryCreate(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            destination,
+            unitSize,
+            out request,
+            heuristic,
+            allowUnwalkableEndpoints,
+            medium);
+    }
+
+    /// <summary>
+    /// Attempts to create a new context-bound volume pathfinding request.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryCreate(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        [NotNullWhen(true)] out VolumePathRequest? request,
+        HeuristicMethod heuristic = HeuristicMethod.Euclidean,
+        bool allowUnwalkableEndpoints = false,
+        TraversalMedium medium = TraversalMedium.Gas)
+    {
         request = Create(
+            context,
             origin,
             destination,
             unitSize,
@@ -141,9 +170,31 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Fixed64 unitSize,
         HeuristicMethod heuristic = HeuristicMethod.Euclidean,
         bool allowUnwalkableEndpoints = false,
+        TraversalMedium medium = TraversalMedium.Gas) =>
+        Create(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            destination,
+            unitSize,
+            heuristic,
+            allowUnwalkableEndpoints,
+            medium);
+
+    /// <summary>
+    /// Creates a context-bound volume pathfinding request.
+    /// </summary>
+    public static VolumePathRequest? Create(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        HeuristicMethod heuristic = HeuristicMethod.Euclidean,
+        bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         if (!VolumeVoxelFinder.TryGetPathEdgeVoxels(
+            context,
             origin,
             destination,
             out Voxel? startNode,
@@ -160,6 +211,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
 
         var request = new VolumePathRequest
         {
+            Context = context,
             Origin = origin,
             StartNode = startNode,
             TargetPosition = destination,
@@ -170,7 +222,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             Medium = medium
         };
 
-        if (PathManager.TryGetMaxSearchSize(startNode, endNode, out int searchSize))
+        if (context.Pathing.TryGetMaxSearchSize(startNode, endNode, out int searchSize))
             request.MaxPathSearchRange = searchSize;
 
         return request;
@@ -182,8 +234,9 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         Vector3d destination,
         Fixed64? unitSize)
     {
-        Fixed64 resolvedUnitSize = unitSize ?? TrailblazerWorldManager.VoxelSize;
+        Fixed64 resolvedUnitSize = unitSize ?? Context.VoxelSize;
         bool hasEndpoints = VolumeVoxelFinder.TryGetPathEdgeVoxels(
+            Context,
             origin,
             destination,
             out Voxel? startNode,
@@ -202,7 +255,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         if (hasEndpoints
             && StartNode != null
             && EndNode != null
-            && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+            && Context.Pathing.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
             MaxPathSearchRange = searchSize;
 
         return HasValidEndpoints;
@@ -215,6 +268,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             return false;
 
         if (!VolumeVoxelFinder.GetStartVoxel(
+            Context,
             origin,
             TargetPosition,
             out Voxel? startNode,
@@ -244,7 +298,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         if (resetSearchRange)
         {
             MaxPathSearchRange = 0;
-            if (HasDestination && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+            if (HasDestination && Context.Pathing.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
                 MaxPathSearchRange = searchSize;
         }
 
@@ -258,6 +312,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             return false;
 
         if (!VolumeVoxelFinder.GetEndVoxel(
+            Context,
             Origin,
             destination,
             out Voxel? endNode,
@@ -287,7 +342,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         if (resetSearchRange)
         {
             MaxPathSearchRange = 0;
-            if (HasOrigin && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+            if (HasOrigin && Context.Pathing.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
                 MaxPathSearchRange = searchSize;
         }
 
@@ -323,7 +378,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         hash.Add((int)Heuristic);
         hash.Add((int)Medium);
         hash.Add(MaxPathSearchRange);
-        hash.Add(VolumeMediumRules.RegistryVersion);
+        hash.Add(Context.Pathing.State.VolumeRulesState.RegistryVersion);
         return hash.ToHashCode();
     }
 }

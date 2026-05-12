@@ -133,6 +133,12 @@ public sealed class TrailblazerGuideService
     public bool RequestGuide<T>(IPathRequest request, [NotNullWhen(true)] out T? result)
         where T : class, IGuide
     {
+        if (!IsRequestOwnedByThisContext(request))
+        {
+            result = null;
+            return false;
+        }
+
         EnsureUsable();
         using (PathManager.EnterState(_state))
             return PathGuideFactory.RequestGuide(request, out result);
@@ -141,6 +147,12 @@ public sealed class TrailblazerGuideService
     /// <inheritdoc cref="PathGuideFactory.RequestGuide(IPathRequest,out IGuide?)"/>
     public bool RequestGuide(IPathRequest request, [NotNullWhen(true)] out IGuide? result)
     {
+        if (!IsRequestOwnedByThisContext(request))
+        {
+            result = null;
+            return false;
+        }
+
         EnsureUsable();
         using (PathManager.EnterState(_state))
             return PathGuideFactory.RequestGuide(request, out result);
@@ -238,4 +250,7 @@ public sealed class TrailblazerGuideService
         if (!_context.World.IsActive)
             throw new InvalidOperationException("TrailblazerGuideService is bound to an inactive GridWorld.");
     }
+
+    private bool IsRequestOwnedByThisContext(IPathRequest request) =>
+        request != null && ReferenceEquals(request.Context, _context);
 }

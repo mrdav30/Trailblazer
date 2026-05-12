@@ -86,6 +86,7 @@ public sealed class VolumeSurveyor
             BuildWaypoints();
 
             VolumeSurveyResult result = VolumeSurveyResult.Create(
+                request.Context,
                 _waypoints.ToArray(),
                 _chartKeys.ToArray(),
                 request.RequestCacheKey);
@@ -144,7 +145,7 @@ public sealed class VolumeSurveyor
         int movementCost,
         bool checkEdges = false)
     {
-        if (!TrailblazerWorldManager.TryGetGrid(current.GridIndex, out VoxelGrid? grid))
+        if (!_request!.Context.World.TryGetGrid(current.GridIndex, out VoxelGrid? grid))
             return false;
 
         foreach (SpatialDirection dir in directions)
@@ -171,7 +172,7 @@ public sealed class VolumeSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool HasValidDiagonalLegs(Voxel current, SpatialDirection diagonal)
     {
-        if (!TrailblazerWorldManager.TryGetGrid(current.GridIndex, out VoxelGrid? grid))
+        if (!_request!.Context.World.TryGetGrid(current.GridIndex, out VoxelGrid? grid))
             return false;
 
         (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
@@ -247,7 +248,7 @@ public sealed class VolumeSurveyor
                 || !data.NextTrailIndex.HasValue)
                 break;
 
-            if (!TrailblazerWorldManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel? nextTrailVoxel)
+            if (!request.Context.World.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel? nextTrailVoxel)
                 || nextTrailVoxel == null)
                 break;
 
@@ -332,9 +333,10 @@ public sealed class VolumeSurveyor
             return true;
 
         if (voxel == request.EndNode && request.AllowUnwalkableEndpoints)
-            return VolumeMediumRules.Matches(voxel, request.Medium);
+            return VolumeMediumRules.Matches(request.Context.Pathing.State, voxel, request.Medium);
 
         return VolumeVoxelFinder.IsTraversable(
+            request.Context,
             voxel,
             request.UnitSize,
             request.Medium);

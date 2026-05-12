@@ -19,12 +19,20 @@ internal sealed class HybridRoutePlanSurveyResult : SurveyResult
     public static HybridRoutePlanSurveyResult Create(
         HybridRoutePlan routePlan,
         string[] chartsUtilized,
+        int key) =>
+        Create(PathManager.TryGetActiveState(out PathingWorldState? state) ? state!.Context : null, routePlan, chartsUtilized, key);
+
+    internal static HybridRoutePlanSurveyResult Create(
+        TrailblazerWorldContext? context,
+        HybridRoutePlan routePlan,
+        string[] chartsUtilized,
         int key)
     {
         return new HybridRoutePlanSurveyResult
         {
             IsValid = true,
             IsInUse = false,
+            Context = context,
             ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
             RoutePlan = routePlan,
             LastUsedFrame = -1,

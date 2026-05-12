@@ -186,8 +186,7 @@ public sealed class ContextOwnedPathingServicesIsolationTests : IDisposable
         Vector3d source,
         Vector3d destination)
     {
-        TrailblazerWorldManager.AttachWorld(context.World);
-        return TestRequire.NotNull(AStarPathRequest.Create(source, destination, Fixed64.One));
+        return TestRequire.NotNull(AStarPathRequest.Create(context, source, destination, Fixed64.One));
     }
 
     private static Voxel RequireVoxel(TrailblazerWorldContext context, Vector3d position)

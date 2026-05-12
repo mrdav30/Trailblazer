@@ -143,8 +143,9 @@ pathing APIs route through that context. Hosts that need more than one world sho
 directly with `TrailblazerWorldContext.Attach(world)` or `TrailblazerWorldContext.CreateOwned(...)`
 and register charts through `context.Pathing.Register(...)`. Chart registries, live voxel ownership,
 partition pools, grid rebuild handling, transition registries, volume-medium rules, reachability
-snapshots, and guide caches are context-local. Navigator state is being moved behind that context in a
-follow-up phase. `PathManager.Register(world, ...)` is no longer a multi-world registration path.
+snapshots, guide caches, path requests, and request-time endpoint resolution are context-local.
+Navigator state is being moved behind that context in a follow-up phase.
+`PathManager.Register(world, ...)` is no longer a multi-world registration path.
 
 `PathManager.Register(chart)` can initialize the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step. Initialization and registration order are live registration state, not authored chart data; use `PathManager.IsChartInitialized(...)` or `TryGetNavigationChartRegistration(...)` when integration code needs to inspect that state.
 
@@ -162,21 +163,23 @@ If you already have your own movement controller, you can use just the pathing l
 
 ```csharp
 using FixedMathSharp;
+using Trailblazer;
 using Trailblazer.Pathing;
 
 Vector3d origin = new(0, 0, 0);
 Vector3d destination = new(2, 0, 2);
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 
-var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
+var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
 
-if (TrailblazerManager.DefaultContext.Guides.RequestGuide(request, out AStarGuide guide))
+if (context.Guides.RequestGuide(request, out AStarGuide guide))
 {
     if (guide.TryGetMovementDirection(origin, out Vector3d heading))
     {
         // Use the heading in your own movement code.
     }
 
-    TrailblazerManager.DefaultContext.Guides.ReturnGuide(guide);
+    context.Guides.ReturnGuide(guide);
 }
 ```
 

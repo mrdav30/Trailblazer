@@ -42,13 +42,36 @@ public static class VolumeVoxelFinder
         [MaybeNullWhen(false)] out Voxel targetVoxel,
         Fixed64 unitSize,
         bool allowUnwalkableEndpoints = false,
+        TraversalMedium medium = TraversalMedium.Gas) =>
+        TryGetPathEdgeVoxels(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            target,
+            out originVoxel,
+            out targetVoxel,
+            unitSize,
+            allowUnwalkableEndpoints,
+            medium);
+
+    /// <summary>
+    /// Attempts to determine the voxels at the origin and target endpoints in one explicit context.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryGetPathEdgeVoxels(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d target,
+        [MaybeNullWhen(false)] out Voxel originVoxel,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
+        Fixed64 unitSize,
+        bool allowUnwalkableEndpoints = false,
         TraversalMedium medium = TraversalMedium.Gas)
     {
         targetVoxel = null;
-        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkableEndpoints, unitSize, medium))
+        if (!GetStartVoxel(context, origin, target, out originVoxel, allowUnwalkableEndpoints, unitSize, medium))
             return false;
 
-        if (!GetEndVoxel(origin, target, out targetVoxel, allowUnwalkableEndpoints, unitSize, medium))
+        if (!GetEndVoxel(context, origin, target, out targetVoxel, allowUnwalkableEndpoints, unitSize, medium))
             return false;
 
         return true;
@@ -87,14 +110,35 @@ public static class VolumeVoxelFinder
         [MaybeNullWhen(false)] out Voxel originVoxel,
         bool allowUnwalkableEndpoints = false,
         Fixed64? unitSize = null,
-        TraversalMedium medium = TraversalMedium.Gas)
-    {
-        return TryGetEndpointVoxel(
+        TraversalMedium medium = TraversalMedium.Gas) =>
+        GetStartVoxel(
+            PathRequestContextResolver.DefaultContext,
             origin,
             target,
             out originVoxel,
             allowUnwalkableEndpoints,
-            unitSize ?? TrailblazerWorldManager.VoxelSize,
+            unitSize,
+            medium);
+
+    /// <summary>
+    /// Attempts to determine the start voxel in one explicit context.
+    /// </summary>
+    public static bool GetStartVoxel(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d target,
+        [MaybeNullWhen(false)] out Voxel originVoxel,
+        bool allowUnwalkableEndpoints = false,
+        Fixed64? unitSize = null,
+        TraversalMedium medium = TraversalMedium.Gas)
+    {
+        return TryGetEndpointVoxel(
+            context,
+            origin,
+            target,
+            out originVoxel,
+            allowUnwalkableEndpoints,
+            unitSize ?? context.VoxelSize,
             medium);
     }
 
@@ -127,14 +171,35 @@ public static class VolumeVoxelFinder
         [MaybeNullWhen(false)] out Voxel targetVoxel,
         bool allowUnwalkableEndpoints = false,
         Fixed64? unitSize = null,
+        TraversalMedium medium = TraversalMedium.Gas) =>
+        GetEndVoxel(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            target,
+            out targetVoxel,
+            allowUnwalkableEndpoints,
+            unitSize,
+            medium);
+
+    /// <summary>
+    /// Attempts to determine the end voxel in one explicit context.
+    /// </summary>
+    public static bool GetEndVoxel(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d target,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
+        bool allowUnwalkableEndpoints = false,
+        Fixed64? unitSize = null,
         TraversalMedium medium = TraversalMedium.Gas)
     {
         return TryGetEndpointVoxel(
+            context,
             target,
             origin,
             out targetVoxel,
             allowUnwalkableEndpoints,
-            unitSize ?? TrailblazerWorldManager.VoxelSize,
+            unitSize ?? context.VoxelSize,
             medium);
     }
 
@@ -171,14 +236,38 @@ public static class VolumeVoxelFinder
         bool allowUnwalkableEndpoints,
         TraversalMedium medium = TraversalMedium.Gas,
         Voxel? startNode = null,
+        Voxel? endNode = null) =>
+        IsDirectPathClear(
+            PathRequestContextResolver.DefaultContext,
+            start,
+            end,
+            unitSize,
+            allowUnwalkableEndpoints,
+            medium,
+            startNode,
+            endNode);
+
+    /// <summary>
+    /// Determines whether a direct, traversable path exists in one explicit context.
+    /// </summary>
+    public static bool IsDirectPathClear(
+        TrailblazerWorldContext context,
+        Vector3d start,
+        Vector3d end,
+        Fixed64 unitSize,
+        bool allowUnwalkableEndpoints,
+        TraversalMedium medium = TraversalMedium.Gas,
+        Voxel? startNode = null,
         Voxel? endNode = null)
     {
-        if (!VolumeMediumRules.IsConfigured(medium))
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        PathingWorldState state = context.Pathing.State;
+        if (!VolumeMediumRules.IsConfigured(state, medium))
             return false;
 
         bool foundAny = false;
 
-        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(TrailblazerWorldManager.World, start, end))
+        foreach (GridVoxelSet gridVoxelSet in GridTracer.TraceLine(context.World, start, end))
         {
             foreach (Voxel voxel in gridVoxelSet.Voxels)
             {
@@ -189,13 +278,13 @@ public static class VolumeVoxelFinder
                     || (endNode != null && voxel.WorldIndex == endNode.WorldIndex));
                 if (isRelaxedEndpoint)
                 {
-                    if (!PassesMedium(voxel, medium))
+                    if (!PassesMedium(state, voxel, medium))
                         return false;
 
                     continue;
                 }
 
-                if (!IsTraversable(voxel, unitSize, medium))
+                if (!IsTraversable(state, voxel, unitSize, medium))
                     return false;
             }
         }
@@ -219,10 +308,32 @@ public static class VolumeVoxelFinder
     public static bool IsTraversable(
         Voxel voxel,
         Fixed64 unitSize,
+        TraversalMedium medium = TraversalMedium.Gas) =>
+        IsTraversable(PathRequestContextResolver.DefaultContext.Pathing.State, voxel, unitSize, medium);
+
+    /// <summary>
+    /// Determines whether the specified voxel can be traversed in one explicit context.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsTraversable(
+        TrailblazerWorldContext context,
+        Voxel voxel,
+        Fixed64 unitSize,
+        TraversalMedium medium = TraversalMedium.Gas)
+    {
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        return IsTraversable(context.Pathing.State, voxel, unitSize, medium);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsTraversable(
+        PathingWorldState state,
+        Voxel voxel,
+        Fixed64 unitSize,
         TraversalMedium medium = TraversalMedium.Gas)
     {
         return IsBaseTraversable(voxel, unitSize)
-            && PassesMedium(voxel, medium);
+            && PassesMedium(state, voxel, medium);
     }
 
     /// <summary>
@@ -240,13 +351,30 @@ public static class VolumeVoxelFinder
         Voxel voxel,
         [MaybeNullWhen(false)] out Voxel closestNeighbor,
         Fixed64 unitSize,
-        TraversalMedium medium = TraversalMedium.Gas)
-    {
-        return EndpointVoxelResolver.TryGetClosestTraversableVoxel(
+        TraversalMedium medium = TraversalMedium.Gas) =>
+        TryGetClosestTraversableVoxel(
+            PathRequestContextResolver.DefaultContext,
             voxel,
             out closestNeighbor,
             unitSize,
-            new VolumeEndpointPolicy(medium));
+            medium);
+
+    /// <summary>
+    /// Attempts to find the closest traversable neighboring voxel in one explicit context.
+    /// </summary>
+    public static bool TryGetClosestTraversableVoxel(
+        TrailblazerWorldContext context,
+        Voxel voxel,
+        [MaybeNullWhen(false)] out Voxel closestNeighbor,
+        Fixed64 unitSize,
+        TraversalMedium medium = TraversalMedium.Gas)
+    {
+        return EndpointVoxelResolver.TryGetClosestTraversableVoxel(
+            context,
+            voxel,
+            out closestNeighbor,
+            unitSize,
+            new VolumeEndpointPolicy(context, medium));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -267,6 +395,7 @@ public static class VolumeVoxelFinder
     }
 
     private static bool TryGetEndpointVoxel(
+        TrailblazerWorldContext context,
         Vector3d position,
         Vector3d traceToward,
         [MaybeNullWhen(false)] out Voxel voxel,
@@ -275,30 +404,33 @@ public static class VolumeVoxelFinder
         TraversalMedium medium)
     {
         return EndpointVoxelResolver.TryGetEndpointVoxel(
+            context,
             position,
             traceToward,
             out voxel,
             allowUnwalkableEndpoints,
             unitSize,
-            new VolumeEndpointPolicy(medium));
+            new VolumeEndpointPolicy(context, medium));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool PassesMedium(Voxel voxel, TraversalMedium medium)
+    private static bool PassesMedium(PathingWorldState state, Voxel voxel, TraversalMedium medium)
     {
-        return VolumeMediumRules.Matches(voxel, medium);
+        return VolumeMediumRules.Matches(state, voxel, medium);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool RequiresSizeFallback(
+        PathingWorldState state,
         Voxel voxel,
         Fixed64 unitSize,
+        Fixed64 voxelSize,
         TraversalMedium medium)
     {
-        if (unitSize == TrailblazerWorldManager.VoxelSize
+        if (unitSize == voxelSize
             || voxel == null
             || voxel.IsBlocked
-            || !PassesMedium(voxel, medium))
+            || !PassesMedium(state, voxel, medium))
         {
             return false;
         }
@@ -314,14 +446,21 @@ public static class VolumeVoxelFinder
 
     internal static bool HasClearance(Voxel origin, Fixed64 unitSize)
     {
-        if (unitSize <= TrailblazerWorldManager.VoxelSize)
+        return HasClearance(PathRequestContextResolver.DefaultContext, origin, unitSize);
+    }
+
+    internal static bool HasClearance(TrailblazerWorldContext context, Voxel origin, Fixed64 unitSize)
+    {
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        Fixed64 voxelSize = context.VoxelSize;
+        if (unitSize <= voxelSize)
             return true;
 
-        int requiredRadius = (unitSize / TrailblazerWorldManager.VoxelSize).CeilToInt() - 1;
+        int requiredRadius = (unitSize / voxelSize).CeilToInt() - 1;
         if (requiredRadius <= 0)
             return true;
 
-        if (!TrailblazerWorldManager.World.TryGetGrid(origin.GridIndex, out VoxelGrid? grid))
+        if (!context.World.TryGetGrid(origin.GridIndex, out VoxelGrid? grid))
             return false;
 
         for (int x = -requiredRadius; x <= requiredRadius; x++)
@@ -347,17 +486,21 @@ public static class VolumeVoxelFinder
 
     private readonly struct VolumeEndpointPolicy : IVoxelEndpointResolutionPolicy
     {
+        private readonly PathingWorldState _state;
+        private readonly Fixed64 _voxelSize;
         private readonly TraversalMedium _medium;
 
-        public VolumeEndpointPolicy(TraversalMedium medium)
+        public VolumeEndpointPolicy(TrailblazerWorldContext context, TraversalMedium medium)
         {
+            _state = context.Pathing.State;
+            _voxelSize = context.VoxelSize;
             _medium = medium;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool CanResolve()
         {
-            return VolumeMediumRules.IsConfigured(_medium);
+            return VolumeMediumRules.IsConfigured(_state, _medium);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -366,20 +509,20 @@ public static class VolumeVoxelFinder
             Fixed64 unitSize,
             bool allowUnwalkableEndpoints)
         {
-            return PassesMedium(voxel, _medium)
+            return PassesMedium(_state, voxel, _medium)
                 && (allowUnwalkableEndpoints || IsBaseTraversable(voxel, unitSize));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool RequiresSizeFallback(Voxel voxel, Fixed64 unitSize)
         {
-            return VolumeVoxelFinder.RequiresSizeFallback(voxel, unitSize, _medium);
+            return VolumeVoxelFinder.RequiresSizeFallback(_state, voxel, unitSize, _voxelSize, _medium);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsTraversable(Voxel voxel, Fixed64 unitSize)
         {
-            return VolumeVoxelFinder.IsTraversable(voxel, unitSize, _medium);
+            return VolumeVoxelFinder.IsTraversable(_state, voxel, unitSize, _medium);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

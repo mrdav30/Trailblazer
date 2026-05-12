@@ -25,6 +25,10 @@ public class AlternativeVoxelFinder
 
     private Vector3d _anchorVoxelPosition;
 
+    private GridWorld? _world;
+
+    private Fixed64 _voxelSize;
+
     private int _maxTestDistance;
 
     private (int x, int z) _direction;
@@ -39,8 +43,21 @@ public class AlternativeVoxelFinder
     /// The containing voxel used to derive deterministic XZ search bias from the query's local position.
     /// </param>
     /// <param name="maxTestDistance">The maximum XZ ring radius to search.</param>
-    public void SetQuery(Vector3d worldPos, Voxel anchorVoxel, int maxTestDistance)
+    public void SetQuery(Vector3d worldPos, Voxel anchorVoxel, int maxTestDistance) =>
+        SetQuery(PathRequestContextResolver.DefaultContext, worldPos, anchorVoxel, maxTestDistance);
+
+    /// <summary>
+    /// Configures the fallback search around the given world-space query point for one explicit context.
+    /// </summary>
+    public void SetQuery(
+        TrailblazerWorldContext context,
+        Vector3d worldPos,
+        Voxel anchorVoxel,
+        int maxTestDistance)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        _world = context.World;
+        _voxelSize = context.VoxelSize;
         _worldPos = worldPos;
         _anchorVoxelPosition = anchorVoxel.WorldPosition;
         _maxTestDistance = maxTestDistance;
@@ -65,7 +82,8 @@ public class AlternativeVoxelFinder
                 _worldPos.x + _direction.x,
                 _worldPos.y,
                 _worldPos.z + _direction.z);
-            if (TrailblazerWorldManager.TryGetVoxel(checkPosition, out Voxel? checkVoxel)
+            if (_world != null
+                && _world.TryGetVoxel(checkPosition, out Voxel? checkVoxel)
                 && checkVoxel != null
                 && IsSearchCandidate(checkVoxel))
             {
@@ -156,7 +174,7 @@ public class AlternativeVoxelFinder
 
     private void InitializeDirection()
     {
-        Fixed64 halfVoxel = TrailblazerWorldManager.VoxelSize * Fixed64.Half;
+        Fixed64 halfVoxel = _voxelSize * Fixed64.Half;
         Fixed64 xOffsetFromCenter = _worldPos.x - (_anchorVoxelPosition.x + halfVoxel);
         Fixed64 zOffsetFromCenter = _worldPos.z - (_anchorVoxelPosition.z + halfVoxel);
 

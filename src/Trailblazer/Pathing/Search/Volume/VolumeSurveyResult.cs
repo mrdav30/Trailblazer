@@ -33,12 +33,20 @@ public sealed class VolumeSurveyResult : SurveyResult
     public static VolumeSurveyResult Create(
         AStarWaypoint[] waypoints,
         string[] chartsUtilized,
+        int key) =>
+        Create(PathManager.TryGetActiveState(out PathingWorldState? state) ? state!.Context : null, waypoints, chartsUtilized, key);
+
+    internal static VolumeSurveyResult Create(
+        TrailblazerWorldContext? context,
+        AStarWaypoint[] waypoints,
+        string[] chartsUtilized,
         int key)
     {
         return new VolumeSurveyResult()
         {
             IsValid = true,
             IsInUse = false,
+            Context = context,
             ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
             Waypoints = waypoints,
             LastUsedFrame = -1,

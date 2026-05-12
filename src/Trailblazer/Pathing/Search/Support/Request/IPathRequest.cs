@@ -11,6 +11,11 @@ namespace Trailblazer.Pathing;
 public interface IPathRequest
 {
     /// <summary>
+    /// The world context this request resolves and surveys against.
+    /// </summary>
+    TrailblazerWorldContext Context { get; }
+
+    /// <summary>
     /// The origin world position.
     /// </summary>
     Vector3d Origin { get; }

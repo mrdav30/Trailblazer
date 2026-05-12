@@ -42,9 +42,21 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
         Vector3d origin,
         Vector3d destination,
         Fixed64 unitSize,
+        out AStarPathRequest? request) =>
+        TryCreate(PathRequestContextResolver.DefaultContext, origin, destination, unitSize, out request);
+
+    /// <summary>
+    /// Attempts to create a new context-bound A* pathfinding request.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryCreate(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
         out AStarPathRequest? request)
     {
-        request = Create(origin, destination, unitSize);
+        request = Create(context, origin, destination, unitSize);
         if (request == null)
             return false;
         return true;
@@ -64,7 +76,11 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
     public static bool TryCreate(
         Vector3d origin,
         Vector3d destination,
-        out AStarPathRequest? request) => TryCreate(origin, destination, TrailblazerWorldManager.VoxelSize, out request);
+        out AStarPathRequest? request)
+    {
+        TrailblazerWorldContext context = PathRequestContextResolver.DefaultContext;
+        return TryCreate(context, origin, destination, context.VoxelSize, out request);
+    }
 
     /// <summary>
     /// Creates a new A* pathfinding request between the specified origin and destination positions, using the given
@@ -90,9 +106,31 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
         Fixed64 unitSize,
         HeuristicMethod heuristic = HeuristicMethod.Manhattan,
         bool allowUnwalkableEndpoints = false,
+        bool allowTraversalTransitions = false) =>
+        Create(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            destination,
+            unitSize,
+            heuristic,
+            allowUnwalkableEndpoints,
+            allowTraversalTransitions);
+
+    /// <summary>
+    /// Creates a context-bound A* pathfinding request.
+    /// </summary>
+    public static AStarPathRequest? Create(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        HeuristicMethod heuristic = HeuristicMethod.Manhattan,
+        bool allowUnwalkableEndpoints = false,
         bool allowTraversalTransitions = false)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         if (!SolidVoxelFinder.TryGetPathEdgeVoxels(
+            context,
             origin,
             destination,
             out Voxel? startNode,
@@ -108,6 +146,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
 
         AStarPathRequest request = new()
         {
+            Context = context,
             Origin = origin,
             StartNode = startNode,
             TargetPosition = destination,
@@ -116,10 +155,10 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
             Heuristic = heuristic,
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             AllowTraversalTransitions = allowTraversalTransitions,
-            MaxClimbHeight = TrailblazerWorldManager.VoxelSize
+            MaxClimbHeight = context.VoxelSize
         };
 
-        if (PathManager.TryGetMaxSearchSize(request.StartNode, request.EndNode, out int searchSize))
+        if (context.Pathing.TryGetMaxSearchSize(request.StartNode, request.EndNode, out int searchSize))
             request.MaxPathSearchRange = searchSize;
 
         return request;
@@ -144,7 +183,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
         hash.Add((int)Heuristic);
         hash.Add(MaxClimbHeight.GetHashCode());
         hash.Add(MaxPathSearchRange);
-        hash.Add(AllowTraversalTransitions ? TraversalTransitionRegistry.RegistryVersion : 0);
+        hash.Add(AllowTraversalTransitions ? Context.Pathing.State.TransitionRegistryState.RegistryVersion : 0);
         return hash.ToHashCode();
     }
 }

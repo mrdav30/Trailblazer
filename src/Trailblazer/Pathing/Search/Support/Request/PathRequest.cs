@@ -15,6 +15,15 @@ namespace Trailblazer.Pathing;
 /// </remarks>
 public abstract class PathRequest : IPathRequest
 {
+    private TrailblazerWorldContext? _context;
+
+    /// <inheritdoc/>
+    public TrailblazerWorldContext Context
+    {
+        get => _context ?? PathRequestContextResolver.DefaultContext;
+        protected set => _context = value;
+    }
+
     /// <inheritdoc/>
     public Vector3d Origin { get; protected set; }
 
@@ -67,12 +76,15 @@ public abstract class PathRequest : IPathRequest
         Vector3d destination,
         Fixed64? unitSize = null)
     {
+        TrailblazerWorldContext context = Context;
+        Fixed64 resolvedUnitSize = unitSize ?? context.VoxelSize;
         bool success = SolidVoxelFinder.TryGetPathEdgeVoxels(
+            context,
             origin,
             destination,
             out Voxel? startVoxel,
             out Voxel? endVoxel,
-            unitSize,
+            resolvedUnitSize,
             AllowUnwalkableEndpoints);
 
         // need to set these even if null incase the new size invalidates the request
@@ -80,7 +92,7 @@ public abstract class PathRequest : IPathRequest
         TargetPosition = destination;
         StartNode = startVoxel;
         EndNode = endVoxel;
-        UnitSize = unitSize ?? TrailblazerWorldManager.VoxelSize;
+        UnitSize = resolvedUnitSize;
         MaxPathSearchRange = 0;
 
         if (!success)
@@ -88,7 +100,7 @@ public abstract class PathRequest : IPathRequest
 
         if (StartNode != null
             && EndNode != null
-            && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+            && context.Pathing.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
             MaxPathSearchRange = searchSize;
 
         return true;
@@ -100,6 +112,7 @@ public abstract class PathRequest : IPathRequest
         if (EndNode == null) return false;
 
         bool success = SolidVoxelFinder.GetStartVoxel(
+            Context,
             origin,
             TargetPosition,
             out Voxel? newVoxel,
@@ -128,7 +141,7 @@ public abstract class PathRequest : IPathRequest
             MaxPathSearchRange = 0;
             if (StartNode != null
                 && EndNode != null
-                && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+                && Context.Pathing.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
                 MaxPathSearchRange = searchSize;
         }
 
@@ -141,6 +154,7 @@ public abstract class PathRequest : IPathRequest
         if (StartNode == null) return false;
 
         bool success = SolidVoxelFinder.GetEndVoxel(
+            Context,
             Origin,
             destination,
             out Voxel? newVoxel,
@@ -169,7 +183,7 @@ public abstract class PathRequest : IPathRequest
             MaxPathSearchRange = 0;
             if (StartNode != null
                 && EndNode != null
-                && PathManager.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
+                && Context.Pathing.TryGetMaxSearchSize(StartNode, EndNode, out int searchSize))
                 MaxPathSearchRange = searchSize;
         }
 

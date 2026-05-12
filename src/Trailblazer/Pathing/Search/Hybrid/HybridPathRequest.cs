@@ -20,6 +20,9 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     #region Properties
 
     /// <inheritdoc/>
+    public TrailblazerWorldContext Context { get; private set; } = null!;
+
+    /// <inheritdoc/>
     public Vector3d Origin { get; private set; }
 
     /// <inheritdoc/>
@@ -99,9 +102,32 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         [NotNullWhen(true)] out HybridPathRequest? request,
         HeuristicMethod heuristic = HeuristicMethod.Manhattan,
         Fixed64? maxClimbHeight = null,
+        bool allowUnwalkableEndpoints = false) =>
+        TryCreate(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            destination,
+            unitSize,
+            out request,
+            heuristic,
+            maxClimbHeight,
+            allowUnwalkableEndpoints);
+
+    /// <summary>
+    /// Attempts to create a new context-bound HybridPathRequest with the specified parameters.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryCreate(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        [NotNullWhen(true)] out HybridPathRequest? request,
+        HeuristicMethod heuristic = HeuristicMethod.Manhattan,
+        Fixed64? maxClimbHeight = null,
         bool allowUnwalkableEndpoints = false)
     {
-        request = Create(origin, destination, unitSize, heuristic, maxClimbHeight, allowUnwalkableEndpoints);
+        request = Create(context, origin, destination, unitSize, heuristic, maxClimbHeight, allowUnwalkableEndpoints);
         return request != null;
     }
 
@@ -121,9 +147,31 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         Fixed64 unitSize,
         HeuristicMethod heuristic = HeuristicMethod.Manhattan,
         Fixed64? maxClimbHeight = null,
+        bool allowUnwalkableEndpoints = false) =>
+        Create(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            destination,
+            unitSize,
+            heuristic,
+            maxClimbHeight,
+            allowUnwalkableEndpoints);
+
+    /// <summary>
+    /// Creates a new context-bound HybridPathRequest with the specified parameters.
+    /// </summary>
+    public static HybridPathRequest? Create(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        HeuristicMethod heuristic = HeuristicMethod.Manhattan,
+        Fixed64? maxClimbHeight = null,
         bool allowUnwalkableEndpoints = false)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         if (!SolidVoxelFinder.TryGetPathEdgeVoxels(
+            context,
             origin,
             destination,
             out Voxel? startNode,
@@ -139,6 +187,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
 
         var request = new HybridPathRequest
         {
+            Context = context,
             Origin = origin,
             StartNode = startNode,
             TargetPosition = destination,
@@ -147,7 +196,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             ChartRequestKind = HybridChartRequestKind.AStar,
             Heuristic = heuristic,
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
-            MaxClimbHeight = maxClimbHeight ?? TrailblazerWorldManager.VoxelSize
+            MaxClimbHeight = maxClimbHeight ?? context.VoxelSize
         };
 
         if (!request.RebuildPlan())
@@ -170,6 +219,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
 
         var hybridRequest = new HybridPathRequest
         {
+            Context = request.Context,
             Origin = request.Origin,
             StartNode = request.StartNode,
             TargetPosition = request.TargetPosition,
@@ -198,6 +248,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
 
         var hybridRequest = new HybridPathRequest
         {
+            Context = request.Context,
             Origin = request.Origin,
             StartNode = request.StartNode,
             TargetPosition = request.TargetPosition,
@@ -220,8 +271,9 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         Vector3d destination,
         Fixed64? unitSize)
     {
-        Fixed64 resolvedUnitSize = unitSize ?? TrailblazerWorldManager.VoxelSize;
+        Fixed64 resolvedUnitSize = unitSize ?? Context.VoxelSize;
         bool success = SolidVoxelFinder.TryGetPathEdgeVoxels(
+            Context,
             origin,
             destination,
             out Voxel? startVoxel,
@@ -252,6 +304,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             return false;
 
         if (!SolidVoxelFinder.GetStartVoxel(
+            Context,
             origin,
             TargetPosition,
             out Voxel? startNode,
@@ -276,6 +329,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             return false;
 
         if (!SolidVoxelFinder.GetEndVoxel(
+            Context,
             Origin,
             destination,
             out Voxel? endNode,
@@ -352,9 +406,13 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         if (!HasValidEndpoints)
             return false;
 
-        if (!HybridRoutePlanner.TryPlan(this, out HybridRoutePlan? plan)
-            || plan == null)
-            return false;
+        HybridRoutePlan? plan;
+        using (PathManager.EnterState(Context.Pathing.State))
+        {
+            if (!HybridRoutePlanner.TryPlan(this, out plan)
+                || plan == null)
+                return false;
+        }
 
         RoutePlan = plan;
 

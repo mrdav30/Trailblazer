@@ -5,6 +5,12 @@ namespace Trailblazer.Pathing;
 /// </summary>
 internal sealed class TrailblazerGuideState
 {
+    internal AStarSurveyor AStarSurveyor { get; } = new();
+
+    internal FlowFieldSurveyor FlowFieldSurveyor { get; } = new();
+
+    internal VolumeSurveyor VolumeSurveyor { get; } = new();
+
     internal ReusableSurveyResultCache<AStarSurveyResult> CachedAStarResults { get; } = new();
 
     internal ReusableSurveyResultCache<FlowFieldSurveyResult> CachedFlowResults { get; } = new();

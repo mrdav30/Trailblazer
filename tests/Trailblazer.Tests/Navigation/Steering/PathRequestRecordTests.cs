@@ -326,6 +326,8 @@ public sealed class PathRequestRecordTests : IDisposable
             EndNode = end;
         }
 
+        public TrailblazerWorldContext Context => TrailblazerManager.DefaultContext;
+
         public Vector3d Origin { get; }
 
         public Voxel StartNode { get; }

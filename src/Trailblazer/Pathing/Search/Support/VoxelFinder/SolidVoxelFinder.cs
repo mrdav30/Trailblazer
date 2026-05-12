@@ -36,14 +36,35 @@ public static class SolidVoxelFinder
         [MaybeNullWhen(false)] out Voxel originVoxel,
         [MaybeNullWhen(false)] out Voxel targetVoxel,
         Fixed64? unitSize = null,
+        bool allowUnwalkableEndpoints = false) =>
+        TryGetPathEdgeVoxels(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            target,
+            out originVoxel,
+            out targetVoxel,
+            unitSize,
+            allowUnwalkableEndpoints);
+
+    /// <summary>
+    /// Attempts to get valid start and end voxels from one explicit context.
+    /// </summary>
+    public static bool TryGetPathEdgeVoxels(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d target,
+        [MaybeNullWhen(false)] out Voxel originVoxel,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
+        Fixed64? unitSize = null,
         bool allowUnwalkableEndpoints = false)
     {
-        Fixed64 resolvedUnitSize = unitSize ?? TrailblazerWorldManager.VoxelSize;
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        Fixed64 resolvedUnitSize = unitSize ?? context.VoxelSize;
         targetVoxel = null;
-        if (!GetStartVoxel(origin, target, out originVoxel, allowUnwalkableEndpoints, resolvedUnitSize))
+        if (!GetStartVoxel(context, origin, target, out originVoxel, allowUnwalkableEndpoints, resolvedUnitSize))
             return false;
 
-        return GetEndVoxel(origin, target, out targetVoxel, allowUnwalkableEndpoints, resolvedUnitSize);
+        return GetEndVoxel(context, origin, target, out targetVoxel, allowUnwalkableEndpoints, resolvedUnitSize);
     }
 
 
@@ -61,14 +82,33 @@ public static class SolidVoxelFinder
         Vector3d target,
         [MaybeNullWhen(false)] out Voxel targetVoxel,
         bool allowUnwalkableEndpoints = false,
+        Fixed64? unitSize = null) =>
+        GetEndVoxel(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            target,
+            out targetVoxel,
+            allowUnwalkableEndpoints,
+            unitSize);
+
+    /// <summary>
+    /// Finds a closest valid end voxel in one explicit context.
+    /// </summary>
+    public static bool GetEndVoxel(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d target,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
+        bool allowUnwalkableEndpoints = false,
         Fixed64? unitSize = null)
     {
         return TryGetEndpointVoxel(
+            context,
             target,
             origin,
             out targetVoxel,
             allowUnwalkableEndpoints,
-            unitSize ?? TrailblazerWorldManager.VoxelSize);
+            unitSize ?? context.VoxelSize);
     }
 
     /// <summary>
@@ -85,14 +125,33 @@ public static class SolidVoxelFinder
         Vector3d target,
         [MaybeNullWhen(false)] out Voxel originVoxel,
         bool allowUnwalkableEndpoints = false,
-        Fixed64? unitSize = null)
-    {
-        return TryGetEndpointVoxel(
+        Fixed64? unitSize = null) =>
+        GetStartVoxel(
+            PathRequestContextResolver.DefaultContext,
             origin,
             target,
             out originVoxel,
             allowUnwalkableEndpoints,
-            unitSize ?? TrailblazerWorldManager.VoxelSize);
+            unitSize);
+
+    /// <summary>
+    /// Finds a closest valid start voxel in one explicit context.
+    /// </summary>
+    public static bool GetStartVoxel(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d target,
+        [MaybeNullWhen(false)] out Voxel originVoxel,
+        bool allowUnwalkableEndpoints = false,
+        Fixed64? unitSize = null)
+    {
+        return TryGetEndpointVoxel(
+            context,
+            origin,
+            target,
+            out originVoxel,
+            allowUnwalkableEndpoints,
+            unitSize ?? context.VoxelSize);
     }
 
 
@@ -104,7 +163,16 @@ public static class SolidVoxelFinder
     /// <param name="targetVoxel"></param>
     /// <returns></returns>
     public static bool StarCast(Vector3d target, [MaybeNullWhen(false)] out Voxel targetVoxel) =>
-        StarCast(target, out targetVoxel, TrailblazerWorldManager.VoxelSize);
+        StarCast(PathRequestContextResolver.DefaultContext, target, out targetVoxel, PathRequestContextResolver.DefaultContext.VoxelSize);
+
+    /// <summary>
+    /// Performs a bounded same-layer star search in one explicit context.
+    /// </summary>
+    public static bool StarCast(
+        TrailblazerWorldContext context,
+        Vector3d target,
+        [MaybeNullWhen(false)] out Voxel targetVoxel) =>
+        StarCast(context, target, out targetVoxel, context.VoxelSize);
 
     /// <summary>
     /// Performs a bounded same-layer star search around the target position and returns the first valid voxel found,
@@ -116,14 +184,27 @@ public static class SolidVoxelFinder
     /// <returns></returns>
     public static bool StarCast(Vector3d target, [MaybeNullWhen(false)] out Voxel targetVoxel, Fixed64 unitSize)
     {
-        if (!TrailblazerWorldManager.TryGetVoxel(target, out Voxel? directVoxel)
+        return StarCast(PathRequestContextResolver.DefaultContext, target, out targetVoxel, unitSize);
+    }
+
+    /// <summary>
+    /// Performs a bounded same-layer star search in one explicit context.
+    /// </summary>
+    public static bool StarCast(
+        TrailblazerWorldContext context,
+        Vector3d target,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
+        Fixed64 unitSize)
+    {
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        if (!context.World.TryGetVoxel(target, out Voxel? directVoxel)
             || directVoxel == null)
         {
             targetVoxel = null;
             return false;
         }
 
-        return StarCast(target, directVoxel, out targetVoxel, unitSize);
+        return StarCast(context, target, directVoxel, out targetVoxel, unitSize);
     }
 
     /// <summary>
@@ -136,13 +217,28 @@ public static class SolidVoxelFinder
     public static bool TryGetClosestWalkableVoxel(
     Voxel voxel,
     [MaybeNullWhen(false)] out Voxel closestNeighbor,
-    Fixed64? unitSize = null)
-    {
-        return EndpointVoxelResolver.TryGetClosestTraversableVoxel(
+    Fixed64? unitSize = null) =>
+        TryGetClosestWalkableVoxel(
+            PathRequestContextResolver.DefaultContext,
             voxel,
             out closestNeighbor,
-            unitSize ?? TrailblazerWorldManager.VoxelSize,
-            new SolidEndpointPolicy());
+            unitSize);
+
+    /// <summary>
+    /// Finds the closest valid neighboring solid voxel in one explicit context.
+    /// </summary>
+    public static bool TryGetClosestWalkableVoxel(
+        TrailblazerWorldContext context,
+        Voxel voxel,
+        [MaybeNullWhen(false)] out Voxel closestNeighbor,
+        Fixed64? unitSize = null)
+    {
+        return EndpointVoxelResolver.TryGetClosestTraversableVoxel(
+            context,
+            voxel,
+            out closestNeighbor,
+            unitSize ?? context.VoxelSize,
+            new SolidEndpointPolicy(context));
     }
 
     /// <summary>
@@ -159,18 +255,38 @@ public static class SolidVoxelFinder
         Vector3d target,
         Fixed64 unitSize,
         [MaybeNullWhen(false)] out Voxel targetVoxel,
+        bool allowUnwalkableEndpoints = false) =>
+        GetClosestVoxelForSize(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            target,
+            unitSize,
+            out targetVoxel,
+            allowUnwalkableEndpoints);
+
+    /// <summary>
+    /// Finds the closest valid endpoint voxel for a unit size in one explicit context.
+    /// </summary>
+    public static bool GetClosestVoxelForSize(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d target,
+        Fixed64 unitSize,
+        [MaybeNullWhen(false)] out Voxel targetVoxel,
         bool allowUnwalkableEndpoints = false)
     {
         return EndpointVoxelResolver.TryGetEndpointVoxel(
+            context,
             target,
             origin,
             out targetVoxel,
             allowUnwalkableEndpoints,
             unitSize,
-            new SolidEndpointPolicy());
+            new SolidEndpointPolicy(context));
     }
 
     private static bool TryGetEndpointVoxel(
+        TrailblazerWorldContext context,
         Vector3d position,
         Vector3d traceToward,
         [MaybeNullWhen(false)] out Voxel voxel,
@@ -178,22 +294,23 @@ public static class SolidVoxelFinder
         Fixed64 unitSize)
     {
         return EndpointVoxelResolver.TryGetEndpointVoxel(
+            context,
             position,
             traceToward,
             out voxel,
             allowUnwalkableEndpoints,
             unitSize,
-            new SolidEndpointPolicy());
+            new SolidEndpointPolicy(context));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsChartTraversable(Voxel voxel, Fixed64 unitSize)
+    private static bool IsChartTraversable(Voxel voxel, Fixed64 unitSize, Fixed64 voxelSize)
     {
         if (!IsBaseChartTraversable(voxel))
             return false;
 
         voxel.TryGetPartition(out SolidChartPartition? partition);
-        return unitSize == TrailblazerWorldManager.VoxelSize
+        return unitSize == voxelSize
             || (partition != null && !partition.IsImpassable(unitSize));
     }
 
@@ -204,9 +321,9 @@ public static class SolidVoxelFinder
         && voxel.HasPartition<SolidChartPartition>();
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool RequiresSizeFallback(Voxel voxel, Fixed64 unitSize)
+    private static bool RequiresSizeFallback(Voxel voxel, Fixed64 unitSize, Fixed64 voxelSize)
     {
-        if (unitSize == TrailblazerWorldManager.VoxelSize
+        if (unitSize == voxelSize
             || !IsBaseChartTraversable(voxel)
             || !voxel.TryGetPartition(out SolidChartPartition? partition)
             || partition == null)
@@ -219,6 +336,15 @@ public static class SolidVoxelFinder
 
     private readonly struct SolidEndpointPolicy : IVoxelEndpointResolutionPolicy
     {
+        private readonly TrailblazerWorldContext _context;
+        private readonly Fixed64 _voxelSize;
+
+        public SolidEndpointPolicy(TrailblazerWorldContext context)
+        {
+            _context = context;
+            _voxelSize = context.VoxelSize;
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool CanResolve() => true;
 
@@ -228,19 +354,19 @@ public static class SolidVoxelFinder
             Fixed64 unitSize,
             bool allowUnwalkableEndpoints)
         {
-            return IsChartTraversable(voxel, unitSize);
+            return IsChartTraversable(voxel, unitSize, _voxelSize);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool RequiresSizeFallback(Voxel voxel, Fixed64 unitSize)
         {
-            return SolidVoxelFinder.RequiresSizeFallback(voxel, unitSize);
+            return SolidVoxelFinder.RequiresSizeFallback(voxel, unitSize, _voxelSize);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsTraversable(Voxel voxel, Fixed64 unitSize)
         {
-            return IsChartTraversable(voxel, unitSize);
+            return IsChartTraversable(voxel, unitSize, _voxelSize);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -250,11 +376,12 @@ public static class SolidVoxelFinder
             Fixed64 unitSize,
             [MaybeNullWhen(false)] out Voxel voxel)
         {
-            return StarCast(position, directVoxel, out voxel, unitSize);
+            return StarCast(_context, position, directVoxel, out voxel, unitSize);
         }
     }
 
     private static bool StarCast(
+        TrailblazerWorldContext context,
         Vector3d target,
         Voxel directVoxel,
         [MaybeNullWhen(false)] out Voxel targetVoxel,
@@ -262,18 +389,19 @@ public static class SolidVoxelFinder
     {
         targetVoxel = null;
 
-        AlternativeVoxelFinder.Shared.SetQuery(target, directVoxel, MaxTestDistance);
+        AlternativeVoxelFinder finder = context.Pathing.State.AlternativeVoxelFinder;
+        finder.SetQuery(context, target, directVoxel, MaxTestDistance);
 
-        if (!AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? candidateVoxel)
+        if (!finder.GetVoxel(out Voxel? candidateVoxel)
             || candidateVoxel == null)
             return false;
 
-        if (IsChartTraversable(candidateVoxel, unitSize))
+        if (IsChartTraversable(candidateVoxel, unitSize, context.VoxelSize))
         {
             targetVoxel = candidateVoxel;
             return true;
         }
 
-        return TryGetClosestWalkableVoxel(candidateVoxel, out targetVoxel, unitSize);
+        return TryGetClosestWalkableVoxel(context, candidateVoxel, out targetVoxel, unitSize);
     }
 }

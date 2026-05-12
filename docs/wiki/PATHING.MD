@@ -52,16 +52,16 @@ Those responsibilities belong to `Trailblazer.Navigation`.
 
 When you use `Trailblazer.Pathing` directly, the normal flow is:
 
-1. Set up `GridForge` global grids.
+1. Create or attach a `TrailblazerWorldContext` for the `GridWorld`.
 2. For chart-backed requests, build one or more `NavigationChart` instances.
-3. Register each chart with `PathManager.Register(...)`.
-4. Call `PathManager.InitializeChart(...)` or `InitializeAllCharts()`.
-5. Optionally configure supplemental `VolumeMediumRules` before creating constrained volume requests.
-6. Create an `IPathRequest`.
-7. Ask `PathGuideFactory` for a guide.
+3. Register each chart with `context.Pathing.Register(...)`.
+4. Call `context.Pathing.InitializeChart(...)` or `InitializeAllCharts()` if initialization was deferred.
+5. Optionally configure supplemental `context.VolumeRules` before creating constrained volume requests.
+6. Create an `IPathRequest` with a context-bound factory.
+7. Ask `context.Guides` for a guide.
 8. Consume the guide in your own movement or planning system.
-9. Return the guide with `PathGuideFactory.ReturnGuide(...)`.
-10. On teardown, clear shared state with `PathManager.Reset()`.
+9. Return the guide with `context.Guides.ReturnGuide(...)`.
+10. On teardown, dispose or reset the context.
 
 Chart registration alone is not enough. Chart-backed requests depend on live `SolidChartPartition` ownership, and that only exists after initialization.  Full 3D traversal requests also depend on authored or host-defined volume membership, whether that comes from chart cells that create `VolumeChartPartition` instances, `VolumeMediumRules`, or both.
 
@@ -78,6 +78,7 @@ Shared state:
 - `UnitSize`: clearance size used during endpoint and traversal validation
 - `AllowUnwalkableEndpoints`: endpoint-relaxation policy
 - `MaxPathSearchRange`: grid-size-derived search cap used to mark the request valid
+- `Context`: explicit world context used for endpoint resolution, mutation, survey expansion, and guide lookup
 
 Shared validation flags:
 
@@ -98,7 +99,9 @@ Important model rules:
 
 - `Origin` and `TargetPosition` are exact points, not snapped voxel origins.
 - `StartNode` and `EndNode` are the resolved pathing hooks into the rest of the system.
-- `RequestCacheKey` is the request hash and is the cache key used by `PathGuideFactory`.
+- `RequestCacheKey` is the request hash and is the cache key used by the context-local guide cache.
+- The request key does not carry a world id; equivalent keys in different contexts stay isolated
+  because each context owns its own caches.
 - A request can have world positions stored and still be invalid if endpoints or search range cannot be resolved.
 
 ## 4. `PathRequest` Base Behavior
@@ -151,11 +154,12 @@ Cache-key behavior:
 Example:
 
 ```csharp
-var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
-if (PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
+if (context.Guides.RequestGuide(request, out AStarGuide guide))
 {
     // Consume guide.ActiveWaypoints or guide.TryGetMovementDirection(...)
-    PathGuideFactory.ReturnGuide(guide);
+    context.Guides.ReturnGuide(guide);
 }
 ```
 
@@ -323,7 +327,8 @@ For liquid routes, transition fallback and `VolumePathRequest` depend on a valid
 
 ## 8. Guide Resolution and Caching
 
-`PathGuideFactory` is the public request-to-guide bridge.
+`TrailblazerWorldContext.Guides` is the primary request-to-guide bridge.
+`PathGuideFactory` remains as the default-context compatibility facade.
 
 For the dedicated guide-layer contract and lifecycle reference, read [`PATHGUIDES.MD`](PATHGUIDES.MD).
 
@@ -339,12 +344,12 @@ Cache behavior:
 - A*, flow-field, and volume survey results each use their own `ReusableSurveyResultCache<T>`
 - the cache key is `request.RequestCacheKey`
 - cached results are reused until invalidated or evicted
-- stale entries are culled by `PathManager.Tick()` through `TrailblazerManager`
+- stale entries are culled by `TrailblazerWorldContext.Simulate()` using the context frame count
 
 Important lifecycle rule:
 
 - requesting a guide directly checks a survey result out of the cache
-- you should return it with `PathGuideFactory.ReturnGuide(...)`
+- you should return it with `context.Guides.ReturnGuide(...)`
 
 Invalidation sources:
 
@@ -385,38 +390,41 @@ Choose transition-aware chart requests when:
 
 ```csharp
 NavigationChart chart = NavigationChart.From3D("Ground", data, minBounds, Fixed64.One);
-PathManager.Register(chart);
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+context.Pathing.Register(chart);
 
-var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
-if (PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
+if (context.Guides.RequestGuide(request, out AStarGuide guide))
 {
     if (guide.TryGetMovementDirection(origin, out Vector3d heading))
     {
         // Use heading in your own system.
     }
 
-    PathGuideFactory.ReturnGuide(guide);
+    context.Guides.ReturnGuide(guide);
 }
 ```
 
 ### 10.2 Shared Destination Flow Field
 
 ```csharp
-var request = FlowFieldPathRequest.Create(origin, destination, Fixed64.One);
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+var request = FlowFieldPathRequest.Create(context, origin, destination, Fixed64.One);
 request.MaxClimbHeight = Fixed64.One;
 request.ExtraFloodRange = 12;
 
-if (PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide))
+if (context.Guides.RequestGuide(request, out FlowFieldGuide guide))
 {
     // Multiple agents can request equivalent destination fields.
-    PathGuideFactory.ReturnGuide(guide);
+    context.Guides.ReturnGuide(guide);
 }
 ```
 
 ### 10.3 Transition-Aware Chart Pathing
 
 ```csharp
-var request = AStarPathRequest.Create(origin, destination, Fixed64.One);
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
 request.AllowTraversalTransitions = true;
 ```
 

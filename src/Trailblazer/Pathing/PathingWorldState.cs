@@ -57,6 +57,8 @@ internal sealed class PathingWorldState
 
     internal TrailblazerGuideState GuideState { get; } = new();
 
+    internal AlternativeVoxelFinder AlternativeVoxelFinder { get; } = new();
+
     internal SwiftDictionary<ushort, ExternalGridEventObservation> ExternalGridEventObservationsByGridIndex { get; } = new();
 
     internal SwiftDictionary<ushort, PendingExternalGridChange> PendingGridChangesByGridIndex { get; } = new();

@@ -431,29 +431,29 @@ Exit criteria:
 
 ## Phase 5 - Bind Requests And Surveyors To Context
 
-**Status:** Not started  
+**Status:** Complete  
 **Goal:** Remove ambient world lookup from path request creation and hot path survey logic.
 
-- [ ] Add `TrailblazerWorldContext Context` to `IPathRequest` or a shared internal request base.
-- [ ] Add context-aware factories for `AStarPathRequest`, `FlowFieldPathRequest`,
+- [x] Add `TrailblazerWorldContext Context` to `IPathRequest` or a shared internal request base.
+- [x] Add context-aware factories for `AStarPathRequest`, `FlowFieldPathRequest`,
   `VolumePathRequest`, and `HybridPathRequest`.
-- [ ] Remove default-voxel-size request overloads or route them through the default context facade
+- [x] Remove default-voxel-size request overloads or route them through the default context facade
   with obsolete guidance.
-- [ ] Change `PathRequest.UpdateRequest`, `TrySetOrigin`, `TrySetDestination`, and
+- [x] Change `PathRequest.UpdateRequest`, `TrySetOrigin`, `TrySetDestination`, and
   `TrySetUnitSize` to use the request's context.
-- [ ] Convert `SolidVoxelFinder`, `VolumeVoxelFinder`, `EndpointVoxelResolver`,
+- [x] Convert `SolidVoxelFinder`, `VolumeVoxelFinder`, `EndpointVoxelResolver`,
   `AlternativeVoxelFinder`, and direct `GridTracer.TraceLine(...)` calls to receive a context or
   context-local pathing service.
-- [ ] Convert `AStarSurveyor.Shared`, `FlowFieldSurveyor.Shared`, and `VolumeSurveyor.Shared` into
+- [x] Convert `AStarSurveyor.Shared`, `FlowFieldSurveyor.Shared`, and `VolumeSurveyor.Shared` into
   context-owned services or stateless entry points with context-owned scratch state.
-- [ ] Ensure cache keys remain allocation-free and deterministic. Prefer context-local caches over
+- [x] Ensure cache keys remain allocation-free and deterministic. Prefer context-local caches over
   adding a world id to every key.
-- [ ] Add allocation tests for steady-state request cache keys after the context field is added.
-- [ ] Add cross-world tests where two equivalent requests in separate contexts produce independent
+- [x] Add allocation tests for steady-state request cache keys after the context field is added.
+- [x] Add cross-world tests where two equivalent requests in separate contexts produce independent
   cache entries and independent invalidation.
-- [ ] Keep survey scratch state owned by the context or rented from pools that do not retain
+- [x] Keep survey scratch state owned by the context or rented from pools that do not retain
   world-specific references after release.
-- [ ] Confirm endpoint resolution performs one context selection at request creation/update and then
+- [x] Confirm endpoint resolution performs one context selection at request creation/update and then
   works against direct `GridWorld`/pathing-state references in inner loops.
 
 Exit criteria:
@@ -462,6 +462,26 @@ Exit criteria:
 - Request creation cannot accidentally resolve endpoints against a different world.
 - Warm guide paths remain allocation-free or any measured regression has an explicit follow-up
   benchmark entry.
+
+Phase 5 notes:
+
+- `IPathRequest.Context` now binds every request to the `TrailblazerWorldContext` that resolved its
+  endpoints. Existing compatibility factories route through the configured default context, while
+  new context-aware factories are available for `AStarPathRequest`, `FlowFieldPathRequest`,
+  `VolumePathRequest`, and internal `HybridPathRequest`.
+- Request mutation, solid/volume endpoint resolution, alternative voxel search, volume line tracing,
+  flow-field sampling helpers, and volume clearance checks now use the request or partition owner
+  context instead of ambient world lookup.
+- `TrailblazerGuideState` owns the A*, FlowField, and Volume surveyor instances for each context.
+  Production guide and hybrid-route paths use those context-owned surveyors; the old `.Shared`
+  surveyors remain only as compatibility/test entry points.
+- Cache keys remain world-id-free because the caches are context-local. The new
+  `ContextBoundPathRequestTests.RequestCacheKeys_ShouldNotAllocateSteadyState_WhenRequestsCarryContext`
+  coverage pins steady-state request-key allocation after adding context ownership.
+- `rg -n "TrailblazerWorldManager" src/Trailblazer/Pathing/Search` and
+  `rg -n "AStarSurveyor\\.Shared|FlowFieldSurveyor\\.Shared|VolumeSurveyor\\.Shared" src/Trailblazer/Pathing/Search`
+  return no production hits. Remaining `TrailblazerWorldManager` production references are in the
+  compatibility facade and Phase 6 navigation/movement-group areas.
 
 ## Phase 6 - Bind Navigation To Context
 

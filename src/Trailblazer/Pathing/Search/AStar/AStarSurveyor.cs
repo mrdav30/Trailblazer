@@ -114,7 +114,7 @@ public class AStarSurveyor
 
             AStarWaypoint[] waypoints = _waypoints.ToArray();
             string[] chartKeys = _chartKeys.ToArray();
-            AStarSurveyResult result = AStarSurveyResult.Create(waypoints, chartKeys, request.RequestCacheKey);
+            AStarSurveyResult result = AStarSurveyResult.Create(request.Context, waypoints, chartKeys, request.RequestCacheKey);
             ClearWorkingState();
             return result;
         }
@@ -279,7 +279,7 @@ public class AStarSurveyor
             if (!_meta.TryGetValue(current, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
                 break; // break in the trail!
 
-            if (!TrailblazerWorldManager.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel? nextTrailVoxel))
+            if (!_request.Context.World.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel? nextTrailVoxel))
                 break; // break in the trail!
 
             current = nextTrailVoxel;
@@ -310,7 +310,7 @@ public class AStarSurveyor
         Vector3d lastDirection = Vector3d.Zero;
 
         // add 1 to ensure we preserve unwalkable voxels that are close enough to matter for the unit size
-        byte scaledUnitSize = (byte)((_request!.UnitSize / TrailblazerWorldManager.VoxelSize).CeilToInt() + 1);
+        byte scaledUnitSize = (byte)((_request!.UnitSize / _request.Context.VoxelSize).CeilToInt() + 1);
         for (int i = 1; i < _rawPath.Count - 1; i++)
         {
             Vector3d direction = (_rawPath[i + 1].VoxelPosition - _rawPath[i].VoxelPosition).Normalize();

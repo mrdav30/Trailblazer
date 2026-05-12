@@ -2496,10 +2496,15 @@ public static class PathManager
 
     internal static bool HasAuthoredVolumeMedium(TraversalMedium medium)
     {
+        return HasAuthoredVolumeMedium(ActiveState, medium);
+    }
+
+    internal static bool HasAuthoredVolumeMedium(PathingWorldState state, TraversalMedium medium)
+    {
         return medium switch
         {
-            TraversalMedium.Gas => _activeAuthoredGasCellCount > 0,
-            TraversalMedium.Liquid => _activeAuthoredLiquidCellCount > 0,
+            TraversalMedium.Gas => state.ActiveAuthoredGasCellCount > 0,
+            TraversalMedium.Liquid => state.ActiveAuthoredLiquidCellCount > 0,
             _ => false
         };
     }

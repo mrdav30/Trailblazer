@@ -81,6 +81,7 @@ public class FlowFieldSurveyor
                 ? Array.Empty<FlowFieldSamplingGrid>()
                 : _samplingGrids.ToArray();
             FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(
+                request.Context,
                 flowFields,
                 chartsUsed,
                 request.RequestCacheKey,
@@ -345,7 +346,7 @@ public class FlowFieldSurveyor
         }
 
         for (int i = 0; i < _samplingGridBuilders.Count; i++)
-            _samplingGrids.Add(_samplingGridBuilders[i].Create(TrailblazerWorldManager.VoxelSize));
+            _samplingGrids.Add(_samplingGridBuilders[i].Create(_request!.Context.VoxelSize));
     }
 
     private FlowFieldSamplingGridBuilder GetOrAddSamplingGridBuilder(WorldVoxelIndex index, Vector3d worldPosition)
@@ -356,7 +357,7 @@ public class FlowFieldSurveyor
                 return _samplingGridBuilders[i];
         }
 
-        FlowFieldSamplingGridBuilder builder = new(index, worldPosition, TrailblazerWorldManager.VoxelSize);
+        FlowFieldSamplingGridBuilder builder = new(index, worldPosition, _request!.Context.VoxelSize);
         _samplingGridBuilders.Add(builder);
         return builder;
     }
@@ -395,10 +396,20 @@ public class FlowFieldSurveyor
         if (result == null || !result.HasPath || result.Fields == null)
             return Vector3d.Zero;
 
-        return SampleFlowVector(worldPosition, result.Fields, result.SamplingGrids);
+        TrailblazerWorldContext? context = result.Context;
+        if (context == null)
+        {
+            if (!PathManager.TryGetActiveState(out PathingWorldState? state) || state == null)
+                return Vector3d.Zero;
+
+            context = state.Context;
+        }
+
+        return SampleFlowVector(context, worldPosition, result.Fields, result.SamplingGrids);
     }
 
     private static Vector3d SampleFlowVector(
+        TrailblazerWorldContext context,
         Vector3d worldPosition,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields,
         FlowFieldSamplingGrid[]? samplingGrids)
@@ -406,7 +417,7 @@ public class FlowFieldSurveyor
         if (fields == null || fields.Count == 0)
             return Vector3d.Zero;
 
-        Fixed64 voxelSize = TrailblazerWorldManager.VoxelSize;
+        Fixed64 voxelSize = context.VoxelSize;
 
         // Get bottom-left corner of the square the agent is standing in
         Vector3d corner = new(
@@ -420,7 +431,7 @@ public class FlowFieldSurveyor
         Fixed64 dz = (worldPosition.z - corner.z) / voxelSize;
 
         if (dx == Fixed64.Zero && dz == Fixed64.Zero)
-            return GetFlowDirection(corner, fields, samplingGrids);
+            return GetFlowDirection(context, corner, fields, samplingGrids);
 
         // Sample the 4 surrounding voxel centers
         Vector3d bottomLeft = corner;
@@ -429,10 +440,10 @@ public class FlowFieldSurveyor
         Vector3d topRight = corner + new Vector3d(voxelSize, Fixed64.Zero, voxelSize);
 
         // Get flow vectors
-        Vector3d f00 = GetFlowDirection(bottomLeft, fields, samplingGrids);
-        Vector3d f10 = GetFlowDirection(bottomRight, fields, samplingGrids);
-        Vector3d f01 = GetFlowDirection(topLeft, fields, samplingGrids);
-        Vector3d f11 = GetFlowDirection(topRight, fields, samplingGrids);
+        Vector3d f00 = GetFlowDirection(context, bottomLeft, fields, samplingGrids);
+        Vector3d f10 = GetFlowDirection(context, bottomRight, fields, samplingGrids);
+        Vector3d f01 = GetFlowDirection(context, topLeft, fields, samplingGrids);
+        Vector3d f11 = GetFlowDirection(context, topRight, fields, samplingGrids);
 
         // Bilinear interpolation
         Vector3d zHigh = f00 * (Fixed64.One - dx) + f10 * dx;
@@ -461,13 +472,32 @@ public class FlowFieldSurveyor
         result = null;
         if (fields == null || fields.Count == 0)
             return false;
+        if (!PathManager.TryGetActiveState(out PathingWorldState? state) || state == null)
+            return false;
+
+        return TryGetNearestFlowAnchor(state.Context, origin, fields, range, out result);
+    }
+
+    /// <summary>
+    /// Attempts to locate the closest valid flow-field anchor in one explicit context.
+    /// </summary>
+    public static bool TryGetNearestFlowAnchor(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        SwiftDictionary<WorldVoxelIndex, FlowField> fields,
+        Fixed64 range,
+        out Voxel? result)
+    {
+        result = null;
+        if (fields == null || fields.Count == 0)
+            return false;
 
         Fixed64 minDistanceSq = range * range;
         bool found = false;
 
         foreach (FlowField flow in fields.Values)
         {
-            if (!TrailblazerWorldManager.TryGetGridAndVoxel(flow.GlobalIndex, out _, out Voxel? flowVoxel)
+            if (!context.World.TryGetGridAndVoxel(flow.GlobalIndex, out _, out Voxel? flowVoxel)
                 || flowVoxel == null)
                 continue;
 
@@ -491,7 +521,20 @@ public class FlowFieldSurveyor
     /// <returns>The direction vector, or <c>Vector3d.Zero</c> if no field exists.</returns>
     public static Vector3d GetFlowDirection(Vector3d position, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
-        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel)
+        return PathManager.TryGetActiveState(out PathingWorldState? state) && state != null
+            ? GetFlowDirection(state.Context, position, fields)
+            : Vector3d.Zero;
+    }
+
+    /// <summary>
+    /// Retrieves the raw directional flow vector at the given world-space position in one explicit context.
+    /// </summary>
+    public static Vector3d GetFlowDirection(
+        TrailblazerWorldContext context,
+        Vector3d position,
+        SwiftDictionary<WorldVoxelIndex, FlowField> fields)
+    {
+        if (context.World.TryGetVoxel(position, out Voxel? voxel)
             && voxel != null)
         {
             if (fields.TryGetValue(voxel.WorldIndex, out FlowField field))
@@ -501,12 +544,13 @@ public class FlowFieldSurveyor
     }
 
     private static Vector3d GetFlowDirection(
+        TrailblazerWorldContext context,
         Vector3d position,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields,
         FlowFieldSamplingGrid[]? samplingGrids)
     {
         if (samplingGrids == null || samplingGrids.Length == 0)
-            return GetFlowDirection(position, fields);
+            return GetFlowDirection(context, position, fields);
 
         for (int i = 0; i < samplingGrids.Length; i++)
         {
@@ -531,7 +575,20 @@ public class FlowFieldSurveyor
     /// </returns>
     public static FlowField GetFlowField(Vector3d position, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
-        if (TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel)
+        return PathManager.TryGetActiveState(out PathingWorldState? state) && state != null
+            ? GetFlowField(state.Context, position, fields)
+            : default;
+    }
+
+    /// <summary>
+    /// Retrieves the flow field associated with the specified world position in one explicit context.
+    /// </summary>
+    public static FlowField GetFlowField(
+        TrailblazerWorldContext context,
+        Vector3d position,
+        SwiftDictionary<WorldVoxelIndex, FlowField> fields)
+    {
+        if (context.World.TryGetVoxel(position, out Voxel? voxel)
             && voxel != null)
         {
             if (fields.TryGetValue(voxel.WorldIndex, out FlowField field))

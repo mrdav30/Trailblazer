@@ -41,9 +41,21 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
     /// <param name="request">When this method returns, contains the created flow field path request if successful; otherwise, null.</param>
     /// <returns>true if the flow field path request was successfully created; otherwise, false.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCreateWithSize(Vector3d origin, Vector3d destination, Fixed64 unitSize, [NotNullWhen(true)] out FlowFieldPathRequest? request)
+    public static bool TryCreateWithSize(Vector3d origin, Vector3d destination, Fixed64 unitSize, [NotNullWhen(true)] out FlowFieldPathRequest? request) =>
+        TryCreateWithSize(PathRequestContextResolver.DefaultContext, origin, destination, unitSize, out request);
+
+    /// <summary>
+    /// Attempts to create a new context-bound flow field path request using the specified origin, destination, and unit size.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryCreateWithSize(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        [NotNullWhen(true)] out FlowFieldPathRequest? request)
     {
-        request = Create(origin, destination, unitSize);
+        request = Create(context, origin, destination, unitSize);
         if (request == null)
             return false;
         return true;
@@ -59,8 +71,22 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
     /// langword="null"/>.</param>
     /// <returns><see langword="true"/> if the path request was successfully created; otherwise, <see langword="false"/>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCreate(Vector3d origin, Vector3d destination, [NotNullWhen(true)] out FlowFieldPathRequest? request) =>
-        TryCreateWithSize(origin, destination, TrailblazerWorldManager.VoxelSize, out request);
+    public static bool TryCreate(Vector3d origin, Vector3d destination, [NotNullWhen(true)] out FlowFieldPathRequest? request)
+    {
+        TrailblazerWorldContext context = PathRequestContextResolver.DefaultContext;
+        return TryCreateWithSize(context, origin, destination, context.VoxelSize, out request);
+    }
+
+    /// <summary>
+    /// Attempts to create a new context-bound flow field path request using the context's voxel size.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryCreate(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        [NotNullWhen(true)] out FlowFieldPathRequest? request) =>
+        TryCreateWithSize(context, origin, destination, context.VoxelSize, out request);
 
     /// <summary>
     /// Creates a new flow field path request between the specified origin and destination positions, using the given
@@ -82,9 +108,29 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
         Vector3d destination,
         Fixed64 unitSize,
         bool allowUnwalkableEndpoints = false,
+        bool allowTraversalTransitions = false) =>
+        Create(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            destination,
+            unitSize,
+            allowUnwalkableEndpoints,
+            allowTraversalTransitions);
+
+    /// <summary>
+    /// Creates a context-bound flow field path request.
+    /// </summary>
+    public static FlowFieldPathRequest? Create(
+        TrailblazerWorldContext context,
+        Vector3d origin,
+        Vector3d destination,
+        Fixed64 unitSize,
+        bool allowUnwalkableEndpoints = false,
         bool allowTraversalTransitions = false)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         if (!SolidVoxelFinder.TryGetPathEdgeVoxels(
+            context,
             origin,
             destination,
             out Voxel? startNode,
@@ -100,6 +146,7 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
 
         FlowFieldPathRequest request = new()
         {
+            Context = context,
             Origin = origin,
             StartNode = startNode,
             TargetPosition = destination,
@@ -107,11 +154,11 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
             UnitSize = unitSize,
             AllowUnwalkableEndpoints = allowUnwalkableEndpoints,
             AllowTraversalTransitions = allowTraversalTransitions,
-            MaxClimbHeight = TrailblazerWorldManager.VoxelSize,
+            MaxClimbHeight = context.VoxelSize,
             ExtraFloodRange = DefaultExtraFloodRange
         };
 
-        if (PathManager.TryGetMaxSearchSize(startNode, endNode, out int searchSize))
+        if (context.Pathing.TryGetMaxSearchSize(startNode, endNode, out int searchSize))
             request.MaxPathSearchRange = searchSize;
 
         return request;
@@ -137,7 +184,7 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
         hash.Add(MaxClimbHeight.GetHashCode());
         hash.Add(ExtraFloodRange);
         hash.Add(MaxPathSearchRange);
-        hash.Add(AllowTraversalTransitions ? TraversalTransitionRegistry.RegistryVersion : 0);
+        hash.Add(AllowTraversalTransitions ? Context.Pathing.State.TransitionRegistryState.RegistryVersion : 0);
         return hash.ToHashCode();
     }
 }

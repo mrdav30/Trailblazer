@@ -353,6 +353,7 @@ internal static class HybridRoutePlanner
         pathCost = 0;
 
         AStarPathRequest? chartRequest = AStarPathRequest.Create(
+            request.Context,
             origin,
             destination,
             request.UnitSize,
@@ -369,7 +370,7 @@ internal static class HybridRoutePlanner
             return true;
         }
 
-        AStarSurveyResult surveyResult = AStarSurveyor.Shared.FindPath(chartRequest);
+        AStarSurveyResult surveyResult = request.Context.Pathing.State.GuideState.AStarSurveyor.FindPath(chartRequest);
         if (!surveyResult.HasPath)
             return false;
 
@@ -389,6 +390,7 @@ internal static class HybridRoutePlanner
         pathCost = 0;
 
         FlowFieldPathRequest? chartRequest = FlowFieldPathRequest.Create(
+            request.Context,
             origin,
             destination,
             request.UnitSize,
@@ -405,7 +407,7 @@ internal static class HybridRoutePlanner
             return true;
         }
 
-        FlowFieldSurveyResult surveyResult = FlowFieldSurveyor.Shared.FindPath(chartRequest);
+        FlowFieldSurveyResult surveyResult = request.Context.Pathing.State.GuideState.FlowFieldSurveyor.FindPath(chartRequest);
         if (!surveyResult.HasPath
             || surveyResult.Fields == null
             || chartRequest.StartNode == null
@@ -431,6 +433,7 @@ internal static class HybridRoutePlanner
         pathCost = 0;
 
         VolumePathRequest? volumeRequest = VolumePathRequest.Create(
+            request.Context,
             origin,
             destination,
             request.UnitSize,
@@ -446,7 +449,7 @@ internal static class HybridRoutePlanner
             return true;
         }
 
-        VolumeSurveyResult surveyResult = VolumeSurveyor.Shared.FindPath(volumeRequest);
+        VolumeSurveyResult surveyResult = request.Context.Pathing.State.GuideState.VolumeSurveyor.FindPath(volumeRequest);
         if (!surveyResult.HasPath)
             return false;
 

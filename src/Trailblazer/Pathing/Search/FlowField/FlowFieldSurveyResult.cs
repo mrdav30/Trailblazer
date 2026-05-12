@@ -51,10 +51,16 @@ public class FlowFieldSurveyResult : SurveyResult
         string[] chartsUtilized,
         int key)
     {
-        return Create(fields, chartsUtilized, key, Array.Empty<FlowFieldSamplingGrid>());
+        return Create(
+            PathManager.TryGetActiveState(out PathingWorldState? state) ? state!.Context : null,
+            fields,
+            chartsUtilized,
+            key,
+            Array.Empty<FlowFieldSamplingGrid>());
     }
 
     internal static FlowFieldSurveyResult Create(
+        TrailblazerWorldContext? context,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields,
         string[] chartsUtilized,
         int key,
@@ -64,6 +70,7 @@ public class FlowFieldSurveyResult : SurveyResult
         {
             IsValid = true,
             IsInUse = false,
+            Context = context,
             ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
             Fields = fields,
             SamplingGrids = samplingGrids ?? Array.Empty<FlowFieldSamplingGrid>(),

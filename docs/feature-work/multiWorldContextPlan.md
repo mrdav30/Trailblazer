@@ -235,9 +235,8 @@ voxel indexes, request results, registry versions, or frame counters must move b
 
 Phase notes:
 
-- Phase 0 acceptance coverage lives in `MultiWorldPhase0AcceptanceTests`. Five future-phase
-  behaviors remain skipped with `Category=MultiWorldPhase0Red`; independent context frame counts are
-  now unskipped and passing after Phase 1.
+- Phase 0 acceptance coverage lives in `MultiWorldPhase0AcceptanceTests`. The remaining future-phase
+  movement-group and navigator-reset cases were unskipped and completed in Phase 6.
 - Baselines and focused verification commands are recorded in
   `multiWorldPhase0Baseline.md`.
 
@@ -416,8 +415,7 @@ Phase notes:
   frame count.
 - `SolidPartitionReachability` snapshot data is context-owned and builds from the active context's
   chart registry and `GridWorld`, not from ambient global chart/world state.
-- The Phase 0 guide-cache acceptance test is now unskipped. Movement groups and navigator reset
-  remain intentionally skipped for Phase 6.
+- The Phase 0 guide-cache, movement-group, and navigator-reset acceptance tests are now unskipped.
 - No out-of-scope hardening item was added in this phase. Request creation and surveyor ambient-world
   lookup remain intentionally tracked in Phase 5; the Phase 4 preflight attaches the compatibility
   ambient world only at the request-creation boundary.
@@ -481,34 +479,50 @@ Phase 5 notes:
 - `rg -n "TrailblazerWorldManager" src/Trailblazer/Pathing/Search` and
   `rg -n "AStarSurveyor\\.Shared|FlowFieldSurveyor\\.Shared|VolumeSurveyor\\.Shared" src/Trailblazer/Pathing/Search`
   return no production hits. Remaining `TrailblazerWorldManager` production references are in the
-  compatibility facade and Phase 6 navigation/movement-group areas.
+  compatibility facade and Phase 7 static-facade cleanup areas.
 
 ## Phase 6 - Bind Navigation To Context
 
-**Status:** Not started  
+**Status:** Complete  
 **Goal:** Make navigators, steering, movement groups, and deterministic ids world-local.
 
-- [ ] Add context binding to `Navigator`, either through constructor injection or an explicit
+- [x] Add context binding to `Navigator`, either through constructor injection or an explicit
   initialization parameter.
-- [ ] Store the bound context on `Navigator` and reject simulation before a context is assigned.
-- [ ] Change `Navigator.Reset()` and occupant registration/deregistration to use the navigator's
+- [x] Store the bound context on `Navigator` and reject simulation before a context is assigned.
+- [x] Change `Navigator.Reset()` and occupant registration/deregistration to use the navigator's
   context world.
-- [ ] Change `NavigatorPathRequestFactory`, `GuidedVolumeExitPlanner`, and guided climb/exit helpers
+- [x] Change `NavigatorPathRequestFactory`, `GuidedVolumeExitPlanner`, and guided climb/exit helpers
   to use the navigator/request context.
-- [ ] Convert `MovementGroupCoordinator` into `MovementGroupCoordinatorState` owned by the context.
-- [ ] Convert `NavigatorGlobalIdAllocator` into context-local state so reset and deterministic id
+- [x] Convert `MovementGroupCoordinator` into `MovementGroupCoordinatorState` owned by the context.
+- [x] Convert `NavigatorGlobalIdAllocator` into context-local state so reset and deterministic id
   order are independent per world.
-- [ ] Update `NavSteering` to read frame count, voxel size, guide services, and movement group state
+- [x] Update `NavSteering` to read frame count, voxel size, guide services, and movement group state
   from the navigator context.
-- [ ] Decide whether a navigator can be moved between contexts after reset. Recommended answer:
+- [x] Decide whether a navigator can be moved between contexts after reset. Recommended answer:
   disallow moving initialized navigators; allow reuse only after `Reset()` and explicit rebind.
-- [ ] Update navigation serialization docs so hosts create and bind navigators to a context before
+- [x] Update navigation serialization docs so hosts create and bind navigators to a context before
   Chronicler populates state. Do not serialize the context itself.
-- [ ] Add tests for two worlds with identical group ids, identical navigator ids after per-world
+- [x] Add tests for two worlds with identical group ids, identical navigator ids after per-world
   reset, independent frame counts, and context-correct reset/deregister behavior.
-- [ ] Confirm steering and motor code stay engine-agnostic and keep fixed-step, fixed-point
+- [x] Confirm steering and motor code stay engine-agnostic and keep fixed-step, fixed-point
   semantics. No wall-clock timing, engine callbacks, or floating-point simulation shortcuts.
-- [ ] Re-run focused NavSteering steady-state allocation tests after context binding lands.
+- [x] Re-run focused NavSteering steady-state allocation tests after context binding lands.
+
+Phase 6 notes:
+
+- `TrailblazerWorldContext` now exposes a `Navigation` service that owns context-local
+  `MovementGroupCoordinatorState` and navigator id allocation.
+- `Navigator` can bind through constructor injection, `BindContext(...)`, or `Setup(context, ...)`.
+  It rejects use without a context, uses the bound world for occupancy, clears the binding on
+  `Reset()`, and requires explicit rebind before reuse.
+- `NavigatorPathRequestFactory`, `GuidedVolumeExitPlanner`, guided exit handoffs, steering guide
+  return/request paths, and serialized path-request rebuilds now use the owning context.
+- `NavSteering`, `NavTurning`, `NavMotor`, and context-aware locomotion timing hooks read fixed-step
+  timing from the bound context while compatibility-only construction still falls back to the
+  default facade when no world-bound operation is active.
+- `ContextBoundNavigatorTests` and the unskipped Phase 0 acceptance tests pin context-local
+  movement groups, deterministic navigator ids, guided request context ownership, and
+  context-correct reset/deregister behavior.
 
 Exit criteria:
 

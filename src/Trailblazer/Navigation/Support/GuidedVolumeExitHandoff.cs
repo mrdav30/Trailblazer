@@ -9,6 +9,8 @@ namespace Trailblazer.Navigation;
 /// </summary>
 internal sealed class GuidedVolumeExitHandoff : IRecordable
 {
+    public TrailblazerWorldContext? Context;
+
     public string? TransitionId;
 
     public Vector3d ChartOriginPosition;
@@ -36,10 +38,12 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         && (ChartPathMode == SolidPathAlgorithm.AStar || ChartPathMode == SolidPathAlgorithm.FlowField);
 
     public bool TryCreateFollowupRequest(
+        TrailblazerWorldContext context,
         Vector3d currentPosition,
         Fixed64 unitSize,
         out IPathRequest? request)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         request = null;
         if (!IsValid)
             return false;
@@ -47,6 +51,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         {
             case SolidPathAlgorithm.AStar:
                 var aStar = AStarPathRequest.Create(
+                    context,
                     ChartOriginPosition,
                     TargetPosition,
                     unitSize,
@@ -62,6 +67,7 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
 
             case SolidPathAlgorithm.FlowField:
                 var flowField = FlowFieldPathRequest.Create(
+                    context,
                     ChartOriginPosition,
                     TargetPosition,
                     unitSize,
@@ -78,6 +84,18 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
             default:
                 return false;
         }
+    }
+
+    public bool TryCreateFollowupRequest(
+        Vector3d currentPosition,
+        Fixed64 unitSize,
+        out IPathRequest? request)
+    {
+        return TryCreateFollowupRequest(
+            Context ?? PathRequestContextResolver.DefaultContext,
+            currentPosition,
+            unitSize,
+            out request);
     }
 
     public void RecordData(IChronicler chronicler)

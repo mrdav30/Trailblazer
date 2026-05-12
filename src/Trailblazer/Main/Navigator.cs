@@ -144,6 +144,8 @@ public abstract class Navigator : INavigate, IRecordable
 
     private int _lastSeenGuidedRouteTopologyVersion;
 
+    private TrailblazerWorldContext? _context;
+
     #endregion
 
     #region State - Identity / Transform
@@ -178,6 +180,11 @@ public abstract class Navigator : INavigate, IRecordable
     /// Indicates whether the Navigator is currently active and ready for simulation.
     /// </summary>
     public bool IsActive => _isSet && _isInitialized;
+
+    /// <summary>
+    /// Gets the world context this navigator is bound to.
+    /// </summary>
+    public TrailblazerWorldContext? Context => _context;
 
     #endregion
 
@@ -267,6 +274,61 @@ public abstract class Navigator : INavigate, IRecordable
     #region Setup / Initialization
 
     /// <summary>
+    /// Initializes a new unbound navigator. Bind it to a context before setup.
+    /// </summary>
+    protected Navigator() { }
+
+    /// <summary>
+    /// Initializes a new navigator bound to the supplied world context.
+    /// </summary>
+    protected Navigator(TrailblazerWorldContext context)
+    {
+        BindContext(context);
+    }
+
+    /// <summary>
+    /// Binds this navigator to a world context before setup.
+    /// </summary>
+    public virtual void BindContext(TrailblazerWorldContext context)
+    {
+        PathRequestContextResolver.ThrowIfUnusable(context);
+
+        if (ReferenceEquals(_context, context))
+            return;
+
+        if (_isSet || _isInitialized)
+            throw new InvalidOperationException("Navigator context cannot be changed after setup. Call Reset() before rebinding.");
+
+        _context = context;
+        _steering?.BindContext(context);
+        _motor?.BindContext(context);
+        _turning?.BindContext(context);
+    }
+
+    /// <summary>
+    /// Initializes and activates the object with the specified condition, position, and optional parameters.
+    /// </summary>
+    /// <param name="context">The world context that owns this navigator.</param>
+    /// <param name="condition">The condition that determines how the object is initialized and activated.</param>
+    /// <param name="position">The position in world coordinates where the object will be placed.</param>
+    /// <param name="rotation">The optional rotation to apply to the object. If null, a default rotation is used.</param>
+    /// <param name="velocity">The optional initial velocity of the object. If null, the object is initialized with zero velocity.</param>
+    /// <param name="size">The optional size of the object. If null, a default size is used.</param>
+    /// <param name="globalId">The optional global identifier for the object. If null, a new identifier may be generated.</param>
+    public virtual void Activate(
+        TrailblazerWorldContext context,
+        TrekCondition condition,
+        Vector3d position,
+        FixedQuaternion? rotation = null,
+        Vector3d? velocity = null,
+        Fixed64? size = null,
+        Guid? globalId = null)
+    {
+        BindContext(context);
+        Activate(condition, position, rotation, velocity, size, globalId);
+    }
+
+    /// <summary>
     /// Initializes and activates the object with the specified condition, position, and optional parameters.
     /// </summary>
     /// <param name="condition">The condition that determines how the object is initialized and activated.</param>
@@ -290,6 +352,27 @@ public abstract class Navigator : INavigate, IRecordable
     /// <summary>
     /// Sets the initial configuration of the object, including position, rotation, velocity, size, and optional stable identity.
     /// </summary>
+    /// <param name="context">The world context that owns this navigator.</param>
+    /// <param name="position">Initial world-space position.</param>
+    /// <param name="rotation">Optional starting rotation.</param>
+    /// <param name="velocity">Optional initial velocity.</param>
+    /// <param name="size">Optional grid size (defaults to 1).</param>
+    /// <param name="globalId">Optional host-provided stable identity. When omitted, Trailblazer assigns one deterministically from setup order.</param>
+    public virtual void Setup(
+        TrailblazerWorldContext context,
+        Vector3d position,
+        FixedQuaternion? rotation = null,
+        Vector3d? velocity = null,
+        Fixed64? size = null,
+        Guid? globalId = null)
+    {
+        BindContext(context);
+        Setup(position, rotation, velocity, size, globalId);
+    }
+
+    /// <summary>
+    /// Sets the initial configuration of the object, including position, rotation, velocity, size, and optional stable identity.
+    /// </summary>
     /// <param name="position">Initial world-space position.</param>
     /// <param name="rotation">Optional starting rotation.</param>
     /// <param name="velocity">Optional initial velocity.</param>
@@ -302,6 +385,8 @@ public abstract class Navigator : INavigate, IRecordable
         Fixed64? size = null,
         Guid? globalId = null)
     {
+        EnsureContextForSetup();
+
         if (globalId.HasValue && globalId.Value == Guid.Empty)
             throw new ArgumentException("Navigator globalId cannot be Guid.Empty.", nameof(globalId));
 
@@ -324,14 +409,16 @@ public abstract class Navigator : INavigate, IRecordable
     /// </summary>
     public virtual void Initialize(TrekCondition condition)
     {
+        TrailblazerWorldContext context = RequireContext();
+
         _frameCondition = condition.Clone();
 
-        _steering = NavSteering.CreateNew(Radius);
+        _steering = NavSteering.CreateNew(context, Radius);
 
-        _motor = NavMotor.CreateNew(_frameCondition, CreateLocomotionProfile());
+        _motor = NavMotor.CreateNew(context, _frameCondition, CreateLocomotionProfile());
         _motor.SetVelocity(Velocity);
 
-        _turning = NavTurning.CreateNew(Radius);
+        _turning = NavTurning.CreateNew(context, Radius);
 
         CheckVoxelOccupancy(true);
 
@@ -367,11 +454,12 @@ public abstract class Navigator : INavigate, IRecordable
         _pendingGuidedVolumeExitHandoff = null;
         ResetGuidedClimbIntentState();
 
-        if (TrailblazerWorldManager.IsActive)
-            GridOccupantManager.TryDeregister(TrailblazerWorldManager.World, this);
+        if (_context != null && !_context.IsDisposed && _context.World.IsActive)
+            GridOccupantManager.TryDeregister(_context.World, this);
 
         _isSet = false;
         _isInitialized = false;
+        _context = null;
     }
 
     #endregion
@@ -527,6 +615,7 @@ public abstract class Navigator : INavigate, IRecordable
         _pendingGuidedVolumeExitHandoff = null;
 
         bool success = NavigatorPathRequestFactory.TryCreate(
+            context: RequireContext(),
             origin: Position,
             targetPosition: targetPosition,
             unitSize: Size,
@@ -692,13 +781,14 @@ public abstract class Navigator : INavigate, IRecordable
         CheckTrekCondition();
 
         Vector3d previousVelocity = _velocity;
-        Fixed64 invDelta = TrailblazerManager.InvDeltaTime;
+        TrailblazerWorldContext context = RequireContext();
+        Fixed64 invDelta = context.InvDeltaTime;
         _velocity = (Position - LastPosition) * invDelta;
         _speed = _velocity != Vector3d.Zero ? _velocity.Magnitude : Fixed64.Zero;
         _acceleration = (_velocity - previousVelocity) * invDelta;
 
         if (Steering!.ShouldMove && _acceleration != Vector3d.Zero)
-            _stuckThresholdSpeed = (_acceleration / TrailblazerManager.FrameRate).Magnitude;
+            _stuckThresholdSpeed = (_acceleration / context.FrameRate).Magnitude;
         else
             _stuckThresholdSpeed = Fixed64.Zero;
 
@@ -932,7 +1022,43 @@ public abstract class Navigator : INavigate, IRecordable
     /// <remarks>Override this method to customize GUID generation logic if a different strategy is required by derived classes.</remarks>
     /// <returns>A new <see cref="Guid"/> value that is guaranteed to be unique across space and time.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    protected virtual Guid GenerateGUID() => NavigatorGlobalIdAllocator.Create();
+    protected virtual Guid GenerateGUID() => NavigatorGlobalIdAllocator.Create(RequireContext());
+
+    private TrailblazerWorldContext EnsureContextForSetup()
+    {
+        if (_context != null)
+            return RequireContext();
+
+        if (TrailblazerManager.HasDefaultContext)
+        {
+            BindContext(TrailblazerManager.DefaultContext);
+            return _context!;
+        }
+
+        if (TrailblazerWorldManager.IsActive)
+        {
+            TrailblazerManager.Initialize(TrailblazerWorldManager.World);
+            BindContext(TrailblazerManager.DefaultContext);
+            return _context!;
+        }
+
+        throw new InvalidOperationException(
+            "Navigator requires a TrailblazerWorldContext before setup. Pass a context to the constructor, " +
+            "call BindContext(context), or use Setup(context, ...).");
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private TrailblazerWorldContext RequireContext()
+    {
+        if (_context == null)
+        {
+            throw new InvalidOperationException(
+                "Navigator requires a TrailblazerWorldContext before simulation.");
+        }
+
+        PathRequestContextResolver.ThrowIfUnusable(_context);
+        return _context;
+    }
 
     private void PrepareGuidedIntentState()
     {
@@ -997,7 +1123,7 @@ public abstract class Navigator : INavigate, IRecordable
             return false;
         }
 
-        if (!_pendingGuidedVolumeExitHandoff.TryCreateFollowupRequest(Position, Size, out IPathRequest? followupRequest)
+        if (!_pendingGuidedVolumeExitHandoff.TryCreateFollowupRequest(RequireContext(), Position, Size, out IPathRequest? followupRequest)
             || followupRequest == null)
         {
             return false;
@@ -1057,7 +1183,8 @@ public abstract class Navigator : INavigate, IRecordable
     {
         if (!init && Position == LastPosition) return;
 
-        bool voxelFound = TrailblazerWorldManager.TryGetGridAndVoxel(
+        GridWorld world = RequireContext().World;
+        bool voxelFound = world.TryGetGridAndVoxel(
             Position,
             out VoxelGrid? curGrid,
             out Voxel? curVoxel);
@@ -1069,7 +1196,7 @@ public abstract class Navigator : INavigate, IRecordable
             return;
         }
 
-        bool lastVoxelFound = TrailblazerWorldManager.TryGetGridAndVoxel(
+        bool lastVoxelFound = world.TryGetGridAndVoxel(
             LastPosition,
             out VoxelGrid? lastGrid,
             out Voxel? lastVoxel);
@@ -1126,6 +1253,7 @@ public abstract class Navigator : INavigate, IRecordable
 
         if (chronicler.Mode == SerializationMode.Loading)
         {
+            TrailblazerWorldContext context = RequireContext();
             _pendingGuidedVolumeExitHandoff = pendingGuidedVolumeExitHandoff?.IsValid == true
                 ? pendingGuidedVolumeExitHandoff
                 : null;
@@ -1140,8 +1268,12 @@ public abstract class Navigator : INavigate, IRecordable
             _isSet = true;
             _isInitialized = Motor != null;
 
+            _steering?.BindContext(context);
             _steering?.UpdateOwnerRadius(Radius);
 
+            _motor?.BindContext(context);
+
+            _turning?.BindContext(context);
             _turning?.OnInitialize(Radius);
 
             CheckVoxelOccupancy(true);

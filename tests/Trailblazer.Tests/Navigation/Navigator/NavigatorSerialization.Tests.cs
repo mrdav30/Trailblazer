@@ -642,7 +642,7 @@ public class NavigatorSerializationTests : IDisposable
         var source = new TestNavigator();
         source.Setup(new Vector3d(1, 0, 1), size: Fixed64.One);
 
-        var target = new TestNavigator();
+        var target = new TestNavigator(TrailblazerManager.DefaultContext);
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.Position.Should().Be(new Vector3d(1, 0, 1));

@@ -26,6 +26,8 @@ public class NavMotor : IRecordable
 
     private bool _isInitialized;
 
+    private TrailblazerWorldContext? _context;
+
     /// <inheritdoc cref="NavMotorEvents"/>
     [NonSerialized]
     public NavMotorEvents Events = new();
@@ -49,6 +51,11 @@ public class NavMotor : IRecordable
     /// Gets a value indicating whether the object has been initialized.
     /// </summary>
     public bool IsInitialized => _isInitialized;
+
+    /// <summary>
+    /// Gets the world context this motor is bound to, when explicitly bound.
+    /// </summary>
+    public TrailblazerWorldContext? Context => _context;
 
     /// <inheritdoc cref="PlatformLocomotion"/>
     public PlatformLocomotion PlatformModule => Handler.Platform;
@@ -167,6 +174,15 @@ public class NavMotor : IRecordable
     public static NavMotor CreateNew(TrekCondition initialCondition, LocomotionProfile? profile = null) => new(initialCondition, profile);
 
     /// <summary>
+    /// Creates a new context-bound <see cref="NavMotor"/> instance.
+    /// </summary>
+    public static NavMotor CreateNew(
+        TrailblazerWorldContext context,
+        TrekCondition initialCondition,
+        LocomotionProfile? profile = null) =>
+        new(context, initialCondition, profile);
+
+    /// <summary>
     /// Creates a new <see cref="NavMotor"/> instance without initializing it, allowing for manual setup before use.
     /// </summary>
     /// <param name="handler">Optional locomotion handler to associate with the new instance.</param>
@@ -177,6 +193,16 @@ public class NavMotor : IRecordable
         if (handler != null)
             motor._handler = handler;
 
+        return motor;
+    }
+
+    /// <summary>
+    /// Creates a new context-bound <see cref="NavMotor"/> instance without initializing it.
+    /// </summary>
+    public static NavMotor CreateUninitialized(TrailblazerWorldContext context, LocomotionHandler? handler = null)
+    {
+        var motor = CreateUninitialized(handler);
+        motor.BindContext(context);
         return motor;
     }
 
@@ -191,6 +217,35 @@ public class NavMotor : IRecordable
     public NavMotor(TrekCondition condition, LocomotionProfile? profile = null) => OnInitialize(condition, profile);
 
     /// <summary>
+    /// Initializes a new context-bound <see cref="NavMotor"/> instance.
+    /// </summary>
+    public NavMotor(TrailblazerWorldContext context, TrekCondition condition, LocomotionProfile? profile = null)
+    {
+        BindContext(context);
+        OnInitialize(condition, profile);
+    }
+
+    /// <summary>
+    /// Binds this motor to a world context.
+    /// </summary>
+    public void BindContext(TrailblazerWorldContext context)
+    {
+        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        _context = context;
+        _handler.BindContext(context);
+    }
+
+    private TrailblazerWorldContext? TryGetContext() => _context;
+
+    private int FrameCount => TryGetContext()?.FrameCount ?? TrailblazerManager.FrameCount;
+
+    private Fixed64 DeltaTime => TryGetContext()?.DeltaTime ?? TrailblazerManager.DeltaTime;
+
+    private Fixed64 InvDeltaTime => TryGetContext()?.InvDeltaTime ?? TrailblazerManager.InvDeltaTime;
+
+    private Fixed64 TotalTime => TryGetContext()?.TotalTime ?? TrailblazerManager.TotalTime;
+
+    /// <summary>
     /// Prepares the controller by linking it to the given object and setting initial state values.
     /// </summary>
     /// <param name="condition">The initial traversal condition of the object</param>
@@ -198,6 +253,8 @@ public class NavMotor : IRecordable
     public void OnInitialize(TrekCondition condition, LocomotionProfile? profile = null)
     {
         _handler = profile != null ? new LocomotionHandler(profile) : new LocomotionHandler();
+        if (_context != null)
+            _handler.BindContext(_context);
         CurrentState = new TransitState(condition);
         if (CurrentState.GroundState.HasValue)
             PlatformModule.HandlePlatformChange(CurrentState.GroundState); // set the initial platform
@@ -292,17 +349,17 @@ public class NavMotor : IRecordable
 
         if (TraversalInProgress)
         {
-            if (TrailblazerManager.FrameCount != _pendingTraversalFrame)
+            if (FrameCount != _pendingTraversalFrame)
             {
                 throw new InvalidOperationException(
-                    $"NavMotor traversal from frame {_pendingTraversalFrame} was never finalized or aborted before frame {TrailblazerManager.FrameCount}. Call FinalizeTraversal(...) or AbortTraversalFrame() in the same frame that opened traversal.");
+                    $"NavMotor traversal from frame {_pendingTraversalFrame} was never finalized or aborted before frame {FrameCount}. Call FinalizeTraversal(...) or AbortTraversalFrame() in the same frame that opened traversal.");
             }
 
             return false;
         }
 
         TraversalInProgress = true;
-        _pendingTraversalFrame = TrailblazerManager.FrameCount;
+        _pendingTraversalFrame = FrameCount;
         return true;
     }
 
@@ -765,7 +822,7 @@ public class NavMotor : IRecordable
         if (desiredVelocity == _forceOutput)
             return;
 
-        Fixed64 maxVelocityChange = GetMaxAcceleration() * TrailblazerManager.DeltaTime;
+        Fixed64 maxVelocityChange = GetMaxAcceleration() * DeltaTime;
         Vector3d velocityChange = (desiredVelocity - _forceOutput).ClampMagnitude(maxVelocityChange);
         if (!IsOnSolid && !Handler.IsInControl)
             return;
@@ -812,7 +869,7 @@ public class NavMotor : IRecordable
 
     private void ApplyEnvironmentalForces()
     {
-        Fixed64 gravityStep = Handler.Forces.GravityForce * TrailblazerManager.DeltaTime;
+        Fixed64 gravityStep = Handler.Forces.GravityForce * DeltaTime;
 
         if (IsFlying)
         {
@@ -858,7 +915,7 @@ public class NavMotor : IRecordable
         _forceOutput.y = Handler.Move.FrameVelocity.y - gravityStep;
 
         // Ensure velocity does not exceed terminal fall speed
-        Fixed64 terminalFallSpeed = Handler.Move.FrameVelocity.y + (_forceOutput.y * TrailblazerManager.DeltaTime);
+        Fixed64 terminalFallSpeed = Handler.Move.FrameVelocity.y + (_forceOutput.y * DeltaTime);
         if (terminalFallSpeed < -Handler.Forces.TerminalVelocity)
             _forceOutput.y = -Handler.Forces.TerminalVelocity - Handler.Move.FrameVelocity.y;
 
@@ -872,7 +929,7 @@ public class NavMotor : IRecordable
             Fixed64 extraJumpLimit = (jumpModule.JumpStartTime + jumpModule.ExtraJumpHeight) / GetVerticalJumpSpeed();
 
             // Negate the gravity we just applied, except we push in jumpDir rather than jump upwards.
-            if (TrailblazerManager.TotalTime <= extraJumpLimit)
+            if (TotalTime <= extraJumpLimit)
                 _forceOutput += jumpModule.FrameJumpDirection * gravityStep;
         }
     }
@@ -1089,7 +1146,7 @@ public class NavMotor : IRecordable
         if (climbModule == null)
             return Fixed64.Zero;
 
-        Fixed64 frameTravelAllowance = climbModule.MaxClimbSpeed * TrailblazerManager.DeltaTime;
+        Fixed64 frameTravelAllowance = climbModule.MaxClimbSpeed * DeltaTime;
         return climbModule.ClimbStartTolerance + frameTravelAllowance;
     }
 
@@ -1202,7 +1259,7 @@ public class NavMotor : IRecordable
     private Vector3d ResolveTraversalVelocityDelta()
     {
         return _forceOutput != Vector3d.Zero
-            ? _forceOutput * TrailblazerManager.DeltaTime
+            ? _forceOutput * DeltaTime
             : Vector3d.Zero;
     }
 
@@ -1268,11 +1325,11 @@ public class NavMotor : IRecordable
 
     private void ValidatePendingTraversalFrame()
     {
-        if (TrailblazerManager.FrameCount == _pendingTraversalFrame)
+        if (FrameCount == _pendingTraversalFrame)
             return;
 
         throw new InvalidOperationException(
-            $"NavMotor traversal opened on frame {_pendingTraversalFrame} cannot be finalized on frame {TrailblazerManager.FrameCount}. Call AbortTraversalFrame() to discard stale traversal state before starting a new frame.");
+            $"NavMotor traversal opened on frame {_pendingTraversalFrame} cannot be finalized on frame {FrameCount}. Call AbortTraversalFrame() to discard stale traversal state before starting a new frame.");
     }
 
     private void RefreshTraversalState(
@@ -1280,7 +1337,7 @@ public class NavMotor : IRecordable
         Vector3d lastPosition,
         TrekCondition conditonRefresh)
     {
-        Handler.Move.FrameVelocity = (newPosition - lastPosition) * TrailblazerManager.InvDeltaTime;
+        Handler.Move.FrameVelocity = (newPosition - lastPosition) * InvDeltaTime;
 
         CurrentState.Update(conditonRefresh, CurrentState.ToTrekCondition());
 

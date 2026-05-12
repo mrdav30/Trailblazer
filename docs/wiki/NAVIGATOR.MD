@@ -73,6 +73,7 @@ That keeps the steering-facing contract small while still letting turning or hos
 
 The main entry points are:
 
+- constructor injection, `BindContext(...)`, or `Setup(context, ...)`
 - `Setup(...)`
 - `Initialize(TrekCondition condition)`
 - `PrewarmMovementGroup()`
@@ -139,6 +140,18 @@ Protected frame-local state includes:
 ## 5. State Ownership
 
 `Navigator` owns several categories of state.
+
+### 5.0 World Context Binding
+
+Each navigator belongs to exactly one `TrailblazerWorldContext` while active. Bind the context by
+passing it to the concrete navigator constructor, calling `BindContext(context)`, or using
+`Setup(context, ...)`. Compatibility setup without an explicit context uses the configured default
+context, but multi-world hosts should bind explicitly.
+
+The bound context supplies voxel occupancy, guided request creation, guide lookup, frame timing,
+movement-group coordination, and deterministic navigator id allocation. `Reset()` deregisters from
+the bound world and clears the binding; reuse across worlds is allowed only after reset and an
+explicit rebind.
 
 ### 5.1 Transform and Motion State
 
@@ -228,7 +241,7 @@ It:
 
 - assigns `GlobalId`
 - uses a host-provided `globalId` when one is supplied
-- otherwise allocates a deterministic default id from navigator setup order
+- otherwise allocates a deterministic default id from the owning context's navigator setup order
 - sets `Position` and `LastPosition`
 - sets `Rotation`
 - derives `Forward`
@@ -247,11 +260,11 @@ If your broader simulation stack already owns stable agent ids, pass that id int
 It:
 
 - stores the initial `_frameCondition`
-- creates `NavSteering` using `Radius`
-- creates `NavMotor` using `_frameCondition`
+- creates context-bound `NavSteering` using `Radius`
+- creates context-bound `NavMotor` using `_frameCondition`
 - seeds motor velocity from the navigator's starting `Velocity`
-- creates `NavTurning` using `Radius`
-- performs initial voxel occupancy registration
+- creates context-bound `NavTurning` using `Radius`
+- performs initial voxel occupancy registration in the owning context's `GridWorld`
 - marks `_isInitialized = true`
 
 After `Setup(...)` and `Initialize(...)`, `IsActive` becomes true.
@@ -266,9 +279,11 @@ It:
 - resets `_frameRequest`
 - sets `IsGuideded = false`
 - removes the navigator from occupied voxels
+- clears the bound context
 - marks the navigator inactive
 
-After `Reset()`, the instance must go through `Setup(...)` and `Initialize(...)` again before reuse.
+After `Reset()`, the instance must be rebound, then go through `Setup(...)` and `Initialize(...)`
+again before reuse.
 
 ## 7. Input and Travel Requests
 
@@ -581,7 +596,8 @@ This protected factory hook lets subclasses build custom request types without r
 A typical concrete navigator flow looks like this:
 
 ```csharp
-var navigator = new MyNavigator();
+TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
+var navigator = new MyNavigator(context);
 
 navigator.Setup(
     position: new Vector3d(0, 0, 0),
@@ -599,14 +615,14 @@ navigator.Initialize(new TrekCondition
 navigator.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
 navigator.ApplyGuidedTrekRequest(new Vector3d(5, 0, 5), rate: TrekRate.Moderate);
 
-TrailblazerManager.Simulate();
+context.Simulate();
 navigator.Simulate();
 navigator.CommitFrameMotion();
 ```
 
 If several navigators should move as one group, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
 
-If grouped navigators are restored through Chronicler and you want formation behavior available on the very next frame, call `PrewarmMovementGroup()` once per loaded navigator before the next `TrailblazerManager.Simulate()` step. If you skip it, grouped steering still re-joins lazily during the next steering update.
+If grouped navigators are restored through Chronicler and you want formation behavior available on the very next frame, bind and initialize each navigator shell to the correct context, populate it, then call `PrewarmMovementGroup()` once per loaded navigator before the next `context.Simulate()` step. If you skip it, grouped steering still re-joins lazily during the next steering update.
 
 ## 15. Common Gotchas
 

@@ -56,6 +56,8 @@ public class LocomotionHandler : IRecordable
 
     private ClimbLocomotion? _climb;
 
+    private TrailblazerWorldContext? _context;
+
     #endregion
 
     #region Initialization
@@ -253,7 +255,15 @@ public class LocomotionHandler : IRecordable
         _fly = profile.Fly;
         _climb = profile.Climb;
 
+        BindInstalledLocomotions();
         RefreshInstalledKinds();
+    }
+
+    internal void BindContext(TrailblazerWorldContext context)
+    {
+        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        _context = context;
+        BindInstalledLocomotions();
     }
 
     /// <summary>
@@ -433,6 +443,8 @@ public class LocomotionHandler : IRecordable
 
     private void SetLocomotion(LocomotionSlot slot, ILocomotion? locomotion)
     {
+        BindLocomotion(locomotion);
+
         switch (slot)
         {
             case LocomotionSlot.Move:
@@ -459,6 +471,37 @@ public class LocomotionHandler : IRecordable
             case LocomotionSlot.Climb:
                 _climb = locomotion as ClimbLocomotion;
                 return;
+        }
+    }
+
+    private void BindInstalledLocomotions()
+    {
+        BindLocomotion(_move);
+        BindLocomotion(_platform);
+        BindLocomotion(_jump);
+        BindLocomotion(_fall);
+        BindLocomotion(_slide);
+        BindLocomotion(_water);
+        BindLocomotion(_fly);
+        BindLocomotion(_climb);
+    }
+
+    private void BindLocomotion(ILocomotion? locomotion)
+    {
+        if (_context == null || locomotion == null)
+            return;
+
+        switch (locomotion)
+        {
+            case JumpLocomotion jump:
+                jump.BindContext(_context);
+                break;
+            case PlatformLocomotion platform:
+                platform.BindContext(_context);
+                break;
+            case WaterLocomotion water:
+                water.BindContext(_context);
+                break;
         }
     }
 

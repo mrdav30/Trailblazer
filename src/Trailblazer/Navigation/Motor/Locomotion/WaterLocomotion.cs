@@ -13,6 +13,8 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 public class WaterLocomotion : ILocomotion
 {
+    private TrailblazerWorldContext? _context;
+
     #region Constants
 
     /// <summary>
@@ -184,6 +186,8 @@ public class WaterLocomotion : ILocomotion
 
     #endregion
 
+    private Fixed64 DeltaTime => _context?.DeltaTime ?? TrailblazerManager.DeltaTime;
+
     /// <summary>
     /// Updates the dive timer, tracking underwater duration and regenerating breath when resurfacing.
     /// </summary>
@@ -191,17 +195,23 @@ public class WaterLocomotion : ILocomotion
     {
         if (IsDiving)
         {
-            UnderwaterTimer += TrailblazerManager.DeltaTime;
+            UnderwaterTimer += DeltaTime;
             return;
         }
 
         if (UnderwaterTimer == Fixed64.Zero)
             return;
 
-        Fixed64 time = TrailblazerManager.DeltaTime * BreathRegenerateIncrement;
+        Fixed64 time = DeltaTime * BreathRegenerateIncrement;
         UnderwaterTimer -= time;
         if (UnderwaterTimer < Fixed64.Zero)
             UnderwaterTimer = Fixed64.Zero;
+    }
+
+    internal void BindContext(TrailblazerWorldContext context)
+    {
+        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        _context = context;
     }
 
     /// <inheritdoc />

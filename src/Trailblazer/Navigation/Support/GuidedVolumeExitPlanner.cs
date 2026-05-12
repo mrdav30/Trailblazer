@@ -14,6 +14,7 @@ internal static class GuidedVolumeExitPlanner
     /// <summary>
     /// Attempts to plan a volume exit path from the origin to a target position, followed by a chart-backed leg to the final destination.
     /// </summary>
+    /// <param name="context">The world context that owns the request and transition registry.</param>
     /// <param name="origin"></param>
     /// <param name="targetPosition"></param>
     /// <param name="unitSize"></param>
@@ -29,6 +30,7 @@ internal static class GuidedVolumeExitPlanner
     /// <param name="totalPathCost"></param>
     /// <returns>True if a valid path was found; otherwise, false.</returns>
     public static bool TryPlan(
+        TrailblazerWorldContext context,
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
@@ -43,6 +45,7 @@ internal static class GuidedVolumeExitPlanner
         out GuidedVolumeExitHandoff? handoff,
         out int totalPathCost)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         request = null;
         handoff = null;
         totalPathCost = 0;
@@ -58,7 +61,8 @@ internal static class GuidedVolumeExitPlanner
         int bestTotalCost = int.MaxValue;
 
         if (!TryPlanWithTransitions(
-                GetLocalDirectedTransitions(targetPosition, medium),
+                GetLocalDirectedTransitions(context, targetPosition, medium),
+                context,
                 origin,
                 targetPosition,
                 unitSize,
@@ -72,7 +76,8 @@ internal static class GuidedVolumeExitPlanner
                 ref bestRequest,
                 ref bestTotalCost)
             && !TryPlanWithTransitions(
-                TraversalTransitionQuery.GetDirectedTransitions(medium, TraversalMedium.Solid),
+                context.Transitions.GetDirectedTransitions(medium, TraversalMedium.Solid),
+                context,
                 origin,
                 targetPosition,
                 unitSize,
@@ -96,6 +101,7 @@ internal static class GuidedVolumeExitPlanner
         totalPathCost = bestTotalCost;
         handoff = CreateHandoff(
             bestTransition,
+            context,
             targetPosition,
             chartPathMode,
             allowUnwalkableEndpoints,
@@ -106,8 +112,41 @@ internal static class GuidedVolumeExitPlanner
         return true;
     }
 
+    public static bool TryPlan(
+        Vector3d origin,
+        Vector3d targetPosition,
+        Fixed64 unitSize,
+        TraversalMedium medium,
+        SolidPathAlgorithm chartPathMode,
+        bool allowUnwalkableEndpoints,
+        bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
+        HeuristicMethod aStarHeuristic,
+        int flowFieldExtraFloodRange,
+        [NotNullWhen(true)] out VolumePathRequest? request,
+        out GuidedVolumeExitHandoff? handoff,
+        out int totalPathCost)
+    {
+        return TryPlan(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            targetPosition,
+            unitSize,
+            medium,
+            chartPathMode,
+            allowUnwalkableEndpoints,
+            allowTraversalTransitions,
+            maxClimbHeight,
+            aStarHeuristic,
+            flowFieldExtraFloodRange,
+            out request,
+            out handoff,
+            out totalPathCost);
+    }
+
     private static bool TryPlanWithTransitions(
         TraversalTransition[] transitions,
+        TrailblazerWorldContext context,
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
@@ -130,6 +169,7 @@ internal static class GuidedVolumeExitPlanner
         {
             TraversalTransition transition = transitions[i];
             VolumePathRequest? volumeRequest = VolumePathRequest.Create(
+                context,
                 origin,
                 transition.Source.Position,
                 unitSize,
@@ -142,7 +182,7 @@ internal static class GuidedVolumeExitPlanner
             int volumeCost = 0;
             if (!volumeRequest.HasZeroDisplacement)
             {
-                VolumeSurveyResult volumeResult = VolumeSurveyor.Shared.FindPath(volumeRequest);
+                VolumeSurveyResult volumeResult = context.Pathing.State.GuideState.VolumeSurveyor.FindPath(volumeRequest);
                 if (!volumeResult.HasPath)
                     continue;
 
@@ -150,6 +190,7 @@ internal static class GuidedVolumeExitPlanner
             }
 
             if (!TryGetChartLegCost(
+                context,
                 transition.Destination.Position,
                 targetPosition,
                 unitSize,
@@ -178,14 +219,15 @@ internal static class GuidedVolumeExitPlanner
     }
 
     private static TraversalTransition[] GetLocalDirectedTransitions(
+        TrailblazerWorldContext context,
         Vector3d targetPosition,
         TraversalMedium medium)
     {
-        if (!TrailblazerWorldManager.TryGetVoxel(targetPosition, out Voxel? targetVoxel)
+        if (!context.World.TryGetVoxel(targetPosition, out Voxel? targetVoxel)
             || targetVoxel == null)
             return Array.Empty<TraversalTransition>();
 
-        return TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(
+        return context.Transitions.GetDirectedTransitionsToDestinationGrid(
             targetVoxel.GridIndex,
             medium,
             TraversalMedium.Solid);
@@ -193,6 +235,7 @@ internal static class GuidedVolumeExitPlanner
 
     private static GuidedVolumeExitHandoff CreateHandoff(
         TraversalTransition transition,
+        TrailblazerWorldContext context,
         Vector3d targetPosition,
         SolidPathAlgorithm chartPathMode,
         bool allowUnwalkableEndpoints,
@@ -204,6 +247,7 @@ internal static class GuidedVolumeExitPlanner
         return new GuidedVolumeExitHandoff
         {
             TransitionId = transition.Id,
+            Context = context,
             ChartOriginPosition = transition.Destination.Position,
             TargetPosition = targetPosition,
             ChartPathMode = chartPathMode,
@@ -217,6 +261,7 @@ internal static class GuidedVolumeExitPlanner
     }
 
     private static bool TryGetChartLegCost(
+        TrailblazerWorldContext context,
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
@@ -234,6 +279,7 @@ internal static class GuidedVolumeExitPlanner
         {
             case SolidPathAlgorithm.FlowField:
                 FlowFieldPathRequest? flowFieldRequest = FlowFieldPathRequest.Create(
+                    context,
                     origin,
                     targetPosition,
                     unitSize,
@@ -258,6 +304,7 @@ internal static class GuidedVolumeExitPlanner
             case SolidPathAlgorithm.AStar:
             default:
                 AStarPathRequest? aStarRequest = AStarPathRequest.Create(
+                    context,
                     origin,
                     targetPosition,
                     unitSize,
@@ -287,7 +334,7 @@ internal static class GuidedVolumeExitPlanner
     {
         chartCost = 0;
 
-        AStarSurveyResult aStarResult = AStarSurveyor.Shared.FindPath(request);
+        AStarSurveyResult aStarResult = request.Context.Pathing.State.GuideState.AStarSurveyor.FindPath(request);
         return aStarResult.HasPath
             && TryAssignChartCost(aStarResult.Waypoints[^1].PathCost, out chartCost);
     }
@@ -298,7 +345,7 @@ internal static class GuidedVolumeExitPlanner
     {
         chartCost = 0;
 
-        FlowFieldSurveyResult flowFieldResult = FlowFieldSurveyor.Shared.FindPath(request);
+        FlowFieldSurveyResult flowFieldResult = request.Context.Pathing.State.GuideState.FlowFieldSurveyor.FindPath(request);
         return flowFieldResult.HasPath
             && flowFieldResult.Fields != null
             && request.StartNode != null

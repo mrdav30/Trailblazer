@@ -99,7 +99,13 @@ internal sealed class PathRequestRecord : IRecordable
 
     public bool TryCreateRequest(out IPathRequest? request)
     {
+        return TryCreateRequest(PathRequestContextResolver.DefaultContext, out request);
+    }
+
+    public bool TryCreateRequest(TrailblazerWorldContext context, out IPathRequest? request)
+    {
         request = null;
+        PathRequestContextResolver.ThrowIfUnusable(context);
 
         switch (Kind)
         {
@@ -108,6 +114,7 @@ internal sealed class PathRequestRecord : IRecordable
 
             case PathRequestRecordKind.AStar:
                 AStarPathRequest? aStar = AStarPathRequest.Create(
+                    context,
                     Origin,
                     TargetPosition,
                     UnitSize,
@@ -126,6 +133,7 @@ internal sealed class PathRequestRecord : IRecordable
 
             case PathRequestRecordKind.FlowField:
                 FlowFieldPathRequest? flowField = FlowFieldPathRequest.Create(
+                    context,
                     Origin,
                     TargetPosition,
                     UnitSize,
@@ -144,6 +152,7 @@ internal sealed class PathRequestRecord : IRecordable
 
             case PathRequestRecordKind.Volume:
                 VolumePathRequest? volume = VolumePathRequest.Create(
+                    context,
                     Origin,
                     TargetPosition,
                     UnitSize,
@@ -161,6 +170,7 @@ internal sealed class PathRequestRecord : IRecordable
 
             case PathRequestRecordKind.Hybrid:
                 HybridPathRequest? hybrid = HybridPathRequest.Create(
+                    context,
                     Origin,
                     TargetPosition,
                     UnitSize,
@@ -187,7 +197,7 @@ internal sealed class PathRequestRecord : IRecordable
         if (!HasGuide || request == null)
             return false;
 
-        if (!PathGuideFactory.RequestGuide(request, out guide) || guide == null)
+        if (!request.Context.Guides.RequestGuide(request, out guide) || guide == null)
             return false;
 
         if (guide is AStarGuide aStarGuide)

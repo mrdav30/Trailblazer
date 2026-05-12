@@ -53,8 +53,9 @@ This is a deliberate constraint.
 The current load path assumes:
 
 1. the host has already created the runtime object
-2. the runtime object has already been initialized enough to own its nested controllers
-3. a Chronicler transport such as `JsonRecordSerializer.Populate(...)` or `MemoryPackRecordSerializer.Populate(...)` then overwrites supported state
+2. the runtime object has already been bound to the correct `TrailblazerWorldContext`
+3. the runtime object has already been initialized enough to own its nested controllers
+4. a Chronicler transport such as `JsonRecordSerializer.Populate(...)` or `MemoryPackRecordSerializer.Populate(...)` then overwrites supported state
 
 This means the current system is designed for:
 
@@ -63,6 +64,10 @@ This means the current system is designed for:
 - proving the shape of the API before broadening scope
 
 Trailblazer intentionally does not treat Chronicler as a construct-from-data runtime factory.
+
+Context is host binding, not serialized state. Hosts must recreate or look up the correct
+`TrailblazerWorldContext`, bind each navigator shell to it, and then populate state. This keeps save
+payloads engine-agnostic and prevents one snapshot from silently attaching to the wrong world.
 
 Another important rule applies across the Trailblazer `RecordData(...)` implementations:
 
@@ -142,10 +147,10 @@ The request record currently captures:
 On load it also:
 
 - rebuilds the active `IPathRequest` from the recorded request data
-- reacquires a guide from `PathGuideFactory` when the session was actively guide-driven
+- reacquires a guide from the request's owning context when the session was actively guide-driven
 - restores waypoint progress for both `AStarGuide` and `VolumeGuide` when the guide is waypoint-based
 - clears any stale guide or movement-group session state already attached to the existing runtime shell
-- preserves per-session movement-group intent while treating the shared coordinator as rebuild-only runtime state
+- preserves per-session movement-group intent while treating the context-owned coordinator as rebuild-only runtime state
 - allows hosts to prewarm grouped sessions explicitly through `Navigator.PrewarmMovementGroup()` or `NavSteering.PrewarmMovementGroup(...)`
 - falls back to a new path request on the next steering tick if a guide could not be reacquired immediately
 

@@ -62,13 +62,13 @@ Important details:
 `TrailblazerWorldContext` is the new explicit owner for one `GridWorld` and its deterministic
 simulation clock. It provides context construction, attach/owned-world lifetime, independent frame
 rate and frame count, context-local lifecycle hooks, pathing state, transitions, volume rules,
-reachability snapshots, and guide caches. `TrailblazerManager` creates a default context when
-initialized with a `GridWorld` so existing static integrations keep working while navigator state
-moves behind explicit contexts.
+reachability snapshots, guide caches, navigator ids, and movement-group state. `TrailblazerManager`
+creates a default context when initialized with a `GridWorld` so existing static integrations keep
+working while new integrations bind runtime objects to explicit contexts.
 
 ### 2.3 PathManager
 
-`TrailblazerWorldContext.Pathing` is the context-local chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell query helpers, owns chart partition pools, and handles grid rebuild events for its `GridWorld`. The static `PathManager` remains as a default-context compatibility facade for single-world integrations and still exposes closest-active-transition and direct-travel utilities while request and navigation binding continue to migrate.
+`TrailblazerWorldContext.Pathing` is the context-local chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell query helpers, owns chart partition pools, and handles grid rebuild events for its `GridWorld`. The static `PathManager` remains as a default-context compatibility facade for single-world integrations and still exposes closest-active-transition and direct-travel utilities.
 
 Explicit handoff data between chart-backed traversal and raw-volume traversal is registered through
 `TrailblazerWorldContext.Transitions`. `TraversalTransitionRegistry` remains as the default-context
@@ -270,7 +270,7 @@ The navigation layer is built from four main pieces.
 
 ### 6.1 Navigator
 
-`Navigator` is the host-facing orchestration layer. It owns transform and traversal state, composes `NavSteering`, `NavTurning`, and `NavMotor`, coordinates the `Simulate()` / `CommitFrameMotion()` lifecycle, and exposes an abstract `CheckTrekCondition()` hook so each host provides traversal probing explicitly.
+`Navigator` is the host-facing orchestration layer. It binds to one `TrailblazerWorldContext`, owns transform and traversal state, composes `NavSteering`, `NavTurning`, and `NavMotor`, coordinates the `Simulate()` / `CommitFrameMotion()` lifecycle, and exposes an abstract `CheckTrekCondition()` hook so each host provides traversal probing explicitly.
 
 See also:
 
@@ -374,7 +374,7 @@ Before runtime pathing works correctly:
 2. Build `NavigationChart` data for the relevant walkable space.
 3. Register the chart with `context.Pathing.Register(...)`.
 4. If you registered with `initializeChart: false`, call `context.Pathing.InitializeChart(chart.Name)` before requesting guides or simulating navigators.
-5. Create and initialize your `Navigator`, or request guides directly.
+5. Create and initialize your context-bound `Navigator`, or request guides directly.
 6. Keep traversal state up to date through your concrete navigator's `CheckTrekCondition()` implementation.
 7. Unload charts or clear caches during teardown.
 

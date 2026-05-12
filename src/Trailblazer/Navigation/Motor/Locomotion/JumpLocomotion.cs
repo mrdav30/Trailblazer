@@ -13,6 +13,8 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 public class JumpLocomotion : ILocomotion
 {
+    private TrailblazerWorldContext? _context;
+
     #region Constants
 
     /// <summary>
@@ -169,6 +171,10 @@ public class JumpLocomotion : ILocomotion
     /// </summary>
     public bool CanJump => JumpCount < MaxJumpCount && !IsCoolingDown;
 
+    private Fixed64 DeltaTime => _context?.DeltaTime ?? TrailblazerManager.DeltaTime;
+
+    private Fixed64 TotalTime => _context?.TotalTime ?? TrailblazerManager.TotalTime;
+
     #endregion
 
     #region Methods
@@ -181,7 +187,7 @@ public class JumpLocomotion : ILocomotion
         JumpCount++;
         IsJumping = true;
         IsHoldingJump = true;
-        JumpStartTime = TrailblazerManager.TotalTime;
+        JumpStartTime = TotalTime;
 
         // Start cooldown only if this was the last allowed jump
         if (JumpCount >= MaxJumpCount)
@@ -204,7 +210,7 @@ public class JumpLocomotion : ILocomotion
     {
         if (!IsCoolingDown)
             return;
-        CooldownTimer += TrailblazerManager.DeltaTime;
+        CooldownTimer += DeltaTime;
         if (CooldownTimer >= CooldownTime)
         {
             CooldownTimer = Fixed64.Zero;
@@ -220,6 +226,12 @@ public class JumpLocomotion : ILocomotion
         JumpCount = 0;
         IsJumping = false;
         IsHoldingJump = false;
+    }
+
+    internal void BindContext(TrailblazerWorldContext context)
+    {
+        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        _context = context;
     }
 
     #endregion

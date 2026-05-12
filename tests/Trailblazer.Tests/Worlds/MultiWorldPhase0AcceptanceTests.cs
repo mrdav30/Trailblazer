@@ -1,8 +1,15 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
+using GridForge.Grids;
+using GridForge.Spatial;
+using SwiftCollections;
 using System;
+using Trailblazer.Navigation;
+using Trailblazer.Navigation.Motor;
+using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
+using Trailblazer.Tests.Navigation;
 using Xunit;
 
 namespace Trailblazer.Tests.Worlds;
@@ -10,9 +17,6 @@ namespace Trailblazer.Tests.Worlds;
 [Collection("PathingCollection")]
 public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
 {
-    private const string Phase0SkipReason =
-        "Phase 0 red acceptance test. Unskip in the owning implementation phase after context-local state exists.";
-
     public void Dispose()
     {
         PathManager.Reset();
@@ -90,20 +94,47 @@ public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
         contextB.FrameCount.Should().Be(1);
     }
 
-    [Fact(Skip = Phase0SkipReason)]
-    [Trait("Category", "MultiWorldPhase0Red")]
+    [Fact]
     public void MovementGroups_WithSameGroupId_ShouldStayContextLocal()
     {
-        Assert.Fail(
-            "Pending Phase 6: movement group state must be owned by TrailblazerWorldContext, not process-wide MovementGroupCoordinator state.");
+        using TrailblazerWorldContext contextA = CreateContextWithGrid();
+        using TrailblazerWorldContext contextB = CreateContextWithGrid();
+        var contextASession = new MovementGroupSession { GroupId = 4 };
+        var contextBSession = new MovementGroupSession { GroupId = 4 };
+        var contextBProbe = new MovementGroupSession { GroupId = 4 };
+        Guid contextAOwner = Guid.NewGuid();
+        Guid contextBOwner = Guid.NewGuid();
+        Vector3d destination = new(3, 0, 0);
+
+        contextA.Navigation.MovementGroups.Prewarm(contextASession, contextAOwner, destination, Vector3d.Zero, Fixed64.One);
+        contextB.Navigation.MovementGroups.Prewarm(contextBSession, contextBOwner, destination, Vector3d.Zero, Fixed64.One);
+
+        contextB.Navigation.MovementGroups.IsNeighbor(contextBProbe, contextAOwner, destination, contextB.FrameCount)
+            .Should()
+            .BeFalse();
+        contextB.Navigation.MovementGroups.IsNeighbor(contextBProbe, contextBOwner, destination, contextB.FrameCount)
+            .Should()
+            .BeTrue();
     }
 
-    [Fact(Skip = Phase0SkipReason)]
-    [Trait("Category", "MultiWorldPhase0Red")]
+    [Fact]
     public void NavigatorReset_ShouldDeregisterFromItsOwnContextWorld()
     {
-        Assert.Fail(
-            "Pending Phase 6: Navigator must store its owning TrailblazerWorldContext and deregister through that world during reset.");
+        using TrailblazerWorldContext contextA = CreateContextWithGrid();
+        using TrailblazerWorldContext contextB = CreateContextWithGrid();
+        TrailblazerManager.Initialize(contextB.World);
+
+        var navigator = new TestNavigator(contextA);
+        navigator.Setup(Vector3d.Zero);
+        navigator.Initialize(new TrekCondition());
+
+        ScanSteerCount(contextA, Vector3d.Zero).Should().Be(1);
+        ScanSteerCount(contextB, Vector3d.Zero).Should().Be(0);
+
+        navigator.Reset();
+
+        ScanSteerCount(contextA, Vector3d.Zero).Should().Be(0);
+        ScanSteerCount(contextB, Vector3d.Zero).Should().Be(0);
     }
 
     private static TrailblazerWorldContext CreateContextWithGrid()
@@ -135,5 +166,19 @@ public sealed class MultiWorldPhase0AcceptanceTests : IDisposable
         Vector3d destination)
     {
         return TestRequire.NotNull(AStarPathRequest.Create(context, source, destination, Fixed64.One));
+    }
+
+    private static int ScanSteerCount(TrailblazerWorldContext context, Vector3d position)
+    {
+        var results = new SwiftList<ISteer>();
+        var scratch = new GridScanScratch();
+        GridScanManager.ScanRadiusInto<ISteer>(
+            context.World,
+            position,
+            Fixed64.One,
+            results,
+            scratch);
+
+        return results.Count;
     }
 }

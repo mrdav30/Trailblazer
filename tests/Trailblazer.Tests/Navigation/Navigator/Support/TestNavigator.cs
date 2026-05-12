@@ -6,6 +6,13 @@ namespace Trailblazer.Tests.Navigation;
 
 internal sealed class TestNavigator : Navigator
 {
+    public TestNavigator() { }
+
+    public TestNavigator(TrailblazerWorldContext context)
+        : base(context)
+    {
+    }
+
     public TrekRequest FrameRequest => _frameRequest;
 
     public TrekCondition FrameCondition => _frameCondition;

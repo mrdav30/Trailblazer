@@ -14,6 +14,8 @@ namespace Trailblazer.Navigation.Motor;
 /// </remarks>
 public class PlatformLocomotion : ILocomotion
 {
+    private TrailblazerWorldContext? _context;
+
     #region Constants
 
     /// <summary>
@@ -121,6 +123,8 @@ public class PlatformLocomotion : ILocomotion
     [Transient]
     public Vector3d FramePlatformVelocity { get; set; }
 
+    private Fixed64 InvDeltaTime => _context?.InvDeltaTime ?? TrailblazerManager.InvDeltaTime;
+
     /// <summary>
     /// The number of frames the scout has been holding onto a platform.
     /// </summary>
@@ -172,12 +176,18 @@ public class PlatformLocomotion : ILocomotion
             Vector3d previousPoint = PreviousPlatform?.Transform.TransformPoint(ScoutLocalPoint) ?? Vector3d.Zero;
 
             // Store platform velocity to use as a canceling force
-            PlatformVelocity = (currentPoint - previousPoint) * TrailblazerManager.InvDeltaTime;
+            PlatformVelocity = (currentPoint - previousPoint) * InvDeltaTime;
         }
 
         PreviousPlatform = ActivePlatform;
         IsNewPlatform = false;
         _preservePreviousTransformForAttachment = false;
+    }
+
+    internal void BindContext(TrailblazerWorldContext context)
+    {
+        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        _context = context;
     }
 
     /// <summary>

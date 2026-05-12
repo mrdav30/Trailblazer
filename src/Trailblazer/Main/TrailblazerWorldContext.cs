@@ -2,6 +2,7 @@ using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
 using System;
+using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
 namespace Trailblazer;
@@ -32,6 +33,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         Transitions = new TrailblazerTransitionService(this, Pathing.State);
         VolumeRules = new TrailblazerVolumeRulesService(this, Pathing.State);
         Guides = new TrailblazerGuideService(this, Pathing.State);
+        Navigation = new TrailblazerNavigationService(this);
     }
 
     /// <summary>
@@ -58,6 +60,11 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// Gets this context's world-local path guide service.
     /// </summary>
     public TrailblazerGuideService Guides { get; }
+
+    /// <summary>
+    /// Gets this context's world-local navigation coordination service.
+    /// </summary>
+    public TrailblazerNavigationService Navigation { get; }
 
     /// <summary>
     /// Gets whether this context has been disposed.
@@ -241,6 +248,7 @@ public sealed class TrailblazerWorldContext : IDisposable
     {
         ThrowIfDisposed();
         _clock.Reset();
+        Navigation.Reset();
         _hooks.InvokeReset();
     }
 

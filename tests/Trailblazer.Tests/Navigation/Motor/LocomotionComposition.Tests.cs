@@ -37,7 +37,8 @@ public class LocomotionCompositionTests : IDisposable
     [Fact]
     public void Given_NavigatorOverride_When_Initialized_Then_CustomProfileIsUsed()
     {
-        var navigator = new MinimalProfileNavigator();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        var navigator = new MinimalProfileNavigator(context);
         navigator.Setup(Vector3d.Zero);
         navigator.Initialize(new TrekCondition
         {
@@ -173,6 +174,11 @@ public class LocomotionCompositionTests : IDisposable
 
     private sealed class MinimalProfileNavigator : Navigator
     {
+        public MinimalProfileNavigator(TrailblazerWorldContext context)
+            : base(context)
+        {
+        }
+
         public override void CheckTrekCondition()
         {
         }

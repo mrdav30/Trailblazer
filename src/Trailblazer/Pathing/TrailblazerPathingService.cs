@@ -215,6 +215,17 @@ public sealed class TrailblazerPathingService
         return true;
     }
 
+    internal bool NeedsPath(
+        Vector3d startPosition,
+        Vector3d endPosition,
+        Fixed64 unitSize,
+        bool includeEnd = false)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(State))
+            return PathManager.NeedsPath(_context.World, startPosition, endPosition, unitSize, includeEnd);
+    }
+
     internal void HandleGridChanged(GridEventInfo eventInfo)
     {
         EnsureUsable();

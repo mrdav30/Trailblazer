@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 
 namespace Trailblazer;
 
@@ -8,7 +7,7 @@ namespace Trailblazer;
 /// </summary>
 internal static class NavigatorGlobalIdAllocator
 {
-    private static long _nextId;
+    private static readonly NavigatorGlobalIdAllocatorState FallbackState = new();
 
     internal static void RegisterTrailblazerLifecycleHooks()
     {
@@ -20,23 +19,23 @@ internal static class NavigatorGlobalIdAllocator
 
     internal static Guid Create()
     {
-        long next = Interlocked.Increment(ref _nextId);
-        return new Guid(
-            unchecked((int)next),
-            unchecked((short)(next >> 32)),
-            unchecked((short)(next >> 48)),
-            (byte)'T',
-            (byte)'R',
-            (byte)'A',
-            (byte)'I',
-            (byte)'L',
-            (byte)'B',
-            (byte)'L',
-            (byte)'Z');
+        return TrailblazerManager.HasDefaultContext
+            ? TrailblazerManager.DefaultContext.Navigation.CreateNavigatorId()
+            : FallbackState.Create();
+    }
+
+    internal static Guid Create(TrailblazerWorldContext context)
+    {
+        if (context == null)
+            throw new ArgumentNullException(nameof(context));
+
+        return context.Navigation.CreateNavigatorId();
     }
 
     internal static void Reset()
     {
-        Interlocked.Exchange(ref _nextId, 0);
+        FallbackState.Reset();
+        if (TrailblazerManager.HasDefaultContext)
+            TrailblazerManager.DefaultContext.Navigation.NavigatorIds.Reset();
     }
 }

@@ -143,8 +143,8 @@ pathing APIs route through that context. Hosts that need more than one world sho
 directly with `TrailblazerWorldContext.Attach(world)` or `TrailblazerWorldContext.CreateOwned(...)`
 and register charts through `context.Pathing.Register(...)`. Chart registries, live voxel ownership,
 partition pools, grid rebuild handling, transition registries, volume-medium rules, reachability
-snapshots, guide caches, path requests, and request-time endpoint resolution are context-local.
-Navigator state is being moved behind that context in a follow-up phase.
+snapshots, guide caches, path requests, request-time endpoint resolution, navigator ids, movement
+groups, and navigator-owned runtime lookups are context-local.
 `PathManager.Register(world, ...)` is no longer a multi-world registration path.
 
 `PathManager.Register(chart)` can initialize the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step. Initialization and registration order are live registration state, not authored chart data; use `PathManager.IsChartInitialized(...)` or `TryGetNavigationChartRegistration(...)` when integration code needs to inspect that state.
@@ -202,9 +202,9 @@ world.TryAddGrid(
     new GridConfiguration(new Vector3d(-32, -8, -32), new Vector3d(32, 24, 32)),
     out _);
 
-TrailblazerManager.Initialize(world);
+TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
 
-var navigator = new MyNavigator();
+var navigator = new MyNavigator(context);
 navigator.Setup(new Vector3d(0, 0, 0), size: Fixed64.One);
 navigator.Initialize(new TrekCondition
 {
@@ -224,13 +224,13 @@ navigator.ApplyGuidedTrekRequest(
     target,
     rate: TrekRate.Moderate);
 
-TrailblazerManager.Simulate();
+context.Simulate();
 navigator.Simulate();
 navigator.CommitFrameMotion();
-TrailblazerManager.LateSimulate();
+context.LateSimulate();
 ```
 
-Call `TrailblazerManager.Initialize(world)` once during application startup before entering the fixed-step loop. Trailblazer will lazily initialize as a safety net if needed, but explicit world bootstrap is the intended host flow.
+Create or attach a `TrailblazerWorldContext` once during application startup before entering the fixed-step loop. `TrailblazerManager.Initialize(world)` remains available as the single-world default-context facade, but multi-world hosts should keep the context handle and pass it to navigators, path requests, and guide services directly.
 
 If several navigators should move as one formation, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
 

@@ -560,7 +560,7 @@ With a concrete `Navigator`, the usual flow is:
 navigator.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
 navigator.ApplyGuidedTrekRequest(destination, rate: TrekRate.Moderate);
 
-TrailblazerManager.Simulate();
+context.Simulate();
 navigator.Simulate();
 navigator.CommitFrameMotion();
 ```
@@ -574,7 +574,7 @@ Under the hood:
 If you use `NavSteering` without `Navigator`, the minimum pattern is:
 
 ```csharp
-var steer = new NavSteering(radius);
+var steer = new NavSteering(context, radius);
 steer.ApplyPathRequest(request, destination);
 
 Vector3d heading = steer.GetHeading(agent);
@@ -605,7 +605,7 @@ This includes aerial and swim movement. Either mode can legitimately bounce betw
 
 ### Expecting movement groups to be fully implemented
 
-They are steering-owned behavior. Hosts only pass `groupId` through the steering API; an internal coordinator tracks shared membership while agents with the same `groupId` and exact destination preserve formation offsets when compact, then fall back to the shared destination when the group spreads out or reaches the end of the move.
+They are steering-owned, context-local behavior. Hosts only pass `groupId` through the steering API; the owning context tracks shared membership while agents with the same `groupId` and exact destination preserve formation offsets when compact, then fall back to the shared destination when the group spreads out or reaches the end of the move.
 
 When grouped sessions are restored from serialized state, call `PrewarmMovementGroup(ISteer navigator)` after load if you want the coordinator seeded before the next steering tick. If you do nothing, the same sessions will still rejoin lazily during `GetHeading(...)`.
 

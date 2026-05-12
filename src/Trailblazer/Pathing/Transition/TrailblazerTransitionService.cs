@@ -135,6 +135,30 @@ public sealed class TrailblazerTransitionService
             return TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(sourceGridIndex);
     }
 
+    internal TraversalTransition[] GetDirectedTransitions(
+        TraversalMedium sourceMedium,
+        TraversalMedium destinationMedium)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(_state))
+            return TraversalTransitionQuery.GetDirectedTransitions(sourceMedium, destinationMedium);
+    }
+
+    internal TraversalTransition[] GetDirectedTransitionsToDestinationGrid(
+        int destinationGridIndex,
+        TraversalMedium sourceMedium,
+        TraversalMedium destinationMedium)
+    {
+        EnsureUsable();
+        using (PathManager.EnterState(_state))
+        {
+            return TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(
+                destinationGridIndex,
+                sourceMedium,
+                destinationMedium);
+        }
+    }
+
     private void EnsureUsable()
     {
         if (_context.IsDisposed)

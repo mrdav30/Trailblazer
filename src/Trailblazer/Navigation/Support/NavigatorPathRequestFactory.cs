@@ -12,6 +12,7 @@ namespace Trailblazer.Navigation;
 public static class NavigatorPathRequestFactory
 {
     internal static bool TryCreate(
+        TrailblazerWorldContext context,
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
@@ -25,6 +26,7 @@ public static class NavigatorPathRequestFactory
         [NotNullWhen(true)] out IPathRequest? request,
         out GuidedVolumeExitHandoff? handoff)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         handoff = null;
 
         // For gas and liquid traversal, we only support volume path requests, 
@@ -36,6 +38,7 @@ public static class NavigatorPathRequestFactory
         if (traversalMedium == TraversalMedium.Gas || traversalMedium == TraversalMedium.Liquid)
         {
             VolumePathRequest? volume = VolumePathRequest.Create(
+                context,
                 origin,
                 targetPosition,
                 unitSize,
@@ -44,6 +47,7 @@ public static class NavigatorPathRequestFactory
                 traversalMedium);
             if (volume == null)
                 return TryCreateVolumeExitHandoff(
+                    context,
                     origin,
                     targetPosition,
                     unitSize,
@@ -59,6 +63,7 @@ public static class NavigatorPathRequestFactory
                     out _);
 
             if (TryCreateVolumeExitHandoffIfNeeded(
+                context,
                 targetPosition,
                 traversalMedium,
                 volume,
@@ -82,12 +87,14 @@ public static class NavigatorPathRequestFactory
         {
             case SolidPathAlgorithm.AStar:
                 return TryCreateAStarRequest(
+                    context,
                     origin, targetPosition, unitSize,
                     aStarHeuristic, allowUnwalkableEndpoints, allowTraversalTransitions,
                     maxClimbHeight, out request);
 
             case SolidPathAlgorithm.FlowField:
                 return TryCreateFlowFieldRequest(
+                    context,
                     origin, targetPosition, unitSize,
                     allowUnwalkableEndpoints, allowTraversalTransitions,
                     maxClimbHeight, flowFieldExtraFloodRange, out request);
@@ -98,7 +105,38 @@ public static class NavigatorPathRequestFactory
         }
     }
 
+    internal static bool TryCreate(
+        Vector3d origin,
+        Vector3d targetPosition,
+        Fixed64 unitSize,
+        SolidPathAlgorithm pathMode,
+        bool allowUnwalkableEndpoints,
+        bool allowTraversalTransitions,
+        Fixed64 maxClimbHeight,
+        TraversalMedium traversalMedium,
+        HeuristicMethod aStarHeuristic,
+        int flowFieldExtraFloodRange,
+        [NotNullWhen(true)] out IPathRequest? request,
+        out GuidedVolumeExitHandoff? handoff)
+    {
+        return TryCreate(
+            PathRequestContextResolver.DefaultContext,
+            origin,
+            targetPosition,
+            unitSize,
+            pathMode,
+            allowUnwalkableEndpoints,
+            allowTraversalTransitions,
+            maxClimbHeight,
+            traversalMedium,
+            aStarHeuristic,
+            flowFieldExtraFloodRange,
+            out request,
+            out handoff);
+    }
+
     private static bool TryCreateVolumeExitHandoff(
+        TrailblazerWorldContext context,
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
@@ -121,6 +159,7 @@ public static class NavigatorPathRequestFactory
             return false;
 
         return GuidedVolumeExitPlanner.TryPlan(
+            context,
             origin,
             targetPosition,
             unitSize,
@@ -139,6 +178,7 @@ public static class NavigatorPathRequestFactory
     }
 
     private static bool TryCreateVolumeExitHandoffIfNeeded(
+        TrailblazerWorldContext context,
         Vector3d targetPosition,
         TraversalMedium medium,
         VolumePathRequest directRequest,
@@ -157,6 +197,7 @@ public static class NavigatorPathRequestFactory
         if (directRequest == null
             || !allowTraversalTransitions
             || !TryGetChartBackedTargetState(
+                context,
                 targetPosition,
                 medium,
                 out bool targetRequiresConstrainedExitHandoff))
@@ -167,6 +208,7 @@ public static class NavigatorPathRequestFactory
         if (!targetRequiresConstrainedExitHandoff
             && !TryCreateGasLandingHandoff(
                 directRequest,
+                context,
                 targetPosition,
                 medium,
                 chartPathMode,
@@ -185,6 +227,7 @@ public static class NavigatorPathRequestFactory
             return true;
 
         return TryCreateVolumeExitHandoff(
+            context,
             directRequest.Origin,
             targetPosition,
             directRequest.UnitSize,
@@ -201,25 +244,27 @@ public static class NavigatorPathRequestFactory
     }
 
     private static bool TryGetChartBackedTargetState(
+        TrailblazerWorldContext context,
         Vector3d targetPosition,
         TraversalMedium medium,
         out bool targetRequiresConstrainedExitHandoff)
     {
         targetRequiresConstrainedExitHandoff = false;
 
-        if (!TrailblazerWorldManager.TryGetVoxel(targetPosition, out Voxel? targetVoxel)
+        if (!context.World.TryGetVoxel(targetPosition, out Voxel? targetVoxel)
             || targetVoxel == null)
             return false;
 
         if (targetVoxel.TryGetPartition(out SolidChartPartition? _) != true)
             return false;
 
-        targetRequiresConstrainedExitHandoff = !VolumeMediumRules.Matches(targetVoxel, medium);
+        targetRequiresConstrainedExitHandoff = !VolumeMediumRules.Matches(context.Pathing.State, targetVoxel, medium);
         return true;
     }
 
     private static bool TryCreateGasLandingHandoff(
         VolumePathRequest directRequest,
+        TrailblazerWorldContext context,
         Vector3d targetPosition,
         TraversalMedium medium,
         SolidPathAlgorithm chartPathMode,
@@ -238,6 +283,7 @@ public static class NavigatorPathRequestFactory
             return false;
 
         if (!TryCreateVolumeExitHandoff(
+            context,
             directRequest.Origin,
             targetPosition,
             directRequest.UnitSize,
@@ -276,6 +322,7 @@ public static class NavigatorPathRequestFactory
     }
 
     private static bool TryCreateAStarRequest(
+        TrailblazerWorldContext context,
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
@@ -286,6 +333,7 @@ public static class NavigatorPathRequestFactory
         [NotNullWhen(true)] out IPathRequest? request)
     {
         AStarPathRequest? aStar = AStarPathRequest.Create(
+            context,
             origin,
             targetPosition,
             unitSize,
@@ -304,6 +352,7 @@ public static class NavigatorPathRequestFactory
     }
 
     private static bool TryCreateFlowFieldRequest(
+        TrailblazerWorldContext context,
         Vector3d origin,
         Vector3d targetPosition,
         Fixed64 unitSize,
@@ -314,6 +363,7 @@ public static class NavigatorPathRequestFactory
         [NotNullWhen(true)] out IPathRequest? request)
     {
         FlowFieldPathRequest? flowField = FlowFieldPathRequest.Create(
+            context,
             origin,
             targetPosition,
             unitSize,
@@ -336,7 +386,7 @@ public static class NavigatorPathRequestFactory
         if (request.HasZeroDisplacement)
             return 0;
 
-        VolumeSurveyResult result = VolumeSurveyor.Shared.FindPath(request);
+        VolumeSurveyResult result = request.Context.Pathing.State.GuideState.VolumeSurveyor.FindPath(request);
         return result.HasPath && result.Waypoints != null && result.Waypoints.Length > 0
             ? result.Waypoints[^1].PathCost
             : int.MaxValue;

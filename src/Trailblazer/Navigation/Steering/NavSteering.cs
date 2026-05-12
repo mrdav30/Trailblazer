@@ -52,19 +52,9 @@ public class NavSteering : IRecordable
     protected const int DefaultPathRecheckCooldown = 16;
 
     /// <summary>
-    /// Number of frames an agent must be below the movement threshold to be considered stuck.
-    /// </summary>
-    protected static int StuckFrameThreshold => TrailblazerManager.FrameRate / 4;
-
-    /// <summary>
     /// Maximum number of repath attempts before declaring the agent fully stuck.
     /// </summary>
     protected const int StuckRepathTries = 4;
-
-    /// <summary>
-    /// Number of frames to wait before allowing auto-stop again.
-    /// </summary>
-    protected static int AutoPauseStopTime => TrailblazerManager.FrameRate / 8;
 
     /// <summary>
     /// Default braking factor applied when decelerating or stopping motion.
@@ -289,6 +279,8 @@ public class NavSteering : IRecordable
 
     private MovementGroupTravelMode _movementGroupMode;
 
+    private TrailblazerWorldContext? _context;
+
     #endregion
 
     #region Events
@@ -297,6 +289,11 @@ public class NavSteering : IRecordable
     /// Container for delegate events that fire on pathfinding state changes (start, stop, arrive).
     /// </summary>
     public NavSteeringEvents Events { get; protected set; } = new();
+
+    /// <summary>
+    /// Gets the world context this steering controller is bound to, when explicitly bound.
+    /// </summary>
+    public TrailblazerWorldContext? Context => _context;
 
     #endregion
 
@@ -310,6 +307,11 @@ public class NavSteering : IRecordable
     public static NavSteering CreateNew(Fixed64 radius) => new(radius);
 
     /// <summary>
+    /// Creates a new <see cref="NavSteering"/> instance bound to a world context.
+    /// </summary>
+    public static NavSteering CreateNew(TrailblazerWorldContext context, Fixed64 radius) => new(context, radius);
+
+    /// <summary>
     /// Initializes a new instance of the NavSteering class with a default radius of 0.5 units.
     /// </summary>
     public NavSteering() : this(Fixed64.Half) { }
@@ -319,6 +321,31 @@ public class NavSteering : IRecordable
     /// </summary>
     /// <param name="radius">The radius of the object entity that this controller will manage.</param>
     public NavSteering(Fixed64 radius) => OnInitialize(radius);
+
+    /// <summary>
+    /// Initializes a new context-bound <see cref="NavSteering"/> instance.
+    /// </summary>
+    public NavSteering(TrailblazerWorldContext context, Fixed64 radius)
+    {
+        BindContext(context);
+        OnInitialize(radius);
+    }
+
+    /// <summary>
+    /// Binds this steering controller to a world context.
+    /// </summary>
+    public void BindContext(TrailblazerWorldContext context)
+    {
+        PathRequestContextResolver.ThrowIfUnusable(context);
+
+        if (ReferenceEquals(_context, context))
+            return;
+
+        if (_context != null)
+            _context.Navigation.MovementGroups.Remove(_movementGroupSession);
+
+        _context = context;
+    }
 
     #endregion
 
@@ -366,6 +393,11 @@ public class NavSteering : IRecordable
             return;
         }
 
+        if (_context == null)
+            BindContext(pathRequest.Context);
+        else if (!ReferenceEquals(_context, pathRequest.Context))
+            throw new InvalidOperationException("NavSteering cannot accept a path request from a different TrailblazerWorldContext.");
+
         _hasLineOfSightPath = false;
         _isAtDestination = false;
 
@@ -396,7 +428,7 @@ public class NavSteering : IRecordable
     /// Applies a short delay to prevent auto-stopping behavior for a few frames.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PauseAutoStop() => _autoStopFrameCount = AutoPauseStopTime;
+    public void PauseAutoStop() => _autoStopFrameCount = AutoPauseStopTimeForContext;
 
     /// <summary>
     /// Replaces the current guide used for guided steering.
@@ -432,7 +464,7 @@ public class NavSteering : IRecordable
     /// </summary>
     public void LeaveMovementGroup()
     {
-        MovementGroupCoordinator.Remove(_movementGroupSession);
+        RemoveMovementGroupSession();
         MovementGroupID = -1;
         GroupIndex = -1;
         _movementGroupMode = MovementGroupTravelMode.None;
@@ -455,7 +487,7 @@ public class NavSteering : IRecordable
         if (!ShouldMove || !IsInGroup || _currentRequest == null)
             return;
 
-        MovementGroupCoordinator.Prewarm(
+        MovementGroups.Prewarm(
             _movementGroupSession,
             vessel.GlobalId,
             _requestedDestination,
@@ -506,7 +538,59 @@ public class NavSteering : IRecordable
     {
         // Fatter objects can afford to land imprecisely
         _agentRadius = radius;
-        _closingDistance = FixedMath.Round(radius + TrailblazerWorldManager.VoxelSize);
+        _closingDistance = FixedMath.Round(radius + ResolveVoxelSize());
+    }
+
+    private Fixed64 ResolveVoxelSize()
+    {
+        if (_context != null)
+            return _context.VoxelSize;
+        if (_currentRequest != null)
+            return _currentRequest.Context.VoxelSize;
+        if (PathManager.TryGetActiveState(out PathingWorldState? state) && state != null)
+            return state.Context.VoxelSize;
+
+        return GridWorld.DefaultVoxelSize;
+    }
+
+    private TrailblazerWorldContext ResolveContext()
+    {
+        TrailblazerWorldContext? context = _context ?? _currentRequest?.Context;
+        if (context != null)
+        {
+            PathRequestContextResolver.ThrowIfUnusable(context);
+            return context;
+        }
+
+        return PathRequestContextResolver.DefaultContext;
+    }
+
+    private MovementGroupCoordinatorState MovementGroups => ResolveContext().Navigation.MovementGroups;
+
+    private void RemoveMovementGroupSession()
+    {
+        if (_context != null)
+            _context.Navigation.MovementGroups.Remove(_movementGroupSession);
+        else if (_currentRequest != null)
+            _currentRequest.Context.Navigation.MovementGroups.Remove(_movementGroupSession);
+        else
+            MovementGroupCoordinator.Remove(_movementGroupSession);
+    }
+
+    private int StuckFrameThresholdForContext => ResolveFrameRate() / 4;
+
+    private int AutoPauseStopTimeForContext => ResolveFrameRate() / 8;
+
+    private int ResolveFrameRate()
+    {
+        if (_context != null)
+            return _context.FrameRate;
+        if (_currentRequest != null)
+            return _currentRequest.Context.FrameRate;
+        if (PathManager.TryGetActiveState(out PathingWorldState? state) && state != null)
+            return state.Context.FrameRate;
+
+        return TrailblazerManager.FrameRate;
     }
 
     /// <summary>
@@ -587,6 +671,7 @@ public class NavSteering : IRecordable
         if (_currentRequest is VolumePathRequest volumeRequest)
         {
             _hasLineOfSightPath = IsVolumeDestinationInSight(
+                _currentRequest.Context,
                 origin,
                 Destination,
                 _currentRequest.UnitSize,
@@ -606,6 +691,7 @@ public class NavSteering : IRecordable
         else
         {
             _hasLineOfSightPath = IsDestinationInSight(
+                _currentRequest.Context,
                 origin,
                 Destination,
                 _currentRequest.UnitSize,
@@ -620,7 +706,7 @@ public class NavSteering : IRecordable
         // request guide
         ReleaseTrailGuide();
         _pathCheckCooldown = PathRecheckCooldownFrames;
-        if (!_currentRequest.IsValid || !PathGuideFactory.RequestGuide(_currentRequest, out _trailGuide))
+        if (!_currentRequest.IsValid || !_currentRequest.Context.Guides.RequestGuide(_currentRequest, out _trailGuide))
         {
             PublishRouteTopology(hasResolvedTopology: false, usesGuideTopology: false, requestsClimbIntent: false);
             TrailblazerLogger.Channel.Warn($"Unable to retrieve a guide from {origin} to {Destination}.");
@@ -669,7 +755,7 @@ public class NavSteering : IRecordable
     {
         return (_distanceToTarget < _closingDistance
                     && Vector3d.Dot(TargetDirection, LastTargetDirection) < Fixed64.Epsilon)
-            || _distanceToTarget < _closingDistance * TrailblazerWorldManager.VoxelSize;
+            || _distanceToTarget < _closingDistance * ResolveVoxelSize();
     }
 
     /// <summary>
@@ -687,7 +773,7 @@ public class NavSteering : IRecordable
             return ResetStuckStatus();
 
         _stuckFrameCount++;
-        if (_stuckFrameCount <= StuckFrameThreshold)
+        if (_stuckFrameCount <= StuckFrameThresholdForContext)
             return true;
 
         return _repathTries < StuckRepathTries
@@ -743,6 +829,7 @@ public class NavSteering : IRecordable
         if (_currentRequest is VolumePathRequest volumeRequest)
         {
             _hasLineOfSightPath = IsVolumeDestinationInSight(
+                _currentRequest.Context,
                 position,
                 Destination,
                 _currentRequest.UnitSize,
@@ -759,11 +846,13 @@ public class NavSteering : IRecordable
         }
         else
         {
+            IPathRequest currentRequest = _currentRequest!;
             _hasLineOfSightPath = IsDestinationInSight(
+                currentRequest.Context,
                 position,
                 Destination,
-                _currentRequest!.UnitSize,
-                _currentRequest.AllowUnwalkableEndpoints);
+                currentRequest.UnitSize,
+                currentRequest.AllowUnwalkableEndpoints);
 
             if (_hasLineOfSightPath)
                 PublishRouteTopology(hasResolvedTopology: true, usesGuideTopology: false, requestsClimbIntent: false);
@@ -878,7 +967,7 @@ public class NavSteering : IRecordable
         if (_trailGuide == null)
             return;
 
-        PathGuideFactory.ReturnGuide(_trailGuide, true);
+        (_currentRequest?.Context ?? ResolveContext()).Guides.ReturnGuide(_trailGuide, true);
         _trailGuide = null;
     }
 
@@ -958,11 +1047,25 @@ public class NavSteering : IRecordable
     /// </summary>
     public static bool IsDestinationInSight(Vector3d position, Vector3d destination, Fixed64 unitSize, bool allowUnwalkableEndpoints)
     {
-        bool result = false;
-        if (!PathManager.NeedsPath(position, destination, unitSize, allowUnwalkableEndpoints))
-            result = true;
+        return IsDestinationInSight(
+            PathRequestContextResolver.DefaultContext,
+            position,
+            destination,
+            unitSize,
+            allowUnwalkableEndpoints);
+    }
 
-        return result;
+    /// <summary>
+    /// Whether the destination is visible and reachable inside the supplied world context.
+    /// </summary>
+    public static bool IsDestinationInSight(
+        TrailblazerWorldContext context,
+        Vector3d position,
+        Vector3d destination,
+        Fixed64 unitSize,
+        bool allowUnwalkableEndpoints)
+    {
+        return !context.Pathing.NeedsPath(position, destination, unitSize, allowUnwalkableEndpoints);
     }
 
     /// <summary>
@@ -978,6 +1081,31 @@ public class NavSteering : IRecordable
         Voxel? endNode = null)
     {
         return VolumeVoxelFinder.IsDirectPathClear(
+            PathRequestContextResolver.DefaultContext,
+            position,
+            destination,
+            unitSize,
+            allowUnwalkableEndpoints,
+            medium,
+            startNode,
+            endNode);
+    }
+
+    /// <summary>
+    /// Whether the destination is currently visible and reachable for raw-volume travel in the supplied context.
+    /// </summary>
+    public static bool IsVolumeDestinationInSight(
+        TrailblazerWorldContext context,
+        Vector3d position,
+        Vector3d destination,
+        Fixed64 unitSize,
+        bool allowUnwalkableEndpoints,
+        TraversalMedium medium = TraversalMedium.Gas,
+        Voxel? startNode = null,
+        Voxel? endNode = null)
+    {
+        return VolumeVoxelFinder.IsDirectPathClear(
+            context,
             position,
             destination,
             unitSize,
@@ -1005,7 +1133,8 @@ public class NavSteering : IRecordable
         if (speed <= Fixed64.Zero)
             return Vector3d.Zero;
 
-        int currentFrame = TrailblazerManager.FrameCount;
+        TrailblazerWorldContext context = ResolveContext();
+        int currentFrame = context.FrameCount;
 
         // we need to see everybody who might influence us—either for group or for avoidance
         Fixed64 groupRadius = radius * GroupFactor;
@@ -1024,7 +1153,7 @@ public class NavSteering : IRecordable
         Fixed64 closestDistSq = avoidRadius * avoidRadius;
 
         GridScanManager.ScanRadiusInto<ISteer>(
-            TrailblazerWorldManager.World,
+            context.World,
             position,
             scanRadius,
             _nearbySteerAgents,
@@ -1103,8 +1232,11 @@ public class NavSteering : IRecordable
 
     #region Movement Groups
 
-    private void CacheOwner(ISteer vessel) =>
-        MovementGroupCoordinator.CacheOwner(_movementGroupSession, vessel.GlobalId);
+    private void CacheOwner(ISteer vessel)
+    {
+        if (IsInGroup)
+            MovementGroups.CacheOwner(_movementGroupSession, vessel.GlobalId);
+    }
 
     private void UpdateMovementGroupState(Vector3d position, bool resetFormationOffset = false)
     {
@@ -1114,7 +1246,7 @@ public class NavSteering : IRecordable
 
         if (IsInGroup && _currentRequest != null)
         {
-            target = MovementGroupCoordinator.UpdateTarget(
+            target = MovementGroups.UpdateTarget(
                 _movementGroupSession,
                 _requestedDestination,
                 position,
@@ -1134,7 +1266,7 @@ public class NavSteering : IRecordable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsGroupNeighbor(Guid otherId, int currentFrame)
-        => MovementGroupCoordinator.IsNeighbor(_movementGroupSession, otherId, _requestedDestination, currentFrame);
+        => MovementGroups.IsNeighbor(_movementGroupSession, otherId, _requestedDestination, currentFrame);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool UsesVolumeGuidance() => _currentRequest is VolumePathRequest;
@@ -1213,7 +1345,7 @@ public class NavSteering : IRecordable
             ResetMovementGroupSession();
 
             _currentRequest = null;
-            if (!requestRecord.TryCreateRequest(out IPathRequest? request))
+                if (!requestRecord.TryCreateRequest(ResolveContext(), out IPathRequest? request))
             {
                 _shouldMove = false;
                 _isStuck = false;
@@ -1259,13 +1391,13 @@ public class NavSteering : IRecordable
         if (_trailGuide == null)
             return;
 
-        PathGuideFactory.ReturnGuide(_trailGuide, dispose);
+        (_currentRequest?.Context ?? ResolveContext()).Guides.ReturnGuide(_trailGuide, dispose);
         _trailGuide = null;
     }
 
     private void ResetMovementGroupSession()
     {
-        MovementGroupCoordinator.Remove(_movementGroupSession);
+        RemoveMovementGroupSession();
         _movementGroupSession.Reset();
     }
 

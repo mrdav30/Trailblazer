@@ -64,6 +64,8 @@ public class NavTurning : IRecordable
 
     private bool _isInitialized;
 
+    private TrailblazerWorldContext? _context;
+
     /// <summary>
     /// Flag indicating that a collision has occurred and an auto-turn should be considered.
     /// </summary>
@@ -83,6 +85,11 @@ public class NavTurning : IRecordable
     /// </summary>
     public FixedQuaternion TargetRotation { get; private set; }
 
+    /// <summary>
+    /// Gets the world context this turning controller is bound to, when explicitly bound.
+    /// </summary>
+    public TrailblazerWorldContext? Context => _context;
+
     #endregion
 
     #region Actions and Functions
@@ -100,6 +107,11 @@ public class NavTurning : IRecordable
     public static NavTurning CreateNew(Fixed64 radius) => new(radius);
 
     /// <summary>
+    /// Creates and initializes a context-bound <see cref="NavTurning"/> instance.
+    /// </summary>
+    public static NavTurning CreateNew(TrailblazerWorldContext context, Fixed64 radius) => new(context, radius);
+
+    /// <summary>
     /// Constructs a <see cref="NavTurning"/> without initializing collision thresholds.
     /// </summary>
     public NavTurning() { }
@@ -108,6 +120,28 @@ public class NavTurning : IRecordable
     /// Constructs and immediately initializes a <see cref="NavTurning"/> with the given object radius.
     /// </summary>
     public NavTurning(Fixed64 radius) => OnInitialize(radius);
+
+    /// <summary>
+    /// Constructs and immediately initializes a context-bound <see cref="NavTurning"/>.
+    /// </summary>
+    public NavTurning(TrailblazerWorldContext context, Fixed64 radius)
+    {
+        BindContext(context);
+        OnInitialize(radius);
+    }
+
+    /// <summary>
+    /// Binds this turning controller to a world context.
+    /// </summary>
+    public void BindContext(TrailblazerWorldContext context)
+    {
+        Trailblazer.Pathing.PathRequestContextResolver.ThrowIfUnusable(context);
+        _context = context;
+    }
+
+    private int FrameRate => _context?.FrameRate ?? TrailblazerManager.FrameRate;
+
+    private Fixed64 DeltaTime => _context?.DeltaTime ?? TrailblazerManager.DeltaTime;
 
     /// <summary>
     /// Configures internal thresholds based on the object’s radius and resets turn state.
@@ -167,7 +201,7 @@ public class NavTurning : IRecordable
         // 3) Mid-turn (or just consumed buffer): do the Slerp
         var t = _pendingInterpolation > Fixed64.Zero
                     ? _pendingInterpolation
-                    : TurnRate * TrailblazerManager.DeltaTime;
+                    : TurnRate * DeltaTime;
         t = FixedMath.Clamp(t, Fixed64.Zero, Fixed64.One);
 
         var next = FixedQuaternion.Slerp(rotation, TargetRotation, t);
@@ -213,7 +247,7 @@ public class NavTurning : IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private Fixed64 GetCollisionTurnThreshold()
     {
-        Fixed64 threshold = _radius / TrailblazerManager.FrameRate * Fixed64.Half;
+        Fixed64 threshold = _radius / FrameRate * Fixed64.Half;
         return threshold * threshold;
     }
 

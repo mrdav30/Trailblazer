@@ -652,7 +652,7 @@ Current direct coverage for navigator orchestration is still lighter than steeri
 
 The main direct support files are:
 
-- `tests/Trailblazer.Tests/Navigation/Navigator/Support/TestNavigator.cs`
+- `tests/Trailblazer.Tests/Navigation/Navigator/TestDoubles/TestNavigator.cs`
 - `tests/Trailblazer.Tests/Navigation/Navigator/Navigator.Tests.cs`
 
 If `Navigator` behavior changes, especially around lifecycle, frame ordering, or traversal-state updates, this area benefits from refreshed direct tests.

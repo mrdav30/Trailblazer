@@ -293,7 +293,7 @@ Practical consequences:
 - `AllowUnwalkableEndpoints` also does not imply transition fallback
 - exact target points inside the destination voxel are preserved in `TargetPosition`
 
-The tests in `tests/Trailblazer.Tests/Pathing/SolidVoxelFinder.Tests.cs` are the best executable reference for these rules.
+The tests in `tests/Trailblazer.Tests/Pathing/Search/VoxelResolution/SolidVoxelFinder.Tests.cs` are the best executable reference for these rules.
 
 ## 7. Transitions and Staged Fallback
 
@@ -467,11 +467,11 @@ When docs and code disagree:
 
 Good pathing-focused test entry points:
 
-- `tests/Trailblazer.Tests/Pathing/SolidVoxelFinder.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/AStarTransitionFallback.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/FlowFieldTransitionFallback.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/TraversalTransitionRegistry.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/PathingNavigationMap.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/VoxelResolution/SolidVoxelFinder.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/AStar/AStarTransitionFallback.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/FlowField/FlowFieldTransitionFallback.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Transition/Registry/TraversalTransitionRegistry.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Manager/PathingNavigationMap.Tests.cs`
 
 ## 13. Where To Read Next
 

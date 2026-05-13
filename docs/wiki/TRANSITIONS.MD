@@ -371,10 +371,10 @@ If you are changing transition behavior, inspect these files together:
 
 Useful tests:
 
-- `tests/Trailblazer.Tests/Pathing/TraversalTransitionRegistry.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/TraversalTransitionQuery.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/AStarTransitionFallback.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/FlowFieldTransitionFallback.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Transition/Registry/TraversalTransitionRegistry.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Transition/Query/TraversalTransitionQuery.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/AStar/AStarTransitionFallback.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/FlowField/FlowFieldTransitionFallback.Tests.cs`
 
 High-risk changes include:
 

@@ -173,10 +173,10 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_Should_CreateAerialRequest_AndEnableFlight()
     {
-        AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(0, 1, 0));
-        AddOpen(new Vector3d(0, 2, 0));
-        AddOpen(new Vector3d(0, 3, 0));
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 2, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 3, 0));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -381,9 +381,9 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_Should_CreateLiquidRequest_WithoutAutoSwimIntent_WhenInWater()
     {
-        AddWater(Vector3d.Zero);
-        AddWater(new Vector3d(0, 0, 1));
-        AddWater(new Vector3d(0, 0, 2));
+        GuidedPathTestScene.AddWater(Vector3d.Zero);
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 2));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -406,9 +406,9 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_ShouldCaptureExplicitSwimIntent_WhenRequestedInWater()
     {
-        AddWater(Vector3d.Zero);
-        AddWater(new Vector3d(0, 0, 1));
-        AddWater(new Vector3d(0, 0, 2));
+        GuidedPathTestScene.AddWater(Vector3d.Zero);
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 2));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -651,9 +651,9 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_Should_RejectSwimRequests_WhenNavigatorIsNotInWater()
     {
-        AddWater(Vector3d.Zero);
-        AddWater(new Vector3d(0, 0, 1));
-        AddWater(new Vector3d(0, 0, 2));
+        GuidedPathTestScene.AddWater(Vector3d.Zero);
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 2));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -743,10 +743,10 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void Simulate_Should_PersistGuidedFlightIntent_BetweenFrames()
     {
-        AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(0, 1, 0));
-        AddOpen(new Vector3d(0, 2, 0));
-        AddOpen(new Vector3d(0, 3, 0));
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 2, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 3, 0));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.SetAirborne();
@@ -1343,41 +1343,14 @@ public class NavigatorTests : IDisposable
         return navigator;
     }
 
-    private static void AddWater(Vector3d position)
-    {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "NavigatorWater");
-    }
-
-    private static void AddOpen(Vector3d position)
-    {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "NavigatorOpen");
-    }
-
-    private static void AddObstacle(Vector3d position)
-    {
-        var (grid, voxel) = TestRequire.GridAndVoxelAt(position);
-        grid!.TryAddObstacle(
-            voxel!,
-            new BoundsKey(position, position)).Should().BeTrue();
-    }
-
-    private static void AddObstaclePlaneAtX(int x)
-    {
-        for (int y = -4; y <= 4; y++)
-        {
-            for (int z = -4; z <= 4; z++)
-                AddObstacle(new Vector3d(x, y, z));
-        }
-    }
-
     private static void RegisterTransitionFallbackScene()
     {
         PathTestFactory.RegisterSingleWalkablePoint("NavigatorTransitionFallbackStart", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("NavigatorTransitionFallbackEnd", new Vector3d(4, 0, 0));
 
-        AddWater(new Vector3d(1, 0, 0));
-        AddWater(new Vector3d(2, 0, 0));
-        AddWater(new Vector3d(3, 0, 0));
+        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddWater(new Vector3d(3, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "navigator-transition-fallback-entry",
@@ -1401,9 +1374,9 @@ public class NavigatorTests : IDisposable
             new Vector3d(1, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Gas);
         PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
-        AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
 
-        AddObstaclePlaneAtX(2);
+        GuidedPathTestScene.AddObstaclePlaneAtX(2);
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
@@ -1439,8 +1412,8 @@ public class NavigatorTests : IDisposable
 
         PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One));
 
-        AddWater(Vector3d.Zero);
-        AddWater(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(Vector3d.Zero);
+        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{chartKey}-exit",

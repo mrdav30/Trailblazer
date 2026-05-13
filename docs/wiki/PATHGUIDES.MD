@@ -472,11 +472,11 @@ High-risk files:
 
 Useful test entry points:
 
-- `tests/Trailblazer.Tests/Pathing/AStarPathSurveryor.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/FlowFieldSurveyor.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/AStarTransitionFallback.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/FlowFieldTransitionFallback.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/AerialSurveyor.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/AStar/AStarPathSurveyor.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/FlowField/FlowFieldSurveyor.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/AStar/AStarTransitionFallback.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/FlowField/FlowFieldTransitionFallback.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/Volume/AerialSurveyor.Tests.cs`
 
 ## 11. Where To Read Next
 

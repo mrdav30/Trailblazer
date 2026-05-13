@@ -211,10 +211,10 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_Should_GuideAerialRequests_WithVerticalOnlyTargets()
     {
-        AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(0, 1, 0));
-        AddOpen(new Vector3d(0, 2, 0));
-        AddOpen(new Vector3d(0, 3, 0));
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 2, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 3, 0));
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
@@ -237,12 +237,12 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_Should_RequestAerialGuide_WhenDirectFlightIsBlocked()
     {
-        AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(0, 1, 0));
-        AddOpen(new Vector3d(1, 1, 0));
-        AddOpen(new Vector3d(2, 1, 0));
-        AddOpen(new Vector3d(2, 0, 0));
-        AddObstacle(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 0));
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
@@ -265,12 +265,12 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_Should_RequestVolumeGuide_WhenDirectSwimIsBlocked()
     {
-        AddWater(new Vector3d(0, 0, 1));
-        AddWater(new Vector3d(0, 0, 0));
-        AddWater(new Vector3d(1, 0, 0));
-        AddWater(new Vector3d(2, 0, 0));
-        AddWater(new Vector3d(2, 0, 1));
-        AddObstacle(new Vector3d(1, 0, 1));
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 0));
+        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 1));
+        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 1));
 
         var agent = new MockSteerAgent(new Vector3d(0, 0, 1));
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
@@ -294,12 +294,12 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_ShouldReleaseVolumeGuide_WhenLineOfSightReturns()
     {
-        AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(0, 1, 0));
-        AddOpen(new Vector3d(1, 0, 0));
-        AddOpen(new Vector3d(1, 1, 0));
-        AddOpen(new Vector3d(2, 1, 0));
-        AddOpen(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
 
         Vector3d obstaclePosition = new(1, 0, 0);
         var (obstacleGrid, obstacleVoxel) = TestRequire.GridAndVoxelAt(obstaclePosition);
@@ -332,12 +332,12 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_ShouldUseGuideFallback_WhenRecoveringFromStuck()
     {
-        AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(0, 1, 0));
-        AddOpen(new Vector3d(1, 1, 0));
-        AddOpen(new Vector3d(2, 1, 0));
-        AddOpen(new Vector3d(2, 0, 0));
-        AddObstacle(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 0));
 
         Vector3d movementDirection = new(1, 0, 0);
         Vector3d fallbackDirection = new(0, 0, 1);
@@ -1438,12 +1438,12 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void GetHeading_ShouldRaiseInvalidPath_WhenVolumeFallbackValidationFails()
     {
-        AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(0, 1, 0));
-        AddOpen(new Vector3d(1, 1, 0));
-        AddOpen(new Vector3d(2, 1, 0));
-        AddOpen(new Vector3d(2, 0, 0));
-        AddObstacle(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 0));
 
 
         var agent = new MockSteerAgent(Vector3d.Zero);
@@ -1575,24 +1575,6 @@ public class NavSteeringTests : IDisposable
         target.TrailGuide.Should().BeNull();
 
         PathManager.UnloadChart("RecordDataGuideFailure");
-    }
-
-    private static void AddObstacle(Vector3d position)
-    {
-        var (grid, voxel) = TestRequire.GridAndVoxelAt(position);
-        grid!.TryAddObstacle(
-            voxel!,
-            new BoundsKey(position, position)).Should().BeTrue();
-    }
-
-    private static void AddWater(Vector3d position)
-    {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "NavSteeringWater");
-    }
-
-    private static void AddOpen(Vector3d position)
-    {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "NavSteeringOpen");
     }
 
     private sealed class TestableNavSteering : NavSteering

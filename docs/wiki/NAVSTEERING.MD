@@ -629,7 +629,7 @@ If `CanPathfind` is false, steering skips guide-based path validation and repath
 Current coverage around steering behavior is concentrated in:
 
 - `tests/Trailblazer.Tests/Navigation/Steering/NavSteering.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Steering/Support/MockSteerAgent.cs`
+- `tests/Trailblazer.Tests/Navigation/Steering/TestDoubles/MockSteerAgent.cs`
 - `tests/Trailblazer.Tests/Support/PathTestFactory.cs`
 - `tests/Trailblazer.Tests/Support/PathingFixture.cs`
 

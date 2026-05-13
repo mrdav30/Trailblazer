@@ -555,11 +555,11 @@ It is not. It is a deterministic locomotion system with gameplay-oriented rules 
 
 The current test coverage around `NavMotor` behavior is concentrated in:
 
-- `tests/Trailblazer.Tests/Navigation/Motor/MoveLocomotion.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Motor/JumpLocomotion.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Motor/FallLocomotion.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Motor/PlatformLocomotion.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Motor/WaterLocomotion.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Motor/SlideLocomotionTests.cs`
+- `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/MoveLocomotion.Tests.cs`
+- `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/JumpLocomotion.Tests.cs`
+- `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/FallLocomotion.Tests.cs`
+- `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/PlatformLocomotion.Tests.cs`
+- `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/WaterLocomotion.Tests.cs`
+- `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/SlideLocomotion.Tests.cs`
 
 If you change the phase order, transition logic, or locomotion interaction rules, update or extend those tests in the same change.

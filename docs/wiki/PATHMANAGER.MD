@@ -491,7 +491,7 @@ Overlapping charts can legitimately share a partition. Unloading one chart does 
 
 Direct chart lifecycle coverage currently lives in:
 
-- `tests/Trailblazer.Tests/Pathing/PathingNavigationMap.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Manager/PathingNavigationMap.Tests.cs`
 - `tests/Trailblazer.Tests/Support/PathingFixture.cs`
 - `tests/Trailblazer.Tests/Support/PathTestFactory.cs`
 

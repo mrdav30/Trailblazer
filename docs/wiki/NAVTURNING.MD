@@ -371,7 +371,7 @@ They do not. `NavTurning` only tracks one buffered turn state.
 Current coverage around turning behavior is concentrated in:
 
 - `tests/Trailblazer.Tests/Navigation/Turning/NavTurning.Tests.cs`
-- `tests/Trailblazer.Tests/Navigation/Turning/Support/MockTurnAgent.cs`
+- `tests/Trailblazer.Tests/Navigation/Turning/TestDoubles/MockTurnAgent.cs`
 
 Those tests cover:
 

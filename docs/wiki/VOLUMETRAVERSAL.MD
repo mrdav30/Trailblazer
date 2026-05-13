@@ -345,9 +345,9 @@ If you are changing volume traversal behavior, inspect these files together:
 
 Useful tests:
 
-- `tests/Trailblazer.Tests/Pathing/TraversalAuthoringMapTests.cs`
-- `tests/Trailblazer.Tests/Pathing/PathingNavigationMap.Tests.cs`
-- `tests/Trailblazer.Tests/Pathing/AerialSurveyor.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Authoring/TraversalAuthoringMap.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Manager/PathingNavigationMap.Tests.cs`
+- `tests/Trailblazer.Tests/Pathing/Search/Volume/AerialSurveyor.Tests.cs`
 - `tests/Trailblazer.Tests/Navigation/Steering/NavSteering.Tests.cs`
 
 High-risk changes include:

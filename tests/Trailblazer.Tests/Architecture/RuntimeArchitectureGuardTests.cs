@@ -45,8 +45,8 @@ public sealed class RuntimeArchitectureGuardTests
     private static readonly string[] ActivePathingStateFacadeFiles =
     {
         NormalizeRelativeSourcePath("Pathing/PathManager.cs"),
-        NormalizeRelativeSourcePath("Pathing/Search/VolumeMediumRules.cs"),
-        NormalizeRelativeSourcePath("Pathing/Transition/TraversalTransitionRegistry.cs")
+        NormalizeRelativeSourcePath("Pathing/VolumeRules/VolumeMediumRules.cs"),
+        NormalizeRelativeSourcePath("Pathing/Transition/Registry/TraversalTransitionRegistry.cs")
     };
 
     [Fact]

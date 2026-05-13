@@ -370,14 +370,14 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(true)]
     public void RoundTrip_ShouldRestoreBlockedAerialGuideProgress(bool useMemoryPack)
     {
-        AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(1, 0, 0));
-        AddOpen(new Vector3d(1, 1, 0));
-        AddOpen(new Vector3d(2, 1, 0));
-        AddOpen(new Vector3d(3, 1, 0));
-        AddOpen(new Vector3d(4, 1, 0));
-        AddOpen(new Vector3d(4, 0, 0));
-        AddObstacle(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(3, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(4, 1, 0));
+        GuidedPathTestScene.AddOpen(new Vector3d(4, 0, 0));
+        GuidedPathTestScene.AddObstacle(new Vector3d(2, 0, 0));
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetTrekCondition(medium: TraversalMedium.Gas);
@@ -416,9 +416,9 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(true)]
     public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedSwimTraversal(bool useMemoryPack)
     {
-        AddWater(Vector3d.Zero);
-        AddWater(new Vector3d(0, 0, 1));
-        AddWater(new Vector3d(0, 0, 2));
+        GuidedPathTestScene.AddWater(Vector3d.Zero);
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 2));
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
@@ -1051,15 +1051,15 @@ public class NavigatorSerializationTests : IDisposable
 
         if (medium == TraversalMedium.Gas)
         {
-            AddOpen(Vector3d.Zero);
-            AddOpen(new Vector3d(0, 1, 0));
-            AddOpen(new Vector3d(0, 2, 0));
-            AddOpen(new Vector3d(0, 3, 0));
-            AddOpen(new Vector3d(0, 4, 0));
-            AddOpen(new Vector3d(1, 4, 0));
-            AddOpen(new Vector3d(2, 4, 0));
-            AddOpen(new Vector3d(3, 4, 0));
-            AddOpen(new Vector3d(4, 4, 0));
+            GuidedPathTestScene.AddOpen(Vector3d.Zero);
+            GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
+            GuidedPathTestScene.AddOpen(new Vector3d(0, 2, 0));
+            GuidedPathTestScene.AddOpen(new Vector3d(0, 3, 0));
+            GuidedPathTestScene.AddOpen(new Vector3d(0, 4, 0));
+            GuidedPathTestScene.AddOpen(new Vector3d(1, 4, 0));
+            GuidedPathTestScene.AddOpen(new Vector3d(2, 4, 0));
+            GuidedPathTestScene.AddOpen(new Vector3d(3, 4, 0));
+            GuidedPathTestScene.AddOpen(new Vector3d(4, 4, 0));
         }
 
         source.ApplyGuidedTrekRequest(
@@ -1149,9 +1149,9 @@ public class NavigatorSerializationTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("TransitionFallbackStart", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("TransitionFallbackEnd", new Vector3d(4, 0, 0));
 
-        AddWater(new Vector3d(1, 0, 0));
-        AddWater(new Vector3d(2, 0, 0));
-        AddWater(new Vector3d(3, 0, 0));
+        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddWater(new Vector3d(3, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "transition-fallback-entry",
@@ -1181,8 +1181,8 @@ public class NavigatorSerializationTests : IDisposable
 
         PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One));
 
-        AddWater(Vector3d.Zero);
-        AddWater(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(Vector3d.Zero);
+        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{chartKey}-exit",
@@ -1199,9 +1199,9 @@ public class NavigatorSerializationTests : IDisposable
             new Vector3d(1, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Gas);
         PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
-        AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(Vector3d.Zero);
 
-        AddObstaclePlaneAtX(2);
+        GuidedPathTestScene.AddObstaclePlaneAtX(2);
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
@@ -1422,33 +1422,6 @@ public class NavigatorSerializationTests : IDisposable
                 actualHybridGuide.CurrentWaypointIndex.Should().Be(expectedHybridGuide.CurrentWaypointIndex);
             }
         }
-    }
-
-    private static void AddObstacle(Vector3d position)
-    {
-        var (grid, voxel) = TestRequire.GridAndVoxelAt(position);
-        grid.TryAddObstacle(
-            voxel,
-            new BoundsKey(position, position)).Should().BeTrue();
-    }
-
-    private static void AddObstaclePlaneAtX(int x)
-    {
-        for (int y = -4; y <= 4; y++)
-        {
-            for (int z = -4; z <= 4; z++)
-                AddObstacle(new Vector3d(x, y, z));
-        }
-    }
-
-    private static void AddWater(Vector3d position)
-    {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "NavigatorSerializationWater");
-    }
-
-    private static void AddOpen(Vector3d position)
-    {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "NavigatorSerializationOpen");
     }
 
     private static void AssertTurningStateMatches(NavTurning expected, NavTurning actual)

@@ -8,17 +8,17 @@ namespace Trailblazer.Tests;
 
 internal static class GuidedPathTestScene
 {
-    public static void AddWater(Vector3d position)
+    public static void AddWater(Vector3d position, string chartNamePrefix = "GuidedPathTestWater")
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, "GuidedPathTestWater");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, chartNamePrefix);
     }
 
-    public static void AddOpen(Vector3d position)
+    public static void AddOpen(Vector3d position, string chartNamePrefix = "GuidedPathTestOpen")
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "GuidedPathTestOpen");
+        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, chartNamePrefix);
     }
 
-    private static void AddObstacle(Vector3d position)
+    public static void AddObstacle(Vector3d position)
     {
         var (grid, voxel) = TestRequire.GridAndVoxelAt(position);
         grid!.TryAddObstacle(

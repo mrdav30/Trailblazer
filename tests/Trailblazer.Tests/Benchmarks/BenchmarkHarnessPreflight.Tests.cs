@@ -138,7 +138,7 @@ public sealed class BenchmarkHarnessPreflightTests
             noMatch.EntriesMatched.Should().Be(0);
             noMatch.EntriesRemoved.Should().Be(0);
 
-            long noMatchAllocated = MeasureAllocatedBytes(() => benchmarks.MeasureInvalidateMixedCacheFor_NoMatchingChart());
+            long noMatchAllocated = AllocationTestUtility.MeasureAllocatedBytes(() => benchmarks.MeasureInvalidateMixedCacheFor_NoMatchingChart());
             noMatchAllocated.Should().BeLessThan(128);
 
             benchmarks.SeedMixedCacheForInvalidation();
@@ -238,7 +238,7 @@ public sealed class BenchmarkHarnessPreflightTests
             benchmarks.MeasureReachabilityFirstHitWorkloadCombos();
             benchmarks.PrepareReachabilityFirstHit();
             long reachabilityWorkloadAllocated =
-                MeasureAllocatedBytes(() => benchmarks.MeasureReachabilityFirstHitWorkloadCombos());
+                AllocationTestUtility.MeasureAllocatedBytes(() => benchmarks.MeasureReachabilityFirstHitWorkloadCombos());
             reachabilityWorkloadAllocated.Should().BeLessThan(2_000_000);
 
             benchmarks.PrepareReachabilitySteadyHit();
@@ -287,17 +287,6 @@ public sealed class BenchmarkHarnessPreflightTests
         {
             benchmarks.GlobalCleanup();
         }
-    }
-
-    private static long MeasureAllocatedBytes(Action action)
-    {
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        action();
-        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     private static Vector3d RegisterOpenPlane(string chartName, int size, Vector3d minBounds)

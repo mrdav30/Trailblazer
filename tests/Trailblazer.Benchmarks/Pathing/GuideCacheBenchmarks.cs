@@ -104,13 +104,13 @@ public class GuideCacheBenchmarks
         var (origin, destination) =
             BenchmarkChartFactory.RegisterOpenPlane("CacheTestOpenPlane", size);
 
-        BenchmarkPreflight.AssertAStarRouteExists(origin, destination, Fixed64.One);
-        BenchmarkPreflight.AssertFlowFieldRouteExists(origin, destination, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, origin, destination, Fixed64.One);
+        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context, origin, destination, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
         // Single warm-hit request.
-        _hitRequest = AStarPathRequest.Create(origin, destination, Fixed64.One);
+        _hitRequest = AStarPathRequest.Create(_fixture.Context, origin, destination, Fixed64.One);
 
         // Unique adjacent pairs for cache-miss and eviction scenarios. Keeping each route to
         // roughly the same length isolates cache behavior from A* search-length differences.
@@ -127,7 +127,7 @@ public class GuideCacheBenchmarks
 
         for (int i = 0; i < CacheCapacity + 1; i++)
         {
-            AStarPathRequest req = AStarPathRequest.Create(
+            AStarPathRequest req = AStarPathRequest.Create(_fixture.Context, 
                 cacheStarts[i],
                 cacheDestinations[i],
                 Fixed64.One);
@@ -140,7 +140,7 @@ public class GuideCacheBenchmarks
                 _belowCapacityRequests[i] = req;
         }
 
-        _ffHitRequest = FlowFieldPathRequest.Create(origin, destination, Fixed64.One);
+        _ffHitRequest = FlowFieldPathRequest.Create(_fixture.Context, origin, destination, Fixed64.One);
         if (_ffHitRequest == null)
             throw new System.InvalidOperationException(
                 $"Preflight: Could not create flow-field request from {origin} -> {destination}.");
@@ -165,14 +165,14 @@ public class GuideCacheBenchmarks
     })]
     public void FlushForColdRun()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
         _iterationIndex = 0;
     }
 
     [IterationSetup(Targets = new[] { nameof(AStarCacheMiss_OverCapacity_Eviction) })]
     public void SeedCacheForEviction()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
 
         for (int i = 0; i < CacheCapacity; i++)
         {
@@ -188,7 +188,7 @@ public class GuideCacheBenchmarks
     })]
     public void SeedCacheForCull()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
 
         // Seed the cache with CacheCapacity entries so there is something to cull.
         for (int i = 0; i < CacheCapacity; i++)
@@ -207,7 +207,7 @@ public class GuideCacheBenchmarks
     })]
     public void SeedCacheForInvalidation()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
 
         // Seed to capacity so no-match invalidation measures the reverse index rather than a one-entry happy path.
         for (int i = 0; i < CacheCapacity; i++)
@@ -244,7 +244,7 @@ public class GuideCacheBenchmarks
     [IterationCleanup(Targets = new[] { nameof(CullMixedCache_StaleWithActiveQuarter) })]
     public void ClearMixedCachePressure()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     // -------------------------------------------------------------------------
@@ -483,7 +483,7 @@ public class GuideCacheBenchmarks
     private void SeedMixedCachePressure(bool keepActiveRatio)
     {
         ClearMixedCachePressure();
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
 
         for (int i = 0; i < MixedCacheEntriesPerFamily; i++)
         {

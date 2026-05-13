@@ -15,8 +15,7 @@ public sealed class PathingWorldStateIsolationTests : IDisposable
     {
         PathManager.Reset();
         TraversalTransitionRegistry.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 

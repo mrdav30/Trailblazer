@@ -15,14 +15,13 @@ public sealed class PathManagerCoverageTailTests : IDisposable
 {
     public PathManagerCoverageTailTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -33,7 +32,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             typeof(PathManager),
             "GetInitializedChartsSnapshot").Should().BeEmpty();
 
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -4, -4), new Vector3d(8, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-8, -4, -4), new Vector3d(8, 4, 4)), out _);
 
         NavigationChart deferred = PathTestFactory.BuildSinglePointMap("SnapshotDeferred", Vector3d.Zero);
         NavigationChart initializedA = PathTestFactory.BuildSinglePointMap("SnapshotInitA", new Vector3d(2, 0, 0));
@@ -59,20 +58,20 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             typeof(PathManager),
             "RefreshManagedGeneratedTransitionsForChart",
             new[] { typeof(GridWorld), typeof(string) },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             "MissingChart");
         Action refreshEmptySet = () => ReflectionUtility.InvokePrivateStatic<object>(
             typeof(PathManager),
             "RefreshManagedGeneratedTransitionsForCharts",
             new[] { typeof(GridWorld), typeof(SwiftHashSet<string>), typeof(string) },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             new SwiftHashSet<string>(),
             null!);
         Action refreshUnknownVoxelChart = () => ReflectionUtility.InvokePrivateStatic<object>(
             typeof(PathManager),
             "RefreshManagedGeneratedTransitionsForVoxel",
             new[] { typeof(GridWorld), typeof(Vector3d), typeof(SwiftHashSet<string>) },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             new Vector3d(99, 99, 99),
             new SwiftHashSet<string> { "MissingChart", string.Empty });
 
@@ -84,8 +83,8 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridgeDiagnostics_ShouldTrackChangedEvents_Rebuilds_AndIgnoredBounds()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort nearGridIndex);
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)), out ushort farGridIndex);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort nearGridIndex);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)), out ushort farGridIndex);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("DiagnosticsNearChart", Vector3d.Zero)).Should().BeTrue();
         PathManagerExternalGridBridge.ResetDiagnostics();
@@ -152,7 +151,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridgeDiagnostics_ShouldSkipExactDuplicateIntersectingChangeEvents()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("DuplicateIntersectingGridChart", Vector3d.Zero)).Should().BeTrue();
         PathManagerExternalGridBridge.ResetDiagnostics();
@@ -181,7 +180,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridgeDiagnostics_ShouldNotSkipGridVersionChanges()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("VersionBumpGridChart", Vector3d.Zero)).Should().BeTrue();
         PathManagerExternalGridBridge.ResetDiagnostics();
@@ -217,7 +216,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridgeDiagnostics_ShouldNotSkipSpawnTokenChangesForSameGridSlot()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("SpawnTokenGridChart", Vector3d.Zero)).Should().BeTrue();
         PathManagerExternalGridBridge.ResetDiagnostics();
@@ -250,8 +249,8 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridge_ShouldUseLiveGridTouchesInsteadOfChartBounds_ForChangedEvents()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out _);
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)), out ushort rightGridIndex);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)), out ushort rightGridIndex);
 
         PathManager.Register(CreateSparseChart("SparseBoundsChart", Vector3d.Zero, authoredX: 0, sizeX: 12)).Should().BeTrue();
         PathManager.Register(PathTestFactory.BuildSinglePointMap("RightTouchChart", new Vector3d(9, 0, 0))).Should().BeTrue();
@@ -277,7 +276,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridge_ShouldUseAuthoredCellsInsteadOfChartBounds_ForAddedEvents()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         PathManager.Register(CreateSparseChart("SparseAddBoundsChart", Vector3d.Zero, authoredX: 0, sizeX: 12)).Should().BeTrue();
         PathManagerExternalGridBridge.ResetDiagnostics();
@@ -299,8 +298,8 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridge_ShouldUpdateLiveGridTouchesAfterChartCellMutations()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out _);
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)), out ushort rightGridIndex);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(8, -4, -4), new Vector3d(12, 4, 4)), out ushort rightGridIndex);
 
         NavigationChart chart = CreateSparseChart("MutableGridTouchChart", Vector3d.Zero, authoredX: 0, sizeX: 12);
         PathManager.Register(chart).Should().BeTrue();
@@ -332,7 +331,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ExternalGridBridge_ShouldCoalesceSpawnTokenReplacementIntoOneCombinedChartSelection()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(0, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
 
         PathManager.Register(PathTestFactory.BuildSinglePointMap("OldGridTouchChart", Vector3d.Zero)).Should().BeTrue();
         PathManager.Register(PathTestFactory.BuildSinglePointMap("NewGridAuthoredChart", new Vector3d(10, 0, 0))).Should().BeTrue();
@@ -369,7 +368,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ManagedTransitionStateHelpers_ShouldHandleMissingAndExistingEntries()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         SwiftDictionary<string, NavigationChartRegistration> states = PathManager.ActiveState.NavigationChartMap;
 
@@ -409,7 +408,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ManagedTransitionStateHelpers_ShouldIgnoreAddAndRemoveRequests_WhenChartStateIsMissing()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         Action addMissing = () => ReflectionUtility.InvokePrivateStatic<object>(
             typeof(PathManager),
@@ -429,7 +428,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ManagedTransitionDeltaHelpers_ShouldRegisterMissingAndRemoveObsoleteTransitions()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         SwiftDictionary<string, NavigationChartRegistration> states = PathManager.ActiveState.NavigationChartMap;
 
@@ -459,7 +458,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ManagedTransitionComparisonHelpers_ShouldReturnEmptyWhenNoDeltaIsRequired()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         NavigationChartRegistration state = CreateRegistration("CompareChart", "compare-prefix", priority: 1);
         TraversalTransition keepTransition = CreateTransition("keep-id", Vector3d.Zero, new Vector3d(1, 0, 0));
@@ -483,7 +482,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ManagedTransitionCollectionHelpers_ShouldHandleEdgePairsAndOwnerResolution()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         NavigationChartCell[,,] cells = new NavigationChartCell[1, 1, 1];
         cells[0, 0, 0] = new NavigationChartCell(
@@ -503,7 +502,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
                 typeof(SwiftHashSet<string>),
                 typeof(SwiftHashSet<string>)
             },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             chart,
             state,
             new SwiftHashSet<string>(),
@@ -521,21 +520,21 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             typeof(PathManager),
             "IsChartEffectiveOwnerAtPosition",
             new[] { typeof(GridWorld), typeof(string), typeof(Vector3d) },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             chart.Name,
             Vector3d.Zero).Should().BeTrue();
         ReflectionUtility.InvokePrivateStatic<bool>(
             typeof(PathManager),
             "IsChartEffectiveOwnerAtPosition",
             new[] { typeof(GridWorld), typeof(string), typeof(Vector3d) },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             "OtherChart",
             Vector3d.Zero).Should().BeFalse();
         ReflectionUtility.InvokePrivateStatic<bool>(
             typeof(PathManager),
             "IsChartEffectiveOwnerAtPosition",
             new[] { typeof(GridWorld), typeof(string), typeof(Vector3d) },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             chart.Name,
             new Vector3d(9, 0, 0)).Should().BeFalse();
     }
@@ -543,7 +542,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ManagedTransitionCollectionHelpers_ShouldTrackActiveGeneratedTransitionsWithoutReportingMissingOnes()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         string[,,] map =
         {
@@ -579,7 +578,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
                 typeof(SwiftHashSet<string>),
                 typeof(SwiftHashSet<string>)
             },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             buildResult.Chart,
             state,
             desiredTransitionIds,
@@ -593,7 +592,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ManagedTransitionCollectionHelpers_ShouldReportMissingGeneratedTransitions_WhenStateIsEmpty()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         string[,,] map =
         {
@@ -625,7 +624,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
                 typeof(SwiftHashSet<string>),
                 typeof(SwiftHashSet<string>)
             },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             buildResult.Chart,
             state,
             desiredTransitionIds,
@@ -639,7 +638,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ManagedTransitionCollectionHelpers_ShouldTrackInactivePairsWithoutActivatingThem()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         string[,,] map =
         {
@@ -684,7 +683,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
                 typeof(SwiftHashSet<string>),
                 typeof(SwiftList<TraversalTransition>)
             },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             buildResult.Chart,
             state,
             firstX,
@@ -705,7 +704,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ResolvedVoxelStateHelpers_ShouldAddRemoveAndIgnoreNonOwners()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         NavigationChart chart = PathTestFactory.BuildSinglePointMap("ResolvedVoxelChart", Vector3d.Zero);
         NavigationChartRegistration registration = new(chart, registrationOrder: 1, chart.Name);
@@ -752,18 +751,18 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     public void ClearInitializedChartStateHelper_ShouldDropResolvedState_WhenGridVoxelNoLongerExists()
     {
         GridConfiguration config = new(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4));
-        TrailblazerWorldManager.TryAddGrid(config, out ushort gridIndex).Should().BeTrue();
+        TestWorld.World.TryAddGrid(config, out ushort gridIndex).Should().BeTrue();
 
         NavigationChart chart = PathTestFactory.RegisterSingleWalkablePoint("ClearTailChart", Vector3d.Zero);
         PathManager.IsChartInitialized(chart).Should().BeTrue();
 
-        TrailblazerWorldManager.TryRemoveGrid(gridIndex).Should().BeTrue();
+        TestWorld.World.TryRemoveGrid(gridIndex).Should().BeTrue();
 
         ReflectionUtility.InvokePrivateStatic<object>(
             typeof(PathManager),
             "ClearInitializedChartLiveStatePreservingRegistration",
             new[] { typeof(GridWorld), typeof(NavigationChart) },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             chart);
 
         PathManager.IsChartInitialized(chart).Should().BeFalse();
@@ -773,7 +772,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     [Fact]
     public void ChartUpdateHelpers_ShouldReturnEarlyForDeferredChartsWhileTrackingRefresh()
     {
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out _);
 
         NavigationChart chart = PathTestFactory.BuildSinglePointMap("DeferredUpdateTailChart", Vector3d.Zero);
         PathManager.Register(chart, initializeChart: false).Should().BeTrue();
@@ -799,7 +798,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
                 typeof(SwiftHashSet<string>),
                 typeof(SwiftHashSet<string>)
             },
-            TrailblazerWorldManager.World,
+            TestWorld.World,
             registration,
             1,
             1,
@@ -851,7 +850,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         uint gridVersion)
     {
         return new GridEventInfo(
-            TrailblazerWorldManager.World.SpawnToken,
+            TestWorld.World.SpawnToken,
             gridIndex,
             gridSpawnToken,
             configuration,

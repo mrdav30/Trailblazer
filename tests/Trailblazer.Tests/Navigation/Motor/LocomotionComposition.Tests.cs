@@ -12,7 +12,7 @@ public class LocomotionCompositionTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -75,7 +75,7 @@ public class LocomotionCompositionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateWaterAgent(
             profile: LocomotionProfile.CreateCoreOnly());
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Forward;
         agent.FrameRequest.Rate = TrekRate.Fast;
         agent.Simulate();
@@ -100,7 +100,7 @@ public class LocomotionCompositionTests : IDisposable
             profile: profile);
         var motor = TestRequire.NotNull(agent.Motor);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         motor.Handler.Slide.Should().BeNull();

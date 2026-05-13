@@ -111,14 +111,14 @@ public class NavSteeringBenchmarks
         Vector3d start = DirectOffset;
         Vector3d end = DirectOffset + new Vector3d(2, 0, 0);
 
-        BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, start, end, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
         _directAgent = new BenchmarkSteerAgent(start) { Speed = Fixed64.One };
-        _directSteer = NavSteering.CreateNew(_directAgent.Radius);
+        _directSteer = NavSteering.CreateNew(_fixture.Context, _directAgent.Radius);
 
-        _directRequest = AStarPathRequest.Create(start, end, Fixed64.One);
+        _directRequest = AStarPathRequest.Create(_fixture.Context, start, end, Fixed64.One);
         _directSteer.ApplyPathRequest(_directRequest);
 
         // Warm the LOS path on the first call so subsequent iterations measure steady state.
@@ -135,17 +135,17 @@ public class NavSteeringBenchmarks
         Vector3d start = AStarGuidedOffset + new Vector3d(1, 0, 1);
         Vector3d end = AStarGuidedOffset + new Vector3d(size - 1, 0, size - 1);
 
-        BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, start, end, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
         _astarGuidedAgent = new BenchmarkSteerAgent(start) { Speed = Fixed64.One };
-        _astarGuidedSteer = NavSteering.CreateNew(_astarGuidedAgent.Radius);
+        _astarGuidedSteer = NavSteering.CreateNew(_fixture.Context, _astarGuidedAgent.Radius);
 
         // Disable LOS recheck so the guide-backed path stays active and measures the guided path.
         _astarGuidedSteer.PathRecheckCooldownFrames = int.MaxValue;
 
-        _astarGuidedRequest = AStarPathRequest.Create(start, end, Fixed64.One);
+        _astarGuidedRequest = AStarPathRequest.Create(_fixture.Context, start, end, Fixed64.One);
         _astarGuidedSteer.ApplyPathRequest(_astarGuidedRequest);
 
         // Prime the guide so the benchmark body measures steady-state guide consumption, not cold resolution.
@@ -161,15 +161,15 @@ public class NavSteeringBenchmarks
         Vector3d start = FlowFieldGuidedOffset + new Vector3d(1, 0, 1);
         Vector3d end = FlowFieldGuidedOffset + new Vector3d(size - 1, 0, size - 1);
 
-        BenchmarkPreflight.AssertFlowFieldRouteExists(start, end, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context, start, end, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
         _ffGuidedAgent = new BenchmarkSteerAgent(start) { Speed = Fixed64.One };
-        _ffGuidedSteer = NavSteering.CreateNew(_ffGuidedAgent.Radius);
+        _ffGuidedSteer = NavSteering.CreateNew(_fixture.Context, _ffGuidedAgent.Radius);
         _ffGuidedSteer.PathRecheckCooldownFrames = int.MaxValue;
 
-        _ffGuidedRequest = FlowFieldPathRequest.Create(start, end, Fixed64.One);
+        _ffGuidedRequest = FlowFieldPathRequest.Create(_fixture.Context, start, end, Fixed64.One);
         _ffGuidedSteer.ApplyPathRequest(_ffGuidedRequest);
 
         // Prime the guide.
@@ -194,29 +194,29 @@ public class NavSteeringBenchmarks
         EnsureAStarGuideResolves(_directRequest, nameof(_directRequest));
         EnsureAStarGuideResolves(_astarGuidedRequest, nameof(_astarGuidedRequest));
         EnsureFlowFieldGuideResolves(_ffGuidedRequest, nameof(_ffGuidedRequest));
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
     }
 
     private static void EnsureAStarGuideResolves(AStarPathRequest request, string requestName)
     {
-        if (!PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+        if (!request.Context.Guides.RequestGuide(request, out AStarGuide guide))
             throw new System.InvalidOperationException(
                 $"Preflight: {requestName} failed after all nav-steering benchmark charts were configured.");
 
-        PathGuideFactory.ReturnGuide(guide);
+        request.Context.Guides.ReturnGuide(guide);
     }
 
     private static void EnsureFlowFieldGuideResolves(FlowFieldPathRequest request, string requestName)
     {
-        if (!PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide))
+        if (!request.Context.Guides.RequestGuide(request, out FlowFieldGuide guide))
             throw new System.InvalidOperationException(
                 $"Preflight: {requestName} failed after all nav-steering benchmark charts were configured.");
 
-        PathGuideFactory.ReturnGuide(guide);
+        request.Context.Guides.ReturnGuide(guide);
     }
 
-    private static void SetupOccupantDensityScenario(
+    private void SetupOccupantDensityScenario(
         int occupantCount,
         int gridWidth,
         int gridDepth,
@@ -236,24 +236,24 @@ public class NavSteeringBenchmarks
         // Register each occupant with the VoxelGrid so the steering scan can find them.
         foreach (BenchmarkOccupant occupant in occupants)
         {
-            if (TrailblazerWorldManager.TryGetGrid(occupant.Position, out VoxelGrid grid))
+            if (_fixture.World.TryGetGrid(occupant.Position, out VoxelGrid grid))
                 grid.TryAddVoxelOccupant(occupant);
         }
 
         // Place the measured agent in the middle of the occupant cloud.
         var agentPos = new Vector3d(originX + gridWidth / 2, 0, originZ + gridDepth / 2);
         agent = new BenchmarkSteerAgent(agentPos) { Speed = Fixed64.One };
-        steer = NavSteering.CreateNew(agent.Radius);
+        steer = NavSteering.CreateNew(_fixture.Context, agent.Radius);
     }
 
-    private static void RemoveOccupants(BenchmarkOccupant[] occupants)
+    private void RemoveOccupants(BenchmarkOccupant[] occupants)
     {
         if (occupants == null)
             return;
 
         foreach (BenchmarkOccupant occupant in occupants)
         {
-            if (TrailblazerWorldManager.TryGetGrid(occupant.Position, out VoxelGrid grid))
+            if (_fixture.World.TryGetGrid(occupant.Position, out VoxelGrid grid))
                 grid.TryRemoveVoxelOccupant(occupant);
         }
     }
@@ -269,7 +269,7 @@ public class NavSteeringBenchmarks
     })]
     public void ReapplyRequestForFirstFrame()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
         _directSteer.ApplyPathRequest(_directRequest);
         _astarGuidedSteer.ApplyPathRequest(_astarGuidedRequest);
     }

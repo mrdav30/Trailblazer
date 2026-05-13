@@ -13,7 +13,7 @@ public class FallLocomotionTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -25,7 +25,7 @@ public class FallLocomotionTests : IDisposable
 
         Vector3d expectedVelocity = Vector3d.Down;
         expectedVelocity.y += -agent.Motor.Handler.Forces.GravityForce
-            * TrailblazerManager.DeltaTime;
+            * TestWorld.Context.DeltaTime;
 
         agent.FrameRequest.IsRequestingJump = true;
 
@@ -44,7 +44,7 @@ public class FallLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateFallingAgent();
 
         // Act - First Frame (Falling)
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         // Assert
@@ -62,7 +62,7 @@ public class FallLocomotionTests : IDisposable
         };
 
         // 2nd Frame
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         // Act - Second Frame (After Ground Contact)
         agent.Simulate();
@@ -84,11 +84,11 @@ public class FallLocomotionTests : IDisposable
         // Act - Simulate falling for 5 frames
         for (int i = 0; i < 5; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
 
             // Calculate expected velocity update from gravity impulse
-            expectedVelocity.y += -agent.Motor.Handler.Forces.GravityForce * TrailblazerManager.DeltaTime;
+            expectedVelocity.y += -agent.Motor.Handler.Forces.GravityForce * TestWorld.Context.DeltaTime;
         }
 
         // Assert
@@ -119,7 +119,7 @@ public class FallLocomotionTests : IDisposable
 
         for (int i = 0; i < 20; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.FrameRequest.Direction = Vector3d.Right;
             agent.FrameRequest.Rate = TrekRate.Moderate;
             agent.Simulate();
@@ -142,7 +142,7 @@ public class FallLocomotionTests : IDisposable
 
         while (!agent.Motor.IsOnSolid)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 
@@ -159,7 +159,7 @@ public class FallLocomotionTests : IDisposable
 
         while (!agent.Motor.IsOnSolid)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 
@@ -178,7 +178,7 @@ public class FallLocomotionTests : IDisposable
 
         agent.Motor.Handler.Move.SlopeLimit = (Fixed64)45;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         agent.Motor.Handler.Fall.IsFalling.Should().BeFalse();
@@ -198,7 +198,7 @@ public class FallLocomotionTests : IDisposable
 
         for (int i = 0; i < 2; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 
@@ -219,13 +219,13 @@ public class FallLocomotionTests : IDisposable
 
         agent.FrameRequest.IsRequestingJump = true;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         // Simulate a few frames of upward motion
         for (int i = 0; i < 13; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.FrameRequest.IsRequestingJump = true;
             agent.Simulate();
         }
@@ -243,7 +243,7 @@ public class FallLocomotionTests : IDisposable
         agent.FrameCondition.Medium = TraversalMedium.Solid;
         agent.FrameCondition.SurfaceLevel = Fixed64.Zero;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         agent.Motor.Handler.Fall.FallHeight.Should().Be(Fixed64.Zero);
@@ -265,7 +265,7 @@ public class FallLocomotionTests : IDisposable
 
         while (!agent.Motor.IsOnSolid)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 

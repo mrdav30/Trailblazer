@@ -24,15 +24,14 @@ Trailblazer assumes:
 - world-space math uses `FixedMathSharp` types such as `Fixed64`, `Vector3d`, and `FixedQuaternion`
 - traversable space is represented by `GridForge` voxels
 - pathfinding is driven by `NavigationChart` data and `SolidChartPartition` ownership
-- simulation advances in deterministic fixed steps through `TrailblazerManager` or an explicit
-  `TrailblazerWorldContext`
+- simulation advances in deterministic fixed steps through `TrailblazerWorldContext`
 - runtime diagnostics flow through `TrailblazerLogger.Channel`, with verbose debug logging gated separately through `TrailblazerLogger.DebugChannel`
 
 At a high level, the runtime loop is:
 
 1. Register and initialize one or more `NavigationChart` instances.
 2. Build an `IPathRequest` directly for lower-level pathing, or let `Navigator` create one from a target position and guided-path settings.
-3. Resolve that request into an `IGuide` through `PathGuideFactory`, or let `NavSteering` do that for you.
+3. Resolve that request into an `IGuide` through `TrailblazerWorldContext.Guides`, or let `NavSteering` do that for you.
 4. Run `Navigator.Simulate()` on the fixed step.
 5. Update traversal medium and surface state from your own collision/environment code.
 6. Commit the frame with `Navigator.CommitFrameMotion()`.
@@ -59,20 +58,14 @@ Important details:
 
 ### 2.2 TrailblazerWorldContext
 
-`TrailblazerWorldContext` is the new explicit owner for one `GridWorld` and its deterministic
-simulation clock. It provides context construction, attach/owned-world lifetime, independent frame
-rate and frame count, context-local lifecycle hooks, pathing state, transitions, volume rules,
-reachability snapshots, guide caches, navigator ids, and movement-group state. `TrailblazerManager`
-creates a default context when initialized with a `GridWorld` so existing static integrations keep
-working while new integrations bind runtime objects to explicit contexts.
+`TrailblazerWorldContext` is the explicit owner for one `GridWorld` and its deterministic simulation clock. It provides context construction, attach/owned-world lifetime, independent frame rate and frame count, context-local lifecycle hooks, pathing state, transitions, volume rules, reachability snapshots, guide caches, navigator ids, and movement-group state.
 
-### 2.3 PathManager
+### 2.3 Pathing Service
 
-`TrailblazerWorldContext.Pathing` is the context-local chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell query helpers, owns chart partition pools, and handles grid rebuild events for its `GridWorld`. The static `PathManager` remains as a default-context compatibility facade for single-world integrations and still exposes closest-active-transition and direct-travel utilities.
+`TrailblazerWorldContext.Pathing` is the context-local chart registry and live partition coordinator. It turns registered `NavigationChart` data into initialized voxel partitions, can apply a `TraversalBuildResult` in one step, manages chart ownership and unload behavior, exposes effective-cell query helpers, owns chart partition pools, and handles grid rebuild events for its `GridWorld`.
 
 Explicit handoff data between chart-backed traversal and raw-volume traversal is registered through
-`TrailblazerWorldContext.Transitions`. `TraversalTransitionRegistry` remains as the default-context
-compatibility facade.
+`TrailblazerWorldContext.Transitions`.
 
 See also:
 
@@ -112,7 +105,7 @@ Use `AStarPathRequest` when you want a concrete waypoint trail.
 
 Additional configuration includes:
 
-- `Heuristic` with `Manhattan`, `Octile`, or `Euclidean`; `Octile` is the closest fit for diagonal-enabled chart grids, while `Manhattan` remains available for axis-biased routing
+- `Heuristic` with `Manhattan`, `Octile`, or `Euclidean`; `Octile` is the closest fit for diagonal-enabled chart grids, while `Manhattan` supports axis-biased routing
 - `MaxClimbHeight` for vertical step restrictions
 
 Factory helpers:
@@ -239,8 +232,7 @@ Guide behavior in practice:
 
 ## 5. Guide Caching and Lifetime
 
-`TrailblazerWorldContext.Guides` is the main entry point for guide resolution.
-`PathGuideFactory` remains as the default-context compatibility facade.
+`TrailblazerWorldContext.Guides` is the entry point for guide resolution, guide return, cache invalidation, and cache diagnostics.
 
 Supported operations:
 
@@ -303,7 +295,7 @@ See also:
 
 ## 7. Deterministic Frame Flow
 
-Call `TrailblazerManager.Initialize(world)` once during application startup after your host creates
+Create or attach a `TrailblazerWorldContext` once during application startup after your host creates
 and populates the `GridWorld` instance Trailblazer should use.
 
 The fixed-step flow is usually:
@@ -315,29 +307,28 @@ world.TryAddGrid(
     new GridConfiguration(new Vector3d(-32, -8, -32), new Vector3d(32, 24, 32)),
     out _);
 
-TrailblazerManager.Initialize(world);
-TrailblazerManager.Simulate();
+TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+context.Simulate();
 navigator.Simulate();
 navigator.CommitFrameMotion();
-TrailblazerManager.LateSimulate();
+context.LateSimulate();
 ```
 
 What each stage does:
 
-1. `TrailblazerManager.Simulate()` advances frame counters and then runs ordered internal simulate hooks such as `PathManager.Tick()`.
+1. `context.Simulate()` advances that world's frame counters, flushes pending grid changes, culls expired guides, and runs ordered simulate hooks.
 2. `Navigator.Simulate()` resolves heading, runs the motor, and updates turning.
 3. Host code refreshes surface and medium data through the concrete navigator's `CheckTrekCondition()` implementation, typically by calling helpers such as `SetGroundContact(...)`, `SetAirborne(...)`, or `SetWaterContact(...)` from inside that override before commit.
 4. `Navigator.CommitFrameMotion()` finalizes deltas, updates velocity and acceleration, and finalizes motor state.
-5. `TrailblazerManager.LateSimulate()` marks the visual accumulation boundary.
+5. `context.LateSimulate()` marks the visual accumulation boundary.
 
-`TrailblazerManager.Visualize()` exists for accumulation tracking on the visual side, but it does not replace fixed-step simulation.
+`context.Visualize()` exists for accumulation tracking on the visual side, but it does not replace fixed-step simulation.
 
 Important maintenance rule:
 
-- when a subsystem needs frame-step, reset, or frame-rate-change maintenance, register an ordered internal `TrailblazerManager` lifecycle hook instead of hard-wiring that subsystem into the manager
-- hosts should prefer explicit `TrailblazerManager.Initialize(world)` during startup rather than relying on lazy first-use initialization
-- `TrailblazerManager.SetFrameRate(...)` requires a positive frame rate; zero or negative values are rejected
-- if a value depends on `TrailblazerManager.FrameRate`, do not freeze it in a one-time snapshot unless the code also refreshes it from the frame-rate-change hook; prefer reading the manager live or recomputing from stored inputs
+- hosts should keep the `TrailblazerWorldContext` handle and pass it to navigators, path requests, guide services, transition services, and volume-rule services
+- `context.SetFrameRate(...)` requires a positive frame rate; zero or negative values are rejected
+- if a value depends on `context.FrameRate`, do not freeze it in a one-time snapshot unless the code also refreshes it when the context frame rate changes; prefer reading the context live or recomputing from stored inputs
 
 ## 8. Direct Pathing Without Navigator
 
@@ -346,7 +337,6 @@ You can use the pathing layer without the full navigation stack:
 For a pathing-first guide that does not assume `Navigator`, read [`PATHING.MD`](PATHING.MD).
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
 
 if (context.Guides.RequestGuide(request, out AStarGuide guide))
@@ -392,11 +382,11 @@ Before runtime pathing works correctly:
 
 - [`../README.md`](../README.md) for package-level overview and quick-start examples
 - [`PATHING.MD`](PATHING.MD) for standalone pathing integration and request guidance
-- [`PATHGUIDES.MD`](PATHGUIDES.MD) for `IGuide`, `IWaypointGuide`, and `PathGuideFactory`
+- [`PATHGUIDES.MD`](PATHGUIDES.MD) for `IGuide`, `IWaypointGuide`, and context-owned guide caches
 - [`TRANSITIONS.MD`](TRANSITIONS.MD) for authored chart and volume handoffs
 - [`VOLUMETRAVERSAL.MD`](VOLUMETRAVERSAL.MD) for raw-volume traversal rules
 - [`NAVMOTOR.MD`](NAVMOTOR.MD) for motor phase ordering
 - [`GRAVITY.MD`](GRAVITY.MD) for the gravity model
-- `src/Trailblazer/Main` for host-facing lifecycle entry points such as `Navigator` and `TrailblazerManager`
+- `src/Trailblazer/Main` for host-facing lifecycle entry points such as `TrailblazerWorldContext` and `Navigator`
 - `src/Trailblazer/Pathing` for core pathing logic, especially the `Search` and `Support` subfolders
 - `src/Trailblazer/Navigation` for steering, turning, motor flow, movement groups

@@ -84,36 +84,6 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     private HybridPathRequest() { }
 
     /// <summary>
-    /// Attempts to create a new HybridPathRequest with the specified parameters.
-    /// </summary>
-    /// <param name="origin">The starting position of the path request.</param>
-    /// <param name="destination">The target position of the path request.</param>
-    /// <param name="unitSize">The size of the unit for pathfinding.</param>
-    /// <param name="request">The resulting HybridPathRequest if creation is successful.</param>
-    /// <param name="heuristic">The heuristic method to use for pathfinding.</param>
-    /// <param name="maxClimbHeight">The maximum climb height for the pathfinding unit.</param>
-    /// <param name="allowUnwalkableEndpoints">Whether to allow paths to unwalkable areas.</param>
-    /// <returns>True if the request was successfully created; otherwise, false.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCreate(
-        Vector3d origin,
-        Vector3d destination,
-        Fixed64 unitSize,
-        [NotNullWhen(true)] out HybridPathRequest? request,
-        HeuristicMethod heuristic = HeuristicMethod.Manhattan,
-        Fixed64? maxClimbHeight = null,
-        bool allowUnwalkableEndpoints = false) =>
-        TryCreate(
-            PathRequestContextResolver.DefaultContext,
-            origin,
-            destination,
-            unitSize,
-            out request,
-            heuristic,
-            maxClimbHeight,
-            allowUnwalkableEndpoints);
-
-    /// <summary>
     /// Attempts to create a new context-bound HybridPathRequest with the specified parameters.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -130,32 +100,6 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         request = Create(context, origin, destination, unitSize, heuristic, maxClimbHeight, allowUnwalkableEndpoints);
         return request != null;
     }
-
-    /// <summary>
-    /// Creates a new HybridPathRequest with the specified parameters.
-    /// </summary>
-    /// <param name="origin">The starting position of the path request.</param>
-    /// <param name="destination">The target position of the path request.</param>
-    /// <param name="unitSize">The size of the unit for pathfinding.</param>
-    /// <param name="heuristic">The heuristic method to use for pathfinding.</param>
-    /// <param name="maxClimbHeight">The maximum climb height for the pathfinding unit.</param>
-    /// <param name="allowUnwalkableEndpoints">Whether to allow paths to unwalkable areas.</param>
-    /// <returns>The created HybridPathRequest if successful; otherwise, null.</returns>
-    public static HybridPathRequest? Create(
-        Vector3d origin,
-        Vector3d destination,
-        Fixed64 unitSize,
-        HeuristicMethod heuristic = HeuristicMethod.Manhattan,
-        Fixed64? maxClimbHeight = null,
-        bool allowUnwalkableEndpoints = false) =>
-        Create(
-            PathRequestContextResolver.DefaultContext,
-            origin,
-            destination,
-            unitSize,
-            heuristic,
-            maxClimbHeight,
-            allowUnwalkableEndpoints);
 
     /// <summary>
     /// Creates a new context-bound HybridPathRequest with the specified parameters.

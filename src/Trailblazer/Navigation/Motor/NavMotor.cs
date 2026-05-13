@@ -166,14 +166,6 @@ public class NavMotor : IRecordable
     #region Construct
 
     /// <summary>
-    /// Creates a new <see cref="NavMotor"/> instance and initializes it with the provided object.
-    /// </summary>
-    /// <param name="initialCondition">The initial traversal condition of the object</param>
-    /// <param name="profile">Optional locomotion composition profile. When omitted, the default profile is used.</param>
-    /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
-    public static NavMotor CreateNew(TrekCondition initialCondition, LocomotionProfile? profile = null) => new(initialCondition, profile);
-
-    /// <summary>
     /// Creates a new context-bound <see cref="NavMotor"/> instance.
     /// </summary>
     public static NavMotor CreateNew(
@@ -183,38 +175,19 @@ public class NavMotor : IRecordable
         new(context, initialCondition, profile);
 
     /// <summary>
-    /// Creates a new <see cref="NavMotor"/> instance without initializing it, allowing for manual setup before use.
-    /// </summary>
-    /// <param name="handler">Optional locomotion handler to associate with the new instance.</param>
-    /// <returns>A new instance of <see cref="NavMotor"/>.</returns>
-    public static NavMotor CreateUninitialized(LocomotionHandler? handler = null)
-    {
-        var motor = new NavMotor();
-        if (handler != null)
-            motor._handler = handler;
-
-        return motor;
-    }
-
-    /// <summary>
     /// Creates a new context-bound <see cref="NavMotor"/> instance without initializing it.
     /// </summary>
     public static NavMotor CreateUninitialized(TrailblazerWorldContext context, LocomotionHandler? handler = null)
     {
-        var motor = CreateUninitialized(handler);
+        var motor = new NavMotor();
+        if (handler != null)
+            motor._handler = handler;
         motor.BindContext(context);
         return motor;
     }
 
     // Parameterless constructor for serialization purposes. Not intended for direct use.
     private NavMotor() { }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="NavMotor"/> class.
-    /// </summary>
-    /// <param name="condition">The initial traversal condition of the object</param>
-    /// <param name="profile">Optional locomotion composition profile. When omitted, the default profile is used.</param>
-    public NavMotor(TrekCondition condition, LocomotionProfile? profile = null) => OnInitialize(condition, profile);
 
     /// <summary>
     /// Initializes a new context-bound <see cref="NavMotor"/> instance.
@@ -235,15 +208,16 @@ public class NavMotor : IRecordable
         _handler.BindContext(context);
     }
 
-    private TrailblazerWorldContext? TryGetContext() => _context;
+    private TrailblazerWorldContext RequireContext() =>
+        _context ?? throw new InvalidOperationException("NavMotor requires an explicit TrailblazerWorldContext.");
 
-    private int FrameCount => TryGetContext()?.FrameCount ?? TrailblazerManager.FrameCount;
+    private int FrameCount => RequireContext().FrameCount;
 
-    private Fixed64 DeltaTime => TryGetContext()?.DeltaTime ?? TrailblazerManager.DeltaTime;
+    private Fixed64 DeltaTime => RequireContext().DeltaTime;
 
-    private Fixed64 InvDeltaTime => TryGetContext()?.InvDeltaTime ?? TrailblazerManager.InvDeltaTime;
+    private Fixed64 InvDeltaTime => RequireContext().InvDeltaTime;
 
-    private Fixed64 TotalTime => TryGetContext()?.TotalTime ?? TrailblazerManager.TotalTime;
+    private Fixed64 TotalTime => RequireContext().TotalTime;
 
     /// <summary>
     /// Prepares the controller by linking it to the given object and setting initial state values.

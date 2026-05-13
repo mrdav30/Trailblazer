@@ -16,17 +16,16 @@ public class AStarSurveryorTests : IDisposable
 {
     public AStarSurveryorTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
+        TestWorld.World.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
 
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
 
         GC.SuppressFinalize(this);
     }
@@ -49,7 +48,7 @@ public class AStarSurveryorTests : IDisposable
 
         PathTestFactory.RegisterFromData("Line", data, origin);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(origin, target, out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, origin, target, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
         Assert.Equal(3, guide.ActiveWaypoints.Length); // start, middle, end
@@ -69,7 +68,7 @@ public class AStarSurveryorTests : IDisposable
 
         var unreachableTarget = new Vector3d(4, 0, 4);
 
-        bool created = AStarPathRequest.TryCreate(Vector3d.Zero, unreachableTarget, out AStarPathRequest? request);
+        bool created = AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, unreachableTarget, Fixed64.One, out AStarPathRequest? request);
 
         Assert.False(created);
         Assert.Null(request);
@@ -99,7 +98,7 @@ public class AStarSurveryorTests : IDisposable
         PathManager.Register(map);
         PathManager.InitializeChart("Diag");
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(start, target, out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, target, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         request.Heuristic = method;
 
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
@@ -115,7 +114,7 @@ public class AStarSurveryorTests : IDisposable
         var pos = new Vector3d(1, 0, 1);
         PathTestFactory.RegisterSingleWalkablePoint("SameSpot", pos);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(pos, pos, out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, pos, pos, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         bool success = PathGuideFactory.RequestGuide(request, out AStarGuide? guide);
 
@@ -147,7 +146,7 @@ public class AStarSurveryorTests : IDisposable
         var start = new Vector3d(0, 0, 0);
         var target = new Vector3d(4, 0, 0);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(start, target, out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, target, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
         // Must have detoured around
@@ -179,7 +178,7 @@ public class AStarSurveryorTests : IDisposable
 
         PathTestFactory.RegisterFromData("Choke", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(new Vector3d(1, 0, 1), new Vector3d(4, 0, 1), Fixed64.Two));
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(1, 0, 1), new Vector3d(4, 0, 1), Fixed64.Two));
 
         request.IsValid.Should().BeTrue();
 
@@ -200,8 +199,7 @@ public class AStarSurveryorTests : IDisposable
         bool[,,] data = BuildSingleVoxelChoke();
         PathTestFactory.RegisterFromData("ChokeFastFail", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            new Vector3d(0, 0, 2),
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(6, 0, 2),
             Fixed64.Two));
 
@@ -231,14 +229,12 @@ public class AStarSurveryorTests : IDisposable
         bool[,,] data = BuildSingleVoxelChoke();
         PathTestFactory.RegisterFromData("ChokeKeySwitch", data, Vector3d.Zero);
 
-        AStarPathRequest lowClimbRequest = TestRequire.NotNull(AStarPathRequest.Create(
-            new Vector3d(0, 0, 2),
+        AStarPathRequest lowClimbRequest = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(6, 0, 2),
             Fixed64.Two));
         lowClimbRequest.MaxClimbHeight = Fixed64.Zero;
 
-        AStarPathRequest highClimbRequest = TestRequire.NotNull(AStarPathRequest.Create(
-            new Vector3d(0, 0, 2),
+        AStarPathRequest highClimbRequest = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(6, 0, 2),
             Fixed64.Two));
         highClimbRequest.MaxClimbHeight = Fixed64.One;
@@ -253,9 +249,9 @@ public class AStarSurveryorTests : IDisposable
     [Fact]
     public void AStarSurveyor_FindPath_ShouldKeepOpenPlane16ColdAllocationsUnderBudget()
     {
-        TrailblazerWorldManager.Reset();
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-1, -1, -1), new Vector3d(20, 4, 20)), out _);
+        TestWorld.Reset();
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-1, -1, -1), new Vector3d(20, 4, 20)), out _);
 
         bool[,,] data = new bool[1, 16, 16];
         for (int x = 0; x < 16; x++)
@@ -265,7 +261,7 @@ public class AStarSurveryorTests : IDisposable
         PathTestFactory.RegisterFromData("AStarOpenPlane16Alloc", data, Vector3d.Zero);
 
         AStarPathRequest request = TestRequire.Created(
-            AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(15, 0, 15), out AStarPathRequest? createdRequest),
+            AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(15, 0, 15), Fixed64.One, out AStarPathRequest? createdRequest),
             createdRequest);
 
         AStarSurveyor.Shared.FindPath(request).HasPath.Should().BeTrue();
@@ -291,8 +287,7 @@ public class AStarSurveryorTests : IDisposable
         bool[,,] blocked = BuildSingleVoxelChoke();
         PathTestFactory.RegisterFromData("ChokeReevalBlocked", blocked, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            new Vector3d(0, 0, 2),
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(6, 0, 2),
             Fixed64.Two));
 
@@ -333,7 +328,7 @@ public class AStarSurveryorTests : IDisposable
 
         PathTestFactory.RegisterFromData("ResetTest", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         bool success1 =
             PathGuideFactory.RequestGuide(request, out AStarGuide? guide);
@@ -356,7 +351,7 @@ public class AStarSurveryorTests : IDisposable
 
         PathTestFactory.RegisterFromData("ResetTestBlocked", badData, Vector3d.Zero);
 
-        AStarPathRequest failedRequest = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdfailedRequest), createdfailedRequest);
+        AStarPathRequest failedRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdfailedRequest), createdfailedRequest);
 
         bool success2 =
             PathGuideFactory.RequestGuide(failedRequest, out AStarGuide? failedGuide);
@@ -378,7 +373,7 @@ public class AStarSurveryorTests : IDisposable
 
         PathTestFactory.RegisterFromData("SearchCap", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(8, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(8, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         request.MaxPathSearchRange = 4; // Set a low search limit to force failure
 
         bool success = PathGuideFactory.RequestGuide(request, out AStarGuide? guide);
@@ -407,7 +402,7 @@ public class AStarSurveryorTests : IDisposable
         PathManager.Register(map);
         PathManager.InitializeChart("LSpline");
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 2), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 2), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
         guide.UseSplineSmoothing = true;
@@ -432,7 +427,7 @@ public class AStarSurveryorTests : IDisposable
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(1, 0, 0);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(start, end, out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
         guide.UseSplineSmoothing = true;
@@ -461,7 +456,7 @@ public class AStarSurveryorTests : IDisposable
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(3, 0, 3);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(start, end, out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
         guide.UseSplineSmoothing = true;
@@ -486,7 +481,7 @@ public class AStarSurveryorTests : IDisposable
 
         PathTestFactory.RegisterFromData("CornerCut", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(1, 0, 1), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, new Vector3d(0, 0, 0), new Vector3d(1, 0, 1), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         bool success = PathGuideFactory.RequestGuide(request, out AStarGuide? guide);
 
         Assert.False(success);
@@ -511,7 +506,7 @@ public class AStarSurveryorTests : IDisposable
 
         PathTestFactory.RegisterFromData("ShortestPath", data, new Vector3d(0, 0, 0));
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(2, 0, 2), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, new Vector3d(0, 0, 0), new Vector3d(2, 0, 2), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
 
         // Ensure path goes through (1,0,1) as optimal diagonal
@@ -536,7 +531,7 @@ public class AStarSurveryorTests : IDisposable
 
         PathTestFactory.RegisterFromData("BlockedMap", data, new Vector3d(0, 0, 0));
 
-        bool created = AStarPathRequest.TryCreate(new Vector3d(0, 0, 0), new Vector3d(2, 0, 2), out AStarPathRequest? request);
+        bool created = AStarPathRequest.TryCreate(TestWorld.Context, new Vector3d(0, 0, 0), new Vector3d(2, 0, 2), Fixed64.One, out AStarPathRequest? request);
 
         Assert.False(created);
         Assert.Null(request);
@@ -558,7 +553,7 @@ public class AStarSurveryorTests : IDisposable
 
         PathTestFactory.RegisterFromData("Consistent", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide1 = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide1), createdGuide1);
         AStarGuide guide2 = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide2), createdGuide2);
 
@@ -592,10 +587,10 @@ public class AStarSurveryorTests : IDisposable
         var start = new Vector3d(1, 0, 2);
         var end = new Vector3d(4, 0, 2);
 
-        AStarPathRequest manhattanRequest = TestRequire.Created(AStarPathRequest.TryCreate(start, end, out AStarPathRequest? createdmanhattanRequest), createdmanhattanRequest);
+        AStarPathRequest manhattanRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdmanhattanRequest), createdmanhattanRequest);
         manhattanRequest.Heuristic = HeuristicMethod.Manhattan;
 
-        AStarPathRequest euclideanRequest = TestRequire.Created(AStarPathRequest.TryCreate(start, end, out AStarPathRequest? createdeuclideanRequest), createdeuclideanRequest);
+        AStarPathRequest euclideanRequest = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdeuclideanRequest), createdeuclideanRequest);
         euclideanRequest.Heuristic = HeuristicMethod.Euclidean;
 
         AStarGuide manhattan = TestRequire.Created(PathGuideFactory.RequestGuide(manhattanRequest, out AStarGuide? createdManhattan), createdManhattan);
@@ -652,7 +647,7 @@ public class AStarSurveryorTests : IDisposable
 
         diagonalPartition.PathCostModifier = 1000;
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(start, end, out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, start, end, Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
 
@@ -684,7 +679,7 @@ public class AStarSurveryorTests : IDisposable
         Voxel currentVoxel = TestRequire.VoxelAt(Vector3d.Zero);
         SolidChartPartition current = TestRequire.Partition<SolidChartPartition>(currentVoxel);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         AStarSurveyor surveyor = new();
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
@@ -712,7 +707,7 @@ public class AStarSurveryorTests : IDisposable
         SolidChartPartition current = TestRequire.Partition<SolidChartPartition>(currentVoxel);
         SolidChartPartition neighbor = TestRequire.Partition<SolidChartPartition>(neighborVoxel);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
 
         AStarSurveyor surveyor = new();
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
@@ -804,7 +799,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("DiagonalEndNode", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 1), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(1, 0, 1), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
         guide.ActiveWaypoints.First().Position.Should().Be(Vector3d.Zero);
         guide.ActiveWaypoints.Last().Position.Should().Be(new Vector3d(1, 0, 1));
@@ -843,7 +838,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("GuideOriginWaypoint", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
 
         // Index 0 is at (0,0,0) = Vector3d.Zero → movementDirection == Zero → return Zero.
@@ -864,7 +859,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("GuideOffOriginDir", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
 
         // Advance to a waypoint that is not at the origin so the branch is taken.
@@ -886,7 +881,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("GuideOutOfRange", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(1, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
 
         guide.TryGetWaypointAt(-1, out _).Should().BeFalse();
@@ -910,7 +905,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("GuideWaypointFallback", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
 
         // Sample from halfway between the first and second waypoints so the nearest
@@ -933,7 +928,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("GuideHasArrived", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
         guide.HasArrived().Should().BeFalse("guide starts at index 0, not the last waypoint");
 
@@ -970,7 +965,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("GuideOutOfRangeDir", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
 
         // Advance past the end so CurrentWaypointIndex >= Length.
@@ -996,7 +991,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("GuideZeroPos", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(2, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
 
         // Index 0 waypoint position is (0,0,0) — the zero-position guard fires.
@@ -1018,7 +1013,7 @@ public class AStarSurveryorTests : IDisposable
         };
         PathTestFactory.RegisterFromData("GuideSpline", data, Vector3d.Zero);
 
-        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(4, 0, 0), out AStarPathRequest? createdrequest), createdrequest);
+        AStarPathRequest request = TestRequire.Created(AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(4, 0, 0), Fixed64.One, out AStarPathRequest? createdrequest), createdrequest);
         AStarGuide guide = TestRequire.Created(PathGuideFactory.RequestGuide(request, out AStarGuide? createdGuide), createdGuide);
         guide.UseSplineSmoothing = true;
 

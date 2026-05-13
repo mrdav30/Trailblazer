@@ -9,27 +9,40 @@ internal sealed class HybridRouteStep
 
     public IPathRequest SegmentRequest { get; private set; } = null!;
 
+    public TrailblazerWorldContext Context { get; private set; } = null!;
+
     public Vector3d WaypointPosition { get; private set; }
 
     public int AdditionalCost { get; private set; }
 
     public string[] SegmentChartKeys { get; private set; } = Array.Empty<string>();
 
+    private HybridRouteStep() { }
+
     public static HybridRouteStep Segment(
         IPathRequest request,
         int additionalCost = 0,
         string[]? chartKeys = null) => new()
-    {
-        Kind = HybridRouteStepKind.PathSegment,
-        SegmentRequest = request,
-        AdditionalCost = additionalCost,
-        SegmentChartKeys = chartKeys ?? Array.Empty<string>()
-    };
+        {
+            Kind = HybridRouteStepKind.PathSegment,
+            SegmentRequest = request,
+            Context = request.Context,
+            AdditionalCost = additionalCost,
+            SegmentChartKeys = chartKeys ?? Array.Empty<string>()
+        };
 
-    public static HybridRouteStep Waypoint(Vector3d position, int additionalCost = 0) => new()
+    public static HybridRouteStep Waypoint(
+        TrailblazerWorldContext context,
+        Vector3d position,
+        int additionalCost = 0)
     {
-        Kind = HybridRouteStepKind.Waypoint,
-        WaypointPosition = position,
-        AdditionalCost = additionalCost
-    };
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        return new()
+        {
+            Kind = HybridRouteStepKind.Waypoint,
+            Context = context,
+            WaypointPosition = position,
+            AdditionalCost = additionalCost
+        };
+    }
 }

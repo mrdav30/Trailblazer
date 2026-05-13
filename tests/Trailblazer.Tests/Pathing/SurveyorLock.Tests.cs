@@ -15,16 +15,15 @@ public sealed class SurveyorLockTests : IDisposable
 {
     public SurveyorLockTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
         var config = new GridConfiguration(new Vector3d(-1, -1, -1), new Vector3d(12, 4, 12));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
+        TestWorld.World.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -59,13 +58,12 @@ public sealed class SurveyorLockTests : IDisposable
         PathManager.Register(chart);
 
         AStarPathRequest aStarRequest = TestRequire.Created(
-            AStarPathRequest.TryCreate(Vector3d.Zero, new Vector3d(7, 0, 7), out AStarPathRequest? createdAStar),
+            AStarPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(7, 0, 7), Fixed64.One, out AStarPathRequest? createdAStar),
             createdAStar);
         FlowFieldPathRequest flowFieldRequest = TestRequire.Created(
-            FlowFieldPathRequest.TryCreate(Vector3d.Zero, new Vector3d(7, 0, 7), out FlowFieldPathRequest? createdFlowField),
+            FlowFieldPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(7, 0, 7), out FlowFieldPathRequest? createdFlowField),
             createdFlowField);
-        VolumePathRequest volumeRequest = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest volumeRequest = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(7, 0, 7),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -98,7 +96,7 @@ public sealed class SurveyorLockTests : IDisposable
             waypoints[waypoints.Length - 1].Position.Should().Be(new Vector3d(7, 0, 7));
         });
 
-        PathManager.UnloadChart("ConcurrentSurveyors");
+        TestWorld.Context.Pathing.UnloadChart("ConcurrentSurveyors");
     }
 
     private static object? GetScratchLock(object surveyor)

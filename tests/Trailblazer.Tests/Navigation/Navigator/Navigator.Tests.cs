@@ -18,16 +18,15 @@ public class NavigatorTests : IDisposable
 {
     public NavigatorTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
+        TestWorld.World.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -82,7 +81,7 @@ public class NavigatorTests : IDisposable
     public void Setup_ShouldHonorExplicitGlobalId()
     {
         Guid explicitId = new("11111111-2222-3333-4444-555555555555");
-        var navigator = new TestNavigator();
+        var navigator = new TestNavigator(TestWorld.Context);
 
         navigator.Setup(Vector3d.Zero, size: Fixed64.One, globalId: explicitId);
 
@@ -92,8 +91,8 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void Setup_ShouldAssignDeterministicGlobalIds_AndReplayAfterReset()
     {
-        var first = new TestNavigator();
-        var second = new TestNavigator();
+        var first = new TestNavigator(TestWorld.Context);
+        var second = new TestNavigator(TestWorld.Context);
 
         first.Setup(Vector3d.Zero, size: Fixed64.One);
         second.Setup(Vector3d.Right, size: Fixed64.One);
@@ -104,10 +103,10 @@ public class NavigatorTests : IDisposable
         secondId.Should().NotBe(firstId);
         firstId.Should().NotBe(Guid.Empty);
 
-        TrailblazerManager.Reset();
+        TestWorld.Context.Reset();
 
-        var replayFirst = new TestNavigator();
-        var replaySecond = new TestNavigator();
+        var replayFirst = new TestNavigator(TestWorld.Context);
+        var replaySecond = new TestNavigator(TestWorld.Context);
 
         replayFirst.Setup(Vector3d.Zero, size: Fixed64.One);
         replaySecond.Setup(Vector3d.Right, size: Fixed64.One);
@@ -119,7 +118,7 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void Setup_ShouldRejectEmptyExplicitGlobalId()
     {
-        var navigator = new TestNavigator();
+        var navigator = new TestNavigator(TestWorld.Context);
 
         Action act = () => navigator.Setup(Vector3d.Zero, size: Fixed64.One, globalId: Guid.Empty);
 
@@ -228,7 +227,7 @@ public class NavigatorTests : IDisposable
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         AStarPathRequest followupRequest = steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
@@ -263,7 +262,7 @@ public class NavigatorTests : IDisposable
         steering.CurrentRequest.Should().BeOfType<AStarPathRequest>()
             .Which.AllowTraversalTransitions.Should().BeTrue();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         steering.GetHeading(navigator);
 
         steering.TrailGuide.Should().BeOfType<AStarGuide>();
@@ -288,7 +287,7 @@ public class NavigatorTests : IDisposable
         steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>()
             .Which.AllowTraversalTransitions.Should().BeTrue();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         steering.GetHeading(navigator);
 
         steering.TrailGuide.Should().BeOfType<FlowFieldGuide>();
@@ -369,7 +368,7 @@ public class NavigatorTests : IDisposable
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>();
@@ -450,7 +449,7 @@ public class NavigatorTests : IDisposable
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         steering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
@@ -482,7 +481,7 @@ public class NavigatorTests : IDisposable
         navigator.ApplyGuidedTrekRequest(new Vector3d(2, 0, 0), rate: TrekRate.Fast);
         navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
@@ -507,7 +506,7 @@ public class NavigatorTests : IDisposable
         navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
@@ -536,7 +535,7 @@ public class NavigatorTests : IDisposable
             rate: TrekRate.Fast,
             isRequestingClimb: false);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
@@ -572,7 +571,7 @@ public class NavigatorTests : IDisposable
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         FlowFieldPathRequest followupRequest = steering.CurrentRequest.Should().BeOfType<FlowFieldPathRequest>().Subject;
@@ -614,7 +613,7 @@ public class NavigatorTests : IDisposable
         navigator.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         steering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         steering.CurrentRequest.Should().BeOfType<AStarPathRequest>()
@@ -732,7 +731,7 @@ public class NavigatorTests : IDisposable
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         navigator.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
@@ -753,12 +752,12 @@ public class NavigatorTests : IDisposable
         navigator.SetAirborne();
         navigator.ApplyGuidedTrekRequest(new Vector3d(0, 3, 0), isRequestingFlight: true, rate: TrekRate.Fast);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
         navigator.CommitFrameMotion();
 
         navigator.ApplyGuidedTrekRequest(new Vector3d(0, 3, 0), isRequestingFlight: true, rate: TrekRate.Fast);
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
@@ -786,13 +785,13 @@ public class NavigatorTests : IDisposable
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Fast);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
         navigator.CommitFrameMotion();
 
         steering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         steering.ShouldMove.Should().BeFalse();
@@ -859,7 +858,7 @@ public class NavigatorTests : IDisposable
             TrekRate.Fast,
             facingDirection: Vector3d.Right);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
@@ -874,7 +873,7 @@ public class NavigatorTests : IDisposable
 
         navigator.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Moderate);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         navigator.Rotation.Should().Be(FixedQuaternion.Identity);
@@ -890,7 +889,7 @@ public class NavigatorTests : IDisposable
 
         navigator.ApplyInputTrekRequest(Vector3d.Right, TrekRate.Fast);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         turning.TargetRotation.Should().Be(FixedQuaternion.FromDirection(Vector3d.Right));
@@ -917,7 +916,7 @@ public class NavigatorTests : IDisposable
         navigator.IsLockedOn = true;
         navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         navigator.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
@@ -936,7 +935,7 @@ public class NavigatorTests : IDisposable
             TrekRate.Fast,
             facingDirection: Vector3d.Forward);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
         navigator.CommitFrameMotion();
 
@@ -955,12 +954,12 @@ public class NavigatorTests : IDisposable
 
         navigator.NotifyCollision();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
         turning.TargetReached.Should().BeTrue();
         navigator.CommitFrameMotion();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         turning.TargetReached.Should().BeFalse();
@@ -1083,7 +1082,7 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void InactiveNavigator_ShouldThrowForPrewarmSimulateAndCommit()
     {
-        var navigator = new TestNavigator();
+        var navigator = new TestNavigator(TestWorld.Context);
 
         navigator.Invoking(n => n.PrewarmMovementGroup())
             .Should().Throw<InvalidOperationException>();
@@ -1096,7 +1095,7 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void InactiveNavigator_ShouldIgnoreRequestConditionAndCollisionUpdates()
     {
-        var navigator = new TestNavigator();
+        var navigator = new TestNavigator(TestWorld.Context);
 
         navigator.ApplyInputTrekRequest(
             Vector3d.Right,
@@ -1172,7 +1171,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.IsRequestingClimb.Should().BeTrue();
         steering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         navigator.FrameRequest.IsRequestingClimb.Should().BeFalse();
@@ -1287,7 +1286,7 @@ public class NavigatorTests : IDisposable
             "_pendingGuidedVolumeExitHandoff");
         handoff.TransitionId = null;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         navigator.Simulate();
 
         steering.CurrentRequest.Should().BeNull();
@@ -1333,7 +1332,7 @@ public class NavigatorTests : IDisposable
 
     private static TestNavigator CreateNavigator(Vector3d position, FixedQuaternion? rotation = null)
     {
-        var navigator = new TestNavigator();
+        var navigator = new TestNavigator(TestWorld.Context);
         navigator.Setup(position, rotation: rotation, size: Fixed64.One);
         navigator.Initialize(new TrekCondition()
         {
@@ -1461,7 +1460,7 @@ public class NavigatorTests : IDisposable
         private int _frameIndex;
 
         public ScriptedRouteTopologySteering(Fixed64 radius, params ScriptedRouteTopologyFrame[] frames)
-            : base(radius)
+            : base(TestWorld.Context, radius)
         {
             _frames = frames;
         }

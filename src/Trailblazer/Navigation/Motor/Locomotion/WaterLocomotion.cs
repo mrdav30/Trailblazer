@@ -1,5 +1,6 @@
 ﻿using Chronicler;
 using FixedMathSharp;
+using System;
 using Trailblazer.Support;
 
 namespace Trailblazer.Navigation.Motor;
@@ -186,7 +187,10 @@ public class WaterLocomotion : ILocomotion
 
     #endregion
 
-    private Fixed64 DeltaTime => _context?.DeltaTime ?? TrailblazerManager.DeltaTime;
+    private TrailblazerWorldContext RequireContext() =>
+        _context ?? throw new InvalidOperationException("WaterLocomotion requires an explicit TrailblazerWorldContext.");
+
+    private Fixed64 DeltaTime => RequireContext().DeltaTime;
 
     /// <summary>
     /// Updates the dive timer, tracking underwater duration and regenerating breath when resurfacing.

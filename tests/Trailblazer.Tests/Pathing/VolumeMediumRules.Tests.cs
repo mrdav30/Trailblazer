@@ -14,8 +14,8 @@ public sealed class VolumeMediumRulesTests : IDisposable
 {
     public VolumeMediumRulesTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
     }
@@ -25,8 +25,7 @@ public sealed class VolumeMediumRulesTests : IDisposable
         VolumeMediumRules.ClearGasVoxelRule();
         VolumeMediumRules.ClearLiquidVoxelRule();
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 

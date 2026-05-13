@@ -112,37 +112,6 @@ internal static class GuidedVolumeExitPlanner
         return true;
     }
 
-    public static bool TryPlan(
-        Vector3d origin,
-        Vector3d targetPosition,
-        Fixed64 unitSize,
-        TraversalMedium medium,
-        SolidPathAlgorithm chartPathMode,
-        bool allowUnwalkableEndpoints,
-        bool allowTraversalTransitions,
-        Fixed64 maxClimbHeight,
-        HeuristicMethod aStarHeuristic,
-        int flowFieldExtraFloodRange,
-        [NotNullWhen(true)] out VolumePathRequest? request,
-        out GuidedVolumeExitHandoff? handoff,
-        out int totalPathCost)
-    {
-        return TryPlan(
-            PathRequestContextResolver.DefaultContext,
-            origin,
-            targetPosition,
-            unitSize,
-            medium,
-            chartPathMode,
-            allowUnwalkableEndpoints,
-            allowTraversalTransitions,
-            maxClimbHeight,
-            aStarHeuristic,
-            flowFieldExtraFloodRange,
-            out request,
-            out handoff,
-            out totalPathCost);
-    }
 
     private static bool TryPlanWithTransitions(
         TraversalTransition[] transitions,

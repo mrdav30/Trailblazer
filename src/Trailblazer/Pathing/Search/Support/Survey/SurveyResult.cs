@@ -40,7 +40,7 @@ public abstract class SurveyResult : ISurveyResult
     public void Release()
     {
         IsInUse = false;
-        LastUsedFrame = Context?.FrameCount ?? TrailblazerManager.FrameCount;
+        LastUsedFrame = Context?.FrameCount ?? -1;
     }
 
     /// <inheritdoc/>

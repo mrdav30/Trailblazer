@@ -123,7 +123,10 @@ internal static class HybridWaypointFlattener
             _ => null
         };
 
-        (context?.Guides ?? PathRequestContextResolver.DefaultContext.Guides).ReturnGuide(guide);
+        if (context == null)
+            throw new InvalidOperationException("Borrowed guide is missing its TrailblazerWorldContext.");
+
+        context.Guides.ReturnGuide(guide);
     }
 
     private static void AppendWaypoints(

@@ -13,10 +13,10 @@ using System.Threading;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Manages registration, initialization, and validation of navigation charts,
-/// as well as providing global pathfinding utilities and neighbor discovery.
+/// Implements context-scoped chart registration, initialization, validation,
+/// neighbor discovery, and related pathing operations.
 /// </summary>
-public static class PathManager
+internal static class PathManager
 {
     [ThreadStatic]
     private static PathingWorldState? _activeState;
@@ -98,26 +98,14 @@ public static class PathManager
         set => ActiveState.NextChartRegistrationOrder = value;
     }
 
-    internal static PathingWorldState ActiveState => _activeState ?? GetDefaultState();
+    internal static PathingWorldState ActiveState => _activeState ?? throw new InvalidOperationException(
+        "Trailblazer pathing operations require an explicit TrailblazerWorldContext.");
 
     internal static bool TryGetActiveState(out PathingWorldState? state)
     {
         if (_activeState != null)
         {
             state = _activeState;
-            return true;
-        }
-
-        if (TrailblazerManager.HasDefaultContext)
-        {
-            state = TrailblazerManager.DefaultContext.Pathing.State;
-            return true;
-        }
-
-        if (TrailblazerWorldManager.IsActive)
-        {
-            TrailblazerManager.Initialize(TrailblazerWorldManager.World);
-            state = TrailblazerManager.DefaultContext.Pathing.State;
             return true;
         }
 
@@ -128,22 +116,6 @@ public static class PathManager
     internal static IDisposable EnterState(PathingWorldState state)
     {
         return new PathingWorldStateScope(state);
-    }
-
-    private static PathingWorldState GetDefaultState()
-    {
-        if (TrailblazerManager.HasDefaultContext)
-            return TrailblazerManager.DefaultContext.Pathing.State;
-
-        if (TrailblazerWorldManager.IsActive)
-        {
-            TrailblazerManager.Initialize(TrailblazerWorldManager.World);
-            return TrailblazerManager.DefaultContext.Pathing.State;
-        }
-
-        throw new InvalidOperationException(
-            "Trailblazer requires an active pathing context. Create a TrailblazerWorldContext and use its Pathing service, " +
-            "or initialize the default facade with TrailblazerManager.Initialize(world).");
     }
 
     private sealed class PathingWorldStateScope : IDisposable
@@ -169,7 +141,7 @@ public static class PathManager
     /// <summary>
     /// Gets whether Trailblazer currently has an active configured grid world.
     /// </summary>
-    public static bool HasConfiguredWorld => TrailblazerManager.HasDefaultContext || TrailblazerWorldManager.IsActive;
+    public static bool HasConfiguredWorld => _activeState != null;
 
     /// <summary>
     /// Gets the active configured grid world.
@@ -187,31 +159,12 @@ public static class PathManager
             return;
         }
 
-        if (TrailblazerManager.HasDefaultContext)
-        {
-            if (!ReferenceEquals(TrailblazerManager.DefaultContext.World, world))
-            {
-                throw new InvalidOperationException(
-                    "PathManager GridWorld overloads are default-context compatibility APIs. " +
-                    "Use TrailblazerWorldContext.Pathing for independent multi-world pathing state.");
-            }
-
-            return;
-        }
-
-        TrailblazerManager.Initialize(world);
+        throw new InvalidOperationException(
+            "PathManager operations require TrailblazerWorldContext.Pathing to select the owning context.");
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static GridWorld GetConfiguredWorld() => ActiveState.World;
-
-    internal static void RegisterTrailblazerLifecycleHooks()
-    {
-        TrailblazerManager.RegisterOnSimulateCore(
-            owner: "PathManager.Tick",
-            order: TrailblazerLifecycleOrder.PathingMaintenance,
-            callback: Tick);
-    }
 
     internal static void Tick()
     {
@@ -938,8 +891,7 @@ public static class PathManager
                 TrackInitializedChartGridTouch(voxel.GridIndex, chart.Name);
             }
 
-            foreach (SolidChartPartition part in partitionsToRebind)
-                part.BindNeighbors();
+            BindCollectedSolidPartitions(partitionsToRebind);
 
             registration.IsInitialized = true;
             affectedChartKeys.Add(chart.Name);
@@ -1057,8 +1009,7 @@ public static class PathManager
                     _resolvedChartVoxelStates.Remove(voxel.WorldIndex);
             }
 
-            foreach (SolidChartPartition part in partitionsToRebind)
-                part.BindNeighbors();
+            BindCollectedSolidPartitions(partitionsToRebind);
 
             TraversalTransitionRegistry.UnregisterRange(generatedTransitionIds);
             registration.IsInitialized = false;
@@ -1422,8 +1373,7 @@ public static class PathManager
             for (int i = 0; i < resolvedVoxelIndicesToRemove.Count; i++)
                 _resolvedChartVoxelStates.Remove(resolvedVoxelIndicesToRemove[i]);
 
-            foreach (SolidChartPartition part in partitionsToRebind)
-                part.BindNeighbors();
+            BindCollectedSolidPartitions(partitionsToRebind);
 
             registration.IsInitialized = false;
             SolidPartitionReachability.Invalidate();
@@ -2464,8 +2414,7 @@ public static class PathManager
         SwiftHashSet<SolidChartPartition> partitionsToRebind,
         SwiftHashSet<string> invalidatedChartKeys)
     {
-        foreach (SolidChartPartition part in partitionsToRebind)
-            part.BindNeighbors();
+        BindCollectedSolidPartitions(partitionsToRebind);
 
         if (partitionsToRebind.Count > 0 || invalidatedChartKeys.Count > 0)
             SolidPartitionReachability.Invalidate();
@@ -2594,6 +2543,16 @@ public static class PathManager
             {
                 partitionsToRebind.Add(neighborPartition!);
             }
+        }
+    }
+
+    private static void BindCollectedSolidPartitions(SwiftHashSet<SolidChartPartition> partitionsToRebind)
+    {
+        PathingWorldState activeState = ActiveState;
+        foreach (SolidChartPartition partition in partitionsToRebind)
+        {
+            if (partition.IsPartitioned && ReferenceEquals(partition.OwnerState, activeState))
+                partition.BindNeighbors();
         }
     }
 

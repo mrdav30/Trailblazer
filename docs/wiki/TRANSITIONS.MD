@@ -113,7 +113,6 @@ Important nuance:
 ## 3. `TraversalTransitionRegistry`
 
 `TrailblazerWorldContext.Transitions` is the context-owned store for authored transitions.
-`TraversalTransitionRegistry` remains as the single default-context compatibility facade.
 
 It is responsible for:
 
@@ -298,7 +297,6 @@ Important nuance:
 Use this when two chart regions should remain disconnected in normal voxel connectivity, but a specific authored gap should be traversable.
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 context.Transitions.Register(new TraversalTransition(
     id: "bridge-gap-jump",
     type: TraversalTransitionType.Jump,
@@ -312,7 +310,6 @@ context.Transitions.Register(new TraversalTransition(
 Use this when solid pathing should hand off into constrained liquid traversal and later back onto a chart.
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 context.Transitions.Register(new TraversalTransition(
     id: "shore-entry",
     type: TraversalTransitionType.SwimEntry,

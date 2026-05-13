@@ -11,7 +11,7 @@ public sealed class PlatformLocomotionTailTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -67,17 +67,17 @@ public sealed class PlatformLocomotionTailTests : IDisposable
     [Fact]
     public void UpdatePlatformVelocity_AndInfluence_ShouldUseTransformDeltaAndRotationBranches()
     {
-        var locomotion = new PlatformLocomotion
+        var locomotion = TestWorld.Bind(new PlatformLocomotion
         {
             HeightAdjust = Fixed64.Zero,
             ActivePlatform = new PlatformSnapshot(1, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(2, 0, 0))),
             PreviousPlatform = new PlatformSnapshot(1, MockMotorAgentTestFactory.CreatePlatformTransform(Vector3d.Zero)),
             ScoutLocalPoint = Vector3d.Zero
-        };
+        });
 
         locomotion.UpdatePlatformVelocity();
 
-        locomotion.PlatformVelocity.x.Should().Be((Fixed64)2 * TrailblazerManager.InvDeltaTime);
+        locomotion.PlatformVelocity.x.Should().Be((Fixed64)2 * TestWorld.Context.InvDeltaTime);
 
         locomotion.GetPlatformInfluence(
             Vector3d.Zero,
@@ -181,17 +181,17 @@ public sealed class PlatformLocomotionTailTests : IDisposable
     [Fact]
     public void UpdatePlatformVelocity_ShouldUseWorldOrigin_WhenPreviousPlatformIsMissing()
     {
-        var locomotion = new PlatformLocomotion
+        var locomotion = TestWorld.Bind(new PlatformLocomotion
         {
             ActivePlatform = new PlatformSnapshot(1, MockMotorAgentTestFactory.CreatePlatformTransform(new Vector3d(2, 0, 0))),
             PreviousPlatform = null,
             ScoutLocalPoint = Vector3d.Zero,
             IsNewPlatform = false
-        };
+        });
 
         locomotion.UpdatePlatformVelocity();
 
-        locomotion.PlatformVelocity.Should().Be(new Vector3d((Fixed64)2 * TrailblazerManager.InvDeltaTime, Fixed64.Zero, Fixed64.Zero));
+        locomotion.PlatformVelocity.Should().Be(new Vector3d((Fixed64)2 * TestWorld.Context.InvDeltaTime, Fixed64.Zero, Fixed64.Zero));
         locomotion.PreviousPlatform.Should().Be(locomotion.ActivePlatform);
         locomotion.IsNewPlatform.Should().BeFalse();
     }

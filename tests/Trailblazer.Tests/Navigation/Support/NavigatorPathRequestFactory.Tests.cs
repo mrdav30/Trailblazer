@@ -13,15 +13,14 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
 {
     public NavigatorPathRequestFactoryTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -32,8 +31,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         RegisterVolumeLine(new Vector3d(0, 0, 2), TraversalMedium.Gas, 3, "NavigatorFactoryGas");
         RegisterVolumeLine(new Vector3d(0, 0, 4), TraversalMedium.Liquid, 3, "NavigatorFactoryLiquid");
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -49,8 +47,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         aStarRequest.Should().BeOfType<AStarPathRequest>()
             .Which.MaxClimbHeight.Should().Be((Fixed64)2);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.FlowField,
@@ -65,8 +62,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
 
         flowFieldRequest.Should().BeOfType<FlowFieldPathRequest>().Which.ExtraFloodRange.Should().Be(17);
 
-        NavigatorPathRequestFactory.TryCreate(
-            new Vector3d(0, 0, 2),
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(2, 0, 2),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -81,8 +77,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
 
         aerialRequest.Should().BeOfType<VolumePathRequest>().Which.Medium.Should().Be(TraversalMedium.Gas);
 
-        NavigatorPathRequestFactory.TryCreate(
-            new Vector3d(0, 0, 4),
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, new Vector3d(0, 0, 4),
             new Vector3d(2, 0, 4),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -104,8 +99,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactoryAerialHandoff";
         GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -132,8 +126,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactoryAerialNormalize";
         GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -155,8 +148,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     {
         RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryDirectGas");
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -179,8 +171,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactoryAerialDirectPreferred";
         GuidedPathTestScene.RegisterAerialLandingChoiceScene(sceneKey);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -203,8 +194,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactorySwimHandoff";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.FlowField,
@@ -231,8 +221,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactorySwimDirect";
         GuidedPathTestScene.RegisterChartBackedSwimTargetScene(sceneKey);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.FlowField,
@@ -255,8 +244,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactorySwimDisabled";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.FlowField,
@@ -278,8 +266,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     {
         RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryOutsideGrid");
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(12, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -307,8 +294,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
             new Vector3d(2, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Gas);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -331,8 +317,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactorySnappedAerialHandoff";
         GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -357,8 +342,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactorySnappedSwimHandoff";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.FlowField,
@@ -386,8 +370,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_ShouldReturnFalse_WhenNoChartCoversOriginOrDestination()
     {
         // No chart registered — positions are inside the grid but unreachable
-        NavigatorPathRequestFactory.TryCreate(
-            new Vector3d(-6, -6, -6),
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -402,8 +385,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
 
         aStarRequest.Should().BeNull();
 
-        NavigatorPathRequestFactory.TryCreate(
-            new Vector3d(-6, -6, -6),
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
             SolidPathAlgorithm.FlowField,
@@ -426,8 +408,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     [Fact]
     public void TryCreate_Internal_FlowField_ShouldReturnFalse_WhenNoChartCoversEndpoints()
     {
-        NavigatorPathRequestFactory.TryCreate(
-            new Vector3d(-6, -6, -6),
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
             SolidPathAlgorithm.FlowField,
@@ -453,8 +434,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     {
         // No gas volume registered — VolumePathRequest.Create returns null.
         // allowTraversalTransitions=false prevents the fallback handoff succeeding.
-        NavigatorPathRequestFactory.TryCreate(
-            new Vector3d(-6, -6, -6),
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -478,8 +458,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     [Fact]
     public void TryCreate_Internal_Swim_ShouldReturnFalse_WhenNotInLiquidVolumeAndNoHandoff()
     {
-        NavigatorPathRequestFactory.TryCreate(
-            new Vector3d(-6, -6, -6),
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, new Vector3d(-6, -6, -6),
             new Vector3d(-5, -6, -6),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -508,8 +487,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactorySwimGasLanding";
         GuidedPathTestScene.RegisterChartBackedSwimTargetScene(sceneKey);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -530,8 +508,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     [Fact]
     public void TryCreate_Internal_ShouldRejectInvalidModes()
     {
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             (SolidPathAlgorithm)123,
@@ -553,8 +530,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     {
         RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryFarOutsideGrid");
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(64, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -578,8 +554,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactoryPreciseLanding";
         RegisterGasLandingChoiceTargetScene(sceneKey, new Vector3d(2, 0, 0), authoredGasLength: 2);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2.25f, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -606,8 +581,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         VolumeMediumRules.SetGasVoxelRule(static voxel =>
             voxel != null && voxel.WorldPosition == new Vector3d(4, 0, 0));
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
@@ -631,8 +605,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         const string sceneKey = "NavigatorFactoryZeroDisplacementLanding";
         RegisterGasLandingChoiceTargetScene(sceneKey, Vector3d.Zero, authoredGasLength: 0);
 
-        NavigatorPathRequestFactory.TryCreate(
-            Vector3d.Zero,
+        NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             Vector3d.Zero,
             Fixed64.One,
             SolidPathAlgorithm.AStar,

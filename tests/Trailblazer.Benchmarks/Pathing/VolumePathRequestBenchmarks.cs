@@ -55,7 +55,7 @@ public class VolumePathRequestBenchmarks
         SetupDirectGasCorridor();
         SetupLShapeGasPath();
         ValidateConfiguredRequests();
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     [GlobalCleanup]
@@ -87,7 +87,7 @@ public class VolumePathRequestBenchmarks
         _directCorridorOrigin = positions[0];
         _directCorridorDestination = positions[positions.Length - 1];
 
-        _directCorridorRequest = VolumePathRequest.Create(
+        _directCorridorRequest = VolumePathRequest.Create(_fixture.Context, 
             _directCorridorOrigin,
             _directCorridorDestination,
             Fixed64.One,
@@ -131,7 +131,7 @@ public class VolumePathRequestBenchmarks
         _lShapeOrigin = positions[0];
         _lShapeDestination = positions[positions.Length - 1];
 
-        _lShapeRequest = VolumePathRequest.Create(
+        _lShapeRequest = VolumePathRequest.Create(_fixture.Context, 
             _lShapeOrigin,
             _lShapeDestination,
             Fixed64.One,
@@ -156,7 +156,7 @@ public class VolumePathRequestBenchmarks
         EnsureVolumeSurveyResolves(_lShapeRequest, nameof(_lShapeRequest));
         EnsureVolumeGuideResolves(_directCorridorRequest, nameof(_directCorridorRequest));
         EnsureVolumeGuideResolves(_lShapeRequest, nameof(_lShapeRequest));
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
     }
 
     private static void EnsureVolumeSurveyResolves(VolumePathRequest request, string requestName)
@@ -193,7 +193,7 @@ public class VolumePathRequestBenchmarks
     })]
     public void FlushCacheBeforeCold()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     // -------------------------------------------------------------------------
@@ -274,7 +274,7 @@ public class VolumePathRequestBenchmarks
     [BenchmarkCategory("Pathing", "Volume", "Request")]
     public VolumePathRequest RequestConstruction_DirectGasCorridor()
     {
-        return VolumePathRequest.Create(
+        return VolumePathRequest.Create(_fixture.Context, 
             _directCorridorOrigin,
             _directCorridorDestination,
             Fixed64.One,

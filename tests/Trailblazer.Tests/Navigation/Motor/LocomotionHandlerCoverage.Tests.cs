@@ -13,7 +13,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -93,7 +93,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     [Fact]
     public void Remove_ShouldRejectCoreTypes_ClearOptionalState_AndUpdateKinds()
     {
-        var handler = new LocomotionHandler();
+        var handler = TestWorld.Bind(new LocomotionHandler());
         handler.Jump!.RegisterJump();
 
         handler.Remove<MoveLocomotion>().Should().BeFalse();
@@ -133,7 +133,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     [Fact]
     public void ApplyProfile_ShouldClearReplacedTransientState_AndPreserveSharedInstances()
     {
-        var handler = new LocomotionHandler();
+        var handler = TestWorld.Bind(new LocomotionHandler());
         var originalMove = handler.Move;
         var originalFall = handler.Fall;
         var originalPlatform = handler.Platform!;
@@ -250,7 +250,7 @@ public sealed class LocomotionHandlerCoverageTests : IDisposable
     [Fact]
     public void SyncTransientState_ShouldCopyEnabledInstalledLocomotionsOnly()
     {
-        var target = new LocomotionHandler();
+        var target = TestWorld.Bind(new LocomotionHandler());
         var source = new LocomotionHandler(LocomotionProfile.CreateCoreOnly());
 
         target.IsInControl = false;

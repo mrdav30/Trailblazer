@@ -15,18 +15,15 @@ public sealed class ContextBoundPathRequestTests : IDisposable
     {
         PathManager.Reset();
         TraversalTransitionRegistry.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
     [Fact]
     public void AStarCreate_WithContext_ShouldResolveAgainstExplicitContext()
     {
-        using TrailblazerWorldContext ambientContext = CreateContextWithGrid();
         using TrailblazerWorldContext requestContext = CreateContextWithGrid();
         RegisterSolidLine(requestContext, "ExplicitAStarContextChart", Vector3d.Zero, 3);
-        TrailblazerWorldManager.AttachWorld(ambientContext.World);
 
         AStarPathRequest request = TestRequire.NotNull(
             AStarPathRequest.Create(requestContext, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
@@ -39,10 +36,8 @@ public sealed class ContextBoundPathRequestTests : IDisposable
     [Fact]
     public void FlowFieldCreate_WithContext_ShouldResolveAgainstExplicitContext()
     {
-        using TrailblazerWorldContext ambientContext = CreateContextWithGrid();
         using TrailblazerWorldContext requestContext = CreateContextWithGrid();
         RegisterSolidLine(requestContext, "ExplicitFlowContextChart", Vector3d.Zero, 3);
-        TrailblazerWorldManager.AttachWorld(ambientContext.World);
 
         FlowFieldPathRequest request = TestRequire.NotNull(
             FlowFieldPathRequest.Create(requestContext, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
@@ -55,10 +50,8 @@ public sealed class ContextBoundPathRequestTests : IDisposable
     [Fact]
     public void VolumeCreate_WithContext_ShouldResolveAgainstExplicitContext()
     {
-        using TrailblazerWorldContext ambientContext = CreateContextWithGrid();
         using TrailblazerWorldContext requestContext = CreateContextWithGrid();
         RegisterVolumeLine(requestContext, "ExplicitVolumeContextChart", Vector3d.Zero, 3, TraversalMedia.Gas);
-        TrailblazerWorldManager.AttachWorld(ambientContext.World);
 
         VolumePathRequest request = TestRequire.NotNull(
             VolumePathRequest.Create(
@@ -74,16 +67,13 @@ public sealed class ContextBoundPathRequestTests : IDisposable
     }
 
     [Fact]
-    public void UpdateRequest_ShouldKeepResolvingAgainstOriginalContextAfterAmbientWorldChanges()
+    public void UpdateRequest_ShouldKeepResolvingAgainstOriginalContext()
     {
         using TrailblazerWorldContext requestContext = CreateContextWithGrid();
-        using TrailblazerWorldContext ambientContext = CreateContextWithGrid();
         RegisterSolidLine(requestContext, "UpdateOriginalContextChart", Vector3d.Zero, 4);
 
         AStarPathRequest request = TestRequire.NotNull(
             AStarPathRequest.Create(requestContext, Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One));
-
-        TrailblazerWorldManager.AttachWorld(ambientContext.World);
 
         request.TrySetDestination(new Vector3d(3, 0, 0), resetSearchRange: true).Should().BeTrue();
 

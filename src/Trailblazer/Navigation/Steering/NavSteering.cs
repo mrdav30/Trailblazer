@@ -300,27 +300,11 @@ public class NavSteering : IRecordable
     #region Constructors
 
     /// <summary>
-    /// Creates a new <see cref="NavSteering"/> instance and initializes it with the provided object.
-    /// </summary>
-    /// <param name="radius">The radius of the object entity that this controller will manage.</param>
-    /// <returns>A new instance of <see cref="NavSteering"/>.</returns>
-    public static NavSteering CreateNew(Fixed64 radius) => new(radius);
-
-    /// <summary>
     /// Creates a new <see cref="NavSteering"/> instance bound to a world context.
     /// </summary>
     public static NavSteering CreateNew(TrailblazerWorldContext context, Fixed64 radius) => new(context, radius);
 
-    /// <summary>
-    /// Initializes a new instance of the NavSteering class with a default radius of 0.5 units.
-    /// </summary>
-    public NavSteering() : this(Fixed64.Half) { }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="NavSteering"/> class.
-    /// </summary>
-    /// <param name="radius">The radius of the object entity that this controller will manage.</param>
-    public NavSteering(Fixed64 radius) => OnInitialize(radius);
+    private NavSteering() { }
 
     /// <summary>
     /// Initializes a new context-bound <see cref="NavSteering"/> instance.
@@ -562,19 +546,14 @@ public class NavSteering : IRecordable
             return context;
         }
 
-        return PathRequestContextResolver.DefaultContext;
+        throw new InvalidOperationException("NavSteering requires an explicit TrailblazerWorldContext.");
     }
 
     private MovementGroupCoordinatorState MovementGroups => ResolveContext().Navigation.MovementGroups;
 
     private void RemoveMovementGroupSession()
     {
-        if (_context != null)
-            _context.Navigation.MovementGroups.Remove(_movementGroupSession);
-        else if (_currentRequest != null)
-            _currentRequest.Context.Navigation.MovementGroups.Remove(_movementGroupSession);
-        else
-            MovementGroupCoordinator.Remove(_movementGroupSession);
+        ResolveContext().Navigation.MovementGroups.Remove(_movementGroupSession);
     }
 
     private int StuckFrameThresholdForContext => ResolveFrameRate() / 4;
@@ -590,7 +569,7 @@ public class NavSteering : IRecordable
         if (PathManager.TryGetActiveState(out PathingWorldState? state) && state != null)
             return state.Context.FrameRate;
 
-        return TrailblazerManager.FrameRate;
+        return ResolveContext().FrameRate;
     }
 
     /// <summary>
@@ -1043,19 +1022,6 @@ public class NavSteering : IRecordable
     #region Line-of-Sight & Reachability
 
     /// <summary>
-    /// Whether the destination is currently visible and reachable from the agent's position.
-    /// </summary>
-    public static bool IsDestinationInSight(Vector3d position, Vector3d destination, Fixed64 unitSize, bool allowUnwalkableEndpoints)
-    {
-        return IsDestinationInSight(
-            PathRequestContextResolver.DefaultContext,
-            position,
-            destination,
-            unitSize,
-            allowUnwalkableEndpoints);
-    }
-
-    /// <summary>
     /// Whether the destination is visible and reachable inside the supplied world context.
     /// </summary>
     public static bool IsDestinationInSight(
@@ -1066,29 +1032,6 @@ public class NavSteering : IRecordable
         bool allowUnwalkableEndpoints)
     {
         return !context.Pathing.NeedsPath(position, destination, unitSize, allowUnwalkableEndpoints);
-    }
-
-    /// <summary>
-    /// Whether the destination is currently visible and reachable for raw-volume travel.
-    /// </summary>
-    public static bool IsVolumeDestinationInSight(
-        Vector3d position,
-        Vector3d destination,
-        Fixed64 unitSize,
-        bool allowUnwalkableEndpoints,
-        TraversalMedium medium = TraversalMedium.Gas,
-        Voxel? startNode = null,
-        Voxel? endNode = null)
-    {
-        return VolumeVoxelFinder.IsDirectPathClear(
-            PathRequestContextResolver.DefaultContext,
-            position,
-            destination,
-            unitSize,
-            allowUnwalkableEndpoints,
-            medium,
-            startNode,
-            endNode);
     }
 
     /// <summary>
@@ -1345,7 +1288,7 @@ public class NavSteering : IRecordable
             ResetMovementGroupSession();
 
             _currentRequest = null;
-                if (!requestRecord.TryCreateRequest(ResolveContext(), out IPathRequest? request))
+            if (!requestRecord.TryCreateRequest(ResolveContext(), out IPathRequest? request))
             {
                 _shouldMove = false;
                 _isStuck = false;

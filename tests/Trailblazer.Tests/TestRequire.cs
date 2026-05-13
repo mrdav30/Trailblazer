@@ -45,18 +45,18 @@ internal static class TestRequire
 
     public static Voxel VoxelAt(Vector3d position)
     {
-        return Created(TrailblazerWorldManager.TryGetVoxel(position, out Voxel? voxel), voxel);
+        return Created(TestWorld.World.TryGetVoxel(position, out Voxel? voxel), voxel);
     }
 
     public static VoxelGrid Grid(ushort gridIndex)
     {
-        return Created(TrailblazerWorldManager.TryGetGrid(gridIndex, out VoxelGrid? grid), grid);
+        return Created(TestWorld.World.TryGetGrid(gridIndex, out VoxelGrid? grid), grid);
     }
 
     public static (VoxelGrid Grid, Voxel Voxel) GridAndVoxelAt(Vector3d position)
     {
         return Created(
-            TrailblazerWorldManager.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel),
+            TestWorld.World.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel),
             grid,
             voxel);
     }

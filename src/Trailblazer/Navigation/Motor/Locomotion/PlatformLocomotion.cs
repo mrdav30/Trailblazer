@@ -1,5 +1,6 @@
 ﻿using Chronicler;
 using FixedMathSharp;
+using System;
 using System.Runtime.CompilerServices;
 using Trailblazer.Support;
 
@@ -123,7 +124,10 @@ public class PlatformLocomotion : ILocomotion
     [Transient]
     public Vector3d FramePlatformVelocity { get; set; }
 
-    private Fixed64 InvDeltaTime => _context?.InvDeltaTime ?? TrailblazerManager.InvDeltaTime;
+    private TrailblazerWorldContext RequireContext() =>
+        _context ?? throw new InvalidOperationException("PlatformLocomotion requires an explicit TrailblazerWorldContext.");
+
+    private Fixed64 InvDeltaTime => RequireContext().InvDeltaTime;
 
     /// <summary>
     /// The number of frames the scout has been holding onto a platform.

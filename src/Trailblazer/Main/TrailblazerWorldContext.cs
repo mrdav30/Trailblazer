@@ -217,6 +217,7 @@ public sealed class TrailblazerWorldContext : IDisposable
     {
         ThrowIfDisposed();
         _clock.Simulate();
+        Pathing.FlushPendingGridChanges();
         Guides.CullExpiredGuides(_clock.FrameCount);
         _hooks.InvokeSimulate();
     }

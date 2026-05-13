@@ -14,20 +14,20 @@ internal sealed class MovementGroupCoordinatorState
 
     private const int MovementGroupHistoryFrames = 1;
 
-    private readonly TrailblazerWorldContext? _context;
+    private readonly TrailblazerWorldContext _context;
 
     private readonly SwiftDictionary<int, MovementGroupState> _movementGroups = new();
 
     private readonly SwiftDictionary<Guid, MovementGroupMembership> _movementGroupMemberships = new();
 
-    internal MovementGroupCoordinatorState(TrailblazerWorldContext? context)
+    internal MovementGroupCoordinatorState(TrailblazerWorldContext context)
     {
-        _context = context;
+        _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    private int FrameCount => _context?.FrameCount ?? TrailblazerManager.FrameCount;
+    private int FrameCount => _context.FrameCount;
 
-    private Fixed64 VoxelSize => _context?.VoxelSize ?? TrailblazerWorldManager.VoxelSize;
+    private Fixed64 VoxelSize => _context.VoxelSize;
 
     internal void CacheOwner(MovementGroupSession session, Guid ownerId)
     {
@@ -256,61 +256,5 @@ internal sealed class MovementGroupCoordinatorState
     {
         return member.LastSeenFrame >= minFrame
             && member.RequestedDestination == requestedDestination;
-    }
-}
-
-/// <summary>
-/// Default-context compatibility facade for movement-group coordination.
-/// </summary>
-internal static class MovementGroupCoordinator
-{
-    private static readonly MovementGroupCoordinatorState FallbackState = new(null);
-
-    private static MovementGroupCoordinatorState State => TrailblazerManager.HasDefaultContext
-        ? TrailblazerManager.DefaultContext.Navigation.MovementGroups
-        : FallbackState;
-
-    internal static void RegisterTrailblazerLifecycleHooks()
-    {
-        TrailblazerManager.RegisterOnResetCore(
-            owner: "MovementGroupCoordinator.Reset",
-            order: TrailblazerLifecycleOrder.NavigationReset,
-            callback: Reset);
-    }
-
-    internal static void CacheOwner(MovementGroupSession session, Guid ownerId) =>
-        State.CacheOwner(session, ownerId);
-
-    internal static void Prewarm(
-        MovementGroupSession session,
-        Guid ownerId,
-        Vector3d requestedDestination,
-        Vector3d position,
-        Fixed64 radius) =>
-        State.Prewarm(session, ownerId, requestedDestination, position, radius);
-
-    internal static MovementGroupTarget UpdateTarget(
-        MovementGroupSession session,
-        Vector3d requestedDestination,
-        Vector3d position,
-        Fixed64 radius,
-        bool resetFormationOffset = false) =>
-        State.UpdateTarget(session, requestedDestination, position, radius, resetFormationOffset);
-
-    internal static void Remove(MovementGroupSession session) =>
-        State.Remove(session);
-
-    internal static bool IsNeighbor(
-        MovementGroupSession session,
-        Guid otherId,
-        Vector3d requestedDestination,
-        int currentFrame) =>
-        State.IsNeighbor(session, otherId, requestedDestination, currentFrame);
-
-    internal static void Reset()
-    {
-        FallbackState.Reset();
-        if (TrailblazerManager.HasDefaultContext)
-            TrailblazerManager.DefaultContext.Navigation.MovementGroups.Reset();
     }
 }

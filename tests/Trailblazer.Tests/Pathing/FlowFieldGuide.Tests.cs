@@ -15,8 +15,8 @@ public sealed class FlowFieldGuideTests : IDisposable
 {
     public FlowFieldGuideTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(12, 12, 12)),
             out _);
     }
@@ -24,8 +24,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -70,8 +69,8 @@ public sealed class FlowFieldGuideTests : IDisposable
         var plan = new HybridRoutePlan(
             new[]
             {
-                HybridRouteStep.Waypoint(new Vector3d(1, 0, 0)),
-                HybridRouteStep.Waypoint(new Vector3d(2, 0, 0))
+                HybridRouteStep.Waypoint(TestWorld.Context, new Vector3d(1, 0, 0)),
+                HybridRouteStep.Waypoint(TestWorld.Context, new Vector3d(2, 0, 0))
             },
             Array.Empty<TraversalTransition>(),
             0);
@@ -97,7 +96,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     {
         HybridRouteStep[] steps = new HybridRouteStep[64];
         for (int i = 0; i < steps.Length; i++)
-            steps[i] = HybridRouteStep.Waypoint(Vector3d.Zero);
+            steps[i] = HybridRouteStep.Waypoint(TestWorld.Context, Vector3d.Zero);
 
         var plan = new HybridRoutePlan(steps, Array.Empty<TraversalTransition>(), 0);
         var guide = new FlowFieldGuide();
@@ -113,8 +112,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     {
         RegisterLineChart("FlowFieldStageLine", Vector3d.Zero, 3);
 
-        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
@@ -169,8 +167,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     {
         RegisterLineChart("FlowFieldGuideStagedAStar", Vector3d.Zero, 3);
 
-        var aStarRequest = AStarPathRequest.Create(
-            Vector3d.Zero,
+        var aStarRequest = AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One);
         Assert.NotNull(aStarRequest);
@@ -213,44 +210,11 @@ public sealed class FlowFieldGuideTests : IDisposable
     }
 
     [Fact]
-    public void FlowFieldGuide_ShouldReturnFalse_WhenStagedPlanContainsNullSteps()
-    {
-        var guide = new FlowFieldGuide();
-        var plan = new HybridRoutePlan(
-            new HybridRouteStep[] { null! },
-            Array.Empty<TraversalTransition>(),
-            0);
-
-        guide.InitializeStaged(plan).Should().BeTrue();
-        guide.TryGetMovementDirection(Vector3d.Zero, out _).Should().BeFalse();
-        guide.TryGetFallbackDirection(Vector3d.Zero, out _).Should().BeFalse();
-    }
-
-    [Fact]
-    public void FlowFieldGuide_PrivateStageHelpers_ShouldBoundAdvanceWithoutBudget_AndRejectWaypointStageGuides()
-    {
-        var guide = new FlowFieldGuide();
-        var waypoint = HybridRouteStep.Waypoint(Vector3d.Zero);
-        var plan = new HybridRoutePlan(new[] { waypoint }, Array.Empty<TraversalTransition>(), 0);
-
-        guide.InitializeStaged(plan).Should().BeTrue();
-
-        object[] advanceArgs = { 0 };
-        ReflectionUtility.InvokePrivate<bool>(guide, "TryAdvanceStage", advanceArgs).Should().BeFalse();
-        advanceArgs[0].Should().Be(0);
-
-        object[] guideArgs = { waypoint, null! };
-        ReflectionUtility.InvokePrivate<bool>(guide, "TryGetOrCreateActiveStageGuide", guideArgs).Should().BeFalse();
-        guideArgs[1].Should().BeNull();
-    }
-
-    [Fact]
     public void FlowFieldGuide_PrivateSegmentHelpers_ShouldReuseStageGuide_AndAdvanceCompletedSegment()
     {
         RegisterLineChart("FlowFieldGuidePrivateSegment", Vector3d.Zero, 3);
 
-        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
@@ -316,7 +280,7 @@ public sealed class FlowFieldGuideTests : IDisposable
             EndNode = end;
         }
 
-        public TrailblazerWorldContext Context => TrailblazerManager.DefaultContext;
+        public TrailblazerWorldContext Context => TestWorld.Context;
 
         public Vector3d Origin { get; }
 

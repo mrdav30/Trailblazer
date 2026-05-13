@@ -12,16 +12,15 @@ public class AStarTransitionFallbackTests : IDisposable
 {
     public AStarTransitionFallbackTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
+        TestWorld.World.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -38,8 +37,7 @@ public class AStarTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean));
@@ -78,8 +76,7 @@ public class AStarTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            new Vector3d(-1, 0, 0),
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(-1, 0, 0),
             new Vector3d(3, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean));
@@ -111,8 +108,7 @@ public class AStarTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
@@ -128,8 +124,7 @@ public class AStarTransitionFallbackTests : IDisposable
     {
         RegisterAuthoredClimbRoute("AStarClimbFallback");
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(3, 0, 1),
             Fixed64.One,
             HeuristicMethod.Euclidean,

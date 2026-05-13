@@ -12,14 +12,13 @@ public sealed class NavigationChartRegistrationTests : IDisposable
 {
     public NavigationChartRegistrationTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -51,7 +50,7 @@ public sealed class NavigationChartRegistrationTests : IDisposable
     [Fact]
     public void PathManager_ShouldExposeInitializationStateThroughRegistration()
     {
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _).Should().BeTrue();
 
@@ -73,7 +72,7 @@ public sealed class NavigationChartRegistrationTests : IDisposable
     [Fact]
     public void SamePriorityOverlap_ShouldUseRegistrationOrderFromLiveRegistration()
     {
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _).Should().BeTrue();
 

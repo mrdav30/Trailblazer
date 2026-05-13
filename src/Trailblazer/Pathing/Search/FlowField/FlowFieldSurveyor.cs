@@ -235,11 +235,11 @@ public class FlowFieldSurveyor
 
         foreach (SolidChartPartition current in _heap.EnumerateClosed())
         {
-            FlowFieldSamplingGrid samplingGrid = GetSamplingGrid(current.GlobalIndex);
+            FlowFieldSamplingGrid samplingGrid = GetSamplingGrid(current.WorldIndex);
 
             FlowField currentFlow = new()
             {
-                GlobalIndex = current.GlobalIndex,
+                GlobalIndex = current.WorldIndex,
                 PathCost = GetPathCostTotal(current)
             };
 
@@ -247,7 +247,7 @@ public class FlowFieldSurveyor
             {
                 // Ensure end voxel is include, it shouldn't point anywhere
                 currentFlow.IsGoal = true;
-                AddFlowField(result, samplingGrid, current.GlobalIndex, currentFlow);
+                AddFlowField(result, samplingGrid, current.WorldIndex, currentFlow);
                 continue;
             }
 
@@ -258,7 +258,7 @@ public class FlowFieldSurveyor
             SolidChartPartition?[]? neighbors = current.Neighbors;
             if (neighbors == null)
             {
-                AddFlowField(result, samplingGrid, current.GlobalIndex, currentFlow);
+                AddFlowField(result, samplingGrid, current.WorldIndex, currentFlow);
                 ChartOwnerUtility.AddOwners(_chartKeys, current.ChartOwners);
                 continue;
             }
@@ -292,7 +292,7 @@ public class FlowFieldSurveyor
             if (minPartition != null)
                 currentFlow.Direction = _normalizedDirectionByNeighbor[minDirectionIndex];
 
-            AddFlowField(result, samplingGrid, current.GlobalIndex, currentFlow);
+            AddFlowField(result, samplingGrid, current.WorldIndex, currentFlow);
             ChartOwnerUtility.AddOwners(_chartKeys, current.ChartOwners);
         }
 
@@ -341,8 +341,8 @@ public class FlowFieldSurveyor
 
         foreach (SolidChartPartition current in _heap.EnumerateClosed())
         {
-            FlowFieldSamplingGridBuilder builder = GetOrAddSamplingGridBuilder(current.GlobalIndex, current.VoxelPosition);
-            builder.Include(current.GlobalIndex);
+            FlowFieldSamplingGridBuilder builder = GetOrAddSamplingGridBuilder(current.WorldIndex, current.VoxelPosition);
+            builder.Include(current.WorldIndex);
         }
 
         for (int i = 0; i < _samplingGridBuilders.Count; i++)

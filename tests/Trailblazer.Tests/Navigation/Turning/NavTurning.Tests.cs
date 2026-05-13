@@ -11,7 +11,7 @@ public class NavTurningTests
     [Fact]
     public void SimulateTurn_Should_BufferAutoTurn_After_Collision_And_Movement()
     {
-        NavTurning turn = new();
+        NavTurning turn = new(TestWorld.Context, Fixed64.One);
         turn.OnInitialize(radius: (Fixed64)1);
         MockTurnAgent mockNav = new()
         {
@@ -55,7 +55,7 @@ public class NavTurningTests
     public void SimulateTurn_ShouldBufferCollisionTurn_AfterMovingPastThreshold()
     {
         // Arrange
-        var turning = new NavTurning(Fixed64.One);
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
         var nav = new MockTurnAgent
         {
             // We’re initially facing +X
@@ -82,7 +82,7 @@ public class NavTurningTests
     [Fact]
     public void SimulateTurn_ShouldNotBuffer_When_CanTurnOnCollisionVetoes()
     {
-        var turning = new NavTurning(Fixed64.One);
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
         turning.CanTurnOnCollision = () => false;
 
         var nav = new MockTurnAgent
@@ -105,7 +105,7 @@ public class NavTurningTests
     [Fact]
     public void SimulateTurn_ShouldCompleteTurn_When_TargetRotationEqualsCurrentRotation()
     {
-        var turning = new NavTurning(Fixed64.One);
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
         var nav = new MockTurnAgent
         {
             Rotation = FixedQuaternion.Identity,
@@ -125,7 +125,7 @@ public class NavTurningTests
     [Fact]
     public void StopTurn_ShouldSet_TargetReached_True()
     {
-        var turning = new NavTurning(Fixed64.One);
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
 
         // force into mid-turn
         turning.RequestTurnDirection(Vector3d.Right, Vector3d.Forward);
@@ -137,19 +137,9 @@ public class NavTurningTests
 
 
     [Fact]
-    public void SimulateTurn_Throws_If_OnInitialize_NotCalled()
-    {
-        var turning = new NavTurning();
-        var nav = new MockTurnAgent();
-        Action act = () => turning.TrySimulateTurn(nav.Position, nav.LastPosition, nav.Forward, nav.Rotation, out _);
-        act.Should().Throw<InvalidOperationException>()
-           .WithMessage("*must be called before SimulateTurn()*");
-    }
-
-    [Fact]
     public void SimulateTurn_DoesNothing_When_CanTurnIsFalse()
     {
-        var turning = new NavTurning(Fixed64.One);
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
         var nav = new MockTurnAgent
         {
             Position = Vector3d.Zero,
@@ -170,7 +160,7 @@ public class NavTurningTests
     [Fact]
     public void RequestTurnDirection_Ignores_SmallAngles()
     {
-        var turning = new NavTurning(Fixed64.One);
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
         var nav = new MockTurnAgent()
         {
             Forward = Vector3d.Right
@@ -189,7 +179,7 @@ public class NavTurningTests
     [Fact]
     public void SimulateTurn_WithMaxInterpolation_JumpsDirectlyToTarget()
     {
-        var turning = new NavTurning(Fixed64.One);
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
         var nav = new MockTurnAgent
         {
             Position = Vector3d.Zero,
@@ -210,7 +200,7 @@ public class NavTurningTests
     [Fact]
     public void SimulateTurn_AfterArrival_RemainsIdle()
     {
-        var turning = new NavTurning(Fixed64.One);
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
         var nav = new MockTurnAgent
         {
             Position = Vector3d.Zero,
@@ -235,7 +225,7 @@ public class NavTurningTests
     [Fact]
     public void MultipleCollisions_OnlyFirst_IsBuffered()
     {
-        var turning = new NavTurning(Fixed64.One);
+        var turning = new NavTurning(TestWorld.Context, Fixed64.One);
         var nav = new MockTurnAgent
         {
             LastPosition = Vector3d.Zero,

@@ -14,7 +14,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -38,7 +38,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void GetMaxAcceleration_ShouldThrow_WhenMotorHasNotBeenInitialized()
     {
-        var motor = NavMotor.CreateUninitialized();
+        var motor = NavMotor.CreateUninitialized(TestWorld.Context);
 
         motor.Invoking(m => m.GetMaxAcceleration())
             .Should().Throw<InvalidOperationException>()
@@ -48,7 +48,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void TryTraversal_ShouldReturnFalse_WhenMotorHasNotBeenInitialized()
     {
-        var motor = NavMotor.CreateUninitialized();
+        var motor = NavMotor.CreateUninitialized(TestWorld.Context);
         TrekRequest request = new()
         {
             Origin = Vector3d.Zero,
@@ -213,7 +213,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
         staleTraversalAgent.FrameRequest.FootPosition = staleTraversalAgent.GetFootPosition();
         staleTraversalAgent.FrameRequest.Rotation = staleTraversalAgent.Rotation;
         staleTraversalAgent.Motor.TryTraversal(staleTraversalAgent.FrameRequest, out _, out _, out _).Should().BeTrue();
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         staleTraversalAgent.Motor.Invoking(m => m.TryTraversal(staleTraversalAgent.FrameRequest, out _, out _, out _))
             .Should().Throw<InvalidOperationException>()
@@ -244,7 +244,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void SetLocomotionProfile_ShouldAllowUninitializedMotorShell()
     {
-        var motor = NavMotor.CreateUninitialized();
+        var motor = NavMotor.CreateUninitialized(TestWorld.Context);
         var profile = LocomotionProfile.CreateCoreOnly();
 
         motor.Invoking(m => m.SetLocomotionProfile(profile))
@@ -434,7 +434,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void FinalizeTraversal_ShouldIgnoreCall_WhenMotorWasNeverInitialized()
     {
-        var motor = NavMotor.CreateUninitialized();
+        var motor = NavMotor.CreateUninitialized(TestWorld.Context);
 
         motor.FinalizeTraversal(
             Vector3d.Zero,
@@ -934,11 +934,11 @@ public sealed class NavMotorCoverageTailTests : IDisposable
     [Fact]
     public void JsonRoundTrip_ShouldHydrateMissingCurrentState_ForUninitializedMotors()
     {
-        var source = NavMotor.CreateUninitialized(new LocomotionHandler(LocomotionProfile.CreateCoreOnly()));
+        var source = NavMotor.CreateUninitialized(TestWorld.Context, new LocomotionHandler(LocomotionProfile.CreateCoreOnly()));
 
         string json = JsonRecordSerializer.Serialize(source, writeIndented: true);
 
-        var target = NavMotor.CreateUninitialized();
+        var target = NavMotor.CreateUninitialized(TestWorld.Context);
         JsonRecordSerializer.Populate(target, json);
 
         target.IsInitialized.Should().BeFalse();

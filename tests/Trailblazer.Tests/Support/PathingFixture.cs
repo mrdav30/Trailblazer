@@ -1,7 +1,6 @@
 ﻿using GridForge;
 using SwiftCollections.Diagnostics;
 using System;
-using Trailblazer.Pathing;
 using Xunit;
 
 namespace Trailblazer.Tests;
@@ -13,15 +12,12 @@ public class PathingFixture : IDisposable
         GridForgeLogger.MinimumLevel = DiagnosticLevel.Error;
         TrailblazerLogger.MinimumLevel = DiagnosticLevel.Error;
         TrailblazerLogger.EnableDebugLogging = false;
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
     }
 
     public void Dispose()
     {
-        PathManager.Reset();
-
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
 
         GC.SuppressFinalize(this);
     }

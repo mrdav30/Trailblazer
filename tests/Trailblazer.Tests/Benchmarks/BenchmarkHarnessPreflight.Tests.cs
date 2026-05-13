@@ -44,8 +44,8 @@ public sealed class BenchmarkHarnessPreflightTests
     {
         try
         {
-            TrailblazerWorldManager.Setup();
-            TrailblazerWorldManager.TryAddGrid(
+            TestWorld.Setup();
+            TestWorld.World.TryAddGrid(
                 new GridConfiguration(new Vector3d(44, -4, -4), new Vector3d(120, 8, 72)),
                 out _).Should().BeTrue();
 
@@ -78,8 +78,7 @@ public sealed class BenchmarkHarnessPreflightTests
         finally
         {
             PathManager.Reset();
-            TrailblazerWorldManager.Reset();
-            TrailblazerManager.Reset();
+            TestWorld.Reset();
         }
     }
 
@@ -320,8 +319,7 @@ public sealed class BenchmarkHarnessPreflightTests
         Vector3d destination,
         HeuristicMethod heuristic)
     {
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            origin,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, origin,
             destination,
             Fixed64.One,
             heuristic));

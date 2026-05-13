@@ -30,25 +30,6 @@ internal interface IVoxelEndpointResolutionPolicy
 internal static class EndpointVoxelResolver
 {
     public static bool TryGetEndpointVoxel<TPolicy>(
-        Vector3d position,
-        Vector3d traceToward,
-        [MaybeNullWhen(false)] out Voxel voxel,
-        bool allowUnwalkableEndpoints,
-        Fixed64 unitSize,
-        TPolicy policy)
-        where TPolicy : struct, IVoxelEndpointResolutionPolicy
-    {
-        return TryGetEndpointVoxel(
-            PathRequestContextResolver.DefaultContext,
-            position,
-            traceToward,
-            out voxel,
-            allowUnwalkableEndpoints,
-            unitSize,
-            policy);
-    }
-
-    public static bool TryGetEndpointVoxel<TPolicy>(
         TrailblazerWorldContext context,
         Vector3d position,
         Vector3d traceToward,
@@ -104,21 +85,6 @@ internal static class EndpointVoxelResolver
 
         voxel = null;
         return false;
-    }
-
-    public static bool TryGetClosestTraversableVoxel<TPolicy>(
-        Voxel voxel,
-        [MaybeNullWhen(false)] out Voxel closestNeighbor,
-        Fixed64 unitSize,
-        TPolicy policy)
-        where TPolicy : struct, IVoxelEndpointResolutionPolicy
-    {
-        return TryGetClosestTraversableVoxel(
-            PathRequestContextResolver.DefaultContext,
-            voxel,
-            out closestNeighbor,
-            unitSize,
-            policy);
     }
 
     public static bool TryGetClosestTraversableVoxel<TPolicy>(

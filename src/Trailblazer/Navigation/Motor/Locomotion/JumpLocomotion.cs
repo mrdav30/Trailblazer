@@ -1,5 +1,6 @@
 ﻿using Chronicler;
 using FixedMathSharp;
+using System;
 using Trailblazer.Support;
 
 namespace Trailblazer.Navigation.Motor;
@@ -171,9 +172,12 @@ public class JumpLocomotion : ILocomotion
     /// </summary>
     public bool CanJump => JumpCount < MaxJumpCount && !IsCoolingDown;
 
-    private Fixed64 DeltaTime => _context?.DeltaTime ?? TrailblazerManager.DeltaTime;
+    private TrailblazerWorldContext RequireContext() =>
+        _context ?? throw new InvalidOperationException("JumpLocomotion requires an explicit TrailblazerWorldContext.");
 
-    private Fixed64 TotalTime => _context?.TotalTime ?? TrailblazerManager.TotalTime;
+    private Fixed64 DeltaTime => RequireContext().DeltaTime;
+
+    private Fixed64 TotalTime => RequireContext().TotalTime;
 
     #endregion
 

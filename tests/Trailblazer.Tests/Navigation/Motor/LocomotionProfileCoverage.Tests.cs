@@ -10,7 +10,7 @@ public sealed class LocomotionProfileCoverageTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 

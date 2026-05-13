@@ -77,7 +77,7 @@ public class FlowFieldPathRequestBenchmarks
         SetupBlockerFloodScaling64();
         SetupSampleFlowVector32();
         ValidateConfiguredRequests();
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     [GlobalCleanup]
@@ -95,13 +95,13 @@ public class FlowFieldPathRequestBenchmarks
         (_openPlane64Origin, _openPlane64Destination) =
             BenchmarkChartFactory.RegisterOpenPlane("FFOpenPlane64", 64, OpenPlane64Offset);
 
-        BenchmarkPreflight.AssertFlowFieldRouteExists(
+        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context, 
             _openPlane64Origin, _openPlane64Destination, Fixed64.One);
 
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _openPlane64Request = FlowFieldPathRequest.Create(
+        _openPlane64Request = FlowFieldPathRequest.Create(_fixture.Context, 
             _openPlane64Origin, _openPlane64Destination, Fixed64.One);
     }
 
@@ -110,13 +110,13 @@ public class FlowFieldPathRequestBenchmarks
         (_openPlane128Origin, _openPlane128Destination) =
             BenchmarkChartFactory.RegisterOpenPlane("FFOpenPlane128", 128, OpenPlane128Offset);
 
-        BenchmarkPreflight.AssertFlowFieldRouteExists(
+        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context, 
             _openPlane128Origin, _openPlane128Destination, Fixed64.One);
 
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _openPlane128Request = FlowFieldPathRequest.Create(
+        _openPlane128Request = FlowFieldPathRequest.Create(_fixture.Context, 
             _openPlane128Origin, _openPlane128Destination, Fixed64.One);
     }
 
@@ -134,16 +134,16 @@ public class FlowFieldPathRequestBenchmarks
         _clusterGuideBuffer = new FlowFieldGuide[startCount];
         for (int i = 0; i < startCount; i++)
         {
-            _clusterRequests[i] = FlowFieldPathRequest.Create(starts[i], destination, Fixed64.One);
+            _clusterRequests[i] = FlowFieldPathRequest.Create(_fixture.Context, starts[i], destination, Fixed64.One);
             if (_clusterRequests[i] == null)
                 throw new System.InvalidOperationException(
                     $"Preflight: Could not create flow-field request from cluster start {starts[i]} -> {destination}.");
         }
 
         // Warm preflight for the first request to confirm reachability.
-        BenchmarkPreflight.AssertFlowFieldRouteExists(starts[0], destination, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context, starts[0], destination, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
     }
 
     private void SetupBlockerFloodScaling64()
@@ -151,14 +151,14 @@ public class FlowFieldPathRequestBenchmarks
         var (origin, destination) =
             BenchmarkChartFactory.RegisterSparseBlockerField("FFBlocker64", 64, Blocker64Offset);
 
-        BenchmarkPreflight.AssertFlowFieldRouteExists(origin, destination, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context, origin, destination, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _blockerDefaultFloodRequest = FlowFieldPathRequest.Create(origin, destination, Fixed64.One);
+        _blockerDefaultFloodRequest = FlowFieldPathRequest.Create(_fixture.Context, origin, destination, Fixed64.One);
         _blockerDefaultFloodRequest.ExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange;
 
-        _blockerLargeFloodRequest = FlowFieldPathRequest.Create(origin, destination, Fixed64.One);
+        _blockerLargeFloodRequest = FlowFieldPathRequest.Create(_fixture.Context, origin, destination, Fixed64.One);
         _blockerLargeFloodRequest.ExtraFloodRange = FlowFieldPathRequest.DefaultExtraFloodRange * 4;
     }
 
@@ -169,7 +169,7 @@ public class FlowFieldPathRequestBenchmarks
         var (origin, destination) =
             BenchmarkChartFactory.RegisterOpenPlane("FFSampleVector32", size, SampleVector32Offset);
 
-        FlowFieldPathRequest request = FlowFieldPathRequest.Create(origin, destination, Fixed64.One);
+        FlowFieldPathRequest request = FlowFieldPathRequest.Create(_fixture.Context, origin, destination, Fixed64.One);
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
 
         if (!result.HasPath || result.Fields == null)
@@ -221,7 +221,7 @@ public class FlowFieldPathRequestBenchmarks
     })]
     public void FlushForColdRun()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     // -------------------------------------------------------------------------
@@ -305,7 +305,7 @@ public class FlowFieldPathRequestBenchmarks
     [BenchmarkCategory("Pathing", "FlowField", "Request")]
     public FlowFieldPathRequest RequestConstruction_OpenPlane64()
     {
-        return FlowFieldPathRequest.Create(_openPlane64Origin, _openPlane64Destination, Fixed64.One);
+        return FlowFieldPathRequest.Create(_fixture.Context, _openPlane64Origin, _openPlane64Destination, Fixed64.One);
     }
 
     /// <summary>Reads the cache key for a pre-created 64x64 open-plane flow-field request.</summary>

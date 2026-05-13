@@ -5,26 +5,17 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Default-context facade for authored and host-configured membership rules for raw volume traversal media.
+/// Evaluates whether a host-defined voxel belongs to a raw-volume traversal medium.
 /// </summary>
-/// <remarks>
-/// Context-owned rule storage lives in <see cref="VolumeMediumRulesState"/>.
-/// Trailblazer can derive raw-volume membership from authored <see cref="VolumeChartPartition"/> data
-/// created during chart initialization. Hosts can also install supplemental gas and
-/// liquid rules for engine-specific partitioning or bespoke world logic. These rules are
-/// additive: they can extend medium membership on voxels that already belong to Trailblazer's
-/// runtime traversal world, but they do not suppress authored membership.
-/// </remarks>
-public static class VolumeMediumRules
-{
-    /// <summary>
-    /// Represents a method that defines a rule to evaluate a voxel and 
-    /// determine whether it satisfies specific criteria.
-    /// </summary>
-    /// <param name="voxel">The voxel to evaluate against the rule.</param>
-    /// <returns>true if the voxel meets the criteria defined by the rule; otherwise, false.</returns>
-    public delegate bool VoxelRule(Voxel voxel);
+/// <param name="voxel">The voxel to evaluate.</param>
+/// <returns>true when the voxel belongs to the configured medium; otherwise, false.</returns>
+public delegate bool VolumeVoxelRule(Voxel voxel);
 
+/// <summary>
+/// Implements authored and host-configured membership rules for raw volume traversal media.
+/// </summary>
+internal static class VolumeMediumRules
+{
     private static VolumeMediumRulesState State => PathManager.ActiveState.VolumeRulesState;
 
     /// <summary>
@@ -53,7 +44,7 @@ public static class VolumeMediumRules
     /// <summary>
     /// Sets a host-defined rule that adds gas membership on eligible voxels.
     /// </summary>
-    public static void SetGasVoxelRule(VoxelRule rule)
+    public static void SetGasVoxelRule(VolumeVoxelRule rule)
     {
         State.GasVoxelRule = rule;
         InvalidateRuleConfiguration();
@@ -82,7 +73,7 @@ public static class VolumeMediumRules
     /// <summary>
     /// Sets a host-defined rule that adds liquid membership on eligible voxels.
     /// </summary>
-    public static void SetLiquidVoxelRule(VoxelRule rule)
+    public static void SetLiquidVoxelRule(VolumeVoxelRule rule)
     {
         State.LiquidVoxelRule = rule;
         InvalidateRuleConfiguration();

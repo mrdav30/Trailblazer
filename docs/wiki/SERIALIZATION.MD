@@ -293,7 +293,7 @@ The current Trailblazer-focused tests verify that:
 - turning configuration survives round-trip while active turn runtime state is rebuilt on load
 - moving-platform state survives round-trip
 - locomotion runtime state survives round-trip
-- grouped steering can be explicitly prewarmed after load while lazy rejoin remains available as a fallback
+- grouped steering can be explicitly prewarmed after load, and the runtime can lazily rejoin groups when needed
 - rebuild-oriented load behavior matches across the JSON and MemoryPack transports
 - a restored navigator remains usable for later simulation
 

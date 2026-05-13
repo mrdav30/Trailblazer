@@ -12,7 +12,7 @@ public sealed class ClimbLocomotionTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -167,7 +167,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.Motor.Events.OnStartClimb = _ => startedCount++;
         agent.Motor.Handler.Climb!.MaxClimbSpeed = (Fixed64)3;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Up;
         agent.FrameRequest.Rate = TrekRate.Fast;
         agent.FrameRequest.IsRequestingClimb = true;
@@ -365,7 +365,7 @@ public sealed class ClimbLocomotionTests : IDisposable
             Snapshot = CreateLadderSnapshot()
         };
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Rate = TrekRate.Stationary;
         agent.FrameRequest.IsRequestingClimb = true;
         agent.Simulate();
@@ -386,7 +386,7 @@ public sealed class ClimbLocomotionTests : IDisposable
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Zero;
         agent.FrameRequest.Rate = TrekRate.Stationary;
         agent.FrameRequest.IsRequestingClimb = false;
@@ -411,7 +411,7 @@ public sealed class ClimbLocomotionTests : IDisposable
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Up;
         agent.FrameRequest.Rate = TrekRate.Fast;
         agent.FrameRequest.IsRequestingClimb = false;
@@ -482,7 +482,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.FrameCondition.GroundState = new GroundCondition();
         agent.Motor.SyncTraversalState(agent.FrameCondition);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Zero;
         agent.FrameRequest.Rate = TrekRate.Stationary;
         agent.FrameRequest.IsRequestingClimb = false;
@@ -509,7 +509,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.FrameCondition.Medium = TraversalMedium.Unknown;
         agent.FrameCondition.GroundState = null;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Zero;
         agent.FrameRequest.Rate = TrekRate.Stationary;
         agent.FrameRequest.IsRequestingClimb = false;
@@ -536,7 +536,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Zero;
         agent.FrameRequest.Rate = TrekRate.Stationary;
         agent.FrameRequest.IsRequestingClimb = false;
@@ -565,7 +565,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Zero;
         agent.FrameRequest.Rate = TrekRate.Stationary;
         agent.FrameRequest.IsRequestingClimb = false;
@@ -591,7 +591,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Zero;
         agent.FrameRequest.Rate = TrekRate.Stationary;
         agent.FrameRequest.IsRequestingClimb = false;
@@ -630,7 +630,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.FrameCondition.GroundState = new GroundCondition();
         agent.Motor.SyncTraversalState(agent.FrameCondition);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Zero;
         agent.FrameRequest.Rate = TrekRate.Stationary;
         agent.FrameRequest.IsRequestingClimb = false;
@@ -653,7 +653,7 @@ public sealed class ClimbLocomotionTests : IDisposable
 
         SimulateClimbFrame(agent, Vector3d.Zero, TrekRate.Fast);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Zero;
         agent.FrameRequest.Rate = TrekRate.Fast;
         agent.FrameRequest.IsRequestingClimb = true;
@@ -676,7 +676,7 @@ public sealed class ClimbLocomotionTests : IDisposable
 
     private static void SimulateClimbFrame(MockMotorAgent agent, Vector3d direction, TrekRate rate)
     {
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = direction;
         agent.FrameRequest.Rate = rate;
         agent.FrameRequest.IsRequestingClimb = true;

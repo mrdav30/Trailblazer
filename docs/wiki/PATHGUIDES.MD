@@ -230,14 +230,13 @@ Important limitations:
 
 - `HybridGuide` is internal
 - it does not wrap a reusable cached survey result
-- `PathGuideFactory.ReturnGuide(...)` has no cache-release action for it
+- `context.Guides.ReturnGuide(...)` has no cache-release action for it
 
 In practice, `HybridGuide` exists mainly for internal guide composition and serialization restoration paths rather than for public consumption.
 
-## 5. Context Guide Service And `PathGuideFactory`
+## 5. Context Guide Service
 
 `TrailblazerWorldContext.Guides` is the context-owned guide-layer entry point.
-`PathGuideFactory` remains as the single default-context compatibility facade.
 Requests carry their owning `TrailblazerWorldContext`; `context.Guides` only accepts requests from
 that same context so guide caches cannot be polluted by another world.
 
@@ -404,7 +403,6 @@ Maintenance behavior:
 ### 8.1 Minimal Direct Usage
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
 
 if (context.Guides.RequestGuide(request, out AStarGuide guide))
@@ -417,7 +415,6 @@ if (context.Guides.RequestGuide(request, out AStarGuide guide))
 ### 8.2 Polymorphic Usage
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 if (context.Guides.RequestGuide(request, out IGuide guide))
 {
     if (guide is IWaypointGuide waypointGuide)

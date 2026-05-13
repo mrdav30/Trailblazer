@@ -1,4 +1,5 @@
 using System;
+using SwiftCollections;
 using Trailblazer.Navigation.MovementGroups;
 
 namespace Trailblazer.Navigation;
@@ -31,9 +32,7 @@ public sealed class TrailblazerNavigationService
     /// </summary>
     public void Bind(Navigator navigator)
     {
-        if (navigator == null)
-            throw new ArgumentNullException(nameof(navigator));
-
+        SwiftThrowHelper.ThrowIfNull(navigator, nameof(navigator));
         navigator.BindContext(_context);
     }
 
@@ -51,8 +50,7 @@ public sealed class TrailblazerNavigationService
 
     private void EnsureUsable()
     {
-        if (_context.IsDisposed)
-            throw new ObjectDisposedException(nameof(TrailblazerWorldContext));
+        SwiftThrowHelper.ThrowIfDisposed(_context.IsDisposed, nameof(TrailblazerWorldContext));
         if (!_context.World.IsActive)
             throw new InvalidOperationException("TrailblazerNavigationService is bound to an inactive GridWorld.");
     }

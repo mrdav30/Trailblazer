@@ -14,16 +14,15 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
 {
     public PathGuideFactoryCoverageTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
         TraversalTransitionRegistry.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -61,8 +60,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     {
         GuidedPathTestScene.RegisterTransitionFallbackScene();
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
@@ -81,7 +79,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     {
         RegisterSolidLine("GuideFactoryFlush", Vector3d.Zero, 3);
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
 
         PathGuideFactory.RequestGuide(request, out _).Should().BeTrue();
         PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
@@ -110,7 +108,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     {
         RegisterSolidLine("GuideFactoryInvalidateSolid", Vector3d.Zero, 3);
         AStarPathRequest aStarRequest = TestRequire.NotNull(
-            AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
         AStarGuide aStarGuide = TestRequire.Created(
             PathGuideFactory.RequestGuide(aStarRequest, out AStarGuide? createdAStarGuide),
             createdAStarGuide);
@@ -121,8 +119,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
 
         RegisterVolumeLine(new Vector3d(0, 0, 2), TraversalMedium.Gas, 3, "GuideFactoryInvalidateVolume");
-        VolumePathRequest volumeRequest = TestRequire.NotNull(VolumePathRequest.Create(
-            new Vector3d(0, 0, 2),
+        VolumePathRequest volumeRequest = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(2, 0, 2),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -141,8 +138,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     {
         RegisterSolidLine("GuideFactoryEmptyInvalidate", Vector3d.Zero, 3);
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
@@ -165,8 +161,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(0, 0, 4), TraversalMedium.Gas, "GuideFactoryVolumeGap");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 4), TraversalMedium.Gas, "GuideFactoryVolumeGap");
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            new Vector3d(0, 0, 4),
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 4),
             new Vector3d(2, 0, 4),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -182,12 +177,10 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         RegisterSolidLine("GuideFactoryFlowFieldConnected", Vector3d.Zero, 3);
         PathTestFactory.RegisterSingleWalkablePoint("GuideFactoryFlowFieldDisconnected", new Vector3d(4, 0, 0));
 
-        FlowFieldPathRequest cachedRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest cachedRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
-        FlowFieldPathRequest disconnectedRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            new Vector3d(4, 0, 0),
+        FlowFieldPathRequest disconnectedRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, new Vector3d(4, 0, 0),
             new Vector3d(2, 0, 0),
             Fixed64.One));
         disconnectedRequest.RequestCacheKey.Should().Be(cachedRequest.RequestCacheKey);
@@ -213,8 +206,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         RegisterSolidLine("GuideFactoryFallbackStart", Vector3d.Zero, 2);
         RegisterSolidLine("GuideFactoryFallbackEnd", new Vector3d(4, 0, 0), 2);
 
-        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(5, 0, 0),
             Fixed64.One,
             allowTraversalTransitions: true));
@@ -239,8 +231,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(5, 0, 0),
             Fixed64.One,
             allowTraversalTransitions: true));
@@ -281,8 +272,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            new Vector3d(-1, 0, 0),
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(-1, 0, 0),
             new Vector3d(3, 0, 0),
             Fixed64.One,
             HeuristicMethod.Manhattan,
@@ -306,9 +296,9 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         RegisterSolidLine("GuideFactoryWarmHitAllocation", Vector3d.Zero, 4);
 
         AStarPathRequest aStarRequest = TestRequire.NotNull(
-            AStarPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(
-            FlowFieldPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+            FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
 
         const int iterations = 256;
         long aStarAllocated = MeasureWarmHitAllocation<AStarGuide>(aStarRequest, iterations);
@@ -324,11 +314,11 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         RegisterVolumeLine(new Vector3d(0, 0, 4), TraversalMedium.Gas, 4, "GuideFactoryWarmReuseVolume");
 
         AStarPathRequest aStarRequest = TestRequire.NotNull(
-            AStarPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(
-            FlowFieldPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+            FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         VolumePathRequest volumeRequest = TestRequire.NotNull(
-            VolumePathRequest.Create(new Vector3d(0, 0, 4), new Vector3d(3, 0, 4), Fixed64.One, medium: TraversalMedium.Gas));
+            VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 4), new Vector3d(3, 0, 4), Fixed64.One, medium: TraversalMedium.Gas));
 
         const int iterations = 256;
 
@@ -349,11 +339,11 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         RegisterVolumeLine(new Vector3d(0, 0, 4), TraversalMedium.Gas, 4, "GuideFactoryRequestKeyVolume");
 
         AStarPathRequest aStarRequest = TestRequire.NotNull(
-            AStarPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(
-            FlowFieldPathRequest.Create(Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
+            FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(3, 0, 0), Fixed64.One));
         VolumePathRequest volumeRequest = TestRequire.NotNull(
-            VolumePathRequest.Create(new Vector3d(0, 0, 4), new Vector3d(3, 0, 4), Fixed64.One, medium: TraversalMedium.Gas));
+            VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 4), new Vector3d(3, 0, 4), Fixed64.One, medium: TraversalMedium.Gas));
 
         const int iterations = 1_024;
 
@@ -487,7 +477,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
 
     private sealed class UnknownRequest : IPathRequest
     {
-        public TrailblazerWorldContext Context => TrailblazerManager.DefaultContext;
+        public TrailblazerWorldContext Context => TestWorld.Context;
 
         public Vector3d Origin => OriginValue;
         public Voxel StartNode => StartNodeValue;

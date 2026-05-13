@@ -11,7 +11,7 @@ public class PlatformLocomotionTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -24,7 +24,7 @@ public class PlatformLocomotionTests : IDisposable
 
         // Act
         // 1st Frame
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         PlatformSnapshot platformHandle = platformLocomotion.ActivePlatform ?? default;
@@ -33,7 +33,7 @@ public class PlatformLocomotionTests : IDisposable
         platformLocomotion.ActivePlatform = platformHandle;
 
         // 2nd Frame
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         //scout.FrameCondition = new(
@@ -56,7 +56,7 @@ public class PlatformLocomotionTests : IDisposable
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent();
         var platformLocomotion = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Platform);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         var movedTransform = MockMotorAgentTestFactory.CreatePlatformTransform(startPosition: new Vector3d(2, 0, 0));
@@ -71,7 +71,7 @@ public class PlatformLocomotionTests : IDisposable
             CeilingLevel = Fixed64.MAX_VALUE
         };
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.Origin = scout.Position;
         scout.FrameRequest.FootPosition = scout.GetFootPosition();
         scout.FrameRequest.Rotation = scout.Rotation;
@@ -93,7 +93,7 @@ public class PlatformLocomotionTests : IDisposable
         activePlatform.Transform.Translation.Should().Be(movedTransform.Translation);
         platformLocomotion.IsNewPlatform.Should().BeFalse();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         scout.Position.Should().Be(movedTransform.Translation);
@@ -109,7 +109,7 @@ public class PlatformLocomotionTests : IDisposable
         FixedQuaternion rotationChange = FixedQuaternion.FromAxisAngle(Vector3d.Up, Fixed64.FromRaw(0x10000000L)); // Small rotation
 
         // Act
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Apply platform rotation
@@ -117,7 +117,7 @@ public class PlatformLocomotionTests : IDisposable
         platformHandle.Transform.SetRotation(rotationChange);
         platformLocomotion.ActivePlatform = platformHandle; // Ensure platform state is updated
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Assert
@@ -135,7 +135,7 @@ public class PlatformLocomotionTests : IDisposable
         Vector3d expectedPosition = scout.Position;
 
         // Act
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Move platform
@@ -144,7 +144,7 @@ public class PlatformLocomotionTests : IDisposable
         platformHandle.Transform.SetTranslation(movementDelta);
         platformLocomotion.ActivePlatform = platformHandle; // Ensure platform state is updated
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Assert
@@ -163,7 +163,7 @@ public class PlatformLocomotionTests : IDisposable
             Fixed64.FromRaw(0x08000000L)); // Small rotation
 
         // Act
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         var platformHandle = platformLocomotion.ActivePlatform ?? default;
@@ -171,7 +171,7 @@ public class PlatformLocomotionTests : IDisposable
         platformHandle.Transform = Fixed4x4.NormalizeRotationMatrix(platformHandle.Transform);
         platformLocomotion.ActivePlatform = platformHandle; // Ensure platform state is updated
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Assert
@@ -192,7 +192,7 @@ public class PlatformLocomotionTests : IDisposable
         platformLocomotion.IsActive.Should().BeFalse();
         platformLocomotion.MovementTransfer.Should().Be(MotionTransfer.None);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         var movedTransform = MockMotorAgentTestFactory.CreatePlatformTransform(startPosition: new Vector3d(3, 0, 0));
@@ -202,7 +202,7 @@ public class PlatformLocomotionTests : IDisposable
             MotionTransferState = MotionTransfer.PermaLocked
         };
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         scout.Position.Should().Be(Vector3d.Zero);
@@ -220,7 +220,7 @@ public class PlatformLocomotionTests : IDisposable
             motionTransfer: MotionTransfer.PermaLocked);
         var platformLocomotion = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Platform);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         platformLocomotion.IsActive.Should().BeTrue();
@@ -231,7 +231,7 @@ public class PlatformLocomotionTests : IDisposable
             MotionTransferState = MotionTransfer.PermaLocked
         };
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         platformLocomotion.ActivePlatform.Should().BeNull();
@@ -249,7 +249,7 @@ public class PlatformLocomotionTests : IDisposable
         var platformLocomotion = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Platform);
 
         // Act 1 - Jump before platform movement
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
@@ -258,7 +258,7 @@ public class PlatformLocomotionTests : IDisposable
         platformHandle.Transform.SetTranslation(new Vector3d(3, 0, 0));
 
         // Act 2 - Simulate next frame after platform movement
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
@@ -275,7 +275,7 @@ public class PlatformLocomotionTests : IDisposable
 
         platformLocomotion.PlatformVelocity = new Vector3d(1, 0, 0);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
@@ -289,7 +289,7 @@ public class PlatformLocomotionTests : IDisposable
         var platformLocomotion = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Platform);
         platformLocomotion.MovementTransfer = MotionTransfer.PermaLocked;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         var moveDelta = new Vector3d(2, 0, 0);
@@ -297,7 +297,7 @@ public class PlatformLocomotionTests : IDisposable
         platformHandle.Transform.SetTranslation(moveDelta);
         platformLocomotion.ActivePlatform = platformHandle; // Ensure platform state is updated
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         scout.Position.Should().Be(moveDelta);
@@ -351,7 +351,7 @@ public class PlatformLocomotionTests : IDisposable
         var initialPlatformVelocity = new Vector3d(1, 0, 0);
         platformLocomotion.PlatformVelocity = initialPlatformVelocity;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
@@ -369,7 +369,7 @@ public class PlatformLocomotionTests : IDisposable
         var platformLocomotion = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Platform);
 
         // Act 1 - Set initial state
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Arrange - Move platform
@@ -378,7 +378,7 @@ public class PlatformLocomotionTests : IDisposable
         platformLocomotion.ActivePlatform = platformHandle; // Ensure platform state is updated
 
         // Act 2 - Jump from moving platform
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 

@@ -117,7 +117,7 @@ public class NavigationScenarioBenchmarks
     })]
     public void PrepareFirstFrameMixedSteering()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
         ReapplyPathRequests(_mixed100);
         ReapplyPathRequests(_mixed500);
     }
@@ -171,7 +171,7 @@ public class NavigationScenarioBenchmarks
 
     public NavigationScenarioSummary MeasureFixedStepMixedSteering500() => RunMixedSteering(_mixed500);
 
-    private static MixedSteeringScenario[] CreateMixedScenarios(int count)
+    private MixedSteeringScenario[] CreateMixedScenarios(int count)
     {
         int perKindCount = (count + 3) / 4;
         Vector3d[] directStarts = new Vector3d[perKindCount];
@@ -206,19 +206,19 @@ public class NavigationScenarioBenchmarks
                 {
                     Vector3d start = directStarts[directIndex];
                     Vector3d destination = directDestinations[directIndex++];
-                    scenarios[i] = CreateGuidedScenario(kind, start, AStarPathRequest.Create(start, destination, Fixed64.One));
+                    scenarios[i] = CreateGuidedScenario(kind, start, AStarPathRequest.Create(_fixture.Context, start, destination, Fixed64.One));
                     break;
                 }
                 case MixedSteeringKind.AStar:
                 {
                     Vector3d start = aStarStarts[aStarIndex++];
-                    scenarios[i] = CreateGuidedScenario(kind, start, AStarPathRequest.Create(start, aStarDestination, Fixed64.One));
+                    scenarios[i] = CreateGuidedScenario(kind, start, AStarPathRequest.Create(_fixture.Context, start, aStarDestination, Fixed64.One));
                     break;
                 }
                 case MixedSteeringKind.FlowField:
                 {
                     Vector3d start = flowStarts[flowIndex++];
-                    scenarios[i] = CreateGuidedScenario(kind, start, FlowFieldPathRequest.Create(start, flowDestination, Fixed64.One));
+                    scenarios[i] = CreateGuidedScenario(kind, start, FlowFieldPathRequest.Create(_fixture.Context, start, flowDestination, Fixed64.One));
                     break;
                 }
                 default:
@@ -228,7 +228,7 @@ public class NavigationScenarioBenchmarks
                         0,
                         10 + ((combinedIndex / 28) % 12));
                     BenchmarkSteerAgent agent = CreateMovingAgent(start);
-                    scenarios[i] = new MixedSteeringScenario(kind, agent, NavSteering.CreateNew(agent.Radius), null);
+                    scenarios[i] = new MixedSteeringScenario(kind, agent, NavSteering.CreateNew(_fixture.Context, agent.Radius), null);
                     combinedIndex++;
                     break;
                 }
@@ -238,7 +238,7 @@ public class NavigationScenarioBenchmarks
         return scenarios;
     }
 
-    private static MixedSteeringScenario CreateGuidedScenario(
+    private MixedSteeringScenario CreateGuidedScenario(
         MixedSteeringKind kind,
         Vector3d start,
         IPathRequest request)
@@ -247,7 +247,7 @@ public class NavigationScenarioBenchmarks
             throw new InvalidOperationException($"Preflight: could not create {kind} scenario request from {start}.");
 
         BenchmarkSteerAgent agent = CreateMovingAgent(start);
-        NavSteering steering = NavSteering.CreateNew(agent.Radius);
+        NavSteering steering = NavSteering.CreateNew(_fixture.Context, agent.Radius);
         if (kind != MixedSteeringKind.DirectLos)
             steering.PathRecheckCooldownFrames = int.MaxValue;
 
@@ -325,7 +325,7 @@ public class NavigationScenarioBenchmarks
         return new NavigationScenarioSummary(processed, direct, aStar, flow, combined, guided, nonZero);
     }
 
-    private static void ValidateRepresentativeGuides(MixedSteeringScenario[] scenarios)
+    private void ValidateRepresentativeGuides(MixedSteeringScenario[] scenarios)
     {
         bool directSeen = false;
         bool aStarSeen = false;
@@ -354,23 +354,23 @@ public class NavigationScenarioBenchmarks
                 break;
         }
 
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     private static void EnsureAStarGuideResolves(AStarPathRequest request, string requestName)
     {
-        if (!PathGuideFactory.RequestGuide(request, out AStarGuide guide))
+        if (!request.Context.Guides.RequestGuide(request, out AStarGuide guide))
             throw new InvalidOperationException($"Preflight: {requestName} A* scenario guide failed to resolve.");
 
-        PathGuideFactory.ReturnGuide(guide);
+        request.Context.Guides.ReturnGuide(guide);
     }
 
     private static void EnsureFlowFieldGuideResolves(FlowFieldPathRequest request, string requestName)
     {
-        if (!PathGuideFactory.RequestGuide(request, out FlowFieldGuide guide))
+        if (!request.Context.Guides.RequestGuide(request, out FlowFieldGuide guide))
             throw new InvalidOperationException($"Preflight: {requestName} flow-field scenario guide failed to resolve.");
 
-        PathGuideFactory.ReturnGuide(guide);
+        request.Context.Guides.ReturnGuide(guide);
     }
 
     private static void GenerateBorderStarts(Vector3d origin, int size, int count, Vector3d[] starts)
@@ -392,17 +392,17 @@ public class NavigationScenarioBenchmarks
             throw new InvalidOperationException($"Preflight: generated only {index} border starts for {count} requested agents.");
     }
 
-    private static void RegisterOccupants(BenchmarkOccupant[] occupants)
+    private void RegisterOccupants(BenchmarkOccupant[] occupants)
     {
         for (int i = 0; i < occupants.Length; i++)
         {
             BenchmarkOccupant occupant = occupants[i];
-            if (TrailblazerWorldManager.TryGetGrid(occupant.Position, out VoxelGrid grid))
+            if (_fixture.World.TryGetGrid(occupant.Position, out VoxelGrid grid))
                 grid.TryAddVoxelOccupant(occupant);
         }
     }
 
-    private static void RemoveOccupants(BenchmarkOccupant[] occupants)
+    private void RemoveOccupants(BenchmarkOccupant[] occupants)
     {
         if (occupants == null)
             return;
@@ -410,7 +410,7 @@ public class NavigationScenarioBenchmarks
         for (int i = 0; i < occupants.Length; i++)
         {
             BenchmarkOccupant occupant = occupants[i];
-            if (TrailblazerWorldManager.TryGetGrid(occupant.Position, out VoxelGrid grid))
+            if (_fixture.World.TryGetGrid(occupant.Position, out VoxelGrid grid))
                 grid.TryRemoveVoxelOccupant(occupant);
         }
     }

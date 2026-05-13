@@ -596,7 +596,6 @@ This protected factory hook lets subclasses build custom request types without r
 A typical concrete navigator flow looks like this:
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 var navigator = new MyNavigator(context);
 
 navigator.Setup(

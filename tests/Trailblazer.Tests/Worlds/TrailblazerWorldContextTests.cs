@@ -10,13 +10,10 @@ namespace Trailblazer.Tests.Worlds;
 [Collection("PathingCollection")]
 public sealed class TrailblazerWorldContextTests : IDisposable
 {
-    private const int DefaultFrameRate = 32;
-
     public void Dispose()
     {
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.SetFrameRate(DefaultFrameRate);
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
+
         GC.SuppressFinalize(this);
     }
 
@@ -138,39 +135,4 @@ public sealed class TrailblazerWorldContextTests : IDisposable
         calls.Should().ContainInOrder("early", "late");
     }
 
-    [Fact]
-    public void TrailblazerManagerInitialize_ShouldCreateDefaultContextFacade()
-    {
-        using var world = new GridWorld();
-
-        TrailblazerManager.Initialize(world);
-
-        TrailblazerManager.DefaultContext.Should().NotBeNull();
-        TrailblazerManager.DefaultContext.World.Should().BeSameAs(world);
-        TrailblazerWorldManager.World.Should().BeSameAs(world);
-    }
-
-    [Fact]
-    public void TrailblazerManagerInitialize_ShouldPreserveConfiguredFacadeFrameRate()
-    {
-        TrailblazerManager.SetFrameRate(48);
-        using var world = new GridWorld();
-
-        TrailblazerManager.Initialize(world);
-
-        TrailblazerManager.FrameRate.Should().Be(48);
-        TrailblazerManager.DefaultContext.FrameRate.Should().Be(48);
-    }
-
-    [Fact]
-    public void TrailblazerManagerSimulate_ShouldAdvanceDefaultContextClock()
-    {
-        using var world = new GridWorld();
-        TrailblazerManager.Initialize(world);
-
-        TrailblazerManager.Simulate();
-
-        TrailblazerManager.FrameCount.Should().Be(1);
-        TrailblazerManager.DefaultContext.FrameCount.Should().Be(1);
-    }
 }

@@ -2,9 +2,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("Trailblazer.Tests")]
-[assembly: InternalsVisibleTo("Trailblazer.Benchmarks")]
-
 namespace Trailblazer.Pathing;
 
 internal struct PathHeapMeta

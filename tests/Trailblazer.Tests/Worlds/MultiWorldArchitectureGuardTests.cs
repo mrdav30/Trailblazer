@@ -9,8 +9,6 @@ namespace Trailblazer.Tests.Worlds;
 
 public sealed class MultiWorldArchitectureGuardTests
 {
-    private const int Phase0TrailblazerWorldManagerReferenceFileBaseline = 28;
-
     private static readonly string[] EngineSpecificMarkers =
     {
         "UnityEngine",
@@ -33,14 +31,76 @@ public sealed class MultiWorldArchitectureGuardTests
     };
 
     [Fact]
-    public void ProductionTrailblazerWorldManagerReferences_ShouldNotIncreaseBeyondPhase0Baseline()
+    public void ProductionCode_ShouldNotContainAmbientWorldBridgeReferences()
     {
         string sourceRoot = Path.Combine(FindRepositoryRoot(), "src", "Trailblazer");
-        List<string> filesWithReferences = FindProductionFilesContaining(sourceRoot, "TrailblazerWorldManager");
+        var forbiddenMarkers = new[]
+        {
+            "TrailblazerWorldManager",
+            "DefaultContext",
+            "HasDefaultContext",
+            "compatibility facade",
+            "default-context",
+            "FallbackState"
+        };
+        var violations = FindProductionMarkerViolations(sourceRoot, forbiddenMarkers);
 
-        filesWithReferences.Count.Should().BeLessThanOrEqualTo(
-            Phase0TrailblazerWorldManagerReferenceFileBaseline,
-            "the multi-world migration should monotonically remove ambient world bridge references");
+        violations.Should().BeEmpty(
+            "Trailblazer is pre-alpha and the public/runtime API should only expose explicit world contexts");
+    }
+
+    [Fact]
+    public void Tests_ShouldNotKeepPhase0CompatibilitySuites()
+    {
+        string testRoot = Path.Combine(FindRepositoryRoot(), "tests", "Trailblazer.Tests");
+        File.Exists(Path.Combine(testRoot, "Worlds", "MultiWorldPhase0AcceptanceTests.cs")).Should().BeFalse(
+            "Phase 0 acceptance coverage should be merged into the owning context/pathing/navigation suites");
+    }
+
+    [Fact]
+    public void PublicDocs_ShouldDescribeContextOnlyApiWithoutMigrationLanguage()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string[] docs =
+        {
+            Path.Combine(repositoryRoot, "README.md"),
+            Path.Combine(repositoryRoot, "docs", "wiki", "OVERVIEW.md"),
+            Path.Combine(repositoryRoot, "docs", "wiki", "PATHING.MD"),
+            Path.Combine(repositoryRoot, "docs", "wiki", "PATHMANAGER.MD"),
+            Path.Combine(repositoryRoot, "docs", "wiki", "PATHGUIDES.MD"),
+            Path.Combine(repositoryRoot, "docs", "wiki", "TRANSITIONS.MD"),
+            Path.Combine(repositoryRoot, "docs", "wiki", "VOLUMETRAVERSAL.MD"),
+            Path.Combine(repositoryRoot, "docs", "wiki", "NAVIGATOR.MD"),
+            Path.Combine(repositoryRoot, "docs", "wiki", "NAVSTEERING.MD"),
+            Path.Combine(repositoryRoot, "docs", "wiki", "SERIALIZATION.MD")
+        };
+
+        var forbiddenMarkers = new[]
+        {
+            "DefaultContext",
+            "TrailblazerWorldManager",
+            "compatibility facade",
+            "default-context",
+            "legacy static",
+            "now has",
+            "now owns",
+            "now uses",
+            "remains available"
+        };
+        var violations = new List<string>();
+
+        foreach (string doc in docs)
+        {
+            string text = File.ReadAllText(doc);
+            foreach (string marker in forbiddenMarkers)
+            {
+                if (text.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
+                    violations.Add($"{Path.GetRelativePath(repositoryRoot, doc)} contains '{marker}'");
+            }
+        }
+
+        violations.Should().BeEmpty(
+            "public docs should present the context-only API as the current API, not as a migration bridge");
     }
 
     [Fact]
@@ -72,6 +132,23 @@ public sealed class MultiWorldArchitectureGuardTests
             string text = File.ReadAllText(file);
             if (text.IndexOf(marker, StringComparison.Ordinal) >= 0)
                 result.Add(Path.GetRelativePath(sourceRoot, file));
+        }
+
+        result.Sort(StringComparer.Ordinal);
+        return result;
+    }
+
+    private static List<string> FindProductionMarkerViolations(string sourceRoot, string[] markers)
+    {
+        var result = new List<string>();
+        foreach (string file in EnumerateProductionSourceFiles(sourceRoot))
+        {
+            string text = File.ReadAllText(file);
+            foreach (string marker in markers)
+            {
+                if (text.IndexOf(marker, StringComparison.Ordinal) >= 0)
+                    result.Add($"{Path.GetRelativePath(sourceRoot, file)} contains '{marker}'");
+            }
         }
 
         result.Sort(StringComparer.Ordinal);

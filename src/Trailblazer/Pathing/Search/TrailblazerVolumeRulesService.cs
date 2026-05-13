@@ -59,8 +59,8 @@ public sealed class TrailblazerVolumeRulesService
             VolumeMediumRules.SetGasVoxelPartition<TPartition>();
     }
 
-    /// <inheritdoc cref="VolumeMediumRules.SetGasVoxelRule(VolumeMediumRules.VoxelRule)"/>
-    public void SetGasVoxelRule(VolumeMediumRules.VoxelRule rule)
+    /// <inheritdoc cref="VolumeMediumRules.SetGasVoxelRule(VolumeVoxelRule)"/>
+    public void SetGasVoxelRule(VolumeVoxelRule rule)
     {
         EnsureUsable();
         using (PathManager.EnterState(_state))
@@ -84,8 +84,8 @@ public sealed class TrailblazerVolumeRulesService
             VolumeMediumRules.SetLiquidVoxelPartition<TPartition>();
     }
 
-    /// <inheritdoc cref="VolumeMediumRules.SetLiquidVoxelRule(VolumeMediumRules.VoxelRule)"/>
-    public void SetLiquidVoxelRule(VolumeMediumRules.VoxelRule rule)
+    /// <inheritdoc cref="VolumeMediumRules.SetLiquidVoxelRule(VolumeVoxelRule)"/>
+    public void SetLiquidVoxelRule(VolumeVoxelRule rule)
     {
         EnsureUsable();
         using (PathManager.EnterState(_state))

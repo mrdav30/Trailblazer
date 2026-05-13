@@ -13,7 +13,7 @@ public class MoveLocomotionTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -37,7 +37,7 @@ public class MoveLocomotionTests : IDisposable
 
         // Assert
         Vector3d newPosition = agent.Position;
-        var expectedVelocity = (newPosition - initialPosition) * TrailblazerManager.InvDeltaTime;
+        var expectedVelocity = (newPosition - initialPosition) * TestWorld.Context.InvDeltaTime;
 
         agent.Motor.Handler.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
         agent.Motor.Handler.Move.FrameVelocity.Should().Be(expectedVelocity);
@@ -52,7 +52,7 @@ public class MoveLocomotionTests : IDisposable
         // Act - Apply movement over multiple frames
         for (int i = 0; i < 10; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.FrameRequest.Direction = Vector3d.Forward;
             agent.FrameRequest.Rate = TrekRate.Slow;
             agent.Simulate();
@@ -60,7 +60,7 @@ public class MoveLocomotionTests : IDisposable
 
         // Assert
         var speed = agent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Forward, TrekRate.Slow);
-        var expected = ((Vector3d.Forward * speed) * 10) * TrailblazerManager.DeltaTime;
+        var expected = ((Vector3d.Forward * speed) * 10) * TestWorld.Context.DeltaTime;
 
         agent.Position.Should().Be(expected);
     }
@@ -135,7 +135,7 @@ public class MoveLocomotionTests : IDisposable
 
         agent.Motor.TryTraversal(frameRequest, out _, out _, out _).Should().BeTrue();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         Action act = () => agent.Motor.TryTraversal(frameRequest, out _, out _, out _);
 
@@ -162,7 +162,7 @@ public class MoveLocomotionTests : IDisposable
 
         agent.Motor.TryTraversal(frameRequest, out _, out _, out _).Should().BeTrue();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         Action act = () => agent.Motor.FinalizeTraversal(
             agent.Position,
@@ -193,7 +193,7 @@ public class MoveLocomotionTests : IDisposable
 
         agent.Motor.TryTraversal(frameRequest, out _, out _, out _).Should().BeTrue();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Motor.AbortTraversalFrame();
 
         agent.Motor.TraversalInProgress.Should().BeFalse();
@@ -217,7 +217,7 @@ public class MoveLocomotionTests : IDisposable
 
         for (int i = 0; i < 100; i++) // Simulate multiple frames to test deceleration
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
             if (agent.Velocity == Vector3d.Zero)
                 break;
@@ -239,7 +239,7 @@ public class MoveLocomotionTests : IDisposable
 
         for (int i = 0; i < 20; i++) // Apply opposing force over time
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 
@@ -261,8 +261,8 @@ public class MoveLocomotionTests : IDisposable
 
         // calculate speed without slopespeed modifier
         var speed = agent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Right, TrekRate.Slow);
-        var projectedVelocity = ((speed * Vector3d.Right) * TrailblazerManager.DeltaTime)
-            * TrailblazerManager.InvDeltaTime;
+        var projectedVelocity = ((speed * Vector3d.Right) * TestWorld.Context.DeltaTime)
+            * TestWorld.Context.InvDeltaTime;
 
         agent.Motor.Handler.Move.FrameVelocity.x.Should().BeLessThan(projectedVelocity.x); // Moving sideways should project velocity down slope
     }
@@ -347,7 +347,7 @@ public class MoveLocomotionTests : IDisposable
 
         for (int i = 0; i < 10; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
 
             agent.FrameRequest.Direction = Vector3d.Forward;
             agent.FrameRequest.Rate = TrekRate.Slow;
@@ -391,7 +391,7 @@ public class MoveLocomotionTests : IDisposable
         // Simulate multiple frames
         for (int i = 0; i < 10; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.FrameRequest.Direction = Vector3d.Forward;
             agent.FrameRequest.Rate = TrekRate.Moderate;
             agent.Simulate();
@@ -420,7 +420,7 @@ public class MoveLocomotionTests : IDisposable
         // Simulate walking forward for both
         for (int i = 0; i < 5; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
 
             lowFrictionScout.FrameRequest.Direction = Vector3d.Forward;
             lowFrictionScout.FrameRequest.Rate = TrekRate.Moderate;
@@ -445,7 +445,7 @@ public class MoveLocomotionTests : IDisposable
 
         for (int i = 0; i < 5; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
 
             lowFrictionScout.FrameRequest.Direction = Vector3d.Forward;
             lowFrictionScout.FrameRequest.Rate = TrekRate.Moderate;
@@ -481,7 +481,7 @@ public class MoveLocomotionTests : IDisposable
         var initialVelocity = agent.Motor.Handler.Move.FrameVelocity;
 
         // Stop input
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         agent.Motor.Handler.Move.FrameVelocity.Magnitude.Should().BeGreaterThan(Fixed64.Zero);

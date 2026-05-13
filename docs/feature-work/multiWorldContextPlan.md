@@ -7,10 +7,9 @@
 **Goal:** Let one process host multiple independent Trailblazer navigation worlds backed by
 explicit GridForge `GridWorld` instances.
 
-**Architecture:** Introduce an explicit `TrailblazerWorldContext` as the owner of one
-`GridWorld`, its simulation clock, pathing state, transition registry, guide caches, and navigation
-coordination state. Existing static managers become temporary single-world facades over a default
-context, then shrink or disappear before alpha.
+**Architecture:** Use an explicit `TrailblazerWorldContext` as the owner of one `GridWorld`, its
+simulation clock, pathing state, transition registry, guide caches, and navigation coordination
+state. Ambient single-world managers are removed before alpha so the public model is context-only.
 
 **Tech Stack:** C# 11, `netstandard2.1`, `net8.0`, `GridForge.GridWorld`, `FixedMathSharp`,
 `SwiftCollections`, xUnit v3, FluentAssertions, BenchmarkDotNet.
@@ -19,15 +18,15 @@ context, then shrink or disappear before alpha.
 
 ## Purpose
 
-GridForge now supports explicit `GridWorld` instances instead of one process-wide static world.
-Trailblazer currently adapts to that through `TrailblazerWorldManager`, but that bridge still
-maintains one active world for the whole process. That means `PathManager.Register(world, chart)`
-does not really create independent world state; it re-points Trailblazer's static runtime at a new
-world while pathing registries, transition registries, guide caches, reachability snapshots, and
-navigation coordination remain process-wide.
+GridForge supports explicit `GridWorld` instances instead of one process-wide static world.
+Trailblazer originally adapted to that through a single active world bridge, but that bridge still
+maintained one active world for the whole process. That meant static registration APIs could not
+create independent world state; they re-pointed Trailblazer's static runtime at a new world while
+pathing registries, transition registries, guide caches, reachability snapshots, and navigation
+coordination remained process-wide.
 
-This plan defines the migration from "static Trailblazer over one active GridWorld" to "one
-Trailblazer runtime context per GridWorld."
+This plan tracks the move from "static Trailblazer over one active GridWorld" to "one Trailblazer
+runtime context per GridWorld."
 
 ## Non-Negotiable Engineering Constraints
 
@@ -45,8 +44,8 @@ support must strengthen that goal, not dilute it.
   fallback only when profiling and ownership rules prove it is better.
 - Keep request creation, guide lookup, survey expansion, steering, and motor simulation free of
   avoidable steady-state allocations.
-- Do not introduce "quick" compatibility behavior that becomes a second architecture. Compatibility
-  facades must be temporary, obvious, and tracked toward removal before alpha.
+- Do not introduce "quick" bridging behavior that becomes a second architecture. Temporary
+  scaffolding must be obvious, measured, and removed before alpha.
 - Reduce duplication by moving shared behavior into focused services or state containers, not by
   copy-pasting static-manager logic into instance-manager logic.
 - Treat developer experience as part of correctness. The public API should make the owning context
@@ -121,10 +120,9 @@ navigator.CommitFrameMotion();
 trail.LateSimulate();
 ```
 
-The context owns all mutable world-specific state. Static classes can remain temporarily as a
-single-world compatibility layer, but new multi-world work must use the context directly. This is
-the clean path because it avoids global maps keyed by `(GridWorld, key)` on hot paths, avoids hidden
-ambient-world switches, and makes lifecycle/reset semantics explicit.
+The context owns all mutable world-specific state. This is the clean path because it avoids global
+maps keyed by `(GridWorld, key)` on hot paths, avoids hidden ambient-world switches, and makes
+lifecycle/reset semantics explicit.
 
 Rejected approaches:
 
@@ -139,12 +137,11 @@ Rejected approaches:
 - A `TrailblazerWorldContext` owns exactly one active `GridWorld`.
 - A `Navigator`, path request, guide, transition registry entry, live chart registration, and
   partition belongs to exactly one `TrailblazerWorldContext`.
-- No world-bound code resolves voxels through `TrailblazerWorldManager.World` after the migration.
+- No world-bound code resolves voxels through an ambient active world.
 - Per-frame work runs only for the contexts the host explicitly simulates.
 - Resetting or disposing one context does not clear charts, caches, transitions, movement groups, or
   frame counters in another context.
-- Request cache keys do not need to carry a world id when the cache is context-local. Any temporary
-  static compatibility cache must include a context id until it is removed.
+- Request cache keys do not need to carry a world id because guide caches are context-local.
 - Authored `NavigationChart` data can be reused, but live registration state is per context.
 - Grid event handling is attached to the context's `GridWorld`; a reset event from world A resets
   only context A's pathing state.
@@ -175,16 +172,15 @@ Rejected approaches:
 - `Navigator` is bound to a context at construction or initialization and cannot change context
   while initialized.
 
-### Compatibility Surface
+### Retired Ambient Surface
 
-- `TrailblazerManager.Initialize(world)` creates and stores a default `TrailblazerWorldContext`.
-- Existing static calls such as `PathManager.Register(chart)` route to the default context while
-  migration is underway.
-- Existing static calls that accept `GridWorld world` are either removed or changed to require an
-  explicit context before alpha. `PathManager.Register(world, chart)` is especially misleading
-  today because it looks multi-world-safe while it switches global state.
-- `TrailblazerWorldManager` becomes an obsolete default-context adapter, then is deleted once source
-  and tests no longer need ambient world lookup.
+- `TrailblazerManager` and `TrailblazerWorldManager` are not part of the context-only API.
+- Host-facing registration, guide, transition, volume-rule, and lifecycle operations flow through
+  `TrailblazerWorldContext` services.
+- Static pathing, guide, transition, and volume-rule entry points are internal implementation
+  details where they remain useful for focused tests or context-owned services; production callers
+  select a context at the API boundary.
+- No public overload should look multi-world-safe while mutating ambient global state.
 
 ## File Structure Target
 
@@ -235,8 +231,8 @@ voxel indexes, request results, registry versions, or frame counters must move b
 
 Phase notes:
 
-- Phase 0 acceptance coverage lives in `MultiWorldPhase0AcceptanceTests`. The remaining future-phase
-  movement-group and navigator-reset cases were unskipped and completed in Phase 6.
+- Phase 0 acceptance coverage was merged into focused context, pathing, lifecycle, and navigation
+  suites during Phase 7 so no temporary acceptance suite remains.
 - Baselines and focused verification commands are recorded in
   `multiWorldPhase0Baseline.md`.
 
@@ -478,8 +474,7 @@ Phase 5 notes:
   coverage pins steady-state request-key allocation after adding context ownership.
 - `rg -n "TrailblazerWorldManager" src/Trailblazer/Pathing/Search` and
   `rg -n "AStarSurveyor\\.Shared|FlowFieldSurveyor\\.Shared|VolumeSurveyor\\.Shared" src/Trailblazer/Pathing/Search`
-  return no production hits. Remaining `TrailblazerWorldManager` production references are in the
-  compatibility facade and Phase 7 static-facade cleanup areas.
+  return no production hits after Phase 7.
 
 ## Phase 6 - Bind Navigation To Context
 
@@ -518,11 +513,9 @@ Phase 6 notes:
 - `NavigatorPathRequestFactory`, `GuidedVolumeExitPlanner`, guided exit handoffs, steering guide
   return/request paths, and serialized path-request rebuilds now use the owning context.
 - `NavSteering`, `NavTurning`, `NavMotor`, and context-aware locomotion timing hooks read fixed-step
-  timing from the bound context while compatibility-only construction still falls back to the
-  default facade when no world-bound operation is active.
-- `ContextBoundNavigatorTests` and the unskipped Phase 0 acceptance tests pin context-local
-  movement groups, deterministic navigator ids, guided request context ownership, and
-  context-correct reset/deregister behavior.
+  timing from the bound context and reject use when no context is bound.
+- `ContextBoundNavigatorTests` pin context-local movement groups, deterministic navigator ids,
+  guided request context ownership, and context-correct reset/deregister behavior.
 
 Exit criteria:
 
@@ -533,30 +526,44 @@ Exit criteria:
 
 ## Phase 7 - Retire The Ambient World Bridge
 
-**Status:** Not started  
+**Status:** Complete  
 **Goal:** Remove the single active world as a production dependency.
 
-- [ ] Remove production dependencies on `TrailblazerWorldManager` outside the compatibility facade.
-- [ ] Replace test fixtures that call `TrailblazerWorldManager.Setup()` with context fixtures.
-- [ ] Update benchmark fixtures to use one context per benchmark class or explicit multiple
+- [x] Remove production dependencies on `TrailblazerWorldManager`.
+- [x] Replace test fixtures that used ambient world setup with context fixtures.
+- [x] Update benchmark fixtures to use one context per benchmark class or explicit multiple
   contexts where the scenario requires it.
-- [ ] Remove or obsolete static overloads that hide context selection.
-- [ ] Update `README.md`, `docs/wiki/OVERVIEW.md`, `PATHING.MD`, `PATHMANAGER.MD`,
+- [x] Remove static overloads that hide context selection.
+- [x] Update `README.md`, `docs/wiki/OVERVIEW.md`, `PATHING.MD`, `PATHMANAGER.MD`,
   `PATHGUIDES.MD`, `TRANSITIONS.MD`, `VOLUMETRAVERSAL.MD`, and navigation docs with context-first
   examples.
-- [ ] Add a migration note from old single-world static usage to new context usage.
-- [ ] Run `rg -n "TrailblazerWorldManager" src/Trailblazer` and remove every production reference
-  except the compatibility file if it still exists.
-- [ ] Run full `Release` build and test.
-- [ ] Run benchmark preflight tests and at least one short pathing benchmark group.
-- [ ] Review `docs/feature-work/hardeningPlans.md` and either close, link, or explicitly defer any
+- [x] Present docs as the current context-only API without migration-note wording.
+- [x] Run `rg -n "TrailblazerWorldManager" src/Trailblazer` and remove every production reference.
+- [x] Run full `Release` build and test.
+- [x] Run benchmark preflight tests and at least one short pathing benchmark group.
+- [x] Review `docs/feature-work/hardeningPlans.md` and either close, link, or explicitly defer any
   out-of-scope issues recorded during the migration.
+
+Phase 7 notes:
+
+- `TrailblazerManager`, `TrailblazerWorldManager`, and the process-wide default-context bridge were
+  removed from production code.
+- Public request, finder, navigator, steering, turning, motor, volume-rule, transition, pathing, and
+  guide APIs require or flow through an explicit `TrailblazerWorldContext`.
+- The old Phase 0 compatibility acceptance suite was deleted after relevant coverage was moved into
+  focused context, lifecycle, pathing, navigation, and architecture guard suites.
+- Staged hybrid waypoint steps now carry an owning context directly, so waypoint-only stages do not
+  infer context from unrelated path segments.
+- Survey result cache entries record their owning context before release, preserving frame-based LRU
+  eviction without adding world ids to request cache keys.
+- Chart partition rebind now ignores partitions that were removed earlier in the same unload pass,
+  preventing stale pooled partitions from being rebound after their owner state has been cleared.
 
 Exit criteria:
 
 - Trailblazer supports multiple active worlds in one process without static world switching.
 - Context-first docs are the source of truth.
-- Ambient default-world APIs are either compatibility-only or removed before alpha.
+- Ambient default-world APIs are removed.
 
 ## Verification Plan
 
@@ -592,8 +599,8 @@ These are recommended defaults unless implementation uncovers a sharper constrai
 - Let `TrailblazerWorldContext` optionally own the `GridWorld`, but default to host-owned worlds.
 - Prefer context-local pools over global pools for world-owned objects. Pure scratch pools can stay
   static only when they do not retain world-specific references after release.
-- Keep the public API context-first even when default-context compatibility exists. Developer
-  experience should guide hosts toward correct multi-world ownership.
+- Keep the public API context-only. Developer experience should guide hosts toward correct
+  multi-world ownership.
 - Favor data structures that scale with the local context's active charts, grids, transitions, and
   navigators. Avoid process-wide scans and hidden global registries in runtime code.
 - Record worthwhile out-of-scope issues in `docs/feature-work/hardeningPlans.md`; do not solve them
@@ -604,14 +611,14 @@ These are recommended defaults unless implementation uncovers a sharper constrai
 | Risk | Mitigation |
 | --- | --- |
 | Large refactor touches pathing and navigation at once | Land phases independently with red isolation tests first. |
-| Static facade hides accidental default-context use | Mark compatibility APIs obsolete early and add `rg` tracking. |
+| Static internals hide accidental ambient-context use | Add architecture guards and `rg` tracking for removed bridge names. |
 | Cache key regressions add allocations | Keep caches context-local and preserve existing hash-builder patterns. |
 | Chart registration split changes overlap behavior | Add same-priority overlap tests before moving `RegistrationOrder`. |
 | Grid event routing misses resets | Instance event bridge subscribes directly to one `GridWorld` and tests reset isolation. |
 | Serialization accidentally captures context | Keep context as host binding and update serialization docs/tests. |
 | Benchmarks accidentally reuse stale worlds | Add preflight coverage for multiple contexts in one process. |
 | Context routing adds hidden hot-path overhead | Select context at API boundaries and pass direct state references through inner loops. |
-| Compatibility APIs become permanent | Mark them obsolete early and include removal in Phase 7 exit criteria. |
+| Temporary bridge APIs become permanent | Include removal in Phase 7 exit criteria and keep docs context-only. |
 | Out-of-scope issues derail migration phases | Track non-blocking issues in `hardeningPlans.md` with a validation signal. |
 
 ## Completion Definition

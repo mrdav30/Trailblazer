@@ -20,7 +20,7 @@ namespace Trailblazer.Pathing;
 /// the owning context's grid-lifecycle bridge, and external world reset is treated as a hard
 /// reset for that context's pathing state.
 /// </remarks>
-public static class TraversalTransitionRegistry
+internal static class TraversalTransitionRegistry
 {
     /// <summary>
     /// Default priority assigned to manual transition registrations.

@@ -13,8 +13,8 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
 {
     public TraversalTransitionAnchorTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
     }
@@ -22,8 +22,7 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 

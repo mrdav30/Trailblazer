@@ -2,6 +2,7 @@
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
+using System;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Trailblazer.Pathing;
@@ -28,6 +29,8 @@ public class FlowFieldGuide : IGuide
     /// When executing a hybrid route plan, the guide may need to stage multiple sub-guides for each step of the plan (e.g. flow field for one segment, A* waypoints for another).
     /// </summary>
     private HybridRoutePlan? _stagedPlan;
+
+    private TrailblazerWorldContext? _stagedContext;
 
     /// <summary>
     /// The index of the currently active step within the staged plan. 
@@ -84,6 +87,7 @@ public class FlowFieldGuide : IGuide
         ReleaseStagedResources(dispose: false);
         FlowMap = null;
         _stagedPlan = routePlan;
+        _stagedContext = ResolveStagedContext(routePlan);
         _stagedStepIndex = 0;
         _activeStageGuideStepIndex = -1;
         return true;
@@ -170,14 +174,16 @@ public class FlowFieldGuide : IGuide
     {
         if (_activeStageGuide != null)
         {
-            (_activeStageGuideContext?.Guides ?? PathRequestContextResolver.DefaultContext.Guides)
-                .ReturnGuide(_activeStageGuide, dispose);
+            TrailblazerWorldContext context = _activeStageGuideContext
+                ?? throw new InvalidOperationException("Active stage guide is missing its TrailblazerWorldContext.");
+            context.Guides.ReturnGuide(_activeStageGuide, dispose);
             _activeStageGuide = null;
         }
 
         _activeStageGuideContext = null;
         _activeStageGuideStepIndex = -1;
         _stagedPlan = null;
+        _stagedContext = null;
         _stagedStepIndex = 0;
     }
 
@@ -338,8 +344,9 @@ public class FlowFieldGuide : IGuide
         if (_activeStageGuide == null)
             return;
 
-        (_activeStageGuideContext?.Guides ?? PathRequestContextResolver.DefaultContext.Guides)
-            .ReturnGuide(_activeStageGuide, dispose);
+        TrailblazerWorldContext context = _activeStageGuideContext
+            ?? throw new InvalidOperationException("Active stage guide is missing its TrailblazerWorldContext.");
+        context.Guides.ReturnGuide(_activeStageGuide, dispose);
         _activeStageGuide = null;
         _activeStageGuideContext = null;
         _activeStageGuideStepIndex = -1;
@@ -384,24 +391,37 @@ public class FlowFieldGuide : IGuide
     /// <param name="origin">The current position of the agent.</param>
     /// <param name="currentStep">The current step in the staged plan.</param>
     /// <returns>True if the target for the current stage has been reached; otherwise, false.</returns>
-    private static bool IsStageTargetReached(Vector3d origin, HybridRouteStep currentStep)
+    private bool IsStageTargetReached(Vector3d origin, HybridRouteStep currentStep)
     {
         // HybridRouteStep.Kind is factory-assigned to Waypoint or PathSegment only.
         Vector3d target = currentStep.Kind == HybridRouteStepKind.Waypoint
             ? currentStep.WaypointPosition
             : currentStep.SegmentRequest.TargetPosition;
 
-        TrailblazerWorldContext context = currentStep.Kind == HybridRouteStepKind.PathSegment
-            ? currentStep.SegmentRequest.Context
-            : PathRequestContextResolver.DefaultContext;
+        TrailblazerWorldContext context = currentStep.Context
+            ?? _stagedContext
+            ?? throw new InvalidOperationException("Staged flow guide is missing its TrailblazerWorldContext.");
         Fixed64 completionDistance = context.VoxelSize * Fixed64.Half;
         return (target - origin).SqrMagnitude <= completionDistance * completionDistance;
+    }
+
+    private static TrailblazerWorldContext ResolveStagedContext(HybridRoutePlan routePlan)
+    {
+        for (int i = 0; i < routePlan.Steps.Length; i++)
+        {
+            HybridRouteStep? step = routePlan.Steps[i];
+            if (step != null)
+                return step.Context;
+        }
+
+        throw new InvalidOperationException("Staged flow guide requires at least one context-bound path segment.");
     }
 
     internal void ResetForReuse()
     {
         FlowMap = null;
         _stagedPlan = null;
+        _stagedContext = null;
         _stagedStepIndex = 0;
         _activeStageGuide = null;
         _activeStageGuideContext = null;

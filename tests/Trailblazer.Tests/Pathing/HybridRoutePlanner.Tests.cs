@@ -12,8 +12,8 @@ public sealed class HybridRoutePlannerTests : IDisposable
 {
     public HybridRoutePlannerTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)),
             out _);
     }
@@ -22,8 +22,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         PathManager.Reset();
         TraversalTransitionRegistry.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -35,8 +34,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterLineChart("HybridPlannerAStar", Vector3d.Zero, 3);
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             out HybridPathRequest? hybridRequest).Should().BeTrue();
@@ -58,8 +56,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterLineChart("HybridPlannerFF", Vector3d.Zero, 3);
 
-        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
@@ -87,8 +84,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(5, 0, 0),
             Fixed64.One,
             out HybridPathRequest? hybridRequest).Should().BeTrue();
@@ -130,8 +126,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             out HybridPathRequest? hybridRequest).Should().BeTrue();
@@ -181,8 +176,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(4, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             out HybridPathRequest? hybridRequest).Should().BeTrue();
@@ -249,8 +243,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(6, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(6, 0, 0),
             Fixed64.One,
             out HybridPathRequest? hybridRequest).Should().BeTrue();
@@ -270,7 +263,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_ShouldUseLocalDestinationGridQuery_WhenSourceAndDestinationAreInDifferentGrids()
     {
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(20, -8, -8), new Vector3d(16, 16, 16)),
             out _).Should().BeTrue();
 
@@ -284,8 +277,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(20, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(20, 0, 0),
             Fixed64.One,
             out HybridPathRequest? hybridRequest).Should().BeTrue();
@@ -302,16 +294,14 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterAuthoredClimbRoute("HybridPlannerClimbChain");
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(3, 0, 1),
             Fixed64.One,
             HeuristicMethod.Manhattan,
             allowUnwalkableEndpoints: true));
         request.MaxClimbHeight = Fixed64.Zero;
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(3, 0, 1),
             Fixed64.One,
             out HybridPathRequest? hybridRequest,
@@ -345,8 +335,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterLineChart("HybridPlannerFFZero", Vector3d.Zero, 3);
 
-        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             Vector3d.Zero,
             Fixed64.One,
             allowUnwalkableEndpoints: true));
@@ -366,8 +355,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterLineChart("HybridPlannerAStarInvalid", Vector3d.Zero, 2);
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             out HybridPathRequest? request).Should().BeTrue();
@@ -391,8 +379,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterLineChart("HybridPlannerFlowInvalid", Vector3d.Zero, 2);
 
-        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One));
 
@@ -417,8 +404,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     {
         RegisterLineChart("HybridPlannerVolumeInvalid", Vector3d.Zero, 2);
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             out HybridPathRequest? request).Should().BeTrue();
@@ -444,8 +430,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
         RegisterLineChart("HybridPlannerVolumeZeroSolid", Vector3d.Zero, 2);
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeZeroGas");
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             out HybridPathRequest? request).Should().BeTrue();
@@ -473,8 +458,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasA");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(6, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasB");
 
-        HybridPathRequest.TryCreate(
-            Vector3d.Zero,
+        HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             out HybridPathRequest? request).Should().BeTrue();

@@ -12,7 +12,7 @@ public class JumpLocomotionTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -47,7 +47,7 @@ public class JumpLocomotionTests : IDisposable
             startingMedium: TraversalMedium.Gas);
 
         Vector3d expectedVelocity = Vector3d.Down;
-        expectedVelocity.y += -scout.Motor.Handler.Forces.GravityForce * TrailblazerManager.DeltaTime;
+        expectedVelocity.y += -scout.Motor.Handler.Forces.GravityForce * TestWorld.Context.DeltaTime;
 
         // Act
         scout.FrameRequest.IsRequestingJump = true;
@@ -67,7 +67,7 @@ public class JumpLocomotionTests : IDisposable
         // Act - First Jump
         scout.FrameRequest.IsRequestingJump = true;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         Fixed64 expectedJumpFrame = jump.JumpStartTime;
@@ -75,7 +75,7 @@ public class JumpLocomotionTests : IDisposable
         // Attempt to jump again immediately
         scout.FrameRequest.IsRequestingJump = true;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Assert
@@ -95,18 +95,18 @@ public class JumpLocomotionTests : IDisposable
         // Act - First Jump
         scout.FrameRequest.IsRequestingJump = true;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Release jump after 2 frames
         for (int i = 0; i < 29; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
         }
 
         // Act - Simulate next frame
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Assert
@@ -135,7 +135,7 @@ public class JumpLocomotionTests : IDisposable
         var scout = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
         // Act - Initial Jump
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
@@ -144,13 +144,13 @@ public class JumpLocomotionTests : IDisposable
         // Continue holding jump for 3 frames
         for (int i = 0; i < 3; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
         }
 
         // Assert
-        var expected = previousVelocity.y - (scout.Motor.Handler.Forces.GravityForce * TrailblazerManager.DeltaTime * 3);
+        var expected = previousVelocity.y - (scout.Motor.Handler.Forces.GravityForce * TestWorld.Context.DeltaTime * 3);
         scout.Motor.Handler.Move.FrameVelocity.y.Should().BeGreaterThan(expected);
     }
 
@@ -165,7 +165,7 @@ public class JumpLocomotionTests : IDisposable
 
         for (int i = 0; i < 13; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
         }
@@ -185,7 +185,7 @@ public class JumpLocomotionTests : IDisposable
 
         for (int i = 0; i < 13; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
         }
@@ -246,7 +246,7 @@ public class JumpLocomotionTests : IDisposable
         // Simulate entire jump arc until landing
         for (int i = 0; i < 30; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
             if (scout.Position.y <= Fixed64.Zero) // If we've landed
                 break;
@@ -278,13 +278,13 @@ public class JumpLocomotionTests : IDisposable
 
         // Start jump
         scout.FrameRequest.IsRequestingJump = true;
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Continue holding jump and track peak height until we land
         while (!scout.Motor.IsOnSolid)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
 
@@ -302,13 +302,13 @@ public class JumpLocomotionTests : IDisposable
 
         // Start jump
         scout.FrameRequest.IsRequestingJump = true;
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Tap release
         for (int i = 0; i < 5; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
         }
 
@@ -329,7 +329,7 @@ public class JumpLocomotionTests : IDisposable
         jump.JumpCount.Should().Be(1);
 
         // Simulate midair
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Second jump in air
@@ -351,7 +351,7 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Second jump (air)
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
@@ -360,7 +360,7 @@ public class JumpLocomotionTests : IDisposable
         var currentVelocity = scout.Velocity;
 
         // Attempt third jump
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
@@ -381,14 +381,14 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Second jump
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
         // Land
         for (int i = 0; i < 30; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
             if (scout.Position.y <= Fixed64.Zero) break;
         }
@@ -414,7 +414,7 @@ public class JumpLocomotionTests : IDisposable
         var velocityAfterFirstJump = scout.Motor.Handler.Move.FrameVelocity.y;
 
         // Midair frame
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Second jump
@@ -442,7 +442,7 @@ public class JumpLocomotionTests : IDisposable
         // Simulate until fall state is entered
         while (!scout.Motor.Handler.Fall.IsFalling)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
         }
 
@@ -503,11 +503,11 @@ public class JumpLocomotionTests : IDisposable
         jump.CooldownTime = (Fixed64)100; // very long cooldown so it never expires
 
         scout.FrameRequest.IsRequestingJump = true;
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // Let one frame pass so UpdateCooldown runs, but timer < CooldownTime
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         // IsCoolingDown should still be true (the false branch of CooldownTimer >= CooldownTime)

@@ -13,8 +13,8 @@ public sealed class PathRequestCoverageTests : IDisposable
 {
     public PathRequestCoverageTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
 
@@ -26,8 +26,7 @@ public sealed class PathRequestCoverageTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -73,8 +72,7 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void VolumePathRequest_ShouldResetSearchRange_AndTrackVersionedHash()
     {
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            new Vector3d(0, 0, 2),
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(2, 0, 2),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -100,8 +98,7 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void VolumePathRequest_ShouldHandleFailedSetters_AndRevalidateUnitSizeChanges()
     {
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            new Vector3d(0, 0, 2),
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(2, 0, 2),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -123,8 +120,7 @@ public sealed class PathRequestCoverageTests : IDisposable
 
         Vector3d boundaryPoint = new(-4, -4, -4);
         PathTestFactory.RegisterGeneratedVolumePoint(boundaryPoint, TraversalMedium.Gas, "VolumeUnitSizeSingle");
-        VolumePathRequest sizeSensitive = VolumePathRequest.Create(
-            boundaryPoint,
+        VolumePathRequest sizeSensitive = VolumePathRequest.Create(TestWorld.Context, boundaryPoint,
             boundaryPoint,
             Fixed64.One,
             medium: TraversalMedium.Gas)
@@ -138,20 +134,17 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void VolumePathRequest_Equals_ShouldSupportObjectAndTypedOverloads()
     {
-        VolumePathRequest a = VolumePathRequest.Create(
-            new Vector3d(0, 0, 2),
+        VolumePathRequest a = VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(2, 0, 2),
             Fixed64.One,
             medium: TraversalMedium.Gas)
             ?? throw new InvalidOperationException("Expected valid Volume request.");
-        VolumePathRequest b = VolumePathRequest.Create(
-            new Vector3d(0, 0, 2),
+        VolumePathRequest b = VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
             new Vector3d(2, 0, 2),
             Fixed64.One,
             medium: TraversalMedium.Gas)
             ?? throw new InvalidOperationException("Expected valid Volume request.");
-        VolumePathRequest c = VolumePathRequest.Create(
-            new Vector3d(1, 0, 2),
+        VolumePathRequest c = VolumePathRequest.Create(TestWorld.Context, new Vector3d(1, 0, 2),
             new Vector3d(2, 0, 2),
             Fixed64.One,
             medium: TraversalMedium.Gas)
@@ -169,8 +162,7 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void FlowFieldPathRequest_ShouldCoverFactoryHelpers_Equality_AndInvalidRequests()
     {
-        FlowFieldPathRequest.TryCreate(
-            Vector3d.Zero,
+        FlowFieldPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             out FlowFieldPathRequest? request).Should().BeTrue();
 
@@ -182,14 +174,12 @@ public sealed class PathRequestCoverageTests : IDisposable
         actualRequest.Equals(missingRequest).Should().BeFalse();
         actualRequest.Equals(unrelatedObject).Should().BeFalse();
 
-        FlowFieldPathRequest.TryCreate(
-            new Vector3d(-20, 0, 0),
+        FlowFieldPathRequest.TryCreate(TestWorld.Context, new Vector3d(-20, 0, 0),
             new Vector3d(-18, 0, 0),
             out FlowFieldPathRequest? invalidDefault).Should().BeFalse();
         invalidDefault.Should().BeNull();
 
-        FlowFieldPathRequest.TryCreateWithSize(
-            new Vector3d(-20, 0, 0),
+        FlowFieldPathRequest.TryCreateWithSize(TestWorld.Context, new Vector3d(-20, 0, 0),
             new Vector3d(-18, 0, 0),
             Fixed64.Two,
             out FlowFieldPathRequest? invalidSized).Should().BeFalse();
@@ -199,8 +189,8 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void HybridPathRequest_ShouldCreateFromChartRequests_AndClearRouteWhenInvalidated()
     {
-        AStarPathRequest aStar = TestRequire.NotNull(AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
-        FlowFieldPathRequest flowField = TestRequire.NotNull(FlowFieldPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+        AStarPathRequest aStar = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+        FlowFieldPathRequest flowField = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
 
         HybridPathRequest.CreateFromAStar(null!).Should().BeNull();
         HybridPathRequest.CreateFromFlowField(null!).Should().BeNull();
@@ -226,25 +216,21 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void HybridPathRequest_ShouldReturnNull_WhenNoRouteExists_AndCoverEqualityAndSetterFailures()
     {
-        HybridPathRequest.Create(
-            Vector3d.Zero,
+        HybridPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One).Should().BeNull();
 
-        AStarPathRequest disconnected = AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest disconnected = AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One)
             ?? throw new InvalidOperationException("Expected endpoints to resolve for disconnected AStar request.");
         HybridPathRequest.CreateFromAStar(disconnected).Should().BeNull();
 
-        HybridPathRequest hybrid = HybridPathRequest.Create(
-            Vector3d.Zero,
+        HybridPathRequest hybrid = HybridPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One)
             ?? throw new InvalidOperationException("Expected valid Hybrid request.");
-        HybridPathRequest other = HybridPathRequest.Create(
-            Vector3d.Zero,
+        HybridPathRequest other = HybridPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One)
             ?? throw new InvalidOperationException("Expected valid Hybrid request.");
@@ -273,8 +259,7 @@ public sealed class PathRequestCoverageTests : IDisposable
         };
         PathTestFactory.RegisterFromData("HybridUnitSizeRoomy", roomyChart, new Vector3d(-3, 0, -3));
 
-        HybridPathRequest roomyHybrid = HybridPathRequest.Create(
-            new Vector3d(-3, 0, -3),
+        HybridPathRequest roomyHybrid = HybridPathRequest.Create(TestWorld.Context, new Vector3d(-3, 0, -3),
             new Vector3d(-1, 0, -1),
             Fixed64.One)
             ?? throw new InvalidOperationException("Expected roomy Hybrid request.");
@@ -287,8 +272,7 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void HybridPathRequest_ShouldReportZeroDisplacement_ForSinglePointRoute()
     {
-        HybridPathRequest.TryCreate(
-            new Vector3d(4, 0, 0),
+        HybridPathRequest.TryCreate(TestWorld.Context, new Vector3d(4, 0, 0),
             new Vector3d(4, 0, 0),
             Fixed64.One,
             out HybridPathRequest? request).Should().BeTrue();
@@ -312,8 +296,7 @@ public sealed class PathRequestCoverageTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(7, 0, 0)),
             pathCostModifier: 3)).Should().BeTrue();
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            new Vector3d(5, 0, 0),
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(5, 0, 0),
             new Vector3d(7, 0, 0),
             Fixed64.One,
             allowTraversalTransitions: true));
@@ -334,8 +317,7 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void HybridPathRequest_TryCreate_ShouldFail_WhenEndpointsCannotResolve()
     {
-        HybridPathRequest.TryCreate(
-            new Vector3d(-20, 0, 0),
+        HybridPathRequest.TryCreate(TestWorld.Context, new Vector3d(-20, 0, 0),
             new Vector3d(-18, 0, 0),
             Fixed64.One,
             out HybridPathRequest? request).Should().BeFalse();
@@ -362,11 +344,11 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void AStarPathRequest_Equals_ShouldSupportObjectAndTypedOverloads()
     {
-        AStarPathRequest a = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One)
+        AStarPathRequest a = AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One)
             ?? throw new InvalidOperationException("Expected valid AStar request.");
-        AStarPathRequest b = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One)
+        AStarPathRequest b = AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One)
             ?? throw new InvalidOperationException("Expected valid AStar request.");
-        AStarPathRequest c = AStarPathRequest.Create(Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One)
+        AStarPathRequest c = AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(1, 0, 0), Fixed64.One)
             ?? throw new InvalidOperationException("Expected valid AStar request.");
 
         a.Equals((object)b).Should().BeTrue();
@@ -398,6 +380,11 @@ public sealed class PathRequestCoverageTests : IDisposable
 
     private sealed class TestPathRequest : PathRequest
     {
+        public TestPathRequest()
+        {
+            Context = TestWorld.Context;
+        }
+
         public override int GetHashCode() =>
             (StartNode?.SpawnToken ?? 0,
                 EndNode?.SpawnToken ?? 0,

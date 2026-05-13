@@ -13,16 +13,15 @@ public class TraversalTransitionRegistryTests : IDisposable
 {
     public TraversalTransitionRegistryTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
+        TestWorld.World.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -97,7 +96,7 @@ public class TraversalTransitionRegistryTests : IDisposable
         Voxel destinationVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
 
         Vector3d pointOverride = sourceVoxel.WorldPosition + new Vector3d(
-            TrailblazerWorldManager.VoxelSize / 4,
+            TestWorld.Context.VoxelSize / 4,
             Fixed64.Zero,
             Fixed64.Zero);
         Voxel overrideVoxel = TestRequire.VoxelAt(pointOverride);
@@ -117,7 +116,7 @@ public class TraversalTransitionRegistryTests : IDisposable
 
         Vector3d alternateQueryPoint = sourceVoxel.WorldPosition + new Vector3d(
             Fixed64.Zero,
-            TrailblazerWorldManager.VoxelSize / 4,
+            TestWorld.Context.VoxelSize / 4,
             Fixed64.Zero);
 
         TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(alternateQueryPoint);
@@ -213,7 +212,7 @@ public class TraversalTransitionRegistryTests : IDisposable
         Voxel sourceVoxel = TestRequire.VoxelAt(Vector3d.Zero);
 
         Vector3d pointOverride = sourceVoxel.WorldPosition + new Vector3d(
-            TrailblazerWorldManager.VoxelSize / 4,
+            TestWorld.Context.VoxelSize / 4,
             Fixed64.Zero,
             Fixed64.Zero);
 
@@ -244,7 +243,7 @@ public class TraversalTransitionRegistryTests : IDisposable
     public void Register_ShouldRejectTransition_WhenDestinationGridIsRemovedAfterAnchorCreation()
     {
         PathTestFactory.RegisterSingleWalkablePoint("RegistryRemovedGridSource", Vector3d.Zero);
-        Assert.True(TrailblazerWorldManager.TryAddGrid(
+        Assert.True(TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(14, 4, 4)),
             out ushort removedGridIndex));
         PathTestFactory.RegisterSingleWalkablePoint("RegistryRemovedGridDestination", new Vector3d(10, 0, 0));
@@ -255,7 +254,7 @@ public class TraversalTransitionRegistryTests : IDisposable
             source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(10, 0, 0)));
 
-        Assert.True(TrailblazerWorldManager.TryRemoveGrid(removedGridIndex));
+        Assert.True(TestWorld.World.TryRemoveGrid(removedGridIndex));
         Assert.False(TraversalTransitionRegistry.Register(transition));
         Assert.False(TraversalTransitionRegistry.IsRegistered("removed-grid-destination"));
     }

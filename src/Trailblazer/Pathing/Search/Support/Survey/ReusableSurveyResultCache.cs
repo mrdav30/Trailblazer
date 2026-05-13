@@ -62,6 +62,7 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
         {
             if (_cache.TryGetValue(key, out result) && result.HasPath)
             {
+                result.Context = request.Context;
                 CheckoutCachedResult(result);
                 return true;
             }
@@ -78,6 +79,7 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
             result = create();
             if (result.HasPath)
             {
+                result.Context = request.Context;
                 _lock.EnterWriteLock();
                 try
                 {
@@ -185,6 +187,7 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
         {
             if (_cache.TryGetValue(key, out result) && result.HasPath)
             {
+                result.Context = request.Context;
                 CheckoutCachedResult(result);
                 return true;
             }
@@ -205,6 +208,9 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
     internal bool TrySeed(T result, bool checkout)
     {
         if (result == null || !result.HasPath || result.RequestHashKey < 0)
+            return false;
+
+        if (!PathManager.TryGetActiveState(out PathingWorldState? state))
             return false;
 
         int key = result.RequestHashKey;
@@ -234,6 +240,8 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
                 result.Checkout();
                 CountInUse++;
             }
+
+            result.Context = state!.Context;
 
             AddCachedResult(key, result);
             return true;

@@ -36,17 +36,6 @@ public class AlternativeVoxelFinder
     private int _layer;
 
     /// <summary>
-    /// Configures the fallback search around the given world-space query point.
-    /// </summary>
-    /// <param name="worldPos">The position whose surrounding layer should be searched.</param>
-    /// <param name="anchorVoxel">
-    /// The containing voxel used to derive deterministic XZ search bias from the query's local position.
-    /// </param>
-    /// <param name="maxTestDistance">The maximum XZ ring radius to search.</param>
-    public void SetQuery(Vector3d worldPos, Voxel anchorVoxel, int maxTestDistance) =>
-        SetQuery(PathRequestContextResolver.DefaultContext, worldPos, anchorVoxel, maxTestDistance);
-
-    /// <summary>
     /// Configures the fallback search around the given world-space query point for one explicit context.
     /// </summary>
     public void SetQuery(

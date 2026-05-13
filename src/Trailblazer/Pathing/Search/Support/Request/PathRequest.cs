@@ -1,5 +1,6 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
+using System;
 
 namespace Trailblazer.Pathing;
 
@@ -20,7 +21,7 @@ public abstract class PathRequest : IPathRequest
     /// <inheritdoc/>
     public TrailblazerWorldContext Context
     {
-        get => _context ?? PathRequestContextResolver.DefaultContext;
+        get => _context ?? throw new InvalidOperationException("Path request is not bound to a TrailblazerWorldContext.");
         protected set => _context = value;
     }
 

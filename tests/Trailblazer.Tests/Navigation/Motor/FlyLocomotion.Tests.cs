@@ -13,7 +13,7 @@ public class FlyLocomotionTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -28,7 +28,7 @@ public class FlyLocomotionTests : IDisposable
 
         fly.GravityCompensation = Fixed64.One;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.IsRequestingFlight = true;
         agent.Simulate();
 
@@ -47,14 +47,14 @@ public class FlyLocomotionTests : IDisposable
 
         fly.GravityCompensation = Fixed64.Half;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.IsRequestingFlight = true;
         agent.FrameRequest.Rate = TrekRate.Fast;
         agent.Simulate();
 
         Vector3d expectedVelocity = new(
             Fixed64.Zero,
-            -(agent.Motor.Handler.Forces.GravityForce * TrailblazerManager.DeltaTime * Fixed64.Half),
+            -(agent.Motor.Handler.Forces.GravityForce * TestWorld.Context.DeltaTime * Fixed64.Half),
             Fixed64.Zero);
 
         agent.Motor.Handler.Move.FrameVelocity.Should().BeApproximately(expectedVelocity, Fixed64.Epsilon);
@@ -69,7 +69,7 @@ public class FlyLocomotionTests : IDisposable
         var fly = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fly);
         var fall = TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Fall);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Down;
         agent.FrameRequest.Rate = TrekRate.Fast;
         agent.FrameRequest.IsRequestingFlight = true;
@@ -91,14 +91,14 @@ public class FlyLocomotionTests : IDisposable
 
         fly.GravityCompensation = Fixed64.One;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.IsRequestingFlight = true;
         agent.Simulate();
 
         fly.IsFlying.Should().BeTrue();
         fall.IsFalling.Should().BeFalse();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         fly.IsFlying.Should().BeFalse();

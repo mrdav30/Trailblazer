@@ -12,7 +12,7 @@ public class SlideLocomotionTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -92,7 +92,7 @@ public class SlideLocomotionTests : IDisposable
         // No movement input
         for (int i = 0; i < 3; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
         }
 
@@ -122,7 +122,7 @@ public class SlideLocomotionTests : IDisposable
         // Simulate several frames to allow friction to take effect
         for (int i = 0; i < 3; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Motor.TryTraversal(request, out _, out _, out _);
             scout.Motor.FinalizeTraversal(scout.Position, scout.LastPosition, scout.Rotation, scout.FrameCondition, Vector3d.Zero);
 
@@ -147,7 +147,7 @@ public class SlideLocomotionTests : IDisposable
 
         for (int i = 0; i < 5; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
 
             lowFrictionScout.Simulate();
             highFrictionScout.Simulate();
@@ -180,7 +180,7 @@ public class SlideLocomotionTests : IDisposable
         // Simulate sliding for a few frames
         for (int i = 0; i < 3; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
         }
 
@@ -197,7 +197,7 @@ public class SlideLocomotionTests : IDisposable
 
         for (int i = 0; i < 3; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
         }
 
@@ -219,7 +219,7 @@ public class SlideLocomotionTests : IDisposable
 
         for (int i = 0; i < 3; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.FrameRequest.Direction = Vector3d.Right;
             scout.FrameRequest.Rate = TrekRate.Slow;
             scout.Simulate();
@@ -250,14 +250,14 @@ public class SlideLocomotionTests : IDisposable
 
         for (int i = 0; i < 32; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
             if (scout.Motor.IsOnSolid)
                 break;
         }
 
         // simulate 1 more frame to capture grounded slope
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         scout.Simulate();
 
         scout.Motor.IsOnSolid.Should().BeTrue();
@@ -278,7 +278,7 @@ public class SlideLocomotionTests : IDisposable
 
         for (int i = 0; i < 3; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             scout.Simulate();
         }
 

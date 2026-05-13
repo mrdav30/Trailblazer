@@ -86,18 +86,6 @@ internal sealed class GuidedVolumeExitHandoff : IRecordable
         }
     }
 
-    public bool TryCreateFollowupRequest(
-        Vector3d currentPosition,
-        Fixed64 unitSize,
-        out IPathRequest? request)
-    {
-        return TryCreateFollowupRequest(
-            Context ?? PathRequestContextResolver.DefaultContext,
-            currentPosition,
-            unitSize,
-            out request);
-    }
-
     public void RecordData(IChronicler chronicler)
     {
         RecordValues.Look(chronicler, ref TransitionId, "TransitionId", null);

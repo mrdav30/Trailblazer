@@ -50,7 +50,7 @@ public abstract class Navigator : INavigate, IRecordable
     protected Fixed64 _speed;
 
     /// <inheritdoc cref="Acceleration"/>
-    protected Vector3d _acceleration;   
+    protected Vector3d _acceleration;
 
     /// <inheritdoc cref="Size"/>
     protected Fixed64 _size = Fixed64.One;
@@ -696,9 +696,8 @@ public abstract class Navigator : INavigate, IRecordable
             return true;
         }
 
-        // Match the legacy controlled-movement behavior: lock-on strafing/backpedaling
-        // keeps the current facing unless the host explicitly supplies a facing override
-        // or the request is treated as sprinting.
+        // Lock-on strafing/backpedaling keeps the current facing unless the host
+        // explicitly supplies a facing override or the request is treated as sprinting.
         if (!IsGuideded
             && IsLockedOn
             && request.Rate != TrekRate.Fast)
@@ -1022,25 +1021,17 @@ public abstract class Navigator : INavigate, IRecordable
     /// <remarks>Override this method to customize GUID generation logic if a different strategy is required by derived classes.</remarks>
     /// <returns>A new <see cref="Guid"/> value that is guaranteed to be unique across space and time.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    protected virtual Guid GenerateGUID() => NavigatorGlobalIdAllocator.Create(RequireContext());
-
+    protected virtual Guid GenerateGUID()
+    {
+        TrailblazerWorldContext context = RequireContext();
+        return context.Navigation.CreateNavigatorId();
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private TrailblazerWorldContext EnsureContextForSetup()
     {
         if (_context != null)
             return RequireContext();
-
-        if (TrailblazerManager.HasDefaultContext)
-        {
-            BindContext(TrailblazerManager.DefaultContext);
-            return _context!;
-        }
-
-        if (TrailblazerWorldManager.IsActive)
-        {
-            TrailblazerManager.Initialize(TrailblazerWorldManager.World);
-            BindContext(TrailblazerManager.DefaultContext);
-            return _context!;
-        }
 
         throw new InvalidOperationException(
             "Navigator requires a TrailblazerWorldContext before setup. Pass a context to the constructor, " +
@@ -1060,6 +1051,7 @@ public abstract class Navigator : INavigate, IRecordable
         return _context;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void PrepareGuidedIntentState()
     {
         if (!IsGuideded)

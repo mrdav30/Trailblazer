@@ -21,8 +21,7 @@ public sealed class ContextBoundNavigatorTests : IDisposable
     {
         PathManager.Reset();
         TraversalTransitionRegistry.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -73,7 +72,7 @@ public sealed class ContextBoundNavigatorTests : IDisposable
     }
 
     [Fact]
-    public void Setup_WithoutContextOrDefaultContext_ShouldThrow()
+    public void Setup_WithoutContext_ShouldThrow()
     {
         var navigator = new TestNavigator();
 
@@ -84,33 +83,26 @@ public sealed class ContextBoundNavigatorTests : IDisposable
     }
 
     [Fact]
-    public void Reset_ShouldDeregisterFromBoundContextWorld_WhenAmbientDefaultChanges()
+    public void Reset_ShouldDeregisterFromBoundContextWorld()
     {
         using TrailblazerWorldContext contextA = CreateContextWithGrid();
-        using TrailblazerWorldContext contextB = CreateContextWithGrid();
-        TrailblazerManager.Initialize(contextB.World);
 
         var navigator = new TestNavigator(contextA);
         navigator.Setup(Vector3d.Zero);
         navigator.Initialize(new TrekCondition());
 
         ScanNavigatorCount(contextA, Vector3d.Zero).Should().Be(1);
-        ScanNavigatorCount(contextB, Vector3d.Zero).Should().Be(0);
 
         navigator.Reset();
 
         ScanNavigatorCount(contextA, Vector3d.Zero).Should().Be(0);
-        ScanNavigatorCount(contextB, Vector3d.Zero).Should().Be(0);
     }
 
     [Fact]
     public void ApplyGuidedTrekRequest_ShouldCreateRequestBoundToNavigatorContext()
     {
         using TrailblazerWorldContext contextA = CreateContextWithGrid();
-        using TrailblazerWorldContext contextB = CreateContextWithGrid();
         RegisterSolidLine(contextA, "ContextA-GuidedNavigator", Vector3d.Zero, 3);
-        RegisterSolidLine(contextB, "ContextB-GuidedNavigator", new Vector3d(10, 0, 0), 3);
-        TrailblazerManager.Initialize(contextB.World);
 
         var navigator = new TestNavigator(contextA);
         navigator.Setup(Vector3d.Zero, size: Fixed64.One);

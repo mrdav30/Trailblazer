@@ -8,10 +8,10 @@ using System.Diagnostics.CodeAnalysis;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Provides default-context access to pooled and reusable IGuide instances for the built-in pathing strategies.
+/// Provides context-scoped access to pooled and reusable IGuide instances for the built-in pathing strategies.
 /// Handles guide request routing, instantiation, and lifecycle management.
 /// </summary>
-public static class PathGuideFactory
+internal static class PathGuideFactory
 {
     /// <summary>
     /// The number of frames after which unused guides are considered stale and eligible for eviction from the pool.
@@ -418,7 +418,7 @@ public static class PathGuideFactory
     internal static bool TrySeedHybridRoutePlanCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
         var routePlan = new HybridRoutePlan(
-            new[] { HybridRouteStep.Waypoint(Vector3d.Zero) },
+            new[] { HybridRouteStep.Waypoint(PathManager.ActiveState.Context, Vector3d.Zero) },
             Array.Empty<TraversalTransition>(),
             totalPathCost: 0);
 

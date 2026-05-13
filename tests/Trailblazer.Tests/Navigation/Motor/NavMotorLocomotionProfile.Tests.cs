@@ -12,7 +12,7 @@ public sealed class NavMotorLocomotionProfileTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 

@@ -12,8 +12,8 @@ public sealed class TraversalValueObjectTests : IDisposable
 {
     public TraversalValueObjectTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
     }
@@ -21,8 +21,7 @@ public sealed class TraversalValueObjectTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -136,7 +135,7 @@ public sealed class TraversalValueObjectTests : IDisposable
     {
         HybridRouteStep[] steps = new[]
         {
-            HybridRouteStep.Waypoint(new Vector3d(1, 0, 0), additionalCost: 3)
+            HybridRouteStep.Waypoint(TestWorld.Context, new Vector3d(1, 0, 0), additionalCost: 3)
         };
         TraversalTransition[] transitions = new[]
         {

@@ -67,8 +67,7 @@ Important overlap rule:
 ## 3. `VolumeMediumRules`
 
 `TrailblazerWorldContext.VolumeRules` is the context-owned supplemental configuration point for
-constrained raw-volume traversal. `VolumeMediumRules` remains as the single default-context
-compatibility facade.
+constrained raw-volume traversal.
 
 Its public surface is:
 
@@ -141,13 +140,11 @@ Use `SetGasVoxelRule(...)` or `SetLiquidVoxelRule(...)` when:
 Examples:
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 context.VolumeRules.SetGasVoxelPartition<MyGasVolumePartition>();
 context.VolumeRules.SetLiquidVoxelPartition<MyLiquidVolumePartition>();
 ```
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 context.VolumeRules.SetGasVoxelRule(voxel =>
     voxel != null
     && voxel.HasPartition<MyGasVolumePartition>());
@@ -329,8 +326,8 @@ Use `TraversalMedium.Gas` when movement should stay chart-optional and 3D, but s
 - Charts can author liquid or gas volume for you.
 - `TraversalMedium.Gas` and `TraversalMedium.Liquid` still respect blockers and clearance.
 - `TraversalMedium.Gas` and `TraversalMedium.Liquid` fail until valid authored or host-configured gas or liquid membership exists.
-- `VolumeMediumRules` is a default-context compatibility facade; use `context.VolumeRules` for multi-world hosts.
-- `PathManager.Reset()` clears default-context host volume rules and authored volume partitions.
+- Use `context.VolumeRules` for host-defined gas and liquid membership.
+- `context.Pathing.Reset()` clears host volume rules and authored volume partitions for that world.
 - Volume traversal does not require charts, but it still depends on real voxels existing.
 - `allowUnwalkableEndpoints` only relaxes endpoints; it does not make the whole route ignore blocked voxels.
 

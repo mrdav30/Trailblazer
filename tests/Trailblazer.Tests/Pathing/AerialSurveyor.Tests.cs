@@ -14,16 +14,15 @@ public class AerialSurveyorTests : IDisposable
 {
     public AerialSurveyorTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
+        TestWorld.World.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -38,8 +37,7 @@ public class AerialSurveyorTests : IDisposable
         AddObstacle(new Vector3d(1, 0, 0));
         Voxel blockedVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
@@ -65,8 +63,7 @@ public class AerialSurveyorTests : IDisposable
         AddOpen(new Vector3d(2, 0, 0));
         AddObstacle(new Vector3d(1, 0, 0));
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
@@ -90,8 +87,7 @@ public class AerialSurveyorTests : IDisposable
 
         AddObstacle(new Vector3d(1, 0, 1));
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            new Vector3d(0, 0, 1),
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 1),
             new Vector3d(2, 0, 1),
             Fixed64.One,
             medium: TraversalMedium.Liquid));

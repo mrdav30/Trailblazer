@@ -105,36 +105,6 @@ public static class NavigatorPathRequestFactory
         }
     }
 
-    internal static bool TryCreate(
-        Vector3d origin,
-        Vector3d targetPosition,
-        Fixed64 unitSize,
-        SolidPathAlgorithm pathMode,
-        bool allowUnwalkableEndpoints,
-        bool allowTraversalTransitions,
-        Fixed64 maxClimbHeight,
-        TraversalMedium traversalMedium,
-        HeuristicMethod aStarHeuristic,
-        int flowFieldExtraFloodRange,
-        [NotNullWhen(true)] out IPathRequest? request,
-        out GuidedVolumeExitHandoff? handoff)
-    {
-        return TryCreate(
-            PathRequestContextResolver.DefaultContext,
-            origin,
-            targetPosition,
-            unitSize,
-            pathMode,
-            allowUnwalkableEndpoints,
-            allowTraversalTransitions,
-            maxClimbHeight,
-            traversalMedium,
-            aStarHeuristic,
-            flowFieldExtraFloodRange,
-            out request,
-            out handoff);
-    }
-
     private static bool TryCreateVolumeExitHandoff(
         TrailblazerWorldContext context,
         Vector3d origin,

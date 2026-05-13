@@ -12,22 +12,21 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
 {
     public MovementGroupCoordinatorTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
+        if (TestWorld.IsActive)
+            TestWorld.Reset();
         else
-            TrailblazerWorldManager.Setup();
+            TestWorld.Setup();
 
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
-        MovementGroupCoordinator.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.World.TryAddGrid(config, out _);
+        TestWorld.Context.Navigation.MovementGroups.Reset();
+        TestWorld.Context.Reset();
     }
 
     public void Dispose()
     {
-        MovementGroupCoordinator.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Context.Navigation.MovementGroups.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -36,7 +35,7 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
     {
         var session = new MovementGroupSession();
 
-        MovementGroupCoordinator.Prewarm(
+        TestWorld.Context.Navigation.MovementGroups.Prewarm(
             session,
             Guid.NewGuid(),
             new Vector3d(4, 0, 0),
@@ -50,7 +49,7 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
     [Fact]
     public void UpdateTarget_ShouldRefreshMembershipWhenOwnerChanges()
     {
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         var session = new MovementGroupSession { GroupId = 7 };
         var probe = new MovementGroupSession { GroupId = 7 };
@@ -58,30 +57,30 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
         Guid replacementOwner = Guid.NewGuid();
         Vector3d destination = new(5, 0, 0);
 
-        MovementGroupCoordinator.Prewarm(session, initialOwner, destination, Vector3d.Zero, Fixed64.One);
-        MovementGroupCoordinator.IsNeighbor(probe, initialOwner, destination, TrailblazerManager.FrameCount).Should().BeTrue();
+        TestWorld.Context.Navigation.MovementGroups.Prewarm(session, initialOwner, destination, Vector3d.Zero, Fixed64.One);
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(probe, initialOwner, destination, TestWorld.Context.FrameCount).Should().BeTrue();
 
-        MovementGroupCoordinator.CacheOwner(session, replacementOwner);
-        MovementGroupCoordinator.UpdateTarget(session, destination, Vector3d.Right, Fixed64.One)
+        TestWorld.Context.Navigation.MovementGroups.CacheOwner(session, replacementOwner);
+        TestWorld.Context.Navigation.MovementGroups.UpdateTarget(session, destination, Vector3d.Right, Fixed64.One)
             .TravelMode.Should().Be(MovementGroupTravelMode.Individual);
 
-        MovementGroupCoordinator.IsNeighbor(probe, initialOwner, destination, TrailblazerManager.FrameCount).Should().BeFalse();
-        MovementGroupCoordinator.IsNeighbor(probe, replacementOwner, destination, TrailblazerManager.FrameCount).Should().BeTrue();
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(probe, initialOwner, destination, TestWorld.Context.FrameCount).Should().BeFalse();
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(probe, replacementOwner, destination, TestWorld.Context.FrameCount).Should().BeTrue();
     }
 
     [Fact]
     public void UpdateTarget_ShouldReturnFormationForClusteredMembers()
     {
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         var first = new MovementGroupSession { GroupId = 3 };
         var second = new MovementGroupSession { GroupId = 3 };
         Vector3d destination = new(10, 0, 0);
 
-        MovementGroupCoordinator.Prewarm(first, Guid.NewGuid(), destination, Vector3d.Zero, Fixed64.One);
-        MovementGroupCoordinator.Prewarm(second, Guid.NewGuid(), destination, new Vector3d(1, 0, 0), Fixed64.One);
+        TestWorld.Context.Navigation.MovementGroups.Prewarm(first, Guid.NewGuid(), destination, Vector3d.Zero, Fixed64.One);
+        TestWorld.Context.Navigation.MovementGroups.Prewarm(second, Guid.NewGuid(), destination, new Vector3d(1, 0, 0), Fixed64.One);
 
-        MovementGroupTarget target = MovementGroupCoordinator.UpdateTarget(first, destination, Vector3d.Zero, Fixed64.One);
+        MovementGroupTarget target = TestWorld.Context.Navigation.MovementGroups.UpdateTarget(first, destination, Vector3d.Zero, Fixed64.One);
 
         target.TravelMode.Should().Be(MovementGroupTravelMode.Formation);
         target.Destination.Should().NotBe(destination);
@@ -90,16 +89,16 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
     [Fact]
     public void UpdateTarget_ShouldFallbackToGroupIndividualWhenFormationSpreadIsTooLarge()
     {
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         var first = new MovementGroupSession { GroupId = 4 };
         var second = new MovementGroupSession { GroupId = 4 };
         Vector3d destination = new(25, 0, 0);
 
-        MovementGroupCoordinator.Prewarm(first, Guid.NewGuid(), destination, Vector3d.Zero, Fixed64.One);
-        MovementGroupCoordinator.Prewarm(second, Guid.NewGuid(), destination, new Vector3d(20, 0, 0), Fixed64.One);
+        TestWorld.Context.Navigation.MovementGroups.Prewarm(first, Guid.NewGuid(), destination, Vector3d.Zero, Fixed64.One);
+        TestWorld.Context.Navigation.MovementGroups.Prewarm(second, Guid.NewGuid(), destination, new Vector3d(20, 0, 0), Fixed64.One);
 
-        MovementGroupTarget target = MovementGroupCoordinator.UpdateTarget(first, destination, Vector3d.Zero, Fixed64.One);
+        MovementGroupTarget target = TestWorld.Context.Navigation.MovementGroups.UpdateTarget(first, destination, Vector3d.Zero, Fixed64.One);
 
         target.TravelMode.Should().Be(MovementGroupTravelMode.GroupIndividual);
         target.Destination.Should().Be(destination);
@@ -108,20 +107,20 @@ public sealed class MovementGroupCoordinatorTests : IDisposable
     [Fact]
     public void Remove_ShouldDropMembershipWhenSessionPointsAtMissingGroup()
     {
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         var session = new MovementGroupSession { GroupId = 6 };
         var probe = new MovementGroupSession { GroupId = 6 };
         Guid ownerId = Guid.NewGuid();
         Vector3d destination = new(3, 0, 0);
 
-        MovementGroupCoordinator.Prewarm(session, ownerId, destination, Vector3d.Zero, Fixed64.One);
-        MovementGroupCoordinator.IsNeighbor(probe, ownerId, destination, TrailblazerManager.FrameCount).Should().BeTrue();
+        TestWorld.Context.Navigation.MovementGroups.Prewarm(session, ownerId, destination, Vector3d.Zero, Fixed64.One);
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(probe, ownerId, destination, TestWorld.Context.FrameCount).Should().BeTrue();
 
         session.GroupId = 99;
-        MovementGroupCoordinator.Remove(session);
+        TestWorld.Context.Navigation.MovementGroups.Remove(session);
 
-        MovementGroupCoordinator.IsNeighbor(probe, ownerId, destination, TrailblazerManager.FrameCount).Should().BeFalse();
+        TestWorld.Context.Navigation.MovementGroups.IsNeighbor(probe, ownerId, destination, TestWorld.Context.FrameCount).Should().BeFalse();
         session.GroupIndex.Should().Be(-1);
     }
 }

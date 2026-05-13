@@ -38,11 +38,6 @@ public class SolidChartPartition : IVoxelPartition
     internal PathingWorldState? OwnerState { get; private set; }
 
     /// <summary>
-    /// Back-compat alias for code that still refers to the pre-v6 name.
-    /// </summary>
-    public WorldVoxelIndex GlobalIndex => WorldIndex;
-
-    /// <summary>
     /// Gets the voxel associated with this partition.
     /// </summary>
     public Voxel Voxel
@@ -287,7 +282,9 @@ public class SolidChartPartition : IVoxelPartition
         if (unitSize <= Fixed64.Zero)
             return false;
 
-        Fixed64 voxelSize = OwnerState?.World.VoxelSize ?? TrailblazerWorldManager.VoxelSize;
+        PathingWorldState ownerState = OwnerState
+            ?? throw new InvalidOperationException("Solid chart partition requires an owning pathing context.");
+        Fixed64 voxelSize = ownerState.World.VoxelSize;
         if (unitSize <= voxelSize)
             return !IsWalkable;
 
@@ -336,11 +333,9 @@ public class SolidChartPartition : IVoxelPartition
         out VoxelGrid? grid,
         out Voxel? voxel)
     {
-        PathingWorldState? ownerState = OwnerState;
-        if (ownerState != null)
-            return ownerState.World.TryGetGridAndVoxel(voxelIndex, out grid, out voxel);
-
-        return TrailblazerWorldManager.TryGetGridAndVoxel(voxelIndex, out grid, out voxel);
+        PathingWorldState ownerState = OwnerState
+            ?? throw new InvalidOperationException("Solid chart partition requires an owning pathing context.");
+        return ownerState.World.TryGetGridAndVoxel(voxelIndex, out grid, out voxel);
     }
 
     private byte ComputeClearanceRadius()

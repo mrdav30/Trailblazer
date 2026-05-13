@@ -13,23 +13,21 @@ public sealed class EndpointVoxelResolverTests : IDisposable
 {
     public EndpointVoxelResolverTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)), out _);
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)), out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
     [Fact]
     public void TryGetEndpointVoxel_ShouldReturnFalse_WhenPolicyCannotResolve()
     {
-        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
-            Vector3d.Zero,
+        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 1, 1),
             out Voxel? voxel,
             allowUnwalkableEndpoints: true,
@@ -43,8 +41,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
     [Fact]
     public void TryGetEndpointVoxel_ShouldTraceFromDirectVoxel_WhenRelaxedEndpointNeedsFallback()
     {
-        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
-            Vector3d.Zero,
+        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             out Voxel? voxel,
             allowUnwalkableEndpoints: true,
@@ -61,8 +58,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
     {
         Voxel fallbackVoxel = GetVoxel(new Vector3d(2, 0, 0));
 
-        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
-            Vector3d.Zero,
+        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             out Voxel? voxel,
             allowUnwalkableEndpoints: true,
@@ -78,8 +74,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
     [Fact]
     public void TryGetEndpointVoxel_ShouldTraceTowardGrid_WhenDirectVoxelIsMissing()
     {
-        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
-            new Vector3d(-8, 0, 0),
+        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(TestWorld.Context, new Vector3d(-8, 0, 0),
             Vector3d.Zero,
             out Voxel? voxel,
             allowUnwalkableEndpoints: true,
@@ -93,8 +88,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
     [Fact]
     public void TryGetEndpointVoxel_ShouldReturnFalse_WhenDirectVoxelIsMissing_AndTraceCannotFindFallback()
     {
-        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(
-            new Vector3d(-8, 0, 0),
+        bool resolved = EndpointVoxelResolver.TryGetEndpointVoxel(TestWorld.Context, new Vector3d(-8, 0, 0),
             Vector3d.Zero,
             out Voxel? voxel,
             allowUnwalkableEndpoints: true,
@@ -110,8 +104,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
     {
         Voxel origin = GetVoxel(Vector3d.Zero);
 
-        bool resolved = EndpointVoxelResolver.TryGetClosestTraversableVoxel(
-            origin,
+        bool resolved = EndpointVoxelResolver.TryGetClosestTraversableVoxel(TestWorld.Context, origin,
             out Voxel? voxel,
             Fixed64.One,
             new TestEndpointPolicy(isTraversable: candidate => candidate.WorldPosition == new Vector3d(1, 0, 1)));
@@ -125,8 +118,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
     {
         Voxel origin = GetVoxel(Vector3d.Zero);
 
-        bool resolved = EndpointVoxelResolver.TryGetClosestTraversableVoxel(
-            origin,
+        bool resolved = EndpointVoxelResolver.TryGetClosestTraversableVoxel(TestWorld.Context, origin,
             out Voxel? voxel,
             Fixed64.One,
             new TestEndpointPolicy());

@@ -15,13 +15,13 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     public ReusableSurveyResultCacheTests()
     {
         PathManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Context.Reset();
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -69,7 +69,7 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
                 .BeTrue();
 
             cache.Return(result, dispose: false);
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
         }
 
         cache.Count.Should().Be(128);
@@ -105,14 +105,14 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
                 .BeTrue();
 
             cache.Return(result, dispose: false);
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
         }
 
         cache.TryGetOrCreate(new TestPathRequest(0), () => TestSurveyResult.Create(0), out TestSurveyResult refreshed)
             .Should()
             .BeTrue();
         cache.Return(refreshed, dispose: false);
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         var evictionRequest = new TestPathRequest(999);
         Func<TestSurveyResult> createEvictionResult = static () => TestSurveyResult.Create(999);
@@ -343,7 +343,7 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
             RequestCacheKey = key;
         }
 
-        public TrailblazerWorldContext Context => TrailblazerManager.DefaultContext;
+        public TrailblazerWorldContext Context => TestWorld.Context;
 
         public Vector3d Origin => Vector3d.Zero;
 

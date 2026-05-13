@@ -12,7 +12,7 @@ public class WaterLocomotionTests : IDisposable
 {
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -30,7 +30,7 @@ public class WaterLocomotionTests : IDisposable
         Fixed64 initialY = agent.Position.y;
         for (int i = 0; i < 10; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 
@@ -47,11 +47,11 @@ public class WaterLocomotionTests : IDisposable
         var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
         // Act - First frame, still on ground
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         // 2nd Frame - Enter Water
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         agent.FrameCondition.Medium = TraversalMedium.Liquid;
         agent.FrameCondition.SurfaceLevel = agent.Position.y;
@@ -68,10 +68,10 @@ public class WaterLocomotionTests : IDisposable
     {
         var agent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Solid);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameCondition.Medium = TraversalMedium.Liquid;
         agent.FrameCondition.SurfaceLevel = agent.Position.y;
         agent.Simulate();
@@ -90,7 +90,7 @@ public class WaterLocomotionTests : IDisposable
 
         // Act - Exit water
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
 
         agent.FrameCondition.Medium = TraversalMedium.Solid;
 
@@ -111,7 +111,7 @@ public class WaterLocomotionTests : IDisposable
         swim.IsEnabled = true;
 
         // Act - Enter Water
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.FrameRequest.Direction = Vector3d.Forward;
         agent.FrameRequest.Rate = TrekRate.Slow;
         agent.FrameRequest.IsRequestingSwim = true;
@@ -120,7 +120,7 @@ public class WaterLocomotionTests : IDisposable
         // Act - Simulate 3 Frames
         for (int i = 0; i < 3; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.FrameRequest.Direction = Vector3d.Forward;
             agent.FrameRequest.Rate = TrekRate.Slow;
             agent.FrameRequest.IsRequestingSwim = true;
@@ -145,7 +145,7 @@ public class WaterLocomotionTests : IDisposable
         TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Water).IsEnabled = true;
 
         // Act - Simulate entry into water
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         Fixed64 previousY = agent.Position.y;
@@ -153,7 +153,7 @@ public class WaterLocomotionTests : IDisposable
         // Simulate multiple frames of floating
         for (int i = 0; i < 10; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 
@@ -178,7 +178,7 @@ public class WaterLocomotionTests : IDisposable
         Fixed64 initialY = agent.Position.y;
         for (int i = 0; i < 10; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
             if (agent.Position.y == Fixed64.Zero) // we hit the surface
                 break;
@@ -205,7 +205,7 @@ public class WaterLocomotionTests : IDisposable
         Fixed64 initialY = agent.Position.y;
         for (int i = 0; i < 10; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 
@@ -226,7 +226,7 @@ public class WaterLocomotionTests : IDisposable
 
         for (int i = 0; i < 10; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 
@@ -242,7 +242,7 @@ public class WaterLocomotionTests : IDisposable
         swim.HoldBreathTime = Fixed64.One;
         swim.UnderwaterTimer = Fixed64.One + (Fixed64)2;
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         swim.IsDrowning.Should().BeFalse();
@@ -258,7 +258,7 @@ public class WaterLocomotionTests : IDisposable
 
         for (int i = 0; i < 10; i++) // Simulate swimming upwards
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.FrameRequest.Direction = Vector3d.Up;
             agent.FrameRequest.Rate = TrekRate.Slow;
             agent.FrameRequest.IsRequestingSwim = true;
@@ -279,7 +279,7 @@ public class WaterLocomotionTests : IDisposable
 
         for (int i = 0; i < 100; i++) // Simulate prolonged underwater time
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.Simulate();
         }
 
@@ -304,7 +304,7 @@ public class WaterLocomotionTests : IDisposable
         agent.FrameRequest.Rate = TrekRate.Stationary;
         agent.FrameRequest.IsRequestingSwim = true;
         agent.FrameRequest.IsRequestingJump = true;
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         jump.IsJumping.Should().BeTrue();
@@ -328,7 +328,7 @@ public class WaterLocomotionTests : IDisposable
         // Request a jump while swimming, but breach is disabled
         agent.FrameRequest.IsRequestingSwim = true;
         agent.FrameRequest.IsRequestingJump = true;
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         jump.IsJumping.Should().BeFalse();
@@ -350,12 +350,12 @@ public class WaterLocomotionTests : IDisposable
         // Simulate a jump breach
         agent.FrameRequest.IsRequestingSwim = true;
         agent.FrameRequest.IsRequestingJump = true;
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         agent.Simulate();
 
         for (int i = 0; i < 32; i++)
         {
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             agent.FrameRequest.IsRequestingSwim = true;
             agent.Simulate();
             if (agent.FrameCondition.Medium == TraversalMedium.Liquid)

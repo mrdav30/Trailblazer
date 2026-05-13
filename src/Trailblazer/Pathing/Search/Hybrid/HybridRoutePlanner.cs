@@ -152,7 +152,7 @@ internal static class HybridRoutePlanner
                 new[]
                 {
                     toTransitionStep!,
-                    HybridRouteStep.Waypoint(transition.Destination.Position, transition.PathCostModifier),
+                    HybridRouteStep.Waypoint(request.Context, transition.Destination.Position, transition.PathCostModifier),
                     toTargetStep!
                 },
                 new[] { transition },
@@ -301,9 +301,9 @@ internal static class HybridRoutePlanner
                     new[]
                     {
                         toEntryStep!,
-                        HybridRouteStep.Waypoint(entry.Destination.Position, entry.PathCostModifier),
+                        HybridRouteStep.Waypoint(request.Context, entry.Destination.Position, entry.PathCostModifier),
                         volumeStep!,
-                        HybridRouteStep.Waypoint(exit.Destination.Position, exit.PathCostModifier),
+                        HybridRouteStep.Waypoint(request.Context, exit.Destination.Position, exit.PathCostModifier),
                         toTargetStep!
                     },
                     new[] { entry, exit },
@@ -366,7 +366,7 @@ internal static class HybridRoutePlanner
 
         if (chartRequest.HasZeroDisplacement)
         {
-            step = HybridRouteStep.Waypoint(destination);
+            step = HybridRouteStep.Waypoint(request.Context, destination);
             return true;
         }
 
@@ -403,7 +403,7 @@ internal static class HybridRoutePlanner
 
         if (chartRequest.HasZeroDisplacement)
         {
-            step = HybridRouteStep.Waypoint(destination);
+            step = HybridRouteStep.Waypoint(request.Context, destination);
             return true;
         }
 
@@ -445,7 +445,7 @@ internal static class HybridRoutePlanner
 
         if (volumeRequest.HasZeroDisplacement)
         {
-            step = HybridRouteStep.Waypoint(destination);
+            step = HybridRouteStep.Waypoint(request.Context, destination);
             return true;
         }
 
@@ -563,6 +563,7 @@ internal static class HybridRoutePlanner
             return null;
 
         return BuildChainedClimbPlan(
+            request.Context,
             transitions,
             previousIndices,
             entrySteps,
@@ -666,6 +667,7 @@ internal static class HybridRoutePlanner
     }
 
     private static HybridRoutePlan BuildChainedClimbPlan(
+        TrailblazerWorldContext context,
         TraversalTransition[] transitions,
         int[] previousIndices,
         HybridRouteStep?[] entrySteps,
@@ -696,6 +698,7 @@ internal static class HybridRoutePlanner
                 steps.Add(bridgeSteps[transitionIndex]!);
 
             steps.Add(HybridRouteStep.Waypoint(
+                context,
                 transition.Destination.Position,
                 transition.PathCostModifier));
             orderedIndex++;

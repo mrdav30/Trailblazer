@@ -12,16 +12,15 @@ public class FlowFieldTransitionFallbackTests : IDisposable
 {
     public FlowFieldTransitionFallbackTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
+        TestWorld.World.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -38,8 +37,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One));
         request.AllowTraversalTransitions = true;
@@ -72,8 +70,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             allowTraversalTransitions: true));
@@ -123,8 +120,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            new Vector3d(-2, 0, 0),
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, new Vector3d(-2, 0, 0),
             new Vector3d(4, 0, 0),
             Fixed64.One));
         request.AllowTraversalTransitions = true;
@@ -163,8 +159,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(3, 0, 0)),
             pathCostModifier: 4)).Should().BeTrue();
 
-        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             allowUnwalkableEndpoints: true));
@@ -179,8 +174,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
     {
         RegisterAuthoredClimbRoute("FlowFieldClimbFallback");
 
-        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(
-            Vector3d.Zero,
+        FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(3, 0, 1),
             Fixed64.One,
             allowUnwalkableEndpoints: true));

@@ -82,44 +82,6 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
     private VolumePathRequest() { }
 
     /// <summary>
-    /// Attempts to create a new volume pathfinding request between the specified origin
-    /// and destination points using the given parameters.
-    /// </summary>
-    /// <remarks>This method does not throw exceptions if the request cannot be created. Use the return value
-    /// to determine success before using the output request.</remarks>
-    /// <param name="origin">The starting point of the path, specified as a 3D vector.</param>
-    /// <param name="destination">The target point of the path, specified as a 3D vector.</param>
-    /// <param name="unitSize">The size of each unit or step in the pathfinding grid. Must be a positive value.</param>
-    /// <param name="request">When this method returns, contains the created volume pathfinding request if successful; otherwise, null.</param>
-    /// <param name="heuristic">The heuristic method to use for pathfinding. Defaults to Euclidean.</param>
-    /// <param name="allowUnwalkableEndpoints">true to allow the origin or destination to be unwalkable; otherwise, false. Defaults to false.</param>
-    /// <param name="medium">
-    /// The traversal medium to use for pathfinding, such as gas or other supported types. 
-    /// Defaults to TraversalMedium.Gas.
-    /// </param>
-    /// <returns>true if the volume pathfinding request was successfully created; otherwise, false.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCreate(
-        Vector3d origin,
-        Vector3d destination,
-        Fixed64 unitSize,
-        [NotNullWhen(true)] out VolumePathRequest? request,
-        HeuristicMethod heuristic = HeuristicMethod.Euclidean,
-        bool allowUnwalkableEndpoints = false,
-        TraversalMedium medium = TraversalMedium.Gas)
-    {
-        return TryCreate(
-            PathRequestContextResolver.DefaultContext,
-            origin,
-            destination,
-            unitSize,
-            out request,
-            heuristic,
-            allowUnwalkableEndpoints,
-            medium);
-    }
-
-    /// <summary>
     /// Attempts to create a new context-bound volume pathfinding request.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -144,41 +106,6 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
 
         return request != null;
     }
-
-    /// <summary>
-    /// Creates a new pathfinding request for traversing a volumetric space between the specified origin
-    /// and destination points.
-    /// </summary>
-    /// <remarks>
-    /// Returns null if the origin or destination cannot be mapped to valid pathfinding nodes,
-    /// or if a path cannot be initialized with the given parameters.
-    /// </remarks>
-    /// <param name="origin">The starting position of the path, specified as a 3D vector in world coordinates.</param>
-    /// <param name="destination">The target position of the path, specified as a 3D vector in world coordinates.</param>
-    /// <param name="unitSize">The size of each voxel or unit used for pathfinding calculations. Must be a positive value.</param>
-    /// <param name="heuristic">The heuristic method to use for estimating pathfinding cost. Defaults to Euclidean if not specified.</param>
-    /// <param name="allowUnwalkableEndpoints">
-    /// true to allow the origin or destination to be in unwalkable locations; otherwise, false. Defaults to false.
-    /// </param>
-    /// <param name="medium">
-    /// The traversal medium to consider when generating the path, such as gas or other supported types. 
-    /// Defaults to TraversalMedium.Gas.</param>
-    /// <returns>A VolumePathRequest representing the pathfinding request if a valid path can be initialized; otherwise, null.</returns>
-    public static VolumePathRequest? Create(
-        Vector3d origin,
-        Vector3d destination,
-        Fixed64 unitSize,
-        HeuristicMethod heuristic = HeuristicMethod.Euclidean,
-        bool allowUnwalkableEndpoints = false,
-        TraversalMedium medium = TraversalMedium.Gas) =>
-        Create(
-            PathRequestContextResolver.DefaultContext,
-            origin,
-            destination,
-            unitSize,
-            heuristic,
-            allowUnwalkableEndpoints,
-            medium);
 
     /// <summary>
     /// Creates a context-bound volume pathfinding request.

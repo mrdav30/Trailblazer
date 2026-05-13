@@ -7,8 +7,7 @@ using System;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Provides compatibility access to the active context's external-grid bridge diagnostics and
-/// event-signature tracking.
+/// Routes external-grid bridge diagnostics and event-signature tracking through the active pathing context.
 /// </summary>
 internal static class PathManagerExternalGridBridge
 {
@@ -103,12 +102,6 @@ internal static class PathManagerExternalGridBridge
     {
         get => PathManager.ActiveState.MaxChartsSelectedForSingleGridEvent;
         set => PathManager.ActiveState.MaxChartsSelectedForSingleGridEvent = value;
-    }
-
-    internal static void Register()
-    {
-        // Context-owned bridges subscribe directly to their GridWorld. This no-op remains for
-        // compatibility with older tests that force PathManager static initialization.
     }
 
     internal static ExternalGridBridgeDiagnosticsSnapshot GetDiagnosticsSnapshot()

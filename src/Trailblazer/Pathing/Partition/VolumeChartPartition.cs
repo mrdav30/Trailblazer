@@ -26,11 +26,6 @@ public sealed class VolumeChartPartition : IVoxelPartition
     internal PathingWorldState? OwnerState { get; private set; }
 
     /// <summary>
-    /// Back-compat alias for code that still refers to the pre-v6 name.
-    /// </summary>
-    public WorldVoxelIndex GlobalIndex => WorldIndex;
-
-    /// <summary>
     /// The world-space position of the authored voxel.
     /// </summary>
     public Vector3d VoxelPosition { get; private set; }
@@ -153,9 +148,9 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// </summary>
     internal bool IsImpassable(Fixed64 unitSize)
     {
-        PathingWorldState? ownerState = OwnerState;
-        TrailblazerWorldContext context = ownerState?.Context ?? PathRequestContextResolver.DefaultContext;
-        return !VolumeVoxelFinder.HasClearance(context, Voxel, unitSize);
+        PathingWorldState ownerState = OwnerState
+            ?? throw new InvalidOperationException("Volume chart partition requires an owning pathing context.");
+        return !VolumeVoxelFinder.HasClearance(ownerState.Context, Voxel, unitSize);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

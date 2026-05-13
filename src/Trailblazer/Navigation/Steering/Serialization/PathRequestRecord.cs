@@ -97,11 +97,6 @@ internal sealed class PathRequestRecord : IRecordable
             WaypointIndex = waypointGuide.CurrentWaypointIndex;
     }
 
-    public bool TryCreateRequest(out IPathRequest? request)
-    {
-        return TryCreateRequest(PathRequestContextResolver.DefaultContext, out request);
-    }
-
     public bool TryCreateRequest(TrailblazerWorldContext context, out IPathRequest? request)
     {
         request = null;

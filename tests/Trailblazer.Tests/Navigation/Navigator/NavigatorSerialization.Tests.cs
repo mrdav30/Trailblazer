@@ -20,16 +20,15 @@ public class NavigatorSerializationTests : IDisposable
 {
     public NavigatorSerializationTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
         var config = new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
+        TestWorld.World.TryAddGrid(config, out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -87,7 +86,7 @@ public class NavigatorSerializationTests : IDisposable
         AssertMotorStateMatches(TestRequire.NotNull(source.Motor), targetMotor);
         AssertTurningStateMatches(TestRequire.NotNull(source.Turning), targetTurning);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Slow, isRequestingJump: false);
         target.Simulate();
         target.CommitFrameMotion();
@@ -149,7 +148,7 @@ public class NavigatorSerializationTests : IDisposable
         AssertMotorStateMatches(TestRequire.NotNull(source.Motor), targetMotor);
         AssertTurningStateMatches(TestRequire.NotNull(source.Turning), targetTurning);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.ApplyInputTrekRequest(Vector3d.Forward, TrekRate.Slow, isRequestingJump: false);
         target.Simulate();
         target.CommitFrameMotion();
@@ -183,7 +182,7 @@ public class NavigatorSerializationTests : IDisposable
 
         AssertSteeringStateMatches(sourceSteering, targetSteering);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
@@ -211,7 +210,7 @@ public class NavigatorSerializationTests : IDisposable
         target.IsGuideded.Should().BeTrue();
         target.FrameRequest.IsRequestingClimb.Should().BeTrue();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         Assert.NotNull(targetSteering.CurrentRequest);
@@ -243,7 +242,7 @@ public class NavigatorSerializationTests : IDisposable
         ReflectionUtility.GetPrivateFieldFromBase<int>(target, "_lastSeenGuidedRouteTopologyVersion")
             .Should().Be(sourceLastSeenVersion);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         target.FrameRequest.IsRequestingClimb.Should().BeTrue();
@@ -305,7 +304,7 @@ public class NavigatorSerializationTests : IDisposable
 
         AssertSteeringStateMatches(sourceSteering, targetSteering);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
@@ -336,7 +335,7 @@ public class NavigatorSerializationTests : IDisposable
 
         AssertSteeringStateMatches(sourceSteering, targetSteering);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
@@ -390,7 +389,7 @@ public class NavigatorSerializationTests : IDisposable
             isRequestingJump: false,
             groupId: 3);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         NavSteering sourceSteering = TestRequire.NotNull(source.Steering);
         sourceSteering.GetHeading(source);
 
@@ -405,7 +404,7 @@ public class NavigatorSerializationTests : IDisposable
         targetSteering.TrailGuide.Should().BeOfType<VolumeGuide>();
         ((VolumeGuide)targetSteering.TrailGuide).CurrentWaypointIndex.Should().Be(sourceGuide.CurrentWaypointIndex);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
@@ -441,7 +440,7 @@ public class NavigatorSerializationTests : IDisposable
         targetSteering.CurrentRequest.Should().BeOfType<VolumePathRequest>();
         ((VolumePathRequest)targetSteering.CurrentRequest).Medium.Should().Be(TraversalMedium.Liquid);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
@@ -487,7 +486,7 @@ public class NavigatorSerializationTests : IDisposable
         target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         targetSteering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         FlowFieldPathRequest followupRequest = Assert.IsType<FlowFieldPathRequest>(TestRequire.NotNull(targetSteering.CurrentRequest));
@@ -539,7 +538,7 @@ public class NavigatorSerializationTests : IDisposable
         target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         targetSteering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         AStarPathRequest followupRequest = Assert.IsType<AStarPathRequest>(TestRequire.NotNull(targetSteering.CurrentRequest));
@@ -588,7 +587,7 @@ public class NavigatorSerializationTests : IDisposable
         target.SetGroundContact(surfaceLevel: Fixed64.Zero, updateMotorState: true);
         targetSteering.Arrive();
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         targetSteering.CurrentRequest.Should().BeOfType<AStarPathRequest>();
@@ -639,10 +638,10 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(true)]
     public void RoundTrip_ShouldLoadSetupOnlyNavigatorWithoutControllers(bool useMemoryPack)
     {
-        var source = new TestNavigator();
+        var source = new TestNavigator(TestWorld.Context);
         source.Setup(new Vector3d(1, 0, 1), size: Fixed64.One);
 
-        var target = new TestNavigator(TrailblazerManager.DefaultContext);
+        var target = new TestNavigator(TestWorld.Context);
         SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
 
         target.Position.Should().Be(new Vector3d(1, 0, 1));
@@ -769,7 +768,7 @@ public class NavigatorSerializationTests : IDisposable
         targetSteering.Destination.Should().Be(Vector3d.Zero);
         targetSteering.TargetDirection.Should().Be(Vector3d.Zero);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         target.Simulate();
 
         target.FrameRequest.Direction.Should().Be(Vector3d.Zero);
@@ -855,7 +854,7 @@ public class NavigatorSerializationTests : IDisposable
         string firstJson = JsonRecordSerializer.Serialize(sourceFirst, writeIndented: true);
         string secondJson = JsonRecordSerializer.Serialize(sourceSecond, writeIndented: true);
 
-        TrailblazerManager.Reset();
+        TestWorld.Context.Reset();
 
         var lazyFirst = CreateNavigator(new Vector3d(-3, 0, 0), size: Fixed64.One);
         var lazySecond = CreateNavigator(new Vector3d(-2, 0, 0), size: Fixed64.One);
@@ -870,7 +869,7 @@ public class NavigatorSerializationTests : IDisposable
         lazyFirstSteering.Destination.Should().Be(sharedDestination);
         lazySecondSteering.Destination.Should().Be(new Vector3d((Fixed64)4.5f, Fixed64.Zero, Fixed64.Zero));
 
-        TrailblazerManager.Reset();
+        TestWorld.Context.Reset();
 
         var prewarmedFirst = CreateNavigator(new Vector3d(-3, 0, 0), size: Fixed64.One);
         var prewarmedSecond = CreateNavigator(new Vector3d(-2, 0, 0), size: Fixed64.One);
@@ -893,7 +892,7 @@ public class NavigatorSerializationTests : IDisposable
 
     private static TestNavigator CreateNavigator(Vector3d position, Fixed64? size = null)
     {
-        var navigator = new TestNavigator();
+        var navigator = new TestNavigator(TestWorld.Context);
         navigator.Setup(
             position,
             rotation: FixedQuaternion.FromAxisAngle(Vector3d.Up, (Fixed64)0.25f),
@@ -1071,14 +1070,14 @@ public class NavigatorSerializationTests : IDisposable
             isRequestingJump: true,
             groupId: 7);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         steering.GetHeading(source);
         steering.PauseAutoStop();
 
         if (steering.TrailGuide is AStarGuide aStarGuide)
         {
             aStarGuide.AdvanceWaypoint();
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             steering.GetHeading(source);
         }
 
@@ -1104,8 +1103,7 @@ public class NavigatorSerializationTests : IDisposable
         };
         steering.BrakingPower = (Fixed64)0.3f;
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             HeuristicMethod.Euclidean,
@@ -1115,7 +1113,7 @@ public class NavigatorSerializationTests : IDisposable
 
         steering.ApplyPathRequest(request, groupId: 5);
 
-        TrailblazerManager.Simulate();
+        TestWorld.Context.Simulate();
         steering.GetHeading(source);
         steering.PauseAutoStop();
 
@@ -1123,7 +1121,7 @@ public class NavigatorSerializationTests : IDisposable
         if (guide.TryGetWaypointAt(guide.CurrentWaypointIndex + 1, out _))
         {
             guide.AdvanceWaypoint();
-            TrailblazerManager.Simulate();
+            TestWorld.Context.Simulate();
             steering.GetHeading(source);
         }
 

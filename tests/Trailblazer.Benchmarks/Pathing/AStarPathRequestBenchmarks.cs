@@ -82,7 +82,7 @@ public class AStarPathRequestBenchmarks
         SetupHeuristics64();
         SetupChokePoint();
         ValidateConfiguredRequests();
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     [GlobalCleanup]
@@ -100,13 +100,13 @@ public class AStarPathRequestBenchmarks
         (_openPlane32Origin, _openPlane32Destination) =
             BenchmarkChartFactory.RegisterOpenPlane("AStarOpenPlane32", 32, OpenPlane32Offset);
 
-        BenchmarkPreflight.AssertAStarRouteExists(
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, 
             _openPlane32Origin, _openPlane32Destination, Fixed64.One);
 
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _openPlane32Request = AStarPathRequest.Create(
+        _openPlane32Request = AStarPathRequest.Create(_fixture.Context, 
             _openPlane32Origin, _openPlane32Destination, Fixed64.One);
     }
 
@@ -117,11 +117,11 @@ public class AStarPathRequestBenchmarks
             64,
             Corridor64Offset);
 
-        BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, start, end, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _corridor64Request = AStarPathRequest.Create(start, end, Fixed64.One);
+        _corridor64Request = AStarPathRequest.Create(_fixture.Context, start, end, Fixed64.One);
     }
 
     private void SetupCorridor256()
@@ -131,11 +131,11 @@ public class AStarPathRequestBenchmarks
             256,
             Corridor256Offset);
 
-        BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, start, end, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _corridor256Request = AStarPathRequest.Create(start, end, Fixed64.One);
+        _corridor256Request = AStarPathRequest.Create(_fixture.Context, start, end, Fixed64.One);
     }
 
     private void SetupCorridor1024()
@@ -145,11 +145,11 @@ public class AStarPathRequestBenchmarks
             1024,
             Corridor1024Offset);
 
-        BenchmarkPreflight.AssertAStarRouteExists(start, end, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, start, end, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _corridor1024Request = AStarPathRequest.Create(start, end, Fixed64.One);
+        _corridor1024Request = AStarPathRequest.Create(_fixture.Context, start, end, Fixed64.One);
     }
 
     private void SetupBlockerField64()
@@ -157,13 +157,13 @@ public class AStarPathRequestBenchmarks
         (_blockerOrigin, _blockerDestination) =
             BenchmarkChartFactory.RegisterSparseBlockerField("AStarBlocker64", 64, Blocker64Offset);
 
-        BenchmarkPreflight.AssertAStarRouteExists(
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, 
             _blockerOrigin, _blockerDestination, Fixed64.One);
 
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _blockerRequest = AStarPathRequest.Create(_blockerOrigin, _blockerDestination, Fixed64.One);
+        _blockerRequest = AStarPathRequest.Create(_fixture.Context, _blockerOrigin, _blockerDestination, Fixed64.One);
     }
 
     private void SetupHeuristics64()
@@ -171,15 +171,15 @@ public class AStarPathRequestBenchmarks
         var (origin, destination) =
             BenchmarkChartFactory.RegisterOpenPlane("AStarHeuristic64", 64, Heuristic64Offset);
 
-        BenchmarkPreflight.AssertAStarRouteExists(origin, destination, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, origin, destination, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _manhattanRequest = AStarPathRequest.Create(
+        _manhattanRequest = AStarPathRequest.Create(_fixture.Context, 
             origin, destination, Fixed64.One, HeuristicMethod.Manhattan);
-        _octileRequest = AStarPathRequest.Create(
+        _octileRequest = AStarPathRequest.Create(_fixture.Context, 
             origin, destination, Fixed64.One, HeuristicMethod.Octile);
-        _euclideanRequest = AStarPathRequest.Create(
+        _euclideanRequest = AStarPathRequest.Create(_fixture.Context, 
             origin, destination, Fixed64.One, HeuristicMethod.Euclidean);
     }
 
@@ -189,11 +189,11 @@ public class AStarPathRequestBenchmarks
             BenchmarkChartFactory.RegisterChokePoint("AStarChoke", ChokeOffset);
 
         // A size-1 agent can pass; this preflight confirms the route exists.
-        BenchmarkPreflight.AssertAStarRouteExists(_chokeOrigin, _chokeDestination, Fixed64.One);
-        BenchmarkPathFixture.FlushGuideCache();
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertAStarRouteExists(_fixture.Context, _chokeOrigin, _chokeDestination, Fixed64.One);
+        _fixture.FlushGuideCache();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _chokeUnitSize2Request = AStarPathRequest.Create(
+        _chokeUnitSize2Request = AStarPathRequest.Create(_fixture.Context, 
             _chokeOrigin,
             _chokeDestination,
             Fixed64.Two);
@@ -222,7 +222,7 @@ public class AStarPathRequestBenchmarks
                 "Preflight: unit-size-2 choke request unexpectedly resolved after all A* benchmark charts were configured.");
         }
 
-        BenchmarkPreflight.AssertNoCacheLeak();
+        BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
     }
 
     private static void EnsureAStarSurveyResolves(AStarPathRequest request, string requestName)
@@ -263,7 +263,7 @@ public class AStarPathRequestBenchmarks
     })]
     public void FlushForColdRun()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     // -------------------------------------------------------------------------
@@ -363,7 +363,7 @@ public class AStarPathRequestBenchmarks
     [BenchmarkCategory("Pathing", "AStar", "Request")]
     public AStarPathRequest RequestConstruction_OpenPlane32()
     {
-        return AStarPathRequest.Create(_openPlane32Origin, _openPlane32Destination, Fixed64.One);
+        return AStarPathRequest.Create(_fixture.Context, _openPlane32Origin, _openPlane32Destination, Fixed64.One);
     }
 
     /// <summary>Reads the cache key for a pre-created 32x32 open-plane A* request.</summary>

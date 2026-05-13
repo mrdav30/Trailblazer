@@ -17,7 +17,7 @@ The code referenced here lives primarily in:
 
 ## 1. What PathManager Is
 
-`TrailblazerWorldContext.Pathing` is the context-owned coordination layer for registered navigation charts and voxel-backed pathing utilities. `PathManager` remains as the single default-context compatibility facade while the public API migration continues.
+`TrailblazerWorldContext.Pathing` is the context-owned coordination layer for registered navigation charts and voxel-backed pathing utilities.
 
 It is responsible for:
 
@@ -362,8 +362,8 @@ That means the accurate teardown pattern is just call `Reset()`.
 
 ### 8.2 Tick(...)
 
-`Tick()` is an internal default-context bridge from `TrailblazerManager` to pending grid event work.
-Guide cache culling now runs from `TrailblazerWorldContext.Simulate()` using the owning context's
+Pending grid event work is flushed by `TrailblazerWorldContext.Simulate()`.
+Guide cache culling also runs from `TrailblazerWorldContext.Simulate()` using the owning context's
 frame count.
 
 ## 9. Utility Methods

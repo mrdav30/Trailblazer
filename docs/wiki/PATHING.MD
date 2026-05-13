@@ -154,7 +154,6 @@ Cache-key behavior:
 Example:
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
 if (context.Guides.RequestGuide(request, out AStarGuide guide))
 {
@@ -327,8 +326,7 @@ For liquid routes, transition fallback and `VolumePathRequest` depend on a valid
 
 ## 8. Guide Resolution and Caching
 
-`TrailblazerWorldContext.Guides` is the primary request-to-guide bridge.
-`PathGuideFactory` remains as the default-context compatibility facade.
+`TrailblazerWorldContext.Guides` is the request-to-guide bridge.
 
 For the dedicated guide-layer contract and lifecycle reference, read [`PATHGUIDES.MD`](PATHGUIDES.MD).
 
@@ -390,7 +388,6 @@ Choose transition-aware chart requests when:
 
 ```csharp
 NavigationChart chart = NavigationChart.From3D("Ground", data, minBounds, Fixed64.One);
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 context.Pathing.Register(chart);
 
 var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
@@ -408,7 +405,6 @@ if (context.Guides.RequestGuide(request, out AStarGuide guide))
 ### 10.2 Shared Destination Flow Field
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 var request = FlowFieldPathRequest.Create(context, origin, destination, Fixed64.One);
 request.MaxClimbHeight = Fixed64.One;
 request.ExtraFloodRange = 12;
@@ -423,12 +419,11 @@ if (context.Guides.RequestGuide(request, out FlowFieldGuide guide))
 ### 10.3 Transition-Aware Chart Pathing
 
 ```csharp
-TrailblazerWorldContext context = TrailblazerManager.DefaultContext;
 var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
 request.AllowTraversalTransitions = true;
 ```
 
-In this mode, transitions are still data owned by `TraversalTransitionRegistry`, not by the request itself.
+In this mode, transitions are still data owned by `context.Transitions`, not by the request itself.
 
 ## 11. Common Gotchas
 

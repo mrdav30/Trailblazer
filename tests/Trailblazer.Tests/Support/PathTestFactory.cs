@@ -16,14 +16,14 @@ public static class PathTestFactory
         data[1, 1, 1] = true;
 
         var map = NavigationChart.From3D(mapName, data, minBounds, Fixed64.One);
-        PathManager.Register(map);
+        TestWorld.Context.Pathing.Register(map);
         return map;
     }
 
     public static NavigationChart RegisterFromData(string name, bool[,,] data, Vector3d minBounds)
     {
-        var map = NavigationChart.From3D(name, data, minBounds, TrailblazerWorldManager.VoxelSize);
-        PathManager.Register(map);
+        var map = NavigationChart.From3D(name, data, minBounds, TestWorld.Context.VoxelSize);
+        TestWorld.Context.Pathing.Register(map);
         return map;
     }
 
@@ -37,7 +37,7 @@ public static class PathTestFactory
         data[1, 1, 1] = new NavigationChartCell(traversalKinds);
 
         var map = NavigationChart.From3D(mapName, data, minBounds, Fixed64.One);
-        PathManager.Register(map);
+        TestWorld.Context.Pathing.Register(map);
         return map;
     }
 

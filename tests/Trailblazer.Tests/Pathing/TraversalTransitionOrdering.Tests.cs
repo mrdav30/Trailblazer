@@ -13,8 +13,8 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
 {
     public TraversalTransitionOrderingTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
     }
@@ -22,8 +22,7 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -226,7 +225,7 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
     [Fact]
     public void TraversalTransitionOrdering_ShouldCompare_ByTypeCostGridAndPointOverrideX()
     {
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(16, -4, -4), new Vector3d(24, 8, 8)),
             out _).Should().BeTrue();
 

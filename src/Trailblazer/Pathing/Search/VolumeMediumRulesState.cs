@@ -7,9 +7,9 @@ namespace Trailblazer.Pathing;
 /// </summary>
 internal sealed class VolumeMediumRulesState
 {
-    internal VolumeMediumRules.VoxelRule? GasVoxelRule;
+    internal VolumeVoxelRule? GasVoxelRule;
 
-    internal VolumeMediumRules.VoxelRule? LiquidVoxelRule;
+    internal VolumeVoxelRule? LiquidVoxelRule;
 
     internal int RegistryVersion;
 

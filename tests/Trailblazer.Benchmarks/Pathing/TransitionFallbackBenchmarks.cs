@@ -57,7 +57,7 @@ public class TransitionFallbackBenchmarks
         SetupAStarSwimPath();
         SetupFlowFieldJumpLink();
 
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
         PrimeConfiguredRequests();
     }
 
@@ -88,7 +88,7 @@ public class TransitionFallbackBenchmarks
         var origin = AStarJumpOffset;
         var destination = AStarJumpOffset + new Vector3d(4, 0, 0);
 
-        _astarJumpRequest = AStarPathRequest.Create(
+        _astarJumpRequest = AStarPathRequest.Create(_fixture.Context, 
             origin,
             destination,
             Fixed64.One,
@@ -127,7 +127,7 @@ public class TransitionFallbackBenchmarks
         var origin = AStarSwimOffset;
         var destination = AStarSwimOffset + new Vector3d(6, 0, 0);
 
-        _astarSwimRequest = AStarPathRequest.Create(
+        _astarSwimRequest = AStarPathRequest.Create(_fixture.Context, 
             origin,
             destination,
             Fixed64.One,
@@ -156,7 +156,7 @@ public class TransitionFallbackBenchmarks
 
         // FlowFieldPathRequest.Create returns null when endpoints cannot be resolved; transition
         // fallback must be enabled during creation so disconnected endpoint requests can be formed.
-        _ffJumpRequest = FlowFieldPathRequest.Create(
+        _ffJumpRequest = FlowFieldPathRequest.Create(_fixture.Context, 
             origin,
             destination,
             Fixed64.One,
@@ -204,7 +204,7 @@ public class TransitionFallbackBenchmarks
     })]
     public void FlushCacheBeforeCold()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     // -------------------------------------------------------------------------

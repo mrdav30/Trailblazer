@@ -30,22 +30,6 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
     private AStarPathRequest() { }
 
     /// <summary>
-    /// Attempts to create a new AStarPathRequest for the specified origin, destination, and unit size.
-    /// </summary>
-    /// <param name="origin">The starting point for the pathfinding request.</param>
-    /// <param name="destination">The target point for the pathfinding request.</param>
-    /// <param name="unitSize">The size of each unit or step used in the pathfinding calculation.</param>
-    /// <param name="request">When this method returns, contains the created AStarPathRequest if successful; otherwise, null.</param>
-    /// <returns>true if the request was successfully created; otherwise, false.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCreate(
-        Vector3d origin,
-        Vector3d destination,
-        Fixed64 unitSize,
-        out AStarPathRequest? request) =>
-        TryCreate(PathRequestContextResolver.DefaultContext, origin, destination, unitSize, out request);
-
-    /// <summary>
     /// Attempts to create a new context-bound A* pathfinding request.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -61,60 +45,6 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
             return false;
         return true;
     }
-
-    /// <summary>
-    /// Attempts to create an A* pathfinding request between the specified origin and destination points using the default voxel size.
-    /// </summary>
-    /// <remarks>This method uses the voxel size from Trailblazer's configured <see cref="GridWorld"/>.
-    /// Use this overload for standard pathfinding scenarios where custom voxel sizing is not required.</remarks>
-    /// <param name="origin">The starting point of the path, represented as a Vector3d.</param>
-    /// <param name="destination">The target point of the path, represented as a Vector3d.</param>
-    /// <param name="request">When this method returns, contains the created AStarPathRequest if the operation succeeds; 
-    /// otherwise, contains the default value.</param>
-    /// <returns>true if the path request was successfully created; otherwise, false.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCreate(
-        Vector3d origin,
-        Vector3d destination,
-        out AStarPathRequest? request)
-    {
-        TrailblazerWorldContext context = PathRequestContextResolver.DefaultContext;
-        return TryCreate(context, origin, destination, context.VoxelSize, out request);
-    }
-
-    /// <summary>
-    /// Creates a new A* pathfinding request between the specified origin and destination positions, using the given
-    /// unit size and heuristic method.
-    /// </summary>
-    /// <remarks>
-    /// If the origin or destination cannot be mapped to valid path edge voxels, the method returns null. 
-    /// The returned request may have its maximum search range set based on the start and end nodes.
-    /// </remarks>
-    /// <param name="origin">The starting position for the pathfinding request.</param>
-    /// <param name="destination">The target position for the pathfinding request.</param>
-    /// <param name="unitSize">The size of the unit for which the path is being calculated. Must be a positive value.</param>
-    /// <param name="heuristic">The heuristic method to use for pathfinding. Defaults to Manhattan if not specified.</param>
-    /// <param name="allowUnwalkableEndpoints">true to allow the origin or destination to be unwalkable; otherwise, false.</param>
-    /// <param name="allowTraversalTransitions">true to allow traversal transitions during pathfinding; otherwise, false.</param>
-    /// <returns>
-    /// An AStarPathRequest representing the configured pathfinding request, or null if a valid path cannot be
-    /// initialized between the specified positions.
-    /// </returns>
-    public static AStarPathRequest? Create(
-        Vector3d origin,
-        Vector3d destination,
-        Fixed64 unitSize,
-        HeuristicMethod heuristic = HeuristicMethod.Manhattan,
-        bool allowUnwalkableEndpoints = false,
-        bool allowTraversalTransitions = false) =>
-        Create(
-            PathRequestContextResolver.DefaultContext,
-            origin,
-            destination,
-            unitSize,
-            heuristic,
-            allowUnwalkableEndpoints,
-            allowTraversalTransitions);
 
     /// <summary>
     /// Creates a context-bound A* pathfinding request.

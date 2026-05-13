@@ -17,7 +17,7 @@ public class TrailblazerFixture : IDisposable
 
     public void Dispose()
     {
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 }

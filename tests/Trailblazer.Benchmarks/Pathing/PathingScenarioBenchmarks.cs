@@ -154,7 +154,7 @@ public class PathingScenarioBenchmarks
         SetupTransitionRequests();
         SetupFlowFieldFloodSweep();
         ValidateConfiguredScenarios();
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
     }
 
     [GlobalCleanup]
@@ -186,7 +186,7 @@ public class PathingScenarioBenchmarks
     })]
     public void PrepareFlowFieldSharing()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
         if (!PathGuideFactory.RequestGuide(_flowSharingRequests[0], out FlowFieldGuide guide))
             throw new InvalidOperationException("Preflight: flow-field sharing seed request failed.");
 
@@ -200,7 +200,7 @@ public class PathingScenarioBenchmarks
     })]
     public void PrepareReachabilityFirstHit()
     {
-        BenchmarkPathFixture.FlushGuideCache();
+        _fixture.FlushGuideCache();
         PathManager.TryUpdateChartCell(
             ReachabilityChartName,
             ReachabilityInvalidateX,
@@ -317,7 +317,7 @@ public class PathingScenarioBenchmarks
     [BenchmarkCategory("Pathing", "Scenario", "Transition", "Request")]
     public AStarPathRequest TransitionRequestConstruction_AStarJumpLink()
     {
-        return AStarPathRequest.Create(
+        return AStarPathRequest.Create(_fixture.Context, 
             _transitionOrigin,
             _transitionDestination,
             Fixed64.One,
@@ -341,7 +341,7 @@ public class PathingScenarioBenchmarks
     [BenchmarkCategory("Pathing", "Scenario", "Transition", "Request")]
     public FlowFieldPathRequest TransitionRequestConstruction_FlowFieldJumpLink()
     {
-        return FlowFieldPathRequest.Create(
+        return FlowFieldPathRequest.Create(_fixture.Context, 
             _transitionOrigin,
             _transitionDestination,
             Fixed64.One,
@@ -569,7 +569,7 @@ public class PathingScenarioBenchmarks
         {
             if ((i & 1) == 0)
             {
-                AStarPathRequest request = AStarPathRequest.Create(
+                AStarPathRequest request = AStarPathRequest.Create(_fixture.Context, 
                     _transitionOrigin,
                     _transitionDestination,
                     Fixed64.One,
@@ -583,7 +583,7 @@ public class PathingScenarioBenchmarks
             }
             else
             {
-                FlowFieldPathRequest request = FlowFieldPathRequest.Create(
+                FlowFieldPathRequest request = FlowFieldPathRequest.Create(_fixture.Context, 
                     _transitionOrigin,
                     _transitionDestination,
                     Fixed64.One,
@@ -631,7 +631,7 @@ public class PathingScenarioBenchmarks
         _dynamicGuideBuffer = new AStarGuide[DynamicRepathWaveCount];
         for (int i = 0; i < DynamicRepathWaveCount; i++)
         {
-            _dynamicRepathRequests[i] = AStarPathRequest.Create(starts[i], destination, Fixed64.One);
+            _dynamicRepathRequests[i] = AStarPathRequest.Create(_fixture.Context, starts[i], destination, Fixed64.One);
             if (_dynamicRepathRequests[i] == null)
                 throw new InvalidOperationException($"Preflight: dynamic A* request {i} could not be created.");
         }
@@ -649,7 +649,7 @@ public class PathingScenarioBenchmarks
         _flowSharingGuideBuffer = new FlowFieldGuide[FlowSharingCount500];
         for (int i = 0; i < FlowSharingCount500; i++)
         {
-            _flowSharingRequests[i] = FlowFieldPathRequest.Create(starts[i], destination, Fixed64.One);
+            _flowSharingRequests[i] = FlowFieldPathRequest.Create(_fixture.Context, starts[i], destination, Fixed64.One);
             if (_flowSharingRequests[i] == null)
                 throw new InvalidOperationException($"Preflight: flow-sharing request {i} could not be created.");
         }
@@ -690,12 +690,12 @@ public class PathingScenarioBenchmarks
         _transitionOrigin = TransitionOffset;
         _transitionDestination = TransitionOffset + new Vector3d(4, 0, 0);
 
-        _transitionAStarRequest = AStarPathRequest.Create(
+        _transitionAStarRequest = AStarPathRequest.Create(_fixture.Context, 
             _transitionOrigin,
             _transitionDestination,
             Fixed64.One,
             allowTraversalTransitions: true);
-        _transitionFlowFieldRequest = FlowFieldPathRequest.Create(
+        _transitionFlowFieldRequest = FlowFieldPathRequest.Create(_fixture.Context, 
             _transitionOrigin,
             _transitionDestination,
             Fixed64.One,
@@ -841,13 +841,13 @@ public class PathingScenarioBenchmarks
             extraFloodRange: request.ExtraFloodRange);
     }
 
-    private static AStarPathRequest CreateReachabilityRequest(
+    private AStarPathRequest CreateReachabilityRequest(
         Vector3d start,
         Vector3d end,
         Fixed64 unitSize,
         Fixed64 maxClimbHeight)
     {
-        AStarPathRequest request = AStarPathRequest.Create(start, end, unitSize)
+        AStarPathRequest request = AStarPathRequest.Create(_fixture.Context, start, end, unitSize)
             ?? throw new InvalidOperationException(
                 $"Preflight: reachability request could not be created for unit size {unitSize}.");
 
@@ -855,9 +855,9 @@ public class PathingScenarioBenchmarks
         return request;
     }
 
-    private static FlowFieldPathRequest CreateFlowRequest(Vector3d start, Vector3d end, string name)
+    private FlowFieldPathRequest CreateFlowRequest(Vector3d start, Vector3d end, string name)
     {
-        return FlowFieldPathRequest.Create(start, end, Fixed64.One)
+        return FlowFieldPathRequest.Create(_fixture.Context, start, end, Fixed64.One)
             ?? throw new InvalidOperationException($"Preflight: flow-field request '{name}' could not be created.");
     }
 

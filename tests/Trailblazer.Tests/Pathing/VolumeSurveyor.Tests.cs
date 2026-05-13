@@ -15,9 +15,9 @@ public sealed class VolumeSurveyorTests : IDisposable
 {
     public VolumeSurveyorTests()
     {
-        TrailblazerWorldManager.Setup();
+        TestWorld.Setup();
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        TrailblazerWorldManager.TryAddGrid(config, out _);
+        TestWorld.World.TryAddGrid(config, out _);
     }
 
     public void Dispose()
@@ -25,8 +25,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathManager.Reset();
         VolumeMediumRules.ClearGasVoxelRule();
         VolumeMediumRules.ClearLiquidVoxelRule();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -37,10 +36,10 @@ public sealed class VolumeSurveyorTests : IDisposable
 
         AddOpen(Vector3d.Zero);
 
-        VolumePathRequest sameVoxel = TestRequire.NotNull(VolumePathRequest.Create(Vector3d.Zero, Vector3d.Zero, Fixed64.One));
+        VolumePathRequest sameVoxel = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero, Vector3d.Zero, Fixed64.One));
         VolumeSurveyor.Shared.FindPath(sameVoxel).HasPath.Should().BeFalse();
 
-        VolumePathRequest invalid = TestRequire.NotNull(VolumePathRequest.Create(Vector3d.Zero, Vector3d.Zero, Fixed64.One));
+        VolumePathRequest invalid = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero, Vector3d.Zero, Fixed64.One));
         invalid.UpdateRequest(new Vector3d(64, 0, 0), Vector3d.Zero, Fixed64.One).Should().BeFalse();
         VolumeSurveyor.Shared.FindPath(invalid).HasPath.Should().BeFalse();
     }
@@ -51,8 +50,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         AddOpen(Vector3d.Zero);
         AddOpen(new Vector3d(2, 0, 0));
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
 
@@ -68,8 +66,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         AddOpen(Vector3d.Zero);
         AddOpen(new Vector3d(1, 0, 1));
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 1),
             Fixed64.One));
 
@@ -86,8 +83,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasSuccA");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasSuccA");
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -118,8 +114,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         foreach (Vector3d pos in positions)
             PathTestFactory.RegisterGeneratedVolumePoint(pos, TraversalMedium.Gas, "GasLShape");
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 2),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -142,8 +137,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasChartKeys");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasChartKeys");
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -164,8 +158,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasRelaxed");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasRelaxed");
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             allowUnwalkableEndpoints: true,
@@ -196,8 +189,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         foreach (Vector3d pos in positions)
             PathTestFactory.RegisterGeneratedVolumePoint(pos, TraversalMedium.Gas, "GasStraight");
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -230,8 +222,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterFromData("SolidVolumeOwners", data, Vector3d.Zero);
         VolumeMediumRules.SetGasVoxelRule(static voxel => voxel != null && voxel.HasPartition<SolidChartPartition>());
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             allowUnwalkableEndpoints: true,
@@ -249,8 +240,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "VolumeMissingMeta");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "VolumeMissingMeta");
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -281,8 +271,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         VolumeChartPartition neighborPartition = TestRequire.NotNull(neighbor.GetPartitionOrDefault<VolumeChartPartition>());
         neighborPartition.PathCostModifier = 25;
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             heuristic: HeuristicMethod.Manhattan,
@@ -342,8 +331,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(0, 0, 1), TraversalMedium.Gas, "GasDiagEnd");
         PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 1), TraversalMedium.Gas, "GasDiagEnd");
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 1),
             Fixed64.One,
             medium: TraversalMedium.Gas));
@@ -370,9 +358,9 @@ public sealed class VolumeSurveyorTests : IDisposable
     [Fact]
     public void VolumeSurveyor_FindPath_ShouldKeepOpenPlane8ColdAllocationsUnderBudget()
     {
-        TrailblazerWorldManager.Reset();
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-1, -1, -1), new Vector3d(12, 4, 12)), out _);
+        TestWorld.Reset();
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-1, -1, -1), new Vector3d(12, 4, 12)), out _);
 
         NavigationChartCell[,,] data = new NavigationChartCell[1, 8, 8];
         for (int x = 0; x < 8; x++)
@@ -382,8 +370,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         NavigationChart chart = NavigationChart.From3D("VolumeOpenPlane8Alloc", data, Vector3d.Zero, Fixed64.One);
         PathManager.Register(chart);
 
-        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(
-            Vector3d.Zero,
+        VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(7, 0, 7),
             Fixed64.One,
             medium: TraversalMedium.Gas));

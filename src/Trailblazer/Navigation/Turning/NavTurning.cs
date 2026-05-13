@@ -102,24 +102,11 @@ public class NavTurning : IRecordable
     #endregion
 
     /// <summary>
-    /// Creates and initializes a new <see cref="NavTurning"/> instance for a object of the given radius.
-    /// </summary>
-    public static NavTurning CreateNew(Fixed64 radius) => new(radius);
-
-    /// <summary>
     /// Creates and initializes a context-bound <see cref="NavTurning"/> instance.
     /// </summary>
     public static NavTurning CreateNew(TrailblazerWorldContext context, Fixed64 radius) => new(context, radius);
 
-    /// <summary>
-    /// Constructs a <see cref="NavTurning"/> without initializing collision thresholds.
-    /// </summary>
-    public NavTurning() { }
-
-    /// <summary>
-    /// Constructs and immediately initializes a <see cref="NavTurning"/> with the given object radius.
-    /// </summary>
-    public NavTurning(Fixed64 radius) => OnInitialize(radius);
+    private NavTurning() { }
 
     /// <summary>
     /// Constructs and immediately initializes a context-bound <see cref="NavTurning"/>.
@@ -139,9 +126,12 @@ public class NavTurning : IRecordable
         _context = context;
     }
 
-    private int FrameRate => _context?.FrameRate ?? TrailblazerManager.FrameRate;
+    private TrailblazerWorldContext RequireContext() =>
+        _context ?? throw new InvalidOperationException("NavTurning requires an explicit TrailblazerWorldContext.");
 
-    private Fixed64 DeltaTime => _context?.DeltaTime ?? TrailblazerManager.DeltaTime;
+    private int FrameRate => RequireContext().FrameRate;
+
+    private Fixed64 DeltaTime => RequireContext().DeltaTime;
 
     /// <summary>
     /// Configures internal thresholds based on the object’s radius and resets turn state.

@@ -60,7 +60,7 @@ This split matters because it keeps:
 
 The main entry points are:
 
-- `CreateNew(Fixed64 radius)`
+- `CreateNew(TrailblazerWorldContext context, Fixed64 radius)`
 - `OnInitialize(Fixed64 radius)`
 - `ApplyPathRequest(IPathRequest pathRequest, int groupId = -1)`
 - `GetHeading(ISteer navigator)`

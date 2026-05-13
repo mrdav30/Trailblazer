@@ -13,8 +13,8 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 {
     public HybridWaypointFlattenerTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)),
             out _);
     }
@@ -22,8 +22,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -32,12 +31,10 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     {
         RegisterLineChart("HybridFlattenChart", Vector3d.Zero, 5);
 
-        AStarPathRequest first = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest first = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One));
-        AStarPathRequest second = TestRequire.NotNull(AStarPathRequest.Create(
-            new Vector3d(2, 0, 0),
+        AStarPathRequest second = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(2, 0, 0),
             new Vector3d(4, 0, 0),
             Fixed64.One));
 
@@ -117,14 +114,12 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
         Voxel volStart = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
         Voxel volEnd = TestRequire.VoxelAt(new Vector3d(3, 0, 0));
 
-        VolumePathRequest volRequest = TestRequire.NotNull(VolumePathRequest.Create(
-            new Vector3d(2, 0, 0),
+        VolumePathRequest volRequest = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(2, 0, 0),
             new Vector3d(3, 0, 0),
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        AStarPathRequest leadUp = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest leadUp = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One));
 
@@ -157,9 +152,9 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
         HybridRoutePlan plan = new(
             new[]
             {
-                HybridRouteStep.Waypoint(new Vector3d(0, 0, 0), additionalCost: 0),
-                HybridRouteStep.Waypoint(new Vector3d(1, 0, 0), additionalCost: 1),
-                HybridRouteStep.Waypoint(new Vector3d(2, 0, 0), additionalCost: 1)
+                HybridRouteStep.Waypoint(TestWorld.Context, new Vector3d(0, 0, 0), additionalCost: 0),
+                HybridRouteStep.Waypoint(TestWorld.Context, new Vector3d(1, 0, 0), additionalCost: 1),
+                HybridRouteStep.Waypoint(TestWorld.Context, new Vector3d(2, 0, 0), additionalCost: 1)
             },
             Array.Empty<TraversalTransition>(),
             0);
@@ -185,8 +180,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
         PathTestFactory.RegisterSingleWalkablePoint("HybridFlattenIsolatedA", Vector3d.Zero);
         PathTestFactory.RegisterSingleWalkablePoint("HybridFlattenIsolatedB", new Vector3d(7, 0, 0));
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(7, 0, 0),
             Fixed64.One));
 
@@ -240,7 +234,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
             EndNode = end;
         }
 
-        public TrailblazerWorldContext Context => TrailblazerManager.DefaultContext;
+        public TrailblazerWorldContext Context => TestWorld.Context;
 
         public Vector3d Origin { get; }
 

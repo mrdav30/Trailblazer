@@ -43,7 +43,7 @@ public class MockMotorAgent
         Rotation = rotation ?? FixedQuaternion.Identity;
         Velocity = velocity ?? Vector3d.Zero;
 
-        Motor = NavMotor.CreateNew(FrameCondition, profile);
+        Motor = NavMotor.CreateNew(TestWorld.Context, FrameCondition, profile);
         Motor.SetVelocity(Velocity);
 
         CheckTrekCondition();
@@ -74,7 +74,7 @@ public class MockMotorAgent
 
         CheckTrekCondition();
 
-        Fixed64 invDelta = TrailblazerManager.InvDeltaTime;
+        Fixed64 invDelta = TestWorld.Context.InvDeltaTime;
         Velocity = (Position - LastPosition) * invDelta;
 
         _positionDelta = Vector3d.Zero;

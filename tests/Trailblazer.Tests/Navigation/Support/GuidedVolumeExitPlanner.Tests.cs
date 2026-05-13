@@ -13,15 +13,14 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
 {
     public GuidedVolumeExitPlannerTests()
     {
-        TrailblazerWorldManager.Setup();
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+        TestWorld.Setup();
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -30,8 +29,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     {
         GuidedPathTestScene.RegisterVolumeExitHandoffScene("GuidedPlannerRejectMode");
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
@@ -56,8 +54,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerAStar";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
@@ -78,7 +75,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         plannedHandoff.ChartPathMode.Should().Be(SolidPathAlgorithm.AStar);
         totalCost.Should().BeGreaterThan(0);
 
-        plannedHandoff.TryCreateFollowupRequest(new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest? followup).Should().BeTrue();
+        plannedHandoff.TryCreateFollowupRequest(TestWorld.Context, new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest? followup).Should().BeTrue();
         followup.Should().BeOfType<AStarPathRequest>();
     }
 
@@ -88,8 +85,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerFlow";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
@@ -110,7 +106,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         plannedHandoff.FlowFieldExtraFloodRange.Should().Be(8);
         totalCost.Should().BeGreaterThan(0);
 
-        plannedHandoff.TryCreateFollowupRequest(new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest? followup).Should().BeTrue();
+        plannedHandoff.TryCreateFollowupRequest(TestWorld.Context, new Vector3d(2, 0, 0), Fixed64.One, out IPathRequest? followup).Should().BeTrue();
         followup.Should().BeOfType<FlowFieldPathRequest>();
     }
 
@@ -120,8 +116,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerAerialAStar";
         GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Gas,
@@ -149,8 +144,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerAerialFlow";
         GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Gas,
@@ -179,8 +173,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerAerialAStarDisabled";
         GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Gas,
@@ -205,8 +198,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerAerialFlowDisabled";
         GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Gas,
@@ -233,8 +225,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerZeroChartLeg";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
@@ -262,8 +253,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerOutsideGrid";
         GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(40, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
@@ -289,8 +279,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         GuidedPathTestScene.AddWater(Vector3d.Zero);
         GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
 
-        GuidedVolumeExitPlanner.TryPlan(
-            Vector3d.Zero,
+        GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
             Fixed64.One,
             TraversalMedium.Liquid,
@@ -321,8 +310,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     {
         RegisterSolidTargetLine("GuidedPlannerDirectHybrid", Vector3d.Zero, 3);
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            Vector3d.Zero,
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
             Fixed64.One,
             allowTraversalTransitions: true));
@@ -341,8 +329,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         const string sceneKey = "GuidedPlannerTransitionAwareHelper";
         GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
 
-        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(
-            new Vector3d(1, 0, 0),
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(1, 0, 0),
             new Vector3d(4, 0, 0),
             Fixed64.One,
             allowTraversalTransitions: true));
@@ -374,19 +361,18 @@ public sealed class GuidedVolumeExitHandoffTests : IDisposable
 {
     public GuidedVolumeExitHandoffTests()
     {
-        if (TrailblazerWorldManager.IsActive)
-            TrailblazerWorldManager.Reset();
+        if (TestWorld.IsActive)
+            TestWorld.Reset();
         else
-            TrailblazerWorldManager.Setup();
+            TestWorld.Setup();
 
-        TrailblazerWorldManager.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-8, -8, -8), new Vector3d(16, 16, 16)), out _);
     }
 
     public void Dispose()
     {
         PathManager.Reset();
-        TrailblazerWorldManager.Reset();
-        TrailblazerManager.Reset();
+        TestWorld.Reset();
         GC.SuppressFinalize(this);
     }
 
@@ -395,7 +381,7 @@ public sealed class GuidedVolumeExitHandoffTests : IDisposable
     {
         // Default TransitionId is null, so IsValid == false; the early-return branch is exercised.
         var handoff = new GuidedVolumeExitHandoff();
-        handoff.TryCreateFollowupRequest(Vector3d.Zero, Fixed64.One, out _).Should().BeFalse();
+        handoff.TryCreateFollowupRequest(TestWorld.Context, Vector3d.Zero, Fixed64.One, out _).Should().BeFalse();
     }
 
     [Fact]
@@ -410,7 +396,7 @@ public sealed class GuidedVolumeExitHandoffTests : IDisposable
             ChartOriginPosition = new Vector3d(1000, 0, 0),
             TargetPosition = new Vector3d(1001, 0, 0),
         };
-        handoff.TryCreateFollowupRequest(Vector3d.Zero, Fixed64.One, out _).Should().BeFalse();
+        handoff.TryCreateFollowupRequest(TestWorld.Context, Vector3d.Zero, Fixed64.One, out _).Should().BeFalse();
     }
 
     [Fact]
@@ -424,6 +410,6 @@ public sealed class GuidedVolumeExitHandoffTests : IDisposable
             ChartOriginPosition = new Vector3d(1000, 0, 0),
             TargetPosition = new Vector3d(1001, 0, 0),
         };
-        handoff.TryCreateFollowupRequest(Vector3d.Zero, Fixed64.One, out _).Should().BeFalse();
+        handoff.TryCreateFollowupRequest(TestWorld.Context, Vector3d.Zero, Fixed64.One, out _).Should().BeFalse();
     }
 }

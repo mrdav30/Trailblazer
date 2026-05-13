@@ -219,20 +219,20 @@ public class AStarSurveyor
         if (neighbor.Voxel == _request.EndNode)
         {
             int endPathCost = CalculatePathCost(neighbor, cost);
-            SetPathPartitionData(neighbor, current.GlobalIndex, cost, endPathCost);
+            SetPathPartitionData(neighbor, current.WorldIndex, cost, endPathCost);
             return true;
         }
 
         int pathCost = CalculatePathCost(neighbor, cost, out int heuristicCost);
         if (!_heap.Contains(neighbor))
         {
-            SetPathPartitionData(neighbor, current.GlobalIndex, cost, pathCost);
+            SetPathPartitionData(neighbor, current.WorldIndex, cost, pathCost);
             _heap.Add(neighbor, pathCost, heuristicCost);
         }
         else if (_meta.TryGetValue(neighbor.Voxel, out AStarVoxelMeta neighborData)
             && neighborData.MovementCost > cost)
         {
-            SetPathPartitionData(neighbor, current.GlobalIndex, cost, pathCost);
+            SetPathPartitionData(neighbor, current.WorldIndex, cost, pathCost);
             _heap.UpdatePathCost(neighbor, pathCost, heuristicCost);
             _heap.SortUp(neighbor);
         }

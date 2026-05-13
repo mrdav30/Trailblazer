@@ -101,6 +101,6 @@ public class LocomotionForcesTests
         LocomotionForces.GlobalForces.Reset();
 
         LocomotionForces loco = new();
-        loco.GravityForce.Should().Be(GlobalEnviromentForces.DefaultGravityForce);
+        loco.GravityForce.Should().Be(GlobalEnvironmentForces.DefaultGravityForce);
     }
 }

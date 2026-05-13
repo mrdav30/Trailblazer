@@ -1,3 +1,7 @@
+global using SwiftCollections.Diagnostics;
+
+using System;
+
 namespace Trailblazer;
 
 /// <summary>

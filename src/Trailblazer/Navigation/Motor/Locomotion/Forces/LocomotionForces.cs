@@ -14,16 +14,16 @@ public sealed class LocomotionForces : IRecordable
     /// </summary>
     /// <remarks>
     /// Assign fields on this instance to shift gravity for every unoverridden object at once.
-    /// Call <see cref="GlobalEnviromentForces.Reset"/> to restore the defaults.
+    /// Call <see cref="GlobalEnvironmentForces.Reset"/> to restore the defaults.
     /// </remarks>
-    public static readonly GlobalEnviromentForces GlobalForces = new();
+    public static readonly GlobalEnvironmentForces GlobalForces = new();
 
     #region Configurable Parameters
 
     /// <summary>
     /// The gravity force applied to this object.
     /// Returns the per-instance override when one is set;
-    /// otherwise delegates to <see cref="GlobalEnviromentForces"/> so a single global change takes effect for all unoverridden navigators simultaneously.
+    /// otherwise delegates to <see cref="GlobalEnvironmentForces"/> so a single global change takes effect for all unoverridden navigators simultaneously.
     /// Assigning this property sets the per-instance override.
     /// Call <see cref="ClearGravityForceOverride"/> to remove the override and restore global tracking.
     /// </summary>
@@ -37,7 +37,7 @@ public sealed class LocomotionForces : IRecordable
 
     /// <summary>
     /// Returns true when this instance carries a per-instance gravity override.
-    /// When false, <see cref="GravityForce"/> follows <see cref="GlobalEnviromentForces"/>.
+    /// When false, <see cref="GravityForce"/> follows <see cref="GlobalEnvironmentForces"/>.
     /// </summary>
     public bool HasGravityForceOverride => _gravityForceOverride.HasValue;
 
@@ -45,7 +45,7 @@ public sealed class LocomotionForces : IRecordable
     /// <summary>
     /// The terminal fall velocity cap for this object.
     /// Returns the per-instance override when one is set; otherwise delegates to
-    /// <see cref="GlobalEnviromentForces"/>.
+    /// <see cref="GlobalEnvironmentForces"/>.
     /// Assigning this property sets the per-instance override.
     /// Call <see cref="ClearTerminalVelocityOverride"/> to remove the override and restore global tracking.
     /// </summary>
@@ -59,7 +59,7 @@ public sealed class LocomotionForces : IRecordable
 
     /// <summary>
     /// Returns true when this instance carries a per-instance terminal velocity override.
-    /// When false, <see cref="TerminalVelocity"/> follows <see cref="GlobalEnviromentForces"/>.
+    /// When false, <see cref="TerminalVelocity"/> follows <see cref="GlobalEnvironmentForces"/>.
     /// </summary>
     public bool HasTerminalVelocityOverride => _terminalVelocityOverride.HasValue;
 
@@ -69,13 +69,13 @@ public sealed class LocomotionForces : IRecordable
 
     /// <summary>
     /// Removes the per-instance gravity override so this object tracks
-    /// <see cref="GlobalEnviromentForces"/>.
+    /// <see cref="GlobalEnvironmentForces"/>.
     /// </summary>
     public void ClearGravityForceOverride() => _gravityForceOverride = null;
 
     /// <summary>
     /// Removes the per-instance terminal velocity override so this object tracks
-    /// <see cref="GlobalEnviromentForces"/>.
+    /// <see cref="GlobalEnvironmentForces"/>.
     /// </summary>
     public void ClearTerminalVelocityOverride() => _terminalVelocityOverride = null;
 

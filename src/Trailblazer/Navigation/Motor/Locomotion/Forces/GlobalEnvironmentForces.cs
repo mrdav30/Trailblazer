@@ -11,7 +11,7 @@ namespace Trailblazer.Navigation.Motor;
 /// Assigning fields on that instance changes the effective gravity for every unoverridden object
 /// on the next simulation frame without touching individual locomotion instances.
 /// </remarks>
-public sealed class GlobalEnviromentForces
+public sealed class GlobalEnvironmentForces
 {
     /// <summary>
     /// The default fixed-point acceleration force for gravity.
@@ -39,7 +39,7 @@ public sealed class GlobalEnviromentForces
     /// </summary>
     public Fixed64 TerminalVelocity;
 
-    internal GlobalEnviromentForces(Fixed64? gravityForce = null, Fixed64? terminalVelocity = null)
+    internal GlobalEnvironmentForces(Fixed64? gravityForce = null, Fixed64? terminalVelocity = null)
     {
         GravityForce = gravityForce ?? DefaultGravityForce;
         TerminalVelocity = terminalVelocity ?? DefaultTerminalVelocity;

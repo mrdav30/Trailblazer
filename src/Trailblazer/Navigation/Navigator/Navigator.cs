@@ -3,13 +3,12 @@ using FixedMathSharp;
 using GridForge.Grids;
 using System;
 using System.Runtime.CompilerServices;
-using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
 using Trailblazer.Pathing;
 
-namespace Trailblazer;
+namespace Trailblazer.Navigation;
 
 /// <summary>
 /// Base class representing a object, responsible for handling movement, traversal state, and simulation flow.

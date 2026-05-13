@@ -1,4 +1,5 @@
 using FixedMathSharp;
+using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 

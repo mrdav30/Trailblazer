@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace Trailblazer;
+namespace Trailblazer.Navigation;
 
 /// <summary>
 /// Allocates deterministic navigator ids for one Trailblazer world context.

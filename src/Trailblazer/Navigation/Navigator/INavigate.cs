@@ -1,7 +1,6 @@
 ﻿using FixedMathSharp;
-using Trailblazer.Navigation;
 
-namespace Trailblazer;
+namespace Trailblazer.Navigation;
 
 /// <summary>
 /// Defines the core interface for a object entity, providing position, rotation, traversal state, and event handling.

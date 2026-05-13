@@ -423,10 +423,10 @@ For teardown or rebuild:
 PathManager.UnloadChart(chart.Name);
 ```
 
-Or, when resetting the whole simulation:
+Or, when resetting a context's pathing state:
 
 ```csharp
-PathManager.Reset();
+context.Pathing.Reset();
 ```
 
 ## 13. Mental Model

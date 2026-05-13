@@ -1,10 +1,14 @@
+using System;
+
 namespace Trailblazer.Pathing;
 
 /// <summary>
 /// Owns guide result caches and reusable guide pools for one pathing context.
 /// </summary>
-internal sealed class TrailblazerGuideState
+internal sealed class TrailblazerGuideState : IDisposable
 {
+    private bool _disposed;
+
     internal AStarSurveyor AStarSurveyor { get; } = new();
 
     internal FlowFieldSurveyor FlowFieldSurveyor { get; } = new();
@@ -27,4 +31,16 @@ internal sealed class TrailblazerGuideState
 
     internal GuidePool<VolumeGuide> VolumeGuides { get; } =
         new(static () => new VolumeGuide(), static guide => guide.ResetForReuse());
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        CachedAStarResults.Dispose();
+        CachedFlowResults.Dispose();
+        CachedVolumeResults.Dispose();
+        CachedHybridRoutePlans.Dispose();
+    }
 }

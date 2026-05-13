@@ -2,6 +2,7 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
 using SwiftCollections.Pool;
+using System;
 using System.Threading;
 
 namespace Trailblazer.Pathing;
@@ -9,8 +10,10 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Owns mutable pathing state for one <see cref="TrailblazerWorldContext"/>.
 /// </summary>
-internal sealed class PathingWorldState
+internal sealed class PathingWorldState : IDisposable
 {
+    private bool _disposed;
+
     internal PathingWorldState(TrailblazerWorldContext context)
     {
         Context = context;
@@ -90,4 +93,16 @@ internal sealed class PathingWorldState
     internal int TotalChartsSelectedForGridRebuild { get; set; }
 
     internal int MaxChartsSelectedForSingleGridEvent { get; set; }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        ExternalGridBridge.Dispose();
+        GuideState.Dispose();
+        TransitionRegistryState.Dispose();
+        NavigationChartMapLock.Dispose();
+    }
 }

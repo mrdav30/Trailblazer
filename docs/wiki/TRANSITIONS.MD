@@ -179,10 +179,10 @@ Transition storage is context-local through `TraversalTransitionRegistryState`.
 
 Important lifecycle rules:
 
-- `PathManager.Reset()` clears the default context registry
-- `GridWorld.Reset()` clears only the transition registry owned by that world context
+- `context.Pathing.Reset()` clears that context's transition registry
+- `GridWorld.Reset()` is world-event teardown and clears only the transition registry owned by that world context
 - `PathManager.UnloadChart(...)` unregisters chart-managed generated transitions for that chart regardless of registration path
-- manually registered transitions remain registered until explicit unregister or `PathManager.Reset()`,
+- manually registered transitions remain registered until explicit unregister or `context.Pathing.Reset()`,
   but they can be suppressed and later reactivated as local topology changes alter their endpoint support
 - chart initialization, unload, mutation, overlap masking, and `VolumeMediumRules` changes all
   reevaluate the managed manual transitions touching the affected voxels
@@ -356,8 +356,8 @@ This is especially important in worlds with:
 - A registered transition can still be unusable if its surrounding chart or volume segments cannot be built.
 - Bidirectional behavior is query-time expansion, not two separate registry entries.
 - Volume anchors depend on `VolumeMediumRules` and the raw `TraversalMedium` implied by their anchor medium.
-- `PathManager.Reset()` clears the default context registry; context reset from `GridWorld.Reset()`
-  clears only the owning context registry.
+- `context.Pathing.Reset()` clears the owning context registry; external `GridWorld.Reset()` does the
+  same as world-event teardown for the attached context.
 - If world topology changes after registration, rebuild your transitions.
 
 ## 9. AI And Contributor Notes

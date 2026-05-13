@@ -13,6 +13,8 @@ public sealed class TrailblazerPathingService
 {
     private readonly TrailblazerWorldContext _context;
 
+    private bool _disposed;
+
     internal TrailblazerPathingService(TrailblazerWorldContext context)
     {
         _context = context;
@@ -231,7 +233,10 @@ public sealed class TrailblazerPathingService
             PathManagerExternalGridBridge.HandleGridChanged(eventInfo);
     }
 
-    internal void Reset()
+    /// <summary>
+    /// Clears this context's registered charts, live partitions, transition registry, volume rules, and guide caches.
+    /// </summary>
+    public void Reset()
     {
         EnsureUsable();
         PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);
@@ -239,13 +244,18 @@ public sealed class TrailblazerPathingService
 
     internal void Dispose()
     {
+        if (_disposed)
+            return;
+
         State.ExternalGridBridge.Dispose();
         PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);
+        State.Dispose();
+        _disposed = true;
     }
 
     private void EnsureUsable()
     {
-        if (_context.IsDisposed)
+        if (_disposed || _context.IsDisposed)
             throw new ObjectDisposedException(nameof(TrailblazerWorldContext));
         if (!_context.World.IsActive)
             throw new InvalidOperationException("TrailblazerPathingService is bound to an inactive GridWorld.");

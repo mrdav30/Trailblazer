@@ -8,8 +8,10 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Stores traversal transition registrations and lookup indexes for one pathing context.
 /// </summary>
-internal sealed class TraversalTransitionRegistryState
+internal sealed class TraversalTransitionRegistryState : IDisposable
 {
+    private bool _disposed;
+
     internal SwiftDictionary<string, RegisteredTraversalTransition> Transitions { get; } =
         new(8, StringComparer.Ordinal);
 
@@ -38,5 +40,14 @@ internal sealed class TraversalTransitionRegistryState
     internal void IncrementRegistryVersion()
     {
         Interlocked.Increment(ref RegistryVersion);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        TransitionLock.Dispose();
     }
 }

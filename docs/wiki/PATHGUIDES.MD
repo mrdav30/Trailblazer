@@ -388,7 +388,7 @@ Invalidation sources include:
 
 - chart ownership changes during `PathManager.InitializeChart(...)`
 - chart unload through `PathManager.UnloadChart(...)`
-- full teardown through `PathManager.Reset()` for the default context or `GridWorld.Reset()` for a context-owned world
+- full pathing teardown through `context.Pathing.Reset()` or world-event teardown through `GridWorld.Reset()`
 - request-hash changes caused by transition-registry versioning
 
 Maintenance behavior:

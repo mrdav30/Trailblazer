@@ -1,9 +1,13 @@
 using FixedMathSharp;
 using FluentAssertions;
+using GridForge.Configuration;
+using GridForge.Grids;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
+using Trailblazer.Pathing;
 using Trailblazer.Tests.Navigation.Steering;
 using Trailblazer.Tests.Navigation.Turning;
 using Xunit;
@@ -175,6 +179,96 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
     }
 
     [Fact]
+    public void PathingReset_ShouldClearOnlyOwningPathingState()
+    {
+        typeof(TrailblazerPathingService)
+            .GetMethod(nameof(TrailblazerPathingService.Reset), BindingFlags.Instance | BindingFlags.Public)
+            .Should()
+            .NotBeNull("context.Pathing.Reset() is the host-facing pathing teardown API");
+
+        using TrailblazerWorldContext contextA = CreateContextWithGrid();
+        using TrailblazerWorldContext contextB = CreateContextWithGrid();
+        RegisterSolidLine(contextA, "LifecycleResetChartA", Vector3d.Zero, 2);
+        RegisterSolidLine(contextB, "LifecycleResetChartB", Vector3d.Zero, 2);
+        RegisterSolidPoint(contextA, "LifecycleReachabilityStartA", new Vector3d(0, 2, 0));
+        RegisterSolidPoint(contextA, "LifecycleReachabilityEndA", new Vector3d(3, 2, 0));
+        RegisterSolidPoint(contextB, "LifecycleReachabilityStartB", new Vector3d(0, 2, 0));
+        RegisterSolidPoint(contextB, "LifecycleReachabilityEndB", new Vector3d(3, 2, 0));
+        contextA.Transitions.Register(CreateJumpTransition(contextA, "lifecycle-reset-transition-a"))
+            .Should()
+            .BeTrue();
+        contextB.Transitions.Register(CreateJumpTransition(contextB, "lifecycle-reset-transition-b"))
+            .Should()
+            .BeTrue();
+        contextA.VolumeRules.SetGasVoxelRule(static _ => true);
+        contextB.VolumeRules.SetGasVoxelRule(static _ => true);
+        contextA.Guides.TrySeedAStarCacheForBenchmark(1111, new[] { "LifecycleResetChartA" }, checkout: false)
+            .Should()
+            .BeTrue();
+        contextB.Guides.TrySeedAStarCacheForBenchmark(2222, new[] { "LifecycleResetChartB" }, checkout: false)
+            .Should()
+            .BeTrue();
+
+        contextA.Guides.RequestGuide(
+            CreateAStarRequest(contextA, new Vector3d(0, 2, 0), new Vector3d(3, 2, 0)),
+            out AStarGuide? contextAGuide).Should().BeFalse();
+        contextB.Guides.RequestGuide(
+            CreateAStarRequest(contextB, new Vector3d(0, 2, 0), new Vector3d(3, 2, 0)),
+            out AStarGuide? contextBGuide).Should().BeFalse();
+        contextAGuide.Should().BeNull();
+        contextBGuide.Should().BeNull();
+        SolidPartitionReachability.SolidPartitionReachabilityStats contextAReachabilityBefore =
+            contextA.Guides.CaptureReachabilityStats();
+        SolidPartitionReachability.SolidPartitionReachabilityStats contextBReachabilityBefore =
+            contextB.Guides.CaptureReachabilityStats();
+
+        contextA.Pathing.Reset();
+
+        contextA.Pathing.IsChartRegistered("LifecycleResetChartA").Should().BeFalse();
+        contextA.Transitions.IsRegistered("lifecycle-reset-transition-a").Should().BeFalse();
+        contextA.VolumeRules.HasGasVoxelRule.Should().BeFalse();
+        contextA.Guides.TotalAStarGuideCount.Should().Be(0);
+        contextA.Guides.CaptureReachabilityStats().Version.Should().BeGreaterThan(contextAReachabilityBefore.Version);
+
+        contextB.Pathing.IsChartRegistered("LifecycleResetChartB").Should().BeTrue();
+        contextB.Transitions.IsRegistered("lifecycle-reset-transition-b").Should().BeTrue();
+        contextB.VolumeRules.HasGasVoxelRule.Should().BeTrue();
+        contextB.Guides.TotalAStarGuideCount.Should().Be(1);
+        contextB.Guides.CaptureReachabilityStats().SnapshotBuildCount
+            .Should()
+            .Be(contextBReachabilityBefore.SnapshotBuildCount);
+    }
+
+    [Fact]
+    public void Dispose_ShouldDisposePathingStateAndGuideCachesIdempotently()
+    {
+        TrailblazerWorldContext context = CreateContextWithGrid();
+        PathingWorldState state = context.Pathing.State;
+        AStarSurveyResult result = AStarSurveyResult.Create(
+            context,
+            new[] { new AStarWaypoint { Position = Vector3d.Zero, IsGoal = true } },
+            new[] { "LifecycleDisposedCache" },
+            key: 3333);
+        context.Guides.TrySeedAStarCacheForBenchmark(3333, new[] { "LifecycleDisposedCache" }, checkout: false)
+            .Should()
+            .BeTrue();
+
+        context.Dispose();
+        context.Dispose();
+
+        Action chartLockUse = () => state.NavigationChartMapLock.EnterReadLock();
+        Action transitionLockUse = () => state.TransitionRegistryState.TransitionLock.EnterReadLock();
+
+        chartLockUse.Should().Throw<ObjectDisposedException>();
+        transitionLockUse.Should().Throw<ObjectDisposedException>();
+        using (PathManager.EnterState(state))
+        {
+            Action guideCacheUse = () => state.GuideState.CachedAStarResults.TrySeed(result, checkout: false);
+            guideCacheUse.Should().Throw<ObjectDisposedException>();
+        }
+    }
+
+    [Fact]
     public void GetFrameFromTime_ShouldUseCurrentInverseDeltaTime()
     {
         TestWorld.Setup();
@@ -197,5 +291,70 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
 
         registration.Dispose();
         registration.Dispose();
+    }
+
+    private static TrailblazerWorldContext CreateContextWithGrid()
+    {
+        TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.World.TryAddGrid(
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
+            out _).Should().BeTrue();
+        return context;
+    }
+
+    private static void RegisterSolidLine(
+        TrailblazerWorldContext context,
+        string chartName,
+        Vector3d minBounds,
+        int length)
+    {
+        var data = new bool[1, length, 1];
+        for (int i = 0; i < length; i++)
+            data[0, i, 0] = true;
+
+        context.Pathing.Register(NavigationChart.From3D(chartName, data, minBounds, Fixed64.One))
+            .Should()
+            .BeTrue();
+    }
+
+    private static void RegisterSolidPoint(
+        TrailblazerWorldContext context,
+        string chartName,
+        Vector3d position)
+    {
+        var data = new bool[1, 1, 1]
+        {
+            {
+                { true }
+            }
+        };
+
+        context.Pathing.Register(NavigationChart.From3D(chartName, data, position, Fixed64.One))
+            .Should()
+            .BeTrue();
+    }
+
+    private static TraversalTransition CreateJumpTransition(TrailblazerWorldContext context, string id)
+    {
+        return new TraversalTransition(
+            id,
+            TraversalTransitionType.Jump,
+            TraversalTransitionAnchor.Solid(RequireVoxel(context, Vector3d.Zero).WorldIndex),
+            TraversalTransitionAnchor.Solid(RequireVoxel(context, new Vector3d(1, 0, 0)).WorldIndex),
+            pathCostModifier: 1);
+    }
+
+    private static AStarPathRequest CreateAStarRequest(
+        TrailblazerWorldContext context,
+        Vector3d source,
+        Vector3d destination)
+    {
+        return TestRequire.NotNull(AStarPathRequest.Create(context, source, destination, Fixed64.One));
+    }
+
+    private static Voxel RequireVoxel(TrailblazerWorldContext context, Vector3d position)
+    {
+        context.World.TryGetVoxel(position, out Voxel? voxel).Should().BeTrue();
+        return TestRequire.NotNull(voxel);
     }
 }

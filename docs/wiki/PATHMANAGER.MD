@@ -444,20 +444,24 @@ From a determinism perspective:
 The usual chart lifecycle is:
 
 ```csharp
+using var context = TrailblazerWorldContext.CreateOwned();
 var chart = NavigationChart.From3D("Arena", data, minBounds, Fixed64.One);
 
-PathManager.Register(chart);
+context.Pathing.Register(chart);
 
 // ... use the chart through requests and guides ...
 
-PathManager.UnloadChart(chart);
+context.Pathing.UnloadChart(chart);
 ```
 
-For multi-chart teardown in tests or world resets, the normal pattern is:
+For multi-chart teardown in tests, world reloads, or host-managed shutdown, use the owning context:
 
 ```csharp
-PathManager.Reset();
+context.Pathing.Reset();
 ```
+
+External `GridWorld.Reset()` is still treated as world-event teardown and clears only the pathing state
+owned by the context attached to that world.
 
 ## 13. Common Gotchas
 

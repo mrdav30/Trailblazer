@@ -152,32 +152,32 @@ or exposed by the context migration:
 - Modify: `docs/wiki/TRANSITIONS.MD`
 - Test: `tests/Trailblazer.Tests/TrailblazerWorldContextLifecycle.Tests.cs`
 
-- [ ] **Step 1: Pin reset semantics**
+- [x] **Step 1: Pin reset semantics**
 
   Keep `TrailblazerWorldContext.Reset()` as clock/navigation reset and make
   `TrailblazerPathingService.Reset()` public for pathing teardown. This preserves the existing
   context lifecycle tests while giving hosts a context-local replacement for the now-internal
   `PathManager.Reset()` surface.
 
-- [ ] **Step 2: Add the reset test before changing implementation**
+- [x] **Step 2: Add the reset test before changing implementation**
 
   Add tests proving that `contextA.Pathing.Reset()` clears only context A's chart registry,
   transition registry, volume rule state, guide cache, and reachability state, while leaving context B
   intact. Keep the existing `context.Reset()` tests focused on frame count, hooks, movement groups,
   and navigator id allocator behavior.
 
-- [ ] **Step 3: Dispose context-owned disposable state**
+- [x] **Step 3: Dispose context-owned disposable state**
 
   Implement disposal for `PathingWorldState` and `TrailblazerGuideState`. Dispose
   `ReaderWriterLockSlim` instances and `ReusableSurveyResultCache<T>` instances after force-flushing
   cached results. Keep disposal idempotent.
 
-- [ ] **Step 4: Update docs**
+- [x] **Step 4: Update docs**
 
   Replace stale `PathManager.Reset()` references with `context.Pathing.Reset()` for host-facing
   teardown. Keep `GridWorld.Reset()` behavior documented as a world-event pathing teardown.
 
-- [ ] **Step 5: Run focused verification**
+- [x] **Step 5: Run focused verification**
 
   ```bash
   dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~TrailblazerWorldContextLifecycleTests

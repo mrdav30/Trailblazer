@@ -160,8 +160,9 @@ Volume rule storage is context-local through `VolumeMediumRulesState`.
 
 Important lifecycle rules:
 
-- `PathManager.Reset()` clears the default context's installed gas and liquid rules
-- `GridWorld.Reset()` clears only the volume rules and authored `VolumeChartPartition` state owned by that world context
+- `context.Pathing.Reset()` clears that context's installed gas and liquid rules
+- `GridWorld.Reset()` is world-event teardown and clears only the volume rules and authored
+  `VolumeChartPartition` state owned by that world context
 - changing a host rule invalidates only the owning context's cached volume guides
 - unloading a chart invalidates only cached volume guides whose `ChartsUtilized` includes that chart
 - overlapping chart initialization invalidates cached volume guides for the already-active chart owners touched by the change

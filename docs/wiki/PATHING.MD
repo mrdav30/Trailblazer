@@ -320,7 +320,7 @@ It:
 
 - resolves anchors to voxels at registration time
 - exposes outgoing and incoming transition queries
-- is cleared by `PathManager.Reset()`
+- is cleared by `context.Pathing.Reset()`
 
 For liquid routes, transition fallback and `VolumePathRequest` depend on a valid liquid medium existing, whether that comes from authored chart cells, `VolumeMediumRules`, or both.
 
@@ -353,7 +353,7 @@ Invalidation sources:
 
 - `PathManager.InitializeChart(...)` when overlapping ownership changes live partitions
 - `PathManager.UnloadChart(...)`
-- `PathManager.Reset()`
+- `context.Pathing.Reset()`
 - transition-topology changes when the request hash includes `TraversalTransitionRegistry.RegistryVersion`
 
 ## 9. Choosing The Right Request
@@ -436,7 +436,7 @@ In this mode, transitions are still data owned by `context.Transitions`, not by 
 - `FlowFieldPathRequest` caches by destination-style identity, not unique start-to-end identity.
 - `TraversalMedium.Liquid` fails until authored liquid volume exists, `VolumeMediumRules` provides liquid membership, or both.
 - `TraversalMedium.Gas` fails until authored gas volume exists, `VolumeMediumRules` provides gas membership, or both.
-- `PathManager.Reset()` also clears transition registry state and volume traversal rules.
+- `context.Pathing.Reset()` also clears transition registry state and volume traversal rules.
 - If you request guides directly and forget `ReturnGuide(...)`, results stay checked out.
 
 ## 12. AI And Contributor Notes

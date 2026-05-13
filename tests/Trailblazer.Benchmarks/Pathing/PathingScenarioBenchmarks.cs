@@ -317,7 +317,7 @@ public class PathingScenarioBenchmarks
     [BenchmarkCategory("Pathing", "Scenario", "Transition", "Request")]
     public AStarPathRequest TransitionRequestConstruction_AStarJumpLink()
     {
-        return AStarPathRequest.Create(_fixture.Context, 
+        return AStarPathRequest.Create(_fixture.Context,
             _transitionOrigin,
             _transitionDestination,
             Fixed64.One,
@@ -341,7 +341,7 @@ public class PathingScenarioBenchmarks
     [BenchmarkCategory("Pathing", "Scenario", "Transition", "Request")]
     public FlowFieldPathRequest TransitionRequestConstruction_FlowFieldJumpLink()
     {
-        return FlowFieldPathRequest.Create(_fixture.Context, 
+        return FlowFieldPathRequest.Create(_fixture.Context,
             _transitionOrigin,
             _transitionDestination,
             Fixed64.One,
@@ -569,7 +569,7 @@ public class PathingScenarioBenchmarks
         {
             if ((i & 1) == 0)
             {
-                AStarPathRequest request = AStarPathRequest.Create(_fixture.Context, 
+                AStarPathRequest request = AStarPathRequest.Create(_fixture.Context,
                     _transitionOrigin,
                     _transitionDestination,
                     Fixed64.One,
@@ -583,7 +583,7 @@ public class PathingScenarioBenchmarks
             }
             else
             {
-                FlowFieldPathRequest request = FlowFieldPathRequest.Create(_fixture.Context, 
+                FlowFieldPathRequest request = FlowFieldPathRequest.Create(_fixture.Context,
                     _transitionOrigin,
                     _transitionDestination,
                     Fixed64.One,
@@ -690,12 +690,12 @@ public class PathingScenarioBenchmarks
         _transitionOrigin = TransitionOffset;
         _transitionDestination = TransitionOffset + new Vector3d(4, 0, 0);
 
-        _transitionAStarRequest = AStarPathRequest.Create(_fixture.Context, 
+        _transitionAStarRequest = AStarPathRequest.Create(_fixture.Context,
             _transitionOrigin,
             _transitionDestination,
             Fixed64.One,
             allowTraversalTransitions: true);
-        _transitionFlowFieldRequest = FlowFieldPathRequest.Create(_fixture.Context, 
+        _transitionFlowFieldRequest = FlowFieldPathRequest.Create(_fixture.Context,
             _transitionOrigin,
             _transitionDestination,
             Fixed64.One,

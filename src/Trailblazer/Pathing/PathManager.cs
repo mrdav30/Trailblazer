@@ -80,18 +80,6 @@ internal static class PathManager
     /// </summary>
     private static ReaderWriterLockSlim _navigationChartMapLock => ActiveState.NavigationChartMapLock;
 
-    private static int _activeAuthoredGasCellCount
-    {
-        get => ActiveState.ActiveAuthoredGasCellCount;
-        set => ActiveState.ActiveAuthoredGasCellCount = value;
-    }
-
-    private static int _activeAuthoredLiquidCellCount
-    {
-        get => ActiveState.ActiveAuthoredLiquidCellCount;
-        set => ActiveState.ActiveAuthoredLiquidCellCount = value;
-    }
-
     private static int _nextChartRegistrationOrder
     {
         get => ActiveState.NextChartRegistrationOrder;
@@ -221,8 +209,7 @@ internal static class PathManager
 
             _resolvedChartVoxelStates.Clear();
             _initializedChartTouchCountsByGridIndex.Clear();
-            _activeAuthoredGasCellCount = 0;
-            _activeAuthoredLiquidCellCount = 0;
+            ClearActiveAuthoredVolumeMediumCounts();
 
             if (flushGuideCache && PathGuideFactory.IsPooling)
                 PathGuideFactory.FlushCache(true);
@@ -1401,8 +1388,7 @@ internal static class PathManager
     {
         _resolvedChartVoxelStates.Clear();
         _initializedChartTouchCountsByGridIndex.Clear();
-        _activeAuthoredGasCellCount = 0;
-        _activeAuthoredLiquidCellCount = 0;
+        ClearActiveAuthoredVolumeMediumCounts();
         SolidPartitionReachability.Invalidate();
     }
 
@@ -2513,16 +2499,36 @@ internal static class PathManager
         NavigationChartCell currentEffectiveCell)
     {
         if (previousEffectiveCell.SupportsMedium(TraversalMedium.Gas))
-            _activeAuthoredGasCellCount--;
+            AdjustActiveAuthoredGasCellCount(-1);
 
         if (previousEffectiveCell.SupportsMedium(TraversalMedium.Liquid))
-            _activeAuthoredLiquidCellCount--;
+            AdjustActiveAuthoredLiquidCellCount(-1);
 
         if (currentEffectiveCell.SupportsMedium(TraversalMedium.Gas))
-            _activeAuthoredGasCellCount++;
+            AdjustActiveAuthoredGasCellCount(1);
 
         if (currentEffectiveCell.SupportsMedium(TraversalMedium.Liquid))
-            _activeAuthoredLiquidCellCount++;
+            AdjustActiveAuthoredLiquidCellCount(1);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ClearActiveAuthoredVolumeMediumCounts()
+    {
+        PathingWorldState state = ActiveState;
+        state.ActiveAuthoredGasCellCount = 0;
+        state.ActiveAuthoredLiquidCellCount = 0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void AdjustActiveAuthoredGasCellCount(int delta)
+    {
+        ActiveState.ActiveAuthoredGasCellCount += delta;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void AdjustActiveAuthoredLiquidCellCount(int delta)
+    {
+        ActiveState.ActiveAuthoredLiquidCellCount += delta;
     }
 
     private static void CollectSolidPartitionsForRebind(

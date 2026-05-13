@@ -4,7 +4,6 @@ using GridForge.Grids;
 using System;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
-using Trailblazer.Support;
 
 namespace Trailblazer.Benchmarks.Navigation;
 
@@ -203,35 +202,35 @@ public class NavigationScenarioBenchmarks
             switch (kind)
             {
                 case MixedSteeringKind.DirectLos:
-                {
-                    Vector3d start = directStarts[directIndex];
-                    Vector3d destination = directDestinations[directIndex++];
-                    scenarios[i] = CreateGuidedScenario(kind, start, AStarPathRequest.Create(_fixture.Context, start, destination, Fixed64.One));
-                    break;
-                }
+                    {
+                        Vector3d start = directStarts[directIndex];
+                        Vector3d destination = directDestinations[directIndex++];
+                        scenarios[i] = CreateGuidedScenario(kind, start, AStarPathRequest.Create(_fixture.Context, start, destination, Fixed64.One));
+                        break;
+                    }
                 case MixedSteeringKind.AStar:
-                {
-                    Vector3d start = aStarStarts[aStarIndex++];
-                    scenarios[i] = CreateGuidedScenario(kind, start, AStarPathRequest.Create(_fixture.Context, start, aStarDestination, Fixed64.One));
-                    break;
-                }
+                    {
+                        Vector3d start = aStarStarts[aStarIndex++];
+                        scenarios[i] = CreateGuidedScenario(kind, start, AStarPathRequest.Create(_fixture.Context, start, aStarDestination, Fixed64.One));
+                        break;
+                    }
                 case MixedSteeringKind.FlowField:
-                {
-                    Vector3d start = flowStarts[flowIndex++];
-                    scenarios[i] = CreateGuidedScenario(kind, start, FlowFieldPathRequest.Create(_fixture.Context, start, flowDestination, Fixed64.One));
-                    break;
-                }
+                    {
+                        Vector3d start = flowStarts[flowIndex++];
+                        scenarios[i] = CreateGuidedScenario(kind, start, FlowFieldPathRequest.Create(_fixture.Context, start, flowDestination, Fixed64.One));
+                        break;
+                    }
                 default:
-                {
-                    Vector3d start = CombinedOffset + new Vector3d(
-                        10 + (combinedIndex % 28),
-                        0,
-                        10 + ((combinedIndex / 28) % 12));
-                    BenchmarkSteerAgent agent = CreateMovingAgent(start);
-                    scenarios[i] = new MixedSteeringScenario(kind, agent, NavSteering.CreateNew(_fixture.Context, agent.Radius), null);
-                    combinedIndex++;
-                    break;
-                }
+                    {
+                        Vector3d start = CombinedOffset + new Vector3d(
+                            10 + (combinedIndex % 28),
+                            0,
+                            10 + ((combinedIndex / 28) % 12));
+                        BenchmarkSteerAgent agent = CreateMovingAgent(start);
+                        scenarios[i] = new MixedSteeringScenario(kind, agent, NavSteering.CreateNew(_fixture.Context, agent.Radius), null);
+                        combinedIndex++;
+                        break;
+                    }
             }
         }
 

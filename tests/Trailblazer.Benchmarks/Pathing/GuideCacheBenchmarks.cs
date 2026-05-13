@@ -127,7 +127,7 @@ public class GuideCacheBenchmarks
 
         for (int i = 0; i < CacheCapacity + 1; i++)
         {
-            AStarPathRequest req = AStarPathRequest.Create(_fixture.Context, 
+            AStarPathRequest req = AStarPathRequest.Create(_fixture.Context,
                 cacheStarts[i],
                 cacheDestinations[i],
                 Fixed64.One);

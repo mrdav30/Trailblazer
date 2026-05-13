@@ -1,6 +1,4 @@
-using System;
 using FixedMathSharp;
-using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;

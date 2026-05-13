@@ -1,8 +1,6 @@
 ﻿using Chronicler;
 using FixedMathSharp;
-using GridForge;
 using GridForge.Grids;
-using GridForge.Spatial;
 using System;
 using System.Runtime.CompilerServices;
 using Trailblazer.Navigation;
@@ -1026,7 +1024,7 @@ public abstract class Navigator : INavigate, IRecordable
         TrailblazerWorldContext context = RequireContext();
         return context.Navigation.CreateNavigatorId();
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private TrailblazerWorldContext EnsureContextForSetup()
     {

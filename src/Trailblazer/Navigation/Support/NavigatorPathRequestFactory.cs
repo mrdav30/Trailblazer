@@ -1,6 +1,5 @@
 using FixedMathSharp;
 using GridForge.Grids;
-using System;
 using System.Diagnostics.CodeAnalysis;
 using Trailblazer.Pathing;
 

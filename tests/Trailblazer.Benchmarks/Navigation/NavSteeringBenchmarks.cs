@@ -3,7 +3,6 @@ using FixedMathSharp;
 using GridForge.Grids;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
-using Trailblazer.Support;
 
 namespace Trailblazer.Benchmarks.Navigation;
 

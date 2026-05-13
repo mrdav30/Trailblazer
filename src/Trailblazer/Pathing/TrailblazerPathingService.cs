@@ -1,6 +1,4 @@
 using FixedMathSharp;
-using GridForge;
-using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
 using System;

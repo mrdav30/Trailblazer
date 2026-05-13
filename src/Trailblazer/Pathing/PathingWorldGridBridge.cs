@@ -1,4 +1,3 @@
-using GridForge.Configuration;
 using GridForge.Grids;
 using System;
 

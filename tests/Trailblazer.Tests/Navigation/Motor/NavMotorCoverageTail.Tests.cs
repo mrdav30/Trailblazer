@@ -2,7 +2,6 @@ using Chronicler;
 using FixedMathSharp;
 using FluentAssertions;
 using System;
-using System.Reflection;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Xunit;

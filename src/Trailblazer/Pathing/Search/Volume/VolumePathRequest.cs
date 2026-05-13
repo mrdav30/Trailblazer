@@ -284,7 +284,7 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
 
         return UpdateRequest(Origin, TargetPosition, unitSize);
     }
-    
+
     /// <inheritdoc/>
     public override bool Equals(object? obj) =>
         obj is VolumePathRequest other && Equals(other);

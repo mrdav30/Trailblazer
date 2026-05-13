@@ -87,7 +87,7 @@ public class VolumePathRequestBenchmarks
         _directCorridorOrigin = positions[0];
         _directCorridorDestination = positions[positions.Length - 1];
 
-        _directCorridorRequest = VolumePathRequest.Create(_fixture.Context, 
+        _directCorridorRequest = VolumePathRequest.Create(_fixture.Context,
             _directCorridorOrigin,
             _directCorridorDestination,
             Fixed64.One,
@@ -131,7 +131,7 @@ public class VolumePathRequestBenchmarks
         _lShapeOrigin = positions[0];
         _lShapeDestination = positions[positions.Length - 1];
 
-        _lShapeRequest = VolumePathRequest.Create(_fixture.Context, 
+        _lShapeRequest = VolumePathRequest.Create(_fixture.Context,
             _lShapeOrigin,
             _lShapeDestination,
             Fixed64.One,
@@ -274,7 +274,7 @@ public class VolumePathRequestBenchmarks
     [BenchmarkCategory("Pathing", "Volume", "Request")]
     public VolumePathRequest RequestConstruction_DirectGasCorridor()
     {
-        return VolumePathRequest.Create(_fixture.Context, 
+        return VolumePathRequest.Create(_fixture.Context,
             _directCorridorOrigin,
             _directCorridorDestination,
             Fixed64.One,

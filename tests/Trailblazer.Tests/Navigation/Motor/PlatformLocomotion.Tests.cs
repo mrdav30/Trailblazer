@@ -282,7 +282,7 @@ public class PlatformLocomotionTests : IDisposable
         scout.Motor.Handler.Move.FrameVelocity.x.Should().BeGreaterThan(Fixed64.Zero);
     }
 
-        [Fact]
+    [Fact]
     public void Given_ScoutWithPermaLocked_When_PlatformMoves_Then_ScoutFollowsPlatform()
     {
         var scout = MockMotorAgentTestFactory.CreatePlatformAgent();

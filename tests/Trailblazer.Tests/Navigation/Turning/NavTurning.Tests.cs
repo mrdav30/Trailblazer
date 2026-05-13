@@ -1,6 +1,5 @@
 ﻿using FixedMathSharp;
 using FluentAssertions;
-using System;
 using Trailblazer.Navigation.Turning;
 using Xunit;
 

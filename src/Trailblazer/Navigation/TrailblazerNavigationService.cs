@@ -1,5 +1,5 @@
-using System;
 using SwiftCollections;
+using System;
 using Trailblazer.Navigation.MovementGroups;
 
 namespace Trailblazer.Navigation;

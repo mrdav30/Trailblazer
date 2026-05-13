@@ -1,7 +1,5 @@
 using BenchmarkDotNet.Attributes;
 using FixedMathSharp;
-using GridForge.Grids;
-using GridForge.Spatial;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks.Pathing;
@@ -95,13 +93,13 @@ public class FlowFieldPathRequestBenchmarks
         (_openPlane64Origin, _openPlane64Destination) =
             BenchmarkChartFactory.RegisterOpenPlane("FFOpenPlane64", 64, OpenPlane64Offset);
 
-        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context, 
+        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context,
             _openPlane64Origin, _openPlane64Destination, Fixed64.One);
 
         _fixture.FlushGuideCache();
         BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _openPlane64Request = FlowFieldPathRequest.Create(_fixture.Context, 
+        _openPlane64Request = FlowFieldPathRequest.Create(_fixture.Context,
             _openPlane64Origin, _openPlane64Destination, Fixed64.One);
     }
 
@@ -110,13 +108,13 @@ public class FlowFieldPathRequestBenchmarks
         (_openPlane128Origin, _openPlane128Destination) =
             BenchmarkChartFactory.RegisterOpenPlane("FFOpenPlane128", 128, OpenPlane128Offset);
 
-        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context, 
+        BenchmarkPreflight.AssertFlowFieldRouteExists(_fixture.Context,
             _openPlane128Origin, _openPlane128Destination, Fixed64.One);
 
         _fixture.FlushGuideCache();
         BenchmarkPreflight.AssertNoCacheLeak(_fixture.Context);
 
-        _openPlane128Request = FlowFieldPathRequest.Create(_fixture.Context, 
+        _openPlane128Request = FlowFieldPathRequest.Create(_fixture.Context,
             _openPlane128Origin, _openPlane128Destination, Fixed64.One);
     }
 

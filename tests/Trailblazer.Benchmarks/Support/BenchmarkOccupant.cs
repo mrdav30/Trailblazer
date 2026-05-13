@@ -1,5 +1,4 @@
 ﻿using FixedMathSharp;
-using GridForge.Spatial;
 using System;
 using Trailblazer.Navigation;
 

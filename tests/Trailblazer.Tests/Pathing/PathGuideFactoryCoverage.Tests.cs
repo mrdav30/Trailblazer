@@ -3,7 +3,6 @@ using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
-using System.IO;
 using Trailblazer.Pathing;
 using Xunit;
 

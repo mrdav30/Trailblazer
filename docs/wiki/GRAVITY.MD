@@ -9,6 +9,8 @@ The source of truth for the behavior described here is the code in:
 - `src/Trailblazer/Navigation/Motor/Locomotion/JumpLocomotion.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotion/FallLocomotion.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotion/WaterLocomotion.cs`
+- `src/Trailblazer/Navigation/Motor/Locomotion/Forces/LocomotionForces.cs`
+- `src/Trailblazer/Navigation/Motor/Locomotion/Forces/GlobalEnvironmentForces.cs`
 
 ## 1. Where Gravity Lives
 
@@ -81,11 +83,11 @@ Serializing a `LocomotionHandler.Forces` instance records whether an override wa
 - `WaterLocomotion.DefaultBouyancyFactor = 1`
 - `MoveLocomotion.DefaultWaterDragFactor = 0.0625`
 
-`TrailblazerManager` provides the fixed simulation timing:
+The owning `TrailblazerWorldContext` provides the fixed simulation timing:
 
-- `TrailblazerManager.DeltaTime`
-- `TrailblazerManager.InvDeltaTime`
-- `TrailblazerManager.TotalTime`
+- `context.DeltaTime`
+- `context.InvDeltaTime`
+- `context.TotalTime`
 
 Those values are what make gravity and jumping deterministic from frame to frame.
 
@@ -151,7 +153,7 @@ Then the motor clamps against terminal fall speed:
 
 ```csharp
 Fixed64 terminalFallSpeed = Handler.Move.FrameVelocity.y
-    + (_forceOutput.y * TrailblazerManager.DeltaTime);
+    + (_forceOutput.y * DeltaTime);
 
 if (terminalFallSpeed < -Handler.Move.TerminalVelocity)
     _forceOutput.y = -Handler.Move.TerminalVelocity - Handler.Move.FrameVelocity.y;
@@ -233,7 +235,7 @@ This lets jumps lean away from slopes instead of always being perfectly vertical
 While a jump is active and the jump input is still held, Trailblazer partially counteracts gravity for a limited window:
 
 ```csharp
-if (TrailblazerManager.TotalTime <= extraJumpLimit)
+if (TotalTime <= extraJumpLimit)
     _forceOutput += Handler.Jump.FrameJumpDirection * gravityStep;
 ```
 
@@ -348,9 +350,9 @@ Higher values:
 
 ## 11. Common Misconceptions
 
-### "Gravity is configured on TrailblazerManager"
+### "Gravity is configured on TrailblazerWorldContext"
 
-It is not. `TrailblazerManager` owns the fixed timestep. Gravity lives on `LocomotionHandler.Forces`.
+It is not. `TrailblazerWorldContext` owns the fixed timestep. Gravity lives on `LocomotionHandler.Forces`.
 
 The simulation-wide defaults are on `LocomotionHandler.Forces.GlobalForces`. Per-instance overrides are stored directly on each locomotion instance. When an override is set it wins; when it is not, the instance reads from `GlobalForces`. This keeps per-navigator tuning intact while letting one assignment propagate to every unoverridden navigator at once.
 

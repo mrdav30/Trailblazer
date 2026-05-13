@@ -9,7 +9,11 @@ The code referenced here lives primarily in:
 
 - `src/Trailblazer/Navigation/Motor/NavMotor.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotion/*`
-- `src/Trailblazer/Navigation/Motor/Support/*`
+- `src/Trailblazer/Navigation/Motor/Locomotion/Forces/*`
+- `src/Trailblazer/Navigation/Motor/Locomotion/Profiles/*`
+- `src/Trailblazer/Navigation/Motor/Climbing/*`
+- `src/Trailblazer/Navigation/Motor/Surface/*`
+- `src/Trailblazer/Navigation/Motor/Trek/*`
 
 ## 1. What NavMotor Is
 
@@ -296,7 +300,7 @@ The motor first recomputes `Handler.Move.FrameVelocity` from:
 
 - `newPosition`
 - `lastPosition`
-- `TrailblazerManager.InvDeltaTime`
+- the owning context's `InvDeltaTime`
 
 This becomes the authoritative runtime velocity for the next frame.
 
@@ -487,7 +491,7 @@ Fall and survival events:
 With a `Navigator`, the usual order is:
 
 ```csharp
-TrailblazerManager.Simulate();
+context.Simulate();
 navigator.Simulate();
 navigator.CommitFrameMotion();
 ```

@@ -10,8 +10,11 @@ If you need the movement-execution side, read `NAVMOTOR.MD`.
 The code referenced here lives primarily in:
 
 - `src/Trailblazer/Navigation/Steering/NavSteering.cs`
-- `src/Trailblazer/Navigation/Steering/Support/*`
-- `src/Trailblazer/Pathing/*`
+- `src/Trailblazer/Navigation/Steering/NavSteeringEvents.cs`
+- `src/Trailblazer/Navigation/Steering/GroupBehaviorWeights.cs`
+- `src/Trailblazer/Navigation/MovementGroups/*`
+- `src/Trailblazer/Pathing/Search/Guide/*`
+- `src/Trailblazer/Pathing/Search/Request/*`
 
 ## 1. What NavSteering Is
 

@@ -380,13 +380,16 @@ Before runtime pathing works correctly:
 
 ## 11. Where to Read Next
 
-- [`../README.md`](../README.md) for package-level overview and quick-start examples
+- [`../../README.md`](../../README.md) for package-level overview and quick-start examples
 - [`PATHING.MD`](PATHING.MD) for standalone pathing integration and request guidance
 - [`PATHGUIDES.MD`](PATHGUIDES.MD) for `IGuide`, `IWaypointGuide`, and context-owned guide caches
 - [`TRANSITIONS.MD`](TRANSITIONS.MD) for authored chart and volume handoffs
 - [`VOLUMETRAVERSAL.MD`](VOLUMETRAVERSAL.MD) for raw-volume traversal rules
 - [`NAVMOTOR.MD`](NAVMOTOR.MD) for motor phase ordering
 - [`GRAVITY.MD`](GRAVITY.MD) for the gravity model
-- `src/Trailblazer/Main` for host-facing lifecycle entry points such as `TrailblazerWorldContext` and `Navigator`
-- `src/Trailblazer/Pathing` for core pathing logic, especially the `Search` and `Support` subfolders
-- `src/Trailblazer/Navigation` for steering, turning, motor flow, movement groups
+- `src/Trailblazer/Runtime` for `TrailblazerWorldContext`, the deterministic clock, and lifecycle hooks
+- `src/Trailblazer/Navigation/Navigator` for the host-facing navigator orchestration API
+- `src/Trailblazer/Navigation` for steering, turning, motor flow, movement groups, and navigator guidance
+- `src/Trailblazer/Pathing` for chart lifecycle, pathing state, grid-bridge integration, transition topology, volume rules, and search
+- `src/Trailblazer/Pathing/Search` for request, guide, survey, voxel-resolution, reachability, open-set, A*, FlowField, Hybrid, and Volume pathing code
+- `src/Trailblazer/Traversal` for traversal-medium value objects shared by runtime, navigation, pathing, and transitions

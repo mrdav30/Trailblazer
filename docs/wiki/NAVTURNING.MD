@@ -123,7 +123,7 @@ That keeps steering noise and tiny directional jitter from generating meaningles
 Collision auto-turning uses a movement-distance threshold derived from:
 
 - navigator radius
-- `TrailblazerManager.FrameRate`
+- the owning context's `FrameRate`
 
 That threshold is recomputed from the current frame rate instead of being frozen once at initialization.
 
@@ -203,7 +203,7 @@ This means collision auto-turning is intentionally staged:
 Once the turn is active, `NavTurning` computes an interpolation factor `t`:
 
 - use `_pendingInterpolation` if it is greater than zero
-- otherwise use `TurnRate * TrailblazerManager.DeltaTime`
+- otherwise use `TurnRate * DeltaTime` from the owning context
 
 That value is clamped into `[0, 1]` and applied through `FixedQuaternion.Slerp(...)`.
 
@@ -293,7 +293,7 @@ It does not necessarily mean:
 With a `Navigator`, the usual flow is:
 
 ```csharp
-TrailblazerManager.Simulate();
+context.Simulate();
 
 if (navigator.IsGuideded)
 {

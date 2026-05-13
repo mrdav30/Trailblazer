@@ -11,7 +11,7 @@ If you need the runtime systems currently covered by this Trailblazer implementa
 
 The code referenced here lives primarily in:
 
-- `src/Trailblazer/Main/Navigator.cs`
+- `src/Trailblazer/Navigation/Navigator/Navigator.cs`
 - `src/Trailblazer/Navigation/Steering/NavSteering.cs`
 - `src/Trailblazer/Navigation/Turning/NavTurning.cs`
 - `src/Trailblazer/Navigation/Motor/NavMotor.cs`

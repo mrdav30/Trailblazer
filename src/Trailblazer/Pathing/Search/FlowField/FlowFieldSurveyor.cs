@@ -388,22 +388,20 @@ public class FlowFieldSurveyor
     /// <summary>
     /// Samples an interpolated flow direction from a survey result using direct index arithmetic.
     /// </summary>
+    /// <param name="context">The world context to sample against.</param>
     /// <param name="worldPosition">The world-space position to sample from.</param>
     /// <param name="result">The flow-field survey result to sample.</param>
     /// <returns>An interpolated directional vector.</returns>
-    public static Vector3d SampleFlowVector(Vector3d worldPosition, FlowFieldSurveyResult result)
+    public static Vector3d SampleFlowVector(
+        TrailblazerWorldContext context,
+        Vector3d worldPosition,
+        FlowFieldSurveyResult result)
     {
         if (result == null || !result.HasPath || result.Fields == null)
             return Vector3d.Zero;
 
-        TrailblazerWorldContext? context = result.Context;
-        if (context == null)
-        {
-            if (!PathManager.TryGetActiveState(out PathingWorldState? state) || state == null)
-                return Vector3d.Zero;
-
-            context = state.Context;
-        }
+        PathRequestContextResolver.ThrowIfUnusable(context);
+        ThrowIfResultOwnedByDifferentContext(result, context);
 
         return SampleFlowVector(context, worldPosition, result.Fields, result.SamplingGrids);
     }
@@ -458,29 +456,12 @@ public class FlowFieldSurveyor
     /// Attempts to locate the closest valid voxel from which to begin flow-based movement.
     /// Useful for finding an initial entry point to the flow field.
     /// </summary>
+    /// <param name="context">The world context to search against.</param>
     /// <param name="origin">The world-space origin to search from.</param>
     /// <param name="fields">Flow field data indexed by voxel spawn token.</param>
     /// <param name="result">The closest valid voxel, if found.</param>
     /// <param name="range">Maximum range to search.</param>
     /// <returns><c>true</c> if a nearby flow field anchor is found; otherwise <c>false</c>.</returns>
-    public static bool TryGetNearestFlowAnchor(
-        Vector3d origin,
-        SwiftDictionary<WorldVoxelIndex, FlowField> fields,
-        Fixed64 range,
-        out Voxel? result)
-    {
-        result = null;
-        if (fields == null || fields.Count == 0)
-            return false;
-        if (!PathManager.TryGetActiveState(out PathingWorldState? state) || state == null)
-            return false;
-
-        return TryGetNearestFlowAnchor(state.Context, origin, fields, range, out result);
-    }
-
-    /// <summary>
-    /// Attempts to locate the closest valid flow-field anchor in one explicit context.
-    /// </summary>
     public static bool TryGetNearestFlowAnchor(
         TrailblazerWorldContext context,
         Vector3d origin,
@@ -489,6 +470,7 @@ public class FlowFieldSurveyor
         out Voxel? result)
     {
         result = null;
+        PathRequestContextResolver.ThrowIfUnusable(context);
         if (fields == null || fields.Count == 0)
             return false;
 
@@ -516,24 +498,16 @@ public class FlowFieldSurveyor
     /// <summary>
     /// Retrieves the raw directional flow vector at the given world-space position, if available.
     /// </summary>
+    /// <param name="context">The world context to query against.</param>
     /// <param name="position">The position to query within the flow field.</param>
     /// <param name="fields">Flow field data indexed by voxel index.</param>
     /// <returns>The direction vector, or <c>Vector3d.Zero</c> if no field exists.</returns>
-    public static Vector3d GetFlowDirection(Vector3d position, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
-    {
-        return PathManager.TryGetActiveState(out PathingWorldState? state) && state != null
-            ? GetFlowDirection(state.Context, position, fields)
-            : Vector3d.Zero;
-    }
-
-    /// <summary>
-    /// Retrieves the raw directional flow vector at the given world-space position in one explicit context.
-    /// </summary>
     public static Vector3d GetFlowDirection(
         TrailblazerWorldContext context,
         Vector3d position,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         if (context.World.TryGetVoxel(position, out Voxel? voxel)
             && voxel != null)
         {
@@ -568,26 +542,18 @@ public class FlowFieldSurveyor
     /// If the position does not correspond to a valid voxel or no flow field is found for the voxel,
     /// the method returns the default value for FlowField.
     /// </remarks>
+    /// <param name="context">The world context to query against.</param>
     /// <param name="position">The world position for which to retrieve the corresponding flow field.</param>
     /// <param name="fields">A dictionary mapping world voxel indices to their associated flow fields. Must not be null.</param>
     /// <returns>
     /// The flow field associated with the specified position if found; otherwise, the default value for the FlowField type.
     /// </returns>
-    public static FlowField GetFlowField(Vector3d position, SwiftDictionary<WorldVoxelIndex, FlowField> fields)
-    {
-        return PathManager.TryGetActiveState(out PathingWorldState? state) && state != null
-            ? GetFlowField(state.Context, position, fields)
-            : default;
-    }
-
-    /// <summary>
-    /// Retrieves the flow field associated with the specified world position in one explicit context.
-    /// </summary>
     public static FlowField GetFlowField(
         TrailblazerWorldContext context,
         Vector3d position,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         if (context.World.TryGetVoxel(position, out Voxel? voxel)
             && voxel != null)
         {
@@ -595,6 +561,17 @@ public class FlowFieldSurveyor
                 return field;
         }
         return default;
+    }
+
+    private static void ThrowIfResultOwnedByDifferentContext(
+        FlowFieldSurveyResult result,
+        TrailblazerWorldContext expectedContext)
+    {
+        if (result.Context == null || ReferenceEquals(result.Context, expectedContext))
+            return;
+
+        throw new InvalidOperationException(
+            "Flow field survey result belongs to a different owning TrailblazerWorldContext.");
     }
 
     private sealed class FlowFieldSamplingGridBuilder

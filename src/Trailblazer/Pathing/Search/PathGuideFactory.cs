@@ -163,7 +163,7 @@ internal static class PathGuideFactory
     {
         if (request?.IsValid != true)
         {
-            Console.WriteLine("Request is invalid. Create or update the request before requesting a guide.");
+            TrailblazerLogger.Channel.Warn($"Request is invalid. Create or update the request before requesting a guide.");
             result = null;
             return false;
         }
@@ -407,8 +407,9 @@ internal static class PathGuideFactory
 
     internal static bool TrySeedAStarCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
+        TrailblazerWorldContext context = PathManager.ActiveState.Context;
         return _cachedAStarResults.TrySeed(
-            AStarSurveyResult.Create(CreateSeedWaypoints(), chartKeys, requestKey),
+            AStarSurveyResult.Create(context, CreateSeedWaypoints(), chartKeys, requestKey),
             checkout);
     }
 
@@ -424,27 +425,30 @@ internal static class PathGuideFactory
             }
         };
 
+        TrailblazerWorldContext context = PathManager.ActiveState.Context;
         return _cachedFlowResults.TrySeed(
-            FlowFieldSurveyResult.Create(fields, chartKeys, requestKey),
+            FlowFieldSurveyResult.Create(context, fields, chartKeys, requestKey),
             checkout);
     }
 
     internal static bool TrySeedVolumeCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
+        TrailblazerWorldContext context = PathManager.ActiveState.Context;
         return _cachedVolumeResults.TrySeed(
-            VolumeSurveyResult.Create(CreateSeedWaypoints(), chartKeys, requestKey),
+            VolumeSurveyResult.Create(context, CreateSeedWaypoints(), chartKeys, requestKey),
             checkout);
     }
 
     internal static bool TrySeedHybridRoutePlanCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
+        TrailblazerWorldContext context = PathManager.ActiveState.Context;
         var routePlan = new HybridRoutePlan(
-            new[] { HybridRouteStep.Waypoint(PathManager.ActiveState.Context, Vector3d.Zero) },
+            new[] { HybridRouteStep.Waypoint(context, Vector3d.Zero) },
             Array.Empty<TraversalTransition>(),
             totalPathCost: 0);
 
         return _cachedHybridRoutePlans.TrySeed(
-            HybridRoutePlanSurveyResult.Create(routePlan, chartKeys, requestKey),
+            HybridRoutePlanSurveyResult.Create(context, routePlan, chartKeys, requestKey),
             checkout);
     }
 

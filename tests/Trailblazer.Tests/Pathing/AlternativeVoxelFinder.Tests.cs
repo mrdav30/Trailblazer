@@ -26,15 +26,18 @@ public class AlternativeVoxelFinderTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    private static AlternativeVoxelFinder AlternativeFinder =>
+        TestWorld.Context.Pathing.State.AlternativeVoxelFinder;
+
     [Fact]
     public void GetVoxel_ShouldRemainOnTheQueryLayer()
     {
         Vector3d query = new(2, 1, 0);
         Voxel anchorVoxel = TestRequire.VoxelAt(query);
 
-        AlternativeVoxelFinder.Shared.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
+        AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
 
-        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
+        Voxel voxel = TestRequire.Created(AlternativeFinder.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.y.Should().Be(query.y);
     }
 
@@ -45,9 +48,9 @@ public class AlternativeVoxelFinderTests : IDisposable
         BlockFirstRing(query);
         Voxel anchorVoxel = TestRequire.VoxelAt(query);
 
-        AlternativeVoxelFinder.Shared.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
+        AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
 
-        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
+        Voxel voxel = TestRequire.Created(AlternativeFinder.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.Should().Be(new Vector3d(-2, 0, 0));
     }
 
@@ -58,9 +61,9 @@ public class AlternativeVoxelFinderTests : IDisposable
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
         Voxel anchorVoxel = TestRequire.VoxelAt(query);
 
-        AlternativeVoxelFinder.Shared.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
+        AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
 
-        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
+        Voxel voxel = TestRequire.Created(AlternativeFinder.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.Should().Be(new Vector3d(1, 0, 0));
     }
 
@@ -72,9 +75,9 @@ public class AlternativeVoxelFinderTests : IDisposable
         Voxel anchorVoxel = TestRequire.VoxelAt(query);
         BlockFirstRing(query);
 
-        AlternativeVoxelFinder.Shared.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
+        AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
 
-        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
+        Voxel voxel = TestRequire.Created(AlternativeFinder.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.Should().Be(new Vector3d(2, 0, 0));
     }
 
@@ -88,9 +91,9 @@ public class AlternativeVoxelFinderTests : IDisposable
         Voxel anchorVoxel = TestRequire.VoxelAt(query);
         BlockFirstRing(query);
 
-        AlternativeVoxelFinder.Shared.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
+        AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
 
-        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
+        Voxel voxel = TestRequire.Created(AlternativeFinder.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.Should().Be(new Vector3d(0, 0, 2));
     }
 
@@ -101,9 +104,9 @@ public class AlternativeVoxelFinderTests : IDisposable
         Voxel anchorVoxel = TestRequire.VoxelAt(query);
         BlockFirstRing(query);
 
-        AlternativeVoxelFinder.Shared.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
+        AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
 
-        AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? voxel).Should().BeFalse();
+        AlternativeFinder.GetVoxel(out Voxel? voxel).Should().BeFalse();
         voxel.Should().BeNull();
     }
 
@@ -119,9 +122,9 @@ public class AlternativeVoxelFinderTests : IDisposable
         Voxel anchorVoxel = TestRequire.VoxelAt(query);
         BlockFirstRing(query);
 
-        AlternativeVoxelFinder.Shared.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
+        AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
 
-        Voxel voxel = TestRequire.Created(AlternativeVoxelFinder.Shared.GetVoxel(out Voxel? createdVoxel), createdVoxel);
+        Voxel voxel = TestRequire.Created(AlternativeFinder.GetVoxel(out Voxel? createdVoxel), createdVoxel);
         voxel.WorldPosition.z.Should().BeLessThan(Fixed64.Zero);
     }
 

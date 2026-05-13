@@ -103,10 +103,11 @@ public class FlowFieldGuide : IGuide
             return TryGetStagedMovementDirection(origin, out direction);
 
         SwiftDictionary<WorldVoxelIndex, FlowField>? fields = FlowMap?.Fields;
-        if (FlowMap == null || !FlowMap.HasPath || fields == null)
+        TrailblazerWorldContext? context = FlowMap?.Context;
+        if (FlowMap == null || !FlowMap.HasPath || fields == null || context == null)
             return false;
 
-        direction = FlowFieldSurveyor.SampleFlowVector(origin, FlowMap);
+        direction = FlowFieldSurveyor.SampleFlowVector(context, origin, FlowMap);
         if (direction == Vector3d.Zero)
             return false;
 

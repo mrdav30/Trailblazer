@@ -207,10 +207,7 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
     /// </remarks>
     internal bool TrySeed(T result, bool checkout)
     {
-        if (result == null || !result.HasPath || result.RequestHashKey < 0)
-            return false;
-
-        if (!PathManager.TryGetActiveState(out PathingWorldState? state))
+        if (result == null || !result.HasPath || result.RequestHashKey < 0 || result.Context == null)
             return false;
 
         int key = result.RequestHashKey;
@@ -240,8 +237,6 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
                 result.Checkout();
                 CountInUse++;
             }
-
-            result.Context = state!.Context;
 
             AddCachedResult(key, result);
             return true;

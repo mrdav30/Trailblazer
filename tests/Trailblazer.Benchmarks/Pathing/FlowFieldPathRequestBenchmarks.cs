@@ -356,7 +356,7 @@ public class FlowFieldPathRequestBenchmarks
     [BenchmarkCategory("Pathing", "FlowField", "Sample")]
     public Vector3d SampleFlowVector_ExactVoxel()
     {
-        return FlowFieldSurveyor.SampleFlowVector(_sampleExactPosition, _prebuiltResult);
+        return FlowFieldSurveyor.SampleFlowVector(_fixture.Context, _sampleExactPosition, _prebuiltResult);
     }
 
     /// <summary>SampleFlowVector at a fractional (between-voxel) position.</summary>
@@ -364,6 +364,6 @@ public class FlowFieldPathRequestBenchmarks
     [BenchmarkCategory("Pathing", "FlowField", "Sample")]
     public Vector3d SampleFlowVector_FractionalPosition()
     {
-        return FlowFieldSurveyor.SampleFlowVector(_sampleFractionalPosition, _prebuiltResult);
+        return FlowFieldSurveyor.SampleFlowVector(_fixture.Context, _sampleFractionalPosition, _prebuiltResult);
     }
 }

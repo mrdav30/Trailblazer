@@ -412,7 +412,10 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
             int key,
             bool hasPath = true,
             string[]? chartsUtilized = null)
-            => new(key, hasPath, chartsUtilized);
+            => new(key, hasPath, chartsUtilized)
+            {
+                Context = TestWorld.Context
+            };
 
         public override void Reset()
         {

@@ -258,7 +258,7 @@ public sealed class FlowFieldGuideTests : IDisposable
             });
         }
 
-        return FlowFieldSurveyResult.Create(fields, Array.Empty<string>(), 1);
+        return FlowFieldSurveyResult.Create(TestWorld.Context, fields, Array.Empty<string>(), 1);
     }
 
     private static void RegisterLineChart(string chartName, Vector3d minBounds, int length)

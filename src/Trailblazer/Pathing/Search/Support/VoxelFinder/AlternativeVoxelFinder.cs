@@ -1,8 +1,6 @@
 ﻿using FixedMathSharp;
 using GridForge.Grids;
-using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Threading;
 
 namespace Trailblazer.Pathing;
 
@@ -12,14 +10,6 @@ namespace Trailblazer.Pathing;
 /// </summary>
 public class AlternativeVoxelFinder
 {
-    private static readonly Lazy<AlternativeVoxelFinder> _instance =
-        new(() => new AlternativeVoxelFinder(), LazyThreadSafetyMode.ExecutionAndPublication);
-
-    /// <summary>
-    /// Gets the shared instance of the alternative voxel finder.
-    /// </summary>
-    public static AlternativeVoxelFinder Shared => _instance.Value;
-
     private Vector3d _worldPos;
 
     private Vector3d _anchorVoxelPosition;

@@ -34,22 +34,18 @@ public class AStarSurveyResult : SurveyResult
     /// <summary>
     /// Creates a new instance of the AStarSurveyResult class with the specified waypoints, charts utilized, and key.
     /// </summary>
+    /// <param name="context">The world context that owns the survey result.</param>
     /// <param name="waypoints">An array of AStarWaypoint objects representing the waypoints to include in the survey result. Can be null.</param>
     /// <param name="chartsUtilized">An array of chart names that were utilized in the survey. If null, an empty array is used.</param>
     /// <param name="key">The unique key associated with the survey request.</param>
     /// <returns>A new AStarSurveyResult instance initialized with the provided waypoints, charts utilized, and key.</returns>
     public static AStarSurveyResult Create(
-        AStarWaypoint[] waypoints,
-        string[] chartsUtilized,
-        int key) =>
-        Create(PathManager.TryGetActiveState(out PathingWorldState? state) ? state!.Context : null, waypoints, chartsUtilized, key);
-
-    internal static AStarSurveyResult Create(
-        TrailblazerWorldContext? context,
+        TrailblazerWorldContext context,
         AStarWaypoint[] waypoints,
         string[] chartsUtilized,
         int key)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         return new AStarSurveyResult()
         {
             IsValid = true,

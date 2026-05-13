@@ -775,7 +775,7 @@ public class AStarSurveryorTests : IDisposable
     public void AStarSurveyResult_Create_ShouldUseFallbackEmptyArray_WhenChartsUtilizedIsNull()
     {
         var waypoints = new[] { new AStarWaypoint { Position = Vector3d.Zero, IsGoal = true } };
-        AStarSurveyResult result = AStarSurveyResult.Create(waypoints, null!, key: 1);
+        AStarSurveyResult result = AStarSurveyResult.Create(TestWorld.Context, waypoints, null!, key: 1);
 
         string[] chartsUtilized = TestRequire.NotNull(result.ChartsUtilized);
         chartsUtilized.Should().BeEmpty();
@@ -946,7 +946,7 @@ public class AStarSurveryorTests : IDisposable
     public void AStarGuide_ShouldReturnSafeDefaults_WhenTrailMapHasNoPath()
     {
         AStarGuide guide = new();
-        ReflectionUtility.SetPrivateField(guide, "<TrailMap>k__BackingField", AStarSurveyResult.Create(Array.Empty<AStarWaypoint>(), Array.Empty<string>(), 0));
+        ReflectionUtility.SetPrivateField(guide, "<TrailMap>k__BackingField", AStarSurveyResult.Create(TestWorld.Context, Array.Empty<AStarWaypoint>(), Array.Empty<string>(), 0));
 
         guide.HasArrived().Should().BeFalse();
         guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d movementDirection).Should().BeFalse();

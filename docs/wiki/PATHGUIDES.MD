@@ -171,9 +171,9 @@ or, during staged transition fallback:
 Normal flow-field behavior:
 
 - `Initialize(...)` stores the resolved `FlowMap`
-- `TryGetMovementDirection(...)` samples the field through `FlowFieldSurveyor.SampleFlowVector(...)`
+- `TryGetMovementDirection(...)` samples the field through `FlowFieldSurveyor.SampleFlowVector(context, ...)`
 - `FlowFieldContainsPosition(...)` tells you whether the current voxel is inside the field
-- `TryGetFallbackDirection(...)` searches for a nearby flow anchor through `FlowFieldSurveyor.TryGetNearestFlowAnchor(...)`
+- `TryGetFallbackDirection(...)` searches for a nearby flow anchor through `FlowFieldSurveyor.TryGetNearestFlowAnchor(context, ...)`
 
 Staged behavior:
 

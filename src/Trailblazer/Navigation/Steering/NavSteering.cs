@@ -535,8 +535,6 @@ public class NavSteering : IRecordable
             return _context.VoxelSize;
         if (_currentRequest != null)
             return _currentRequest.Context.VoxelSize;
-        if (PathManager.TryGetActiveState(out PathingWorldState? state) && state != null)
-            return state.Context.VoxelSize;
 
         return GridWorld.DefaultVoxelSize;
     }
@@ -570,10 +568,8 @@ public class NavSteering : IRecordable
             return _context.FrameRate;
         if (_currentRequest != null)
             return _currentRequest.Context.FrameRate;
-        if (PathManager.TryGetActiveState(out PathingWorldState? state) && state != null)
-            return state.Context.FrameRate;
 
-        return ResolveContext().FrameRate;
+        return TrailblazerClock.DefaultFrameRate;
     }
 
     /// <summary>

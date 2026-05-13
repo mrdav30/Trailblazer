@@ -196,38 +196,38 @@ or exposed by the context migration:
 - Modify: `src/Trailblazer/Pathing/Search/Volume/VolumeSurveyResult.cs`
 - Test: `tests/Trailblazer.Tests/Architecture/RuntimeArchitectureGuardTests.cs`
 
-- [ ] **Step 1: Deduplicate context-scope wrappers**
+- [x] **Step 1: Deduplicate context-scope wrappers**
 
   Add a focused helper on each service, or a shared internal helper, for the repeated
   `EnsureUsable(); using (PathManager.EnterState(State)) ...` pattern. Keep it allocation-free by
   using direct methods rather than delegate-heavy hot-path wrappers where the call is performance
   sensitive.
 
-- [ ] **Step 2: Remove ambient public helper paths**
+- [x] **Step 2: Remove ambient public helper paths**
 
   Remove `AlternativeVoxelFinder.Shared` and any other ambient helper bridge that exists only for
   legacy or test convenience. Prefer context-owned `context.Pathing.State.AlternativeVoxelFinder` in
   production and update tests to construct or access a context-owned finder.
 
-- [ ] **Step 3: Make survey-result context ownership explicit**
+- [x] **Step 3: Make survey-result context ownership explicit**
 
   Replace public factory overloads that infer `PathManager.ActiveState` with explicit context overloads.
   Delete active-state factory overloads that exist only as test convenience or compatibility bridges.
 
-- [ ] **Step 4: Expand architecture guards**
+- [x] **Step 4: Expand architecture guards**
 
   Add guard coverage for new production references to `PathManager.TryGetActiveState(...)` outside
   known implementation facades. This should steer new code toward explicit context parameters.
 
 ## Final Verification
 
-- [ ] Run the full `Release` suite:
+- [x] Run the full `Release` suite:
 
   ```bash
   dotnet test Trailblazer.slnx --configuration Release
   ```
 
-- [ ] Run `git diff --check`.
+- [x] Run `git diff --check`.
 - [ ] Re-run any benchmark allocation checks touched by guide return or context reset behavior.
 - [ ] If `ReleaseLean` remains in scope, resolve the current `Chronicler.Lean` restore issue or document
   why lean packaging is intentionally unavailable before alpha.

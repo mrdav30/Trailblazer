@@ -42,17 +42,20 @@ public class FlowFieldSurveyResult : SurveyResult
     /// <summary>
     /// Creates a new instance of the FlowFieldSurveyResult class using the specified flow fields, utilized charts, and request key.
     /// </summary>
+    /// <param name="context">The world context that owns the survey result.</param>
     /// <param name="fields">A dictionary mapping world voxel indices to their corresponding flow fields. Cannot be null.</param>
     /// <param name="chartsUtilized">An array of chart identifiers that were utilized during the survey. If null, an empty array is used.</param>
     /// <param name="key">A unique integer key representing the request associated with this survey result.</param>
     /// <returns>A FlowFieldSurveyResult instance initialized with the provided flow fields, charts, and request key.</returns>
     public static FlowFieldSurveyResult Create(
+        TrailblazerWorldContext context,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields,
         string[] chartsUtilized,
         int key)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         return Create(
-            PathManager.TryGetActiveState(out PathingWorldState? state) ? state!.Context : null,
+            context,
             fields,
             chartsUtilized,
             key,
@@ -60,7 +63,7 @@ public class FlowFieldSurveyResult : SurveyResult
     }
 
     internal static FlowFieldSurveyResult Create(
-        TrailblazerWorldContext? context,
+        TrailblazerWorldContext context,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields,
         string[] chartsUtilized,
         int key,

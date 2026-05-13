@@ -26,22 +26,18 @@ public sealed class VolumeSurveyResult : SurveyResult
     /// <summary>
     /// Creates a new instance of the VolumeSurveyResult class using the specified waypoints, charts, and key.
     /// </summary>
+    /// <param name="context">The world context that owns the survey result.</param>
     /// <param name="waypoints">An array of AStarWaypoint objects representing the waypoints to include in the survey result. Can be null.</param>
     /// <param name="chartsUtilized">An array of chart names that were utilized in the survey. If null, an empty array is used.</param>
     /// <param name="key">A key used to identify or hash the request associated with this survey result.</param>
     /// <returns>A new VolumeSurveyResult instance initialized with the provided waypoints, charts, and key.</returns>
     public static VolumeSurveyResult Create(
-        AStarWaypoint[] waypoints,
-        string[] chartsUtilized,
-        int key) =>
-        Create(PathManager.TryGetActiveState(out PathingWorldState? state) ? state!.Context : null, waypoints, chartsUtilized, key);
-
-    internal static VolumeSurveyResult Create(
-        TrailblazerWorldContext? context,
+        TrailblazerWorldContext context,
         AStarWaypoint[] waypoints,
         string[] chartsUtilized,
         int key)
     {
+        PathRequestContextResolver.ThrowIfUnusable(context);
         return new VolumeSurveyResult()
         {
             IsValid = true,

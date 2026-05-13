@@ -23,8 +23,7 @@ public sealed class TrailblazerTransitionService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return TraversalTransitionRegistry.RegistryVersion;
         }
     }
@@ -34,8 +33,7 @@ public sealed class TrailblazerTransitionService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return TraversalTransitionRegistry.AllTransitions;
         }
     }
@@ -43,32 +41,28 @@ public sealed class TrailblazerTransitionService
     /// <inheritdoc cref="TraversalTransitionRegistry.Register(TraversalTransition,int)"/>
     public bool Register(TraversalTransition transition, int priority = TraversalTransitionRegistry.DefaultManualPriority)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionRegistry.Register(transition, priority);
     }
 
     /// <inheritdoc cref="TraversalTransitionRegistry.IsRegistered(string)"/>
     public bool IsRegistered(string id)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionRegistry.IsRegistered(id);
     }
 
     /// <inheritdoc cref="TraversalTransitionRegistry.IsActive(string)"/>
     public bool IsActive(string id)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionRegistry.IsActive(id);
     }
 
     /// <inheritdoc cref="TraversalTransitionRegistry.TryGet(string,out TraversalTransition)"/>
     public bool TryGet(string id, out TraversalTransition transition)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionRegistry.TryGet(id, out transition);
     }
 
@@ -78,8 +72,7 @@ public sealed class TrailblazerTransitionService
         out WorldVoxelIndex sourceVoxelIndex,
         out WorldVoxelIndex destinationVoxelIndex)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
         {
             return TraversalTransitionRegistry.TryGetResolvedEndpoints(
                 id,
@@ -91,47 +84,41 @@ public sealed class TrailblazerTransitionService
     /// <inheritdoc cref="TraversalTransitionRegistry.Unregister(string)"/>
     public bool Unregister(string id)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionRegistry.Unregister(id);
     }
 
     /// <inheritdoc cref="TraversalTransitionRegistry.GetOutgoingTransitions(WorldVoxelIndex)"/>
     public TraversalTransition[] GetOutgoingTransitions(WorldVoxelIndex sourceVoxelIndex)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionRegistry.GetOutgoingTransitions(sourceVoxelIndex);
     }
 
     /// <inheritdoc cref="TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d)"/>
     public TraversalTransition[] GetOutgoingTransitions(Vector3d sourcePosition)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionRegistry.GetOutgoingTransitions(sourcePosition);
     }
 
     /// <inheritdoc cref="TraversalTransitionRegistry.GetIncomingTransitions(WorldVoxelIndex)"/>
     public TraversalTransition[] GetIncomingTransitions(WorldVoxelIndex destinationVoxelIndex)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionRegistry.GetIncomingTransitions(destinationVoxelIndex);
     }
 
     /// <inheritdoc cref="TraversalTransitionRegistry.GetIncomingTransitions(Vector3d)"/>
     public TraversalTransition[] GetIncomingTransitions(Vector3d destinationPosition)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionRegistry.GetIncomingTransitions(destinationPosition);
     }
 
     internal TraversalTransition[] GetDirectedTransitionsFromSourceGrid(int sourceGridIndex)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionQuery.GetDirectedTransitionsFromSourceGrid(sourceGridIndex);
     }
 
@@ -139,8 +126,7 @@ public sealed class TrailblazerTransitionService
         TraversalMedium sourceMedium,
         TraversalMedium destinationMedium)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return TraversalTransitionQuery.GetDirectedTransitions(sourceMedium, destinationMedium);
     }
 
@@ -149,14 +135,19 @@ public sealed class TrailblazerTransitionService
         TraversalMedium sourceMedium,
         TraversalMedium destinationMedium)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
         {
             return TraversalTransitionQuery.GetDirectedTransitionsToDestinationGrid(
                 destinationGridIndex,
                 sourceMedium,
                 destinationMedium);
         }
+    }
+
+    private IDisposable EnterUsableState()
+    {
+        EnsureUsable();
+        return PathManager.EnterState(_state);
     }
 
     private void EnsureUsable()

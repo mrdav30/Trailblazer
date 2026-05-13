@@ -32,6 +32,7 @@ public sealed class WaypointGuideTests : IDisposable
         guide.Initialize(AStarSurveyResult.Empty).Should().BeFalse();
 
         AStarSurveyResult survey = AStarSurveyResult.Create(
+            TestWorld.Context,
             BuildWaypoints(
                 Vector3d.Zero,
                 new Vector3d(1, 0, 0),
@@ -67,6 +68,7 @@ public sealed class WaypointGuideTests : IDisposable
     {
         var shortGuide = new AStarGuide { UseSplineSmoothing = true };
         shortGuide.Initialize(AStarSurveyResult.Create(
+            TestWorld.Context,
             BuildWaypoints(
                 Vector3d.Zero,
                 new Vector3d(1, 0, 0),
@@ -78,6 +80,7 @@ public sealed class WaypointGuideTests : IDisposable
 
         var smoothedGuide = new AStarGuide { UseSplineSmoothing = true };
         smoothedGuide.Initialize(AStarSurveyResult.Create(
+            TestWorld.Context,
             BuildWaypoints(
                 Vector3d.Zero,
                 new Vector3d(1, 0, 0),
@@ -98,6 +101,7 @@ public sealed class WaypointGuideTests : IDisposable
         guide.Initialize(VolumeSurveyResult.Empty).Should().BeFalse();
 
         VolumeSurveyResult survey = VolumeSurveyResult.Create(
+            TestWorld.Context,
             BuildWaypoints(
                 Vector3d.Zero,
                 new Vector3d(1, 0, 0),
@@ -148,6 +152,7 @@ public sealed class WaypointGuideTests : IDisposable
         // Exercises the CurrentWaypointIndex >= ActiveWaypoints.Length guard in
         // GetCurrentWaypointDirection by advancing the index past the last waypoint.
         VolumeSurveyResult survey = VolumeSurveyResult.Create(
+            TestWorld.Context,
             BuildWaypoints(new Vector3d(1, 0, 0), new Vector3d(2, 0, 0)),
             Array.Empty<string>(),
             5);

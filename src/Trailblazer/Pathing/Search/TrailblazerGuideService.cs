@@ -22,8 +22,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.TotalAStarGuideCount;
         }
     }
@@ -33,8 +32,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.InUseAStarGuideCount;
         }
     }
@@ -44,8 +42,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.TotalFlowGuideCount;
         }
     }
@@ -55,8 +52,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.InUseFlowGuideCount;
         }
     }
@@ -66,8 +62,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.TotalVolumeGuideCount;
         }
     }
@@ -77,8 +72,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.InUseVolumeGuideCount;
         }
     }
@@ -88,8 +82,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.TotalHybridRoutePlanCount;
         }
     }
@@ -99,8 +92,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.InUseHybridRoutePlanCount;
         }
     }
@@ -110,8 +102,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.IsPooling;
         }
     }
@@ -121,8 +112,7 @@ public sealed class TrailblazerGuideService
     {
         get
         {
-            EnsureUsable();
-            using (PathManager.EnterState(_state))
+            using (EnterUsableState())
                 return PathGuideFactory.AnyInUse;
         }
     }
@@ -139,8 +129,7 @@ public sealed class TrailblazerGuideService
             return false;
         }
 
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return PathGuideFactory.RequestGuide(request, out result);
     }
 
@@ -153,8 +142,7 @@ public sealed class TrailblazerGuideService
             return false;
         }
 
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return PathGuideFactory.RequestGuide(request, out result);
     }
 
@@ -164,73 +152,63 @@ public sealed class TrailblazerGuideService
         if (guide == null)
             return;
 
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             PathGuideFactory.ReturnGuide(guide, dispose);
     }
 
     /// <inheritdoc cref="PathGuideFactory.InvalidateCacheFor(string)"/>
     public void InvalidateCacheFor(string chartKey)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             PathGuideFactory.InvalidateCacheFor(chartKey);
     }
 
     /// <inheritdoc cref="PathGuideFactory.FlushCache(bool)"/>
     public void FlushCache(bool force = false)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             PathGuideFactory.FlushCache(force);
     }
 
     internal void CullExpiredGuides(int currentFrame)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             PathGuideFactory.CullExpiredGuides(currentFrame);
     }
 
     internal void InvalidateVolumeCache()
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             PathGuideFactory.InvalidateVolumeCache();
     }
 
     internal SolidPartitionReachability.SolidPartitionReachabilityStats CaptureReachabilityStats()
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return SolidPartitionReachability.CaptureStats();
     }
 
     internal bool TrySeedAStarCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return PathGuideFactory.TrySeedAStarCacheForBenchmark(requestKey, chartKeys, checkout);
     }
 
     internal bool TrySeedFlowFieldCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return PathGuideFactory.TrySeedFlowFieldCacheForBenchmark(requestKey, chartKeys, checkout);
     }
 
     internal bool TrySeedVolumeCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return PathGuideFactory.TrySeedVolumeCacheForBenchmark(requestKey, chartKeys, checkout);
     }
 
     internal bool TrySeedHybridRoutePlanCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
         {
             return PathGuideFactory.TrySeedHybridRoutePlanCacheForBenchmark(
                 requestKey,
@@ -241,9 +219,14 @@ public sealed class TrailblazerGuideService
 
     internal int CountIndexedCacheEntriesForBenchmark(string chartKey)
     {
-        EnsureUsable();
-        using (PathManager.EnterState(_state))
+        using (EnterUsableState())
             return PathGuideFactory.CountIndexedCacheEntriesForBenchmark(chartKey);
+    }
+
+    private IDisposable EnterUsableState()
+    {
+        EnsureUsable();
+        return PathManager.EnterState(_state);
     }
 
     private void EnsureUsable()

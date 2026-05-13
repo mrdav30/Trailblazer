@@ -14,3 +14,4 @@ artifacts/
 TestResults/
 BenchmarkDotNet.Artifacts/
 artifacts/
+docs/feature-work/prototype/

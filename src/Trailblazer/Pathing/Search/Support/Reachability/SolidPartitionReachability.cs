@@ -2,6 +2,7 @@ using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
+using System;
 
 namespace Trailblazer.Pathing;
 
@@ -60,13 +61,22 @@ internal static class SolidPartitionReachability
     /// <summary>
     /// Clears cached connectivity snapshots after live solid topology changes.
     /// </summary>
-    internal static void Invalidate()
+    internal static void Invalidate() => Invalidate(PathManager.ActiveState);
+
+    /// <summary>
+    /// Clears cached connectivity snapshots on an explicit pathing state after live solid topology changes.
+    /// </summary>
+    internal static void Invalidate(PathingWorldState state)
     {
-        lock (_lock)
+        if (state == null)
+            throw new ArgumentNullException(nameof(state));
+
+        SolidPartitionReachabilityState reachabilityState = state.ReachabilityState;
+        lock (reachabilityState.Lock)
         {
-            unchecked { _version++; }
-            _hasActiveSnapshot = false;
-            _activeSnapshotVersion = -1;
+            unchecked { reachabilityState.Version++; }
+            reachabilityState.HasActiveSnapshot = false;
+            reachabilityState.ActiveSnapshotVersion = -1;
         }
     }
 

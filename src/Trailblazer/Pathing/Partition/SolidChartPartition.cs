@@ -229,7 +229,7 @@ public class SolidChartPartition : IVoxelPartition
         IsWalkable = eventInfo.VoxelIndex != default && eventInfo.ObstacleCount == 0;
         _clearanceRadiusInVoxels = DefaultDegreeCap;
         _isClearanceValid = false;
-        SolidPartitionReachability.Invalidate();
+        SolidPartitionReachability.Invalidate(RequireOwnerState());
     }
 
     /// <summary>
@@ -281,8 +281,7 @@ public class SolidChartPartition : IVoxelPartition
         if (unitSize <= Fixed64.Zero)
             return false;
 
-        PathingWorldState ownerState = OwnerState
-            ?? throw new InvalidOperationException("Solid chart partition requires an owning pathing context.");
+        PathingWorldState ownerState = RequireOwnerState();
         Fixed64 voxelSize = ownerState.World.VoxelSize;
         if (unitSize <= voxelSize)
             return !IsWalkable;
@@ -332,10 +331,11 @@ public class SolidChartPartition : IVoxelPartition
         out VoxelGrid? grid,
         out Voxel? voxel)
     {
-        PathingWorldState ownerState = OwnerState
-            ?? throw new InvalidOperationException("Solid chart partition requires an owning pathing context.");
-        return ownerState.World.TryGetGridAndVoxel(voxelIndex, out grid, out voxel);
+        return RequireOwnerState().World.TryGetGridAndVoxel(voxelIndex, out grid, out voxel);
     }
+
+    private PathingWorldState RequireOwnerState() =>
+        OwnerState ?? throw new InvalidOperationException("Solid chart partition requires an owning pathing context.");
 
     private byte ComputeClearanceRadius()
     {

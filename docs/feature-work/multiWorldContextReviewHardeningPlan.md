@@ -43,6 +43,8 @@ or exposed by the context migration:
 - **P3:** Some public/shared helper surfaces still preserve ambient patterns (`AlternativeVoxelFinder.Shared`,
   survey-result factories that infer the active state, and static flow-field helpers without context).
   Production paths mostly avoid them, but they are easy to misuse and add test-only escape hatches.
+  Because Trailblazer is pre-alpha, remove these compatibility bridges instead of preserving or
+  obsoleting them for external compatibility.
 
 ## Phase 1 - P0 Context Ownership Fixes
 
@@ -56,7 +58,7 @@ or exposed by the context migration:
 - Test: `tests/Trailblazer.Tests/Pathing/SolidChartPartition.Tests.cs`
 - Test: `tests/Trailblazer.Tests/Worlds/ContextBoundPathRequestTests.cs`
 
-- [ ] **Step 1: Add a failing obstacle-callback ownership test**
+- [x] **Step 1: Add a failing obstacle-callback ownership test**
 
   Add a test that creates a standalone `TrailblazerWorldContext`, registers an initialized solid
   chart, fetches the registered voxel, and calls `TryAddObstacle(...)` without keeping a
@@ -71,25 +73,25 @@ or exposed by the context migration:
 
   Expected before implementation: failure from missing active pathing state or unchanged owner stats.
 
-- [ ] **Step 2: Route reachability invalidation through the partition owner**
+- [x] **Step 2: Route reachability invalidation through the partition owner**
 
   Add an overload such as `SolidPartitionReachability.Invalidate(PathingWorldState state)` and update
   `SolidChartPartition.HandleChange(...)` to use `OwnerState`. Keep the existing parameterless
   `Invalidate()` only for code already executing inside a selected pathing state.
 
-- [ ] **Step 3: Add a failing wrong-context guide-return test**
+- [x] **Step 3: Add a failing wrong-context guide-return test**
 
   Request an `AStarGuide` from `contextA`, then attempt to return it through `contextB.Guides`.
   The test should assert a clear `InvalidOperationException` and then verify that returning through
   `contextA.Guides` restores `contextA.Guides.InUseAStarGuideCount` to zero.
 
-- [ ] **Step 4: Enforce guide ownership on return**
+- [x] **Step 4: Enforce guide ownership on return**
 
   Teach `TrailblazerGuideService.ReturnGuide(...)` or `PathGuideFactory.ReturnGuide(...)` to resolve
   the guide's owner from its survey result context before mutating any cache or pool. Reject
   wrong-context returns with a deterministic exception message. Keep null returns as no-ops.
 
-- [ ] **Step 5: Run focused verification**
+- [x] **Step 5: Run focused verification**
 
   ```bash
   dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~SolidChartPartition
@@ -201,17 +203,16 @@ or exposed by the context migration:
   using direct methods rather than delegate-heavy hot-path wrappers where the call is performance
   sensitive.
 
-- [ ] **Step 2: Retire ambient public helper paths**
+- [ ] **Step 2: Remove ambient public helper paths**
 
-  Mark `AlternativeVoxelFinder.Shared` obsolete or make it internal if the alpha API can still break.
-  Prefer context-owned `context.Pathing.State.AlternativeVoxelFinder` in production and update tests
-  to construct or access a context-owned finder.
+  Remove `AlternativeVoxelFinder.Shared` and any other ambient helper bridge that exists only for
+  legacy or test convenience. Prefer context-owned `context.Pathing.State.AlternativeVoxelFinder` in
+  production and update tests to construct or access a context-owned finder.
 
 - [ ] **Step 3: Make survey-result context ownership explicit**
 
-  Replace public factory overloads that infer `PathManager.ActiveState` with explicit context overloads
-  or rename them for test-only active-state behavior. Keep existing overloads only if they are needed
-  for compatibility, and add XML docs warning they require an active context scope.
+  Replace public factory overloads that infer `PathManager.ActiveState` with explicit context overloads.
+  Delete active-state factory overloads that exist only as test convenience or compatibility bridges.
 
 - [ ] **Step 4: Expand architecture guards**
 

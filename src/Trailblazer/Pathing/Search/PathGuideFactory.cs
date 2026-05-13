@@ -327,6 +327,8 @@ internal static class PathGuideFactory
     {
         if (guide == null) return;
 
+        ThrowIfGuideOwnedByDifferentContext(guide, PathManager.ActiveState.Context);
+
         switch (guide)
         {
             case AStarGuide a:
@@ -345,6 +347,25 @@ internal static class PathGuideFactory
                 ReturnVolumeGuide(v, dispose);
                 break;
         }
+    }
+
+    private static void ThrowIfGuideOwnedByDifferentContext(
+        IGuide guide,
+        TrailblazerWorldContext expectedContext)
+    {
+        TrailblazerWorldContext? ownerContext = guide switch
+        {
+            AStarGuide a => a.TrailMap.Context,
+            FlowFieldGuide f => f.OwnerContext,
+            VolumeGuide v => v.TrailMap?.Context,
+            _ => null,
+        };
+
+        if (ownerContext == null || ReferenceEquals(ownerContext, expectedContext))
+            return;
+
+        throw new InvalidOperationException(
+            "Guide belongs to a different owning TrailblazerWorldContext. Return it through the context that created it.");
     }
 
     /// <summary>

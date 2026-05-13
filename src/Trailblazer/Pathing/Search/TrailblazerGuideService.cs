@@ -161,6 +161,9 @@ public sealed class TrailblazerGuideService
     /// <inheritdoc cref="PathGuideFactory.ReturnGuide(IGuide?,bool)"/>
     public void ReturnGuide(IGuide? guide, bool dispose = false)
     {
+        if (guide == null)
+            return;
+
         EnsureUsable();
         using (PathManager.EnterState(_state))
             PathGuideFactory.ReturnGuide(guide, dispose);

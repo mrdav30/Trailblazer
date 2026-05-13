@@ -99,6 +99,33 @@ public sealed class ContextBoundPathRequestTests : IDisposable
     }
 
     [Fact]
+    public void GuideService_ShouldRejectGuideReturnedThroughDifferentContext()
+    {
+        using TrailblazerWorldContext contextA = CreateContextWithGrid();
+        using TrailblazerWorldContext contextB = CreateContextWithGrid();
+        RegisterSolidLine(contextA, "WorldAGuideReturnChart", Vector3d.Zero, 3);
+        AStarPathRequest requestA = TestRequire.NotNull(
+            AStarPathRequest.Create(contextA, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+
+        contextA.Guides.RequestGuide(requestA, out AStarGuide? guide).Should().BeTrue();
+        guide.Should().NotBeNull();
+        contextA.Guides.InUseAStarGuideCount.Should().Be(1);
+
+        Exception? exception = Record.Exception(() => contextB.Guides.ReturnGuide(guide));
+        if (exception is InvalidOperationException)
+            contextA.Guides.ReturnGuide(guide);
+        else
+            contextA.Guides.FlushCache(force: true);
+
+        exception.Should()
+            .BeOfType<InvalidOperationException>()
+            .Which.Message.Should()
+            .Contain("owning TrailblazerWorldContext");
+        contextA.Guides.InUseAStarGuideCount.Should().Be(0);
+        contextB.Guides.InUseAStarGuideCount.Should().Be(0);
+    }
+
+    [Fact]
     public void RequestCacheKeys_ShouldNotAllocateSteadyState_WhenRequestsCarryContext()
     {
         using TrailblazerWorldContext context = CreateContextWithGrid();

@@ -56,6 +56,8 @@ public class FlowFieldGuide : IGuide
     /// </summary>
     internal bool IsStaged => _stagedPlan != null;
 
+    internal TrailblazerWorldContext? OwnerContext => FlowMap?.Context ?? _stagedContext ?? _activeStageGuideContext;
+
     #endregion
 
     /// <summary>

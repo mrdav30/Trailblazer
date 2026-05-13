@@ -451,6 +451,7 @@ public abstract class Navigator : INavigate, IRecordable
         _isGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
         ResetGuidedClimbIntentState();
+        _steering?.Reset();
 
         if (_context != null && !_context.IsDisposed && _context.World.IsActive)
             GridOccupantManager.TryDeregister(_context.World, this);

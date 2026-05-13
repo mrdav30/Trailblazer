@@ -33,6 +33,26 @@ public sealed class TrailblazerWorldContextTests : IDisposable
     }
 
     [Fact]
+    public void Attach_ShouldRejectSameWorldUntilExistingContextIsDisposed()
+    {
+        using var world = new GridWorld();
+        using TrailblazerWorldContext contextA = TrailblazerWorldContext.Attach(world);
+        TrailblazerWorldContext? duplicate = null;
+
+        Action duplicateAttach = () => duplicate = TrailblazerWorldContext.Attach(world);
+
+        duplicateAttach.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*already*TrailblazerWorldContext*");
+        duplicate?.Dispose();
+
+        contextA.Dispose();
+
+        using TrailblazerWorldContext contextB = TrailblazerWorldContext.Attach(world);
+        contextB.World.Should().BeSameAs(world);
+    }
+
+    [Fact]
     public void Attach_ShouldDisposeExternalWorld_WhenOwnershipIsTaken()
     {
         var world = new GridWorld();

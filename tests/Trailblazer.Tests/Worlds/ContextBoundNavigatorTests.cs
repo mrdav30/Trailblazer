@@ -98,6 +98,32 @@ public sealed class ContextBoundNavigatorTests : IDisposable
     }
 
     [Fact]
+    public void Reset_ShouldReturnActiveGuideToOwningContext()
+    {
+        using TrailblazerWorldContext context = CreateContextWithGrid();
+        RegisterSolidLine(context, "ContextNavigatorResetGuide", Vector3d.Zero, 3);
+
+        var navigator = new TestNavigator(context);
+        navigator.Setup(Vector3d.Zero, size: Fixed64.One);
+        navigator.Initialize(new TrekCondition());
+        navigator.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar);
+        navigator.ApplyGuidedTrekRequest(new Vector3d(2, 0, 0), rate: TrekRate.Moderate);
+
+        AStarPathRequest request = navigator.Steering!.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
+        context.Guides.RequestGuide(request, out AStarGuide? guide).Should().BeTrue();
+        navigator.Steering.SetTrailGuide(guide);
+
+        navigator.Steering.TrailGuide.Should().NotBeNull();
+        context.Guides.InUseAStarGuideCount.Should().Be(1);
+
+        navigator.Reset();
+
+        context.Guides.InUseAStarGuideCount.Should().Be(0);
+        navigator.Steering.TrailGuide.Should().BeNull();
+        navigator.Steering.CurrentRequest.Should().BeNull();
+    }
+
+    [Fact]
     public void ApplyGuidedTrekRequest_ShouldCreateRequestBoundToNavigatorContext()
     {
         using TrailblazerWorldContext contextA = CreateContextWithGrid();

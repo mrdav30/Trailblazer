@@ -523,6 +523,12 @@ public class NavSteering : IRecordable
         _closingDistance = FixedMath.Round(radius + ResolveVoxelSize());
     }
 
+    internal void Reset()
+    {
+        ReleaseTrailGuide();
+        OnInitialize(_agentRadius);
+    }
+
     private Fixed64 ResolveVoxelSize()
     {
         if (_context != null)

@@ -109,29 +109,29 @@ or exposed by the context migration:
 - Test: `tests/Trailblazer.Tests/Worlds/ContextBoundNavigatorTests.cs`
 - Test: `tests/Trailblazer.Tests/Worlds/TrailblazerWorldContextTests.cs`
 
-- [ ] **Step 1: Add a navigator reset guide-return regression test**
+- [x] **Step 1: Add a navigator reset guide-return regression test**
 
   Create a guided navigator, let steering acquire a guide, call `navigator.Reset()`, and assert the
   owning context no longer reports the guide as in use.
 
-- [ ] **Step 2: Add an explicit steering clear/reset API**
+- [x] **Step 2: Add an explicit steering clear/reset API**
 
   Add an internal `NavSteering.Reset()` or `ClearActiveGuide()` method that releases `_trailGuide`,
   removes movement-group membership, and clears `_currentRequest` without firing arrival events.
   Call it from `Navigator.Reset()` before `_context` is cleared.
 
-- [ ] **Step 3: Add a duplicate-attach regression test**
+- [x] **Step 3: Add a duplicate-attach regression test**
 
   Attach one `GridWorld` to `contextA`, then attempt `TrailblazerWorldContext.Attach(sameWorld)`.
   The expected behavior should be a clear exception unless the first context has been disposed.
 
-- [ ] **Step 4: Track active world ownership**
+- [x] **Step 4: Track active world ownership**
 
   Add a small ownership guard for `TrailblazerWorldContext.Attach(...)`. Prefer a weak or disposal-aware
   registry so disposed contexts do not permanently reserve a host-owned `GridWorld`. Do not put this
   registry on a hot path; it should only run during context construction/disposal.
 
-- [ ] **Step 5: Run focused verification**
+- [x] **Step 5: Run focused verification**
 
   ```bash
   dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~ContextBoundNavigatorTests

@@ -17,6 +17,10 @@ namespace Trailblazer;
 /// </remarks>
 public sealed class TrailblazerWorldContext : IDisposable
 {
+    private static readonly object _worldOwnershipLock = new();
+
+    private static readonly SwiftDictionary<GridWorld, WeakReference<TrailblazerWorldContext>> _worldOwners = new();
+
     private readonly TrailblazerClock _clock = new();
 
     private readonly TrailblazerLifecycleHooks _hooks = new();
@@ -192,7 +196,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         if (!world.IsActive)
             throw new InvalidOperationException("TrailblazerWorldContext requires an active GridWorld.");
 
-        return new TrailblazerWorldContext(world, takeOwnership);
+        return CreateRegistered(world, takeOwnership);
     }
 
     /// <summary>
@@ -205,7 +209,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         Fixed64? voxelSize = null,
         int spatialGridCellSize = GridWorld.DefaultSpatialGridCellSize)
     {
-        return new TrailblazerWorldContext(
+        return CreateRegistered(
             new GridWorld(voxelSize, spatialGridCellSize),
             ownsWorld: true);
     }
@@ -308,14 +312,56 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// <inheritdoc/>
     public void Dispose()
     {
-        if (_disposed)
+        lock (_worldOwnershipLock)
+        {
+            if (_disposed)
+                return;
+
+            Pathing.Dispose();
+            _disposed = true;
+            ReleaseWorldOwnership(this);
+
+            if (_ownsWorld && World.IsActive)
+                World.Dispose();
+        }
+    }
+
+    private static TrailblazerWorldContext CreateRegistered(GridWorld world, bool ownsWorld)
+    {
+        lock (_worldOwnershipLock)
+        {
+            ThrowIfWorldOwned(world);
+            TrailblazerWorldContext context = new(world, ownsWorld);
+            _worldOwners[world] = new WeakReference<TrailblazerWorldContext>(context);
+            return context;
+        }
+    }
+
+    private static void ThrowIfWorldOwned(GridWorld world)
+    {
+        if (!_worldOwners.TryGetValue(world, out WeakReference<TrailblazerWorldContext> weakOwner))
             return;
 
-        Pathing.Dispose();
-        _disposed = true;
+        if (weakOwner.TryGetTarget(out TrailblazerWorldContext? owner)
+            && !owner.IsDisposed
+            && owner.World.IsActive)
+        {
+            throw new InvalidOperationException("GridWorld is already attached to an active TrailblazerWorldContext.");
+        }
 
-        if (_ownsWorld && World.IsActive)
-            World.Dispose();
+        _worldOwners.Remove(world);
+    }
+
+    private static void ReleaseWorldOwnership(TrailblazerWorldContext context)
+    {
+        if (!_worldOwners.TryGetValue(context.World, out WeakReference<TrailblazerWorldContext> weakOwner))
+            return;
+
+        if (!weakOwner.TryGetTarget(out TrailblazerWorldContext? owner)
+            || ReferenceEquals(owner, context))
+        {
+            _worldOwners.Remove(context.World);
+        }
     }
 
     private void ThrowIfDisposed()

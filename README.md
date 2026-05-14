@@ -24,6 +24,7 @@ Trailblazer is being prepared for alpha release. Current work is focused on API 
 - Dual pathing strategies: waypoint-based A* and destination-centric flow fields
 - Context-owned chart registration and invalidation through `TrailblazerWorldContext.Pathing`
 - Context-owned guide caching through `TrailblazerWorldContext.Guides`
+- Context-owned deterministic heightmap sampling for ground/contact Y lookup
 - Runtime steering, group movement, stuck detection, repathing, and local avoidance hooks
 - Deterministic turning and locomotion-aware movement through `NavTurning` and `NavMotor`
 - Multi-targeted library build for `netstandard2.1` and `net8.0`
@@ -54,6 +55,7 @@ Trailblazer does not own your world simulation. Your game or simulation still su
 
 - `GridForge` world creation and grid registration through `GridWorld`
 - traversal medium and contact information
+- heightmap baking and registration when using precomputed ground/contact Y sampling
 - collision and environment probing
 - object setup and traversal-state refresh
 - any rendering, animation, or ECS integration
@@ -144,6 +146,48 @@ When charts overlap on the same voxel, Trailblazer resolves one winning authored
 Registered charts are mutable after registration through `context.Pathing.TryUpdateChartCell(...)` and `context.Pathing.ApplyChartUpdates(...)`. Initialized charts re-resolve only the touched voxels and keep the rest of the live pathing state intact. Any registered chart whose cells carry generated-transition media participates in the same managed transition lifecycle: local mutations refresh only the affected adjacent pairs, overlap masking suppresses inactive managed transitions without unregistering them, and unloading the chart removes its managed generated transitions entirely. Explicit manual transitions are lifecycle-managed too: Trailblazer keeps them registered, reevaluates them as local chart state changes, and suppresses them automatically when their endpoint media is no longer supported.
 
 If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse a `string[,,]` using the built-in legend into a `TraversalBuildResult`, and `context.Pathing.Register(buildResult)` will register the chart, initialize any authored solid or volume partitions, and register generated explicit transitions in one step. Generated transitions inherit the owning chart priority, remain registered while inactive, and become active only when their supporting pair is valid in the current effective world state. The built-in legend and current generator rules are documented in `docs/wiki/AUTHORING.MD`.
+
+### Optional: Register a Heightmap
+
+Heightmaps are context-owned, prebuilt ground/contact Y lookup surfaces. They are separate from
+`NavigationChart` walkability and are useful when a host wants grounded agents to project to known
+environment height without the need for a raycast.
+
+```csharp
+using FixedMathSharp;
+using SwiftCollections.Dimensions;
+using Trailblazer.Heightmaps;
+using Trailblazer.Navigation;
+
+var samples = new SwiftShortArray2D(1, 1);
+samples[0, 0] = 0;
+
+var compression = new HeightmapCompression(
+    referenceHeight: Fixed64.Zero,
+    heightStep: Fixed64.One);
+
+HeightmapSurface ground = HeightmapSurface.FromCompressed(
+    name: "ArenaGround",
+    samples: samples,
+    minBounds: Vector3d.Zero,
+    interval: Fixed64.One,
+    compression: compression);
+
+context.Heightmaps.Register(
+    ground,
+    minSelectionY: (Fixed64)(-1),
+    maxSelectionY: (Fixed64)2);
+
+navigator.ConfigureHeightmapGrounding(
+    mode: HeightmapGroundingMode.SurfaceLevelAndPosition,
+    layerName: "ArenaGround",
+    groundOffset: Fixed64.Zero,
+    snapTolerance: Fixed64.One);
+```
+
+Concrete navigator types still own traversal probing. Call the protected
+`TryApplyHeightmapGrounding(...)` helper from `CheckTrekCondition()` only after host collision or
+environment logic has determined the navigator is grounded on solid terrain.
 
 ### 2. Request a Guide Directly
 
@@ -258,9 +302,10 @@ Use `VolumePathRequest` when:
 | Path | Purpose |
 | --- | --- |
 | [`src/Trailblazer`](src/Trailblazer) | Main library source |
-| [`src/Trailblazer/Main`](src/Trailblazer/Main) | Host-facing lifecycle entry points such as `TrailblazerWorldContext` and `Navigator` |
+| [`src/Trailblazer/Runtime`](src/Trailblazer/Runtime) | Host-facing context and lifecycle entry points |
+| [`src/Trailblazer/Heightmaps`](src/Trailblazer/Heightmaps) | Deterministic compressed ground/contact Y sampling |
 | [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Charts, requests, search, guides, caching, and transitions |
-| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Steering, turning, motor, and movement groups flow |
+| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Navigator, steering, turning, motor, and movement groups flow |
 | [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests) | xUnit test suite |
 | [`docs`](docs) | Architecture and subsystem notes |
 
@@ -273,6 +318,7 @@ Start with:
 - [`PATHGUIDES.MD`](docs/wiki/PATHGUIDES.MD)
 - [`TRANSITIONS.MD`](docs/wiki/TRANSITIONS.MD)
 - [`VOLUMETRAVERSAL.MD`](docs/wiki/VOLUMETRAVERSAL.MD)
+- [`HEIGHTMAPS.MD`](docs/wiki/HEIGHTMAPS.MD)
 - [`PATHMANAGER.MD`](docs/wiki/PATHMANAGER.MD)
 - [`NAVIGATOR.MD`](docs/wiki/NAVIGATOR.MD)
 - [`NAVSTEERING.MD`](docs/wiki/NAVSTEERING.MD)
@@ -282,10 +328,11 @@ Start with:
 
 If you are integrating or extending the runtime, the key source entry points are:
 
-- [`src/Trailblazer/Main/TrailblazerWorldContext.cs`](src/Trailblazer/Main/TrailblazerWorldContext.cs)
+- [`src/Trailblazer/Runtime/TrailblazerWorldContext.cs`](src/Trailblazer/Runtime/TrailblazerWorldContext.cs)
+- [`src/Trailblazer/Heightmaps/TrailblazerHeightmapService.cs`](src/Trailblazer/Heightmaps/TrailblazerHeightmapService.cs)
 - [`src/Trailblazer/Pathing/TrailblazerPathingService.cs`](src/Trailblazer/Pathing/TrailblazerPathingService.cs)
-- [`src/Trailblazer/Pathing/Search/TrailblazerGuideService.cs`](src/Trailblazer/Pathing/Search/TrailblazerGuideService.cs)
-- [`src/Trailblazer/Main/Navigator.cs`](src/Trailblazer/Main/Navigator.cs)
+- [`src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs`](src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs)
+- [`src/Trailblazer/Navigation/Navigator/Navigator.cs`](src/Trailblazer/Navigation/Navigator/Navigator.cs)
 - [`src/Trailblazer/Navigation/Steering/NavSteering.cs`](src/Trailblazer/Navigation/Steering/NavSteering.cs)
 - [`src/Trailblazer/Navigation/Turning/NavTurning.cs`](src/Trailblazer/Navigation/Turning/NavTurning.cs)
 

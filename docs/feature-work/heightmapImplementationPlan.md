@@ -501,11 +501,11 @@ Expected: navigator serialization tests pass.
 
 **Tasks:**
 
-- [ ] Add `HEIGHTMAPS.MD` with sections for model, registration, sampling, multi-level layers,
+- [x] Add `HEIGHTMAPS.MD` with sections for model, registration, sampling, multi-level layers,
   navigator grounding, and host responsibilities.
-- [ ] Link `HEIGHTMAPS.MD` from `docs/wiki/OVERVIEW.md`.
-- [ ] Add a short README feature bullet and usage example.
-- [ ] Keep docs aligned with exact type and method names landed in source.
+- [x] Link `HEIGHTMAPS.MD` from `docs/wiki/OVERVIEW.md`.
+- [x] Add a short README feature bullet and usage example.
+- [x] Keep docs aligned with exact type and method names landed in source.
 
 ## Phase 7 - Full Verification
 

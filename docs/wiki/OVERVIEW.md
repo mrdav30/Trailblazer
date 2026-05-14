@@ -14,6 +14,7 @@ See also:
 - `PATHGUIDES.MD` for the runtime guide and guide-factory layer
 - `TRANSITIONS.MD` for authored handoffs between charts and raw volume
 - `VOLUMETRAVERSAL.MD` for raw-volume traversal media and host rules
+- `HEIGHTMAPS.MD` for deterministic context-owned ground/contact Y sampling
 - `CHARTS.MD` for a deeper explanation of `NavigationChart` and the chart lifecycle
 - `SERIALIZATION.MD` for Trailblazer's current serialization coverage and runtime behavior
 
@@ -72,6 +73,27 @@ See also:
 - [`AUTHORING.MD`](AUTHORING.MD)
 - [`CHARTS.MD`](CHARTS.MD)
 - [`PATHMANAGER.MD`](PATHMANAGER.MD)
+
+### 2.4 Heightmaps
+
+`TrailblazerWorldContext.Heightmaps` is the context-local registry for deterministic ground/contact
+Y sampling from prebuilt heightmap data. Heightmaps are separate from `NavigationChart` topology:
+they do not author walkability, neighbors, guide caches, or traversal transitions. They answer the
+runtime question "what environment Y exists at this X/Z contact query?"
+
+Runtime heightmap storage is compressed through `SwiftShortArray2D` plus
+`HeightmapCompression`. Use `HeightmapSurface.FromCompressed(...)` for baked or serialized compact
+samples, and `HeightmapSurface.FromHeights(...)` only when tests, generated maps, or tooling already
+have `Fixed64[,]` heights and want Trailblazer to quantize them once.
+
+Multi-level worlds register separate layers with vertical selection bands. For example, a floor and
+an overhead platform can share X/Z coverage while selecting by contact Y. Navigators can opt into
+heightmap grounding through `ConfigureHeightmapGrounding(...)`, but concrete navigators must still
+call the protected grounding helper from their own grounded traversal probing.
+
+See also:
+
+- [`HEIGHTMAPS.MD`](HEIGHTMAPS.MD)
 
 ## 3. Path Requests
 

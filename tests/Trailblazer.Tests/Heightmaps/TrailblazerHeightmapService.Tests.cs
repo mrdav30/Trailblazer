@@ -102,6 +102,103 @@ public sealed class TrailblazerHeightmapServiceTests
         sample.DistanceFromSelectionY.Should().Be(Fixed64.One);
     }
 
+    [Fact]
+    public void TrySampleGround_ShouldSelectGroundLayer_WhenStackedLayersShareXZAndContactYIsGroundBand()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.Heightmaps.Register(CreateSurface("Ground", height: 0), -Fixed64.One, (Fixed64)2)
+            .Should().BeTrue();
+        context.Heightmaps.Register(CreateSurface("Platform", height: 3), (Fixed64)2, (Fixed64)4)
+            .Should().BeTrue();
+
+        context.Heightmaps.TrySampleGround(new Vector3d(Fixed64.Zero, Fixed64.Half, Fixed64.Zero), out HeightmapSample sample)
+            .Should().BeTrue();
+
+        sample.LayerName.Should().Be("Ground");
+        sample.GroundY.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void TrySampleGround_ShouldSelectPlatformLayer_WhenStackedLayersShareXZAndContactYIsPlatformBand()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.Heightmaps.Register(CreateSurface("Ground", height: 0), -Fixed64.One, (Fixed64)2)
+            .Should().BeTrue();
+        context.Heightmaps.Register(CreateSurface("Platform", height: 3), (Fixed64)2, (Fixed64)4)
+            .Should().BeTrue();
+
+        context.Heightmaps.TrySampleGround(new Vector3d(Fixed64.Zero, (Fixed64)3, Fixed64.Zero), out HeightmapSample sample)
+            .Should().BeTrue();
+
+        sample.LayerName.Should().Be("Platform");
+        sample.GroundY.Should().Be((Fixed64)3);
+    }
+
+    [Fact]
+    public void TrySampleGround_WithPreferredLayer_ShouldKeepPreferredLayer_WhenItStillContainsQuery()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.Heightmaps.Register(CreateSurface("Ground", height: 0), Fixed64.Zero, (Fixed64)4)
+            .Should().BeTrue();
+        context.Heightmaps.Register(CreateSurface("Platform", height: 3), Fixed64.Zero, (Fixed64)4)
+            .Should().BeTrue();
+
+        context.Heightmaps.TrySampleGround(new Vector3d(Fixed64.Zero, (Fixed64)3, Fixed64.Zero), "Ground", out HeightmapSample sample)
+            .Should().BeTrue();
+
+        sample.LayerName.Should().Be("Ground");
+        sample.GroundY.Should().Be(Fixed64.Zero);
+        sample.DistanceFromSelectionY.Should().Be((Fixed64)3);
+    }
+
+    [Fact]
+    public void TrySampleGround_WithPreferredLayer_ShouldFallBack_WhenPreferredLayerNoLongerContainsContactY()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.Heightmaps.Register(CreateSurface("Ground", height: 0), -Fixed64.One, (Fixed64)2)
+            .Should().BeTrue();
+        context.Heightmaps.Register(CreateSurface("Platform", height: 3), (Fixed64)2, (Fixed64)4)
+            .Should().BeTrue();
+
+        context.Heightmaps.TrySampleGround(new Vector3d(Fixed64.Zero, (Fixed64)3, Fixed64.Zero), "Ground", out HeightmapSample sample)
+            .Should().BeTrue();
+
+        sample.LayerName.Should().Be("Platform");
+        sample.GroundY.Should().Be((Fixed64)3);
+    }
+
+    [Fact]
+    public void TrySampleGround_ShouldUseHigherPriority_WhenCandidatesTieByDistance()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.Heightmaps.Register(CreateSurface("LowPriority", height: 0), Fixed64.Zero, (Fixed64)3)
+            .Should().BeTrue();
+        context.Heightmaps.Register(CreateSurface("HighPriority", height: 2), Fixed64.Zero, (Fixed64)3, priority: 10)
+            .Should().BeTrue();
+
+        context.Heightmaps.TrySampleGround(new Vector3d(Fixed64.Zero, Fixed64.One, Fixed64.Zero), out HeightmapSample sample)
+            .Should().BeTrue();
+
+        sample.LayerName.Should().Be("HighPriority");
+        sample.GroundY.Should().Be((Fixed64)2);
+    }
+
+    [Fact]
+    public void TrySampleGround_ShouldUseRegistrationOrder_WhenCandidatesTieByDistanceAndPriority()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.Heightmaps.Register(CreateSurface("First", height: 0), Fixed64.Zero, (Fixed64)2)
+            .Should().BeTrue();
+        context.Heightmaps.Register(CreateSurface("Second", height: 0), Fixed64.Zero, (Fixed64)2)
+            .Should().BeTrue();
+
+        context.Heightmaps.TrySampleGround(new Vector3d(Fixed64.Zero, Fixed64.Half, Fixed64.Zero), out HeightmapSample sample)
+            .Should().BeTrue();
+
+        sample.LayerName.Should().Be("First");
+        sample.GroundY.Should().Be(Fixed64.Zero);
+    }
+
     private static HeightmapSurface CreateSurface(string name, int height)
     {
         return HeightmapSurface.FromHeights(

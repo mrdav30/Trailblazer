@@ -348,14 +348,14 @@ Expected: service tests pass.
 
 **Tasks:**
 
-- [ ] Add tests for ground at Y 0 and platform at Y 3 sharing the same X/Z, with contact Y near
+- [x] Add tests for ground at Y 0 and platform at Y 3 sharing the same X/Z, with contact Y near
   ground selecting the ground layer.
-- [ ] Add tests for the same X/Z with contact Y near platform selecting the platform layer.
-- [ ] Add tests proving sticky active layer wins while still valid.
-- [ ] Add tests proving sticky active layer is abandoned when the query contact Y leaves its
+- [x] Add tests for the same X/Z with contact Y near platform selecting the platform layer.
+- [x] Add tests proving sticky active layer wins while still valid.
+- [x] Add tests proving sticky active layer is abandoned when the query contact Y leaves its
   vertical band.
-- [ ] Add tests proving priority and registration order break exact ties deterministically.
-- [ ] Implement overload:
+- [x] Add tests proving priority and registration order break exact ties deterministically.
+- [x] Implement overload:
 
 ```csharp
 public bool TrySampleGround(
@@ -364,9 +364,9 @@ public bool TrySampleGround(
     out HeightmapSample sample);
 ```
 
-- [ ] Keep the no-preference overload deterministic by using the same candidate ordering without a
+- [x] Keep the no-preference overload deterministic by using the same candidate ordering without a
   preferred layer.
-- [ ] Run:
+- [x] Run:
 
 ```bash
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~TrailblazerHeightmapService

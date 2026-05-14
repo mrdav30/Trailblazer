@@ -89,7 +89,23 @@ public sealed class TrailblazerHeightmapService
     /// </summary>
     public bool TrySampleGround(Vector3d worldPosition, out HeightmapSample sample)
     {
+        return TrySampleGround(worldPosition, null, out sample);
+    }
+
+    /// <summary>
+    /// Attempts to sample the preferred layer when valid, then falls back to deterministic candidate selection.
+    /// </summary>
+    public bool TrySampleGround(Vector3d worldPosition, string? preferredLayerName, out HeightmapSample sample)
+    {
         EnsureUsable();
+
+        if (!string.IsNullOrWhiteSpace(preferredLayerName)
+            && State.LayersByName.TryGetValue(preferredLayerName, out HeightmapLayerRegistration preferredRegistration)
+            && TrySampleRegistration(preferredRegistration, worldPosition, out Fixed64 preferredGroundY, out Fixed64 preferredDistance))
+        {
+            sample = CreateSample(preferredRegistration, worldPosition, preferredGroundY, preferredDistance);
+            return true;
+        }
 
         bool hasBest = false;
         HeightmapLayerRegistration? bestRegistration = null;
@@ -97,13 +113,9 @@ public sealed class TrailblazerHeightmapService
         Fixed64 bestDistance = Fixed64.Zero;
         foreach (HeightmapLayerRegistration registration in State.LayersByName.Values)
         {
-            if (!registration.ContainsSelectionY(worldPosition.y))
+            if (!TrySampleRegistration(registration, worldPosition, out Fixed64 groundY, out Fixed64 distance))
                 continue;
 
-            if (!registration.Surface.TrySampleGround(worldPosition, out Fixed64 groundY))
-                continue;
-
-            Fixed64 distance = (worldPosition.y - groundY).Abs();
             if (hasBest && !IsBetterCandidate(registration, distance, bestRegistration!, bestDistance))
                 continue;
 
@@ -119,11 +131,7 @@ public sealed class TrailblazerHeightmapService
             return false;
         }
 
-        sample = new HeightmapSample(
-            bestRegistration.LayerName,
-            worldPosition,
-            bestGroundY,
-            bestDistance);
+        sample = CreateSample(bestRegistration, worldPosition, bestGroundY, bestDistance);
         return true;
     }
 
@@ -139,6 +147,37 @@ public sealed class TrailblazerHeightmapService
     internal void Dispose()
     {
         State.Reset();
+    }
+
+    private static bool TrySampleRegistration(
+        HeightmapLayerRegistration registration,
+        Vector3d worldPosition,
+        out Fixed64 groundY,
+        out Fixed64 distance)
+    {
+        if (!registration.ContainsSelectionY(worldPosition.y)
+            || !registration.Surface.TrySampleGround(worldPosition, out groundY))
+        {
+            groundY = Fixed64.Zero;
+            distance = Fixed64.Zero;
+            return false;
+        }
+
+        distance = (worldPosition.y - groundY).Abs();
+        return true;
+    }
+
+    private static HeightmapSample CreateSample(
+        HeightmapLayerRegistration registration,
+        Vector3d worldPosition,
+        Fixed64 groundY,
+        Fixed64 distance)
+    {
+        return new HeightmapSample(
+            registration.LayerName,
+            worldPosition,
+            groundY,
+            distance);
     }
 
     private static bool IsBetterCandidate(

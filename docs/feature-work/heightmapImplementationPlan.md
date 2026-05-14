@@ -309,15 +309,15 @@ public sealed class TrailblazerHeightmapService
 
 **Tasks:**
 
-- [ ] Write tests proving duplicate layer names are rejected inside one context.
-- [ ] Write tests proving two separate contexts can register the same layer name independently.
-- [ ] Write tests proving `Reset()` clears only the current context's heightmap registry.
-- [ ] Write tests proving service APIs throw clear disposed-context errors after context disposal.
-- [ ] Implement `HeightmapWorldState` with `SwiftDictionary<string, HeightmapLayerRegistration>`.
-- [ ] Add `TrailblazerWorldContext.Heightmaps` construction beside `Pathing`, `Guides`, and
+- [x] Write tests proving duplicate layer names are rejected inside one context.
+- [x] Write tests proving two separate contexts can register the same layer name independently.
+- [x] Write tests proving `Reset()` clears only the current context's heightmap registry.
+- [x] Write tests proving service APIs throw clear disposed-context errors after context disposal.
+- [x] Implement `HeightmapWorldState` with `SwiftDictionary<string, HeightmapLayerRegistration>`.
+- [x] Add `TrailblazerWorldContext.Heightmaps` construction beside `Pathing`, `Guides`, and
   `Navigation`.
-- [ ] Add heightmap service reset/disposal into `TrailblazerWorldContext.Reset()` and `Dispose()`.
-- [ ] Run:
+- [x] Add heightmap service reset/disposal into `TrailblazerWorldContext.Reset()` and `Dispose()`.
+- [x] Run:
 
 ```bash
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~TrailblazerHeightmapService

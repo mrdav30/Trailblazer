@@ -2,6 +2,7 @@ using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
 using System;
+using Trailblazer.Heightmaps;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 
@@ -38,6 +39,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         VolumeRules = new TrailblazerVolumeRulesService(this, Pathing.State);
         Guides = new TrailblazerGuideService(this, Pathing.State);
         Navigation = new TrailblazerNavigationService(this);
+        Heightmaps = new TrailblazerHeightmapService(this);
     }
 
     /// <summary>
@@ -69,6 +71,11 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// Gets this context's world-local navigation coordination service.
     /// </summary>
     public TrailblazerNavigationService Navigation { get; }
+
+    /// <summary>
+    /// Gets this context's world-local heightmap registry and sampling service.
+    /// </summary>
+    public TrailblazerHeightmapService Heightmaps { get; }
 
     /// <summary>
     /// Gets whether this context has been disposed.
@@ -254,6 +261,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         ThrowIfDisposed();
         _clock.Reset();
         Navigation.Reset();
+        Heightmaps.Reset();
         _hooks.InvokeReset();
     }
 
@@ -318,6 +326,7 @@ public sealed class TrailblazerWorldContext : IDisposable
                 return;
 
             Pathing.Dispose();
+            Heightmaps.Dispose();
             _disposed = true;
             ReleaseWorldOwnership(this);
 

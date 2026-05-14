@@ -48,8 +48,8 @@
 	<!-- NuGet Packaging Metadata -->
 	<PropertyGroup>
 		<Authors>mrdav30</Authors>
-		<Description></Description>
-		<PackageTags></PackageTags>
+		<Description>Deterministic, framework-agnostic pathfinding and navigation for lockstep simulations and games. Trailblazer combines FixedMathSharp fixed-point math, GridForge voxel navigation charts, A* paths, flow fields, reusable guide caching, transition-aware routing, steering, turning, locomotion, heightmaps, and Chronicler serialization support.</Description>
+		<PackageTags>pathfinding;navigation;game-development;deterministic;lockstep;fixed-point;fixedmathsharp;gridforge;voxel;astar;flow-field;steering;locomotion;simulation;dotnet</PackageTags>
 		<RepositoryUrl>https://github.com/mrdav30/Trailblazer</RepositoryUrl>
 		<PackageIcon>icon.png</PackageIcon>
 		<PackageIconUrl>https://raw.githubusercontent.com/mrdav30/trailblazer/main/icon.png</PackageIconUrl>

@@ -1,5 +1,14 @@
 # Trailblazer
 
+![Trailblazer Icon](https://raw.githubusercontent.com/mrdav30/trailblazer/main/icon.png)
+
+[![.NET CI](https://github.com/mrdav30/Trailblazer/actions/workflows/dotnet.yml/badge.svg)](https://github.com/mrdav30/Trailblazer/actions/workflows/dotnet.yml)
+[![Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fmrdav30.github.io%2FTrailblazer%2FSummary.json&query=%24.summary.linecoverage&suffix=%25&label=coverage&color=brightgreen)](https://mrdav30.github.io/Trailblazer/)
+[![NuGet](https://img.shields.io/nuget/v/Trailblazer.svg)](https://www.nuget.org/packages/Trailblazer)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Trailblazer.svg)](https://www.nuget.org/packages/Trailblazer)
+[![License](https://img.shields.io/github/license/mrdav30/Trailblazer.svg)](https://github.com/mrdav30/Trailblazer/blob/main/LICENSE)
+[![Frameworks](https://img.shields.io/badge/frameworks-netstandard2.1%20%7C%20net8.0-512BD4.svg)](https://github.com/mrdav30/Trailblazer)
+
 **A deterministic, framework-agnostic pathfinding and navigation library for lockstep simulations and games.**
 
 Trailblazer targets simulation-heavy projects that need predictable movement, fixed-point math, and reusable navigation primitives without depending on a specific engine.

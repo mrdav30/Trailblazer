@@ -155,15 +155,15 @@ navigator.ConfigureHeightmapGrounding(
 
 **Goal:** Lock down the feature boundary before source changes.
 
-- [ ] Confirm the namespace and folder name will be `Trailblazer.Heightmaps`.
-- [ ] Confirm `HeightmapSurface` stores environment ground/contact Y.
-- [ ] Confirm `HeightmapGroundingMode.SurfaceLevelAndPosition` is the only mode that projects
+- [x] Confirm the namespace and folder name will be `Trailblazer.Heightmaps`.
+- [x] Confirm `HeightmapSurface` stores environment ground/contact Y.
+- [x] Confirm `HeightmapGroundingMode.SurfaceLevelAndPosition` is the only mode that projects
   root Y.
-- [ ] Confirm `groundOffset` means extra clearance above sampled ground after
+- [x] Confirm `groundOffset` means extra clearance above sampled ground after
   `FootPositionAdjust` is applied.
-- [ ] Confirm layer bands use inclusive lower bound and exclusive upper bound:
+- [x] Confirm layer bands use inclusive lower bound and exclusive upper bound:
   `minSelectionY <= contactY && contactY < maxSelectionY`.
-- [ ] Record any additional open questions in `docs/feature-work/hardeningPlans.md` instead of
+- [x] Record any additional open questions in `docs/feature-work/hardeningPlans.md` instead of
   widening this plan.
 
 ## Phase 1 - Compressed Heightmap Surface And Sampling
@@ -236,39 +236,39 @@ public sealed class HeightmapSurface
 
 **Tasks:**
 
-- [ ] Write tests proving `HeightmapCompression` rejects `HeightStep <= Fixed64.Zero`.
-- [ ] Write tests proving `Decompress(0)` returns `ReferenceHeight`.
-- [ ] Write tests proving positive and negative compressed values use
+- [x] Write tests proving `HeightmapCompression` rejects `HeightStep <= Fixed64.Zero`.
+- [x] Write tests proving `Decompress(0)` returns `ReferenceHeight`.
+- [x] Write tests proving positive and negative compressed values use
   `ReferenceHeight + compressed * HeightStep`.
-- [ ] Write tests proving `CompressClamped` clamps values outside the representable short range.
-- [ ] Write tests proving `FromCompressed` rejects null data, empty dimensions, and non-positive
+- [x] Write tests proving `CompressClamped` clamps values outside the representable short range.
+- [x] Write tests proving `FromCompressed` rejects null data, empty dimensions, and non-positive
   interval.
-- [ ] Write tests proving `FromHeights` rejects null data and compresses into the same sampling
+- [x] Write tests proving `FromHeights` rejects null data and compresses into the same sampling
   result as an equivalent `SwiftShortArray2D` passed to `FromCompressed`.
-- [ ] Write tests proving negative world X/Z outside `MinBounds` fails instead of truncating to
+- [x] Write tests proving negative world X/Z outside `MinBounds` fails instead of truncating to
   zero.
-- [ ] Write tests proving exact edge positions clamp to the last valid sample instead of sampling
+- [x] Write tests proving exact edge positions clamp to the last valid sample instead of sampling
   one past the array.
-- [ ] Write tests proving bilinear interpolation uses four neighboring samples and deterministic
+- [x] Write tests proving bilinear interpolation uses four neighboring samples and deterministic
   `FixedMath.LinearInterpolate`.
-- [ ] Write XML docs on `FromCompressed(...)` explaining that it is the preferred baked/runtime
+- [x] Write XML docs on `FromCompressed(...)` explaining that it is the preferred baked/runtime
   path and avoids setup-time quantization work.
-- [ ] Write XML docs on `FromHeights(...)` explaining that it is a setup-time convenience for tests,
+- [x] Write XML docs on `FromHeights(...)` explaining that it is a setup-time convenience for tests,
   generated data, or host tooling that already has fixed-point heights; it still quantizes once and
   stores compressed shorts internally.
-- [ ] Implement `HeightmapCompression`.
-- [ ] Implement `HeightmapSurface` with `SwiftShortArray2D` as the only internal sample storage.
-- [ ] Implement `FromCompressed(...)`.
-- [ ] Implement `FromHeights(...)` by compressing the provided `Fixed64[,]` into a
+- [x] Implement `HeightmapCompression`.
+- [x] Implement `HeightmapSurface` with `SwiftShortArray2D` as the only internal sample storage.
+- [x] Implement `FromCompressed(...)`.
+- [x] Implement `FromHeights(...)` by compressing the provided `Fixed64[,]` into a
   `SwiftShortArray2D` during construction and then delegating to the same internal initialization as
   `FromCompressed(...)`.
-- [ ] Implement floor-based local index conversion:
+- [x] Implement floor-based local index conversion:
   `localX = (worldX - MinBounds.x) / Interval`, `x0 = localX.FloorToInt()`.
-- [ ] Implement clamped neighbor lookup using `x1 = FixedMath.Min(x0 + 1, Width - 1)` and the same
+- [x] Implement clamped neighbor lookup using `x1 = FixedMath.Min(x0 + 1, Width - 1)` and the same
   rule for Z.
-- [ ] Decompress only the four sampled corners into local `Fixed64` values during
+- [x] Decompress only the four sampled corners into local `Fixed64` values during
   `TrySampleGround`.
-- [ ] Run:
+- [x] Run:
 
 ```bash
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~Heightmap

@@ -3,6 +3,7 @@ using FixedMathSharp;
 using GridForge.Grids;
 using System;
 using System.Runtime.CompilerServices;
+using Trailblazer.Heightmaps;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
@@ -143,6 +144,8 @@ public abstract class Navigator : INavigate, IRecordable
 
     private TrailblazerWorldContext? _context;
 
+    private readonly NavigatorHeightmapGroundingSettings _heightmapGrounding = new();
+
     #endregion
 
     #region State - Identity / Transform
@@ -219,6 +222,11 @@ public abstract class Navigator : INavigate, IRecordable
 
     /// <inheritdoc cref="_footPositionAdjust"/>
     public Fixed64 FootPositionAdjust { get => _footPositionAdjust; set => _footPositionAdjust = value; }
+
+    /// <summary>
+    /// Gets the opt-in heightmap grounding settings owned by this navigator.
+    /// </summary>
+    public NavigatorHeightmapGroundingSettings HeightmapGrounding => _heightmapGrounding;
 
     /// <summary>
     /// Gets or sets a value indicating whether the object is currently locked on to a target.
@@ -450,6 +458,7 @@ public abstract class Navigator : INavigate, IRecordable
         _isGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
         ResetGuidedClimbIntentState();
+        _heightmapGrounding.Reset();
         _steering?.Reset();
 
         if (_context != null && !_context.IsDisposed && _context.World.IsActive)
@@ -600,6 +609,22 @@ public abstract class Navigator : INavigate, IRecordable
         _guidedAStarHeuristic = aStarHeuristic ?? _guidedAStarHeuristic;
         _guidedFlowFieldExtraFloodRange = flowFieldExtraFloodRange ?? _guidedFlowFieldExtraFloodRange;
         _guidedMaxClimbHeight = maxClimbHeight ?? _guidedMaxClimbHeight;
+    }
+
+    /// <summary>
+    /// Configures explicit heightmap grounding for concrete navigators that opt in during traversal checks.
+    /// </summary>
+    /// <param name="mode">Heightmap grounding behavior to use when <see cref="TryApplyHeightmapGrounding"/> is called.</param>
+    /// <param name="layerName">Optional initial layer preference used before an active layer is established.</param>
+    /// <param name="groundOffset">Optional extra root offset above the sampled ground Y.</param>
+    /// <param name="snapTolerance">Optional maximum root-Y correction allowed for positional projection.</param>
+    public virtual void ConfigureHeightmapGrounding(
+        HeightmapGroundingMode mode,
+        string? layerName = null,
+        Fixed64? groundOffset = null,
+        Fixed64? snapTolerance = null)
+    {
+        _heightmapGrounding.Configure(mode, layerName, groundOffset, snapTolerance);
     }
 
     /// <summary>
@@ -940,6 +965,111 @@ public abstract class Navigator : INavigate, IRecordable
     /// Checks and updates the current traversal condition.
     /// </summary>
     public abstract void CheckTrekCondition();
+
+    #endregion
+
+    #region Heightmap Grounding
+
+    /// <summary>
+    /// Applies configured heightmap grounding when a concrete navigator chooses to opt in.
+    /// </summary>
+    /// <remarks>
+    /// The base navigator never calls this automatically. Host/concrete navigators should invoke it
+    /// from their traversal probing code after they know the navigator is grounded on solid terrain.
+    /// </remarks>
+    /// <param name="updateMotorState">Whether to immediately sync the resulting ground contact into the motor.</param>
+    /// <param name="surfaceFriction">Optional friction stored in the generated ground condition.</param>
+    /// <param name="motionTransfer">Motion transfer mode stored in the generated ground condition.</param>
+    /// <returns>True when a registered heightmap sample updated this navigator's ground contact.</returns>
+    protected bool TryApplyHeightmapGrounding(
+        bool updateMotorState = false,
+        Fixed64? surfaceFriction = null,
+        MotionTransfer motionTransfer = MotionTransfer.None)
+    {
+        if (!IsActive || _heightmapGrounding.Mode == HeightmapGroundingMode.Disabled)
+            return false;
+        if (_frameCondition.Medium != TraversalMedium.Solid)
+            return false;
+
+        TrailblazerWorldContext context = RequireContext();
+        Vector3d queryPosition = GetHeightmapGroundingQueryPosition();
+        string? preferredLayerName = _heightmapGrounding.ActiveLayerName ?? _heightmapGrounding.LayerName;
+        if (!context.Heightmaps.TrySampleGround(queryPosition, preferredLayerName, out HeightmapSample sample))
+        {
+            _heightmapGrounding.ActiveLayerName = null;
+            return false;
+        }
+
+        _heightmapGrounding.ActiveLayerName = sample.LayerName;
+        SetGroundContact(
+            surfaceLevel: sample.GroundY,
+            surfaceFriction: surfaceFriction,
+            motionTransfer: motionTransfer,
+            updateMotorState: updateMotorState);
+
+        if (_heightmapGrounding.Mode == HeightmapGroundingMode.SurfaceLevelAndPosition)
+            TryProjectRootToHeightmapSample(sample);
+
+        return true;
+    }
+
+    private Vector3d GetHeightmapGroundingQueryPosition()
+    {
+        return new Vector3d(
+            _position.x,
+            _position.y - _footPositionAdjust - _heightmapGrounding.GroundOffset,
+            _position.z);
+    }
+
+    private void TryProjectRootToHeightmapSample(HeightmapSample sample)
+    {
+        Fixed64 targetRootY = sample.GroundY + _footPositionAdjust + _heightmapGrounding.GroundOffset;
+        Fixed64 correctionY = targetRootY - _position.y;
+        if (correctionY == Fixed64.Zero)
+            return;
+
+        Fixed64? snapTolerance = _heightmapGrounding.SnapTolerance;
+        if (snapTolerance.HasValue && correctionY.Abs() > snapTolerance.Value)
+            return;
+
+        ProjectRootWithoutVelocity(new Vector3d(Fixed64.Zero, correctionY, Fixed64.Zero));
+    }
+
+    private void ProjectRootWithoutVelocity(Vector3d correction)
+    {
+        if (correction == Vector3d.Zero)
+            return;
+
+        Vector3d oldPosition = _position;
+        _position += correction;
+        _lastPosition += correction;
+        UpdateVoxelOccupancyAfterRootProjection(oldPosition, _position);
+    }
+
+    private void UpdateVoxelOccupancyAfterRootProjection(Vector3d oldPosition, Vector3d newPosition)
+    {
+        if (_context == null || _context.IsDisposed || !_context.World.IsActive)
+            return;
+
+        GridWorld world = _context.World;
+        bool oldVoxelFound = world.TryGetGridAndVoxel(
+            oldPosition,
+            out VoxelGrid? oldGrid,
+            out Voxel? oldVoxel);
+        bool newVoxelFound = world.TryGetGridAndVoxel(
+            newPosition,
+            out VoxelGrid? newGrid,
+            out Voxel? newVoxel);
+
+        if (oldVoxelFound && newVoxelFound && oldVoxel == newVoxel)
+            return;
+
+        if (oldVoxelFound)
+            oldGrid!.TryRemoveVoxelOccupant(oldVoxel!, this);
+
+        if (newVoxelFound && newGrid!.TryAddVoxelOccupant(newVoxel!, this) == false)
+            TrailblazerLogger.Channel.Warn($"Navigator {GlobalId} failed to register occupancy in voxel {newVoxel!.Index} of grid {newGrid} at position {newPosition}.");
+    }
 
     #endregion
 

@@ -413,26 +413,26 @@ protected bool TryApplyHeightmapGrounding(
 
 **Tasks:**
 
-- [ ] Write tests proving `Disabled` performs no sampling and leaves `SurfaceLevel` and position
+- [x] Write tests proving `Disabled` performs no sampling and leaves `SurfaceLevel` and position
   unchanged.
-- [ ] Write tests proving `SurfaceLevelOnly` samples ground Y and calls `SetGroundContact` without
+- [x] Write tests proving `SurfaceLevelOnly` samples ground Y and calls `SetGroundContact` without
   changing navigator root Y.
-- [ ] Write tests proving `SurfaceLevelAndPosition` sets root Y to
+- [x] Write tests proving `SurfaceLevelAndPosition` sets root Y to
   `sample.GroundY + FootPositionAdjust + groundOffset`.
-- [ ] Write tests proving root projection shifts `Position` and `LastPosition` together.
-- [ ] Write tests proving projection is skipped when current medium is not `TraversalMedium.Solid`.
-- [ ] Write tests proving projection is skipped when the absolute root correction exceeds
+- [x] Write tests proving root projection shifts `Position` and `LastPosition` together.
+- [x] Write tests proving projection is skipped when current medium is not `TraversalMedium.Solid`.
+- [x] Write tests proving projection is skipped when the absolute root correction exceeds
   `snapTolerance`.
-- [ ] Write tests proving a configured layer name preserves the active layer across frames while
+- [x] Write tests proving a configured layer name preserves the active layer across frames while
   valid.
-- [ ] Implement `NavigatorHeightmapGroundingSettings` with mode, layer name, active layer name,
+- [x] Implement `NavigatorHeightmapGroundingSettings` with mode, layer name, active layer name,
   ground offset, and snap tolerance.
-- [ ] Add `ConfigureHeightmapGrounding(...)` to `Navigator`.
-- [ ] Add a protected `TryApplyHeightmapGrounding(...)` hook that concrete navigators can call from
+- [x] Add `ConfigureHeightmapGrounding(...)` to `Navigator`.
+- [x] Add a protected `TryApplyHeightmapGrounding(...)` hook that concrete navigators can call from
   `CheckTrekCondition()`.
-- [ ] Keep the base navigator from performing hidden heightmap probes unless the opt-in helper is
+- [x] Keep the base navigator from performing hidden heightmap probes unless the opt-in helper is
   called by the host/concrete navigator.
-- [ ] Run:
+- [x] Run:
 
 ```bash
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~NavigatorHeightmapGrounding

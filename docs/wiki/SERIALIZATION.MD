@@ -22,6 +22,7 @@ The code referenced here lives primarily in:
 The current Trailblazer serialization coverage is intentionally limited to:
 
 - `Navigator`
+- `NavigatorHeightmapGroundingSettings`
 - `NavSteering`
 - `NavTurning`
 - `NavMotor`
@@ -40,6 +41,7 @@ In practice that means the current covered branch handles:
 - navigator steering session state
 - navigator turning configuration
 - navigator motor-owned traversal state
+- navigator-owned heightmap grounding opt-in settings
 - locomotion configuration
 - locomotion resumable runtime state
 - moving-platform attachment state inside the motor branch and guided steering branch
@@ -101,6 +103,7 @@ That means this runtime is not designed for:
 - `Size`
 - `FootPositionAdjust`
 - guided-request defaults configured through `ConfigureForGuidedTraversal(...)`, including `GuidedPathMode`, transition fallback, and the built-in chart request tuning values
+- heightmap grounding settings configured through `ConfigureHeightmapGrounding(...)`, including mode, preferred layer name, active layer name, ground offset, and snap tolerance
 - `GlobalId`
 - `OccupantGroupId`
 - `IsLockedOn`
@@ -120,6 +123,13 @@ On load it also:
 - refreshes steering radius-derived tolerances from the loaded navigator size
 - clears and recomputes occupancy
 - reinitializes `Turning` if present
+
+Heightmap samples, compressed heightmap data, and context registrations are not serialized through
+`Navigator`. Those are host/context-owned world resources. After loading a navigator with heightmap
+grounding enabled, hosts must register the required heightmap layers on the already-bound
+`TrailblazerWorldContext` before calling the navigator's concrete heightmap grounding hook. If a
+restored navigator references a missing layer, grounding fails cleanly and does not construct or
+hydrate heightmap data from the navigator payload.
 
 ### 3.2 NavSteering
 
@@ -291,6 +301,7 @@ The current Trailblazer-focused tests verify that:
 - disabled locomotions clear transient runtime state on load even when serialized payloads still carry stale transient values
 - unresolved deferred links throw explicit load errors for both transports
 - turning configuration survives round-trip while active turn runtime state is rebuilt on load
+- navigator heightmap grounding settings survive round-trip without serializing context-owned heightmap data
 - moving-platform state survives round-trip
 - locomotion runtime state survives round-trip
 - grouped steering can be explicitly prewarmed after load, and the runtime can lazily rejoin groups when needed

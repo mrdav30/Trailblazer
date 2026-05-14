@@ -5,6 +5,7 @@ using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
+using Trailblazer.Heightmaps;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
@@ -276,6 +277,53 @@ public class NavigatorSerializationTests : IDisposable
         targetTurning.TurnRate.Should().Be(sourceTurning.TurnRate);
         targetTurning.TargetReached.Should().BeTrue();
         targetTurning.TargetRotation.Should().Be(FixedQuaternion.Identity);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RoundTrip_ShouldRestoreNavigatorHeightmapGroundingSettings(bool useMemoryPack)
+    {
+        var source = CreateNavigator(new Vector3d(2, 0, 2));
+        source.ConfigureHeightmapGrounding(
+            HeightmapGroundingMode.SurfaceLevelAndPosition,
+            layerName: "Ground",
+            groundOffset: Fixed64.Half,
+            snapTolerance: (Fixed64)2);
+        source.HeightmapGrounding.ActiveLayerName = "Platform";
+
+        var target = CreateNavigator(new Vector3d(-4, 0, -4));
+
+        SerializationUtility.PopulateRecord(target, SerializationUtility.SerializeRecord(source, useMemoryPack), useMemoryPack);
+
+        target.HeightmapGrounding.Mode.Should().Be(HeightmapGroundingMode.SurfaceLevelAndPosition);
+        target.HeightmapGrounding.LayerName.Should().Be("Ground");
+        target.HeightmapGrounding.ActiveLayerName.Should().Be("Platform");
+        target.HeightmapGrounding.GroundOffset.Should().Be(Fixed64.Half);
+        target.HeightmapGrounding.SnapTolerance.Should().Be((Fixed64)2);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RoundTrip_ShouldRestoreHeightmapGroundingSettingsWithoutCreatingHeightmapData(bool useMemoryPack)
+    {
+        RegisterHeightmapSurface("MissingAfterLoad", height: 4, minSelectionY: Fixed64.Zero, maxSelectionY: (Fixed64)8);
+        var source = CreateNavigator(new Vector3d(Fixed64.Zero, (Fixed64)4 + Navigator.DefaultFootPositionAdjust, Fixed64.Zero));
+        source.ConfigureHeightmapGrounding(HeightmapGroundingMode.SurfaceLevelAndPosition);
+        source.ApplyHeightmapGrounding().Should().BeTrue();
+        source.HeightmapGrounding.ActiveLayerName.Should().Be("MissingAfterLoad");
+
+        object payload = SerializationUtility.SerializeRecord(source, useMemoryPack);
+        TestWorld.Context.Reset();
+
+        var target = CreateNavigator(new Vector3d(Fixed64.Zero, (Fixed64)4 + Navigator.DefaultFootPositionAdjust, Fixed64.Zero));
+        SerializationUtility.PopulateRecord(target, payload, useMemoryPack);
+
+        target.HeightmapGrounding.Mode.Should().Be(HeightmapGroundingMode.SurfaceLevelAndPosition);
+        target.HeightmapGrounding.ActiveLayerName.Should().Be("MissingAfterLoad");
+        target.ApplyHeightmapGrounding().Should().BeFalse();
+        TestWorld.Context.Heightmaps.IsRegistered("MissingAfterLoad").Should().BeFalse();
     }
 
     [Fact]
@@ -1240,6 +1288,22 @@ public class NavigatorSerializationTests : IDisposable
         };
 
         PathTestFactory.RegisterFromData(chartKey, data, Vector3d.Zero);
+    }
+
+    private static void RegisterHeightmapSurface(
+        string name,
+        int height,
+        Fixed64 minSelectionY,
+        Fixed64 maxSelectionY)
+    {
+        HeightmapSurface surface = HeightmapSurface.FromHeights(
+            name,
+            new Fixed64[1, 1] { { (Fixed64)height } },
+            Vector3d.Zero,
+            Fixed64.One,
+            new HeightmapCompression(Fixed64.Zero, Fixed64.One));
+
+        TestWorld.Context.Heightmaps.Register(surface, minSelectionY, maxSelectionY).Should().BeTrue();
     }
 
     private static void AssertMotorStateMatches(NavMotor expected, NavMotor actual)

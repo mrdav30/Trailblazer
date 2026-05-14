@@ -144,7 +144,7 @@ public abstract class Navigator : INavigate, IRecordable
 
     private TrailblazerWorldContext? _context;
 
-    private readonly NavigatorHeightmapGroundingSettings _heightmapGrounding = new();
+    private NavigatorHeightmapGroundingSettings _heightmapGrounding = new();
 
     #endregion
 
@@ -1363,6 +1363,7 @@ public abstract class Navigator : INavigate, IRecordable
         RecordValues.Look(chronicler, ref _lastSeenGuidedRouteTopologyVersion, "LastSeenGuidedRouteTopologyVersion", 0);
         RecordDeepStruct.Look(chronicler, ref _frameCondition, "FrameCondition");
         RecordDeepStruct.Look(chronicler, ref _frameRequest, "FrameRequest");
+        RecordDeep.Look(chronicler, ref _heightmapGrounding, "HeightmapGrounding");
         RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff!, "PendingGuidedVolumeExitHandoff");
         if (_steering != null)
             RecordDeep.Look(chronicler, ref _steering, "Steering");
@@ -1385,6 +1386,7 @@ public abstract class Navigator : INavigate, IRecordable
             _positionDelta = Vector3d.Zero;
             _velocityDelta = Vector3d.Zero;
             _rotationDelta = FixedQuaternion.Identity;
+            _heightmapGrounding ??= new NavigatorHeightmapGroundingSettings();
             _isSet = true;
             _isInitialized = Motor != null;
 

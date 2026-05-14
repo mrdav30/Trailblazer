@@ -454,17 +454,17 @@ without serializing host-owned heightmap data through navigators.
 
 **Tasks:**
 
-- [ ] Add serialization tests proving mode, layer name, active layer name, ground offset, and snap
+- [x] Add serialization tests proving mode, layer name, active layer name, ground offset, and snap
   tolerance round-trip through Chronicler.
-- [ ] Add a load test proving missing registered heightmap data does not construct a heightmap and
+- [x] Add a load test proving missing registered heightmap data does not construct a heightmap and
   causes `TryApplyHeightmapGrounding(...)` to return false.
-- [ ] Record only navigator-owned settings. Do not record heightmap samples or registrations inside
+- [x] Record only navigator-owned settings. Do not record heightmap samples or registrations inside
   `Navigator.RecordData(...)`.
-- [ ] Bind restored settings to the already-bound `TrailblazerWorldContext` during load, matching
+- [x] Bind restored settings to the already-bound `TrailblazerWorldContext` during load, matching
   existing navigator load behavior.
-- [ ] Update `docs/wiki/SERIALIZATION.MD` to state that hosts must register heightmaps on the
+- [x] Update `docs/wiki/SERIALIZATION.MD` to state that hosts must register heightmaps on the
   context before loaded navigators can use heightmap grounding.
-- [ ] Run:
+- [x] Run:
 
 ```bash
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~NavigatorSerialization

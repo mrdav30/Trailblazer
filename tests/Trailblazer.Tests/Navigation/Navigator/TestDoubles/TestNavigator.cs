@@ -27,6 +27,14 @@ internal sealed class TestNavigator : Navigator
             _lastPosition = position;
     }
 
+    public bool ApplyHeightmapGrounding(
+        bool updateMotorState = false,
+        Fixed64? surfaceFriction = null,
+        MotionTransfer motionTransfer = MotionTransfer.None)
+    {
+        return TryApplyHeightmapGrounding(updateMotorState, surfaceFriction, motionTransfer);
+    }
+
     public override void CheckTrekCondition()
     {
     }

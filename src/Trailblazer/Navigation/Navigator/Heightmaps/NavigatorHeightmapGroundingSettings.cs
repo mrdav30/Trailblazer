@@ -1,3 +1,4 @@
+using Chronicler;
 using FixedMathSharp;
 using System;
 
@@ -6,7 +7,7 @@ namespace Trailblazer.Navigation;
 /// <summary>
 /// Navigator-owned opt-in settings for consuming context-registered heightmap layers.
 /// </summary>
-public sealed class NavigatorHeightmapGroundingSettings
+public sealed class NavigatorHeightmapGroundingSettings : IRecordable
 {
     /// <summary>
     /// Gets the configured heightmap grounding mode.
@@ -57,6 +58,37 @@ public sealed class NavigatorHeightmapGroundingSettings
         ActiveLayerName = null;
         GroundOffset = Fixed64.Zero;
         SnapTolerance = null;
+    }
+
+    /// <inheritdoc/>
+    public void RecordData(IChronicler chronicler)
+    {
+        HeightmapGroundingMode mode = Mode;
+        string? layerName = LayerName;
+        string? activeLayerName = ActiveLayerName;
+        Fixed64 groundOffset = GroundOffset;
+        bool hasSnapTolerance = SnapTolerance.HasValue;
+        Fixed64 snapTolerance = SnapTolerance ?? Fixed64.Zero;
+
+        RecordValues.Look(chronicler, ref mode, "Mode", HeightmapGroundingMode.Disabled);
+        RecordValues.Look(chronicler, ref layerName, "LayerName", null);
+        RecordValues.Look(chronicler, ref activeLayerName, "ActiveLayerName", null);
+        RecordValues.Look(chronicler, ref groundOffset, "GroundOffset", Fixed64.Zero);
+        RecordValues.Look(chronicler, ref hasSnapTolerance, "HasSnapTolerance", false);
+        RecordValues.Look(chronicler, ref snapTolerance, "SnapTolerance", Fixed64.Zero);
+
+        if (chronicler.Mode == SerializationMode.Loading)
+        {
+            ValidateMode(mode);
+            if (hasSnapTolerance && snapTolerance < Fixed64.Zero)
+                throw new ArgumentOutOfRangeException(nameof(SnapTolerance), "Heightmap snap tolerance cannot be negative.");
+
+            Mode = mode;
+            LayerName = string.IsNullOrWhiteSpace(layerName) ? null : layerName;
+            ActiveLayerName = string.IsNullOrWhiteSpace(activeLayerName) ? null : activeLayerName;
+            GroundOffset = groundOffset;
+            SnapTolerance = hasSnapTolerance ? snapTolerance : null;
+        }
     }
 
     private static void ValidateMode(HeightmapGroundingMode mode)

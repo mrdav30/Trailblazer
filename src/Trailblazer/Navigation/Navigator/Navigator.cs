@@ -3,7 +3,6 @@ using FixedMathSharp;
 using GridForge.Grids;
 using System;
 using System.Runtime.CompilerServices;
-using Trailblazer.Heightmaps;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;
@@ -19,7 +18,7 @@ namespace Trailblazer.Navigation;
 /// It defines common traversal behaviors and lifecycle methods that can be extended by concrete implementations.
 /// </remarks>
 [Serializable]
-public abstract class Navigator : INavigate, IRecordable
+public abstract partial class Navigator : INavigate, IRecordable
 {
     #region Constants
 
@@ -457,7 +456,10 @@ public abstract class Navigator : INavigate, IRecordable
         _frameRequest.Reset();
         _isGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
-        ResetGuidedClimbIntentState();
+        NavigatorGuidedTraversalState.ResetClimbIntent(
+            ref _guidedClimbIntent,
+            ref _guidedClimbIntentMode,
+            ref _lastSeenGuidedRouteTopologyVersion);
         _heightmapGrounding.Reset();
         _steering?.Reset();
 
@@ -518,7 +520,10 @@ public abstract class Navigator : INavigate, IRecordable
 
         _isGuideded = false;
         _pendingGuidedVolumeExitHandoff = null;
-        ResetGuidedClimbIntentState();
+        NavigatorGuidedTraversalState.ResetClimbIntent(
+            ref _guidedClimbIntent,
+            ref _guidedClimbIntentMode,
+            ref _lastSeenGuidedRouteTopologyVersion);
         _frameRequest.SetRequest(
                 direction: direction ?? Vector3d.Zero,
                 rate: rate ?? TrekRate.Stationary,
@@ -564,11 +569,11 @@ public abstract class Navigator : INavigate, IRecordable
         if (_pendingGuidedVolumeExitHandoff != null)
             _pendingGuidedVolumeExitHandoff.MovementGroupId = groupId;
 
-        SetGuidedClimbIntent(
-            isRequestingClimb ?? GuidedClimbIntentResolver.Resolve(pathRequest, _pendingGuidedVolumeExitHandoff),
-            isRequestingClimb.HasValue
-                ? GuidedClimbIntentMode.Explicit
-                : GuidedClimbIntentMode.Auto);
+        _guidedClimbIntent = NavigatorGuidedTraversalState.ResolveInitialClimbIntent(
+            pathRequest,
+            _pendingGuidedVolumeExitHandoff,
+            isRequestingClimb,
+            out _guidedClimbIntentMode);
 
         _isGuideded = true;
         _frameRequest.SetRequest(
@@ -694,7 +699,12 @@ public abstract class Navigator : INavigate, IRecordable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public virtual void ToggleGuidedClimb(bool status)
     {
-        SetGuidedClimbIntent(status, GuidedClimbIntentMode.Explicit);
+        NavigatorGuidedTraversalState.SetClimbIntent(
+            ref _frameRequest,
+            status,
+            GuidedClimbIntentMode.Explicit,
+            ref _guidedClimbIntent,
+            ref _guidedClimbIntentMode);
     }
 
     /// <summary>
@@ -741,14 +751,41 @@ public abstract class Navigator : INavigate, IRecordable
         if (!IsActive)
             throw new InvalidOperationException("Navigator must be Setup and Initialized before Simulate().");
 
-        bool activatedGuidedHandoff = TryActivatePendingGuidedVolumeExitHandoff(out bool handoffRequestedClimb);
-        PrepareGuidedIntentState();
+        bool activatedGuidedHandoff = NavigatorGuidedTraversalState.TryActivatePendingVolumeExitHandoff(
+            IsGuideded,
+            RequireContext(),
+            Position,
+            Size,
+            ref _frameRequest,
+            Steering,
+            ref _pendingGuidedVolumeExitHandoff,
+            ref _guidedClimbIntent,
+            _guidedClimbIntentMode,
+            ref _lastSeenGuidedRouteTopologyVersion,
+            out bool handoffRequestedClimb);
+        NavigatorGuidedTraversalState.PrepareFrame(
+            IsGuideded,
+            ref _frameRequest,
+            Steering,
+            _pendingGuidedVolumeExitHandoff,
+            ref _guidedClimbIntent,
+            ref _guidedClimbIntentMode,
+            ref _lastSeenGuidedRouteTopologyVersion);
 
         Vector3d heading = Vector3d.Zero;
         if (IsGuideded)
         {
             heading = Steering!.GetHeading(this);
-            SyncGuidedIntentStateFromSteering(activatedGuidedHandoff, handoffRequestedClimb);
+            NavigatorGuidedTraversalState.SyncFromSteering(
+                IsGuideded,
+                ref _frameRequest,
+                Steering,
+                _pendingGuidedVolumeExitHandoff,
+                activatedGuidedHandoff,
+                handoffRequestedClimb,
+                ref _guidedClimbIntent,
+                ref _guidedClimbIntentMode,
+                ref _lastSeenGuidedRouteTopologyVersion);
         }
 
         _frameRequest.SetTransientState(
@@ -968,111 +1005,6 @@ public abstract class Navigator : INavigate, IRecordable
 
     #endregion
 
-    #region Heightmap Grounding
-
-    /// <summary>
-    /// Applies configured heightmap grounding when a concrete navigator chooses to opt in.
-    /// </summary>
-    /// <remarks>
-    /// The base navigator never calls this automatically. Host/concrete navigators should invoke it
-    /// from their traversal probing code after they know the navigator is grounded on solid terrain.
-    /// </remarks>
-    /// <param name="updateMotorState">Whether to immediately sync the resulting ground contact into the motor.</param>
-    /// <param name="surfaceFriction">Optional friction stored in the generated ground condition.</param>
-    /// <param name="motionTransfer">Motion transfer mode stored in the generated ground condition.</param>
-    /// <returns>True when a registered heightmap sample updated this navigator's ground contact.</returns>
-    protected bool TryApplyHeightmapGrounding(
-        bool updateMotorState = false,
-        Fixed64? surfaceFriction = null,
-        MotionTransfer motionTransfer = MotionTransfer.None)
-    {
-        if (!IsActive || _heightmapGrounding.Mode == HeightmapGroundingMode.Disabled)
-            return false;
-        if (_frameCondition.Medium != TraversalMedium.Solid)
-            return false;
-
-        TrailblazerWorldContext context = RequireContext();
-        Vector3d queryPosition = GetHeightmapGroundingQueryPosition();
-        string? preferredLayerName = _heightmapGrounding.ActiveLayerName ?? _heightmapGrounding.LayerName;
-        if (!context.Heightmaps.TrySampleGround(queryPosition, preferredLayerName, out HeightmapSample sample))
-        {
-            _heightmapGrounding.ActiveLayerName = null;
-            return false;
-        }
-
-        _heightmapGrounding.ActiveLayerName = sample.LayerName;
-        SetGroundContact(
-            surfaceLevel: sample.GroundY,
-            surfaceFriction: surfaceFriction,
-            motionTransfer: motionTransfer,
-            updateMotorState: updateMotorState);
-
-        if (_heightmapGrounding.Mode == HeightmapGroundingMode.SurfaceLevelAndPosition)
-            TryProjectRootToHeightmapSample(sample);
-
-        return true;
-    }
-
-    private Vector3d GetHeightmapGroundingQueryPosition()
-    {
-        return new Vector3d(
-            _position.x,
-            _position.y - _footPositionAdjust - _heightmapGrounding.GroundOffset,
-            _position.z);
-    }
-
-    private void TryProjectRootToHeightmapSample(HeightmapSample sample)
-    {
-        Fixed64 targetRootY = sample.GroundY + _footPositionAdjust + _heightmapGrounding.GroundOffset;
-        Fixed64 correctionY = targetRootY - _position.y;
-        if (correctionY == Fixed64.Zero)
-            return;
-
-        Fixed64? snapTolerance = _heightmapGrounding.SnapTolerance;
-        if (snapTolerance.HasValue && correctionY.Abs() > snapTolerance.Value)
-            return;
-
-        ProjectRootWithoutVelocity(new Vector3d(Fixed64.Zero, correctionY, Fixed64.Zero));
-    }
-
-    private void ProjectRootWithoutVelocity(Vector3d correction)
-    {
-        if (correction == Vector3d.Zero)
-            return;
-
-        Vector3d oldPosition = _position;
-        _position += correction;
-        _lastPosition += correction;
-        UpdateVoxelOccupancyAfterRootProjection(oldPosition, _position);
-    }
-
-    private void UpdateVoxelOccupancyAfterRootProjection(Vector3d oldPosition, Vector3d newPosition)
-    {
-        if (_context == null || _context.IsDisposed || !_context.World.IsActive)
-            return;
-
-        GridWorld world = _context.World;
-        bool oldVoxelFound = world.TryGetGridAndVoxel(
-            oldPosition,
-            out VoxelGrid? oldGrid,
-            out Voxel? oldVoxel);
-        bool newVoxelFound = world.TryGetGridAndVoxel(
-            newPosition,
-            out VoxelGrid? newGrid,
-            out Voxel? newVoxel);
-
-        if (oldVoxelFound && newVoxelFound && oldVoxel == newVoxel)
-            return;
-
-        if (oldVoxelFound)
-            oldGrid!.TryRemoveVoxelOccupant(oldVoxel!, this);
-
-        if (newVoxelFound && newGrid!.TryAddVoxelOccupant(newVoxel!, this) == false)
-            TrailblazerLogger.Channel.Warn($"Navigator {GlobalId} failed to register occupancy in voxel {newVoxel!.Index} of grid {newGrid} at position {newPosition}.");
-    }
-
-    #endregion
-
     #region Deltas - Position / Velocity / Rotation
 
     /// <summary>
@@ -1180,109 +1112,8 @@ public abstract class Navigator : INavigate, IRecordable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void PrepareGuidedIntentState()
-    {
-        if (!IsGuideded)
-            return;
-
-        if (TryClearInactiveGuidedClimbIntent())
-            return;
-
-        _frameRequest.IsRequestingClimb = _guidedClimbIntent;
-    }
-
-    private void SyncGuidedIntentStateFromSteering(bool activatedGuidedHandoff, bool handoffRequestedClimb)
-    {
-        if (!IsGuideded)
-            return;
-
-        if (TryClearInactiveGuidedClimbIntent())
-            return;
-
-        if (_guidedClimbIntentMode == GuidedClimbIntentMode.Auto
-            && Steering != null
-            && Steering.CurrentRouteTopologyVersion != _lastSeenGuidedRouteTopologyVersion)
-        {
-            bool resolvedRouteRequestsClimb = Steering.CurrentRouteRequestsClimbIntent;
-            bool shouldDeferHandoffBootstrapClear =
-                activatedGuidedHandoff
-                && handoffRequestedClimb
-                && !resolvedRouteRequestsClimb;
-            if (!shouldDeferHandoffBootstrapClear)
-            {
-                _guidedClimbIntent = resolvedRouteRequestsClimb;
-                _lastSeenGuidedRouteTopologyVersion = Steering.CurrentRouteTopologyVersion;
-            }
-        }
-
-        _frameRequest.IsRequestingClimb = _guidedClimbIntent;
-    }
-
-    private bool TryClearInactiveGuidedClimbIntent()
-    {
-        if (Steering?.CurrentRequest != null
-            || _pendingGuidedVolumeExitHandoff != null)
-        {
-            return false;
-        }
-
-        ResetGuidedClimbIntentState();
-        _frameRequest.IsRequestingClimb = false;
-        return true;
-    }
-
-    private bool TryActivatePendingGuidedVolumeExitHandoff(out bool handoffRequestedClimb)
-    {
-        handoffRequestedClimb = false;
-        if (!IsGuideded
-            || _pendingGuidedVolumeExitHandoff == null
-            || Steering == null
-            || Steering.ShouldMove
-            || Steering.CurrentRequest != null)
-        {
-            return false;
-        }
-
-        if (!_pendingGuidedVolumeExitHandoff.TryCreateFollowupRequest(RequireContext(), Position, Size, out IPathRequest? followupRequest)
-            || followupRequest == null)
-        {
-            return false;
-        }
-
-        GuidedVolumeExitHandoff handoff = _pendingGuidedVolumeExitHandoff;
-        _pendingGuidedVolumeExitHandoff = null;
-
-        Steering.ApplyPathRequest(followupRequest, handoff.MovementGroupId);
-        CaptureGuidedRouteTopologyVersion();
-        _frameRequest.IsRequestingFlight = false;
-        _frameRequest.IsRequestingSwim = false;
-        handoffRequestedClimb = handoff.IsRequestingClimb;
-        if (_guidedClimbIntentMode == GuidedClimbIntentMode.Auto)
-            _guidedClimbIntent = handoffRequestedClimb;
-
-        _frameRequest.IsRequestingClimb = _guidedClimbIntent;
-        return true;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void SetGuidedClimbIntent(bool status, GuidedClimbIntentMode mode)
-    {
-        _guidedClimbIntent = status;
-        _guidedClimbIntentMode = mode;
-        _frameRequest.IsRequestingClimb = status;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void ResetGuidedClimbIntentState()
-    {
-        _guidedClimbIntent = false;
-        _guidedClimbIntentMode = GuidedClimbIntentMode.Auto;
-        _lastSeenGuidedRouteTopologyVersion = 0;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void CaptureGuidedRouteTopologyVersion() =>
-        _lastSeenGuidedRouteTopologyVersion = Steering?.CurrentRouteTopologyVersion ?? 0;
+        NavigatorGuidedTraversalState.CaptureRouteTopologyVersion(Steering, ref _lastSeenGuidedRouteTopologyVersion);
 
     #endregion
 
@@ -1301,105 +1132,8 @@ public abstract class Navigator : INavigate, IRecordable
     /// </param>
     protected virtual void CheckVoxelOccupancy(bool init = false)
     {
-        if (!init && Position == LastPosition) return;
-
-        GridWorld world = RequireContext().World;
-        bool voxelFound = world.TryGetGridAndVoxel(
-            Position,
-            out VoxelGrid? curGrid,
-            out Voxel? curVoxel);
-        if (!voxelFound) return;
-
-        if (curGrid!.TryAddVoxelOccupant(curVoxel!, this) == false)
-        {
-            TrailblazerLogger.Channel.Warn($"Navigator {GlobalId} failed to register occupancy in voxel {curVoxel!.Index} of grid {curGrid} at position {Position}.");
-            return;
-        }
-
-        bool lastVoxelFound = world.TryGetGridAndVoxel(
-            LastPosition,
-            out VoxelGrid? lastGrid,
-            out Voxel? lastVoxel);
-
-        // check if position is still within the same voxel
-        if (!lastVoxelFound || curVoxel == lastVoxel)
-            return;
-
-        lastGrid!.TryRemoveVoxelOccupant(lastVoxel!, this);
-    }
-
-    #endregion
-
-    #region Serialization
-
-    /// <inheritdoc />
-    public virtual void RecordData(IChronicler chronicler)
-    {
-        GuidedVolumeExitHandoff? pendingGuidedVolumeExitHandoff = _pendingGuidedVolumeExitHandoff;
-        if (chronicler.Mode == SerializationMode.Loading && pendingGuidedVolumeExitHandoff == null)
-            pendingGuidedVolumeExitHandoff = new GuidedVolumeExitHandoff();
-
-        RecordValues.Look(chronicler, ref _position, "Position", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _lastPosition, "LastPosition", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _rotation, "Rotation", FixedQuaternion.Identity);
-        RecordValues.Look(chronicler, ref _velocity, "Velocity", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _speed, "Speed", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref _acceleration, "Acceleration", Vector3d.Zero);
-        RecordValues.Look(chronicler, ref _size, "Size", Fixed64.One);
-        RecordValues.Look(chronicler, ref _footPositionAdjust, "FootPositionAdjust", DefaultFootPositionAdjust);
-        RecordValues.Look(chronicler, ref _guidedPathMode, "GuidedPathMode", SolidPathAlgorithm.AStar);
-        RecordValues.Look(chronicler, ref _guidedAllowUnwalkableEndpoints, "GuidedAllowUnwalkableEndpoints", false);
-        RecordValues.Look(chronicler, ref _guidedAllowTraversalTransitions, "GuidedAllowTraversalTransitions", false);
-        RecordValues.Look(chronicler, ref _guidedMaxClimbHeight, "GuidedMaxClimbHeight", Fixed64.One);
-        RecordValues.Look(chronicler, ref _guidedAStarHeuristic, "GuidedAStarHeuristic", HeuristicMethod.Manhattan);
-        RecordValues.Look(chronicler, ref _guidedFlowFieldExtraFloodRange, "GuidedFlowFieldExtraFloodRange", FlowFieldPathRequest.DefaultExtraFloodRange);
-        RecordValues.Look(chronicler, ref _globalId, "GlobalId", Guid.Empty);
-        RecordValues.Look(chronicler, ref _occupantGroupId, "OccupantGroupId", (byte)1);
-        RecordValues.Look(chronicler, ref _isLockedOn, "IsLockedOn", false);
-        RecordValues.Look(chronicler, ref _stuckThresholdSpeed, "StuckThresholdSpeed", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref _isGuideded, "IsGuideded", false);
-        RecordValues.Look(chronicler, ref _guidedClimbIntent, "GuidedClimbIntent", false);
-        RecordValues.Look(chronicler, ref _guidedClimbIntentMode, "GuidedClimbIntentMode", GuidedClimbIntentMode.Auto);
-        RecordValues.Look(chronicler, ref _lastSeenGuidedRouteTopologyVersion, "LastSeenGuidedRouteTopologyVersion", 0);
-        RecordDeepStruct.Look(chronicler, ref _frameCondition, "FrameCondition");
-        RecordDeepStruct.Look(chronicler, ref _frameRequest, "FrameRequest");
-        RecordDeep.Look(chronicler, ref _heightmapGrounding, "HeightmapGrounding");
-        RecordDeep.Look(chronicler, ref pendingGuidedVolumeExitHandoff!, "PendingGuidedVolumeExitHandoff");
-        if (_steering != null)
-            RecordDeep.Look(chronicler, ref _steering, "Steering");
-        if (_turning != null)
-            RecordDeep.Look(chronicler, ref _turning, "Turning");
-        if (_motor != null)
-            RecordDeep.Look(chronicler, ref _motor, "Motor");
-
-        if (chronicler.Mode == SerializationMode.Loading)
-        {
-            TrailblazerWorldContext context = RequireContext();
-            _pendingGuidedVolumeExitHandoff = pendingGuidedVolumeExitHandoff?.IsValid == true
-                ? pendingGuidedVolumeExitHandoff
-                : null;
-
-            Forward = Rotation != FixedQuaternion.Identity
-                ? Rotation.Rotate(Vector3d.Forward)
-                : Vector3d.Forward;
-
-            _positionDelta = Vector3d.Zero;
-            _velocityDelta = Vector3d.Zero;
-            _rotationDelta = FixedQuaternion.Identity;
-            _heightmapGrounding ??= new NavigatorHeightmapGroundingSettings();
-            _isSet = true;
-            _isInitialized = Motor != null;
-
-            _steering?.BindContext(context);
-            _steering?.UpdateOwnerRadius(Radius);
-
-            _motor?.BindContext(context);
-
-            _turning?.BindContext(context);
-            _turning?.OnInitialize(Radius);
-
-            CheckVoxelOccupancy(true);
-        }
+        NavigatorOccupancyTracker.Update(
+            RequireContext().World, this, Position, LastPosition, init);
     }
 
     #endregion

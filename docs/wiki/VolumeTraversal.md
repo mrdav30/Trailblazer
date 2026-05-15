@@ -250,6 +250,7 @@ Examples:
 
 ```csharp
 var request = VolumePathRequest.Create(
+    context,
     origin,
     destination,
     Fixed64.One,
@@ -258,6 +259,7 @@ var request = VolumePathRequest.Create(
 
 ```csharp
 var request = VolumePathRequest.Create(
+    context,
     origin,
     destination,
     Fixed64.One,

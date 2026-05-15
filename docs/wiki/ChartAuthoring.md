@@ -1,6 +1,6 @@
 # Traversal Authoring Reference
 
-This document explains the current tokenized authoring workflow built around `TraversalAuthoringMap`, the built-in legend, and `PathManager.Register(TraversalBuildResult)`.
+This document explains the current tokenized authoring workflow built around `TraversalAuthoringMap`, the built-in legend, and `TrailblazerWorldContext.Pathing.Register(TraversalBuildResult)`.
 
 Use this file when you need:
 
@@ -39,7 +39,7 @@ TraversalBuildResult buildResult = new TraversalAuthoringMap(
     minBounds: Vector3d.Zero,
     interval: Fixed64.One).Build();
 
-PathManager.Register(buildResult);
+context.Pathing.Register(buildResult);
 ```
 
 `TraversalBuildResult` contains:
@@ -47,7 +47,7 @@ PathManager.Register(buildResult);
 - the built `NavigationChart`
 - the generated explicit `TraversalTransition[]`
 
-`PathManager.Register(buildResult)`:
+`context.Pathing.Register(buildResult)`:
 
 - registers the chart
 - registers the generated transitions

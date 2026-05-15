@@ -119,8 +119,8 @@ Shared request behavior is provided by `PathRequest`:
 - successful creation or endpoint reset derives `MaxPathSearchRange` from the request's
   `TrailblazerWorldContext`
 
-Prefer context-bound factories. Compatibility overloads without a context use the configured
-default context.
+Use context-bound factories. Requests carry their owning `TrailblazerWorldContext`, and guide
+resolution rejects requests from a different context.
 
 ### 3.1 AStarPathRequest
 
@@ -134,7 +134,7 @@ Additional configuration includes:
 Factory helpers:
 
 ```csharp
-AStarPathRequest.TryCreate(context, origin, destination, out var request);
+AStarPathRequest.TryCreate(context, origin, destination, Fixed64.One, out var request);
 ```
 
 ### 3.2 FlowFieldPathRequest

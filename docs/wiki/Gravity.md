@@ -383,4 +383,4 @@ Trailblazer's vertical model is deterministic and gameplay-oriented:
 - jump injects upward motion and can temporarily offset gravity while held
 - fall state, landing, ceilings, and water transitions are handled as explicit locomotion states
 
-If you need the execution order for the full motor, read `NAVMOTOR.md` alongside this file.
+If you need the execution order for the full motor, read `NavMotor.md` alongside this file.

@@ -71,13 +71,13 @@ The main entry points are:
 
 - `TrailblazerWorldContext.Pathing.Register(NavigationChart chart, bool initializeChart = true)`
 - `TrailblazerWorldContext.Pathing.Register(TraversalBuildResult buildResult, bool initializeChart = true)`
-- `PathManager.Register(NavigationChart chart, bool initializeChart = true)` for the default context facade
+- `PathManager.Register(...)` inside an active context-owned pathing service scope
 - `IsChartRegistered(string name)`
 - `TryGetNavigationChart(string name, out NavigationChart chart)`
-- `TryGetEffectiveCell(GlobalVoxelIndex voxelIndex, out NavigationChartCell cell)`
+- `TryGetEffectiveCell(WorldVoxelIndex voxelIndex, out NavigationChartCell cell)`
 - `TryGetEffectiveCell(Vector3d worldPosition, out NavigationChartCell cell)`
-- `TryGetEffectiveChartOwner(GlobalVoxelIndex voxelIndex, out string chartName)`
-- `TryGetEffectiveChartOwner(Vector3d worldPosition, out string chartName)`
+- `TryGetEffectiveChartOwner(WorldVoxelIndex voxelIndex, out string? chartName)`
+- `TryGetEffectiveChartOwner(Vector3d worldPosition, out string? chartName)`
 - `TryGetClosestActiveTransition(Vector3d worldPosition, TraversalTransitionType transitionType, out TraversalTransition transition)`
 - `InitializeChart(string chartKey)`
 - `InitializeAllCharts()`
@@ -85,21 +85,21 @@ The main entry points are:
 - `TryUpdateChartCell(string chartName, Vector3d worldPosition, NavigationChartCell cell)`
 - `ApplyChartUpdates(string chartName, IReadOnlyList<NavigationChartCellUpdate> updates)`
 - `UnloadChart(string chartKey)`
+- `UnloadChart(NavigationChart chart)`
 - `Reset()`
-- `GetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)`
+- `TryGetMaxSearchSize(Voxel start, Voxel end, out int maxSearchSize)`
 - `NeedsPath(Vector3d startPos, Vector3d endPos, Fixed64 unitSize, bool allowUnwalkableEndpoints = false)`
 
 Important public state includes:
 
 - `AllCharts`
-- `DefaultMaxPathSearchRange`
 
 Important internal infrastructure includes:
 
 - `PartitionPool`
 - `VolumeChartPartitionPool`
 - `PartitionSetPool`
-- `Tick(int currentFrame)`
+- `Tick()`
 
 ## 4. Context State and Ownership
 
@@ -123,7 +123,7 @@ That means:
 - two contexts can register the same chart names independently
 - partitions release back to the pool owned by the context that attached them
 - a grid reset or grid rebuild event affects only the pathing state for the owning `GridWorld`
-- the static `PathManager` facade should only be used for one configured default context
+- the static `PathManager` implementation expects an active `PathingWorldState`; host code should enter it through `TrailblazerWorldContext.Pathing`
 
 ## 5. Chart Registration Lifecycle
 
@@ -356,7 +356,7 @@ That means:
 - clears context-owned transition and volume-rule registries
 - flushes context-owned guide caches if pooling is active
 - invalidates context-owned reachability snapshots
-- clears chart initialization state on registered chart instances
+- clears chart registration and initialization state for the context
 
 It will walk live voxels and remove partitions itself.
 
@@ -370,9 +370,9 @@ frame count.
 
 ## 9. Utility Methods
 
-### 9.1 GetMaxSearchSize(...)
+### 9.1 TryGetMaxSearchSize(...)
 
-`GetMaxSearchSize(...)` computes a search bound for path requests based on the sizes of the start and end grids.
+`TryGetMaxSearchSize(...)` computes a search bound for path requests based on the sizes of the start and end grids.
 
 Behavior:
 

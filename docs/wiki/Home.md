@@ -73,7 +73,7 @@ The library is easiest to reason about in this order:
 7. Advance fixed-step runtime flow with `context.Simulate()`, `Navigator.Simulate()`, host traversal probing, `Navigator.CommitFrameMotion()`, and `context.LateSimulate()`.
 8. Return guides, unload charts, reset contexts, or dispose owned worlds explicitly when a test, tool, or host world shuts down.
 
-The most important architectural reality is that Trailblazer is context-scoped. If behavior seems global, check whether it actually belongs to the active `TrailblazerWorldContext`, its backing `GridWorld`, or a compatibility path that resolves through the configured default context.
+The most important architectural reality is that Trailblazer is context-scoped. If behavior seems global, check whether it actually belongs to the active `TrailblazerWorldContext`, its backing `GridWorld`, or an internal service that entered context-owned state for the duration of the operation.
 
 ## Architecture At A Glance
 
@@ -106,8 +106,10 @@ The most important architectural reality is that Trailblazer is context-scoped. 
 | `src/Trailblazer/Navigation/Turning` | Deterministic turning and turning serialization |
 | `src/Trailblazer/Navigation/Motor` | Movement execution, traversal finalization, locomotion, climbing, surface state, and motor serialization |
 | `src/Trailblazer/Heightmaps` | Compressed heightmap surfaces, sampling, and context-owned registry support |
-| `src/Trailblazer/Serialization` | Chronicler integration, JSON/MemoryPack transports, record helpers, and stable-link support |
-| `src/Trailblazer/Runtime` | World context, deterministic clock, lifecycle hooks, diagnostics, and reset behavior |
+| `src/Trailblazer/Support` | Lifecycle hook helpers, transient-state utilities, and shared support types |
+| `src/Trailblazer/Traversal` | Traversal-medium value objects shared by pathing and navigation |
+| `src/Trailblazer/Diagnostics` | Logging channels and diagnostics helpers |
+| `src/Trailblazer/Runtime` | World context, deterministic clock, lifecycle hooks, and reset behavior |
 | `tests/Trailblazer.Tests/Pathing` | Pathing, chart, transition, guide, surveyor, and cache coverage |
 | `tests/Trailblazer.Tests/Navigation` | Navigator, steering, turning, motor, locomotion, and serialization coverage |
 | `tests/Trailblazer.Tests/Support` | Fixtures and factories for context, grid, chart, and runtime isolation |

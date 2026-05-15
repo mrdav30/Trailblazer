@@ -424,7 +424,7 @@ context.Pathing.Register(chart);
 For teardown or rebuild:
 
 ```csharp
-PathManager.UnloadChart(chart.Name);
+context.Pathing.UnloadChart(chart);
 ```
 
 Or, when resetting a context's pathing state:

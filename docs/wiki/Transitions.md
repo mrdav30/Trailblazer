@@ -9,7 +9,7 @@ Use this file when you need to understand:
 - how transition topology affects path reuse and deterministic planning
 
 If you need the broader request model first, read `Pathing.md`.
-If you need raw-volume traversal rules, pair this with `VOLUMETRAVERSAL.md`.
+If you need raw-volume traversal rules, pair this with `VolumeTraversal.md`.
 
 Relevant code:
 
@@ -71,6 +71,7 @@ Current built-in transition types:
 - `SwimExit`
 - `Takeoff`
 - `Landing`
+- `Climb`
 
 Important nuance:
 
@@ -86,7 +87,7 @@ Each transition endpoint is a `TraversalTransitionAnchor`.
 An anchor is defined by:
 
 - a traversal medium
-- a canonical `GlobalVoxelIndex`
+- a canonical `WorldVoxelIndex`
 - an optional world-space point override inside that voxel
 
 You can create anchors from either a resolved voxel index or a world position that resolves to one.
@@ -386,6 +387,6 @@ High-risk changes include:
 ## 10. Where To Read Next
 
 - `Pathing.md` for request-level transition opt-in
-- `VOLUMETRAVERSAL.md` for raw-volume traversal rules used by volume anchors
+- `VolumeTraversal.md` for raw-volume traversal rules used by volume anchors
 - `NavigationCharts.md` for the solid-side world model
 - `PathGuides.md` for how transition-aware routes still surface as normal guide types

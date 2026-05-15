@@ -3,7 +3,7 @@
 This document is the detailed reference for Trailblazer's deterministic steering and guide-following layer.
 
 If you only need the high-level architecture, read `Overview.md`.
-If you want the pathing-first request, guide, and transition model without `Navigator`, read `PATHING.md`.
+If you want the pathing-first request, guide, and transition model without `Navigator`, read `Pathing.md`.
 If you specifically want `IGuide`, `IWaypointGuide`, and `PathGuideFactory`, read `PathGuides.md`.
 If you need the movement-execution side, read `NavMotor.md`.
 
@@ -240,7 +240,7 @@ Important detail:
 It also computes `_closingDistance` from:
 
 - the agent radius
-- `GlobalGridManager.VoxelSize`
+- the bound context's `VoxelSize`, falling back to the active request context or `GridWorld.DefaultVoxelSize`
 
 That value is what later controls waypoint advancement and arrival tolerance.
 
@@ -520,7 +520,7 @@ The steering scan radius is derived from:
 - `AvoidFactor`
 - agent radius
 
-It queries nearby voxel occupants through `GridScanManager.ScanRadius(...)`.
+It queries nearby voxel occupants through `GridScanManager.ScanRadiusInto(...)` against the bound context's `GridWorld`.
 
 ### 13.3 Group Behavior
 
@@ -594,7 +594,7 @@ If you use `NavSteering` without `Navigator`, the minimum pattern is:
 
 ```csharp
 var steer = new NavSteering(context, radius);
-steer.ApplyPathRequest(request, destination);
+steer.ApplyPathRequest(request);
 
 Vector3d heading = steer.GetHeading(agent);
 ```

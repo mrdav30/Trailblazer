@@ -5,9 +5,9 @@ This document is the standalone guide for Trailblazer's `Trailblazer.Pathing` na
 It is intended for developers integrating Trailblazer pathfinding without the higher-level `Navigation` stack.
 
 If you only need the broad architecture, start with `Overview.md`.
-If you need chart lifecycle details, pair this with `NavigationCharts.md` and `PATHMANAGER.md`.
+If you need chart lifecycle details, pair this with `NavigationCharts.md` and `PathManager.md`.
 If you want the dedicated guide and factory reference, read `PathGuides.md`.
-If you need authored handoffs and volume rules, read `TRANSITIONS.md` and `VOLUMETRAVERSAL.md`.
+If you need authored handoffs and volume rules, read `Transitions.md` and `VolumeTraversal.md`.
 
 Relevant code:
 
@@ -196,7 +196,7 @@ Important nuance:
 
 Use `VolumePathRequest` when traversal should run through raw voxel volume rather than through chart partitions.
 
-For the dedicated raw-volume rules reference, read [`VOLUMETRAVERSAL.md`](VOLUMETRAVERSAL.md).
+For the dedicated raw-volume rules reference, read [`VolumeTraversal.md`](VolumeTraversal.md).
 
 Key configuration:
 
@@ -231,6 +231,7 @@ Example:
 
 ```csharp
 var request = VolumePathRequest.Create(
+    context,
     origin,
     destination,
     Fixed64.One,
@@ -299,7 +300,7 @@ The tests in `tests/Trailblazer.Tests/Pathing/Search/VoxelResolution/SolidVoxelF
 
 Chart-backed requests can opt into authored transitions through `AllowTraversalTransitions`.
 
-For the dedicated authored-handoff reference, read [`TRANSITIONS.md`](TRANSITIONS.md).
+For the dedicated authored-handoff reference, read [`Transitions.md`](Transitions.md).
 
 That opt-in means:
 
@@ -427,9 +428,8 @@ In this mode, transitions are still data owned by `context.Transitions`, not by 
 
 ## 11. Common Gotchas
 
-- `PathManager.Register(...)` does not make a chart pathable. You must initialize it.
-- `PathManager.Register(NavigationChart)` does not make a chart pathable. You must initialize it.
-- `PathManager.Register(TraversalBuildResult)` initializes the built chart by default after registering its generated transitions.
+- `context.Pathing.Register(chart)` initializes by default. Only deferred registration with `initializeChart: false` requires a later `InitializeChart(...)` call.
+- `context.Pathing.Register(buildResult)` initializes the built chart by default after registering its generated transitions.
 - `IsValid` depends on resolved endpoints and a positive `MaxPathSearchRange`.
 - `AllowUnwalkableEndpoints` relaxes endpoint resolution. It does not guarantee the full route can ignore blocked space.
 - `AllowTraversalTransitions` is a separate opt-in from `AllowUnwalkableEndpoints`.
@@ -445,7 +445,7 @@ If you are changing `Trailblazer.Pathing`, read in this order:
 
 1. this file
 2. `NavigationCharts.md`
-3. `PATHMANAGER.md`
+3. `PathManager.md`
 4. the concrete request type you are touching
 5. `PathGuideFactory`
 6. the matching surveyor
@@ -477,10 +477,10 @@ Good pathing-focused test entry points:
 
 - `Overview.md` for the whole library architecture
 - `PathGuides.md` for `IGuide`, `IWaypointGuide`, and `PathGuideFactory`
-- `TRANSITIONS.md` for authored chart and volume handoffs
-- `VOLUMETRAVERSAL.md` for raw-volume traversal rules and modes
+- `Transitions.md` for authored chart and volume handoffs
+- `VolumeTraversal.md` for raw-volume traversal rules and modes
 - `NavigationCharts.md` for authored surface-space design
-- `PATHMANAGER.md` for chart lifecycle and utility APIs
+- `PathManager.md` for chart lifecycle and utility APIs
 - `src/Trailblazer/Pathing` for implementation details
 - `src/Trailblazer/Runtime` for `TrailblazerWorldContext`, clock state, and lifecycle hooks
 - `src/Trailblazer/Navigation/Navigator` for `Navigator` and guided request construction

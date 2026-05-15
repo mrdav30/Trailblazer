@@ -3,7 +3,7 @@
 This document is the detailed reference for Trailblazer's `Navigator` class.
 
 If you only need the high-level architecture, read `Overview.md`.
-If you only need the standalone pathing request and guide layer, read `PATHING.md`.
+If you only need the standalone pathing request and guide layer, read `Pathing.md`.
 If you need the subsystem references behind `Navigator`, read:
 
 - `NavSteering.md`
@@ -85,7 +85,7 @@ That keeps the steering-facing contract small while still letting turning or hos
 
 The main entry points are:
 
-- constructor injection, `BindContext(...)`, or `Setup(context, ...)`
+- constructor injection, `BindContext(...)`, `Setup(context, ...)`, or `Activate(context, ...)`
 - `Setup(...)`
 - `Initialize(TrekCondition condition)`
 - `PrewarmMovementGroup()`
@@ -157,8 +157,8 @@ Protected frame-local state includes:
 
 Each navigator belongs to exactly one `TrailblazerWorldContext` while active. Bind the context by
 passing it to the concrete navigator constructor, calling `BindContext(context)`, or using
-`Setup(context, ...)`. Compatibility setup without an explicit context uses the configured default
-context, but multi-world hosts should bind explicitly.
+`Setup(context, ...)` / `Activate(context, ...)`. Setup without an existing binding throws, so hosts
+should make context ownership explicit.
 
 The bound context supplies voxel occupancy, guided request creation, guide lookup, frame timing,
 movement-group coordination, and deterministic navigator id allocation. `Reset()` deregisters from
@@ -575,15 +575,15 @@ This internal helper:
 
 This is what makes nearby-occupant scans work for `NavSteering.ComputeCombinedSteering(...)`.
 
-### 11.3 Reset Cleanup
+### 11.2 Reset Cleanup
 
 `Reset()` explicitly removes the navigator from all tracked occupied voxels before deactivating it.
 
-This is important because grid occupancy is global or static infrastructure.
+This is important because grid occupancy is context-owned world infrastructure that feeds steering behavior.
 
-## 13. Utility Methods and Extension Points
+## 12. Utility Methods and Extension Points
 
-### 13.1 GetFootPosition()
+### 12.1 GetFootPosition()
 
 Returns:
 
@@ -591,7 +591,7 @@ Returns:
 
 This is used by platform and ground-contact logic.
 
-### 13.2 GenerateGUID()
+### 12.2 GenerateGUID()
 
 `GenerateGUID()` is virtual.
 
@@ -599,11 +599,11 @@ By default it delegates to Trailblazer's deterministic navigator-id allocator.
 
 That still gives a subclass a way to control identity generation if needed for testing, host integration, or stricter determinism workflows.
 
-### 13.3 TryCreateGuidedPathRequest(...)
+### 12.3 TryCreateGuidedPathRequest(...)
 
 This protected factory hook lets subclasses build custom request types without replacing steering.
 
-## 14. Common Integration Pattern
+## 13. Common Integration Pattern
 
 A typical concrete navigator flow looks like this:
 
@@ -635,7 +635,7 @@ If several navigators should move as one group, pass the same optional `groupId`
 
 If grouped navigators are restored through Chronicler and you want formation behavior available on the very next frame, bind and initialize each navigator shell to the correct context, populate it, then call `PrewarmMovementGroup()` once per loaded navigator before the next `context.Simulate()` step. If you skip it, grouped steering still re-joins lazily during the next steering update.
 
-## 15. Common Gotchas
+## 14. Common Gotchas
 
 ### Calling Simulate() or CommitFrameMotion() before activation
 
@@ -657,7 +657,7 @@ Voxel occupancy is not cosmetic. It feeds scan-based steering and avoidance.
 
 `Reset()` deactivates the navigator and clears state, but it is still a reuse-oriented reset. Re-run `Setup(...)` and `Initialize(...)` before using the instance again.
 
-## 16. Testing Notes
+## 15. Testing Notes
 
 Current direct coverage for navigator orchestration is still lighter than steering, turning, and motor coverage.
 

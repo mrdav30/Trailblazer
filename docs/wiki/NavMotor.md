@@ -2,7 +2,7 @@
 
 This document is the detailed reference for Trailblazer's deterministic movement motor.
 
-If you only need the high-level architecture, read `OVERVIEW.md`.
+If you only need the high-level architecture, read `Overview.md`.
 If you need the vertical-force model specifically, read `Gravity.md`.
 
 The code referenced here lives primarily in:
@@ -26,7 +26,7 @@ The code referenced here lives primarily in:
 It is responsible for:
 
 - turning a frame's movement request into deterministic motion deltas
-- applying locomotion rules for ground, air, water, slopes, slides, jumps, controlled flight, and moving platforms
+- applying locomotion rules for ground, air, water, slopes, slides, jumps, controlled flight, climbing, and moving platforms
 - tracking traversal-state transitions between frames
 - producing deterministic movement output using fixed-point math and a fixed simulation timestep
 
@@ -68,8 +68,8 @@ The motor starts from `Handler.Move.FrameVelocity`, adjusts that output accordin
 
 The main entry points are:
 
-- `CreateNew(TrekCondition initialCondition)`
-- `OnInitialize(TrekCondition condition)`
+- `CreateNew(TrailblazerWorldContext context, TrekCondition initialCondition, LocomotionProfile? profile = null)`
+- `OnInitialize(TrekCondition condition, LocomotionProfile? profile = null)`
 - `TryTraversal(TrekRequest request, out Vector3d velocityDelta, out Vector3d positionDelta, out FixedQuaternion rotationDelta)`
 - `FinalizeTraversal(Vector3d newPosition, Vector3d lastPosition, FixedQuaternion newRotation, TrekCondition conditionRefresh, Vector3d? newFootPosition = null)`
 - `AbortTraversalFrame()`
@@ -94,6 +94,7 @@ Important public state includes:
 - `WasInGas`
 - `IsInLiquid`
 - `WasInLiquid`
+- `IsClimbing`
 - `InLimbo`
 - `Handler.Platform.InteriaApplied`
 - `Handler.Platform.IsActive`
@@ -480,6 +481,24 @@ Owns:
 - diving and underwater timers
 - drowning rules
 
+### 8.7 Fly
+
+Owns:
+
+- controlled flight state
+- flight acceleration and speed caps
+- ascent and descent speed caps
+- gravity compensation while flying
+
+### 8.8 Climb
+
+Owns:
+
+- active climb and mantle state
+- climb acceleration and speed caps
+- gravity compensation while attached to climb affordances
+- attachment identity and tolerance data used with host climb probes
+
 ## 9. Events
 
 `NavMotorEvents` exposes state-notification hooks for external systems.
@@ -498,6 +517,13 @@ Fall and survival events:
 - `OnStopFall`
 - `OnMaxFallHeightReached`
 - `OnDrowning`
+
+Climb events:
+
+- `OnStartClimb`
+- `OnStopClimb`
+- `OnStartMantle`
+- `OnClimbSlip`
 
 ## 10. Common Integration Pattern
 
@@ -574,5 +600,7 @@ The current test coverage around `NavMotor` behavior is concentrated in:
 - `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/PlatformLocomotion.Tests.cs`
 - `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/WaterLocomotion.Tests.cs`
 - `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/SlideLocomotion.Tests.cs`
+- `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/FlyLocomotion.Tests.cs`
+- `tests/Trailblazer.Tests/Navigation/Motor/Locomotion/ClimbLocomotion.Tests.cs`
 
 If you change the phase order, transition logic, or locomotion interaction rules, update or extend those tests in the same change.

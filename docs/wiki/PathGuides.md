@@ -265,20 +265,25 @@ The main entry points are:
 - `context.Guides.InvalidateCacheFor(string chartKey)`
 - `context.Guides.FlushCache(bool force = false)`
 
-The static `PathGuideFactory` exposes the same operations for the configured default context while
-the public API migration continues.
+The internal `PathGuideFactory` performs the same routing and cache work after `context.Guides`
+enters the owning context state.
 
 Useful status properties:
 
 - `TotalAStarGuideCount`
 - `TotalFlowGuideCount`
 - `TotalVolumeGuideCount`
+- `TotalHybridRoutePlanCount`
+- `InUseAStarGuideCount`
+- `InUseFlowGuideCount`
+- `InUseVolumeGuideCount`
+- `InUseHybridRoutePlanCount`
 - `IsPooling`
 - `AnyInUse`
 
 Important invalidation rule:
 
-- `InvalidateCacheFor(string chartKey)` invalidates cached A*, FlowField, and Volume results whose `ChartsUtilized` contains that chart key
+- `InvalidateCacheFor(string chartKey)` invalidates cached A*, FlowField, Volume, and hybrid route-plan results whose `ChartsUtilized` contains that chart key
 - unrelated cached guides remain reusable when the invalidation does not match them
 
 ### 5.2 Request Routing
@@ -355,14 +360,15 @@ Important nuance:
 
 ## 6. Cache And Lifetime Rules
 
-Each `TrailblazerWorldContext` uses one cache per reusable survey-result family:
+Each `TrailblazerWorldContext` uses one cache per reusable survey-result or route-plan family:
 
 - `_cachedAStarResults`
 - `_cachedFlowResults`
 - `_cachedVolumeResults`
+- `_cachedHybridRoutePlans`
 
-These caches store survey results keyed by `request.RequestCacheKey`. Because the caches are
-context-local, equivalent request keys from different worlds do not share survey results.
+These caches store survey results or route plans keyed by `request.RequestCacheKey`. Because the caches are
+context-local, equivalent request keys from different worlds do not share cached data.
 The request key does not include a world id; world separation comes from the cache owner.
 
 Guide lifetime rules:
@@ -482,7 +488,7 @@ Useful test entry points:
 
 - `Pathing.md` for the request and surveyor model
 - `Transitions.md` for authored transition fallback and staged route planning
-- `VOLUMETRAVERSAL.md` for raw-volume traversal rules behind `VolumeGuide`
+- `VolumeTraversal.md` for raw-volume traversal rules behind `VolumeGuide`
 - `PathManager.md` for cache invalidation triggers caused by chart lifecycle
 - `NavSteering.md` for the main runtime consumer of guides
 - `Serialization.md` if you need current guide-restoration behavior during load

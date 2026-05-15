@@ -2,7 +2,7 @@
 
 This document is the detailed reference for Trailblazer's deterministic facing layer.
 
-If you only need the high-level architecture, read `OVERVIEW.md`.
+If you only need the high-level architecture, read `Overview.md`.
 If you need movement execution after a heading is chosen, read `NavMotor.md`.
 
 The code referenced here lives primarily in:
@@ -57,7 +57,7 @@ Two details matter here:
 
 The main entry points are:
 
-- `CreateNew(Fixed64 radius)`
+- `CreateNew(TrailblazerWorldContext context, Fixed64 radius)`
 - `OnInitialize(Fixed64 radius)`
 - `TrySimulateTurn(Vector3d position, Vector3d lastPosition, Vector3d forward, FixedQuaternion rotation, out FixedQuaternion appliedRotation)`
 - `RequestTurnDirection(Vector3d curDirection, Vector3d targetDirection, Fixed64? interpolation = null)`
@@ -320,7 +320,7 @@ if (navigator.Turning.TrySimulateTurn(
 With lower-level usage, the minimum pattern is:
 
 ```csharp
-var turning = new NavTurning(radius);
+var turning = new NavTurning(context, radius);
 turning.RequestTurnDirection(currentForward, desiredForward);
 
 if (turning.TrySimulateTurn(position, lastPosition, currentForward, currentRotation, out var appliedRotation))

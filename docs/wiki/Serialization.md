@@ -37,6 +37,7 @@ The current Trailblazer serialization coverage is intentionally limited to:
 - `SlideLocomotion`
 - `WaterLocomotion`
 - `FlyLocomotion`
+- `ClimbLocomotion`
 
 In practice that means the current covered branch handles:
 
@@ -147,7 +148,7 @@ hydrate heightmap data from the navigator payload.
 
 The request record currently captures:
 
-- request type (`AStar`, `FlowField`, or `Volume`)
+- request type (`AStar`, `FlowField`, `Volume`, or internal `Hybrid`)
 - origin
 - target position
 - unit size
@@ -161,7 +162,7 @@ On load it also:
 
 - rebuilds the active `IPathRequest` from the recorded request data
 - reacquires a guide from the request's owning context when the session was actively guide-driven
-- restores waypoint progress for both `AStarGuide` and `VolumeGuide` when the guide is waypoint-based
+- restores waypoint progress for `AStarGuide`, `VolumeGuide`, and internal `HybridGuide` when the guide is waypoint-based
 - clears any stale guide or movement-group session state already attached to the existing runtime shell
 - preserves per-session movement-group intent while treating the context-owned coordinator as rebuild-only runtime state
 - allows hosts to prewarm grouped sessions explicitly through `Navigator.PrewarmMovementGroup()` or `NavSteering.PrewarmMovementGroup(...)`
@@ -222,6 +223,7 @@ Examples:
 - `SlideLocomotion`: slide-specific configuration plus `IsSliding`
 - `WaterLocomotion`: liquid-medium configuration plus swim/dive/underwater timers
 - `FlyLocomotion`: flight speed/acceleration/gravity-compensation configuration plus `IsFlying`
+- `ClimbLocomotion`: climb speed/acceleration/gravity-compensation configuration plus active climb/mantle state
 - `PlatformLocomotion`: platform configuration plus active/previous/hold platform state, movement-transfer state, local attachment state, and tracked platform velocities
 
 ## 4. What Is Not Serialized Yet
@@ -232,7 +234,7 @@ Out of scope today:
 
 - inline serialization of live `IGuide` instances
 - movement-group coordinator caches and memberships
-- chart registrations, path caches, or global pathing state
+- chart registrations, path caches, or context-owned pathing state
 - full voxel occupancy maps
 
 Some state is also intentionally rebuilt instead of persisted directly:
@@ -316,7 +318,7 @@ The current Trailblazer-focused tests verify that:
 The Trailblazer-specific branch is in solid shape now, but a few non-blocking follow-ups are still valuable:
 
 1. Add an end-to-end host workflow guide or sample that shows batch save/load for multiple navigators, including chart prerequisites, restore ordering, and optional `PrewarmMovementGroup()` calls.
-2. Decide whether any additional Trailblazer-owned global state should ever expose optional snapshot surfaces, or whether pathing/global managers remain rebuild-only by design.
+2. Decide whether any additional Trailblazer-owned context state should ever expose optional snapshot surfaces, or whether pathing and navigation services remain rebuild-only by design.
 3. Expand `RecordData(...)` coverage into other Trailblazer branches only as those runtime surfaces stabilize and prove they contain authoritative state worth persisting.
 
 ## 9. Trailblazer Extension Guidance

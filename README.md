@@ -139,12 +139,14 @@ var chart = NavigationChart.From3D(
     name: "Arena",
     sourceMap: chartData,
     minBounds: Vector3d.Zero,
-    interval: Fixed64.One);
+    interval: context.VoxelSize);
 
 context.Pathing.Register(chart);
 ```
 
 Create or attach a `TrailblazerWorldContext` once during startup for each `GridWorld` Trailblazer should manage. Chart registries, live voxel ownership, partition pools, grid rebuild handling, transition registries, volume-medium rules, reachability snapshots, guide caches, path requests, request-time endpoint resolution, navigator ids, movement groups, and navigator-owned runtime lookups are context-local.
+
+`NavigationChart.Interval` must match the owning context's `VoxelSize` when the chart is registered. Prefer passing `context.VoxelSize` to `NavigationChart.From3D(...)` so authored chart cells map one-to-one onto live `GridForge` voxels.
 
 `context.Pathing.Register(chart)` initializes the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step. Initialization and registration order are live registration state, not authored chart data; use `context.Pathing.IsChartInitialized(...)` or `context.Pathing.TryGetNavigationChartRegistration(...)` when integration code needs to inspect that state.
 

@@ -122,6 +122,16 @@ public class NavigationChartTests
     }
 
     [Fact]
+    public void From3D_ShouldThrow_WhenIntervalIsNotPositive()
+    {
+        var map = new bool[1, 1, 1] { { { true } } };
+
+        Action act = () => NavigationChart.From3D("ZeroInterval", map, Vector3d.Zero, Fixed64.Zero);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
     public void From3D_Bool_ShouldThrow_WhenUnsupportedMediumIsUsed()
     {
         var map = new bool[1, 1, 1] { { { true } } };
@@ -142,6 +152,23 @@ public class NavigationChartTests
             Fixed64.One);
 
         bool valid = chart.TryWorldToIndex(new Vector3d(-5, 0, 0), out int x, out int y, out int z);
+
+        valid.Should().BeFalse();
+        x.Should().Be(-1);
+        y.Should().Be(-1);
+        z.Should().Be(-1);
+    }
+
+    [Fact]
+    public void TryWorldToIndex_ShouldReturnFalse_WhenPositionIsFractionallyBelowMinimumBounds()
+    {
+        NavigationChart chart = NavigationChart.From3D(
+            "FractionalBelowMin",
+            new bool[1, 2, 2],
+            new Vector3d(1, 1, 1),
+            Fixed64.One);
+
+        bool valid = chart.TryWorldToIndex(new Vector3d(Fixed64.Half, Fixed64.One, Fixed64.One), out int x, out int y, out int z);
 
         valid.Should().BeFalse();
         x.Should().Be(-1);

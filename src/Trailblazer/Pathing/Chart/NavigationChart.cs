@@ -35,7 +35,7 @@ public class NavigationChart
     public readonly Vector3d MaxBounds;
 
     /// <summary>
-    /// The distance between grid points along each axis.
+    /// The distance between chart cells along each axis. This must match the owning context's voxel size when registered.
     /// </summary>
     public readonly Fixed64 Interval;
 
@@ -87,12 +87,13 @@ public class NavigationChart
     /// <param name="sizeZ">Number of cells along the Z axis.</param>
     /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
     /// <param name="maxBounds">The maximum world-space bounds of the grid.</param>
-    /// <param name="interval">Distance between adjacent grid points.</param>
+    /// <param name="interval">Distance between adjacent chart cells. Must be greater than zero.</param>
     /// <param name="medium">The authored traversal medium emitted for each <c>true</c> cell.</param>
     /// <param name="priority">The authored precedence used when this chart overlaps another chart on the same voxel.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="map"/> is null.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// Thrown when <paramref name="medium"/> is not <see cref="TraversalMedium.Solid"/>,
+    /// Thrown when <paramref name="interval"/> is not greater than zero, when any dimension is not greater than zero,
+    /// or when <paramref name="medium"/> is not <see cref="TraversalMedium.Solid"/>,
     /// <see cref="TraversalMedium.Gas"/>, or <see cref="TraversalMedium.Liquid"/>.
     /// </exception>
     public NavigationChart(
@@ -128,8 +129,11 @@ public class NavigationChart
     /// <param name="sizeZ">Number of cells along the Z axis.</param>
     /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
     /// <param name="maxBounds">The maximum world-space bounds of the grid.</param>
-    /// <param name="interval">Distance between adjacent grid points.</param>
+    /// <param name="interval">Distance between adjacent chart cells. Must be greater than zero.</param>
     /// <param name="priority">The authored precedence used when this chart overlaps another chart on the same voxel.</param>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="interval"/> is not greater than zero, or when any dimension is not greater than zero.
+    /// </exception>
     public NavigationChart(
         string name,
         NavigationChartCell[] cells,
@@ -151,7 +155,17 @@ public class NavigationChart
         Interval = interval;
         Priority = priority;
 
-        int expectedCellCount = sizeX * sizeY * sizeZ;
+        if (interval <= Fixed64.Zero)
+            throw new ArgumentOutOfRangeException(nameof(interval), interval, "Navigation chart interval must be greater than zero.");
+
+        if (sizeX <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sizeX), sizeX, "Navigation chart size must be greater than zero.");
+        if (sizeY <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sizeY), sizeY, "Navigation chart size must be greater than zero.");
+        if (sizeZ <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sizeZ), sizeZ, "Navigation chart size must be greater than zero.");
+
+        int expectedCellCount = checked(sizeX * sizeY * sizeZ);
         if (_cells.Length != expectedCellCount)
             throw new ArgumentException($"Expected {expectedCellCount} chart cells but received {_cells.Length}.", nameof(cells));
 
@@ -178,9 +192,9 @@ public class NavigationChart
     /// <returns>True if the position is within bounds; otherwise, false.</returns>
     public bool TryWorldToIndex(Vector3d pos, out int x, out int y, out int z)
     {
-        x = (int)((pos.x - MinBounds.x) / Interval);
-        y = (int)((pos.y - MinBounds.y) / Interval);
-        z = (int)((pos.z - MinBounds.z) / Interval);
+        x = ((pos.x - MinBounds.x) / Interval).FloorToInt();
+        y = ((pos.y - MinBounds.y) / Interval).FloorToInt();
+        z = ((pos.z - MinBounds.z) / Interval).FloorToInt();
 
         bool valid = x >= 0 && x < SizeX &&
                      y >= 0 && y < SizeY &&
@@ -270,13 +284,13 @@ public class NavigationChart
     /// <param name="name">Name identifier for the chart.</param>
     /// <param name="sourceMap">3D map of authored cells (true = authored traversal).</param>
     /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
-    /// <param name="interval">The spacing between each grid point.</param>
+    /// <param name="interval">The spacing between each chart cell. Must be greater than zero.</param>
     /// <param name="medium">The authored traversal medium emitted for each <c>true</c> cell.</param>
     /// <param name="priority">The authored precedence used when this chart overlaps another chart on the same voxel.</param>
     /// <returns>A constructed NavigationChart instance.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="sourceMap"/> is null.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// Thrown when <paramref name="medium"/> is not <see cref="TraversalMedium.Solid"/>,
+    /// Thrown when <paramref name="interval"/> is not greater than zero, or when <paramref name="medium"/> is not <see cref="TraversalMedium.Solid"/>,
     /// <see cref="TraversalMedium.Gas"/>, or <see cref="TraversalMedium.Liquid"/>.
     /// </exception>
     public static NavigationChart From3D(
@@ -323,9 +337,11 @@ public class NavigationChart
     /// <param name="name">Name identifier for the chart.</param>
     /// <param name="sourceMap">3D map of authored chart cells.</param>
     /// <param name="minBounds">The minimum world-space bounds of the grid.</param>
-    /// <param name="interval">The spacing between each grid point.</param>
+    /// <param name="interval">The spacing between each chart cell. Must be greater than zero.</param>
     /// <param name="priority">The authored precedence used when this chart overlaps another chart on the same voxel.</param>
     /// <returns>A constructed NavigationChart instance.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="sourceMap"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="interval"/> is not greater than zero.</exception>
     public static NavigationChart From3D(
         string name,
         NavigationChartCell[,,] sourceMap,

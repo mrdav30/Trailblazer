@@ -229,6 +229,9 @@ internal static class PathManager
     /// <param name="initializeChart">Whether to initialize the chart after registration succeeds.</param>
     /// <returns>True if successful, false if a duplicate name exists.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="chart"/> is null.</exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="chart"/>'s interval does not match the owning world's voxel size.
+    /// </exception>
     public static bool Register(NavigationChart chart, bool initializeChart = true)
     {
         PathingWorldState state = ActiveState;
@@ -244,6 +247,9 @@ internal static class PathManager
     /// <param name="initializeChart">Whether to initialize the chart after registration succeeds.</param>
     /// <returns>True if successful, false if a duplicate name exists.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="chart"/> is null.</exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="chart"/>'s interval does not match <paramref name="world"/>'s voxel size.
+    /// </exception>
     public static bool Register(GridWorld world, NavigationChart chart, bool initializeChart = true)
     {
         SwiftThrowHelper.ThrowIfNull(chart, nameof(chart));
@@ -318,6 +324,8 @@ internal static class PathManager
             if (_navigationChartMap.ContainsKey(chart.Name))
                 return false;
 
+            ValidateChartVoxelSizeCompatibility(world, chart);
+
             var registration = new NavigationChartRegistration(
                 chart,
                 unchecked(++_nextChartRegistrationOrder),
@@ -336,6 +344,17 @@ internal static class PathManager
             InitializeChart(world, chart.Name);
 
         return true;
+    }
+
+    private static void ValidateChartVoxelSizeCompatibility(GridWorld world, NavigationChart chart)
+    {
+        if (chart.Interval == world.VoxelSize)
+            return;
+
+        throw new ArgumentException(
+            $"Navigation chart '{chart.Name}' uses interval {chart.Interval}, but the owning GridWorld uses voxel size {world.VoxelSize}. " +
+            "Rebuild the chart with the context voxel size before registration.",
+            nameof(chart));
     }
 
     /// <summary>

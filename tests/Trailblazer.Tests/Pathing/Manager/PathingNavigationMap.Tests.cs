@@ -78,6 +78,23 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void Register_ShouldThrowWithoutRegisteringChart_WhenChartIntervalDiffersFromWorldVoxelSize()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        TestWorld.World.TryAddGrid(config, out _);
+
+        var chart = NavigationChart.From3D(
+            "MismatchedInterval",
+            new bool[1, 2, 1] { { { true }, { true } } },
+            Vector3d.Zero,
+            Fixed64.Half);
+
+        Assert.Throws<ArgumentException>(() => PathManager.Register(chart));
+
+        Assert.False(PathManager.IsChartRegistered(chart.Name));
+    }
+
+    [Fact]
     public void AllCharts_ShouldReturnEmptyAndRegisteredSnapshots()
     {
         Assert.Empty(PathManager.AllCharts);

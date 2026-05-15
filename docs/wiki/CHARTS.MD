@@ -57,7 +57,7 @@ Important fields:
 - `Name`: stable chart identity used by `PathManager`
 - `MinBounds`: world-space origin of the chart volume
 - `MaxBounds`: exclusive upper world bound
-- `Interval`: spacing between chart cells
+- `Interval`: spacing between chart cells; this must match the owning context's `VoxelSize` when registered
 - `SizeX`, `SizeY`, `SizeZ`: chart dimensions
 
 Live registration state, including initialization and registration order, is stored by
@@ -65,14 +65,14 @@ Live registration state, including initialization and registration order, is sto
 initialization through `PathManager.IsChartInitialized(...)` when integration code needs to observe
 that state.
 
-The core factory today is:
+The core factory today is, assuming `context` is the owning `TrailblazerWorldContext`:
 
 ```csharp
 NavigationChart chart = NavigationChart.From3D(
     "ArenaGround",
     sourceMap,
     minBounds: new Vector3d(0, 0, 0),
-    interval: Fixed64.One);
+    interval: context.VoxelSize);
 ```
 
 The `bool[,,]` overload emits authored solid cells by default, or one authored volume medium when you pass `TraversalMedium.Gas` or `TraversalMedium.Liquid`.
@@ -174,7 +174,7 @@ That means:
 
 - chart creation is cheap relative to full runtime activation
 - a chart is not pathable until initialization has run
-- `PathManager.Register(chart)` performs that initialization by default, while `initializeChart: false` keeps the chart inert until a later explicit activation step
+- `context.Pathing.Register(chart)` performs that initialization by default, while `initializeChart: false` keeps the chart inert until a later explicit activation step
 - the initialized flag belongs to the live registration, so authored chart data can be reused across
   registrations without carrying runtime state from one registration to another
 
@@ -295,9 +295,9 @@ Avoid charts whose meaning changes frame to frame.
 
 ### 9.2 Keep The Interval Aligned With Your Grid
 
-Charts are most predictable when their `Interval` matches the world sampling assumptions used by your `GridForge` setup.
+Charts are valid for live registration only when their `Interval` matches the owning `TrailblazerWorldContext.VoxelSize`.
 
-Misalignment between chart cell spacing and voxel spacing can cause confusing endpoint resolution and awkward gaps.
+Misalignment between chart cell spacing and voxel spacing can collapse multiple authored cells onto one live voxel, create gaps between authored chart neighbors, and produce generated transition anchors that do not match the intended topology. Trailblazer rejects mismatched charts during registration so this fails early instead of becoming a pathing bug.
 
 ### 9.3 Use Charts For Structure, Not Occupancy
 
@@ -339,9 +339,9 @@ NavigationChart chart = NavigationChart.From3D(
     "Lane",
     walkable,
     minBounds: Vector3d.Zero,
-    interval: Fixed64.One);
+    interval: context.VoxelSize);
 
-PathManager.Register(chart);
+context.Pathing.Register(chart);
 ```
 
 ### 10.2 Bake From Scene Geometry
@@ -384,6 +384,8 @@ One reasonable Unity workflow would look like this:
 Very rough pseudo-code:
 
 ```csharp
+Fixed64 interval = context.VoxelSize;
+
 for (int y = 0; y < sizeY; y++)
 for (int x = 0; x < sizeX; x++)
 for (int z = 0; z < sizeZ; z++)
@@ -406,13 +408,15 @@ The exact bake logic is host-specific, but that is the point: Trailblazer should
 Typical runtime flow:
 
 ```csharp
+Fixed64 interval = context.VoxelSize;
+
 NavigationChart chart = NavigationChart.From3D(
     "ArenaGround",
     map,
     minBounds,
     interval);
 
-PathManager.Register(chart);
+context.Pathing.Register(chart);
 
 // Later, path requests and navigators can use the live chart-backed pathing graph.
 ```

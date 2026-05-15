@@ -54,6 +54,7 @@ Important details:
 
 - the chart itself is data only; it does not become queryable by pathfinding until it is registered and initialized
 - the chart uses flattened internal storage, but the public constructor/factory still works in 3D terms
+- `NavigationChart.Interval` must match the owning context's `VoxelSize` at registration time so authored cells map one-to-one onto live GridForge voxels
 - charts can author both solid and raw-volume traversal data; runtime gas and liquid routing still flow through `VolumePathRequest`
 - world bounds are derived from `MinBounds`, `Interval`, and the source array size
 

@@ -8,7 +8,7 @@ namespace Trailblazer.Navigation.Turning;
 /// <summary>
 /// The Turn class manages the character's rotation and turning functionality.
 /// </summary>
-public class NavTurning : IRecordable
+public partial class NavTurning : IRecordable
 {
     #region Constants
 
@@ -284,12 +284,5 @@ public class NavTurning : IRecordable
     public void NotifyCollision()
     {
         _isColliding = true;
-    }
-
-    /// <inheritdoc />
-    public void RecordData(IChronicler chronicler)
-    {
-        RecordValues.Look(chronicler, ref CanTurn, "CanTurn", true);
-        RecordValues.Look(chronicler, ref TurnRate, "TurnRate", DefaultTurnRate);
     }
 }

@@ -2,16 +2,22 @@
 
 This document is the detailed reference for Trailblazer's deterministic steering and guide-following layer.
 
-If you only need the high-level architecture, read `OVERVIEW.md`.
-If you want the pathing-first request, guide, and transition model without `Navigator`, read `PATHING.MD`.
-If you specifically want `IGuide`, `IWaypointGuide`, and `PathGuideFactory`, read `PATHGUIDES.MD`.
-If you need the movement-execution side, read `NAVMOTOR.MD`.
+If you only need the high-level architecture, read `Overview.md`.
+If you want the pathing-first request, guide, and transition model without `Navigator`, read `PATHING.md`.
+If you specifically want `IGuide`, `IWaypointGuide`, and `PathGuideFactory`, read `PathGuides.md`.
+If you need the movement-execution side, read `NavMotor.md`.
 
 The code referenced here lives primarily in:
 
 - `src/Trailblazer/Navigation/Steering/NavSteering.cs`
+- `src/Trailblazer/Navigation/Steering/NavSteering.Requests.cs`
+- `src/Trailblazer/Navigation/Steering/NavSteering.Simulation.cs`
+- `src/Trailblazer/Navigation/Steering/NavSteering.LineOfSight.cs`
+- `src/Trailblazer/Navigation/Steering/NavSteering.Groups.cs`
+- `src/Trailblazer/Navigation/Steering/NavSteering.Serialization.cs`
 - `src/Trailblazer/Navigation/Steering/NavSteeringEvents.cs`
-- `src/Trailblazer/Navigation/Steering/GroupBehaviorWeights.cs`
+- `src/Trailblazer/Navigation/Steering/Grouping/GroupBehaviorWeights.cs`
+- `src/Trailblazer/Navigation/Steering/Serialization/PathRequestRecord.cs`
 - `src/Trailblazer/Navigation/MovementGroups/*`
 - `src/Trailblazer/Pathing/Search/Guide/*`
 - `src/Trailblazer/Pathing/Search/Request/*`
@@ -58,6 +64,16 @@ This split matters because it keeps:
 - pathfinding logic out of the motor
 - locomotion logic out of steering
 - guide caching separate from runtime movement
+
+The implementation mirrors this separation across partial files:
+
+- `NavSteering.cs` keeps core state, construction, tuning fields, events, and group-facing properties.
+- `NavSteering.Requests.cs` owns public request and guide-session entry points.
+- `NavSteering.Simulation.cs` owns the per-frame `GetHeading(...)` pipeline, path validation, stuck handling, arrival, and stop behavior.
+- `NavSteering.LineOfSight.cs` owns chart and volume line-of-sight helpers.
+- `NavSteering.Groups.cs` owns combined steering, movement-group session state, and route-topology publication helpers.
+- `NavSteering.Serialization.cs` contains the Chronicler `RecordData(...)` implementation.
+- `Steering/Serialization/*` contains the serializable request snapshot types used by `NavSteering.RecordData(...)`.
 
 ## 3. Public Surface
 

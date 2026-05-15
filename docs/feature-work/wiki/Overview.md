@@ -9,14 +9,14 @@ This document is the high-level architecture guide for the current codebase.
 
 See also:
 
-- `AUTHORING.MD` for tokenized chart plus transition authoring
-- `PATHING.MD` for a standalone guide to the `Trailblazer.Pathing` namespace
-- `PATHGUIDES.MD` for the runtime guide and guide-factory layer
-- `TRANSITIONS.MD` for authored handoffs between charts and raw volume
-- `VOLUMETRAVERSAL.MD` for raw-volume traversal media and host rules
-- `HEIGHTMAPS.MD` for deterministic context-owned ground/contact Y sampling
-- `CHARTS.MD` for a deeper explanation of `NavigationChart` and the chart lifecycle
-- `SERIALIZATION.MD` for Trailblazer's current serialization coverage and runtime behavior
+- `ChartAuthoring.md` for tokenized chart plus transition authoring
+- `Pathing.md` for a standalone guide to the `Trailblazer.Pathing` namespace
+- `PathGuides.md` for the runtime guide and guide-factory layer
+- `Transitions.md` for authored handoffs between charts and raw volume
+- `VolumeTraversal.md` for raw-volume traversal media and host rules
+- `HeightMaps.md` for deterministic context-owned ground/contact Y sampling
+- `NavigationCharts.md` for a deeper explanation of `NavigationChart` and the chart lifecycle
+- `Serialization.md` for Trailblazer's current serialization coverage and runtime behavior
 
 ## 1. Core Model
 
@@ -71,9 +71,9 @@ Explicit handoff data between chart-backed traversal and raw-volume traversal is
 
 See also:
 
-- [`AUTHORING.MD`](AUTHORING.MD)
-- [`CHARTS.MD`](CHARTS.MD)
-- [`PATHMANAGER.MD`](PATHMANAGER.MD)
+- [`ChartAuthoring.md`](ChartAuthoring.md)
+- [`NavigationCharts.md`](NavigationCharts.md)
+- [`PathManager.md`](PathManager.md)
 
 ### 2.4 Heightmaps
 
@@ -94,7 +94,7 @@ call the protected grounding helper from their own grounded traversal probing.
 
 See also:
 
-- [`HEIGHTMAPS.MD`](HEIGHTMAPS.MD)
+- [`HeightMaps.md`](HeightMaps.md)
 
 ## 3. Path Requests
 
@@ -220,7 +220,7 @@ These results are what the cache stores and reuses.
 
 Guides expose movement directions to runtime systems through `IGuide`:
 
-For the dedicated guide-layer reference, read [`PATHGUIDES.MD`](PATHGUIDES.MD).
+For the dedicated guide-layer reference, read [`PathGuides.md`](PathGuides.md).
 
 ```csharp
 public interface IGuide
@@ -283,13 +283,15 @@ Lifetime rules matter:
 
 The navigation layer is built from four main pieces.
 
+The primary navigation controllers are split into partial files by responsibility; the subsystem pages below list the current source layout.
+
 ### 6.1 Navigator
 
 `Navigator` is the host-facing orchestration layer. It binds to one `TrailblazerWorldContext`, owns transform and traversal state, composes `NavSteering`, `NavTurning`, and `NavMotor`, coordinates the `Simulate()` / `CommitFrameMotion()` lifecycle, and exposes an abstract `CheckTrekCondition()` hook so each host provides traversal probing explicitly.
 
 See also:
 
-- [`NAVIGATOR.MD`](NAVIGATOR.MD)
+- [`Navigator.md`](Navigator.md)
 
 ### 6.2 NavSteering
 
@@ -297,7 +299,7 @@ See also:
 
 See also:
 
-- [`NAVSTEERING.MD`](NAVSTEERING.MD)
+- [`NavSteering.md`](NavSteering.md)
 
 ### 6.3 NavTurning
 
@@ -305,7 +307,7 @@ See also:
 
 See also:
 
-- [`NAVTURNING.MD`](NAVTURNING.MD)
+- [`NavTurning.md`](NavTurning.md)
 
 ### 6.4 NavMotor
 
@@ -313,8 +315,8 @@ See also:
 
 See also:
 
-- [`NAVMOTOR.MD`](NAVMOTOR.MD)
-- [`GRAVITY.MD`](GRAVITY.MD)
+- [`NavMotor.md`](NavMotor.md)
+- [`Gravity.md`](Gravity.md)
 
 ## 7. Deterministic Frame Flow
 
@@ -357,7 +359,7 @@ Important maintenance rule:
 
 You can use the pathing layer without the full navigation stack:
 
-For a pathing-first guide that does not assume `Navigator`, read [`PATHING.MD`](PATHING.MD).
+For a pathing-first guide that does not assume `Navigator`, read [`Pathing.md`](Pathing.md).
 
 ```csharp
 var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
@@ -404,12 +406,12 @@ Before runtime pathing works correctly:
 ## 11. Where to Read Next
 
 - [`../../README.md`](../../README.md) for package-level overview and quick-start examples
-- [`PATHING.MD`](PATHING.MD) for standalone pathing integration and request guidance
-- [`PATHGUIDES.MD`](PATHGUIDES.MD) for `IGuide`, `IWaypointGuide`, and context-owned guide caches
-- [`TRANSITIONS.MD`](TRANSITIONS.MD) for authored chart and volume handoffs
-- [`VOLUMETRAVERSAL.MD`](VOLUMETRAVERSAL.MD) for raw-volume traversal rules
-- [`NAVMOTOR.MD`](NAVMOTOR.MD) for motor phase ordering
-- [`GRAVITY.MD`](GRAVITY.MD) for the gravity model
+- [`Pathing.md`](Pathing.md) for standalone pathing integration and request guidance
+- [`PathGuides.md`](PathGuides.md) for `IGuide`, `IWaypointGuide`, and context-owned guide caches
+- [`Transitions.md`](Transitions.md) for authored chart and volume handoffs
+- [`VolumeTraversal.md`](VolumeTraversal.md) for raw-volume traversal rules
+- [`NavMotor.md`](NavMotor.md) for motor phase ordering
+- [`Gravity.md`](Gravity.md) for the gravity model
 - `src/Trailblazer/Runtime` for `TrailblazerWorldContext`, the deterministic clock, and lifecycle hooks
 - `src/Trailblazer/Navigation/Navigator` for the host-facing navigator orchestration API
 - `src/Trailblazer/Navigation` for steering, turning, motor flow, movement groups, and navigator guidance

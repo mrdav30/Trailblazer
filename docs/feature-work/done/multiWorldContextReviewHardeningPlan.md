@@ -147,9 +147,9 @@ or exposed by the context migration:
 - Modify: `src/Trailblazer/Pathing/PathingWorldState.cs`
 - Modify: `src/Trailblazer/Pathing/Search/TrailblazerGuideState.cs`
 - Modify: `src/Trailblazer/Pathing/Transition/TraversalTransitionRegistryState.cs`
-- Modify: `docs/wiki/PATHMANAGER.MD`
-- Modify: `docs/wiki/VOLUMETRAVERSAL.MD`
-- Modify: `docs/wiki/TRANSITIONS.MD`
+- Modify: `docs/wiki/PathManager.md`
+- Modify: `docs/wiki/VolumeTraversal.md`
+- Modify: `docs/wiki/Transitions.md`
 - Test: `tests/Trailblazer.Tests/TrailblazerWorldContextLifecycle.Tests.cs`
 
 - [x] **Step 1: Pin reset semantics**

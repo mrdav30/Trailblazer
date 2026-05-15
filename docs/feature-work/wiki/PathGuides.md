@@ -12,7 +12,7 @@ This document is the focused reference for Trailblazer's guide layer:
 
 Use this file when you already understand requests and want to understand how computed path data is exposed to runtime consumers.
 
-If you need the broader pathing model first, read `PATHING.MD`.
+If you need the broader pathing model first, read `Pathing.md`.
 
 Relevant code:
 
@@ -480,9 +480,9 @@ Useful test entry points:
 
 ## 11. Where To Read Next
 
-- `PATHING.MD` for the request and surveyor model
-- `TRANSITIONS.MD` for authored transition fallback and staged route planning
-- `VOLUMETRAVERSAL.MD` for raw-volume traversal rules behind `VolumeGuide`
-- `PATHMANAGER.MD` for cache invalidation triggers caused by chart lifecycle
-- `NAVSTEERING.MD` for the main runtime consumer of guides
-- `SERIALIZATION.MD` if you need current guide-restoration behavior during load
+- `Pathing.md` for the request and surveyor model
+- `Transitions.md` for authored transition fallback and staged route planning
+- `VOLUMETRAVERSAL.md` for raw-volume traversal rules behind `VolumeGuide`
+- `PathManager.md` for cache invalidation triggers caused by chart lifecycle
+- `NavSteering.md` for the main runtime consumer of guides
+- `Serialization.md` if you need current guide-restoration behavior during load

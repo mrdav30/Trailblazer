@@ -3,11 +3,15 @@
 This document is the detailed reference for Trailblazer's deterministic movement motor.
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
-If you need the vertical-force model specifically, read `GRAVITY.MD`.
+If you need the vertical-force model specifically, read `Gravity.md`.
 
 The code referenced here lives primarily in:
 
 - `src/Trailblazer/Navigation/Motor/NavMotor.cs`
+- `src/Trailblazer/Navigation/Motor/NavMotor.Traversal.cs`
+- `src/Trailblazer/Navigation/Motor/NavMotor.Finalization.cs`
+- `src/Trailblazer/Navigation/Motor/NavMotor.Utility.cs`
+- `src/Trailblazer/Navigation/Motor/NavMotor.Serialization.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotion/*`
 - `src/Trailblazer/Navigation/Motor/Locomotion/Forces/*`
 - `src/Trailblazer/Navigation/Motor/Locomotion/Profiles/*`
@@ -45,6 +49,15 @@ Those responsibilities belong to `NavSteering`, `NavTurning`, and the host navig
 That split is what lets Trailblazer stay deterministic while still depending on host-owned surface, water, ceiling, and platform data.
 
 Another important detail:
+
+- the implementation mirrors this runtime split across partial files
+- `NavMotor.cs` keeps the core state, initialization, public properties, and profile setup
+- `NavMotor.Traversal.cs` owns `TryTraversal(...)` and the force/output pipeline
+- `NavMotor.Finalization.cs` owns `FinalizeTraversal(...)` and traversal-state reconciliation
+- `NavMotor.Utility.cs` holds shared small helpers such as velocity, slope, state sync, and abort handling
+- `NavMotor.Serialization.cs` contains the Chronicler `RecordData(...)` implementation
+
+The movement model also has some historical naming:
 
 - names like `_forceOutput` are historical
 - in practice, `NavMotor` behaves more like a velocity-oriented movement accumulator than a classical rigidbody force solver
@@ -241,7 +254,7 @@ This phase applies vertical environmental behavior:
 
 This is the gravity and buoyancy stage, not the initial jump-impulse stage.
 
-For the full vertical model, see `GRAVITY.MD`.
+For the full vertical model, see `Gravity.md`.
 
 ### 6.6 ApplyJumpForce()
 

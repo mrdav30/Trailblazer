@@ -162,5 +162,5 @@ It does not automatically:
 - infer climb routing from every solid cell
 - refresh generated transitions mid-simulation
 
-For the chart lifecycle, read `PATHMANAGER.MD`.
-For explicit handoff data, read `TRANSITIONS.MD`.
+For the chart lifecycle, read `PathManager.md`.
+For explicit handoff data, read `Transitions.md`.

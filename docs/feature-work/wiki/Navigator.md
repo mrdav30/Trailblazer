@@ -2,19 +2,30 @@
 
 This document is the detailed reference for Trailblazer's `Navigator` class.
 
-If you only need the high-level architecture, read `OVERVIEW.md`.
-If you only need the standalone pathing request and guide layer, read `PATHING.MD`.
+If you only need the high-level architecture, read `Overview.md`.
+If you only need the standalone pathing request and guide layer, read `PATHING.md`.
 If you need the subsystem references behind `Navigator`, read:
 
-- `NAVSTEERING.MD`
-- `NAVTURNING.MD`
-- `NAVMOTOR.MD`
+- `NavSteering.md`
+- `NavTurning.md`
+- `NavMotor.md`
 
 The code referenced here lives primarily in:
 
 - `src/Trailblazer/Navigation/Navigator/Navigator.cs`
+- `src/Trailblazer/Navigation/Navigator/Navigator.HeightmapGrounding.cs`
+- `src/Trailblazer/Navigation/Navigator/Navigator.Serialization.cs`
 - `src/Trailblazer/Navigation/Navigator/INavigate.cs`
+- `src/Trailblazer/Navigation/Navigator/Occupancy/NavigatorOccupancyTracker.cs`
 - `src/Trailblazer/Navigation/Navigator/Guidance/*`
+
+`Navigator` is implemented as a partial class split by ownership area:
+
+- `Navigator.cs` contains the host-facing orchestration API, lifecycle flow, frame state, guided request construction, and traversal-state helpers.
+- `Navigator.HeightmapGrounding.cs` contains the optional protected heightmap grounding helper used by concrete navigator implementations.
+- `Navigator.Serialization.cs` contains the Chronicler `RecordData(...)` implementation.
+- `NavigatorOccupancyTracker` owns the shared occupancy bookkeeping that backs `GlobalId`, `OccupantGroupId`, and nearby-occupant scans.
+- `Guidance/*` contains guided traversal defaults, guided climb intent state, request construction, and volume-exit handoff planning.
 
 ## 1. What Navigator Is
 

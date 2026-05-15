@@ -147,8 +147,8 @@ navigator.ConfigureHeightmapGrounding(
 | `tests/Trailblazer.Tests/Heightmaps/HeightmapCompression.Tests.cs` | Compression precision, range clamping, and deterministic quantization behavior. |
 | `tests/Trailblazer.Tests/Heightmaps/TrailblazerHeightmapService.Tests.cs` | Context registry, multi-layer selection, sticky active layer, and reset behavior. |
 | `tests/Trailblazer.Tests/Navigation/Navigator/NavigatorHeightmapGrounding.Tests.cs` | Navigator `SurfaceLevelOnly` and `SurfaceLevelAndPosition` behavior. |
-| `docs/wiki/HEIGHTMAPS.MD` | User-facing heightmap domain guide. |
-| `docs/wiki/OVERVIEW.md` | Adds heightmaps to the high-level architecture. |
+| `docs/wiki/HeightMaps.md` | User-facing heightmap domain guide. |
+| `docs/wiki/Overview.md` | Adds heightmaps to the high-level architecture. |
 | `README.md` | Adds a concise heightmap usage example and host responsibility note. |
 
 ## Phase 0 - Baseline And Naming
@@ -450,7 +450,7 @@ without serializing host-owned heightmap data through navigators.
 - Modify: `src/Trailblazer/Navigation/Navigator/Navigator.cs`
 - Modify: `src/Trailblazer/Navigation/Navigator/Heightmaps/NavigatorHeightmapGroundingSettings.cs`
 - Test: `tests/Trailblazer.Tests/Navigation/Navigator/NavigatorSerialization.Tests.cs`
-- Docs: `docs/wiki/SERIALIZATION.MD`
+- Docs: `docs/wiki/Serialization.md`
 
 **Tasks:**
 
@@ -462,7 +462,7 @@ without serializing host-owned heightmap data through navigators.
   `Navigator.RecordData(...)`.
 - [x] Bind restored settings to the already-bound `TrailblazerWorldContext` during load, matching
   existing navigator load behavior.
-- [x] Update `docs/wiki/SERIALIZATION.MD` to state that hosts must register heightmaps on the
+- [x] Update `docs/wiki/Serialization.md` to state that hosts must register heightmaps on the
   context before loaded navigators can use heightmap grounding.
 - [x] Run:
 
@@ -478,8 +478,8 @@ Expected: navigator serialization tests pass.
 
 **Files:**
 
-- Create: `docs/wiki/HEIGHTMAPS.MD`
-- Modify: `docs/wiki/OVERVIEW.md`
+- Create: `docs/wiki/HeightMaps.md`
+- Modify: `docs/wiki/Overview.md`
 - Modify: `README.md`
 
 **Docs content:**
@@ -501,9 +501,9 @@ Expected: navigator serialization tests pass.
 
 **Tasks:**
 
-- [x] Add `HEIGHTMAPS.MD` with sections for model, registration, sampling, multi-level layers,
+- [x] Add `HeightMaps.md` with sections for model, registration, sampling, multi-level layers,
   navigator grounding, and host responsibilities.
-- [x] Link `HEIGHTMAPS.MD` from `docs/wiki/OVERVIEW.md`.
+- [x] Link `HeightMaps.md` from `docs/wiki/Overview.md`.
 - [x] Add a short README feature bullet and usage example.
 - [x] Keep docs aligned with exact type and method names landed in source.
 

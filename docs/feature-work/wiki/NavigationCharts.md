@@ -4,10 +4,10 @@ This document is a deep dive into `NavigationChart`, the chart lifecycle managed
 
 `NavigationChart` is a dense authored traversal map. Solid traversal is its main chart-backed runtime use, but charts can also author raw-volume cells that initialize `VolumeChartPartition` state for `VolumePathRequest`.
 
-If you only need the high-level architecture, start with `OVERVIEW.md`.
-If you are working from the standalone pathing API inward, read `PATHING.MD` before this file.
-If your chart world depends on jumps, water, or chart-to-volume handoffs, also read `TRANSITIONS.MD` and `VOLUMETRAVERSAL.MD`.
-If you need the registry and lifecycle details, read `PATHMANAGER.MD` alongside this file.
+If you only need the high-level architecture, start with `Overview.md`.
+If you are working from the standalone pathing API inward, read `Pathing.md` before this file.
+If your chart world depends on jumps, water, or chart-to-volume handoffs, also read `Transitions.md` and `VolumeTraversal.md`.
+If you need the registry and lifecycle details, read `PathManager.md` alongside this file.
 
 Relevant code:
 

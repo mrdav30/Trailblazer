@@ -3,11 +3,16 @@
 This document is the detailed reference for Trailblazer's deterministic facing layer.
 
 If you only need the high-level architecture, read `OVERVIEW.md`.
-If you need movement execution after a heading is chosen, read `NAVMOTOR.MD`.
+If you need movement execution after a heading is chosen, read `NavMotor.md`.
 
 The code referenced here lives primarily in:
 
 - `src/Trailblazer/Navigation/Turning/NavTurning.cs`
+- `src/Trailblazer/Navigation/Turning/NavTurning.Serialization.cs`
+
+`NavTurning` is implemented as a partial class: `NavTurning.cs` contains the runtime turning
+state and simulation behavior, while `NavTurning.Serialization.cs` contains the Chronicler
+`RecordData(...)` implementation.
 
 ## 1. What NavTurning Is
 

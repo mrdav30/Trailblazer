@@ -542,7 +542,7 @@ Fast-follow observations:
 
 **Severity:** Low to Medium  
 **Primary files:** `src/Trailblazer/Pathing/Search/FlowField/FlowFieldSurveyor.cs`,
-`docs/wiki/OVERVIEW.md`, `README.md`
+`docs/wiki/Overview.md`, `README.md`
 
 Keep these as fast-follow cleanup unless they block the earlier phases:
 

@@ -2,10 +2,10 @@
 
 This document is the detailed reference for Trailblazer's context-owned chart registry and pathing utility layer.
 
-If you only need the high-level architecture, read `OVERVIEW.md`.
-If you want the pathing-first request and guide model, read `PATHING.MD`.
-If you need a deeper explanation of what charts are and why they exist, read `CHARTS.MD`.
-If you need the tokenized chart-plus-transition builder flow, read `AUTHORING.MD`.
+If you only need the high-level architecture, read `Overview.md`.
+If you want the pathing-first request and guide model, read `Pathing.md`.
+If you need a deeper explanation of what charts are and why they exist, read `NavigationCharts.md`.
+If you need the tokenized chart-plus-transition builder flow, read `ChartAuthoring.md`.
 If you need guide caching and guide lifetime details, read the relevant pathing source alongside this file.
 
 The code referenced here lives primarily in:

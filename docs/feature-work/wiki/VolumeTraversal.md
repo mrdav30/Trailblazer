@@ -9,8 +9,8 @@ Use this file when you need to understand:
 - how raw-volume endpoint resolution differs from chart-backed endpoint resolution
 - how volume traversal interacts with authored transitions
 
-If you need the broader request model first, read `PATHING.MD`.
-If you need authored handoff registration, pair this with `TRANSITIONS.MD`.
+If you need the broader request model first, read `Pathing.md`.
+If you need authored handoff registration, pair this with `Transitions.md`.
 
 Relevant code:
 
@@ -360,7 +360,7 @@ High-risk changes include:
 
 ## 12. Where To Read Next
 
-- `PATHING.MD` for the request-level pathing model
-- `TRANSITIONS.MD` for authored handoffs into and out of raw volume
-- `CHARTS.MD` for the authored chart model
-- `PATHGUIDES.MD` for `VolumeGuide` and guide-factory behavior
+- `Pathing.md` for the request-level pathing model
+- `Transitions.md` for authored handoffs into and out of raw volume
+- `NavigationCharts.md` for the authored chart model
+- `PathGuides.md` for `VolumeGuide` and guide-factory behavior

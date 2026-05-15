@@ -156,7 +156,7 @@ When charts overlap on the same voxel, Trailblazer resolves one winning authored
 
 Registered charts are mutable after registration through `context.Pathing.TryUpdateChartCell(...)` and `context.Pathing.ApplyChartUpdates(...)`. Initialized charts re-resolve only the touched voxels and keep the rest of the live pathing state intact. Any registered chart whose cells carry generated-transition media participates in the same managed transition lifecycle: local mutations refresh only the affected adjacent pairs, overlap masking suppresses inactive managed transitions without unregistering them, and unloading the chart removes its managed generated transitions entirely. Explicit manual transitions are lifecycle-managed too: Trailblazer keeps them registered, reevaluates them as local chart state changes, and suppresses them automatically when their endpoint media is no longer supported.
 
-If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse a `string[,,]` using the built-in legend into a `TraversalBuildResult`, and `context.Pathing.Register(buildResult)` will register the chart, initialize any authored solid or volume partitions, and register generated explicit transitions in one step. Generated transitions inherit the owning chart priority, remain registered while inactive, and become active only when their supporting pair is valid in the current effective world state. The built-in legend and current generator rules are documented in `docs/wiki/AUTHORING.MD`.
+If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse a `string[,,]` using the built-in legend into a `TraversalBuildResult`, and `context.Pathing.Register(buildResult)` will register the chart, initialize any authored solid or volume partitions, and register generated explicit transitions in one step. Generated transitions inherit the owning chart priority, remain registered while inactive, and become active only when their supporting pair is valid in the current effective world state. The built-in legend and current generator rules are documented in `docs/wiki/ChartAuthoring.md`.
 
 ### Optional: Register a Heightmap
 
@@ -324,18 +324,18 @@ Use `VolumePathRequest` when:
 
 Start with:
 
-- [`OVERVIEW.md`](docs/wiki/OVERVIEW.md)
-- [`PATHING.MD`](docs/wiki/PATHING.MD)
-- [`PATHGUIDES.MD`](docs/wiki/PATHGUIDES.MD)
-- [`TRANSITIONS.MD`](docs/wiki/TRANSITIONS.MD)
-- [`VOLUMETRAVERSAL.MD`](docs/wiki/VOLUMETRAVERSAL.MD)
-- [`HEIGHTMAPS.MD`](docs/wiki/HEIGHTMAPS.MD)
-- [`PATHMANAGER.MD`](docs/wiki/PATHMANAGER.MD)
-- [`NAVIGATOR.MD`](docs/wiki/NAVIGATOR.MD)
-- [`NAVSTEERING.MD`](docs/wiki/NAVSTEERING.MD)
-- [`NAVTURNING.MD`](docs/wiki/NAVTURNING.MD)
-- [`NAVMOTOR.MD`](docs/wiki/NAVMOTOR.MD)
-- [`GRAVITY.MD`](docs/wiki/GRAVITY.MD)
+- [`Overview.md`](docs/wiki/Overview.md)
+- [`Pathing.md`](docs/wiki/Pathing.md)
+- [`PathGuides.md`](docs/wiki/PathGuides.md)
+- [`Transitions.md`](docs/wiki/Transitions.md)
+- [`VolumeTraversal.md`](docs/wiki/VolumeTraversal.md)
+- [`HeightMaps.md`](docs/wiki/HeightMaps.md)
+- [`PathManager.md`](docs/wiki/PathManager.md)
+- [`Navigator.md`](docs/wiki/Navigator.md)
+- [`NavSteering.md`](docs/wiki/NavSteering.md)
+- [`NavTurning.md`](docs/wiki/NavTurning.md)
+- [`NavMotor.md`](docs/wiki/NavMotor.md)
+- [`Gravity.md`](docs/wiki/Gravity.md)
 
 If you are integrating or extending the runtime, the key source entry points are:
 

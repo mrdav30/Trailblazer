@@ -8,8 +8,8 @@ Use this file when you need to understand:
 - how to author and register jump, swim, takeoff, and landing handoffs
 - how transition topology affects path reuse and deterministic planning
 
-If you need the broader request model first, read `PATHING.MD`.
-If you need raw-volume traversal rules, pair this with `VOLUMETRAVERSAL.MD`.
+If you need the broader request model first, read `Pathing.md`.
+If you need raw-volume traversal rules, pair this with `VOLUMETRAVERSAL.md`.
 
 Relevant code:
 
@@ -385,7 +385,7 @@ High-risk changes include:
 
 ## 10. Where To Read Next
 
-- `PATHING.MD` for request-level transition opt-in
-- `VOLUMETRAVERSAL.MD` for raw-volume traversal rules used by volume anchors
-- `CHARTS.MD` for the solid-side world model
-- `PATHGUIDES.MD` for how transition-aware routes still surface as normal guide types
+- `Pathing.md` for request-level transition opt-in
+- `VOLUMETRAVERSAL.md` for raw-volume traversal rules used by volume anchors
+- `NavigationCharts.md` for the solid-side world model
+- `PathGuides.md` for how transition-aware routes still surface as normal guide types

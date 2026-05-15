@@ -4,10 +4,10 @@ This document is the standalone guide for Trailblazer's `Trailblazer.Pathing` na
 
 It is intended for developers integrating Trailblazer pathfinding without the higher-level `Navigation` stack.
 
-If you only need the broad architecture, start with `OVERVIEW.md`.
-If you need chart lifecycle details, pair this with `CHARTS.MD` and `PATHMANAGER.MD`.
-If you want the dedicated guide and factory reference, read `PATHGUIDES.MD`.
-If you need authored handoffs and volume rules, read `TRANSITIONS.MD` and `VOLUMETRAVERSAL.MD`.
+If you only need the broad architecture, start with `Overview.md`.
+If you need chart lifecycle details, pair this with `NavigationCharts.md` and `PATHMANAGER.md`.
+If you want the dedicated guide and factory reference, read `PathGuides.md`.
+If you need authored handoffs and volume rules, read `TRANSITIONS.md` and `VOLUMETRAVERSAL.md`.
 
 Relevant code:
 
@@ -196,7 +196,7 @@ Important nuance:
 
 Use `VolumePathRequest` when traversal should run through raw voxel volume rather than through chart partitions.
 
-For the dedicated raw-volume rules reference, read [`VOLUMETRAVERSAL.MD`](VOLUMETRAVERSAL.MD).
+For the dedicated raw-volume rules reference, read [`VOLUMETRAVERSAL.md`](VOLUMETRAVERSAL.md).
 
 Key configuration:
 
@@ -299,7 +299,7 @@ The tests in `tests/Trailblazer.Tests/Pathing/Search/VoxelResolution/SolidVoxelF
 
 Chart-backed requests can opt into authored transitions through `AllowTraversalTransitions`.
 
-For the dedicated authored-handoff reference, read [`TRANSITIONS.MD`](TRANSITIONS.MD).
+For the dedicated authored-handoff reference, read [`TRANSITIONS.md`](TRANSITIONS.md).
 
 That opt-in means:
 
@@ -328,7 +328,7 @@ For liquid routes, transition fallback and `VolumePathRequest` depend on a valid
 
 `TrailblazerWorldContext.Guides` is the request-to-guide bridge.
 
-For the dedicated guide-layer contract and lifecycle reference, read [`PATHGUIDES.MD`](PATHGUIDES.MD).
+For the dedicated guide-layer contract and lifecycle reference, read [`PathGuides.md`](PathGuides.md).
 
 Routing by type:
 
@@ -444,8 +444,8 @@ In this mode, transitions are still data owned by `context.Transitions`, not by 
 If you are changing `Trailblazer.Pathing`, read in this order:
 
 1. this file
-2. `CHARTS.MD`
-3. `PATHMANAGER.MD`
+2. `NavigationCharts.md`
+3. `PATHMANAGER.md`
 4. the concrete request type you are touching
 5. `PathGuideFactory`
 6. the matching surveyor
@@ -475,12 +475,12 @@ Good pathing-focused test entry points:
 
 ## 13. Where To Read Next
 
-- `OVERVIEW.md` for the whole library architecture
-- `PATHGUIDES.MD` for `IGuide`, `IWaypointGuide`, and `PathGuideFactory`
-- `TRANSITIONS.MD` for authored chart and volume handoffs
-- `VOLUMETRAVERSAL.MD` for raw-volume traversal rules and modes
-- `CHARTS.MD` for authored surface-space design
-- `PATHMANAGER.MD` for chart lifecycle and utility APIs
+- `Overview.md` for the whole library architecture
+- `PathGuides.md` for `IGuide`, `IWaypointGuide`, and `PathGuideFactory`
+- `TRANSITIONS.md` for authored chart and volume handoffs
+- `VOLUMETRAVERSAL.md` for raw-volume traversal rules and modes
+- `NavigationCharts.md` for authored surface-space design
+- `PATHMANAGER.md` for chart lifecycle and utility APIs
 - `src/Trailblazer/Pathing` for implementation details
 - `src/Trailblazer/Runtime` for `TrailblazerWorldContext`, clock state, and lifecycle hooks
 - `src/Trailblazer/Navigation/Navigator` for `Navigator` and guided request construction

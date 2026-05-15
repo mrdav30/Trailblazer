@@ -69,7 +69,7 @@ phase, add it to the phase. If it does not block the phase, hardening-track it a
 ## Context Ingested
 
 - `README.md` documents explicit `GridWorld` creation and `TrailblazerManager.Initialize(world)`.
-- `docs/wiki/OVERVIEW.md` originally described `PathManager` as a global chart registry and
+- `docs/wiki/Overview.md` originally described `PathManager` as a global chart registry and
   `TrailblazerManager` as the fixed-step owner; Phase 3 updates the pathing wording to the
   context-owned model.
 - `src/Trailblazer/Support/TrailblazerWorldManager.cs` confirms the current bridge owns a single
@@ -534,8 +534,8 @@ Exit criteria:
 - [x] Update benchmark fixtures to use one context per benchmark class or explicit multiple
   contexts where the scenario requires it.
 - [x] Remove static overloads that hide context selection.
-- [x] Update `README.md`, `docs/wiki/OVERVIEW.md`, `PATHING.MD`, `PATHMANAGER.MD`,
-  `PATHGUIDES.MD`, `TRANSITIONS.MD`, `VOLUMETRAVERSAL.MD`, and navigation docs with context-first
+- [x] Update `README.md`, `docs/wiki/Overview.md`, `Pathing.md`, `PathManager.md`,
+  `PathGuides.md`, `Transitions.md`, `VolumeTraversal.md`, and navigation docs with context-first
   examples.
 - [x] Present docs as the current context-only API without migration-note wording.
 - [x] Run `rg -n "TrailblazerWorldManager" src/Trailblazer` and remove every production reference.
@@ -629,7 +629,7 @@ The migration is complete when:
 - Both contexts can register same-named charts and same-named transitions independently.
 - Both contexts can simulate path requests and navigators in the same process without cache, group,
   transition, frame, or reset interference.
-- `README.md` and `docs/wiki/OVERVIEW.md` show context-first examples.
+- `README.md` and `docs/wiki/Overview.md` show context-first examples.
 - Full `Release` tests pass.
 - Short guide-cache and nav-steering benchmark groups still show no obvious allocation regression on
   warm paths.

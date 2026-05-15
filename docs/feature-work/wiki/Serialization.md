@@ -2,19 +2,22 @@
 
 This document is the Trailblazer-specific reference for how the runtime currently uses the Chronicler serialization layer.
 
-If you only need the high-level architecture, read `OVERVIEW.md`.
+If you only need the high-level architecture, read `Overview.md`.
 If you need the reusable Chronicler API details, check out that library's [`README.md`](https://github.com/mrdav30/Chronicler/blob/main/README.md).
 If you need the runtime systems currently covered by this Trailblazer implementation, read:
 
-- `NAVIGATOR.MD`
-- `NAVMOTOR.MD`
+- `Navigator.md`
+- `NavSteering.md`
+- `NavTurning.md`
+- `NavMotor.md`
 
 The code referenced here lives primarily in:
 
-- `src/Trailblazer/Navigation/Navigator/Navigator.cs`
-- `src/Trailblazer/Navigation/Steering/NavSteering.cs`
-- `src/Trailblazer/Navigation/Turning/NavTurning.cs`
-- `src/Trailblazer/Navigation/Motor/NavMotor.cs`
+- `src/Trailblazer/Navigation/Navigator/Navigator.Serialization.cs`
+- `src/Trailblazer/Navigation/Steering/NavSteering.Serialization.cs`
+- `src/Trailblazer/Navigation/Steering/Serialization/*`
+- `src/Trailblazer/Navigation/Turning/NavTurning.Serialization.cs`
+- `src/Trailblazer/Navigation/Motor/NavMotor.Serialization.cs`
 - `src/Trailblazer/Navigation/Motor/Locomotion/*`
 
 ## 1. Trailblazer Coverage

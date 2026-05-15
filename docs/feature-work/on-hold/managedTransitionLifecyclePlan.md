@@ -152,7 +152,7 @@ After any new lifecycle model lands:
 - add tests for grouped unregister and grouped regeneration
 - add tests proving local voxel changes refresh only relevant managed manual groups
 - add tests for precedence interactions between regenerated manual groups and generated transitions
-- document the owner/group lifecycle in `docs/wiki/TRANSITIONS.MD`
+- document the owner/group lifecycle in `docs/wiki/Transitions.md`
 - link this plan from `docs/wiki/feature-work/hardeningPhasePlan.md`
 
 ## Guardrails

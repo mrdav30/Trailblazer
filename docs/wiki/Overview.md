@@ -9,14 +9,14 @@ This document is the high-level architecture guide for the current codebase.
 
 See also:
 
-- [ChartAuthoring.md](ChartAuthoring.md) for tokenized chart plus transition authoring
-- [Pathing.md](Pathing.md) for a standalone guide to the `Trailblazer.Pathing` namespace
-- [PathGuides.md](PathGuides.md) for the runtime guide and guide-factory layer
-- [Transitions.md](Transitions.md) for authored handoffs between charts and raw volume
-- [VolumeTraversal.md](VolumeTraversal.md) for raw-volume traversal media and host rules
-- [HeightMaps.md](HeightMaps.md) for deterministic context-owned ground/contact Y sampling
-- [NavigationCharts.md](NavigationCharts.md) for a deeper explanation of `NavigationChart` and the chart lifecycle
-- [Serialization.md](Serialization.md) for Trailblazer's current serialization coverage and runtime behavior
+- [ChartAuthoring](ChartAuthoring.md) for tokenized chart plus transition authoring
+- [Pathing](Pathing.md) for a standalone guide to the `Trailblazer.Pathing` namespace
+- [PathGuides](PathGuides.md) for the runtime guide and guide-factory layer
+- [Transitions](Transitions.md) for authored handoffs between charts and raw volume
+- [VolumeTraversal](VolumeTraversal.md) for raw-volume traversal media and host rules
+- [HeightMaps](HeightMaps.md) for deterministic context-owned ground/contact Y sampling
+- [NavigationCharts](NavigationCharts.md) for a deeper explanation of `NavigationChart` and the chart lifecycle
+- [Serialization](Serialization.md) for Trailblazer's current serialization coverage and runtime behavior
 
 ## 1. Core Model
 
@@ -71,9 +71,9 @@ Explicit handoff data between chart-backed traversal and raw-volume traversal is
 
 See also:
 
-- [`ChartAuthoring.md`](ChartAuthoring.md)
-- [`NavigationCharts.md`](NavigationCharts.md)
-- [`PathManager.md`](PathManager.md)
+- [`ChartAuthoring`](ChartAuthoring.md)
+- [`NavigationCharts`](NavigationCharts.md)
+- [`PathManager`](PathManager.md)
 
 ### 2.4 Heightmaps
 

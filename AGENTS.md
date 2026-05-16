@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Trailblazer is a framework-agnostic deterministic navigation library for lockstep simulations and games. The library currently targets `netstandard2.1` and `net8.0`, uses fixed-point math via `FixedMathSharp`, and is being prepared for an alpha release.
+Trailblazer is a framework-agnostic deterministic navigation library for lockstep simulations and games. The library currently targets `netstandard2.1` and `net8.0`, uses fixed-point math via `FixedMathSharp`.
 
-Current alpha priorities:
+Current priorities:
 
 1. Preserve deterministic behavior first.
 2. Reduce time complexity and avoid unnecessary allocations in hot paths.
@@ -137,7 +137,7 @@ Observed project conventions:
 - XML doc output is generated for the library, but warning `1591` is suppressed.
 - Namespace-folder matching is not enforced.
 
-Contributor expectations for alpha:
+Contributor expectations for code and docs:
 
 - Add or improve XML `<summary>` tags for public and externally meaningful internal APIs when touching them.
 - Add brief comments only where the logic is hard to infer from the code alone.

@@ -22,10 +22,6 @@ The library combines:
 - steering, turning, and deterministic motor simulation
 - extension points for host-owned traversal, and collision systems
 
-## Status
-
-Trailblazer is being prepared for alpha release. Current work is focused on API clarity, documentation, coverage, and performance hardening in the pathing and navigation hot paths.
-
 ## Features
 
 - Deterministic fixed-point math through `FixedMathSharp`
@@ -92,8 +88,6 @@ For local development today, reference the project directly:
   <ProjectReference Include="path/to/Trailblazer/src/Trailblazer/Trailblazer.csproj" />
 </ItemGroup>
 ```
-
-The package id is `Trailblazer`. Once the alpha package is published, installation can be done with:
 
 ```bash
 dotnet add package Trailblazer

@@ -25,7 +25,7 @@ Trailblazer is built around explicit `TrailblazerWorldContext` instances. A cont
 - Library consumers wiring Trailblazer into a game, simulation, server, or tool
 - Engine integrators building concrete `Navigator` subclasses and host traversal probes
 - Contributors working on pathing, navigation, serialization, or deterministic runtime behavior
-- Maintainers keeping alpha-era API behavior, tests, and docs aligned
+- Maintainers keeping API behavior, tests, and docs aligned
 
 ## Wiki Navigation
 

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This document captures the remaining follow-up work so we can release to alpha.
+This document captures the hardening plans for Trailblazer.
 
-## Remaining Follow-Up
+## On-hold Hardening Plans
 
 These are valid future hardening items, but they should stay demand-driven rather than automatic.
 
@@ -19,7 +19,7 @@ These are valid future hardening items, but they should stay demand-driven rathe
 
 ## Issues to Track
 
-These are the issues we should track and close before we can release to alpha.
+These are the issues we should track and close as they arise.
 
 When implementation work uncovers an issue outside the active plan, record it here instead of
 folding unrelated cleanup into the current patch. Include the observed problem, why it is outside

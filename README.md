@@ -5,83 +5,64 @@
 [![Build](https://github.com/mrdav30/Trailblazer/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/mrdav30/Trailblazer/actions/workflows/build-and-test.yml)
 [![Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fmrdav30.github.io%2FTrailblazer%2FSummary.json&query=%24.summary.linecoverage&suffix=%25&label=coverage&color=brightgreen)](https://mrdav30.github.io/Trailblazer/)
 [![NuGet](https://img.shields.io/nuget/v/Trailblazer.svg)](https://www.nuget.org/packages/Trailblazer)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/Trailblazer.svg)](https://www.nuget.org/packages/Trailblazer)
+[![NuGet Lean](https://img.shields.io/nuget/v/Trailblazer.Lean.svg?label=nuget%20lean)](https://www.nuget.org/packages/Trailblazer.Lean)
 [![License](https://img.shields.io/github/license/mrdav30/Trailblazer.svg)](https://github.com/mrdav30/Trailblazer/blob/main/LICENSE)
 [![Frameworks](https://img.shields.io/badge/frameworks-netstandard2.1%20%7C%20net8.0-512BD4.svg)](https://github.com/mrdav30/Trailblazer)
 
-**A deterministic, framework-agnostic pathfinding and navigation library for lockstep simulations and games.**
+**Deterministic pathfinding and navigation for lockstep simulations and games.**
 
-Trailblazer targets simulation-heavy projects that need predictable movement, fixed-point math, and reusable navigation primitives without depending on a specific engine.
+Trailblazer gives simulation-heavy .NET projects a fixed-point navigation stack without tying them to a renderer, physics engine, ECS, or game framework. Use the pathing layer directly for chart-backed A*, flow fields, volume routes, and reusable guide data. Add the navigation layer when you also want steering, turning, locomotion-aware movement, groups, heightmap grounding, and frame-by-frame controller state.
 
-The library combines:
+The README is the front door. The deeper integration notes live in the [wiki](docs/wiki/Home.md), starting with the [architecture overview](docs/wiki/Overview.md).
 
-- voxel-backed navigation charts
-- A* waypoint pathfinding
-- flow-field generation for shared destination movement
-- cached reusable guide results
-- steering, turning, and deterministic motor simulation
-- extension points for host-owned traversal, and collision systems
+## Why Trailblazer?
 
-## Features
+- Deterministic runtime math through `FixedMathSharp` types such as `Fixed64`, `Vector3d`, and `FixedQuaternion`.
+- Voxel-backed world representation through `GridForge`, with explicit chart registration and context-owned runtime state.
+- Three guide families: waypoint-oriented `AStarGuide`, destination-centric `FlowFieldGuide`, and raw-volume `VolumeGuide`.
+- Authored transitions between chart surfaces and raw gas/liquid/volume traversal.
+- Full navigation stack with `Navigator`, `NavSteering`, `NavTurning`, and `NavMotor`.
+- Locomotion profiles for grounded movement, falls, jumps, slopes, swimming, controlled flight, climbing, slides, and moving platforms.
+- Context-local caches, movement groups, heightmaps, diagnostics, and serialization boundaries.
+- Multi-targeted builds for `netstandard2.1` and `net8.0`.
 
-- Deterministic fixed-point math through `FixedMathSharp`
-- Engine-agnostic architecture with no required renderer or physics engine
-- Dual pathing strategies: waypoint-based A* and destination-centric flow fields
-- Context-owned chart registration and invalidation through `TrailblazerWorldContext.Pathing`
-- Context-owned guide caching through `TrailblazerWorldContext.Guides`
-- Context-owned deterministic heightmap sampling for ground/contact Y lookup
-- Runtime steering, group movement, stuck detection, repathing, and local avoidance hooks
-- Deterministic turning and locomotion-aware movement through `NavTurning` and `NavMotor`
-- Multi-targeted library build for `netstandard2.1` and `net8.0`
+## Install
 
-## What Trailblazer Includes
+```bash
+dotnet add package Trailblazer
+```
 
-### Pathing Layer
+Trailblazer targets `netstandard2.1` and `net8.0`.
 
-- `NavigationChart` and `NavigationChartCell` for defining chart-backed surface space with optional per-cell cost and hint metadata
-- `TraversalAuthoringMap`, `TraversalLegend`, and `TraversalBuildResult` for tokenized `string[,,]` authoring that can build and apply a chart plus generated transitions
-- `TraversalTransition` and `TrailblazerWorldContext.Transitions` for explicit chart-to-chart and chart-to-volume handoff data
-- `TrailblazerWorldContext.Pathing` for chart registration, initialization, unloading, effective-state queries, closest-active-transition queries, and path utilities
-- `AStarPathRequest`, `FlowFieldPathRequest`, and `VolumePathRequest` for request configuration
-- `AStarSurveyor` and `FlowFieldSurveyor` for raw path generation
-- `TrailblazerWorldContext.Guides`, `PathGuideFactory`, and `ReusableSurveyResultCache<T>` for guide reuse
-- `AStarGuide`, `FlowFieldGuide`, and `VolumeGuide` for runtime direction queries
+### Package Variants
 
-### Navigation Layer
+Trailblazer is published in two build variants so you can choose between built-in `MemoryPack` support and a leaner dependency set:
 
-- `Navigator` as the host-facing simulation coordinator
-- `NavSteering` for headings, direct-path checks, guide following, and repathing
-- `NavTurning` for deterministic facing updates
-- `NavMotor` and locomotion handlers for movement state transitions, gravity, jumps, slopes, swimming, sliding, moving platforms, and per-object locomotion profiles
+- `Trailblazer`: Includes `MemoryPack` and depends on the standard `FixedMathSharp`, `SwiftCollections`, `GridForge`, and `Chronicler.Core` packages. This is the best default choice for most .NET applications, especially if you want the MemoryPack-backed Chronicler transport available out of the box.
+- `Trailblazer.Lean`: Excludes the `MemoryPack` package, swaps to `FixedMathSharp.NoMemoryPack`, `SwiftCollections.Lean`, `GridForge.Lean`, and `Chronicler.Lean`, and omits MemoryPack-specific source files. Choose this when you do not need built-in MemoryPack serialization, when you prefer a different serializer, or when you want the leanest dependency surface.
 
-### Host Responsibilities
+Both variants expose the same core pathing and navigation API. The main difference is whether `MemoryPack` and the standard dependency chain are included.
 
-Trailblazer does not own your world simulation. Your game or simulation still supplies:
+Install via NuGet:
 
-- `GridForge` world creation and grid registration through `GridWorld`
-- traversal medium and contact information
-- heightmap baking and registration when using precomputed ground/contact Y sampling
-- collision and environment probing
-- object setup and traversal-state refresh
-- any rendering, animation, or ECS integration
+- Standard package:
 
-## Dependencies
+  ```bash
+  dotnet add package Trailblazer
+  ```
 
-Trailblazer is built around:
+- Lean package:
 
-- `FixedMathSharp`
-- `GridForge`
-- `SwiftCollections`
+  ```bash
+  dotnet add package Trailblazer.Lean
+  ```
 
-These are part of the design, not incidental utilities. If you integrate Trailblazer directly from source, those packages will be restored automatically through the project file.
+If you build from source, the repository provides matching release configurations:
 
-## Installation
+- `Release` builds the standard `Trailblazer` package.
+- `ReleaseLean` builds the `Trailblazer.Lean` package.
 
-The library project lives at:
-
-- [`src/Trailblazer/Trailblazer.csproj`](src/Trailblazer/Trailblazer.csproj)
-
-For local development today, reference the project directly:
+For local development against the repository, reference the project directly:
 
 ```xml
 <ItemGroup>
@@ -89,38 +70,34 @@ For local development today, reference the project directly:
 </ItemGroup>
 ```
 
-```bash
-dotnet add package Trailblazer
-```
+## Mental Model
 
-## Diagnostics
+Trailblazer is easiest to approach as a small pipeline:
 
-Trailblazer routes its runtime diagnostics through `TrailblazerLogger`.
+1. Create or attach a `TrailblazerWorldContext` for a `GridWorld`.
+2. Register `NavigationChart` data whose cell interval matches the context voxel size.
+3. Request an `IGuide` directly, or let a `Navigator` create and manage guide requests.
+4. Advance the context and navigators in your fixed-step simulation.
+5. Feed host-owned collision, traversal, contacts, and platform state back into the navigator.
 
-- `TrailblazerLogger.MinimumLevel` controls whether warning and error diagnostics are emitted.
-- `TrailblazerLogger.Channel` exposes no-unnecessary-work interpolated `Info`, `Warn`, `Error`, and dynamic `Log` helpers.
-- `TrailblazerLogger.EnableDebugLogging` opts in to verbose trace-style messages on `TrailblazerLogger.DebugChannel`, which are off by default.
-- `TrailblazerLogger.LogHandler` and `TrailblazerLogger.CustomFormatter` let hosts redirect or format Trailblazer diagnostics without modifying simulation code.
+Trailblazer owns navigation state. Your host still owns rendering, animation, entity lifetime, collision queries, environment probes, and any engine-specific integration.
 
 ## Quick Start
 
-### 1. Register a Navigation Chart
+This example builds a tiny chart, requests an A* guide, and samples the first movement direction. The [Pathing wiki](docs/wiki/Pathing.md) and [Navigator wiki](docs/wiki/Navigator.md) cover complete integration flows.
 
 ```csharp
 using FixedMathSharp;
 using GridForge.Configuration;
-using GridForge.Grids;
 using Trailblazer;
 using Trailblazer.Pathing;
 
-var world = new GridWorld();
-world.TryAddGrid(
-    new GridConfiguration(new Vector3d(-8, -4, -8), new Vector3d(8, 4, 8)),
+using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+context.World.TryAddGrid(
+    new GridConfiguration(new Vector3d(-4, -1, -4), new Vector3d(8, 2, 8)),
     out _);
 
-TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
-
-bool[,,] chartData = new bool[1, 3, 3]
+bool[,,] cells = new bool[1, 3, 3]
 {
     {
         { true, true, true },
@@ -129,221 +106,70 @@ bool[,,] chartData = new bool[1, 3, 3]
     }
 };
 
-var chart = NavigationChart.From3D(
+NavigationChart chart = NavigationChart.From3D(
     name: "Arena",
-    sourceMap: chartData,
+    sourceMap: cells,
     minBounds: Vector3d.Zero,
     interval: context.VoxelSize);
 
 context.Pathing.Register(chart);
-```
-
-Create or attach a `TrailblazerWorldContext` once during startup for each `GridWorld` Trailblazer should manage. Chart registries, live voxel ownership, partition pools, grid rebuild handling, transition registries, volume-medium rules, reachability snapshots, guide caches, path requests, request-time endpoint resolution, navigator ids, movement groups, and navigator-owned runtime lookups are context-local.
-
-`NavigationChart.Interval` must match the owning context's `VoxelSize` when the chart is registered. Prefer passing `context.VoxelSize` to `NavigationChart.From3D(...)` so authored chart cells map one-to-one onto live `GridForge` voxels.
-
-`context.Pathing.Register(chart)` initializes the chart by default. Pass `initializeChart: false` when you need to defer live partition activation until a later step. Initialization and registration order are live registration state, not authored chart data; use `context.Pathing.IsChartInitialized(...)` or `context.Pathing.TryGetNavigationChartRegistration(...)` when integration code needs to inspect that state.
-
-`NavigationChart.From3D(...)` also accepts `NavigationChartCell[,,]` when you need authored per-cell surface or volume traversal metadata, cost modifiers, mixed media such as `Solid | Liquid` or `Solid | Gas`, or transition hints. The `bool[,,]` overload emits solid cells by default, or a single authored gas/liquid medium when you pass `TraversalMedium.Gas` or `TraversalMedium.Liquid`. Raw 3D travel runs through `VolumePathRequest`, while chart-backed `AStarPathRequest` and `FlowFieldPathRequest` requests can opt into registered transition fallback through `AllowTraversalTransitions`.
-
-When charts overlap on the same voxel, Trailblazer resolves one winning authored cell instead of merging them additively. Higher `NavigationChart.Priority` wins; same-priority ties fall back to later chart registration order. If one voxel should intentionally support both solid and volume traversal, author that explicitly in the cell payload or tokenized authoring input instead of relying on overlap.
-
-Registered charts are mutable after registration through `context.Pathing.TryUpdateChartCell(...)` and `context.Pathing.ApplyChartUpdates(...)`. Initialized charts re-resolve only the touched voxels and keep the rest of the live pathing state intact. Any registered chart whose cells carry generated-transition media participates in the same managed transition lifecycle: local mutations refresh only the affected adjacent pairs, overlap masking suppresses inactive managed transitions without unregistering them, and unloading the chart removes its managed generated transitions entirely. Explicit manual transitions are lifecycle-managed too: Trailblazer keeps them registered, reevaluates them as local chart state changes, and suppresses them automatically when their endpoint media is no longer supported.
-
-If you prefer tokenized setup for tests or lightweight host bootstrapping, `TraversalAuthoringMap` can parse a `string[,,]` using the built-in legend into a `TraversalBuildResult`, and `context.Pathing.Register(buildResult)` will register the chart, initialize any authored solid or volume partitions, and register generated explicit transitions in one step. Generated transitions inherit the owning chart priority, remain registered while inactive, and become active only when their supporting pair is valid in the current effective world state. The built-in legend and current generator rules are documented in `docs/wiki/ChartAuthoring.md`.
-
-### Optional: Register a Heightmap
-
-Heightmaps are context-owned, prebuilt ground/contact Y lookup surfaces. They are separate from
-`NavigationChart` walkability and are useful when a host wants grounded agents to project to known
-environment height without the need for a raycast.
-
-```csharp
-using FixedMathSharp;
-using SwiftCollections.Dimensions;
-using Trailblazer.Heightmaps;
-using Trailblazer.Navigation;
-
-var samples = new SwiftShortArray2D(1, 1);
-samples[0, 0] = 0;
-
-var compression = new HeightmapCompression(
-    referenceHeight: Fixed64.Zero,
-    heightStep: Fixed64.One);
-
-HeightmapSurface ground = HeightmapSurface.FromCompressed(
-    name: "ArenaGround",
-    samples: samples,
-    minBounds: Vector3d.Zero,
-    interval: Fixed64.One,
-    compression: compression);
-
-context.Heightmaps.Register(
-    ground,
-    minSelectionY: (Fixed64)(-1),
-    maxSelectionY: (Fixed64)2);
-
-navigator.ConfigureHeightmapGrounding(
-    mode: HeightmapGroundingMode.SurfaceLevelAndPosition,
-    layerName: "ArenaGround",
-    groundOffset: Fixed64.Zero,
-    snapTolerance: Fixed64.One);
-```
-
-Concrete navigator types still own traversal probing. Call the protected
-`TryApplyHeightmapGrounding(...)` helper from `CheckTrekCondition()` only after host collision or
-environment logic has determined the navigator is grounded on solid terrain.
-
-### 2. Request a Guide Directly
-
-If you already have your own movement controller, you can use just the pathing layer:
-
-```csharp
-using FixedMathSharp;
-using Trailblazer;
-using Trailblazer.Pathing;
 
 Vector3d origin = new(0, 0, 0);
 Vector3d destination = new(2, 0, 2);
-using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+AStarPathRequest? request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
 
-var request = AStarPathRequest.Create(context, origin, destination, Fixed64.One);
-
-if (context.Guides.RequestGuide(request, out AStarGuide guide))
+if (request != null && context.Guides.RequestGuide(request, out AStarGuide? guide))
 {
-    if (guide.TryGetMovementDirection(origin, out Vector3d heading))
+    try
     {
-        // Use the heading in your own movement code.
+        if (guide.TryGetMovementDirection(origin, out Vector3d heading))
+        {
+            // Apply heading in your own movement code, or use Navigator for the full stack.
+        }
     }
-
-    context.Guides.ReturnGuide(guide);
+    finally
+    {
+        context.Guides.ReturnGuide(guide);
+    }
 }
 ```
 
-### 3. Use the Full Navigation Stack
+## Main Systems
 
-If you want steering, turning, and locomotion support, create a concrete `Navigator` implementation and drive it from your fixed simulation loop:
-
-```csharp
-using FixedMathSharp;
-using GridForge.Configuration;
-using GridForge.Grids;
-using Trailblazer;
-using Trailblazer.Navigation;
-using Trailblazer.Navigation.Motor;
-using Trailblazer.Pathing;
-
-// Once during startup.
-var world = new GridWorld();
-world.TryAddGrid(
-    new GridConfiguration(new Vector3d(-32, -8, -32), new Vector3d(32, 24, 32)),
-    out _);
-
-TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
-
-var navigator = new MyNavigator(context);
-navigator.Setup(new Vector3d(0, 0, 0), size: Fixed64.One);
-navigator.Initialize(new TrekCondition
-{
-    Medium = TraversalMedium.Solid,
-    SurfaceLevel = Fixed64.Zero,
-    GroundState = new GroundCondition()
-});
-
-Vector3d target = new(10, 0, 10);
-navigator.ConfigureForGuidedTraversal(
-    pathAlgorithm: SolidPathAlgorithm.FlowField,
-    allowTraversalTransitions: true,
-    maxClimbHeight: Fixed64.One,
-    flowFieldExtraFloodRange: FlowFieldPathRequest.DefaultExtraFloodRange);
-
-navigator.ApplyGuidedTrekRequest(
-    target,
-    rate: TrekRate.Moderate);
-
-context.Simulate();
-navigator.Simulate();
-navigator.CommitFrameMotion();
-context.LateSimulate();
-```
-
-Create or attach a `TrailblazerWorldContext` once during application startup before entering the fixed-step loop. Keep the context handle and pass it to navigators, path requests, and guide services directly.
-
-If several navigators should move as one formation, pass the same optional `groupId` to each `ApplyGuidedTrekRequest(...)` call.
-
-Concrete navigator types should implement `CheckTrekCondition()` to populate ground, water, ceiling, and platform state during `CommitFrameMotion()`.
-
-Call `navigator.ConfigureForGuidedTraversal(allowTraversalTransitions: true)` when built-in chart-guided travel should fall back through registered `TraversalTransition` handoffs instead of failing at chart boundaries. The same opt-in also allows bounded swim-exit style handoffs from liquid volume into a follow-up chart request when the requested target is chart-backed outside the active liquid volume, plus bounded aerial landing handoffs when an authored volume-to-chart landing route is a better fit than staying in gas-volume travel.
-
-If a navigator should use a smaller locomotion set, override `CreateLocomotionProfile()` and return a custom profile such as `LocomotionProfile.CreateCoreOnly()`. Core locomotion always includes move, platform, and fall behavior.
+| Area | What it does | Start here |
+| --- | --- | --- |
+| World context | Owns one `GridWorld`, the deterministic clock, pathing services, guide caches, transitions, heightmaps, movement groups, diagnostics, and lifecycle hooks. | [Overview](docs/wiki/Overview.md) |
+| Chart authoring | Builds surface and volume traversal data from `NavigationChart`, `NavigationChartCell`, or tokenized `TraversalAuthoringMap` input. | [ChartAuthoring](docs/wiki/ChartAuthoring.md), [NavigationCharts](docs/wiki/NavigationCharts.md) |
+| Pathing | Resolves `AStarPathRequest`, `FlowFieldPathRequest`, and `VolumePathRequest` into reusable guides. | [Pathing](docs/wiki/Pathing.md), [PathGuides](docs/wiki/PathGuides.md) |
+| Transitions | Describes explicit handoffs between charts and raw volume traversal, including generated transition data. | [Transitions](docs/wiki/Transitions.md), [VolumeTraversal](docs/wiki/VolumeTraversal.md) |
+| Navigation | Coordinates steering, turning, motor simulation, locomotion, occupancy, and host traversal state. | [Navigator](docs/wiki/Navigator.md), [NavSteering](docs/wiki/NavSteering.md), [NavMotor](docs/wiki/NavMotor.md) |
+| Heightmaps | Provides deterministic ground/contact Y sampling separate from chart walkability. | [HeightMaps](docs/wiki/HeightMaps.md) |
+| Serialization | Uses explicit Chronicler record/populate behavior for supported navigation state. | [Serialization](docs/wiki/Serialization.md) |
 
 ## Choosing A Request Type
 
-When you use `Navigator.ApplyGuidedTrekRequest(...)`, the navigator creates the concrete request internally from the current traversal medium plus the guided traversal defaults configured through `Navigator.ConfigureForGuidedTraversal(...)`.
+Use `AStarPathRequest` when one agent needs a concrete waypoint trail or you want explicit waypoint progression.
 
-Use `AStarPathRequest` when:
+Use `FlowFieldPathRequest` when many agents can share a destination and sample local movement vectors from one cached field.
 
-- a single unit needs a concrete trail of waypoints
-- you want explicit path smoothing or waypoint progression
-- you want per-request heuristic control
-- you want optional transition-aware fallback through `AllowTraversalTransitions`
+Use `VolumePathRequest` when movement should route through raw 3D voxel connectivity for gas, liquid, aerial, or chart-optional travel.
 
-Use `FlowFieldPathRequest` when:
+When using `Navigator.ApplyGuidedTrekRequest(...)`, the navigator chooses the request family from the current traversal medium and the settings configured through `Navigator.ConfigureForGuidedTraversal(...)`.
 
-- many units can share the same destination
-- you want local vector sampling rather than waypoint following
-- you want to restrict per-step climb height while keeping destination-centric reuse
-- you want optional transition-aware fallback while keeping a FlowField request surface
-- you want destination-centric caching and group-friendly movement; paired `groupId` values can preserve relative offsets while the group stays cohesive
-
-Use `VolumePathRequest` when:
-
-- traversal should stay in raw voxel volume instead of chart-backed surface space
-- movement needs gas or liquid routing without authored chart structure
-- gas or liquid navigator guidance should stay volume-first but still be allowed to hand off into chart-backed traversal at authored exits or landing zones when guided traversal transitions are enabled
-
-## Project Layout
+## Repository Map
 
 | Path | Purpose |
 | --- | --- |
 | [`src/Trailblazer`](src/Trailblazer) | Main library source |
-| [`src/Trailblazer/Runtime`](src/Trailblazer/Runtime) | Host-facing context and lifecycle entry points |
-| [`src/Trailblazer/Heightmaps`](src/Trailblazer/Heightmaps) | Deterministic compressed ground/contact Y sampling |
-| [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Charts, requests, search, guides, caching, and transitions |
-| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Navigator, steering, turning, motor, and movement groups flow |
-| [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests) | xUnit test suite |
-| [`docs`](docs) | Architecture and subsystem notes |
+| [`src/Trailblazer/Runtime`](src/Trailblazer/Runtime) | World context, deterministic clock, lifecycle hooks, and reset behavior |
+| [`src/Trailblazer/Pathing`](src/Trailblazer/Pathing) | Charts, requests, transitions, search, guides, caches, and voxel lookup |
+| [`src/Trailblazer/Navigation`](src/Trailblazer/Navigation) | Navigator, steering, turning, motor, locomotion, and movement groups |
+| [`src/Trailblazer/Heightmaps`](src/Trailblazer/Heightmaps) | Compressed deterministic ground/contact Y sampling |
+| [`tests/Trailblazer.Tests`](tests/Trailblazer.Tests) | xUnit v3 test suite |
+| [`tests/Trailblazer.Benchmarks`](tests/Trailblazer.Benchmarks) | BenchmarkDotNet performance suite |
+| [`docs/wiki`](docs/wiki) | Architecture, subsystem, and integration documentation |
 
-## Documentation
-
-Start with:
-
-- [`Overview.md`](docs/wiki/Overview.md)
-- [`Pathing.md`](docs/wiki/Pathing.md)
-- [`PathGuides.md`](docs/wiki/PathGuides.md)
-- [`Transitions.md`](docs/wiki/Transitions.md)
-- [`VolumeTraversal.md`](docs/wiki/VolumeTraversal.md)
-- [`HeightMaps.md`](docs/wiki/HeightMaps.md)
-- [`PathManager.md`](docs/wiki/PathManager.md)
-- [`Navigator.md`](docs/wiki/Navigator.md)
-- [`NavSteering.md`](docs/wiki/NavSteering.md)
-- [`NavTurning.md`](docs/wiki/NavTurning.md)
-- [`NavMotor.md`](docs/wiki/NavMotor.md)
-- [`Gravity.md`](docs/wiki/Gravity.md)
-
-If you are integrating or extending the runtime, the key source entry points are:
-
-- [`src/Trailblazer/Runtime/TrailblazerWorldContext.cs`](src/Trailblazer/Runtime/TrailblazerWorldContext.cs)
-- [`src/Trailblazer/Heightmaps/TrailblazerHeightmapService.cs`](src/Trailblazer/Heightmaps/TrailblazerHeightmapService.cs)
-- [`src/Trailblazer/Pathing/TrailblazerPathingService.cs`](src/Trailblazer/Pathing/TrailblazerPathingService.cs)
-- [`src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs`](src/Trailblazer/Pathing/Search/Guide/TrailblazerGuideService.cs)
-- [`src/Trailblazer/Navigation/Navigator/Navigator.cs`](src/Trailblazer/Navigation/Navigator/Navigator.cs)
-- [`src/Trailblazer/Navigation/Steering/NavSteering.cs`](src/Trailblazer/Navigation/Steering/NavSteering.cs)
-- [`src/Trailblazer/Navigation/Turning/NavTurning.cs`](src/Trailblazer/Navigation/Turning/NavTurning.cs)
-
-## Testing and Validation
-
-To restore, build, and run the full suite:
+## Build And Test
 
 ```bash
 dotnet restore Trailblazer.slnx
@@ -351,52 +177,42 @@ dotnet build Trailblazer.slnx --configuration Release
 dotnet test Trailblazer.slnx --configuration Release
 ```
 
-For focused runs while iterating:
+For focused work, run the matching test area first:
 
 ```bash
 dotnet test tests/Trailblazer.Tests/Trailblazer.Tests.csproj --configuration Release --filter FullyQualifiedName~NavSteering
 ```
 
-Note:
-
-- the library project currently generates NuGet packages on build
-- most tests rely on global static managers, so teardown and fixture discipline matter
+Release builds generate NuGet packages because `GeneratePackageOnBuild` is enabled.
 
 ## Benchmarks
 
-The benchmark suite lives under [`tests/Trailblazer.Benchmarks`](tests/Trailblazer.Benchmarks).
+The benchmark suite measures path-request and navigation hot paths: raw A* and flow-field surveys, cold and warm guide resolution, guide cache lifecycle, steering steady-state costs, transition fallback, and volume routing.
 
-It covers the layered path-request hot paths: raw A* and flow-field surveys, cold and warm guide
-resolution, guide cache lifecycle, NavSteering steady-state and first-frame costs, transition-aware
-routing, and volume-path request resolution.
-
-List all available benchmark selections:
+List available benchmark selections:
 
 ```bash
 dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- list
 ```
 
-Run all benchmarks:
+Run a specific group:
 
 ```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- all
-```
-
-Run a specific group using an alias:
-
-```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- nav-steering
 dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- guide-cache
 ```
 
-Filter to specific benchmark methods within a run:
+See the [benchmark README](tests/Trailblazer.Benchmarks/README.md) for the full command reference and suite design notes.
 
-```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request --filter '*Corridor*'
-```
+## Documentation
 
-See [`tests/Trailblazer.Benchmarks/README.md`](tests/Trailblazer.Benchmarks/README.md) for the full command reference and benchmark design notes.
+Start with the [wiki home](docs/wiki/Home.md) if you are evaluating the project, or jump straight into:
+
+- [Overview](docs/wiki/Overview.md) for the runtime model
+- [Pathing](docs/wiki/Pathing.md) for guide requests and direct pathing usage
+- [Navigator](docs/wiki/Navigator.md) for full-stack movement integration
+- [Serialization](docs/wiki/Serialization.md) for Chronicler behavior and load boundaries
+
+The wiki is intentionally more detailed than this README. If behavior changes, keep code, tests, README, and the relevant wiki page aligned.
 
 ## Compatibility
 
@@ -404,37 +220,12 @@ See [`tests/Trailblazer.Benchmarks/README.md`](tests/Trailblazer.Benchmarks/READ
 - `net8.0`
 - Windows, Linux, and macOS host environments supported by .NET
 
----
+## Contributing
 
-## 🤝 Contributing
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and prefer focused changes with release-mode validation.
 
-We welcome contributions! Please see our [CONTRIBUTING](https://github.com/mrdav30/Trailblazer/blob/main/CONTRIBUTING.md) guide for details on how to propose changes, report issues, and interact with the community.
-
----
-
-## 👥 Contributors
-
-- **mrdav30** - Lead Developer
-- Contributions are welcome! Feel free to submit pull requests or report issues.
-
----
-
-## 💬 Community & Support
-
-For questions, discussions, or general support, join the official Discord community:
-
-👉 **[Join the Discord Server](https://discord.gg/mhwK2QFNBA)**
-
-For bug reports or feature requests, please open an issue in this repository.
-
-We welcome feedback, contributors, and community discussion across all projects.
+For issues, feature requests, or questions, use the repository issue tracker. Community discussion is also available on the official [Discord server](https://discord.gg/mhwK2QFNBA).
 
 ## License
 
-This project is licensed under the MIT License.
-
-See the following files for details:
-
-- LICENSE – standard MIT license
-- NOTICE – additional terms regarding project branding and redistribution
-- COPYRIGHT – authorship information
+Trailblazer is licensed under the MIT License. See [LICENSE](LICENSE), [NOTICE](NOTICE), and [COPYRIGHT](COPYRIGHT) for the project terms and attribution details.

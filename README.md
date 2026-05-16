@@ -39,7 +39,7 @@ Trailblazer targets `netstandard2.1` and `net8.0`.
 Trailblazer is published in two build variants so you can choose between built-in `MemoryPack` support and a leaner dependency set:
 
 - `Trailblazer`: Includes `MemoryPack` and depends on the standard `FixedMathSharp`, `SwiftCollections`, `GridForge`, and `Chronicler.Core` packages. This is the best default choice for most .NET applications, especially if you want the MemoryPack-backed Chronicler transport available out of the box.
-- `Trailblazer.Lean`: Excludes the `MemoryPack` package, swaps to `FixedMathSharp.NoMemoryPack`, `SwiftCollections.Lean`, `GridForge.Lean`, and `Chronicler.Lean`, and omits MemoryPack-specific source files. Choose this when you do not need built-in MemoryPack serialization, when you prefer a different serializer, or when you want the leanest dependency surface.
+- `Trailblazer.Lean`: Excludes the `MemoryPack` package, swaps to `FixedMathSharp.NoMemoryPack`, `SwiftCollections.Lean`, `GridForge.Lean`, and `Chronicler.Core.Lean`, and omits MemoryPack-specific source files. Choose this when you do not need built-in MemoryPack serialization, when you prefer a different serializer, or when you want the leanest dependency surface.
 
 Both variants expose the same core pathing and navigation API. The main difference is whether `MemoryPack` and the standard dependency chain are included.
 

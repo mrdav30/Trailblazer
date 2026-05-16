@@ -122,7 +122,9 @@ public class FlyLocomotionTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_FlyLocomotion_WhenDisabledOnLoad_ShouldClearIsFlying(bool useMemoryPack)
     {
         var source = MockMotorAgentTestFactory.CreateMockAgent(
@@ -166,7 +168,9 @@ public class FlyLocomotionTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_FlyLocomotion_ShouldPreserveConfigurationAndRuntimeState(bool useMemoryPack)
     {
         var source = MockMotorAgentTestFactory.CreateMockAgent(

@@ -127,7 +127,9 @@ public class LocomotionCompositionTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_MinimalProfile_ShouldPreserveInstalledKinds(bool useMemoryPack)
     {
         var source = MockMotorAgentTestFactory.CreateMockAgent(
@@ -153,7 +155,9 @@ public class LocomotionCompositionTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_DefaultProfile_ShouldLoadAllModules_WhenInstalledKindsUsesDeclaredDefault(bool useMemoryPack)
     {
         var source = MockMotorAgentTestFactory.CreateJumpReadyAgent();

@@ -1248,7 +1248,9 @@ public class NavSteeringTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldResetToIdleState_WhenRequestCannotBeRebuilt(bool useMemoryPack)
     {
         // Arrange: register a chart and give the NavSteering an active request
@@ -1295,7 +1297,9 @@ public class NavSteeringTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldScheduleRepath_WhenRequestLoadedWithoutGuide(bool useMemoryPack)
     {
         // Arrange: register a chart and give the NavSteering an active request WITHOUT simulating

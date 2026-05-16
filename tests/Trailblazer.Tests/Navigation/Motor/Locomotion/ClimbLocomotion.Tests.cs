@@ -44,7 +44,9 @@ public sealed class ClimbLocomotionTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void ClimbLocomotion_Serialization_ShouldRoundTripRuntimeState(bool useMemoryPack)
     {
         var source = new ClimbLocomotion

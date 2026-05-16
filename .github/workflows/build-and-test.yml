@@ -17,8 +17,10 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        configuration: [Release, ReleaseLean]
 
     steps:
     - name: Checkout repository
@@ -45,21 +47,22 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
+        key: ${{ runner.os }}-${{ matrix.configuration }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
         restore-keys: |
+          ${{ runner.os }}-${{ matrix.configuration }}-nuget-
           ${{ runner.os }}-nuget-
 
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore Trailblazer.slnx --property:Configuration=${{ matrix.configuration }}
 
     - name: Build Solution
       run: |
         echo "Version: ${{ steps.gitversion.outputs.fullSemVer }}"
         echo "Assembly Version: ${{ steps.gitversion.outputs.assemblySemFileVer }}"
-        dotnet build --configuration Release --no-restore
+        dotnet build Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-restore
 
     - name: Run Tests
-      run: dotnet test --configuration Release --no-build --verbosity normal
+      run: dotnet test Trailblazer.slnx --configuration ${{ matrix.configuration }} --no-build --verbosity normal
   validate-wiki-sync:
     runs-on: ubuntu-latest
 

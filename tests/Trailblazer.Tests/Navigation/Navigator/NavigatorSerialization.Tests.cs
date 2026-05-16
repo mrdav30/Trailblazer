@@ -95,6 +95,7 @@ public class NavigatorSerializationTests : IDisposable
         targetMotor.IsInitialized.Should().BeTrue();
     }
 
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [Fact]
     public void MemoryPackRoundTrip_ShouldRestoreMotorStateIntoExistingMotor()
     {
@@ -156,6 +157,7 @@ public class NavigatorSerializationTests : IDisposable
 
         targetMotor.IsInitialized.Should().BeTrue();
     }
+#endif
 
     [Fact]
     public void JsonRoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedAStarTraversal()
@@ -192,7 +194,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreExplicitGuidedClimbIntent(bool useMemoryPack)
     {
         RegisterGuidedPathChart("NavigatorSerializationGuidedClimb");
@@ -222,7 +226,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreAutoGuidedClimbIntentTracking(bool useMemoryPack)
     {
         GuidedPathTestScene.RegisterTransitionFallbackClimbScene(TestWorld.Context);
@@ -252,7 +258,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRebuildTurningRuntimeState_OnLoad(bool useMemoryPack)
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
@@ -281,7 +289,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreNavigatorHeightmapGroundingSettings(bool useMemoryPack)
     {
         var source = CreateNavigator(new Vector3d(2, 0, 2));
@@ -305,7 +315,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreHeightmapGroundingSettingsWithoutCreatingHeightmapData(bool useMemoryPack)
     {
         RegisterHeightmapSurface("MissingAfterLoad", height: 4, minSelectionY: Fixed64.Zero, maxSelectionY: (Fixed64)8);
@@ -326,6 +338,7 @@ public class NavigatorSerializationTests : IDisposable
         TestWorld.Context.Heightmaps.IsRegistered("MissingAfterLoad").Should().BeFalse();
     }
 
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [Fact]
     public void MemoryPackRoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedFlowFieldTraversal()
     {
@@ -358,10 +371,13 @@ public class NavigatorSerializationTests : IDisposable
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
         targetSteering.ShouldMove.Should().BeTrue();
     }
+#endif
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedAerialTraversal(bool useMemoryPack)
     {
         var source = CreateConfiguredGuidedNavigator(medium: TraversalMedium.Gas, isFlying: true);
@@ -394,7 +410,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForAStarTransitionFallback(bool useMemoryPack)
     {
         RegisterTransitionFallbackAStarScene();
@@ -415,7 +433,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreBlockedAerialGuideProgress(bool useMemoryPack)
     {
         GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
@@ -461,7 +481,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedSwimTraversal(bool useMemoryPack)
     {
         GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
@@ -499,7 +521,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestorePendingSwimExitHandoff_AndActivateChartFollowup(bool useMemoryPack)
     {
         RegisterVolumeExitHandoffScene("NavigatorSerializationSwimExitHandoff");
@@ -550,7 +574,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestorePendingAerialLandingHandoff_AndActivateChartFollowup(bool useMemoryPack)
     {
         const string sceneKey = "NavigatorSerializationAerialLandingHandoff";
@@ -603,7 +629,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldRestorePendingAerialClimbHandoff_AndPreserveClimbOnFollowup(bool useMemoryPack)
     {
         const string sceneKey = "NavigatorSerializationAerialClimbHandoff";
@@ -649,7 +677,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldSupportPartialNavigatorPayloads_AndPreserveOmittedBranches(bool useMemoryPack)
     {
         var source = CreateConfiguredNavigator();
@@ -683,7 +713,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldLoadSetupOnlyNavigatorWithoutControllers(bool useMemoryPack)
     {
         var source = new TestNavigator(TestWorld.Context);
@@ -704,7 +736,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldUseBackwardCompatibleDefaults_WhenPayloadOmitsNewerFields(bool useMemoryPack)
     {
         RegisterGuidedPathChart("NavigatorSerializationLegacyDefaults");
@@ -754,7 +788,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldUseBackwardCompatibleDefaults_WhenPayloadOmitsFacingDirection(bool useMemoryPack)
     {
         var source = CreateConfiguredNavigator();
@@ -770,7 +806,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldUseBackwardCompatibleDefaults_WhenPayloadOmitsJumpAffordability(bool useMemoryPack)
     {
         var source = CreateConfiguredNavigator();
@@ -786,7 +824,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldClearSteeringSession_WhenRequestRehydrationFails(bool useMemoryPack)
     {
         RegisterGuidedPathChart("NavigatorSerializationInvalidRequest");
@@ -826,7 +866,9 @@ public class NavigatorSerializationTests : IDisposable
 
     [Theory]
     [InlineData(false)]
+#if !TRAILBLAZER_DISABLE_MEMORYPACK
     [InlineData(true)]
+#endif
     public void RoundTrip_ShouldClearTransientState_WhenLocomotionsLoadDisabled(bool useMemoryPack)
     {
         var source = CreateConfiguredMotorAgent();

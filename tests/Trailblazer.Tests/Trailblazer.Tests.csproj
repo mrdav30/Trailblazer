@@ -10,6 +10,9 @@
 		<OutputType>Exe</OutputType>
 		<RunSettingsFilePath>$(MSBuildThisFileDirectory)coverlet.runsettings</RunSettingsFilePath>
 	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)' == 'ReleaseLean'">
+		<DefineConstants>$(DefineConstants);TRAILBLAZER_DISABLE_MEMORYPACK</DefineConstants>
+	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj" />
 		<ProjectReference Include="..\Trailblazer.Benchmarks\Trailblazer.Benchmarks.csproj" />

@@ -31,22 +31,21 @@ Trailblazer is built around explicit `TrailblazerWorldContext` instances. A cont
 
 | Page | Focus |
 | --- | --- |
-| [Home](Home) | Shared project context, architecture snapshot, invariants, and wiki roadmap |
-| [Overview](Overview) | High-level architecture, runtime flow, and where the major systems fit |
-| [Authoring](ChartAuthoring) | Tokenized chart and generated-transition authoring |
-| [Navigation Charts](NavigationCharts) | `NavigationChart`, chart cells, registration, initialization, updates, and unload behavior |
-| [PathManager](PathManager) | Context-local chart registry, partition ownership, effective-cell queries, and transition lookup |
-| [Pathing](Pathing) | Path requests, surveyors, guide resolution, staged fallback, and direct pathing usage |
-| [Path Guides](PathGuides) | `IGuide`, `IWaypointGuide`, guide factories, guide caches, and reusable survey results |
-| [Transitions](Transitions) | Authored handoffs between chart-backed traversal and raw-volume traversal |
-| [Volume Traversal](VolumeTraversal) | Gas/liquid/raw-volume routing, medium rules, and volume request behavior |
-| [Heightmaps](HeightMaps) | Context-owned deterministic ground/contact Y sampling and navigator grounding helpers |
-| [Navigator](Navigator) | Host-facing orchestration, frame flow, guided requests, occupancy, and traversal state |
-| [NavSteering](NavSteering) | Heading generation, request lifecycle, line-of-sight checks, groups, repathing, and arrival |
-| [NavTurning](NavTurning) | Deterministic facing, buffered turn requests, interpolation, and collision auto-turns |
-| [NavMotor](NavMotor) | Movement execution, traversal finalization, locomotion profiles, and host state refresh |
-| [Gravity](Gravity) | Vertical-force model, jump/fall/water/flight interactions, and motor expectations |
-| [Serialization](Serialization) | Chronicler coverage, load-into-existing-instance behavior, and round-trip boundaries |
+| [Overview](./Overview) | High-level architecture, runtime flow, and where the major systems fit |
+| [Authoring](./ChartAuthoring) | Tokenized chart and generated-transition authoring |
+| [Navigation Charts](./NavigationCharts) | `NavigationChart`, chart cells, registration, initialization, updates, and unload behavior |
+| [PathManager](./PathManager) | Context-local chart registry, partition ownership, effective-cell queries, and transition lookup |
+| [Pathing](./Pathing) | Path requests, surveyors, guide resolution, staged fallback, and direct pathing usage |
+| [Path Guides](./PathGuides) | `IGuide`, `IWaypointGuide`, guide factories, guide caches, and reusable survey results |
+| [Transitions](./Transitions) | Authored handoffs between chart-backed traversal and raw-volume traversal |
+| [Volume Traversal](./VolumeTraversal) | Gas/liquid/raw-volume routing, medium rules, and volume request behavior |
+| [Heightmaps](./HeightMaps) | Context-owned deterministic ground/contact Y sampling and navigator grounding helpers |
+| [Navigator](./Navigator) | Host-facing orchestration, frame flow, guided requests, occupancy, and traversal state |
+| [NavSteering](./NavSteering) | Heading generation, request lifecycle, line-of-sight checks, groups, repathing, and arrival |
+| [NavTurning](./NavTurning) | Deterministic facing, buffered turn requests, interpolation, and collision auto-turns |
+| [NavMotor](./NavMotor) | Movement execution, traversal finalization, locomotion profiles, and host state refresh |
+| [Gravity](./Gravity) | Vertical-force model, jump/fall/water/flight interactions, and motor expectations |
+| [Serialization](./Serialization) | Chronicler coverage, load-into-existing-instance behavior, and round-trip boundaries |
 
 ## Quick Technical Snapshot
 

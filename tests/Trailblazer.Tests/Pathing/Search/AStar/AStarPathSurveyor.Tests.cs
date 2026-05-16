@@ -196,7 +196,7 @@ public class AStarSurveyorTests : IDisposable
     [Fact]
     public void AStar_ShouldFastFailRepeatedClearanceDisconnectedRequest()
     {
-        bool[,,] data = BuildSingleVoxelChoke();
+        bool[,,] data = PathTestFactory.BuildSingleVoxelChoke();
         PathTestFactory.RegisterFromData(TestWorld.Context, "ChokeFastFail", data, Vector3d.Zero);
 
         AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
@@ -226,7 +226,7 @@ public class AStarSurveyorTests : IDisposable
     [Fact]
     public void AStar_ShouldRebuildReachabilitySnapshot_WhenClearanceKeyChanges()
     {
-        bool[,,] data = BuildSingleVoxelChoke();
+        bool[,,] data = PathTestFactory.BuildSingleVoxelChoke();
         PathTestFactory.RegisterFromData(TestWorld.Context, "ChokeKeySwitch", data, Vector3d.Zero);
 
         AStarPathRequest lowClimbRequest = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
@@ -284,7 +284,7 @@ public class AStarSurveyorTests : IDisposable
     [Fact]
     public void AStar_ShouldReevaluateFastFail_WhenChartChangesMakeRouteReachable()
     {
-        bool[,,] blocked = BuildSingleVoxelChoke();
+        bool[,,] blocked = PathTestFactory.BuildSingleVoxelChoke();
         PathTestFactory.RegisterFromData(TestWorld.Context, "ChokeReevalBlocked", blocked, Vector3d.Zero);
 
         AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
@@ -1028,19 +1028,4 @@ public class AStarSurveyorTests : IDisposable
         PathManager.UnloadChart("GuideSpline");
     }
 
-    private static bool[,,] BuildSingleVoxelChoke()
-    {
-        bool[,,] data = new bool[1, 7, 5];
-        for (int x = 0; x < 7; x++)
-        {
-            for (int z = 0; z < 5; z++)
-            {
-                bool isChokeColumn = x == 3;
-                bool isCenterRow = z == 2;
-                data[0, x, z] = !isChokeColumn || isCenterRow;
-            }
-        }
-
-        return data;
-    }
 }

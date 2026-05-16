@@ -52,8 +52,145 @@ public sealed class PathManagerCoverageTailTests : IDisposable
     }
 
     [Fact]
+    public void SnapshotHelpers_ShouldFilterInitializedChartsByBoundsAndGridTouches()
+    {
+        ReflectionUtility.InvokePrivateStatic<NavigationChart[]>(
+            typeof(PathManager),
+            "GetInitializedChartsIntersectingBoundsSnapshot",
+            Vector3d.Zero,
+            Vector3d.One).Should().BeEmpty();
+        ReflectionUtility.InvokePrivateStatic<NavigationChart[]>(
+            typeof(PathManager),
+            "GetInitializedChartsTouchingGridSnapshot",
+            (ushort)42).Should().BeEmpty();
+        ReflectionUtility.InvokePrivateStatic<NavigationChart[]>(
+            typeof(PathManager),
+            "GetInitializedChartsWithAuthoredCellsIntersectingBoundsSnapshot",
+            Vector3d.Zero,
+            Vector3d.One).Should().BeEmpty();
+
+        TestWorld.World.TryAddGrid(
+            new GridConfiguration(new Vector3d(-8, -4, -4), new Vector3d(24, 8, 8)),
+            out ushort gridIndex);
+
+        NavigationChart initializedA = PathTestFactory.BuildSinglePointMap("SnapshotBoundsA", Vector3d.Zero);
+        NavigationChart initializedB = PathTestFactory.BuildSinglePointMap("SnapshotBoundsB", new Vector3d(8, 0, 0));
+        NavigationChart deferred = PathTestFactory.BuildSinglePointMap("SnapshotBoundsDeferred", new Vector3d(2, 0, 0));
+
+        PathManager.Register(initializedA).Should().BeTrue();
+        PathManager.Register(initializedB).Should().BeTrue();
+        PathManager.Register(deferred, initializeChart: false).Should().BeTrue();
+
+        NavigationChart[] boundsMatches = ReflectionUtility.InvokePrivateStatic<NavigationChart[]>(
+            typeof(PathManager),
+            "GetInitializedChartsIntersectingBoundsSnapshot",
+            new Vector3d(-1, -1, -1),
+            new Vector3d(1, 1, 1));
+        boundsMatches.Should().ContainSingle(chart => chart.Name == initializedA.Name);
+
+        NavigationChart[] authoredMatches = ReflectionUtility.InvokePrivateStatic<NavigationChart[]>(
+            typeof(PathManager),
+            "GetInitializedChartsWithAuthoredCellsIntersectingBoundsSnapshot",
+            new Vector3d(-1, -1, -1),
+            new Vector3d(1, 1, 1));
+        authoredMatches.Should().ContainSingle(chart => chart.Name == initializedA.Name);
+
+        NavigationChart[] gridMatches = ReflectionUtility.InvokePrivateStatic<NavigationChart[]>(
+            typeof(PathManager),
+            "GetInitializedChartsTouchingGridSnapshot",
+            gridIndex);
+        gridMatches.Should().ContainInOrder(initializedA, initializedB);
+        gridMatches.Should().NotContain(chart => chart.Name == deferred.Name);
+
+        ReflectionUtility.InvokePrivateStatic<int>(
+                typeof(PathManager),
+                "RebuildInitializedChartsAgainstExternalGridBounds",
+                new[] { typeof(GridWorld), typeof(ushort), typeof(Vector3d), typeof(Vector3d), typeof(bool) },
+                TestWorld.World,
+                gridIndex,
+                new Vector3d(-1, -1, -1),
+                new Vector3d(1, 1, 1),
+                false)
+            .Should()
+            .Be(1);
+        ReflectionUtility.InvokePrivateStatic<int>(
+                typeof(PathManager),
+                "RebuildInitializedChartsAgainstExternalGridBounds",
+                new[] { typeof(GridWorld), typeof(ushort), typeof(Vector3d), typeof(Vector3d), typeof(bool) },
+                TestWorld.World,
+                gridIndex,
+                new Vector3d(-1, -1, -1),
+                new Vector3d(1, 1, 1),
+                true)
+            .Should()
+            .Be(2);
+    }
+
+    [Fact]
+    public void ContextSelectionGuards_ShouldRejectMissingOrMismatchedWorlds()
+    {
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)), out _);
+        PathManager.ConfiguredWorld.Should().BeSameAs(TestWorld.World);
+
+        PathManager.Tick();
+        PathManager.Reset(TestWorld.World);
+
+        using TrailblazerWorldContext otherContext = PathTestFactory.CreateContextWithGrid();
+        NavigationChart mismatchedChart = PathTestFactory.BuildSinglePointMap("MismatchedWorldChart", Vector3d.Zero);
+
+        Action mismatchedWorld = () => PathManager.Register(otherContext.World, mismatchedChart);
+        mismatchedWorld.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*active Trailblazer pathing context*");
+
+        TestWorld.Reset();
+        using var detachedWorld = new GridWorld();
+        NavigationChart detachedChart = PathTestFactory.BuildSinglePointMap("DetachedWorldChart", Vector3d.Zero);
+
+        Action directWorldCall = () => PathManager.Register(detachedWorld, detachedChart);
+        directWorldCall.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*TrailblazerWorldContext*");
+    }
+
+    [Fact]
     public void ManagedTransitionHelpers_ShouldHandleMissingChartsAndIgnoredRefreshRequests()
     {
+        ReflectionUtility.InvokePrivateStatic<int>(
+            typeof(PathManager),
+            "RebuildInitializedChartsAgainstExternalGridRequests",
+            new[] { typeof(GridWorld), typeof(ExternalGridChartRebuildRequest[]) },
+            TestWorld.World,
+            Array.Empty<ExternalGridChartRebuildRequest>()).Should().Be(0);
+        ReflectionUtility.InvokePrivateStatic<NavigationChart[]>(
+            typeof(PathManager),
+            "BuildInitializedChartSelectionSnapshot",
+            new SwiftList<NavigationChartRegistration>()).Should().BeEmpty();
+        ReflectionUtility.InvokePrivateStatic<object>(
+            typeof(PathManager),
+            "UntrackInitializedChartGridTouch",
+            (ushort)77,
+            "MissingChart");
+        ReflectionUtility.InvokePrivateStatic<bool>(
+            typeof(PathManager),
+            "TryRegisterManagedGeneratedTransitions",
+            new[] { typeof(string), typeof(TraversalTransition[]) },
+            "MissingChart",
+            null!).Should().BeFalse();
+        ReflectionUtility.InvokePrivateStatic<object>(
+            typeof(PathManager),
+            "RememberManagedGeneratedTransitions",
+            "MissingChart",
+            Array.Empty<string>(),
+            0);
+        ReflectionUtility.InvokePrivateStatic<string[]>(
+            typeof(PathManager),
+            "GetObsoleteManagedGeneratedTransitionIds",
+            new[] { typeof(NavigationChartRegistration), typeof(string[]), typeof(TraversalTransition[]) },
+            CreateRegistration("MissingObsoleteChart", "missing-obsolete", priority: 1),
+            Array.Empty<string>(),
+            Array.Empty<TraversalTransition>()).Should().BeEmpty();
+
         Action refreshMissingChart = () => ReflectionUtility.InvokePrivateStatic<object>(
             typeof(PathManager),
             "RefreshManagedGeneratedTransitionsForChart",
@@ -74,10 +211,65 @@ public sealed class PathManagerCoverageTailTests : IDisposable
             TestWorld.World,
             new Vector3d(99, 99, 99),
             new SwiftHashSet<string> { "MissingChart", string.Empty });
+        Action refreshNullVoxelCharts = () => ReflectionUtility.InvokePrivateStatic<object>(
+            typeof(PathManager),
+            "RefreshManagedGeneratedTransitionsForVoxel",
+            new[] { typeof(GridWorld), typeof(Vector3d), typeof(SwiftHashSet<string>) },
+            TestWorld.World,
+            Vector3d.Zero,
+            null!);
 
         refreshMissingChart.Should().NotThrow();
         refreshEmptySet.Should().NotThrow();
         refreshUnknownVoxelChart.Should().NotThrow();
+        refreshNullVoxelCharts.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ExternalGridBridgeTailHelpers_ShouldHandleNoSelectionResetAndDuplicateRemovedEvents()
+    {
+        TestWorld.World.TryAddGrid(new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)), out ushort gridIndex);
+        GridEventInfo eventInfo = CreateGridEventInfo(
+            gridIndex,
+            12,
+            new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4)),
+            1);
+
+        PendingExternalGridChange addedMerge = ReflectionUtility.InvokePrivateStatic<PendingExternalGridChange>(
+            typeof(PathManagerExternalGridBridge),
+            "MergePendingGridChangeForSameSpawnToken",
+            new PendingExternalGridChange(12, 1, Vector3d.Zero, Vector3d.One, false, false),
+            eventInfo,
+            ExternalGridEventKind.Added);
+        addedMerge.RequiresAuthoredCellBoundsSelection.Should().BeTrue();
+
+        PendingExternalGridChange removedMerge = ReflectionUtility.InvokePrivateStatic<PendingExternalGridChange>(
+            typeof(PathManagerExternalGridBridge),
+            "MergePendingGridChangeForSameSpawnToken",
+            new PendingExternalGridChange(12, 1, Vector3d.Zero, Vector3d.One, true, false),
+            eventInfo,
+            ExternalGridEventKind.Removed);
+        removedMerge.RequiresLiveGridTouchSelection.Should().BeTrue();
+        removedMerge.RequiresAuthoredCellBoundsSelection.Should().BeFalse();
+
+        PathManager.ActiveState.PendingGridChangesByGridIndex[gridIndex] = new PendingExternalGridChange(
+            12,
+            1,
+            Vector3d.Zero,
+            Vector3d.One,
+            requiresLiveGridTouchSelection: false,
+            requiresAuthoredCellBoundsSelection: false);
+        PathManager.ActiveState.PendingGridChangeOrder.Add(gridIndex);
+        PathManagerExternalGridBridge.FlushPendingGridChanges();
+        PathManager.ActiveState.PendingGridChangeOrder.Should().BeEmpty();
+
+        PathManagerExternalGridBridge.HandleGridRemoved(eventInfo);
+        PathManagerExternalGridBridge.HandleGridRemoved(eventInfo);
+        PathManagerExternalGridBridge.GetDiagnosticsSnapshot().DuplicateRemoveEventSignaturesObserved.Should().Be(1);
+
+        ReflectionUtility.InvokePrivateStatic<object>(
+            typeof(PathManagerExternalGridBridge),
+            "HandleGridReset");
     }
 
     [Fact]

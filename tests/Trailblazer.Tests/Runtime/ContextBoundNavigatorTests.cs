@@ -46,6 +46,23 @@ public sealed class ContextBoundNavigatorTests : IDisposable
     }
 
     [Fact]
+    public void SetupAndActivate_ContextOverloads_ShouldBindBeforeInitializing()
+    {
+        using TrailblazerWorldContext context = CreateContextWithGrid();
+        var setupNavigator = new TestNavigator();
+        var activeNavigator = new TestNavigator();
+
+        setupNavigator.Setup(context, Vector3d.Zero);
+        activeNavigator.Activate(context, new TrekCondition(), new Vector3d(1, 0, 0));
+
+        setupNavigator.Context.Should().BeSameAs(context);
+        setupNavigator.IsActive.Should().BeFalse();
+        setupNavigator.Position.Should().Be(Vector3d.Zero);
+        activeNavigator.Context.Should().BeSameAs(context);
+        activeNavigator.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
     public void ContextReset_ShouldResetOnlyThatContextsNavigatorIdAllocator()
     {
         using TrailblazerWorldContext contextA = CreateContextWithGrid();

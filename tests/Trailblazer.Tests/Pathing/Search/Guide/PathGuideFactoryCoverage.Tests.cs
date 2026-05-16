@@ -2,6 +2,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
+using SwiftCollections;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -31,27 +32,48 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         PathGuideFactory.RequestGuide(null!, out IGuide? nullGuide).Should().BeFalse();
         nullGuide.Should().BeNull();
 
-        var invalidRequest = new UnknownRequest { IsValidValue = false };
+        var invalidRequest = new TestPathRequest { IsValid = false };
         PathGuideFactory.RequestGuide(invalidRequest, out IGuide? invalidGuide).Should().BeFalse();
         invalidGuide.Should().BeNull();
+
+        using TrailblazerWorldContext otherContext = PathTestFactory.CreateContextWithGrid();
+        var foreignContextRequest = new TestPathRequest(otherContext) { IsValid = true };
+        PathGuideFactory.RequestGuide(foreignContextRequest, out IGuide? foreignGuide).Should().BeFalse();
+        foreignGuide.Should().BeNull();
 
         PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryUnknown", Vector3d.Zero, 2);
         Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
-        var unknownRequest = new UnknownRequest
+        var unknownRequest = new TestPathRequest
         {
-            OriginValue = Vector3d.Zero,
-            StartNodeValue = start,
-            TargetValue = new Vector3d(1, 0, 0),
-            EndNodeValue = end,
-            UnitSizeValue = Fixed64.One,
-            MaxPathSearchRangeValue = 1,
-            IsValidValue = true
+            Origin = Vector3d.Zero,
+            StartNode = start,
+            TargetPosition = new Vector3d(1, 0, 0),
+            EndNode = end,
+            UnitSize = Fixed64.One,
+            MaxPathSearchRange = 1,
+            IsValid = true
         };
 
         PathGuideFactory.RequestGuide(unknownRequest, out IGuide? unknownGuide).Should().BeFalse();
         unknownGuide.Should().BeNull();
+    }
+
+    [Fact]
+    public void RequestAStar_ShouldFastFailReachabilityBlockedRequests()
+    {
+        bool[,,] data = PathTestFactory.BuildSingleVoxelChoke();
+        PathTestFactory.RegisterFromData(TestWorld.Context, "GuideFactoryChokeFastFail", data, Vector3d.Zero);
+
+        AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 2),
+            new Vector3d(6, 0, 2),
+            Fixed64.Two));
+
+        SolidPartitionReachability.IsProvablyUnreachable(request).Should().BeTrue();
+
+        PathGuideFactory.RequestAStar(request).Should().BeNull();
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(0);
     }
 
     [Fact]
@@ -71,6 +93,20 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
             createdGuide);
         guide.ActiveWaypoints.Should().NotBeEmpty();
         guide.ActiveWaypoints[^1].IsGoal.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RequestGuideTyped_ShouldReturnFalseAndReleaseGuide_WhenGuideTypeDoesNotMatch()
+    {
+        PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryTypedMismatch", Vector3d.Zero, 3);
+        AStarPathRequest request = TestRequire.NotNull(
+            AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
+
+        PathGuideFactory.RequestGuide<FlowFieldGuide>(request, out FlowFieldGuide? mismatchedGuide).Should().BeFalse();
+
+        mismatchedGuide.Should().BeNull();
+        PathGuideFactory.TotalAStarGuideCount.Should().Be(1);
+        PathGuideFactory.InUseAStarGuideCount.Should().Be(0);
     }
 
     [Fact]
@@ -364,7 +400,7 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     [Fact]
     public void ReusableSurveyResultCacheWarmCheckout_ShouldNotAllocateSteadyState()
     {
-        var request = new UnknownRequest { IsValidValue = true };
+        var request = new TestPathRequest { IsValid = true };
         var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
 
         cache.TryGetOrCreate(request, () => FakeSurveyResult.Create(request.RequestCacheKey), out FakeSurveyResult result).Should().BeTrue();
@@ -405,6 +441,67 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         allocated.Should().BeLessThan(128);
     }
 
+    [Fact]
+    public void RoutePlanChartKeyCollection_ShouldFallBackToEndpointChartOwners_WhenSegmentKeysAreMissing()
+    {
+        PathTestFactory.RegisterSolidPoint(TestWorld.Context, "GuideFactoryEndpointSolid", Vector3d.Zero);
+        RegisterVolumePoint("GuideFactoryEndpointGas", new Vector3d(1, 0, 0), TraversalMedia.Gas);
+        Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
+        var request = new TestPathRequest
+        {
+            Origin = Vector3d.Zero,
+            TargetPosition = new Vector3d(1, 0, 0),
+            StartNode = start,
+            EndNode = end,
+            MaxPathSearchRange = 1,
+            IsValid = true
+        };
+        var plan = new HybridRoutePlan(
+            new[] { HybridRouteStep.Segment(request) },
+            Array.Empty<TraversalTransition>(),
+            totalPathCost: 0);
+
+        string[] chartKeys = ReflectionUtility.InvokePrivateStatic<string[]>(
+            typeof(PathGuideFactory),
+            "CollectRoutePlanChartKeys",
+            plan);
+        string[] nullPlanKeys = ReflectionUtility.InvokePrivateStatic<string[]>(
+            typeof(PathGuideFactory),
+            "CollectRoutePlanChartKeys",
+            (object)null!);
+        var waypointOnlyPlan = new HybridRoutePlan(
+            new[] { HybridRouteStep.Waypoint(TestWorld.Context, Vector3d.Zero) },
+            Array.Empty<TraversalTransition>(),
+            totalPathCost: 0);
+        string[] waypointOnlyKeys = ReflectionUtility.InvokePrivateStatic<string[]>(
+            typeof(PathGuideFactory),
+            "CollectRoutePlanChartKeys",
+            waypointOnlyPlan);
+        var nullSafeKeys = new SwiftHashSet<string>();
+        ReflectionUtility.InvokePrivateStatic<object?>(
+            typeof(PathGuideFactory),
+            "AddChartKeys",
+            nullSafeKeys,
+            null!);
+        ReflectionUtility.InvokePrivateStatic<object?>(
+            typeof(PathGuideFactory),
+            "AddRequestEndpointChartOwners",
+            nullSafeKeys,
+            null!);
+        ReflectionUtility.InvokePrivateStatic<object?>(
+            typeof(PathGuideFactory),
+            "AddVoxelChartOwners",
+            nullSafeKeys,
+            null!);
+
+        chartKeys.Should().Contain("GuideFactoryEndpointSolid");
+        chartKeys.Should().Contain("GuideFactoryEndpointGas");
+        nullPlanKeys.Should().BeEmpty();
+        waypointOnlyKeys.Should().BeEmpty();
+        nullSafeKeys.Should().BeEmpty();
+    }
+
     private static void RegisterVolumePoint(string chartName, Vector3d position, TraversalMedia media)
     {
         var data = new NavigationChartCell[1, 1, 1];
@@ -435,71 +532,4 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
-    private sealed class UnknownRequest : IPathRequest
-    {
-        public TrailblazerWorldContext Context => TestWorld.Context;
-
-        public Vector3d Origin => OriginValue;
-        public Voxel StartNode => StartNodeValue;
-        public Vector3d TargetPosition => TargetValue;
-        public Voxel EndNode => EndNodeValue;
-        public Fixed64 UnitSize => UnitSizeValue;
-        public bool HasZeroDisplacement => StartNodeValue == EndNodeValue;
-        public bool AllowUnwalkableEndpoints => false;
-        public int MaxPathSearchRange { get => MaxPathSearchRangeValue; set => MaxPathSearchRangeValue = value; }
-        public bool HasOrigin => StartNodeValue != null;
-        public bool HasDestination => EndNodeValue != null;
-        public bool HasValidEndpoints => HasOrigin && HasDestination;
-        public bool IsValid => IsValidValue;
-        public int RequestCacheKey => 1234;
-
-        internal Vector3d OriginValue;
-        internal Voxel StartNodeValue = null!;
-        internal Vector3d TargetValue;
-        internal Voxel EndNodeValue = null!;
-        internal Fixed64 UnitSizeValue = Fixed64.One;
-        internal int MaxPathSearchRangeValue;
-        internal bool IsValidValue;
-
-        public bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize) => false;
-
-        public bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false) => false;
-
-        public bool TrySetDestination(Vector3d destination, bool resetSearchRange = false) => false;
-
-        public bool TrySetUnitSize(Fixed64 unitSize) => false;
-    }
-
-    private sealed class FakeSurveyResult : SurveyResult
-    {
-        public override bool HasPath => IsValid;
-
-        public static FakeSurveyResult Create(int requestKey)
-        {
-            return new FakeSurveyResult
-            {
-                IsValid = true,
-                RequestHashKey = requestKey
-            };
-        }
-    }
-
-    private sealed class FakeGuide : IGuide
-    {
-        public void Reset()
-        {
-        }
-
-        public bool TryGetMovementDirection(Vector3d origin, out Vector3d direction)
-        {
-            direction = Vector3d.Zero;
-            return false;
-        }
-
-        public bool TryGetFallbackDirection(Vector3d from, out Vector3d fallbackDirection)
-        {
-            fallbackDirection = Vector3d.Zero;
-            return false;
-        }
-    }
 }

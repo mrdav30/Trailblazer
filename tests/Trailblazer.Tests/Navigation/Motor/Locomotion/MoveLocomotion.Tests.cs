@@ -18,6 +18,23 @@ public class MoveLocomotionTests : IDisposable
     }
 
     [Fact]
+    public void IsEnabled_ShouldClearTransientVelocity_WhenDisabled()
+    {
+        var locomotion = new MoveLocomotion
+        {
+            FrameVelocity = new Vector3d(1, 0, 0)
+        };
+
+        locomotion.IsEnabled = false;
+
+        locomotion.IsEnabled.Should().BeFalse();
+        locomotion.FrameVelocity.Should().Be(Vector3d.Zero);
+
+        locomotion.IsEnabled = true;
+        locomotion.IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
     public void Given_When_ForceIsApplied_Then_VelocityShouldIncrease()
     {
         // Arrange

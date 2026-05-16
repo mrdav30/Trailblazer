@@ -2,6 +2,8 @@
 using GridForge.Configuration;
 using GridForge.Grids;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using Trailblazer.Pathing;
 using Xunit;
@@ -213,6 +215,44 @@ public class PathHeapTests : IDisposable
 
         Assert.Equal((uint)PathHeap<HeapNode>.DefaultCapacity + 1u, heap.HeapCount);
         Assert.True(heap.Capacity > originalCapacity);
+    }
+
+    [Fact]
+    public void PathHeapMetadata_ClosedEnumerable_ShouldSupportResetAndExplicitEnumerators()
+    {
+        var metadata = new PathHeapMetadata<HeapNode>(2);
+        var closed = new HeapNode("closed");
+        var open = new HeapNode("open");
+        metadata[closed] = new PathHeapMeta { ClosedHeapVersion = 7 };
+        metadata[open] = new PathHeapMeta { ClosedHeapVersion = 2 };
+
+        Assert.Throws<KeyNotFoundException>(() => metadata[new HeapNode("missing")]);
+        Assert.False(metadata.TryGetValue(null!, out PathHeapMeta nullValue));
+        Assert.Equal(default, nullValue);
+        Assert.Throws<ArgumentNullException>(() => metadata.Set(null!, default));
+
+        metadata.EnsureCapacity(32);
+        metadata.TrimExcess();
+
+        PathHeapMetadata<HeapNode>.Enumerator enumerator = metadata.EnumerateClosed(7).GetEnumerator();
+
+        Assert.True(enumerator.MoveNext());
+        Assert.Equal(closed, enumerator.Current);
+        enumerator.Reset();
+        Assert.True(enumerator.MoveNext());
+        Assert.Equal(closed, ((IEnumerator)enumerator).Current);
+        Assert.False(enumerator.MoveNext());
+        enumerator.Dispose();
+
+        IEnumerable<HeapNode> genericEnumerable = metadata.EnumerateClosed(7);
+        Assert.Equal(new[] { closed }, genericEnumerable.ToArray());
+
+        IEnumerable nonGenericEnumerable = metadata.EnumerateClosed(7);
+        Assert.Single(nonGenericEnumerable.Cast<HeapNode>());
+
+        IEnumerator nonGenericEnumerator = ((IEnumerable)metadata.EnumerateClosed(7)).GetEnumerator();
+        Assert.True(nonGenericEnumerator.MoveNext());
+        Assert.Equal(closed, nonGenericEnumerator.Current);
     }
 
     [Fact]

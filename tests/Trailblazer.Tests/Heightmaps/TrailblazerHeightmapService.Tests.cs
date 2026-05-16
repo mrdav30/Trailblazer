@@ -21,6 +21,31 @@ public sealed class TrailblazerHeightmapServiceTests
     }
 
     [Fact]
+    public void Register_ShouldRejectNullSurfacesAndInvalidSelectionRanges()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+
+        Action nullSurface = () => context.Heightmaps.Register(null!, Fixed64.Zero, Fixed64.One);
+        Action invalidRange = () => context.Heightmaps.Register(CreateSurface("Ground", height: 2), Fixed64.One, Fixed64.One);
+
+        nullSurface.Should().Throw<ArgumentNullException>().WithParameterName("surface");
+        invalidRange.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("maxSelectionY");
+    }
+
+    [Fact]
+    public void Unregister_ShouldRemoveExistingLayerAndIgnoreInvalidNames()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        HeightmapSurface surface = CreateSurface("Ground", height: 2);
+        context.Heightmaps.Register(surface, Fixed64.Zero, (Fixed64)4).Should().BeTrue();
+
+        context.Heightmaps.Unregister(string.Empty).Should().BeFalse();
+        context.Heightmaps.Unregister("Ground").Should().BeTrue();
+        context.Heightmaps.Unregister("Ground").Should().BeFalse();
+        context.Heightmaps.IsRegistered("Ground").Should().BeFalse();
+    }
+
+    [Fact]
     public void Register_ShouldKeepSameLayerNameIndependentAcrossContexts()
     {
         using TrailblazerWorldContext first = TrailblazerWorldContext.CreateOwned();
@@ -84,6 +109,10 @@ public sealed class TrailblazerHeightmapServiceTests
         registration.MaxSelectionY.Should().Be((Fixed64)4);
         registration.Priority.Should().Be(7);
         registration.RegistrationOrder.Should().Be(0);
+
+        context.Heightmaps.TryGetRegistration("Missing", out HeightmapLayerRegistration missing)
+            .Should().BeFalse();
+        missing.Should().BeNull();
     }
 
     [Fact]
@@ -181,6 +210,36 @@ public sealed class TrailblazerHeightmapServiceTests
 
         sample.LayerName.Should().Be("HighPriority");
         sample.GroundY.Should().Be((Fixed64)2);
+    }
+
+    [Fact]
+    public void TrySampleGround_ShouldPreferCloserCandidate_WhenDistancesDiffer()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.Heightmaps.Register(CreateSurface("Far", height: 0), Fixed64.Zero, (Fixed64)4)
+            .Should().BeTrue();
+        context.Heightmaps.Register(CreateSurface("Near", height: 2), Fixed64.Zero, (Fixed64)4)
+            .Should().BeTrue();
+
+        context.Heightmaps.TrySampleGround(new Vector3d(Fixed64.Zero, (Fixed64)3, Fixed64.Zero), out HeightmapSample sample)
+            .Should().BeTrue();
+
+        sample.LayerName.Should().Be("Near");
+        sample.GroundY.Should().Be((Fixed64)2);
+    }
+
+    [Fact]
+    public void ServiceApis_ShouldThrowWhenOwningWorldIsInactive()
+    {
+        TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        TrailblazerHeightmapService service = context.Heightmaps;
+        context.World.Dispose();
+
+        Action act = () => service.IsRegistered("Ground");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*inactive GridWorld*");
+        context.Dispose();
     }
 
     [Fact]

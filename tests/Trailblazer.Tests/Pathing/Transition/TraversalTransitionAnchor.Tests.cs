@@ -2,6 +2,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Spatial;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -62,6 +63,14 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
         var solidWithOverride = TraversalTransitionAnchor.Solid(voxel.WorldIndex, pointOverride);
         solidWithOverride.HasPointOverride.Should().BeTrue();
         solidWithOverride.PointOverride.Should().Be(pointOverride);
+
+        TraversalTransitionAnchor gasFromPosition = TraversalTransitionAnchor.Gas(voxel.WorldPosition, pointOverride);
+        gasFromPosition.HasPointOverride.Should().BeTrue();
+        gasFromPosition.Position.Should().Be(pointOverride);
+
+        TraversalTransitionAnchor liquidFromPosition = TraversalTransitionAnchor.Liquid(voxel.WorldPosition, pointOverride);
+        liquidFromPosition.HasPointOverride.Should().BeTrue();
+        liquidFromPosition.Position.Should().Be(pointOverride);
     }
 
     [Fact]
@@ -112,5 +121,15 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
         Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
         var anchor = TraversalTransitionAnchor.Solid(voxel.WorldIndex);
         anchor.Position.Should().Be(voxel.WorldPosition);
+    }
+
+    [Fact]
+    public void TraversalTransitionAnchor_Position_ShouldThrow_WhenVoxelIndexIsUnavailable()
+    {
+        TraversalTransitionAnchor anchor = TraversalTransitionAnchor.Solid(default(WorldVoxelIndex));
+
+        Action act = () => _ = anchor.Position;
+
+        act.Should().Throw<InvalidOperationException>();
     }
 }

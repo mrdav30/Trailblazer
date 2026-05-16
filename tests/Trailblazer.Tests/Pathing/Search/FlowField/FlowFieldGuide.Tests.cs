@@ -29,6 +29,72 @@ public sealed class FlowFieldGuideTests : IDisposable
     }
 
     [Fact]
+    public void FlowFieldLocalIndex_ShouldUseCoordinateValueEqualityAndHashing()
+    {
+        var first = new FlowFieldLocalIndex(1, 2, 3);
+        var same = new FlowFieldLocalIndex(1, 2, 3);
+        var different = new FlowFieldLocalIndex(1, 2, 4);
+
+        first.Equals(same).Should().BeTrue();
+        first.Equals(different).Should().BeFalse();
+        first.Equals((object)same).Should().BeTrue();
+        first.Equals("not-an-index").Should().BeFalse();
+        first.GetHashCode().Should().Be(same.GetHashCode());
+    }
+
+    [Fact]
+    public void FlowFieldSamplingGrid_ShouldSupportDenseAndSparseDirectionLookups()
+    {
+        Voxel sample = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        VoxelIndex sampleLocalIndex = sample.WorldIndex.VoxelIndex;
+        Vector3d originWorldPosition = new(
+            sample.WorldPosition.x - (Fixed64)sampleLocalIndex.x,
+            sample.WorldPosition.y - (Fixed64)sampleLocalIndex.y,
+            sample.WorldPosition.z - (Fixed64)sampleLocalIndex.z);
+        var dense = new FlowFieldSamplingGrid(
+            sample.WorldIndex,
+            originWorldPosition,
+            Fixed64.One,
+            minX: sampleLocalIndex.x,
+            minY: sampleLocalIndex.y,
+            minZ: sampleLocalIndex.z,
+            maxX: sampleLocalIndex.x + 1,
+            maxY: sampleLocalIndex.y + 1,
+            maxZ: sampleLocalIndex.z + 1,
+            fieldCount: 8);
+
+        dense.MatchesGrid(sample.WorldIndex).Should().BeTrue();
+        dense.TryGetDirection(Vector3d.Zero, out _).Should().BeFalse();
+        dense.AddDirection(sample.WorldIndex, new Vector3d(1, 0, 0));
+        dense.TryGetDirection(Vector3d.Zero, out Vector3d denseDirection).Should().BeTrue();
+        denseDirection.Should().Be(new Vector3d(1, 0, 0));
+        dense.TryGetDirection(new Vector3d(8, 0, 0), out _).Should().BeFalse();
+
+        var sparse = new FlowFieldSamplingGrid(
+            sample.WorldIndex,
+            originWorldPosition,
+            Fixed64.One,
+            minX: sampleLocalIndex.x,
+            minY: sampleLocalIndex.y,
+            minZ: sampleLocalIndex.z,
+            maxX: sampleLocalIndex.x + 64,
+            maxY: sampleLocalIndex.y + 64,
+            maxZ: sampleLocalIndex.z + 64,
+            fieldCount: 1);
+
+        sparse.AddDirection(sample.WorldIndex, new Vector3d(0, 0, 1));
+        sparse.TryGetDirection(Vector3d.Zero, out Vector3d sparseDirection).Should().BeTrue();
+        sparseDirection.Should().Be(new Vector3d(0, 0, 1));
+        sparse.TryGetDirection(new Vector3d(1, 0, 0), out _).Should().BeFalse();
+
+        TestWorld.World.TryAddGrid(
+            new GridConfiguration(new Vector3d(20, 0, 0), new Vector3d(4, 4, 4)),
+            out _).Should().BeTrue();
+        Voxel otherGridVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(20, 0, 0));
+        sparse.MatchesGrid(otherGridVoxel.WorldIndex).Should().BeFalse();
+    }
+
+    [Fact]
     public void FlowFieldGuide_ShouldHandleNonStagedQueries()
     {
         PathTestFactory.RegisterLineChart(TestWorld.Context, "FlowFieldGuideLine", Vector3d.Zero, 3);

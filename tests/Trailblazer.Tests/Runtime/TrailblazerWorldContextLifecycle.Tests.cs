@@ -46,6 +46,25 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
     }
 
     [Fact]
+    public void LifecycleHookCounts_ShouldReflectRegisteredSimulateAndResetHooks()
+    {
+        TestWorld.Setup();
+        object hooks = ReflectionUtility.GetPrivateField<object>(TestWorld.Context, "_hooks");
+
+        using IDisposable simulate = TestWorld.Context.RegisterOnSimulate("count-simulate", 0, () => { });
+        using IDisposable reset = TestWorld.Context.RegisterOnReset("count-reset", 0, () => { });
+
+        GetHookCount(hooks, "SimulateHookCount").Should().Be(1);
+        GetHookCount(hooks, "ResetHookCount").Should().Be(1);
+
+        simulate.Dispose();
+        reset.Dispose();
+
+        GetHookCount(hooks, "SimulateHookCount").Should().Be(0);
+        GetHookCount(hooks, "ResetHookCount").Should().Be(0);
+    }
+
+    [Fact]
     public void Setup_ShouldReplaceTheSelectedTestContext()
     {
         TestWorld.Setup();
@@ -291,6 +310,19 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
 
         registration.Dispose();
         registration.Dispose();
+
+        TestWorld.Context.Simulate();
+
+        callCount.Should().Be(0);
+    }
+
+    private static int GetHookCount(object hooks, string propertyName)
+    {
+        PropertyInfo property = hooks.GetType().GetProperty(
+            propertyName,
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Property '{propertyName}' was not found.");
+        return (int)property.GetValue(hooks)!;
     }
 
 }

@@ -361,6 +361,7 @@ public class TraversalTransitionRegistryTests : IDisposable
 
         Assert.True(TraversalTransitionRegistry.RegisterGenerated(generated, startSuppressed: true));
         Assert.True(TraversalTransitionRegistry.IsRegistered("generated-suppressed"));
+        Assert.True(TraversalTransitionRegistry.IsSuppressed("generated-suppressed"));
         Assert.False(TraversalTransitionRegistry.IsActive("generated-suppressed"));
         Assert.Empty(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
 
@@ -368,8 +369,28 @@ public class TraversalTransitionRegistryTests : IDisposable
             new[] { "generated-suppressed" },
             suppressed: false);
 
+        Assert.False(TraversalTransitionRegistry.IsSuppressed("generated-suppressed"));
         Assert.True(TraversalTransitionRegistry.IsActive("generated-suppressed"));
         Assert.Single(TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero));
+    }
+
+    [Fact]
+    public void RegisteredTraversalTransition_EqualsObject_ShouldCompareTransitionIdentity()
+    {
+        var transition = new TraversalTransition(
+            id: "registered-equals",
+            type: TraversalTransitionType.Jump,
+            source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
+            pathCostModifier: 3);
+        var registered = new RegisteredTraversalTransition(
+            transition,
+            TraversalTransitionOwnershipKind.ManagedManual,
+            priority: 1,
+            registrationOrder: 2);
+
+        Assert.True(registered.Equals((object)registered));
+        Assert.False(registered.Equals("registered-equals"));
     }
 
     [Fact]

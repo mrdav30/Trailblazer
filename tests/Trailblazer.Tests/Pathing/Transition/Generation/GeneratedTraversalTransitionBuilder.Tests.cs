@@ -45,6 +45,16 @@ public sealed class GeneratedTraversalTransitionBuilderTests : IDisposable
                 secondZ: 0)
             .Should()
             .BeEmpty();
+        GeneratedTraversalTransitionBuilder.CanBuildTransitionsForPairFromChartData(
+                chart,
+                firstX: -1,
+                firstY: 0,
+                firstZ: 0,
+                secondX: 0,
+                secondY: 0,
+                secondZ: 0)
+            .Should()
+            .BeFalse();
 
         GeneratedTraversalTransitionBuilder.BuildTransitionsForPair(
                 chart,
@@ -281,6 +291,54 @@ public sealed class GeneratedTraversalTransitionBuilderTests : IDisposable
             t.Type == TraversalTransitionType.SwimEntry
             && !t.RequestsClimbIntent
             && !t.PreserveClimbIntentOnFollowup);
+    }
+
+    [Fact]
+    public void CanBuildTransitionsForPairFromChartData_ShouldRecognizeBoundaryAndClimbCandidates()
+    {
+        NavigationChart firstSolidSecondGas = CreateChart(
+            new NavigationChartCell[1, 2, 1]
+            {
+                {
+                    { new NavigationChartCell(TraversalMedia.Solid, generatedTransitionMedia: TraversalMedia.Solid) },
+                    { new NavigationChartCell(TraversalMedia.Gas, generatedTransitionMedia: TraversalMedia.Gas) }
+                }
+            });
+        NavigationChart firstGasSecondSolid = CreateChart(
+            new NavigationChartCell[1, 2, 1]
+            {
+                {
+                    { new NavigationChartCell(TraversalMedia.Gas, generatedTransitionMedia: TraversalMedia.Gas) },
+                    { new NavigationChartCell(TraversalMedia.Solid, generatedTransitionMedia: TraversalMedia.Solid) }
+                }
+            });
+        NavigationChart firstLiquidSecondSolid = CreateChart(
+            new NavigationChartCell[1, 2, 1]
+            {
+                {
+                    { new NavigationChartCell(TraversalMedia.Liquid, generatedTransitionMedia: TraversalMedia.Liquid) },
+                    { new NavigationChartCell(TraversalMedia.Solid, generatedTransitionMedia: TraversalMedia.Solid) }
+                }
+            });
+        NavigationChart climbSeam = CreateChart(
+            new NavigationChartCell[1, 2, 1]
+            {
+                {
+                    { new NavigationChartCell(
+                        TraversalMedia.Solid,
+                        flags: NavigationChartCellFlags.ClimbSurfaceHint | NavigationChartCellFlags.ClimbTransitionHint) },
+                    { NavigationChartCell.Solid }
+                }
+            });
+
+        GeneratedTraversalTransitionBuilder.CanBuildTransitionsForPairFromChartData(
+            firstSolidSecondGas, 0, 0, 0, 1, 0, 0).Should().BeTrue();
+        GeneratedTraversalTransitionBuilder.CanBuildTransitionsForPairFromChartData(
+            firstGasSecondSolid, 0, 0, 0, 1, 0, 0).Should().BeTrue();
+        GeneratedTraversalTransitionBuilder.CanBuildTransitionsForPairFromChartData(
+            firstLiquidSecondSolid, 0, 0, 0, 1, 0, 0).Should().BeTrue();
+        GeneratedTraversalTransitionBuilder.CanBuildTransitionsForPairFromChartData(
+            climbSeam, 0, 0, 0, 1, 0, 0).Should().BeTrue();
     }
 
     private static NavigationChart CreateChart(NavigationChartCell[,,] data)

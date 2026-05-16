@@ -72,6 +72,22 @@ public static class PathTestFactory
         return map;
     }
 
+    public static bool[,,] BuildSingleVoxelChoke()
+    {
+        bool[,,] data = new bool[1, 7, 5];
+        for (int x = 0; x < 7; x++)
+        {
+            for (int z = 0; z < 5; z++)
+            {
+                bool isChokeColumn = x == 3;
+                bool isCenterRow = z == 2;
+                data[0, x, z] = !isChokeColumn || isCenterRow;
+            }
+        }
+
+        return data;
+    }
+
     public static NavigationChart RegisterLineChart(
         TrailblazerWorldContext context,
         string chartName,

@@ -33,6 +33,19 @@ public sealed class TrailblazerWorldContextTests : IDisposable
     }
 
     [Fact]
+    public void Attach_ShouldRejectNullOrInactiveWorlds()
+    {
+        Action nullWorld = () => TrailblazerWorldContext.Attach(null!);
+        nullWorld.Should().Throw<ArgumentNullException>().WithParameterName("world");
+
+        var inactiveWorld = new GridWorld();
+        inactiveWorld.Dispose();
+
+        Action inactive = () => TrailblazerWorldContext.Attach(inactiveWorld);
+        inactive.Should().Throw<InvalidOperationException>().WithMessage("*active GridWorld*");
+    }
+
+    [Fact]
     public void Attach_ShouldRejectSameWorldUntilExistingContextIsDisposed()
     {
         using var world = new GridWorld();

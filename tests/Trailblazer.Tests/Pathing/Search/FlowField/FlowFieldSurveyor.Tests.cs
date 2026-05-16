@@ -233,6 +233,9 @@ public class FlowFieldSurveyorTests : IDisposable
     public void FlowField_ShouldReturnEmpty_ForNullAndUnresolvedRequests()
     {
         FlowFieldSurveyor.Shared.FindPath(null!).HasPath.Should().BeFalse();
+        FlowFieldSurveyor.SampleFlowVector(TestWorld.Context, Vector3d.Zero, FlowFieldSurveyResult.Empty)
+            .Should()
+            .Be(Vector3d.Zero);
 
         bool[,,] data = new bool[1, 1, 1];
         data[0, 0, 0] = true;
@@ -296,6 +299,14 @@ public class FlowFieldSurveyorTests : IDisposable
         FlowFieldPathRequest request = TestRequire.Created(FlowFieldPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(1, 0, 0), out FlowFieldPathRequest? createdrequest), createdrequest);
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
         var fields = TestRequire.NotNull(result.Fields);
+
+        FlowFieldSurveyor.TryGetNearestFlowAnchor(TestWorld.Context,
+            Vector3d.Zero,
+            fields,
+            Fixed64.Zero,
+            out Voxel? nearestAnchor).Should().BeTrue();
+        nearestAnchor.Should().NotBeNull();
+        nearestAnchor!.WorldPosition.Should().Be(Vector3d.Zero);
 
         TestWorld.Reset();
 
@@ -720,11 +731,13 @@ public class FlowFieldSurveyorTests : IDisposable
         var fields = TestRequire.NotNull(result.Fields);
         FlowField found = FlowFieldSurveyor.GetFlowField(TestWorld.Context, Vector3d.Zero, fields);
         FlowField missing = FlowFieldSurveyor.GetFlowField(TestWorld.Context, new Vector3d(4, 0, 0), fields);
+        Vector3d missingDirection = FlowFieldSurveyor.GetFlowDirection(TestWorld.Context, new Vector3d(4, 0, 0), fields);
 
         found.GlobalIndex.Should().NotBe(default(WorldVoxelIndex));
         missing.GlobalIndex.Should().Be(default(WorldVoxelIndex));
         missing.Direction.Should().Be(Vector3d.Zero);
         missing.PathCost.Should().Be(0);
+        missingDirection.Should().Be(Vector3d.Zero);
 
         PathManager.UnloadChart("MissingFlowFieldLookup");
     }

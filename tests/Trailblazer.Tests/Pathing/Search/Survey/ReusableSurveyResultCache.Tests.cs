@@ -1,6 +1,4 @@
-using FixedMathSharp;
 using FluentAssertions;
-using GridForge.Grids;
 using SwiftCollections;
 using System;
 using System.Collections.Generic;
@@ -28,10 +26,10 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     [Fact]
     public void TryGetOrCreate_ShouldCheckoutAndReleaseCachedHits()
     {
-        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
         var request = new TestPathRequest(7);
 
-        cache.TryGetOrCreate(request, () => TestSurveyResult.Create(7), out TestSurveyResult created).Should().BeTrue();
+        cache.TryGetOrCreate(request, () => FakeSurveyResult.Create(7), out FakeSurveyResult created).Should().BeTrue();
         cache.Count.Should().Be(1);
         cache.CountInUse.Should().Be(1);
         created.IsInUse.Should().BeTrue();
@@ -44,8 +42,8 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         cache.TryGetOrCreate(request, () =>
         {
             createCalled = true;
-            return TestSurveyResult.Create(7);
-        }, out TestSurveyResult reused).Should().BeTrue();
+            return FakeSurveyResult.Create(7);
+        }, out FakeSurveyResult reused).Should().BeTrue();
 
         createCalled.Should().BeFalse();
         reused.Should().BeSameAs(created);
@@ -60,11 +58,11 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     [Fact]
     public void TryGetOrCreate_ShouldEvictLeastRecentlyUsedReusableEntry_WhenCacheIsFull()
     {
-        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
 
         for (int i = 0; i < 128; i++)
         {
-            cache.TryGetOrCreate(new TestPathRequest(i), () => TestSurveyResult.Create(i), out TestSurveyResult result)
+            cache.TryGetOrCreate(new TestPathRequest(i), () => FakeSurveyResult.Create(i), out FakeSurveyResult result)
                 .Should()
                 .BeTrue();
 
@@ -75,7 +73,7 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         cache.Count.Should().Be(128);
         cache.CountInUse.Should().Be(0);
 
-        cache.TryGetOrCreate(new TestPathRequest(999), () => TestSurveyResult.Create(999), out TestSurveyResult added)
+        cache.TryGetOrCreate(new TestPathRequest(999), () => FakeSurveyResult.Create(999), out FakeSurveyResult added)
             .Should()
             .BeTrue();
         cache.Return(added, dispose: false);
@@ -86,8 +84,8 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         cache.TryGetOrCreate(new TestPathRequest(0), () =>
         {
             recreatedEvictedEntry = true;
-            return TestSurveyResult.Create(0);
-        }, out TestSurveyResult rehydrated).Should().BeTrue();
+            return FakeSurveyResult.Create(0);
+        }, out FakeSurveyResult rehydrated).Should().BeTrue();
 
         recreatedEvictedEntry.Should().BeTrue();
         rehydrated.RequestHashKey.Should().Be(0);
@@ -96,11 +94,11 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     [Fact]
     public void TryGetOrCreate_ShouldEvictLeastRecentlyReleasedEntry_WithoutLinqAllocation()
     {
-        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
 
         for (int i = 0; i < 128; i++)
         {
-            cache.TryGetOrCreate(new TestPathRequest(i), () => TestSurveyResult.Create(i), out TestSurveyResult result)
+            cache.TryGetOrCreate(new TestPathRequest(i), () => FakeSurveyResult.Create(i), out FakeSurveyResult result)
                 .Should()
                 .BeTrue();
 
@@ -108,21 +106,21 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
             TestWorld.Context.Simulate();
         }
 
-        cache.TryGetOrCreate(new TestPathRequest(0), () => TestSurveyResult.Create(0), out TestSurveyResult refreshed)
+        cache.TryGetOrCreate(new TestPathRequest(0), () => FakeSurveyResult.Create(0), out FakeSurveyResult refreshed)
             .Should()
             .BeTrue();
         cache.Return(refreshed, dispose: false);
         TestWorld.Context.Simulate();
 
         var evictionRequest = new TestPathRequest(999);
-        Func<TestSurveyResult> createEvictionResult = static () => TestSurveyResult.Create(999);
+        Func<FakeSurveyResult> createEvictionResult = static () => FakeSurveyResult.Create(999);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
         long before = GC.GetAllocatedBytesForCurrentThread();
-        bool created = cache.TryGetOrCreate(evictionRequest, createEvictionResult, out TestSurveyResult added);
+        bool created = cache.TryGetOrCreate(evictionRequest, createEvictionResult, out FakeSurveyResult added);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         created.Should().BeTrue();
@@ -133,8 +131,8 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         cache.TryGetOrCreate(new TestPathRequest(1), () =>
         {
             recreatedOldestEntry = true;
-            return TestSurveyResult.Create(1);
-        }, out TestSurveyResult rehydratedOldest).Should().BeTrue();
+            return FakeSurveyResult.Create(1);
+        }, out FakeSurveyResult rehydratedOldest).Should().BeTrue();
 
         recreatedOldestEntry.Should().BeTrue();
         rehydratedOldest.RequestHashKey.Should().Be(1);
@@ -143,8 +141,8 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         cache.TryGetOrCreate(new TestPathRequest(0), () =>
         {
             recreatedRefreshedEntry = true;
-            return TestSurveyResult.Create(0);
-        }, out TestSurveyResult rehydratedRefreshed).Should().BeTrue();
+            return FakeSurveyResult.Create(0);
+        }, out FakeSurveyResult rehydratedRefreshed).Should().BeTrue();
 
         recreatedRefreshedEntry.Should().BeFalse();
         rehydratedRefreshed.Should().BeSameAs(refreshed);
@@ -156,15 +154,15 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     [Fact]
     public void InvalidateForChart_ShouldUseChartIndexAndMaintainMultiChartMembership()
     {
-        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
-        List<TestSurveyResult> results = new(128);
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
+        List<FakeSurveyResult> results = new(128);
 
         for (int i = 0; i < 128; i++)
         {
             cache.TryGetOrCreate(
                     new TestPathRequest(i),
-                    () => TestSurveyResult.Create(i, chartsUtilized: new[] { "chart-a", "chart-b" }),
-                    out TestSurveyResult result)
+                    () => FakeSurveyResult.Create(i, chartsUtilized: new[] { "chart-a", "chart-b" }),
+                    out FakeSurveyResult result)
                 .Should()
                 .BeTrue();
 
@@ -186,17 +184,25 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         SwiftDictionary<string, SwiftList<int>> chartIndex =
             ReflectionUtility.GetPrivateField<SwiftDictionary<string, SwiftList<int>>>(cache, "_chartIndex");
         chartIndex.Count.Should().Be(0);
+
+        var danglingKeys = new SwiftList<int>(1);
+        danglingKeys.Add(404);
+        chartIndex["dangling-chart"] = danglingKeys;
+
+        cache.InvalidateForChart("dangling-chart");
+
+        chartIndex.ContainsKey("dangling-chart").Should().BeFalse();
     }
 
     [Fact]
     public void TrySeed_ShouldPopulateChartIndexAndTrackCheckedOutEntries()
     {
-        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
 
-        TestSurveyResult released = TestSurveyResult.Create(
+        FakeSurveyResult released = FakeSurveyResult.Create(
             10,
             chartsUtilized: new[] { "chart-a", "chart-b", "chart-a" });
-        TestSurveyResult active = TestSurveyResult.Create(
+        FakeSurveyResult active = FakeSurveyResult.Create(
             11,
             chartsUtilized: new[] { "chart-a" });
 
@@ -219,13 +225,58 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     }
 
     [Fact]
+    public void TrySeed_ShouldRejectInvalidInputs_ReplaceExistingEntries_AndRespectCapacity()
+    {
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
+
+        FakeSurveyResult missingPath = FakeSurveyResult.Create(1, hasPath: false);
+        FakeSurveyResult missingContext = FakeSurveyResult.Create(2);
+        missingContext.Context = null;
+
+        cache.TrySeed(null!, checkout: false).Should().BeFalse();
+        cache.TrySeed(missingPath, checkout: false).Should().BeFalse();
+        cache.TrySeed(FakeSurveyResult.Create(-1), checkout: false).Should().BeFalse();
+        cache.TrySeed(missingContext, checkout: false).Should().BeFalse();
+        cache.CountIndexedEntriesForChart(string.Empty).Should().Be(0);
+
+        FakeSurveyResult active = FakeSurveyResult.Create(10, chartsUtilized: new[] { "old-chart" });
+        cache.TrySeed(active, checkout: true).Should().BeTrue();
+        cache.CountInUse.Should().Be(1);
+
+        FakeSurveyResult replacement = FakeSurveyResult.Create(10, chartsUtilized: new[] { "new-chart" });
+        cache.TrySeed(replacement, checkout: false).Should().BeTrue();
+
+        active.ResetCount.Should().Be(1);
+        cache.Count.Should().Be(1);
+        cache.CountInUse.Should().Be(0);
+        cache.CountIndexedEntriesForChart("old-chart").Should().Be(0);
+        cache.CountIndexedEntriesForChart("new-chart").Should().Be(1);
+
+        replacement.Checkout();
+        cache.TrySeed(replacement, checkout: false).Should().BeTrue();
+        replacement.IsInUse.Should().BeFalse();
+
+        FakeSurveyResult directReplacement = FakeSurveyResult.Create(10, chartsUtilized: new[] { "direct-chart" });
+        ReflectionUtility.InvokePrivate<object?>(cache, "AddCachedResult", 10, directReplacement);
+        cache.CountIndexedEntriesForChart("new-chart").Should().Be(0);
+        cache.CountIndexedEntriesForChart("direct-chart").Should().Be(1);
+
+        using var fullCache = new ReusableSurveyResultCache<FakeSurveyResult>();
+        for (int i = 0; i < 128; i++)
+            fullCache.TrySeed(FakeSurveyResult.Create(i), checkout: false).Should().BeTrue();
+
+        fullCache.TrySeed(FakeSurveyResult.Create(500), checkout: false).Should().BeFalse();
+        fullCache.Count.Should().Be(128);
+    }
+
+    [Fact]
     public void EvictStaleEntries_ShouldNotAllocate_WhenNoEntriesAreStale()
     {
-        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
 
         for (int i = 0; i < 32; i++)
         {
-            cache.TryGetOrCreate(new TestPathRequest(i), () => TestSurveyResult.Create(i), out TestSurveyResult result)
+            cache.TryGetOrCreate(new TestPathRequest(i), () => FakeSurveyResult.Create(i), out FakeSurveyResult result)
                 .Should()
                 .BeTrue();
 
@@ -241,11 +292,11 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     [Fact]
     public void EvictStaleEntries_ShouldNotAllocate_WhenEntriesAreStale()
     {
-        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
 
         for (int i = 0; i < 32; i++)
         {
-            cache.TryGetOrCreate(new TestPathRequest(i), () => TestSurveyResult.Create(i), out TestSurveyResult result)
+            cache.TryGetOrCreate(new TestPathRequest(i), () => FakeSurveyResult.Create(i), out FakeSurveyResult result)
                 .Should()
                 .BeTrue();
 
@@ -261,12 +312,12 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     [Fact]
     public void TryGetOrCreate_ShouldReturnUncachedResult_WhenCacheIsFullAndAllEntriesAreInUse()
     {
-        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
-        List<TestSurveyResult> checkedOut = new(128);
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
+        List<FakeSurveyResult> checkedOut = new(128);
 
         for (int i = 0; i < 128; i++)
         {
-            cache.TryGetOrCreate(new TestPathRequest(i), () => TestSurveyResult.Create(i), out TestSurveyResult result)
+            cache.TryGetOrCreate(new TestPathRequest(i), () => FakeSurveyResult.Create(i), out FakeSurveyResult result)
                 .Should()
                 .BeTrue();
 
@@ -276,7 +327,7 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         cache.Count.Should().Be(128);
         cache.CountInUse.Should().Be(128);
 
-        cache.TryGetOrCreate(new TestPathRequest(2000), () => TestSurveyResult.Create(2000), out TestSurveyResult uncached)
+        cache.TryGetOrCreate(new TestPathRequest(2000), () => FakeSurveyResult.Create(2000), out FakeSurveyResult uncached)
             .Should()
             .BeTrue();
 
@@ -292,8 +343,8 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         cache.TryGetOrCreate(new TestPathRequest(2000), () =>
         {
             recreated = true;
-            return TestSurveyResult.Create(2000);
-        }, out TestSurveyResult recreatedResult).Should().BeTrue();
+            return FakeSurveyResult.Create(2000);
+        }, out FakeSurveyResult recreatedResult).Should().BeTrue();
         recreated.Should().BeTrue();
 
         cache.Return(recreatedResult, dispose: false);
@@ -307,21 +358,24 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
     [Fact]
     public void Cache_ShouldRejectPathlessResults_AndResetInvalidatedEntries()
     {
-        using var cache = new ReusableSurveyResultCache<TestSurveyResult>();
+        using var cache = new ReusableSurveyResultCache<FakeSurveyResult>();
+
+        cache.InvalidateWhere(_ => true);
+        cache.Count.Should().Be(0);
 
         cache.TryGetOrCreate(
             new TestPathRequest(1),
-            () => TestSurveyResult.Create(1, hasPath: false),
-            out TestSurveyResult failed).Should().BeFalse();
+            () => FakeSurveyResult.Create(1, hasPath: false),
+            out FakeSurveyResult failed).Should().BeFalse();
 
         Assert.NotNull(failed);
         cache.Count.Should().Be(0);
         cache.CountInUse.Should().Be(0);
 
-        cache.TryGetOrCreate(new TestPathRequest(10), () => TestSurveyResult.Create(10), out TestSurveyResult inUse)
+        cache.TryGetOrCreate(new TestPathRequest(10), () => FakeSurveyResult.Create(10), out FakeSurveyResult inUse)
             .Should()
             .BeTrue();
-        cache.TryGetOrCreate(new TestPathRequest(11), () => TestSurveyResult.Create(11), out TestSurveyResult pooled)
+        cache.TryGetOrCreate(new TestPathRequest(11), () => FakeSurveyResult.Create(11), out FakeSurveyResult pooled)
             .Should()
             .BeTrue();
         cache.Return(pooled, dispose: false);
@@ -336,80 +390,4 @@ public sealed class ReusableSurveyResultCacheTests : IDisposable
         pooled.IsValid.Should().BeFalse();
     }
 
-    private sealed class TestPathRequest : IPathRequest
-    {
-        public TestPathRequest(int key)
-        {
-            RequestCacheKey = key;
-        }
-
-        public TrailblazerWorldContext Context => TestWorld.Context;
-
-        public Vector3d Origin => Vector3d.Zero;
-
-        public Voxel StartNode => null!;
-
-        public Vector3d TargetPosition => Vector3d.Zero;
-
-        public Voxel EndNode => null!;
-
-        public Fixed64 UnitSize => Fixed64.One;
-
-        public bool HasZeroDisplacement => false;
-
-        public bool AllowUnwalkableEndpoints => false;
-
-        public int MaxPathSearchRange { get; set; } = 1;
-
-        public bool HasOrigin => true;
-
-        public bool HasDestination => true;
-
-        public bool HasValidEndpoints => true;
-
-        public bool IsValid => true;
-
-        public int RequestCacheKey { get; }
-
-        public bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize) => false;
-
-        public bool TrySetOrigin(Vector3d origin, bool resetSearchRange = false) => false;
-
-        public bool TrySetDestination(Vector3d destination, bool resetSearchRange = false) => false;
-
-        public bool TrySetUnitSize(Fixed64 unitSize) => false;
-    }
-
-    private sealed class TestSurveyResult : SurveyResult
-    {
-        private readonly bool _hasPath;
-
-        private TestSurveyResult(int key, bool hasPath, string[]? chartsUtilized)
-        {
-            _hasPath = hasPath;
-            IsValid = hasPath;
-            RequestHashKey = key;
-            LastUsedFrame = -1;
-            ChartsUtilized = chartsUtilized ?? Array.Empty<string>();
-        }
-
-        public int ResetCount { get; private set; }
-
-        public override bool HasPath => IsValid && _hasPath;
-
-        public static TestSurveyResult Create(
-            int key,
-            bool hasPath = true,
-            string[]? chartsUtilized = null)
-            => new(key, hasPath, chartsUtilized)
-            {
-                Context = TestWorld.Context
-            };
-
-        public override void Reset()
-        {
-            ResetCount++;
-            base.Reset();
-        }
-    }
 }

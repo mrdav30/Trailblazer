@@ -105,6 +105,18 @@ public sealed class TrailblazerLoggerTests : IDisposable
         TrailblazerLogger.MinimumLevel = DiagnosticLevel.None;
         TrailblazerLogger.IsEnabled(DiagnosticLevel.Error).Should().BeFalse();
     }
+
+    [Fact]
+    public void DefaultFormatterAndHandler_ShouldUseSwiftCollectionsLoggerDefaults()
+    {
+        string formatted = TrailblazerLogger.DefaultLogFormatter(DiagnosticLevel.Warning, "message", "source");
+
+        formatted.Should().Contain("message");
+        formatted.Should().Contain("source");
+
+        Action defaultHandler = () => TrailblazerLogger.DefaultLogHandler(DiagnosticLevel.Info, "message", "source");
+        defaultHandler.Should().NotThrow();
+    }
 }
 
 [CollectionDefinition("TrailblazerLoggerCollection", DisableParallelization = true)]

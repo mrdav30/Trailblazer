@@ -10,6 +10,39 @@ namespace Trailblazer.Tests.Pathing;
 public class NavigationChartTests
 {
     [Fact]
+    public void Constructor_BoolArray_ShouldCreateCellsForRequestedTraversalMedium()
+    {
+        bool[] map =
+        {
+            true,
+            false,
+            true,
+            false
+        };
+
+        var chart = new NavigationChart(
+            "FlatBoolChart",
+            map,
+            sizeX: 2,
+            sizeY: 2,
+            sizeZ: 1,
+            minBounds: Vector3d.Zero,
+            maxBounds: new Vector3d(2, 2, 1),
+            interval: Fixed64.One,
+            medium: TraversalMedium.Gas,
+            priority: 4);
+
+        chart.Priority.Should().Be(4);
+        chart.TryGetCell(Vector3d.Zero, out NavigationChartCell first).Should().BeTrue();
+        first.SupportsMedium(TraversalMedium.Gas).Should().BeTrue();
+        chart.TryGetCell(new Vector3d(1, 0, 0), out NavigationChartCell empty).Should().BeTrue();
+        empty.HasTraversalData.Should().BeFalse();
+        chart.GetAuthoredCells().Select(entry => entry.Position)
+            .Should()
+            .Equal(Vector3d.Zero, new Vector3d(0, 1, 0));
+    }
+
+    [Fact]
     public void Enumerations_ShouldTrackSparseAuthoredAndGeneratedCellsAcrossLiveUpdates()
     {
         NavigationChartCell[,,] data = new NavigationChartCell[1, 4, 1];

@@ -225,7 +225,7 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(true)]
     public void RoundTrip_ShouldRestoreAutoGuidedClimbIntentTracking(bool useMemoryPack)
     {
-        GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
+        GuidedPathTestScene.RegisterTransitionFallbackClimbScene(TestWorld.Context);
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.ConfigureForGuidedTraversal(pathAlgorithm: SolidPathAlgorithm.AStar, allowTraversalTransitions: true);
@@ -418,14 +418,14 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(true)]
     public void RoundTrip_ShouldRestoreBlockedAerialGuideProgress(bool useMemoryPack)
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(3, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(4, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(4, 0, 0));
-        GuidedPathTestScene.AddObstacle(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(3, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(4, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(4, 0, 0));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, new Vector3d(2, 0, 0));
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetTrekCondition(medium: TraversalMedium.Gas);
@@ -464,9 +464,9 @@ public class NavigatorSerializationTests : IDisposable
     [InlineData(true)]
     public void RoundTrip_ShouldRestoreNavigatorAndSteeringState_ForGuidedSwimTraversal(bool useMemoryPack)
     {
-        GuidedPathTestScene.AddWater(Vector3d.Zero);
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 2));
+        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 2));
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetWaterContact(surfaceLevel: (Fixed64)2, updateMotorState: true);
@@ -607,7 +607,7 @@ public class NavigatorSerializationTests : IDisposable
     public void RoundTrip_ShouldRestorePendingAerialClimbHandoff_AndPreserveClimbOnFollowup(bool useMemoryPack)
     {
         const string sceneKey = "NavigatorSerializationAerialClimbHandoff";
-        GuidedPathTestScene.RegisterAerialClimbHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialClimbHandoffScene(TestWorld.Context, sceneKey);
 
         var source = CreateNavigator(Vector3d.Zero, size: Fixed64.One);
         source.SetTrekCondition(medium: TraversalMedium.Gas);
@@ -1099,15 +1099,15 @@ public class NavigatorSerializationTests : IDisposable
 
         if (medium == TraversalMedium.Gas)
         {
-            GuidedPathTestScene.AddOpen(Vector3d.Zero);
-            GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-            GuidedPathTestScene.AddOpen(new Vector3d(0, 2, 0));
-            GuidedPathTestScene.AddOpen(new Vector3d(0, 3, 0));
-            GuidedPathTestScene.AddOpen(new Vector3d(0, 4, 0));
-            GuidedPathTestScene.AddOpen(new Vector3d(1, 4, 0));
-            GuidedPathTestScene.AddOpen(new Vector3d(2, 4, 0));
-            GuidedPathTestScene.AddOpen(new Vector3d(3, 4, 0));
-            GuidedPathTestScene.AddOpen(new Vector3d(4, 4, 0));
+            GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+            GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+            GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 2, 0));
+            GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 3, 0));
+            GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 4, 0));
+            GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 4, 0));
+            GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 4, 0));
+            GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(3, 4, 0));
+            GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(4, 4, 0));
         }
 
         source.ApplyGuidedTrekRequest(
@@ -1189,17 +1189,17 @@ public class NavigatorSerializationTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData(chartKey, data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, chartKey, data, Vector3d.Zero);
     }
 
     private static void RegisterTransitionFallbackAStarScene()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("TransitionFallbackStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("TransitionFallbackEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "TransitionFallbackStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "TransitionFallbackEnd", new Vector3d(4, 0, 0));
 
-        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(3, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(3, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "transition-fallback-entry",
@@ -1229,8 +1229,8 @@ public class NavigatorSerializationTests : IDisposable
 
         PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One));
 
-        GuidedPathTestScene.AddWater(Vector3d.Zero);
-        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{chartKey}-exit",
@@ -1243,13 +1243,13 @@ public class NavigatorSerializationTests : IDisposable
     private static void RegisterAerialLandingHandoffScene(string sceneKey)
     {
         PathTestFactory.RegisterSingleTraversalPoint(
-            $"{sceneKey}-Landing",
+            TestWorld.Context, $"{sceneKey}-Landing",
             new Vector3d(1, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Gas);
-        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, $"{sceneKey}-Target", new Vector3d(4, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
 
-        GuidedPathTestScene.AddObstaclePlaneAtX(2);
+        GuidedPathTestScene.AddObstaclePlaneAtX(TestWorld.Context, 2);
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
@@ -1287,7 +1287,7 @@ public class NavigatorSerializationTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData(chartKey, data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, chartKey, data, Vector3d.Zero);
     }
 
     private static void RegisterHeightmapSurface(

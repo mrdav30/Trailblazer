@@ -100,8 +100,8 @@ public sealed class VolumeVoxelFinderTests : IDisposable
     {
         ConfigureGrid(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
 
-        PathTestFactory.RegisterSingleWalkablePoint("HostExtendedStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("HostExtendedEnd", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HostExtendedStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HostExtendedEnd", new Vector3d(1, 0, 0));
 
         VolumeMediumRules.SetGasVoxelRule(static voxel =>
             voxel != null
@@ -157,8 +157,8 @@ public sealed class VolumeVoxelFinderTests : IDisposable
         ConfigureGrid(Vector3d.Zero, new Vector3d(6, 6, 6));
         RegisterGasLine(new Vector3d(0, 2, 2), 5, "VolumeSizeFallback");
 
-        Voxel edgeVoxel = TestRequire.VoxelAt(new Vector3d(0, 2, 2));
-        Voxel interiorVoxel = TestRequire.VoxelAt(new Vector3d(1, 2, 2));
+        Voxel edgeVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(0, 2, 2));
+        Voxel interiorVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 2, 2));
 
         VolumeVoxelFinder.IsTraversable(TestWorld.Context, edgeVoxel, Fixed64.Two, TraversalMedium.Gas).Should().BeFalse();
         VolumeVoxelFinder.IsTraversable(TestWorld.Context, interiorVoxel, Fixed64.Two, TraversalMedium.Gas).Should().BeTrue();
@@ -191,12 +191,12 @@ public sealed class VolumeVoxelFinderTests : IDisposable
             for (int z = 0; z < 3; z++)
                 data[0, x, z] = true;
         }
-        PathTestFactory.RegisterFromData("SolidGasFallback", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "SolidGasFallback", data, Vector3d.Zero);
 
         VolumeMediumRules.SetGasVoxelRule(static voxel => voxel != null && voxel.HasPartition<SolidChartPartition>());
 
-        Voxel edgeVoxel = TestRequire.VoxelAt(new Vector3d(0, 0, 1));
-        Voxel interiorVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 1));
+        Voxel edgeVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(0, 0, 1));
+        Voxel interiorVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 1));
 
         VolumeVoxelFinder.IsTraversable(TestWorld.Context, edgeVoxel, Fixed64.Two, TraversalMedium.Gas).Should().BeFalse();
         VolumeVoxelFinder.IsTraversable(TestWorld.Context, interiorVoxel, Fixed64.Two, TraversalMedium.Gas).Should().BeTrue();
@@ -229,8 +229,8 @@ public sealed class VolumeVoxelFinderTests : IDisposable
         ConfigureGrid(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         RegisterGasLine(Vector3d.Zero, 3, "GasClearLine");
 
-        Voxel startVoxel = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel endVoxel = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
+        Voxel startVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel endVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(2, 0, 0));
 
         VolumeVoxelFinder.IsDirectPathClear(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -246,11 +246,11 @@ public sealed class VolumeVoxelFinderTests : IDisposable
     {
         ConfigureGrid(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         // Only the endpoints are gas — nothing in between.
-        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasGap");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 0), TraversalMedium.Gas, "GasGap");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, "GasGap");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(2, 0, 0), TraversalMedium.Gas, "GasGap");
 
-        Voxel startVoxel = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel endVoxel = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
+        Voxel startVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel endVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(2, 0, 0));
 
         // The voxel at (1,0,0) has no gas medium → IsTraversable(1,0,0) returns false.
         VolumeVoxelFinder.IsDirectPathClear(TestWorld.Context, Vector3d.Zero,
@@ -268,11 +268,11 @@ public sealed class VolumeVoxelFinderTests : IDisposable
         ConfigureGrid(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         // Solid start, then gas neighbors — the solid voxel is registered as the relaxed startNode but
         // it has no gas membership, so PassesMedium fails and IsDirectPathClear returns false.
-        PathTestFactory.RegisterSingleWalkablePoint("RelaxedSolidStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RelaxedSolidStart", Vector3d.Zero);
         RegisterGasLine(new Vector3d(1, 0, 0), 2, "RelaxedGasRest");
 
-        Voxel solidStart = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel gasEnd = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
+        Voxel solidStart = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel gasEnd = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(2, 0, 0));
 
         // allowUnwalkableEndpoints=true + startNode given → the solid voxel is a relaxed endpoint
         // but PassesMedium(solidVoxel, Gas) = false → returns false.
@@ -291,8 +291,8 @@ public sealed class VolumeVoxelFinderTests : IDisposable
         ConfigureGrid(Vector3d.Zero, new Vector3d(6, 6, 6));
         RegisterGasLine(new Vector3d(0, 2, 2), 3, "RelaxedEndOnly");
 
-        Voxel interiorStart = TestRequire.VoxelAt(new Vector3d(1, 2, 2));
-        Voxel edgeEnd = TestRequire.VoxelAt(new Vector3d(0, 2, 2));
+        Voxel interiorStart = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 2, 2));
+        Voxel edgeEnd = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(0, 2, 2));
 
         VolumeVoxelFinder.IsTraversable(TestWorld.Context, interiorStart, Fixed64.Two, TraversalMedium.Gas).Should().BeTrue();
         VolumeVoxelFinder.IsTraversable(TestWorld.Context, edgeEnd, Fixed64.Two, TraversalMedium.Gas).Should().BeFalse();
@@ -311,10 +311,10 @@ public sealed class VolumeVoxelFinderTests : IDisposable
     {
         ConfigureGrid(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
         // Register gas elsewhere so IsConfigured(Gas) = true, giving us a configured medium.
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(3, 0, 0), TraversalMedium.Gas, "GasElsewhere");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(3, 0, 0), TraversalMedium.Gas, "GasElsewhere");
 
         // Get a plain grid voxel that has no chart partition at all.
-        Voxel plainVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel plainVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         // IsBaseTraversable → no VolumeChartPartition and no SolidChartPartition → return false.
         VolumeVoxelFinder.IsTraversable(TestWorld.Context, plainVoxel, Fixed64.One, TraversalMedium.Gas).Should().BeFalse();
@@ -367,10 +367,10 @@ public sealed class VolumeVoxelFinderTests : IDisposable
     public void TryGetClosestTraversableVoxel_ShouldPreferPerpendicularNeighbor_WhenOneIsAvailable()
     {
         ConfigureGrid(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 1), TraversalMedium.Gas, "GasClosestPerpendicular");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 2), TraversalMedium.Gas, "GasClosestPerpendicular");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(2, 0, 1), TraversalMedium.Gas, "GasClosestPerpendicular");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(2, 0, 2), TraversalMedium.Gas, "GasClosestPerpendicular");
 
-        Voxel center = TestRequire.VoxelAt(new Vector3d(1, 0, 1));
+        Voxel center = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 1));
 
         VolumeVoxelFinder.TryGetClosestTraversableVoxel(TestWorld.Context, center,
             out Voxel? closestNeighbor,
@@ -385,9 +385,9 @@ public sealed class VolumeVoxelFinderTests : IDisposable
     public void TryGetClosestTraversableVoxel_ShouldFallbackToDiagonalNeighbor_WhenNoPerpendicularCandidateMatches()
     {
         ConfigureGrid(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 2), TraversalMedium.Gas, "GasClosestDiagonal");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(2, 0, 2), TraversalMedium.Gas, "GasClosestDiagonal");
 
-        Voxel center = TestRequire.VoxelAt(new Vector3d(1, 0, 1));
+        Voxel center = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 1));
 
         VolumeVoxelFinder.TryGetClosestTraversableVoxel(TestWorld.Context, center,
             out Voxel? closestNeighbor,
@@ -402,7 +402,7 @@ public sealed class VolumeVoxelFinderTests : IDisposable
         for (int i = 0; i < length; i++)
         {
             PathTestFactory.RegisterGeneratedVolumePoint(
-                new Vector3d(start.x + i, start.y, start.z),
+                TestWorld.Context, new Vector3d(start.x + i, start.y, start.z),
                 TraversalMedium.Gas,
                 chartNamePrefix);
         }

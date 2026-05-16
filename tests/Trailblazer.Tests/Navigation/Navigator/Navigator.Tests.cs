@@ -44,7 +44,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorAStar", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorAStar", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -140,7 +140,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorFlowField", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorFlowField", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -173,10 +173,10 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_Should_CreateAerialRequest_AndEnableFlight()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 2, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 3, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 2, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 3, 0));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -306,7 +306,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorGuidedClimbIntent", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorGuidedClimbIntent", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -326,7 +326,7 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_ShouldEnableClimb_WhenTransitionAwareRouteRequestsIt()
     {
-        GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
+        GuidedPathTestScene.RegisterTransitionFallbackClimbScene(TestWorld.Context);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -346,7 +346,7 @@ public class NavigatorTests : IDisposable
     public void ApplyGuidedTrekRequest_ShouldPreserveClimbAcrossSwimExitHandoff_WhenGeneratedSwimExitTargetsLiquidClimbShoreline()
     {
         const string chartKey = "NavigatorLiquidClimbExit";
-        GuidedPathTestScene.RegisterLiquidClimbExitScene(chartKey);
+        GuidedPathTestScene.RegisterLiquidClimbExitScene(TestWorld.Context, chartKey);
 
         var navigator = CreateNavigator(new Vector3d(1, 0, 0));
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -381,9 +381,9 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_Should_CreateLiquidRequest_WithoutAutoSwimIntent_WhenInWater()
     {
-        GuidedPathTestScene.AddWater(Vector3d.Zero);
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 2));
+        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 2));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -406,9 +406,9 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_ShouldCaptureExplicitSwimIntent_WhenRequestedInWater()
     {
-        GuidedPathTestScene.AddWater(Vector3d.Zero);
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 2));
+        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 2));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -428,7 +428,7 @@ public class NavigatorTests : IDisposable
     public void ApplyGuidedTrekRequest_ShouldPreserveClimbAcrossGuidedHandoff_WhenTransitionRequestsIt()
     {
         const string sceneKey = "NavigatorAerialClimbHandoff";
-        GuidedPathTestScene.RegisterAerialClimbHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialClimbHandoffScene(TestWorld.Context, sceneKey);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -471,7 +471,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorAutoGuidedClimbSync", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorAutoGuidedClimbSync", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.SetTestSteering(new ScriptedRouteTopologySteering(
@@ -492,7 +492,7 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void Simulate_ShouldClearAutoGuidedClimbIntent_WhenSteeringPublishesNonClimbRouteTopology()
     {
-        GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
+        GuidedPathTestScene.RegisterTransitionFallbackClimbScene(TestWorld.Context);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.SetTestSteering(new ScriptedRouteTopologySteering(
@@ -523,7 +523,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorExplicitGuidedClimbSticky", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorExplicitGuidedClimbSticky", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.SetTestSteering(new ScriptedRouteTopologySteering(
@@ -591,7 +591,7 @@ public class NavigatorTests : IDisposable
     public void Simulate_ShouldRecomputeAutoGuidedClimbIntent_FromFollowupRouteTopology_AfterVolumeExitHandoff()
     {
         const string chartKey = "NavigatorVolumeExitFollowupClimb";
-        GuidedPathTestScene.RegisterVolumeExitFollowupClimbScene(chartKey);
+        GuidedPathTestScene.RegisterVolumeExitFollowupClimbScene(TestWorld.Context, chartKey);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -651,9 +651,9 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void ApplyGuidedTrekRequest_Should_RejectSwimRequests_WhenNavigatorIsNotInWater()
     {
-        GuidedPathTestScene.AddWater(Vector3d.Zero);
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 2));
+        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 2));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -698,7 +698,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorResetGuided", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorResetGuided", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
@@ -726,7 +726,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorGuidedHeading", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorGuidedHeading", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.ApplyGuidedTrekRequest(new Vector3d(4, 0, 0), rate: TrekRate.Moderate);
@@ -743,10 +743,10 @@ public class NavigatorTests : IDisposable
     [Fact]
     public void Simulate_Should_PersistGuidedFlightIntent_BetweenFrames()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 2, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 3, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 2, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 3, 0));
 
         var navigator = CreateNavigator(Vector3d.Zero);
         navigator.SetAirborne();
@@ -779,7 +779,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorArriveStopsHeading", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorArriveStopsHeading", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -909,7 +909,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorGuidedTurnWhileLockedOn", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorGuidedTurnWhileLockedOn", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavTurning turning = TestRequire.NotNull(navigator.Turning);
@@ -1159,7 +1159,7 @@ public class NavigatorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("NavigatorGuidedClimbClear", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NavigatorGuidedClimbClear", data, Vector3d.Zero);
 
         var navigator = CreateNavigator(Vector3d.Zero);
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
@@ -1345,12 +1345,12 @@ public class NavigatorTests : IDisposable
 
     private static void RegisterTransitionFallbackScene()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("NavigatorTransitionFallbackStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("NavigatorTransitionFallbackEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "NavigatorTransitionFallbackStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "NavigatorTransitionFallbackEnd", new Vector3d(4, 0, 0));
 
-        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(3, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(3, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "navigator-transition-fallback-entry",
@@ -1370,13 +1370,13 @@ public class NavigatorTests : IDisposable
     private static void RegisterAerialLandingHandoffScene(string sceneKey)
     {
         PathTestFactory.RegisterSingleTraversalPoint(
-            $"{sceneKey}-Landing",
+            TestWorld.Context, $"{sceneKey}-Landing",
             new Vector3d(1, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Gas);
-        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, $"{sceneKey}-Target", new Vector3d(4, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
 
-        GuidedPathTestScene.AddObstaclePlaneAtX(2);
+        GuidedPathTestScene.AddObstaclePlaneAtX(TestWorld.Context, 2);
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
@@ -1412,8 +1412,8 @@ public class NavigatorTests : IDisposable
 
         PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One));
 
-        GuidedPathTestScene.AddWater(Vector3d.Zero);
-        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: $"{chartKey}-exit",

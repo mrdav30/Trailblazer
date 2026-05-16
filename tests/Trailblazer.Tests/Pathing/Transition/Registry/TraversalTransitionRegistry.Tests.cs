@@ -30,8 +30,8 @@ public class TraversalTransitionRegistryTests : IDisposable
     {
         Vector3d source = Vector3d.Zero;
         Vector3d destination = new(1, 0, 0);
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryChartSource", source);
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryChartDestination", destination);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryChartSource", source);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryChartDestination", destination);
 
         var transition = new TraversalTransition(
             id: "jump-link",
@@ -62,8 +62,8 @@ public class TraversalTransitionRegistryTests : IDisposable
             out WorldVoxelIndex sourceVoxelIndex,
             out WorldVoxelIndex destinationVoxelIndex));
 
-        Voxel sourceVoxel = TestRequire.VoxelAt(source);
-        Voxel destinationVoxel = TestRequire.VoxelAt(destination);
+        Voxel sourceVoxel = TestRequire.VoxelAt(TestWorld.Context, source);
+        Voxel destinationVoxel = TestRequire.VoxelAt(TestWorld.Context, destination);
         Assert.Equal(sourceVoxel.WorldIndex, sourceVoxelIndex);
         Assert.Equal(destinationVoxel.WorldIndex, destinationVoxelIndex);
     }
@@ -89,17 +89,17 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void Register_ShouldSupportVoxelScopedAnchorsWithPointOverrides()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryPointOverrideSource", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryPointOverrideDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryPointOverrideSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryPointOverrideDestination", new Vector3d(1, 0, 0));
 
-        Voxel sourceVoxel = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel destinationVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel sourceVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel destinationVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         Vector3d pointOverride = sourceVoxel.WorldPosition + new Vector3d(
             TestWorld.Context.VoxelSize / 4,
             Fixed64.Zero,
             Fixed64.Zero);
-        Voxel overrideVoxel = TestRequire.VoxelAt(pointOverride);
+        Voxel overrideVoxel = TestRequire.VoxelAt(TestWorld.Context, pointOverride);
         Assert.Equal(sourceVoxel.WorldIndex, overrideVoxel.WorldIndex);
 
         var transition = new TraversalTransition(
@@ -177,8 +177,8 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void Register_ShouldRejectDuplicateManualTransitions_WhenEffectiveSemanticsMatch()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryDuplicateSource", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryDuplicateDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryDuplicateSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryDuplicateDestination", new Vector3d(1, 0, 0));
 
         var first = new TraversalTransition(
             id: "manual-duplicate-a",
@@ -206,10 +206,10 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void Register_ShouldAllowDistinctPointOverrideTransitionsToCoexist()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryDistinctOverrideSource", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryDistinctOverrideDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryDistinctOverrideSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryDistinctOverrideDestination", new Vector3d(1, 0, 0));
 
-        Voxel sourceVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel sourceVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         Vector3d pointOverride = sourceVoxel.WorldPosition + new Vector3d(
             TestWorld.Context.VoxelSize / 4,
@@ -242,11 +242,11 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void Register_ShouldRejectTransition_WhenDestinationGridIsRemovedAfterAnchorCreation()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryRemovedGridSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryRemovedGridSource", Vector3d.Zero);
         Assert.True(TestWorld.World.TryAddGrid(
             new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(14, 4, 4)),
             out ushort removedGridIndex));
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryRemovedGridDestination", new Vector3d(10, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryRemovedGridDestination", new Vector3d(10, 0, 0));
 
         var transition = new TraversalTransition(
             id: "removed-grid-destination",
@@ -293,8 +293,8 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void Register_ShouldOverrideEquivalentGeneratedTransition_WithoutUnregisteringIt()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryOverrideSource", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryOverrideDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryOverrideSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryOverrideDestination", new Vector3d(1, 0, 0));
 
         var generated = new TraversalTransition(
             id: "generated-link",
@@ -411,8 +411,8 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void PathManagerReset_ShouldClearTransitionRegistry()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryResetSource", Vector3d.Zero);
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(0, 1, 0), TraversalMedium.Gas, "RegistryResetGas");
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryResetSource", Vector3d.Zero);
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(0, 1, 0), TraversalMedium.Gas, "RegistryResetGas");
 
         var transition = new TraversalTransition(
             id: "reset-check",
@@ -468,7 +468,7 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void RegisterAndUnregister_ShouldSupportSameVoxelManualTransitions()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryLoopPoint", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryLoopPoint", Vector3d.Zero);
 
         var transition = new TraversalTransition(
             id: "loop-link",
@@ -477,7 +477,7 @@ public class TraversalTransitionRegistryTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(Vector3d.Zero));
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         TraversalTransition[] outgoing = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
         TraversalTransition[] incoming = TraversalTransitionRegistry.GetIncomingTransitions(Vector3d.Zero);
@@ -498,8 +498,8 @@ public class TraversalTransitionRegistryTests : IDisposable
     [Fact]
     public void GetActiveTransitionsTouchingGrid_ShouldDeduplicateTransitionsReferencedByBothEndpoints()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryGridSource", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("RegistryGridDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryGridSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "RegistryGridDestination", new Vector3d(1, 0, 0));
 
         var transition = new TraversalTransition(
             id: "same-grid",
@@ -508,7 +508,7 @@ public class TraversalTransitionRegistryTests : IDisposable
             destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
 
         Assert.True(TraversalTransitionRegistry.Register(transition));
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         TraversalTransition[] touching = TraversalTransitionRegistry.GetActiveTransitionsTouchingGrid(voxel.GridIndex);
 

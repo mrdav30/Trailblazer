@@ -27,7 +27,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     [Fact]
     public void TryPlan_ShouldRejectUnsupportedChartModes()
     {
-        GuidedPathTestScene.RegisterVolumeExitHandoffScene("GuidedPlannerRejectMode");
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, "GuidedPlannerRejectMode");
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -52,7 +52,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryPlan_ShouldCreateAStarExitPlan_ForLocalSwimExit()
     {
         const string sceneKey = "GuidedPlannerAStar";
-        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -83,7 +83,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryPlan_ShouldCreateFlowFieldExitPlan_ForLocalSwimExit()
     {
         const string sceneKey = "GuidedPlannerFlow";
-        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -114,7 +114,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryPlan_ShouldUseTransitionAwareAStarChartLeg_ForAerialLanding()
     {
         const string sceneKey = "GuidedPlannerAerialAStar";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -142,7 +142,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryPlan_ShouldUseTransitionAwareFlowFieldChartLeg_ForAerialLanding()
     {
         const string sceneKey = "GuidedPlannerAerialFlow";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -171,7 +171,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryPlan_ShouldFail_WhenAStarChartLegNeedsTransitionsButFallbackIsDisabled()
     {
         const string sceneKey = "GuidedPlannerAerialAStarDisabled";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -196,7 +196,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryPlan_ShouldFail_WhenFlowFieldChartLegNeedsTransitionsButFallbackIsDisabled()
     {
         const string sceneKey = "GuidedPlannerAerialFlowDisabled";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -223,7 +223,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryPlan_ShouldAllowZeroDisplacementChartLeg(SolidPathAlgorithm chartPathMode)
     {
         const string sceneKey = "GuidedPlannerZeroChartLeg";
-        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -251,7 +251,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryPlan_ShouldFail_WhenTargetIsOutsideEveryActiveGrid()
     {
         const string sceneKey = "GuidedPlannerOutsideGrid";
-        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(40, 0, 0),
@@ -276,8 +276,8 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryPlan_ShouldFail_WhenNoTransitionsCanExitVolume()
     {
         RegisterSolidTargetLine("GuidedPlannerNoTransition", new Vector3d(2, 0, 0), 3);
-        GuidedPathTestScene.AddWater(Vector3d.Zero);
-        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
 
         GuidedVolumeExitPlanner.TryPlan(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -327,7 +327,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
     public void TryGetTransitionAwareChartCost_ShouldAssignCost_WhenRouteUsesDirectedTransitions()
     {
         const string sceneKey = "GuidedPlannerTransitionAwareHelper";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
 
         AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(1, 0, 0),
             new Vector3d(4, 0, 0),
@@ -348,7 +348,7 @@ public sealed class GuidedVolumeExitPlannerTests : IDisposable
         for (int i = 0; i < length; i++)
             data[0, i, 0] = true;
 
-        PathTestFactory.RegisterFromData(chartKey, data, minBounds);
+        PathTestFactory.RegisterFromData(TestWorld.Context, chartKey, data, minBounds);
     }
 }
 

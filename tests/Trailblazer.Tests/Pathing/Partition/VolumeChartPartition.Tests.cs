@@ -63,8 +63,8 @@ public sealed class VolumeChartPartitionTests : IDisposable
     [Fact]
     public void HandleChange_ShouldTrackObstacleEvents_WhenAttachedToVoxel()
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Liquid, "VolumePartitionObstacle");
-        var (grid, voxel) = TestRequire.GridAndVoxelAt(Vector3d.Zero);
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, Vector3d.Zero, TraversalMedium.Liquid, "VolumePartitionObstacle");
+        var (grid, voxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, Vector3d.Zero);
         voxel!.TryGetPartition(out VolumeChartPartition? partition).Should().BeTrue();
         partition!.IsWalkable.Should().BeTrue();
 

@@ -18,9 +18,9 @@ public sealed class PathRequestCoverageTests : IDisposable
             new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8)),
             out _);
 
-        PathTestFactory.RegisterLineChart("BaseGridZero", Vector3d.Zero, 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "BaseGridZero", Vector3d.Zero, 3);
         RegisterGasLine(new Vector3d(0, 0, 2), 3, "VolumeGridZero");
-        PathTestFactory.RegisterLineChart("HybridSingle", new Vector3d(4, 0, 0), 1);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridSingle", new Vector3d(4, 0, 0), 1);
     }
 
     public void Dispose()
@@ -119,7 +119,7 @@ public sealed class PathRequestCoverageTests : IDisposable
         request.TrySetDestination(new Vector3d(2, 0, 2)).Should().BeFalse();
 
         Vector3d boundaryPoint = new(-4, -4, -4);
-        PathTestFactory.RegisterGeneratedVolumePoint(boundaryPoint, TraversalMedium.Gas, "VolumeUnitSizeSingle");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, boundaryPoint, TraversalMedium.Gas, "VolumeUnitSizeSingle");
         VolumePathRequest sizeSensitive = VolumePathRequest.Create(TestWorld.Context, boundaryPoint,
             boundaryPoint,
             Fixed64.One,
@@ -257,7 +257,7 @@ public sealed class PathRequestCoverageTests : IDisposable
                 { true, true, true }
             }
         };
-        PathTestFactory.RegisterFromData("HybridUnitSizeRoomy", roomyChart, new Vector3d(-3, 0, -3));
+        PathTestFactory.RegisterFromData(TestWorld.Context, "HybridUnitSizeRoomy", roomyChart, new Vector3d(-3, 0, -3));
 
         HybridPathRequest roomyHybrid = HybridPathRequest.Create(TestWorld.Context, new Vector3d(-3, 0, -3),
             new Vector3d(-1, 0, -1),
@@ -286,8 +286,8 @@ public sealed class PathRequestCoverageTests : IDisposable
     [Fact]
     public void HybridPathRequest_ShouldRebuildAndHashTransitionAwarePlans()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("HybridGapStart", new Vector3d(5, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("HybridGapEnd", new Vector3d(7, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridGapStart", new Vector3d(5, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridGapEnd", new Vector3d(7, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "hybrid-gap",
@@ -363,7 +363,7 @@ public sealed class PathRequestCoverageTests : IDisposable
         for (int i = 0; i < length; i++)
         {
             PathTestFactory.RegisterGeneratedVolumePoint(
-                new Vector3d(start.x + i, start.y, start.z),
+                TestWorld.Context, new Vector3d(start.x + i, start.y, start.z),
                 TraversalMedium.Gas,
                 chartNamePrefix);
         }

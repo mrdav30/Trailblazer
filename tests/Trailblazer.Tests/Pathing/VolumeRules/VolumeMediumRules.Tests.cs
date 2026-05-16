@@ -81,7 +81,7 @@ public sealed class VolumeMediumRulesTests : IDisposable
     [Fact]
     public void VolumeMediumRules_Matches_ShouldReturnFalse_ForVoxelWithNoPartition()
     {
-        Voxel voxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         VolumeMediumRules.SetGasVoxelRule(static v => true);
 
@@ -102,8 +102,8 @@ public sealed class VolumeMediumRulesTests : IDisposable
     [Fact]
     public void VolumeMediumRules_Matches_ShouldReturnFalse_ForUnknownMedium()
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "VMRGasTest");
-        Voxel voxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(1, 0, 0), TraversalMedium.Gas, "VMRGasTest");
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         VolumeMediumRules.Matches(voxel, TraversalMedium.Unknown).Should().BeFalse();
     }

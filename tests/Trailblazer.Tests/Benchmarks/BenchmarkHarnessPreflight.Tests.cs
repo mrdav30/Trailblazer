@@ -296,7 +296,7 @@ public sealed class BenchmarkHarnessPreflightTests
             for (int z = 0; z < size; z++)
                 data[0, x, z] = true;
 
-        PathTestFactory.RegisterFromData(chartName, data, minBounds);
+        PathTestFactory.RegisterFromData(TestWorld.Context, chartName, data, minBounds);
         return new Vector3d(
             minBounds.x + (Fixed64)(size - 1),
             minBounds.y,

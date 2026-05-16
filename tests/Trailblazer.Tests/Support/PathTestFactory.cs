@@ -29,14 +29,17 @@ public static class PathTestFactory
         return context;
     }
 
-    public static NavigationChart RegisterSingleWalkablePoint(string mapName, Vector3d pos)
+    public static NavigationChart RegisterSingleWalkablePoint(
+        TrailblazerWorldContext context,
+        string mapName,
+        Vector3d pos)
     {
         Vector3d minBounds = pos - new Vector3d(1, 1, 1);
         bool[,,] data = new bool[3, 3, 3];
         data[1, 1, 1] = true;
 
         var map = NavigationChart.From3D(mapName, data, minBounds, Fixed64.One);
-        TestWorld.Context.Pathing.Register(map);
+        context.Pathing.Register(map).Should().BeTrue();
         return map;
     }
 
@@ -57,31 +60,26 @@ public static class PathTestFactory
         return chart;
     }
 
-    public static NavigationChart RegisterSolidPoint(string chartName, Vector3d position)
-    {
-        var data = new bool[1, 1, 1]
-        {
-            {
-                { true }
-            }
-        };
 
-        var chart = NavigationChart.From3D(chartName, data, position, Fixed64.One);
-        TestWorld.Context.Pathing.Register(chart).Should().BeTrue();
-        return chart;
-    }
-
-    public static NavigationChart RegisterFromData(string name, bool[,,] data, Vector3d minBounds)
+    public static NavigationChart RegisterFromData(
+        TrailblazerWorldContext context,
+        string name,
+        bool[,,] data,
+        Vector3d minBounds)
     {
-        var map = NavigationChart.From3D(name, data, minBounds, TestWorld.Context.VoxelSize);
-        TestWorld.Context.Pathing.Register(map);
+        var map = NavigationChart.From3D(name, data, minBounds, context.VoxelSize);
+        context.Pathing.Register(map).Should().BeTrue();
         return map;
     }
 
-    public static NavigationChart RegisterLineChart(string chartName, Vector3d minBounds, int length)
+    public static NavigationChart RegisterLineChart(
+        TrailblazerWorldContext context,
+        string chartName,
+        Vector3d minBounds,
+        int length)
     {
         var data = BuildSolidLineData(length);
-        return RegisterFromData(chartName, data, minBounds);
+        return RegisterFromData(context, chartName, data, minBounds);
     }
 
     public static NavigationChart RegisterSolidLine(
@@ -96,13 +94,9 @@ public static class PathTestFactory
         return chart;
     }
 
-    public static NavigationChart RegisterSolidLine(string chartName, Vector3d minBounds, int length)
-    {
-        var data = BuildSolidLineData(length);
-        return RegisterFromData(chartName, data, minBounds);
-    }
 
     public static void RegisterVolumeLine(
+        TrailblazerWorldContext context,
         Vector3d start,
         TraversalMedium medium,
         int length,
@@ -111,13 +105,16 @@ public static class PathTestFactory
         for (int i = 0; i < length; i++)
         {
             RegisterGeneratedVolumePoint(
+                context,
                 new Vector3d(start.x + i, start.y, start.z),
                 medium,
-            chartNamePrefix);
+                chartNamePrefix);
         }
     }
 
-    public static TraversalBuildResult RegisterAuthoredClimbRoute(string chartName)
+    public static TraversalBuildResult RegisterAuthoredClimbRoute(
+        TrailblazerWorldContext context,
+        string chartName)
     {
         string[,,] map = new string[2, 4, 2];
         map[0, 0, 0] = "S";
@@ -135,7 +132,7 @@ public static class PathTestFactory
             Fixed64.One).Build();
 
         buildResult.GeneratedTransitions.Should().NotBeEmpty();
-        PathManager.Register(buildResult).Should().BeTrue();
+        context.Pathing.Register(buildResult).Should().BeTrue();
         return buildResult;
     }
 
@@ -156,6 +153,7 @@ public static class PathTestFactory
     }
 
     public static NavigationChart RegisterSingleTraversalPoint(
+        TrailblazerWorldContext context,
         string mapName,
         Vector3d pos,
         TraversalMedia traversalKinds)
@@ -165,16 +163,18 @@ public static class PathTestFactory
         data[1, 1, 1] = new NavigationChartCell(traversalKinds);
 
         var map = NavigationChart.From3D(mapName, data, minBounds, Fixed64.One);
-        TestWorld.Context.Pathing.Register(map);
+        context.Pathing.Register(map).Should().BeTrue();
         return map;
     }
 
     public static NavigationChart RegisterGeneratedVolumePoint(
+        TrailblazerWorldContext context,
         Vector3d pos,
         TraversalMedium medium,
         string chartNamePrefix = "GeneratedVolume")
     {
         return RegisterSingleTraversalPoint(
+            context,
             mapName: $"{chartNamePrefix}-{Interlocked.Increment(ref _generatedChartId)}",
             pos: pos,
             traversalKinds: ToTraversalKinds(medium));

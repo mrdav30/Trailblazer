@@ -513,7 +513,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         resolvedState.AddOwner(chart.Name, NavigationChartCell.Solid, priority: 0, registrationOrder: 1);
         SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> resolvedStates =
             PathManager.ActiveState.ResolvedChartVoxelStates;
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         resolvedStates[voxel.WorldIndex] = resolvedState;
 
         ReflectionUtility.InvokePrivateStatic<bool>(
@@ -708,7 +708,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
 
         NavigationChart chart = PathTestFactory.BuildSinglePointMap("ResolvedVoxelChart", Vector3d.Zero);
         NavigationChartRegistration registration = new(chart, registrationOrder: 1, chart.Name);
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         SwiftDictionary<WorldVoxelIndex, ResolvedChartVoxelState> resolvedStates =
             PathManager.ActiveState.ResolvedChartVoxelStates;
@@ -753,7 +753,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
         GridConfiguration config = new(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4));
         TestWorld.World.TryAddGrid(config, out ushort gridIndex).Should().BeTrue();
 
-        NavigationChart chart = PathTestFactory.RegisterSingleWalkablePoint("ClearTailChart", Vector3d.Zero);
+        NavigationChart chart = PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClearTailChart", Vector3d.Zero);
         PathManager.IsChartInitialized(chart).Should().BeTrue();
 
         TestWorld.World.TryRemoveGrid(gridIndex).Should().BeTrue();

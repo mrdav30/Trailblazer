@@ -129,7 +129,7 @@ public sealed class EndpointVoxelResolverTests : IDisposable
 
     private static Voxel GetVoxel(Vector3d position)
     {
-        Voxel voxel = TestRequire.VoxelAt(position);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, position);
         return voxel;
     }
 

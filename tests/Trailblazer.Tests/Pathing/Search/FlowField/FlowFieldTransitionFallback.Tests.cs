@@ -102,9 +102,9 @@ public class FlowFieldTransitionFallbackTests : IDisposable
         RegisterTwoPointChart("WaterStart", new Vector3d(-2, 0, 0));
         RegisterTwoPointChart("WaterEnd", new Vector3d(3, 0, 0));
 
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(2, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "water-entry",
@@ -172,7 +172,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
     [Fact]
     public void FlowFieldRequest_ShouldUseTransitionFallback_ForGeneratedClimbTopology()
     {
-        PathTestFactory.RegisterAuthoredClimbRoute("FlowFieldClimbFallback");
+        PathTestFactory.RegisterAuthoredClimbRoute(TestWorld.Context, "FlowFieldClimbFallback");
 
         FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(3, 0, 1),
@@ -207,7 +207,7 @@ public class FlowFieldTransitionFallbackTests : IDisposable
         bool[,,] data = new bool[1, 2, 1];
         data[0, 0, 0] = true;
         data[0, 1, 0] = true;
-        PathTestFactory.RegisterFromData(chartName, data, minBounds);
+        PathTestFactory.RegisterFromData(TestWorld.Context, chartName, data, minBounds);
     }
 
 }

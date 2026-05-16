@@ -34,7 +34,7 @@ public sealed class VolumeSurveyorTests : IDisposable
     {
         VolumeSurveyor.Shared.FindPath(null!).HasPath.Should().BeFalse();
 
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
 
         VolumePathRequest sameVoxel = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero, Vector3d.Zero, Fixed64.One));
         VolumeSurveyor.Shared.FindPath(sameVoxel).HasPath.Should().BeFalse();
@@ -47,8 +47,8 @@ public sealed class VolumeSurveyorTests : IDisposable
     [Fact]
     public void FindPath_ShouldReturnEmpty_WhenNoRouteExists()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 0, 0));
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -63,8 +63,8 @@ public sealed class VolumeSurveyorTests : IDisposable
     [Fact]
     public void FindPath_ShouldRejectDiagonalCornerCutting()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 0, 1));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 0, 1));
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 1),
@@ -80,8 +80,8 @@ public sealed class VolumeSurveyorTests : IDisposable
     public void FindPath_ShouldSucceed_WithAdjacentConnectedGasVoxels()
     {
         // Two adjacent gas voxels form the minimal viable path.
-        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasSuccA");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasSuccA");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, "GasSuccA");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasSuccA");
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -112,7 +112,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         };
 
         foreach (Vector3d pos in positions)
-            PathTestFactory.RegisterGeneratedVolumePoint(pos, TraversalMedium.Gas, "GasLShape");
+            PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, pos, TraversalMedium.Gas, "GasLShape");
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 2),
@@ -134,8 +134,8 @@ public sealed class VolumeSurveyorTests : IDisposable
     public void FindPath_ShouldTrackVolumeChartKeys_WhenPathPassesThroughVolumePartition()
     {
         // Gas voxels registered individually each produce their own VolumeChartPartition.
-        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasChartKeys");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasChartKeys");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, "GasChartKeys");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasChartKeys");
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -155,8 +155,8 @@ public sealed class VolumeSurveyorTests : IDisposable
     {
         // With allowUnwalkableEndpoints enabled the surveyor uses the lighter Matches check
         // for the EndNode so a voxel that would normally fail clearance can still terminate the path.
-        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasRelaxed");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasRelaxed");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, "GasRelaxed");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasRelaxed");
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -187,7 +187,7 @@ public sealed class VolumeSurveyorTests : IDisposable
         };
 
         foreach (Vector3d pos in positions)
-            PathTestFactory.RegisterGeneratedVolumePoint(pos, TraversalMedium.Gas, "GasStraight");
+            PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, pos, TraversalMedium.Gas, "GasStraight");
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -219,7 +219,7 @@ public sealed class VolumeSurveyorTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("SolidVolumeOwners", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "SolidVolumeOwners", data, Vector3d.Zero);
         VolumeMediumRules.SetGasVoxelRule(static voxel => voxel != null && voxel.HasPartition<SolidChartPartition>());
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
@@ -237,15 +237,15 @@ public sealed class VolumeSurveyorTests : IDisposable
     [Fact]
     public void VolumeSurveyor_ProcessNeighbors_ShouldReturnFalse_WhenCurrentVoxelHasNoRecordedMeta()
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "VolumeMissingMeta");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "VolumeMissingMeta");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, "VolumeMissingMeta");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(1, 0, 0), TraversalMedium.Gas, "VolumeMissingMeta");
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
             Fixed64.One,
             medium: TraversalMedium.Gas));
 
-        Voxel current = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel current = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         VolumeSurveyor surveyor = new();
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
@@ -264,10 +264,10 @@ public sealed class VolumeSurveyorTests : IDisposable
         };
 
         foreach (Vector3d position in positions)
-            PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, "VolumeHelperUpdate");
+            PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, position, TraversalMedium.Gas, "VolumeHelperUpdate");
 
-        Voxel current = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel neighbor = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel current = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel neighbor = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
         VolumeChartPartition neighborPartition = TestRequire.NotNull(neighbor.GetPartitionOrDefault<VolumeChartPartition>());
         neighborPartition.PathCostModifier = 25;
 
@@ -326,10 +326,10 @@ public sealed class VolumeSurveyorTests : IDisposable
     public void FindPath_ShouldFindDirectDiagonalPath_WhenEndNodeIsDiagonallyAdjacent()
     {
         // Register all four corners so the diagonal legs (1,0,0) and (0,0,1) are traversable.
-        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "GasDiagEnd");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasDiagEnd");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(0, 0, 1), TraversalMedium.Gas, "GasDiagEnd");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 1), TraversalMedium.Gas, "GasDiagEnd");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, "GasDiagEnd");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(1, 0, 0), TraversalMedium.Gas, "GasDiagEnd");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(0, 0, 1), TraversalMedium.Gas, "GasDiagEnd");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(1, 0, 1), TraversalMedium.Gas, "GasDiagEnd");
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 1),

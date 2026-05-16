@@ -36,7 +36,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.TryGetNavigationChart("TestMap", out var retrieved));
         Assert.Equal(map, retrieved);
         Assert.False(PathManager.IsChartInitialized(map));
-        Voxel voxel = TestRequire.VoxelAt(new Vector3d(0, 0, 0));
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(0, 0, 0));
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart("TestMap");
@@ -52,7 +52,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.Register(map));
 
         Assert.True(PathManager.IsChartInitialized(map));
-        Voxel voxel = TestRequire.VoxelAt(new Vector3d(0, 0, 0));
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(0, 0, 0));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart("InitMap");
@@ -141,9 +141,9 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(PathManager.IsChartInitialized(first));
         Assert.True(PathManager.IsChartInitialized(second));
-        Voxel firstVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel firstVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(firstVoxel.TryGetPartition<SolidChartPartition>(out _));
-        Voxel secondVoxel = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
+        Voxel secondVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(2, 0, 0));
         Assert.True(secondVoxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart("DeferredA");
@@ -173,7 +173,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.InitializeChart("MapB");
 
         // Validate partition exists and belongs to both
-        Voxel voxel = TestRequire.VoxelAt(pos);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, pos);
         SolidChartPartition partition = TestRequire.Partition<SolidChartPartition>(voxel);
         Assert.True(partition.BelongsTo("MapA"));
         Assert.True(partition.BelongsTo("MapB"));
@@ -233,7 +233,7 @@ public class PathingNavigationMapTests : IDisposable
             TraversalMedia.Gas,
             priority: 1)));
 
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell worldCell));
         Assert.True(PathManager.TryGetEffectiveCell(voxel.WorldIndex, out NavigationChartCell voxelCell));
@@ -255,7 +255,7 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         TestWorld.World.TryAddGrid(config, out _);
 
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.False(PathManager.TryGetEffectiveCell(voxel.WorldIndex, out _));
         Assert.False(PathManager.TryGetEffectiveChartOwner(voxel.WorldIndex, out _));
     }
@@ -266,12 +266,12 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(12, 0, 4));
         TestWorld.World.TryAddGrid(config, out _);
 
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpStartA", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpEndA", new Vector3d(1, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestLandingStart", new Vector3d(3, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestLandingEnd", new Vector3d(4, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpStartB", new Vector3d(8, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestJumpEndB", new Vector3d(9, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestJumpStartA", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestJumpEndA", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestLandingStart", new Vector3d(3, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestLandingEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestJumpStartB", new Vector3d(8, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestJumpEndB", new Vector3d(9, 0, 0));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "closest-jump-a",
@@ -314,10 +314,10 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(12, 0, 4));
         TestWorld.World.TryAddGrid(config, out _);
 
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestReverseStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestReverseEnd", new Vector3d(1, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestFallbackStart", new Vector3d(6, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestFallbackEnd", new Vector3d(7, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestReverseStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestReverseEnd", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestFallbackStart", new Vector3d(6, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestFallbackEnd", new Vector3d(7, 0, 0));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "closest-bidirectional",
@@ -371,10 +371,10 @@ public class PathingNavigationMapTests : IDisposable
             new GridConfiguration(new Vector3d(4, -4, -4), new Vector3d(12, 4, 4)),
             out _));
 
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestLocalSource", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestLocalDestination", new Vector3d(1, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestNeighborSource", new Vector3d(4, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("ClosestNeighborDestination", new Vector3d(5, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestLocalSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestLocalDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestNeighborSource", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ClosestNeighborDestination", new Vector3d(5, 0, 0));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "closest-local-grid",
@@ -405,10 +405,10 @@ public class PathingNavigationMapTests : IDisposable
             new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(14, 4, 4)),
             out _));
 
-        PathTestFactory.RegisterSingleWalkablePoint("OutsideSearchNearSource", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("OutsideSearchNearDestination", new Vector3d(1, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("OutsideSearchFarSource", new Vector3d(10, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("OutsideSearchFarDestination", new Vector3d(11, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "OutsideSearchNearSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "OutsideSearchNearDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "OutsideSearchFarSource", new Vector3d(10, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "OutsideSearchFarDestination", new Vector3d(11, 0, 0));
 
         Assert.True(TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "outside-search-near",
@@ -446,7 +446,7 @@ public class PathingNavigationMapTests : IDisposable
 
         PathManager.InitializeChart(map.Name);
 
-        Voxel voxel = TestRequire.VoxelAt(new Vector3d(0, 0, 0));
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(0, 0, 0));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart(map);
@@ -467,7 +467,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(PathManager.IsChartInitialized(map));
         Assert.True(PathManager.Register(map));
         Assert.True(PathManager.IsChartInitialized(map));
-        Voxel voxel = TestRequire.VoxelAt(new Vector3d(0, 0, 0));
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(0, 0, 0));
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         PathManager.UnloadChart(map);
@@ -570,7 +570,7 @@ public class PathingNavigationMapTests : IDisposable
 
         PathManager.Register(chart);
 
-        Voxel voxel = TestRequire.VoxelAt(targetPosition);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, targetPosition);
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
         VolumeChartPartition volumePartition = TestRequire.Partition<VolumeChartPartition>(voxel);
         Assert.True(volumePartition.SupportsMedium(TraversalMedium.Gas));
@@ -596,7 +596,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.Register(chart);
         PathManager.InitializeChart(chart.Name);
 
-        Voxel voxel = TestRequire.VoxelAt(targetPosition);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, targetPosition);
         SolidChartPartition partition = TestRequire.Partition<SolidChartPartition>(voxel);
         Assert.Equal(7, partition.PathCostModifier);
         Assert.Equal(NavigationChartCellFlags.TransitionSourceHint, partition.ChartFlags);
@@ -635,7 +635,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.InitializeChart("StructuredB");
         PathManager.InitializeChart("StructuredA");
 
-        Voxel voxel = TestRequire.VoxelAt(targetPosition);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, targetPosition);
         SolidChartPartition partition = TestRequire.Partition<SolidChartPartition>(voxel);
         Assert.True(partition.BelongsTo("StructuredA"));
         Assert.True(partition.BelongsTo("StructuredB"));
@@ -671,7 +671,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.Register(chart);
         PathManager.InitializeChart(chart.Name);
 
-        Voxel voxel = TestRequire.VoxelAt(targetPosition);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, targetPosition);
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
         VolumeChartPartition volumePartition = TestRequire.Partition<VolumeChartPartition>(voxel);
         Assert.True(volumePartition.SupportsMedium(TraversalMedium.Liquid));
@@ -698,7 +698,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.Register(chart);
         PathManager.InitializeChart(chart.Name);
 
-        Voxel voxel = TestRequire.VoxelAt(targetPosition);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, targetPosition);
         SolidChartPartition solidPartition = TestRequire.Partition<SolidChartPartition>(voxel);
         Assert.Equal(4, solidPartition.PathCostModifier);
         Assert.Equal(NavigationChartCellFlags.TransitionSourceHint, solidPartition.ChartFlags);
@@ -730,7 +730,7 @@ public class PathingNavigationMapTests : IDisposable
         PathManager.Register(NavigationChart.From3D("LowSolid", solidData, minBounds, Fixed64.One, priority: 0));
         PathManager.Register(NavigationChart.From3D("HighLiquid", liquidData, minBounds, Fixed64.One, priority: 1));
 
-        Voxel voxel = TestRequire.VoxelAt(targetPosition);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, targetPosition);
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
         VolumeChartPartition liquidPartition = TestRequire.Partition<VolumeChartPartition>(voxel);
         Assert.Equal("HighLiquid", liquidPartition.EffectiveChartOwner);
@@ -758,7 +758,7 @@ public class PathingNavigationMapTests : IDisposable
         var chart = NavigationChart.From3D("LiveUpdateChart", data, new Vector3d(-1, -1, -1), Fixed64.One);
         PathManager.Register(chart);
 
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         SolidChartPartition solidPartition = TestRequire.Partition<SolidChartPartition>(voxel);
         Assert.Equal("LiveUpdateChart", solidPartition.EffectiveChartOwner);
         Assert.False(voxel.TryGetPartition<VolumeChartPartition>(out _));
@@ -793,7 +793,7 @@ public class PathingNavigationMapTests : IDisposable
         var chart = NavigationChart.From3D("BatchUpdateChart", data, Vector3d.Zero, Fixed64.One);
         PathManager.Register(chart);
 
-        Voxel middleVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel middleVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
         Assert.False(middleVoxel.TryGetPartition<VolumeChartPartition>(out _));
 
         int changedCount = PathManager.ApplyChartUpdates(
@@ -867,7 +867,7 @@ public class PathingNavigationMapTests : IDisposable
 
         var chart = NavigationChart.From3D("EmptyRemovalChart", data, Vector3d.Zero, Fixed64.One);
         Assert.True(PathManager.Register(chart));
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         Assert.True(PathManager.TryUpdateChartCell(chart.Name, 0, 0, 0, NavigationChartCell.Empty));
@@ -948,7 +948,7 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell effectiveCell));
         string winningOwnerAfterUpdate = TestRequire.Created(PathManager.TryGetEffectiveChartOwner(Vector3d.Zero, out string? createdwinningOwnerAfterUpdate), createdwinningOwnerAfterUpdate);
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         SolidChartPartition partition = TestRequire.Partition<SolidChartPartition>(voxel);
 
         Assert.True(effectiveCell.HasSolid);
@@ -984,9 +984,9 @@ public class PathingNavigationMapTests : IDisposable
         NavigationChart chart = TestRequire.Created(PathManager.TryGetNavigationChart(buildResult.Chart.Name, out NavigationChart? createdchart), createdchart);
         Assert.Same(buildResult.Chart, chart);
         Assert.True(PathManager.IsChartInitialized(chart));
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(voxel.TryGetPartition<SolidChartPartition>(out _));
-        Voxel waterVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel waterVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
         VolumeChartPartition volumePartition = TestRequire.Partition<VolumeChartPartition>(waterVoxel);
         Assert.True(volumePartition.SupportsMedium(TraversalMedium.Liquid));
 
@@ -1149,7 +1149,7 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         TestWorld.World.TryAddGrid(config, out _);
 
-        Voxel unAuthoredVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel unAuthoredVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.False(VolumeVoxelFinder.IsTraversable(TestWorld.Context, unAuthoredVoxel, Fixed64.One, TraversalMedium.Gas));
 
         string[,,] map =
@@ -1166,7 +1166,7 @@ public class PathingNavigationMapTests : IDisposable
             interval: Fixed64.One).Build();
 
         Assert.True(PathManager.Register(buildResult));
-        Voxel authoredOpenVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel authoredOpenVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
         Assert.True(VolumeVoxelFinder.IsTraversable(TestWorld.Context, authoredOpenVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.False(VolumeVoxelFinder.IsTraversable(TestWorld.Context, unAuthoredVoxel, Fixed64.One, TraversalMedium.Gas));
 
@@ -1183,11 +1183,11 @@ public class PathingNavigationMapTests : IDisposable
             voxel.WorldPosition == Vector3d.Zero
             || voxel.WorldPosition == new Vector3d(1, 0, 0));
 
-        Voxel unpartitionedVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel unpartitionedVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.False(VolumeVoxelFinder.IsTraversable(TestWorld.Context, unpartitionedVoxel, Fixed64.One, TraversalMedium.Gas));
 
-        PathTestFactory.RegisterSingleWalkablePoint("OpenRuleSurfaceA", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("OpenRuleSurfaceB", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "OpenRuleSurfaceA", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "OpenRuleSurfaceB", new Vector3d(1, 0, 0));
 
         Assert.True(VolumeVoxelFinder.IsTraversable(TestWorld.Context, unpartitionedVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.True(VolumePathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
@@ -1222,9 +1222,9 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         TestWorld.World.TryAddGrid(config, out _);
 
-        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "AuthoredOpenAuthority");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, "AuthoredOpenAuthority");
 
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(VolumeVoxelFinder.IsTraversable(TestWorld.Context, voxel, Fixed64.One, TraversalMedium.Gas));
 
         VolumeMediumRules.SetGasVoxelRule(static candidate =>
@@ -1244,9 +1244,9 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         TestWorld.World.TryAddGrid(config, out _);
 
-        PathTestFactory.RegisterGeneratedVolumePoint(Vector3d.Zero, TraversalMedium.Gas, "AuthoredOpenPlusWater");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, "AuthoredOpenPlusWater");
 
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(VolumeVoxelFinder.IsTraversable(TestWorld.Context, voxel, Fixed64.One, TraversalMedium.Gas));
         Assert.False(VolumeVoxelFinder.IsTraversable(TestWorld.Context, voxel, Fixed64.One, TraversalMedium.Liquid));
 
@@ -1269,11 +1269,11 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         TestWorld.World.TryAddGrid(config, out _);
 
-        PathTestFactory.RegisterSingleWalkablePoint("HostOnlyOpenStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("HostOnlyOpenEnd", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HostOnlyOpenStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HostOnlyOpenEnd", new Vector3d(1, 0, 0));
 
-        Voxel startVoxel = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel endVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel startVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel endVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
         Assert.False(VolumeVoxelFinder.IsTraversable(TestWorld.Context, startVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.False(VolumeVoxelFinder.IsTraversable(TestWorld.Context, endVoxel, Fixed64.One, TraversalMedium.Gas));
         Assert.Null(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
@@ -1318,8 +1318,8 @@ public class PathingNavigationMapTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("AStarCacheChart", data, Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("UnrelatedAStarChart", new Vector3d(-3, 0, -3));
+        PathTestFactory.RegisterFromData(TestWorld.Context, "AStarCacheChart", data, Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "UnrelatedAStarChart", new Vector3d(-3, 0, -3));
 
         AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -1355,7 +1355,7 @@ public class PathingNavigationMapTests : IDisposable
 
         PathManager.Register(NavigationChart.From3D("VolumeCacheChart", data, Vector3d.Zero, Fixed64.One));
         PathManager.InitializeChart("VolumeCacheChart");
-        PathTestFactory.RegisterSingleWalkablePoint("UnrelatedVolumeChart", new Vector3d(-3, 0, -3));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "UnrelatedVolumeChart", new Vector3d(-3, 0, -3));
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -1393,8 +1393,8 @@ public class PathingNavigationMapTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("SurfaceBackedVolumeChart", data, Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("UnrelatedSurfaceBackedVolumeChart", new Vector3d(-3, 0, -3));
+        PathTestFactory.RegisterFromData(TestWorld.Context, "SurfaceBackedVolumeChart", data, Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "UnrelatedSurfaceBackedVolumeChart", new Vector3d(-3, 0, -3));
         VolumeMediumRules.SetGasVoxelRule(static voxel =>
             voxel != null
             && voxel.HasPartition<SolidChartPartition>());
@@ -1428,8 +1428,8 @@ public class PathingNavigationMapTests : IDisposable
 
         bool[,,] data = CreateThreeVoxelLine();
 
-        PathTestFactory.RegisterFromData("OverlappedAStarChart", data, Vector3d.Zero);
-        PathTestFactory.RegisterFromData("UnrelatedAStarChart", data, new Vector3d(-6, 0, 0));
+        PathTestFactory.RegisterFromData(TestWorld.Context, "OverlappedAStarChart", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "UnrelatedAStarChart", data, new Vector3d(-6, 0, 0));
 
         AStarPathRequest overlappedRequest = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -1552,8 +1552,8 @@ public class PathingNavigationMapTests : IDisposable
 
         bool[,,] data = CreateThreeVoxelLine();
 
-        PathTestFactory.RegisterFromData("OverlappedFlowChart", data, Vector3d.Zero);
-        PathTestFactory.RegisterFromData("UnrelatedFlowChart", data, new Vector3d(-6, 0, 0));
+        PathTestFactory.RegisterFromData(TestWorld.Context, "OverlappedFlowChart", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "UnrelatedFlowChart", data, new Vector3d(-6, 0, 0));
 
         FlowFieldPathRequest overlappedRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -1654,7 +1654,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(PathManager.IsChartInitialized(buildResult.Chart));
         Assert.False(TraversalTransitionRegistry.IsRegistered(buildResult.GeneratedTransitions[0].Id));
         Assert.True(TraversalTransitionRegistry.IsRegistered(preRegisteredTransition.Id));
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
     }
 
@@ -1837,8 +1837,8 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         TestWorld.World.TryAddGrid(config, out _);
 
-        PathTestFactory.RegisterSingleWalkablePoint("ManualManagedSource", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("ManualManagedDestination", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ManualManagedSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ManualManagedDestination", new Vector3d(1, 0, 0));
 
         var manual = new TraversalTransition(
             id: "managed-manual-link",
@@ -1872,8 +1872,8 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         TestWorld.World.TryAddGrid(config, out _);
 
-        NavigationChart sourceChart = PathTestFactory.RegisterSingleWalkablePoint("ExternalResetSource", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("ExternalResetDestination", new Vector3d(1, 0, 0));
+        NavigationChart sourceChart = PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ExternalResetSource", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ExternalResetDestination", new Vector3d(1, 0, 0));
 
         var manual = new TraversalTransition(
             id: "external-reset-transition",
@@ -1898,8 +1898,8 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         Assert.True(TestWorld.World.TryAddGrid(config, out ushort gridIndex));
 
-        NavigationChart sourceChart = PathTestFactory.RegisterSingleWalkablePoint("ExternalRemoveSource", Vector3d.Zero);
-        NavigationChart destinationChart = PathTestFactory.RegisterSingleWalkablePoint("ExternalRemoveDestination", new Vector3d(1, 0, 0));
+        NavigationChart sourceChart = PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ExternalRemoveSource", Vector3d.Zero);
+        NavigationChart destinationChart = PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ExternalRemoveDestination", new Vector3d(1, 0, 0));
 
         var manual = new TraversalTransition(
             id: "external-remove-transition",
@@ -1909,7 +1909,7 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(TraversalTransitionRegistry.Register(manual));
         Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
-        Voxel sourceVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel sourceVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(sourceVoxel.TryGetPartition<SolidChartPartition>(out _));
 
         Assert.True(TestWorld.World.TryRemoveGrid(gridIndex));
@@ -1930,7 +1930,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell restoredCell));
         Assert.True(restoredCell.HasSolid);
-        Voxel rebuiltSourceVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel rebuiltSourceVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(rebuiltSourceVoxel.TryGetPartition<SolidChartPartition>(out _));
     }
 
@@ -1989,13 +1989,13 @@ public class PathingNavigationMapTests : IDisposable
             new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(18, 4, 4)),
             out ushort rightGridIndex));
 
-        NavigationChart leftChart = PathTestFactory.RegisterSingleWalkablePoint("ChangedLeftChart", Vector3d.Zero);
-        NavigationChart rightChart = PathTestFactory.RegisterSingleWalkablePoint("ChangedRightChart", new Vector3d(10, 0, 0));
+        NavigationChart leftChart = PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ChangedLeftChart", Vector3d.Zero);
+        NavigationChart rightChart = PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "ChangedRightChart", new Vector3d(10, 0, 0));
 
         Assert.True(PathManager.IsChartInitialized(leftChart));
         Assert.True(PathManager.IsChartInitialized(rightChart));
-        Voxel leftVoxel = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel rightVoxel = TestRequire.VoxelAt(new Vector3d(10, 0, 0));
+        Voxel leftVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel rightVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(10, 0, 0));
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
         Assert.True(rightVoxel.TryGetPartition<SolidChartPartition>(out _));
 
@@ -2023,10 +2023,10 @@ public class PathingNavigationMapTests : IDisposable
             new GridConfiguration(new Vector3d(20, -4, -4), new Vector3d(28, 4, 4)),
             out ushort farGridIndex));
 
-        NavigationChart leftChart = PathTestFactory.RegisterSingleWalkablePoint("UnchangedChart", Vector3d.Zero);
+        NavigationChart leftChart = PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "UnchangedChart", Vector3d.Zero);
 
         Assert.True(PathManager.IsChartInitialized(leftChart));
-        Voxel leftVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel leftVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(leftVoxel.TryGetPartition<SolidChartPartition>(out _));
 
         TestWorld.World.IncrementGridVersion(farGridIndex, false);
@@ -2047,7 +2047,7 @@ public class PathingNavigationMapTests : IDisposable
         NavigationChart deferredChart = PathTestFactory.BuildSinglePointMap("DeferredGridChangeChart", Vector3d.Zero);
         Assert.True(PathManager.Register(deferredChart, initializeChart: false));
         Assert.False(PathManager.IsChartInitialized(deferredChart));
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.False(voxel.TryGetPartition<SolidChartPartition>(out _));
 
         TestWorld.World.IncrementGridVersion(gridIndex, false);
@@ -2085,7 +2085,7 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell restoredCell));
         Assert.False(restoredCell.HasSolid);
         Assert.True(restoredCell.SupportsMedium(TraversalMedium.Liquid));
-        Voxel rebuiltVoxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel rebuiltVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.False(rebuiltVoxel.TryGetPartition<SolidChartPartition>(out _));
         VolumeChartPartition volumePartition = TestRequire.Partition<VolumeChartPartition>(rebuiltVoxel);
         Assert.True(volumePartition.SupportsMedium(TraversalMedium.Liquid));
@@ -2096,9 +2096,9 @@ public class PathingNavigationMapTests : IDisposable
     {
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4));
         Assert.True(TestWorld.World.TryAddGrid(config, out _));
-        Voxel start = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel end = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
-        VoxelGrid grid = TestRequire.Grid(start.GridIndex);
+        Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
+        VoxelGrid grid = TestRequire.Grid(TestWorld.Context, start.GridIndex);
 
         Assert.True(PathManager.TryGetMaxSearchSize(start, end, out int maxSearchSize));
         Assert.Equal(grid.Size, maxSearchSize);
@@ -2114,10 +2114,10 @@ public class PathingNavigationMapTests : IDisposable
             new GridConfiguration(new Vector3d(10, -4, -4), new Vector3d(18, 4, 4)),
             out _));
 
-        Voxel start = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel end = TestRequire.VoxelAt(new Vector3d(10, 0, 0));
-        VoxelGrid startGrid = TestRequire.Grid(start.GridIndex);
-        VoxelGrid endGrid = TestRequire.Grid(end.GridIndex);
+        Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(10, 0, 0));
+        VoxelGrid startGrid = TestRequire.Grid(TestWorld.Context, start.GridIndex);
+        VoxelGrid endGrid = TestRequire.Grid(TestWorld.Context, end.GridIndex);
 
         Assert.True(PathManager.TryGetMaxSearchSize(start, end, out int maxSearchSize));
         Assert.Equal(startGrid.Size + endGrid.Size, maxSearchSize);
@@ -2128,8 +2128,8 @@ public class PathingNavigationMapTests : IDisposable
     {
         var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4));
         Assert.True(TestWorld.World.TryAddGrid(config, out ushort gridIndex));
-        Voxel start = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel end = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         Assert.True(TestWorld.World.TryRemoveGrid(gridIndex));
 
@@ -2152,7 +2152,7 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         Assert.True(TestWorld.World.TryAddGrid(config, out _));
 
-        PathTestFactory.RegisterFromData("NeedsPathWalkableChart", CreateThreeVoxelLine(), Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NeedsPathWalkableChart", CreateThreeVoxelLine(), Vector3d.Zero);
 
         Assert.False(PathManager.NeedsPath(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
 
@@ -2165,7 +2165,7 @@ public class PathingNavigationMapTests : IDisposable
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
         Assert.True(TestWorld.World.TryAddGrid(config, out _));
 
-        PathTestFactory.RegisterFromData("NeedsPathImpassableChart", CreateThreeVoxelLine(), Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NeedsPathImpassableChart", CreateThreeVoxelLine(), Vector3d.Zero);
 
         Assert.True(PathManager.NeedsPath(Vector3d.Zero, new Vector3d(2, 0, 0), (Fixed64)10));
 

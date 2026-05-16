@@ -8,50 +8,56 @@ namespace Trailblazer.Tests;
 
 internal static class GuidedPathTestScene
 {
-    public static void AddWater(Vector3d position, string chartNamePrefix = "GuidedPathTestWater")
+    public static void AddWater(
+        TrailblazerWorldContext context,
+        Vector3d position,
+        string chartNamePrefix = "GuidedPathTestWater")
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Liquid, chartNamePrefix);
+        PathTestFactory.RegisterGeneratedVolumePoint(context, position, TraversalMedium.Liquid, chartNamePrefix);
     }
 
-    public static void AddOpen(Vector3d position, string chartNamePrefix = "GuidedPathTestOpen")
+    public static void AddOpen(
+        TrailblazerWorldContext context,
+        Vector3d position,
+        string chartNamePrefix = "GuidedPathTestOpen")
     {
-        PathTestFactory.RegisterGeneratedVolumePoint(position, TraversalMedium.Gas, chartNamePrefix);
+        PathTestFactory.RegisterGeneratedVolumePoint(context, position, TraversalMedium.Gas, chartNamePrefix);
     }
 
-    public static void AddObstacle(Vector3d position)
+    public static void AddObstacle(TrailblazerWorldContext context, Vector3d position)
     {
-        var (grid, voxel) = TestRequire.GridAndVoxelAt(position);
+        context.World.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel).Should().BeTrue();
         grid!.TryAddObstacle(
             voxel!,
             new BoundsKey(position, position)).Should().BeTrue();
     }
 
-    public static void AddObstaclePlaneAtX(int x)
+    public static void AddObstaclePlaneAtX(TrailblazerWorldContext context, int x)
     {
         for (int y = -4; y <= 4; y++)
         {
             for (int z = -4; z <= 4; z++)
-                AddObstacle(new Vector3d(x, y, z));
+                AddObstacle(context, new Vector3d(x, y, z));
         }
     }
 
-    public static void RegisterTransitionFallbackScene()
+    public static void RegisterTransitionFallbackScene(TrailblazerWorldContext context)
     {
-        PathTestFactory.RegisterSingleWalkablePoint("GuidedPathTransitionStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("GuidedPathTransitionEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(context, "GuidedPathTransitionStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(context, "GuidedPathTransitionEnd", new Vector3d(4, 0, 0));
 
-        AddWater(new Vector3d(1, 0, 0));
-        AddWater(new Vector3d(2, 0, 0));
-        AddWater(new Vector3d(3, 0, 0));
+        AddWater(context, new Vector3d(1, 0, 0));
+        AddWater(context, new Vector3d(2, 0, 0));
+        AddWater(context, new Vector3d(3, 0, 0));
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: "guided-path-transition-entry",
             type: TraversalTransitionType.SwimEntry,
             source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
             destination: TraversalTransitionAnchor.Liquid(new Vector3d(1, 0, 0)),
             pathCostModifier: 2)).Should().BeTrue();
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: "guided-path-transition-exit",
             type: TraversalTransitionType.SwimExit,
             source: TraversalTransitionAnchor.Liquid(new Vector3d(3, 0, 0)),
@@ -59,16 +65,16 @@ internal static class GuidedPathTestScene
             pathCostModifier: 1)).Should().BeTrue();
     }
 
-    public static void RegisterTransitionFallbackClimbScene()
+    public static void RegisterTransitionFallbackClimbScene(TrailblazerWorldContext context)
     {
-        PathTestFactory.RegisterSingleWalkablePoint("GuidedPathClimbTransitionStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("GuidedPathClimbTransitionEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(context, "GuidedPathClimbTransitionStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(context, "GuidedPathClimbTransitionEnd", new Vector3d(4, 0, 0));
 
-        AddWater(new Vector3d(1, 0, 0));
-        AddWater(new Vector3d(2, 0, 0));
-        AddWater(new Vector3d(3, 0, 0));
+        AddWater(context, new Vector3d(1, 0, 0));
+        AddWater(context, new Vector3d(2, 0, 0));
+        AddWater(context, new Vector3d(3, 0, 0));
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: "guided-path-climb-transition-entry",
             type: TraversalTransitionType.SwimEntry,
             source: TraversalTransitionAnchor.Solid(Vector3d.Zero),
@@ -76,7 +82,7 @@ internal static class GuidedPathTestScene
             pathCostModifier: 2,
             requestsClimbIntent: true)).Should().BeTrue();
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: "guided-path-climb-transition-exit",
             type: TraversalTransitionType.SwimExit,
             source: TraversalTransitionAnchor.Liquid(new Vector3d(3, 0, 0)),
@@ -84,7 +90,7 @@ internal static class GuidedPathTestScene
             pathCostModifier: 1)).Should().BeTrue();
     }
 
-    public static void RegisterLiquidClimbExitScene(string chartKey)
+    public static void RegisterLiquidClimbExitScene(TrailblazerWorldContext context, string chartKey)
     {
         string[,,] map = new string[1, 6, 1]
         {
@@ -103,28 +109,29 @@ internal static class GuidedPathTestScene
             map,
             Vector3d.Zero,
             Fixed64.One).Build();
-        PathManager.Register(buildResult).Should().BeTrue();
+        context.Pathing.Register(buildResult).Should().BeTrue();
     }
 
-    public static void RegisterAerialLandingHandoffScene(string sceneKey)
+    public static void RegisterAerialLandingHandoffScene(TrailblazerWorldContext context, string sceneKey)
     {
         PathTestFactory.RegisterSingleTraversalPoint(
+            context,
             $"{sceneKey}-Landing",
             new Vector3d(1, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Gas);
-        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
-        AddOpen(Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(context, $"{sceneKey}-Target", new Vector3d(4, 0, 0));
+        AddOpen(context, Vector3d.Zero);
 
-        AddObstaclePlaneAtX(2);
+        AddObstaclePlaneAtX(context, 2);
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
             type: TraversalTransitionType.Landing,
             source: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: $"{sceneKey}-chart-hop",
             type: TraversalTransitionType.Jump,
             source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
@@ -132,18 +139,19 @@ internal static class GuidedPathTestScene
             pathCostModifier: 2)).Should().BeTrue();
     }
 
-    public static void RegisterAerialClimbHandoffScene(string sceneKey)
+    public static void RegisterAerialClimbHandoffScene(TrailblazerWorldContext context, string sceneKey)
     {
         PathTestFactory.RegisterSingleTraversalPoint(
+            context,
             $"{sceneKey}-Landing",
             new Vector3d(1, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Gas);
-        PathTestFactory.RegisterSingleWalkablePoint($"{sceneKey}-Target", new Vector3d(4, 0, 0));
-        AddOpen(Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(context, $"{sceneKey}-Target", new Vector3d(4, 0, 0));
+        AddOpen(context, Vector3d.Zero);
 
-        AddObstaclePlaneAtX(2);
+        AddObstaclePlaneAtX(context, 2);
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
             type: TraversalTransitionType.Landing,
             source: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)),
@@ -152,7 +160,7 @@ internal static class GuidedPathTestScene
             requestsClimbIntent: true,
             preserveClimbIntentOnFollowup: true)).Should().BeTrue();
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: $"{sceneKey}-chart-hop",
             type: TraversalTransitionType.Jump,
             source: TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)),
@@ -160,16 +168,17 @@ internal static class GuidedPathTestScene
             pathCostModifier: 2)).Should().BeTrue();
     }
 
-    public static void RegisterAerialLandingChoiceScene(string sceneKey)
+    public static void RegisterAerialLandingChoiceScene(TrailblazerWorldContext context, string sceneKey)
     {
-        AddOpen(Vector3d.Zero);
-        AddOpen(new Vector3d(1, 0, 0));
+        AddOpen(context, Vector3d.Zero);
+        AddOpen(context, new Vector3d(1, 0, 0));
         PathTestFactory.RegisterSingleTraversalPoint(
+            context,
             $"{sceneKey}-Target",
             new Vector3d(2, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Gas);
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: $"{sceneKey}-landing",
             type: TraversalTransitionType.Landing,
             source: TraversalTransitionAnchor.Gas(new Vector3d(2, 0, 0)),
@@ -177,7 +186,7 @@ internal static class GuidedPathTestScene
             pathCostModifier: 1)).Should().BeTrue();
     }
 
-    public static void RegisterVolumeExitHandoffScene(string chartKey)
+    public static void RegisterVolumeExitHandoffScene(TrailblazerWorldContext context, string chartKey)
     {
         NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1]
         {
@@ -188,12 +197,12 @@ internal static class GuidedPathTestScene
             }
         };
 
-        PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One));
+        context.Pathing.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One)).Should().BeTrue();
 
-        AddWater(Vector3d.Zero);
-        AddWater(new Vector3d(1, 0, 0));
+        AddWater(context, Vector3d.Zero);
+        AddWater(context, new Vector3d(1, 0, 0));
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: $"{chartKey}-exit",
             type: TraversalTransitionType.SwimExit,
             source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
@@ -201,7 +210,7 @@ internal static class GuidedPathTestScene
             pathCostModifier: 1)).Should().BeTrue();
     }
 
-    public static void RegisterVolumeExitFollowupClimbScene(string chartKey)
+    public static void RegisterVolumeExitFollowupClimbScene(TrailblazerWorldContext context, string chartKey)
     {
         NavigationChartCell[,,] data = new NavigationChartCell[1, 3, 1]
         {
@@ -212,19 +221,19 @@ internal static class GuidedPathTestScene
             }
         };
 
-        PathManager.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One)).Should().BeTrue();
+        context.Pathing.Register(NavigationChart.From3D(chartKey, data, new Vector3d(2, 0, 0), Fixed64.One)).Should().BeTrue();
 
-        AddWater(Vector3d.Zero);
-        AddWater(new Vector3d(1, 0, 0));
+        AddWater(context, Vector3d.Zero);
+        AddWater(context, new Vector3d(1, 0, 0));
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: $"{chartKey}-exit",
             type: TraversalTransitionType.SwimExit,
             source: TraversalTransitionAnchor.Liquid(new Vector3d(2, 0, 0)),
             destination: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
             pathCostModifier: 1)).Should().BeTrue();
 
-        TraversalTransitionRegistry.Register(new TraversalTransition(
+        context.Transitions.Register(new TraversalTransition(
             id: $"{chartKey}-climb",
             type: TraversalTransitionType.Climb,
             source: TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0)),
@@ -233,14 +242,15 @@ internal static class GuidedPathTestScene
             requestsClimbIntent: true)).Should().BeTrue();
     }
 
-    public static void RegisterChartBackedSwimTargetScene(string chartKey)
+    public static void RegisterChartBackedSwimTargetScene(TrailblazerWorldContext context, string chartKey)
     {
         PathTestFactory.RegisterSingleTraversalPoint(
+            context,
             $"{chartKey}-Target",
             new Vector3d(2, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Liquid);
 
-        AddWater(Vector3d.Zero);
-        AddWater(new Vector3d(1, 0, 0));
+        AddWater(context, Vector3d.Zero);
+        AddWater(context, new Vector3d(1, 0, 0));
     }
 }

@@ -149,7 +149,7 @@ public class SolidVoxelFinderTests : IDisposable
     [Fact]
     public void StarCast_ShouldBiasFallbackFromTheAnchorVoxelLocalOffset()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("StarCastLocalBias", new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "StarCastLocalBias", new Vector3d(1, 0, 0));
 
         Fixed64 quarter = TestWorld.Context.VoxelSize / 4;
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
@@ -236,8 +236,8 @@ public class SolidVoxelFinderTests : IDisposable
     [Fact]
     public void TryGetClosestWalkableVoxel_ShouldReturnFalse_WhenNoNeighborIsTraversable()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("NoNeighborWalkable", Vector3d.Zero);
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "NoNeighborWalkable", Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         SolidVoxelFinder.TryGetClosestWalkableVoxel(TestWorld.Context, voxel, out Voxel? closestNeighbor).Should().BeFalse();
         closestNeighbor.Should().BeNull();
@@ -248,6 +248,6 @@ public class SolidVoxelFinderTests : IDisposable
         bool[,,] data = new bool[1, 2, 1];
         data[0, 0, 0] = true;
         data[0, 1, 0] = true;
-        PathTestFactory.RegisterFromData(chartName, data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, chartName, data, Vector3d.Zero);
     }
 }

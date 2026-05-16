@@ -41,20 +41,22 @@ internal static class TestRequire
         return (NotNull(first), NotNull(second));
     }
 
-    public static Voxel VoxelAt(Vector3d position)
+    public static Voxel VoxelAt(TrailblazerWorldContext context, Vector3d position)
     {
-        return Created(TestWorld.World.TryGetVoxel(position, out Voxel? voxel), voxel);
+        return Created(context.World.TryGetVoxel(position, out Voxel? voxel), voxel);
     }
 
-    public static VoxelGrid Grid(ushort gridIndex)
+    public static VoxelGrid Grid(TrailblazerWorldContext context, ushort gridIndex)
     {
-        return Created(TestWorld.World.TryGetGrid(gridIndex, out VoxelGrid? grid), grid);
+        return Created(context.World.TryGetGrid(gridIndex, out VoxelGrid? grid), grid);
     }
 
-    public static (VoxelGrid Grid, Voxel Voxel) GridAndVoxelAt(Vector3d position)
+    public static (VoxelGrid Grid, Voxel Voxel) GridAndVoxelAt(
+        TrailblazerWorldContext context,
+        Vector3d position)
     {
         return Created(
-            TestWorld.World.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel),
+            context.World.TryGetGridAndVoxel(position, out VoxelGrid? grid, out Voxel? voxel),
             grid,
             voxel);
     }

@@ -27,9 +27,9 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     [Fact]
     public void TryCreate_ShouldBuildDirectRequests_ForSupportedModes()
     {
-        PathTestFactory.RegisterLineChart("NavigatorFactorySolid", Vector3d.Zero, 3);
-        PathTestFactory.RegisterVolumeLine(new Vector3d(0, 0, 2), TraversalMedium.Gas, 3, "NavigatorFactoryGas");
-        PathTestFactory.RegisterVolumeLine(new Vector3d(0, 0, 4), TraversalMedium.Liquid, 3, "NavigatorFactoryLiquid");
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "NavigatorFactorySolid", Vector3d.Zero, 3);
+        PathTestFactory.RegisterVolumeLine(TestWorld.Context, new Vector3d(0, 0, 2), TraversalMedium.Gas, 3, "NavigatorFactoryGas");
+        PathTestFactory.RegisterVolumeLine(TestWorld.Context, new Vector3d(0, 0, 4), TraversalMedium.Liquid, 3, "NavigatorFactoryLiquid");
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -97,7 +97,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_WithAerialMode_ShouldBuildLandingHandoff_WhenDirectFlightCannotReachTarget()
     {
         const string sceneKey = "NavigatorFactoryAerialHandoff";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -124,7 +124,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_WithAerialMode_ShouldNormalizeUnsupportedFallbackModesToAStar()
     {
         const string sceneKey = "NavigatorFactoryAerialNormalize";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -146,7 +146,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     [Fact]
     public void TryCreate_WithAerialMode_ShouldKeepDirectRequest_WhenTargetIsNotChartBacked()
     {
-        PathTestFactory.RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryDirectGas");
+        PathTestFactory.RegisterVolumeLine(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryDirectGas");
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -169,7 +169,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_WithAerialMode_ShouldKeepDirectRequest_WhenDirectFlightIsCheaperThanLanding()
     {
         const string sceneKey = "NavigatorFactoryAerialDirectPreferred";
-        GuidedPathTestScene.RegisterAerialLandingChoiceScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingChoiceScene(TestWorld.Context, sceneKey);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -192,7 +192,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_WithSwimMode_ShouldBuildExitHandoff_WhenSolidTargetRequiresOne()
     {
         const string sceneKey = "NavigatorFactorySwimHandoff";
-        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -219,7 +219,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_WithSwimMode_ShouldKeepDirectRequest_WhenTargetSupportsLiquid()
     {
         const string sceneKey = "NavigatorFactorySwimDirect";
-        GuidedPathTestScene.RegisterChartBackedSwimTargetScene(sceneKey);
+        GuidedPathTestScene.RegisterChartBackedSwimTargetScene(TestWorld.Context, sceneKey);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -242,7 +242,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_WithConstrainedVolumeExit_ShouldFail_WhenTraversalTransitionsAreDisabled()
     {
         const string sceneKey = "NavigatorFactorySwimDisabled";
-        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -264,7 +264,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     [Fact]
     public void TryCreate_Internal_Aerial_ShouldKeepDirectRequest_WhenTargetIsOutsideGridButEndpointSnaps()
     {
-        PathTestFactory.RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryOutsideGrid");
+        PathTestFactory.RegisterVolumeLine(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryOutsideGrid");
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(12, 0, 0),
@@ -288,9 +288,9 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     [Fact]
     public void TryCreate_Internal_Aerial_ShouldKeepDirectRequest_WhenNoLandingHandoffCanBePlanned()
     {
-        PathTestFactory.RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryNoLandingGas");
+        PathTestFactory.RegisterVolumeLine(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryNoLandingGas");
         PathTestFactory.RegisterSingleTraversalPoint(
-            "NavigatorFactoryNoLandingTarget",
+            TestWorld.Context, "NavigatorFactoryNoLandingTarget",
             new Vector3d(2, 0, 0),
             TraversalMedia.Solid | TraversalMedia.Gas);
 
@@ -315,7 +315,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_Internal_Aerial_ShouldBuildLandingHandoff_WhenDirectRequestSnapsFromSolidTarget()
     {
         const string sceneKey = "NavigatorFactorySnappedAerialHandoff";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -340,7 +340,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_Internal_Swim_ShouldBuildExitHandoff_WhenDirectRequestSnapsFromSolidTarget()
     {
         const string sceneKey = "NavigatorFactorySnappedSwimHandoff";
-        GuidedPathTestScene.RegisterVolumeExitHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterVolumeExitHandoffScene(TestWorld.Context, sceneKey);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -485,7 +485,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_Internal_Swim_ShouldKeepDirectRequest_WhenTargetSupportsMedium_GasLandingHandoffSkipped()
     {
         const string sceneKey = "NavigatorFactorySwimGasLanding";
-        GuidedPathTestScene.RegisterChartBackedSwimTargetScene(sceneKey);
+        GuidedPathTestScene.RegisterChartBackedSwimTargetScene(TestWorld.Context, sceneKey);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -528,7 +528,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     [Fact]
     public void TryCreate_Internal_Aerial_ShouldKeepDirectRequest_WhenTargetVoxelDoesNotExist()
     {
-        PathTestFactory.RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryFarOutsideGrid");
+        PathTestFactory.RegisterVolumeLine(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, 3, "NavigatorFactoryFarOutsideGrid");
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(64, 0, 0),
@@ -577,7 +577,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     public void TryCreate_Internal_Aerial_ShouldPreferLandingHandoff_WhenLandingIsCheaperThanDirectFlight()
     {
         const string sceneKey = "NavigatorFactoryCheaperLanding";
-        GuidedPathTestScene.RegisterAerialLandingHandoffScene(sceneKey);
+        GuidedPathTestScene.RegisterAerialLandingHandoffScene(TestWorld.Context, sceneKey);
         VolumeMediumRules.SetGasVoxelRule(static voxel =>
             voxel != null && voxel.WorldPosition == new Vector3d(4, 0, 0));
 
@@ -625,10 +625,10 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
     private static void RegisterGasLandingChoiceTargetScene(string sceneKey, Vector3d targetPosition, int authoredGasLength)
     {
         if (authoredGasLength > 0)
-            PathTestFactory.RegisterVolumeLine(Vector3d.Zero, TraversalMedium.Gas, authoredGasLength, $"{sceneKey}-Gas");
+            PathTestFactory.RegisterVolumeLine(TestWorld.Context, Vector3d.Zero, TraversalMedium.Gas, authoredGasLength, $"{sceneKey}-Gas");
 
         PathTestFactory.RegisterSingleTraversalPoint(
-            $"{sceneKey}-Target",
+            TestWorld.Context, $"{sceneKey}-Target",
             targetPosition,
             TraversalMedia.Solid | TraversalMedia.Gas);
 

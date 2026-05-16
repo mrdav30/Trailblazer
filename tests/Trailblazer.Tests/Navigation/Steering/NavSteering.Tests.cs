@@ -61,7 +61,7 @@ public class NavSteeringTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("MovementDisabledChart", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "MovementDisabledChart", data, Vector3d.Zero);
 
         var start = Vector3d.Zero;
         var end = new Vector3d(1, 0, 0);
@@ -107,7 +107,7 @@ public class NavSteeringTests : IDisposable
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(2, 0, 0);
 
-        PathTestFactory.RegisterFromData("SimpleLine", data, start);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "SimpleLine", data, start);
 
         var agent = new MockSteerAgent(start);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
@@ -129,7 +129,7 @@ public class NavSteeringTests : IDisposable
         for (int i = 0; i < 3; i++)
             data[0, i, 0] = true;
 
-        PathTestFactory.RegisterFromData("LineSight", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "LineSight", data, Vector3d.Zero);
 
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(2, 0, 0);
@@ -157,7 +157,7 @@ public class NavSteeringTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("SteeringRouteTopologyDirect", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "SteeringRouteTopologyDirect", data, Vector3d.Zero);
 
         var start = Vector3d.Zero;
         var end = new Vector3d(2, 0, 0);
@@ -180,7 +180,7 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void GetHeading_ShouldPublishGuideBackedRouteTopologyMetadata_WhenTransitionAwareFallbackRequestsClimb()
     {
-        GuidedPathTestScene.RegisterTransitionFallbackClimbScene();
+        GuidedPathTestScene.RegisterTransitionFallbackClimbScene(TestWorld.Context);
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
@@ -211,10 +211,10 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_Should_GuideAerialRequests_WithVerticalOnlyTargets()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 2, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 3, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 2, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 3, 0));
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
@@ -237,12 +237,12 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_Should_RequestAerialGuide_WhenDirectFlightIsBlocked()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, new Vector3d(1, 0, 0));
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
@@ -265,12 +265,12 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_Should_RequestVolumeGuide_WhenDirectSwimIsBlocked()
     {
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 1));
-        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 1));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(2, 0, 1));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, new Vector3d(1, 0, 1));
 
         var agent = new MockSteerAgent(new Vector3d(0, 0, 1));
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
@@ -294,15 +294,15 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_ShouldReleaseVolumeGuide_WhenLineOfSightReturns()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 0, 0));
 
         Vector3d obstaclePosition = new(1, 0, 0);
-        var (obstacleGrid, obstacleVoxel) = TestRequire.GridAndVoxelAt(obstaclePosition);
+        var (obstacleGrid, obstacleVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, obstaclePosition);
         var obstacleKey = new BoundsKey(obstaclePosition, obstaclePosition);
         obstacleGrid!.TryAddObstacle(obstacleVoxel!, obstacleKey).Should().BeTrue();
 
@@ -332,12 +332,12 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void NavSteering_ShouldUseGuideFallback_WhenRecoveringFromStuck()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, new Vector3d(1, 0, 0));
 
         Vector3d movementDirection = new(1, 0, 0);
         Vector3d fallbackDirection = new(0, 0, 1);
@@ -374,7 +374,7 @@ public class NavSteeringTests : IDisposable
     public void NavSteering_Should_Arrive_WhenCloseEnough()
     {
         var data = new bool[1, 1, 1] { { { true } } };
-        PathTestFactory.RegisterFromData("Point", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "Point", data, Vector3d.Zero);
 
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
@@ -404,7 +404,7 @@ public class NavSteeringTests : IDisposable
 
         };
 
-        PathTestFactory.RegisterFromData("StuckTest", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "StuckTest", data, Vector3d.Zero);
 
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0)) { Speed = Fixed64.Zero };
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
@@ -434,7 +434,7 @@ public class NavSteeringTests : IDisposable
         data[0, 0, 0] = true;  // Start
         data[0, 2, 0] = true;  // End (middle is blocked)
 
-        PathTestFactory.RegisterFromData("BlockedMiddle", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "BlockedMiddle", data, Vector3d.Zero);
 
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
@@ -477,7 +477,7 @@ public class NavSteeringTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("FlowFieldTest", data, new Vector3d(0, 0, 0));
+        PathTestFactory.RegisterFromData(TestWorld.Context, "FlowFieldTest", data, new Vector3d(0, 0, 0));
 
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
@@ -813,7 +813,7 @@ public class NavSteeringTests : IDisposable
 
         };
 
-        PathTestFactory.RegisterFromData("AdvanceWaypoint", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "AdvanceWaypoint", data, Vector3d.Zero);
 
         var waypointGuide = new Mock<IWaypointGuide>();
         waypointGuide.Setup(x => x.GetCurrentWaypointDirection(It.IsAny<Vector3d>())).Returns(new Vector3d(1, 0, 0));
@@ -847,7 +847,7 @@ public class NavSteeringTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("StopMove", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "StopMove", data, Vector3d.Zero);
 
         var agent = new MockSteerAgent(new Vector3d(0, 0, 0));
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
@@ -887,7 +887,7 @@ public class NavSteeringTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("LargeSize", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "LargeSize", data, Vector3d.Zero);
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
@@ -911,7 +911,7 @@ public class NavSteeringTests : IDisposable
         for (int i = 0; i < 3; i++)
             data[0, i, 0] = true;
 
-        PathTestFactory.RegisterFromData("RepathUnitSize", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "RepathUnitSize", data, Vector3d.Zero);
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
@@ -956,7 +956,7 @@ public class NavSteeringTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("MissingPath", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "MissingPath", data, Vector3d.Zero);
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
@@ -990,7 +990,7 @@ public class NavSteeringTests : IDisposable
                 { true, true }
             }
         };
-        PathTestFactory.RegisterFromData("ReturnGuide", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "ReturnGuide", data, Vector3d.Zero);
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = new NavSteering(TestWorld.Context, agent.Radius);
@@ -1027,7 +1027,7 @@ public class NavSteeringTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("MovementGroupSteering", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "MovementGroupSteering", data, Vector3d.Zero);
 
         var leader = new MockSteerAgent(new Vector3d(0, 0, 0))
         {
@@ -1107,7 +1107,7 @@ public class NavSteeringTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("GroupFormation", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "GroupFormation", data, Vector3d.Zero);
 
         var firstAgent = new MockSteerAgent(new Vector3d(1, 0, 0)) { Speed = Fixed64.One };
         var secondAgent = new MockSteerAgent(new Vector3d(2, 0, 0)) { Speed = Fixed64.One };
@@ -1149,7 +1149,7 @@ public class NavSteeringTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("GroupFallback", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "GroupFallback", data, Vector3d.Zero);
 
         var firstAgent = new MockSteerAgent(new Vector3d(0, 0, 0)) { Speed = Fixed64.One };
         var secondAgent = new MockSteerAgent(new Vector3d(5, 0, 0)) { Speed = Fixed64.One };
@@ -1188,7 +1188,7 @@ public class NavSteeringTests : IDisposable
             }
         };
 
-        PathTestFactory.RegisterFromData("MovementGroupReset", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "MovementGroupReset", data, Vector3d.Zero);
 
         var leader = new MockSteerAgent(new Vector3d(0, 0, 0))
         {
@@ -1263,7 +1263,7 @@ public class NavSteeringTests : IDisposable
 
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(2, 0, 0);
-        PathTestFactory.RegisterFromData("RecordDataIdleChart", data, start);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "RecordDataIdleChart", data, start);
 
         var agent = new MockSteerAgent(start);
         var source = new NavSteering(TestWorld.Context, agent.Radius);
@@ -1311,7 +1311,7 @@ public class NavSteeringTests : IDisposable
 
         var start = new Vector3d(0, 0, 0);
         var end = new Vector3d(2, 0, 0);
-        PathTestFactory.RegisterFromData("RecordDataNoGuideChart", data, start);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "RecordDataNoGuideChart", data, start);
 
         var agent = new MockSteerAgent(start);
         var source = new NavSteering(TestWorld.Context, agent.Radius);
@@ -1361,7 +1361,7 @@ public class NavSteeringTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("ApplyPathRequestEvents", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "ApplyPathRequestEvents", data, Vector3d.Zero);
 
         var steer = new TestableNavSteering();
         bool fired = false;
@@ -1400,7 +1400,7 @@ public class NavSteeringTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("PrewarmMovementGroup", data, Vector3d.Zero);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "PrewarmMovementGroup", data, Vector3d.Zero);
 
         var owner = new MockSteerAgent(Vector3d.Zero);
         var steer = new NavSteering(TestWorld.Context, owner.Radius);
@@ -1438,12 +1438,12 @@ public class NavSteeringTests : IDisposable
     [Fact]
     public void GetHeading_ShouldRaiseInvalidPath_WhenVolumeFallbackValidationFails()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, new Vector3d(1, 0, 0));
 
 
         var agent = new MockSteerAgent(Vector3d.Zero);
@@ -1544,7 +1544,7 @@ public class NavSteeringTests : IDisposable
 
         var start = Vector3d.Zero;
         var end = new Vector3d(2, 0, 0);
-        PathTestFactory.RegisterFromData("RecordDataGuideFailure", data, start);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "RecordDataGuideFailure", data, start);
 
         var agent = new MockSteerAgent(start);
         var source = new NavSteering(TestWorld.Context, agent.Radius);
@@ -1565,7 +1565,7 @@ public class NavSteeringTests : IDisposable
                 { true }
             }
         };
-        PathTestFactory.RegisterFromData("RecordDataGuideFailure", blocked, start);
+        PathTestFactory.RegisterFromData(TestWorld.Context, "RecordDataGuideFailure", blocked, start);
 
         var target = new NavSteering(TestWorld.Context, agent.Radius);
         JsonRecordSerializer.Populate(target, payload);

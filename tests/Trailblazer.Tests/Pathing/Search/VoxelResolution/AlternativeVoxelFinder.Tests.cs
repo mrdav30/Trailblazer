@@ -33,7 +33,7 @@ public class AlternativeVoxelFinderTests : IDisposable
     public void GetVoxel_ShouldRemainOnTheQueryLayer()
     {
         Vector3d query = new(2, 1, 0);
-        Voxel anchorVoxel = TestRequire.VoxelAt(query);
+        Voxel anchorVoxel = TestRequire.VoxelAt(TestWorld.Context, query);
 
         AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
 
@@ -46,7 +46,7 @@ public class AlternativeVoxelFinderTests : IDisposable
     {
         Vector3d query = Vector3d.Zero;
         BlockFirstRing(query);
-        Voxel anchorVoxel = TestRequire.VoxelAt(query);
+        Voxel anchorVoxel = TestRequire.VoxelAt(TestWorld.Context, query);
 
         AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
 
@@ -59,7 +59,7 @@ public class AlternativeVoxelFinderTests : IDisposable
     {
         Fixed64 quarter = TestWorld.Context.VoxelSize / 4;
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
-        Voxel anchorVoxel = TestRequire.VoxelAt(query);
+        Voxel anchorVoxel = TestRequire.VoxelAt(TestWorld.Context, query);
 
         AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
 
@@ -72,7 +72,7 @@ public class AlternativeVoxelFinderTests : IDisposable
     {
         Fixed64 quarter = TestWorld.Context.VoxelSize / 4;
         Vector3d query = new(quarter * 3, Fixed64.Zero, quarter);
-        Voxel anchorVoxel = TestRequire.VoxelAt(query);
+        Voxel anchorVoxel = TestRequire.VoxelAt(TestWorld.Context, query);
         BlockFirstRing(query);
 
         AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
@@ -88,7 +88,7 @@ public class AlternativeVoxelFinderTests : IDisposable
         Fixed64 quarter = TestWorld.Context.VoxelSize / 4;
         Fixed64 eighth = TestWorld.Context.VoxelSize / 8;
         Vector3d query = new(halfVoxel - eighth, Fixed64.Zero, halfVoxel + quarter);
-        Voxel anchorVoxel = TestRequire.VoxelAt(query);
+        Voxel anchorVoxel = TestRequire.VoxelAt(TestWorld.Context, query);
         BlockFirstRing(query);
 
         AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
@@ -101,7 +101,7 @@ public class AlternativeVoxelFinderTests : IDisposable
     public void GetVoxel_ShouldReturnFalse_WhenSearchRadiusIsExhausted()
     {
         Vector3d query = Vector3d.Zero;
-        Voxel anchorVoxel = TestRequire.VoxelAt(query);
+        Voxel anchorVoxel = TestRequire.VoxelAt(TestWorld.Context, query);
         BlockFirstRing(query);
 
         AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
@@ -119,7 +119,7 @@ public class AlternativeVoxelFinderTests : IDisposable
         // exercising the negative-Z branches in both InitializeDirection and the ring-advance logic.
         Fixed64 halfVoxel = TestWorld.Context.VoxelSize / 2;
         Vector3d query = new(halfVoxel, Fixed64.Zero, Fixed64.Zero);
-        Voxel anchorVoxel = TestRequire.VoxelAt(query);
+        Voxel anchorVoxel = TestRequire.VoxelAt(TestWorld.Context, query);
         BlockFirstRing(query);
 
         AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
@@ -130,14 +130,14 @@ public class AlternativeVoxelFinderTests : IDisposable
 
     private static void BlockFirstRing(Vector3d center)
     {
-        GuidedPathTestScene.AddObstacle(center + new Vector3d(-1, 0, -1));
-        GuidedPathTestScene.AddObstacle(center + new Vector3d(-1, 0, 0));
-        GuidedPathTestScene.AddObstacle(center + new Vector3d(-1, 0, 1));
-        GuidedPathTestScene.AddObstacle(center + new Vector3d(0, 0, -1));
-        GuidedPathTestScene.AddObstacle(center + new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddObstacle(center + new Vector3d(1, 0, -1));
-        GuidedPathTestScene.AddObstacle(center + new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddObstacle(center + new Vector3d(1, 0, 1));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, center + new Vector3d(-1, 0, -1));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, center + new Vector3d(-1, 0, 0));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, center + new Vector3d(-1, 0, 1));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, center + new Vector3d(0, 0, -1));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, center + new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, center + new Vector3d(1, 0, -1));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, center + new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, center + new Vector3d(1, 0, 1));
     }
 
 }

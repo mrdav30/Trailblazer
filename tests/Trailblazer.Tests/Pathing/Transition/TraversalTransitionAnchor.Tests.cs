@@ -29,7 +29,7 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     [Fact]
     public void TraversalTransitionAnchor_GasAndLiquid_ShouldCreateFromVoxelIndex()
     {
-        Voxel voxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         var gas = TraversalTransitionAnchor.Gas(voxel.WorldIndex);
         gas.Medium.Should().Be(TraversalMedium.Gas);
@@ -47,7 +47,7 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     [Fact]
     public void TraversalTransitionAnchor_ShouldCreateFromVoxelIndexWithPointOverride()
     {
-        Voxel voxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
         var pointOverride = new Vector3d(1.1, 0, 0);
 
         var gasWithOverride = TraversalTransitionAnchor.Gas(voxel.WorldIndex, pointOverride);
@@ -99,7 +99,7 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     [Fact]
     public void TraversalTransitionAnchor_Create_ShouldThrow_WhenPointOverrideIsInDifferentVoxel()
     {
-        Voxel voxelA = TestRequire.VoxelAt(new Vector3d(0, 0, 0));
+        Voxel voxelA = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(0, 0, 0));
 
         // A point override that resolves to a completely different voxel.
         Action action = () => TraversalTransitionAnchor.Solid(voxelA.WorldIndex, new Vector3d(2, 0, 0));
@@ -109,7 +109,7 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     [Fact]
     public void TraversalTransitionAnchor_Position_ShouldUseVoxelWorldPosition_WhenNoOverride()
     {
-        Voxel voxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
         var anchor = TraversalTransitionAnchor.Solid(voxel.WorldIndex);
         anchor.Position.Should().Be(voxel.WorldPosition);
     }

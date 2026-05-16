@@ -32,7 +32,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_AStarKind_ShouldBuildDirectPlanWithAStarSegment()
     {
-        PathTestFactory.RegisterLineChart("HybridPlannerAStar", Vector3d.Zero, 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerAStar", Vector3d.Zero, 3);
 
         HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -54,7 +54,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_FlowFieldKind_ShouldBuildDirectPlanWithFlowFieldStep()
     {
-        PathTestFactory.RegisterLineChart("HybridPlannerFF", Vector3d.Zero, 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerFF", Vector3d.Zero, 3);
 
         FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -74,8 +74,8 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_SolidTransition_ShouldBuildSingleTransitionPlan()
     {
-        PathTestFactory.RegisterLineChart("HybridPlannerSolidStart", Vector3d.Zero, 2);
-        PathTestFactory.RegisterLineChart("HybridPlannerSolidEnd", new Vector3d(4, 0, 0), 2);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerSolidStart", Vector3d.Zero, 2);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerSolidEnd", new Vector3d(4, 0, 0), 2);
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "hybridplanner-solid-hop",
@@ -106,11 +106,11 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_LiquidTransitionPair_ShouldBuildPlanWithVolumeStep()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerLiquidStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerLiquidEnd", new Vector3d(4, 0, 0));
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Liquid, "HybridPlannerLiquidVol");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 0), TraversalMedium.Liquid, "HybridPlannerLiquidVol");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(3, 0, 0), TraversalMedium.Liquid, "HybridPlannerLiquidVol");
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridPlannerLiquidStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridPlannerLiquidEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(1, 0, 0), TraversalMedium.Liquid, "HybridPlannerLiquidVol");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(2, 0, 0), TraversalMedium.Liquid, "HybridPlannerLiquidVol");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(3, 0, 0), TraversalMedium.Liquid, "HybridPlannerLiquidVol");
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "hybridplanner-swim-entry",
@@ -156,11 +156,11 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_GasTransitionPair_ShouldBuildPlanWithGasVolumeStep()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerGasStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerGasEnd", new Vector3d(4, 0, 0));
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(1, 0, 0), TraversalMedium.Gas, "HybridPlannerGasVol");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 0), TraversalMedium.Gas, "HybridPlannerGasVol");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(3, 0, 0), TraversalMedium.Gas, "HybridPlannerGasVol");
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridPlannerGasStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridPlannerGasEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(1, 0, 0), TraversalMedium.Gas, "HybridPlannerGasVol");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(2, 0, 0), TraversalMedium.Gas, "HybridPlannerGasVol");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(3, 0, 0), TraversalMedium.Gas, "HybridPlannerGasVol");
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "hybridplanner-gas-entry",
@@ -206,14 +206,14 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_ShouldPreferCheaperLiquidTransitionPair_WhenGasAndLiquidRoutesBothExist()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerDualStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerDualEnd", new Vector3d(6, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridPlannerDualStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridPlannerDualEnd", new Vector3d(6, 0, 0));
 
         for (int x = 1; x <= 5; x++)
-            PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(x, 0, 0), TraversalMedium.Gas, "HybridPlannerDualGas");
+            PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(x, 0, 0), TraversalMedium.Gas, "HybridPlannerDualGas");
 
         for (int x = 1; x <= 5; x++)
-            PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(x, 0, 1), TraversalMedium.Liquid, "HybridPlannerDualLiquid");
+            PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(x, 0, 1), TraversalMedium.Liquid, "HybridPlannerDualLiquid");
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "hybridplanner-dual-gas-entry",
@@ -267,8 +267,8 @@ public sealed class HybridRoutePlannerTests : IDisposable
             new GridConfiguration(new Vector3d(20, -8, -8), new Vector3d(16, 16, 16)),
             out _).Should().BeTrue();
 
-        PathTestFactory.RegisterLineChart("HybridPlannerCrossGridStart", Vector3d.Zero, 2);
-        PathTestFactory.RegisterSingleWalkablePoint("HybridPlannerCrossGridEnd", new Vector3d(20, 0, 0));
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerCrossGridStart", Vector3d.Zero, 2);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridPlannerCrossGridEnd", new Vector3d(20, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "hybridplanner-cross-grid-hop",
@@ -292,7 +292,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_ShouldBuildChainedClimbRoute_ForAuthoredParkourTopology()
     {
-        PathTestFactory.RegisterAuthoredClimbRoute("HybridPlannerClimbChain");
+        PathTestFactory.RegisterAuthoredClimbRoute(TestWorld.Context, "HybridPlannerClimbChain");
 
         AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(3, 0, 1),
@@ -333,7 +333,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryPlan_FlowFieldKind_ZeroDisplacement_ShouldBuildWaypointStep()
     {
-        PathTestFactory.RegisterLineChart("HybridPlannerFFZero", Vector3d.Zero, 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerFFZero", Vector3d.Zero, 3);
 
         FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             Vector3d.Zero,
@@ -353,7 +353,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryCreateAStarStep_ShouldReturnFalse_WhenChartRequestCannotResolve()
     {
-        PathTestFactory.RegisterLineChart("HybridPlannerAStarInvalid", Vector3d.Zero, 2);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerAStarInvalid", Vector3d.Zero, 2);
 
         HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -377,7 +377,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryCreateFlowFieldStep_ShouldReturnFalse_WhenChartRequestCannotResolve()
     {
-        PathTestFactory.RegisterLineChart("HybridPlannerFlowInvalid", Vector3d.Zero, 2);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerFlowInvalid", Vector3d.Zero, 2);
 
         FlowFieldPathRequest flowFieldRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -402,7 +402,7 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryCreateVolumeStep_ShouldReturnFalse_WhenVolumeRequestCannotResolve()
     {
-        PathTestFactory.RegisterLineChart("HybridPlannerVolumeInvalid", Vector3d.Zero, 2);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerVolumeInvalid", Vector3d.Zero, 2);
 
         HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -427,8 +427,8 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryCreateVolumeStep_ShouldReturnWaypoint_WhenOriginMatchesDestination()
     {
-        PathTestFactory.RegisterLineChart("HybridPlannerVolumeZeroSolid", Vector3d.Zero, 2);
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeZeroGas");
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerVolumeZeroSolid", Vector3d.Zero, 2);
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeZeroGas");
 
         HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),
@@ -454,9 +454,9 @@ public sealed class HybridRoutePlannerTests : IDisposable
     [Fact]
     public void TryCreateVolumeStep_ShouldReturnFalse_WhenVolumeSurveyFindsNoPath()
     {
-        PathTestFactory.RegisterLineChart("HybridPlannerVolumeMissSolid", Vector3d.Zero, 2);
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasA");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(6, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasB");
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridPlannerVolumeMissSolid", Vector3d.Zero, 2);
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(4, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasA");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(6, 0, 0), TraversalMedium.Gas, "HybridPlannerVolumeMissGasB");
 
         HybridPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero,
             new Vector3d(1, 0, 0),

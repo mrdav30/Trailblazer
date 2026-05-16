@@ -84,9 +84,9 @@ public class PathHeapTests : IDisposable
     {
         var heap = new PathHeap<Voxel>();
 
-        Voxel a = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel b = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
-        Voxel c = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
+        Voxel a = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel b = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
+        Voxel c = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(2, 0, 0));
 
         heap.Add(a, pathCost: 30);
         heap.Add(b, pathCost: 20);
@@ -244,7 +244,7 @@ public class PathHeapTests : IDisposable
 
     private static SolidChartPartition CreateAttachedPartition(Vector3d position)
     {
-        Voxel voxel = TestRequire.VoxelAt(position);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, position);
 
         var partition = new SolidChartPartition();
 

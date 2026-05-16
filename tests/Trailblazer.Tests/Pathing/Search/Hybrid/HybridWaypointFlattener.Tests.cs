@@ -29,7 +29,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     [Fact]
     public void TryBuild_ShouldFlattenSegments_AndDeduplicateChartKeysAndAdjacentWaypoints()
     {
-        PathTestFactory.RegisterLineChart("HybridFlattenChart", Vector3d.Zero, 5);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridFlattenChart", Vector3d.Zero, 5);
 
         AStarPathRequest first = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -69,9 +69,9 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     [Fact]
     public void TryBuild_ShouldRejectUnsupportedSegmentRequests()
     {
-        PathTestFactory.RegisterLineChart("HybridFlattenUnsupported", Vector3d.Zero, 2);
-        Voxel start = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel end = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridFlattenUnsupported", Vector3d.Zero, 2);
+        Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         HybridRoutePlan routePlan = new(
             new[]
@@ -106,13 +106,13 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
     public void TryBuild_ShouldSucceed_WithVolumeSegmentStep()
     {
         // Register a gas corridor for the volume step and a solid point for the surrounding segments.
-        PathTestFactory.RegisterLineChart("HybridFlattenVolStart", Vector3d.Zero, 2);
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(2, 0, 0), TraversalMedium.Gas, "HybridFlattenGas");
-        PathTestFactory.RegisterGeneratedVolumePoint(new Vector3d(3, 0, 0), TraversalMedium.Gas, "HybridFlattenGas");
-        PathTestFactory.RegisterLineChart("HybridFlattenVolEnd", new Vector3d(4, 0, 0), 2);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridFlattenVolStart", Vector3d.Zero, 2);
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(2, 0, 0), TraversalMedium.Gas, "HybridFlattenGas");
+        PathTestFactory.RegisterGeneratedVolumePoint(TestWorld.Context, new Vector3d(3, 0, 0), TraversalMedium.Gas, "HybridFlattenGas");
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "HybridFlattenVolEnd", new Vector3d(4, 0, 0), 2);
 
-        Voxel volStart = TestRequire.VoxelAt(new Vector3d(2, 0, 0));
-        Voxel volEnd = TestRequire.VoxelAt(new Vector3d(3, 0, 0));
+        Voxel volStart = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(2, 0, 0));
+        Voxel volEnd = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(3, 0, 0));
 
         VolumePathRequest volRequest = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(2, 0, 0),
             new Vector3d(3, 0, 0),
@@ -177,8 +177,8 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
         // Exercises the aStarGuide == null early-return branch in TryAppendSegmentWaypoints.
         // Two isolated single-cell charts have no partition neighbors, so A* produces no path
         // and RequestAStar returns null.
-        PathTestFactory.RegisterSingleWalkablePoint("HybridFlattenIsolatedA", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("HybridFlattenIsolatedB", new Vector3d(7, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridFlattenIsolatedA", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridFlattenIsolatedB", new Vector3d(7, 0, 0));
 
         AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(7, 0, 0),

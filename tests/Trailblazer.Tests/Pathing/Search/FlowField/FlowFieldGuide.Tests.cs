@@ -31,7 +31,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     [Fact]
     public void FlowFieldGuide_ShouldHandleNonStagedQueries()
     {
-        PathTestFactory.RegisterLineChart("FlowFieldGuideLine", Vector3d.Zero, 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "FlowFieldGuideLine", Vector3d.Zero, 3);
 
         var guide = new FlowFieldGuide();
         guide.Initialize(FlowFieldSurveyResult.Empty).Should().BeFalse();
@@ -110,7 +110,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     [Fact]
     public void FlowFieldGuide_ShouldUseFlowFieldSubGuide_ForStagedSegments()
     {
-        PathTestFactory.RegisterLineChart("FlowFieldStageLine", Vector3d.Zero, 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "FlowFieldStageLine", Vector3d.Zero, 3);
 
         FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -142,7 +142,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     [Fact]
     public void FlowFieldGuide_TryGetMovementDirection_ShouldReturnFalse_WhenFlowVectorAtPositionIsZero()
     {
-        PathTestFactory.RegisterLineChart("FlowFieldGuideZeroDir", Vector3d.Zero, 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "FlowFieldGuideZeroDir", Vector3d.Zero, 3);
 
         FlowFieldSurveyResult survey = CreateSurveyResult(
             (Vector3d.Zero, new Vector3d(1, 0, 0), 2, false),
@@ -165,7 +165,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     [Fact]
     public void FlowFieldGuide_StagedWithAStarSegment_FlowFieldContainsPosition_ShouldReturnFalse()
     {
-        PathTestFactory.RegisterLineChart("FlowFieldGuideStagedAStar", Vector3d.Zero, 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "FlowFieldGuideStagedAStar", Vector3d.Zero, 3);
 
         var aStarRequest = AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -191,10 +191,10 @@ public sealed class FlowFieldGuideTests : IDisposable
     [Fact]
     public void FlowFieldGuide_ShouldFailGracefully_WhenStagedSegmentCannotCreateAnInnerGuide()
     {
-        PathTestFactory.RegisterLineChart("FlowFieldGuideUnsupportedSegment", Vector3d.Zero, 2);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "FlowFieldGuideUnsupportedSegment", Vector3d.Zero, 2);
 
-        Voxel start = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel end = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         var plan = new HybridRoutePlan(
             new[] { HybridRouteStep.Segment(new UnsupportedRequest(start, end)) },
@@ -212,7 +212,7 @@ public sealed class FlowFieldGuideTests : IDisposable
     [Fact]
     public void FlowFieldGuide_PrivateSegmentHelpers_ShouldReuseStageGuide_AndAdvanceCompletedSegment()
     {
-        PathTestFactory.RegisterLineChart("FlowFieldGuidePrivateSegment", Vector3d.Zero, 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "FlowFieldGuidePrivateSegment", Vector3d.Zero, 3);
 
         FlowFieldPathRequest request = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -248,7 +248,7 @@ public sealed class FlowFieldGuideTests : IDisposable
 
         for (int i = 0; i < cells.Length; i++)
         {
-            Voxel voxel = TestRequire.VoxelAt(cells[i].position);
+            Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, cells[i].position);
             fields.Add(voxel.WorldIndex, new FlowField
             {
                 GlobalIndex = voxel.WorldIndex,

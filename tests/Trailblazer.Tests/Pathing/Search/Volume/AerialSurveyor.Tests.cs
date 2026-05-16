@@ -29,13 +29,13 @@ public class AerialSurveyorTests : IDisposable
     [Fact]
     public void AerialSurveyor_Should_FindChartlessDetour_AroundBlockedVoxel()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 0));
-        Voxel blockedVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, new Vector3d(1, 0, 0));
+        Voxel blockedVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -56,12 +56,12 @@ public class AerialSurveyorTests : IDisposable
     [Fact]
     public void PathGuideFactory_Should_ReturnAerialGuide_ForBlockedAerialRequests()
     {
-        GuidedPathTestScene.AddOpen(Vector3d.Zero);
-        GuidedPathTestScene.AddOpen(new Vector3d(0, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(1, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 1, 0));
-        GuidedPathTestScene.AddOpen(new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, Vector3d.Zero);
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(0, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(1, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 1, 0));
+        GuidedPathTestScene.AddOpen(TestWorld.Context, new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, new Vector3d(1, 0, 0));
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(2, 0, 0),
@@ -79,13 +79,13 @@ public class AerialSurveyorTests : IDisposable
     [Fact]
     public void VolumeSurveyor_Should_FindWaterDetour_ThroughHostMarkedVoxels()
     {
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 1));
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 1));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 1));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(2, 0, 1));
 
-        GuidedPathTestScene.AddObstacle(new Vector3d(1, 0, 1));
+        GuidedPathTestScene.AddObstacle(TestWorld.Context, new Vector3d(1, 0, 1));
 
         VolumePathRequest request = TestRequire.NotNull(VolumePathRequest.Create(TestWorld.Context, new Vector3d(0, 0, 1),
             new Vector3d(2, 0, 1),

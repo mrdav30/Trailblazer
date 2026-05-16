@@ -48,7 +48,7 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
     [Fact]
     public void TraversalTransitionOrdering_ShouldCompareAnchorDetails_WhenIdsMatch()
     {
-        Voxel voxel = TestRequire.VoxelAt(Vector3d.Zero);
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
 
         var solid = new TraversalTransition(
             "same",
@@ -191,7 +191,7 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
     [Fact]
     public void TraversalTransitionOrdering_ShouldCompare_ByPointOverridePosition()
     {
-        Voxel destVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel destVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         // Same dest voxel, but one has a point override with different Y.
         var left = new TraversalTransition(
@@ -270,7 +270,7 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
 
         TraversalTransitionOrdering.Compare(firstGrid, secondGrid).Should().BeLessThan(0);
 
-        Voxel destinationVoxel = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        Voxel destinationVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
         var lowerOverrideX = new TraversalTransition(
             "cmp-point",
             TraversalTransitionType.Jump,

@@ -34,8 +34,8 @@ public sealed class PathRequestRecordTests : IDisposable
     [Fact]
     public void TryCreateRequest_ShouldRoundTripSupportedRequestKinds()
     {
-        PathTestFactory.RegisterLineChart("PathRecordSolid", Vector3d.Zero, 5);
-        PathTestFactory.RegisterVolumeLine(new Vector3d(0, 0, 2), TraversalMedium.Gas, 5, "PathRecordGas");
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "PathRecordSolid", Vector3d.Zero, 5);
+        PathTestFactory.RegisterVolumeLine(TestWorld.Context, new Vector3d(0, 0, 2), TraversalMedium.Gas, 5, "PathRecordGas");
 
         AStarPathRequest aStar = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(4, 0, 0),
@@ -113,9 +113,9 @@ public sealed class PathRequestRecordTests : IDisposable
     [Fact]
     public void TryCreateGuide_ShouldRestoreWaypointIndices_ForWaypointGuides()
     {
-        PathTestFactory.RegisterLineChart("PathRecordGuideSolid", new Vector3d(0, 2, 0), 5);
-        PathTestFactory.RegisterVolumeLine(new Vector3d(0, 0, 2), TraversalMedium.Gas, 5, "PathRecordGuideGas");
-        GuidedPathTestScene.RegisterTransitionFallbackScene();
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "PathRecordGuideSolid", new Vector3d(0, 2, 0), 5);
+        PathTestFactory.RegisterVolumeLine(TestWorld.Context, new Vector3d(0, 0, 2), TraversalMedium.Gas, 5, "PathRecordGuideGas");
+        GuidedPathTestScene.RegisterTransitionFallbackScene(TestWorld.Context);
 
         AStarPathRequest aStar = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, new Vector3d(0, 2, 0),
             new Vector3d(4, 2, 0),
@@ -163,9 +163,9 @@ public sealed class PathRequestRecordTests : IDisposable
         record.TryCreateGuide(null, out IGuide? emptyGuide).Should().BeFalse();
         emptyGuide.Should().BeNull();
 
-        PathTestFactory.RegisterLineChart("PathRecordUnsupported", Vector3d.Zero, 2);
-        Voxel start = TestRequire.VoxelAt(Vector3d.Zero);
-        Voxel end = TestRequire.VoxelAt(new Vector3d(1, 0, 0));
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "PathRecordUnsupported", Vector3d.Zero, 2);
+        Voxel start = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel end = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
 
         Action captureUnsupported = () => record.Capture(new UnsupportedRequest(start, end), null);
         captureUnsupported.Should().Throw<NotSupportedException>();
@@ -216,7 +216,7 @@ public sealed class PathRequestRecordTests : IDisposable
     [Fact]
     public void TryCreateGuide_ShouldReturnFalse_WhenGuideCannotBeRecreated()
     {
-        PathTestFactory.RegisterLineChart("PathRecordFlowField", new Vector3d(0, 4, 0), 3);
+        PathTestFactory.RegisterLineChart(TestWorld.Context, "PathRecordFlowField", new Vector3d(0, 4, 0), 3);
 
         FlowFieldPathRequest flowField = TestRequire.NotNull(FlowFieldPathRequest.Create(TestWorld.Context, new Vector3d(0, 4, 0),
             new Vector3d(2, 4, 0),
@@ -235,8 +235,8 @@ public sealed class PathRequestRecordTests : IDisposable
         PathGuideFactory.ReturnGuide(recreatedFlowGuide, dispose: true);
         PathGuideFactory.ReturnGuide(flowGuide, dispose: true);
 
-        PathTestFactory.RegisterSingleWalkablePoint("PathRecordDisconnectedStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("PathRecordDisconnectedEnd", new Vector3d(4, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "PathRecordDisconnectedStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "PathRecordDisconnectedEnd", new Vector3d(4, 0, 0));
 
         PathRequestRecord failureRecord = new()
         {

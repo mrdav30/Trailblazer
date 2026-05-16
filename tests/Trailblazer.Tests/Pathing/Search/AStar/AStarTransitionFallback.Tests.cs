@@ -27,8 +27,8 @@ public class AStarTransitionFallbackTests : IDisposable
     [Fact]
     public void AStarRequest_ShouldUseTransitionFallback_ForDisconnectedJumpLink()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("JumpStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("JumpEnd", new Vector3d(2, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "JumpStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "JumpEnd", new Vector3d(2, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "jump-gap",
@@ -55,12 +55,12 @@ public class AStarTransitionFallbackTests : IDisposable
     [Fact]
     public void AStarRequest_ShouldUseTransitionFallback_ForChartToWaterToChartRoute()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("WaterStart", new Vector3d(-1, 0, 0));
-        PathTestFactory.RegisterSingleWalkablePoint("WaterEnd", new Vector3d(3, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "WaterStart", new Vector3d(-1, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "WaterEnd", new Vector3d(3, 0, 0));
 
-        GuidedPathTestScene.AddWater(new Vector3d(0, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(1, 0, 0));
-        GuidedPathTestScene.AddWater(new Vector3d(2, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(0, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(1, 0, 0));
+        GuidedPathTestScene.AddWater(TestWorld.Context, new Vector3d(2, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "water-entry",
@@ -98,8 +98,8 @@ public class AStarTransitionFallbackTests : IDisposable
     [Fact]
     public void AStarRequest_ShouldNotUseTransitionFallback_WhenOnlyAllowUnwalkableIsEnabled()
     {
-        PathTestFactory.RegisterSingleWalkablePoint("NoFallbackStart", Vector3d.Zero);
-        PathTestFactory.RegisterSingleWalkablePoint("NoFallbackEnd", new Vector3d(2, 0, 0));
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "NoFallbackStart", Vector3d.Zero);
+        PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "NoFallbackEnd", new Vector3d(2, 0, 0));
 
         TraversalTransitionRegistry.Register(new TraversalTransition(
             id: "no-fallback-jump",
@@ -122,7 +122,7 @@ public class AStarTransitionFallbackTests : IDisposable
     [Fact]
     public void AStarRequest_ShouldUseTransitionFallback_ForGeneratedClimbTopology()
     {
-        PathTestFactory.RegisterAuthoredClimbRoute("AStarClimbFallback");
+        PathTestFactory.RegisterAuthoredClimbRoute(TestWorld.Context, "AStarClimbFallback");
 
         AStarPathRequest request = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero,
             new Vector3d(3, 0, 1),

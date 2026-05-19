@@ -6,7 +6,7 @@
         <Configuration>
           <Format>cobertura</Format>
           <Include>[Trailblazer]*</Include>
-          <ExcludeByFile>**/bin/**,**/obj/**,**/*.g.cs</ExcludeByFile>
+          <ExcludeByFile>**/bin/**,**/obj/**,**/*.g.cs,**/MemoryPack.Generator/**/*.cs</ExcludeByFile>
           <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <IncludeTestAssembly>false</IncludeTestAssembly>
         </Configuration>

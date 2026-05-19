@@ -3,15 +3,15 @@ obj/
 .vs/
 TestResults/
 .codex
+*.lscache
+
+# Local build, release, and CI artifact output
 artifacts/
 .vs/
-.editorconfig
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-TestResults/
 BenchmarkDotNet.Artifacts/
-artifacts/
 docs/feature-work/prototype/

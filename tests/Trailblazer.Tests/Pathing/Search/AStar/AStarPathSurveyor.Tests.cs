@@ -2,6 +2,7 @@
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Spatial;
 using SwiftCollections;
 using System;
 using System.Collections.Generic;
@@ -713,9 +714,9 @@ public class AStarSurveyorTests : IDisposable
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
         PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
-        SwiftDictionary<Voxel, AStarVoxelMeta> meta = ReflectionUtility.GetPrivateField<SwiftDictionary<Voxel, AStarVoxelMeta>>(surveyor, "_meta");
+        SwiftDictionary<WorldVoxelIndex, AStarVoxelMeta> meta = ReflectionUtility.GetPrivateField<SwiftDictionary<WorldVoxelIndex, AStarVoxelMeta>>(surveyor, "_meta");
 
-        meta[neighbor.Voxel] = new AStarVoxelMeta
+        meta[neighbor.WorldIndex] = new AStarVoxelMeta
         {
             MovementCost = 300,
             NextTrailIndex = current.WorldIndex,
@@ -725,8 +726,8 @@ public class AStarSurveyorTests : IDisposable
 
         ReflectionUtility.InvokePrivate<bool>(surveyor, "ProcessNeighbor", current, neighbor, 200).Should().BeFalse();
 
-        meta[neighbor.Voxel].MovementCost.Should().Be(200);
-        meta[neighbor.Voxel].NextTrailIndex.Should().Be(current.WorldIndex);
+        meta[neighbor.WorldIndex].MovementCost.Should().Be(200);
+        meta[neighbor.WorldIndex].NextTrailIndex.Should().Be(current.WorldIndex);
         heap.TryGetPathCost(neighbor, out int updatedPathCost).Should().BeTrue();
         updatedPathCost.Should().Be(
             neighbor.PathCostModifier

@@ -66,7 +66,8 @@ public class AStarSurveyor
 
     private readonly PathHeap<SolidChartPartition> _heap = new();
 
-    private readonly SwiftDictionary<Voxel, AStarVoxelMeta> _meta = new();
+    // Key by stable voxel index so reconstruction is independent of GridForge voxel wrapper identity.
+    private readonly SwiftDictionary<WorldVoxelIndex, AStarVoxelMeta> _meta = new();
 
     private readonly SwiftList<SolidChartPartition> _rawPath = new();
 
@@ -97,7 +98,7 @@ public class AStarSurveyor
 
             ClearWorkingState();
             // Trace path from the start to the end
-            _meta[_request.StartNode] = new AStarVoxelMeta
+            _meta[_request.StartNode.WorldIndex] = new AStarVoxelMeta
             {
                 PathCost = 0
             };
@@ -147,7 +148,7 @@ public class AStarSurveyor
     /// <returns>True if any neighbor is the target destination.</returns>
     private bool ProcessNeighbors(SolidChartPartition current)
     {
-        if (!_meta.TryGetValue(current.Voxel, out AStarVoxelMeta data))
+        if (!_meta.TryGetValue(current.WorldIndex, out AStarVoxelMeta data))
             return false;
 
         if (TryProcessDirection(current, SpatialAwareness.PerpendicularDirections, data.MovementCost + StraightCost))
@@ -229,7 +230,7 @@ public class AStarSurveyor
             SetPathPartitionData(neighbor, current.WorldIndex, cost, pathCost);
             _heap.Add(neighbor, pathCost, heuristicCost);
         }
-        else if (_meta.TryGetValue(neighbor.Voxel, out AStarVoxelMeta neighborData)
+        else if (_meta.TryGetValue(neighbor.WorldIndex, out AStarVoxelMeta neighborData)
             && neighborData.MovementCost > cost)
         {
             SetPathPartitionData(neighbor, current.WorldIndex, cost, pathCost);
@@ -253,7 +254,7 @@ public class AStarSurveyor
         int movementCost,
         int pathCost)
     {
-        _meta[partition.Voxel] = new AStarVoxelMeta
+        _meta[partition.WorldIndex] = new AStarVoxelMeta
         {
             MovementCost = movementCost,
             NextTrailIndex = nextTrailCoordinates,
@@ -276,7 +277,7 @@ public class AStarSurveyor
 
             _rawPath.Insert(0, currentPartition);
 
-            if (!_meta.TryGetValue(current, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
+            if (!_meta.TryGetValue(current.WorldIndex, out AStarVoxelMeta data) || !data.NextTrailIndex.HasValue)
                 break; // break in the trail!
 
             if (!_request.Context.World.TryGetGridAndVoxel(data.NextTrailIndex.Value, out _, out Voxel? nextTrailVoxel))
@@ -365,7 +366,7 @@ public class AStarSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int GetPathCost(Voxel voxel)
     {
-        return _meta[voxel].PathCost;
+        return _meta[voxel.WorldIndex].PathCost;
     }
 
     private void ClearWorkingState()

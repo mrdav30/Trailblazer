@@ -37,7 +37,8 @@ public sealed class VolumeSurveyor
 
     private readonly PathHeap<Voxel> _heap = new();
 
-    private readonly SwiftDictionary<Voxel, VolumeVoxelMeta> _meta = new();
+    // Key by stable voxel index so reconstruction is independent of GridForge voxel wrapper identity.
+    private readonly SwiftDictionary<WorldVoxelIndex, VolumeVoxelMeta> _meta = new();
 
     private readonly SwiftList<Voxel> _rawPath = new();
 
@@ -72,7 +73,7 @@ public sealed class VolumeSurveyor
 
             ClearWorkingState();
 
-            _meta[activeRequest.StartNode!] = new VolumeVoxelMeta();
+            _meta[activeRequest.StartNode!.WorldIndex] = new VolumeVoxelMeta();
             _heap.Add(activeRequest.StartNode!, 0);
 
             if (!TracePath())
@@ -116,7 +117,7 @@ public sealed class VolumeSurveyor
 
     private bool ProcessNeighbors(Voxel current)
     {
-        if (!_meta.TryGetValue(current, out VolumeVoxelMeta data))
+        if (!_meta.TryGetValue(current.WorldIndex, out VolumeVoxelMeta data))
             return false;
 
         if (TryProcessDirections(
@@ -213,7 +214,7 @@ public sealed class VolumeSurveyor
             SetVoxelData(neighbor, current.WorldIndex, totalMovementCost);
             _heap.Add(neighbor, pathCost);
         }
-        else if (_meta.TryGetValue(neighbor, out VolumeVoxelMeta neighborData)
+        else if (_meta.TryGetValue(neighbor.WorldIndex, out VolumeVoxelMeta neighborData)
             && neighborData.MovementCost > totalMovementCost)
         {
             SetVoxelData(neighbor, current.WorldIndex, totalMovementCost);
@@ -229,7 +230,7 @@ public sealed class VolumeSurveyor
         WorldVoxelIndex nextTrailIndex,
         int movementCost)
     {
-        _meta[voxel] = new VolumeVoxelMeta()
+        _meta[voxel.WorldIndex] = new VolumeVoxelMeta()
         {
             MovementCost = movementCost,
             NextTrailIndex = nextTrailIndex
@@ -244,7 +245,7 @@ public sealed class VolumeSurveyor
         {
             _rawPath.Insert(0, current);
 
-            if (!_meta.TryGetValue(current, out VolumeVoxelMeta data)
+            if (!_meta.TryGetValue(current.WorldIndex, out VolumeVoxelMeta data)
                 || !data.NextTrailIndex.HasValue)
                 break;
 
@@ -345,7 +346,7 @@ public sealed class VolumeSurveyor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int GetMovementCost(Voxel voxel)
     {
-        return _meta[voxel].MovementCost;
+        return _meta[voxel.WorldIndex].MovementCost;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

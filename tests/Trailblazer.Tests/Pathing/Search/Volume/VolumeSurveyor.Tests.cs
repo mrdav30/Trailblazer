@@ -2,6 +2,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Spatial;
 using SwiftCollections;
 using System;
 using System.Linq;
@@ -281,9 +282,9 @@ public sealed class VolumeSurveyorTests : IDisposable
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
         PathHeap<Voxel> heap = ReflectionUtility.GetPrivateField<PathHeap<Voxel>>(surveyor, "_heap");
-        SwiftDictionary<Voxel, VolumeVoxelMeta> meta = ReflectionUtility.GetPrivateField<SwiftDictionary<Voxel, VolumeVoxelMeta>>(surveyor, "_meta");
+        SwiftDictionary<WorldVoxelIndex, VolumeVoxelMeta> meta = ReflectionUtility.GetPrivateField<SwiftDictionary<WorldVoxelIndex, VolumeVoxelMeta>>(surveyor, "_meta");
 
-        meta[neighbor] = new VolumeVoxelMeta
+        meta[neighbor.WorldIndex] = new VolumeVoxelMeta
         {
             MovementCost = 400,
             NextTrailIndex = current.WorldIndex
@@ -292,8 +293,8 @@ public sealed class VolumeSurveyorTests : IDisposable
 
         ReflectionUtility.InvokePrivate<bool>(surveyor, "ProcessNeighbor", current, neighbor, 150).Should().BeFalse();
 
-        meta[neighbor].MovementCost.Should().Be(175);
-        meta[neighbor].NextTrailIndex.Should().Be(current.WorldIndex);
+        meta[neighbor.WorldIndex].MovementCost.Should().Be(175);
+        meta[neighbor.WorldIndex].NextTrailIndex.Should().Be(current.WorldIndex);
         heap.TryGetPathCost(neighbor, out int updatedPathCost).Should().BeTrue();
         updatedPathCost.Should().Be(
             175

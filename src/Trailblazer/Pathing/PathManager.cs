@@ -25,16 +25,6 @@ internal static class PathManager
 
     internal static readonly SwiftHashSetPool<SolidChartPartition> PartitionSetPool = new();
 
-    /// <summary>
-    /// Pool of reusable <see cref="SolidChartPartition"/> instances used for partitioning the navigation grid.
-    /// </summary>
-    internal static SwiftObjectPool<SolidChartPartition> PartitionPool => ActiveState.PartitionPool;
-
-    /// <summary>
-    /// Pool of reusable <see cref="VolumeChartPartition"/> instances used for authored raw-volume traversal.
-    /// </summary>
-    internal static SwiftObjectPool<VolumeChartPartition> VolumeChartPartitionPool => ActiveState.VolumeChartPartitionPool;
-
     #endregion
 
     #region Properties
@@ -2479,7 +2469,7 @@ internal static class PathManager
         {
             if (!voxel.TryGetPartition(out SolidChartPartition? solidPartition))
             {
-                solidPartition = PartitionPool.Rent();
+                solidPartition = ActiveState.PartitionPool.Rent();
                 solidPartition.SetOwner(ActiveState);
                 voxel.TryAddPartition(solidPartition);
             }
@@ -2500,7 +2490,7 @@ internal static class PathManager
         {
             if (!voxel.TryGetPartition(out VolumeChartPartition? volumePartition))
             {
-                volumePartition = VolumeChartPartitionPool.Rent();
+                volumePartition = ActiveState.VolumeChartPartitionPool.Rent();
                 volumePartition.SetOwner(ActiveState);
                 voxel.TryAddPartition(volumePartition);
             }

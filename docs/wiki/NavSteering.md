@@ -1,11 +1,13 @@
 # NavSteering Reference
 
-This document is the detailed reference for Trailblazer's deterministic steering and guide-following layer.
+This document is the detailed reference for Trailblazer's deterministic steering
+and guide-following layer.
 
-If you only need the high-level architecture, read `Overview.md`.
-If you want the pathing-first request, guide, and transition model without `Navigator`, read `Pathing.md`.
-If you specifically want `IGuide`, `IWaypointGuide`, and `PathGuideFactory`, read `PathGuides.md`.
-If you need the movement-execution side, read `NavMotor.md`.
+If you only need the high-level architecture, read `Overview.md`. If you want
+the pathing-first request, guide, and transition model without `Navigator`, read
+`Pathing.md`. If you specifically want `IGuide`, `IWaypointGuide`, and
+`PathGuideFactory`, read `PathGuides.md`. If you need the movement-execution
+side, read `NavMotor.md`.
 
 The code referenced here lives primarily in:
 
@@ -24,7 +26,8 @@ The code referenced here lives primarily in:
 
 ## 1. What NavSteering Is
 
-`NavSteering` is the layer that decides where a navigator wants to move this frame.
+`NavSteering` is the layer that decides where a navigator wants to move this
+frame.
 
 It is responsible for:
 
@@ -42,11 +45,13 @@ It is not responsible for:
 - turning interpolation
 - environment probing
 
-Those responsibilities belong to the pathing layer, `NavMotor`, `NavTurning`, and the host navigator.
+Those responsibilities belong to the pathing layer, `NavMotor`, `NavTurning`,
+and the host navigator.
 
 ## 2. Core Design Model
 
-The important design choice is that `NavSteering` is a heading generator, not a mover.
+The important design choice is that `NavSteering` is a heading generator, not a
+mover.
 
 Its main loop is:
 
@@ -57,7 +62,8 @@ Its main loop is:
 5. Blend in avoidance and group steering.
 6. Stop, arrive, repath, or continue.
 
-`NavSteering` does not apply motion directly. It returns a desired movement vector, and `Navigator` passes that to `NavTurning` and `NavMotor`.
+`NavSteering` does not apply motion directly. It returns a desired movement
+vector, and `Navigator` passes that to `NavTurning` and `NavMotor`.
 
 This split matters because it keeps:
 
@@ -67,13 +73,18 @@ This split matters because it keeps:
 
 The implementation mirrors this separation across partial files:
 
-- `NavSteering.cs` keeps core state, construction, tuning fields, events, and group-facing properties.
+- `NavSteering.cs` keeps core state, construction, tuning fields, events, and
+  group-facing properties.
 - `NavSteering.Requests.cs` owns public request and guide-session entry points.
-- `NavSteering.Simulation.cs` owns the per-frame `GetHeading(...)` pipeline, path validation, stuck handling, arrival, and stop behavior.
+- `NavSteering.Simulation.cs` owns the per-frame `GetHeading(...)` pipeline,
+  path validation, stuck handling, arrival, and stop behavior.
 - `NavSteering.LineOfSight.cs` owns chart and volume line-of-sight helpers.
-- `NavSteering.Groups.cs` owns combined steering, movement-group session state, and route-topology publication helpers.
-- `NavSteering.Serialization.cs` contains the Chronicler `RecordData(...)` implementation.
-- `Steering/Serialization/*` contains the serializable request snapshot types used by `NavSteering.RecordData(...)`.
+- `NavSteering.Groups.cs` owns combined steering, movement-group session state,
+  and route-topology publication helpers.
+- `NavSteering.Serialization.cs` contains the Chronicler `RecordData(...)`
+  implementation.
+- `Steering/Serialization/*` contains the serializable request snapshot types
+  used by `NavSteering.RecordData(...)`.
 
 ## 3. Public Surface
 
@@ -138,8 +149,12 @@ Important public state includes:
 
 In normal `Navigator` usage, the steering integration looks like this:
 
-1. `ApplyGuidedTrekRequest(...)` builds an internal `IPathRequest` from the target position plus navigator-owned defaults configured through `ConfigureForGuidedTraversal(...)`, including transition fallback for chart-backed modes, then forwards it to `Steering.ApplyPathRequest(...)`.
-2. Each simulation tick, `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
+1. `ApplyGuidedTrekRequest(...)` builds an internal `IPathRequest` from the
+   target position plus navigator-owned defaults configured through
+   `ConfigureForGuidedTraversal(...)`, including transition fallback for
+   chart-backed modes, then forwards it to `Steering.ApplyPathRequest(...)`.
+2. Each simulation tick, `Navigator.Simulate()` calls
+   `Steering.GetHeading(this)`.
 3. The resulting heading is passed to `NavTurning` and `NavMotor`.
 
 The built-in chart-backed guided algorithms are:
@@ -147,7 +162,9 @@ The built-in chart-backed guided algorithms are:
 - `SolidPathAlgorithm.AStar`
 - `SolidPathAlgorithm.FlowField`
 
-When the navigator's current traversal medium is `Gas` or `Liquid`, guided routing is volume-first and uses the configured solid algorithm only for optional chart-backed exit or landing handoffs.
+When the navigator's current traversal medium is `Gas` or `Liquid`, guided
+routing is volume-first and uses the configured solid algorithm only for
+optional chart-backed exit or landing handoffs.
 
 If you use `NavSteering` directly, the essential rule is:
 
@@ -172,7 +189,8 @@ Two internal concepts are especially important:
 
 ### 5.1 `_currentRequest`
 
-This is the active `IPathRequest` for the current movement session. It is reused and updated as the navigator moves.
+This is the active `IPathRequest` for the current movement session. It is reused
+and updated as the navigator moves.
 
 ### 5.2 `_trailGuide`
 
@@ -185,9 +203,15 @@ It may be:
 - a `FlowFieldGuide`
 - a `VolumeGuide`
 
-When transition-aware guided fallback is enabled, `AStarGuide` and `FlowFieldGuide` still remain the public guide shapes. The staged transition behavior stays internal to the request-resolution and guide layers.
+When transition-aware guided fallback is enabled, `AStarGuide` and
+`FlowFieldGuide` still remain the public guide shapes. The staged transition
+behavior stays internal to the request-resolution and guide layers.
 
-Gas and liquid guided travel both use the raw-volume path flow. They stay guide-free while the direct corridor is clear, then allocate a `VolumeGuide` only when raw voxel blockers force a detour. Liquid travel depends on a valid water medium, which may come from authored chart cells, `VolumeMediumRules`, or both.
+Gas and liquid guided travel both use the raw-volume path flow. They stay
+guide-free while the direct corridor is clear, then allocate a `VolumeGuide`
+only when raw voxel blockers force a detour. Liquid travel depends on a valid
+water medium, which may come from authored chart cells, `VolumeMediumRules`, or
+both.
 
 Guide lifetime is owned by `NavSteering` while the movement session is active.
 
@@ -198,14 +222,17 @@ Guide lifetime is owned by `NavSteering` while the movement session is active.
 - `CurrentRouteRequestsClimbIntent`
 - `CurrentRouteTopologyVersion`
 
-This metadata is updated only when the effective route state relevant to guided climb intent changes:
+This metadata is updated only when the effective route state relevant to guided
+climb intent changes:
 
 - unresolved or cleared route state
 - direct line-of-sight travel
-- guide-backed chart travel whose effective transition topology requests climb intent
+- guide-backed chart travel whose effective transition topology requests climb
+  intent
 
-`Navigator` uses this after `GetHeading(...)` to keep auto-derived guided climb intent aligned with
-the live route without rebuilding hybrid topology every frame.
+`Navigator` uses this after `GetHeading(...)` to keep auto-derived guided climb
+intent aligned with the live route without rebuilding hybrid topology every
+frame.
 
 ## 6. Request Lifecycle
 
@@ -223,24 +250,29 @@ It:
 - marks movement as active
 - schedules a path validation pass on the next `GetHeading(...)`
 - optionally assigns a movement group id for shared group steering
-- routes shared movement-group bookkeeping through an internal coordinator so hosts still only drive `NavSteering`
+- routes shared movement-group bookkeeping through an internal coordinator so
+  hosts still only drive `NavSteering`
 
-If the request is invalid or lacks endpoints, `ApplyPathRequest(...)` calls `Arrive()` immediately.
+If the request is invalid or lacks endpoints, `ApplyPathRequest(...)` calls
+`Arrive()` immediately.
 
 Important detail:
 
 - `destination` can be an exact point inside a voxel
 - it is not required to be the voxel's `WorldPosition`
-- group membership is keyed by both `groupId` and the exact requested destination
+- group membership is keyed by both `groupId` and the exact requested
+  destination
 
 ### 6.2 OnInitialize(...)
 
-`OnInitialize(Fixed64 radius)` resets steering state for a new navigator session.
+`OnInitialize(Fixed64 radius)` resets steering state for a new navigator
+session.
 
 It also computes `_closingDistance` from:
 
 - the agent radius
-- the bound context's `VoxelSize`, falling back to the active request context or `GridWorld.DefaultVoxelSize`
+- the bound context's `VoxelSize`, falling back to the active request context or
+  `GridWorld.DefaultVoxelSize`
 
 That value is what later controls waypoint advancement and arrival tolerance.
 
@@ -259,11 +291,14 @@ The method returns `Vector3d.Zero` if:
 
 ### 7.2 Path Validation
 
-If movement is active, `GetHeading(...)` starts by making sure the current path context is still valid.
+If movement is active, `GetHeading(...)` starts by making sure the current path
+context is still valid.
 
 If `CanPathfind` is true, it calls `ValidateMovementPath(navigator.Position)`.
 
-The built-in aerial request mode always validates its live origin/destination, because it may switch between direct 3D travel and a cached aerial guide as blockers appear or disappear inside authored or configured open volume.
+The built-in aerial request mode always validates its live origin/destination,
+because it may switch between direct 3D travel and a cached aerial guide as
+blockers appear or disappear inside authored or configured open volume.
 
 If that validation fails:
 
@@ -275,7 +310,8 @@ If that validation fails:
 
 Steering does not recompute line-of-sight every frame.
 
-It uses `_pathCheckCooldown` and `PathRecheckCooldownFrames` to periodically re-evaluate:
+It uses `_pathCheckCooldown` and `PathRecheckCooldownFrames` to periodically
+re-evaluate:
 
 - whether the destination is directly reachable
 - whether the current guide may be unnecessary
@@ -287,7 +323,8 @@ This keeps straight-line checks cheaper in the common case.
 Once the request is valid:
 
 1. `LastTargetDirection` is preserved.
-2. the effective `Destination` is resolved from the current movement-group state.
+2. the effective `Destination` is resolved from the current movement-group
+   state.
 3. `FindTargetDirection(...)` resolves the new target direction.
 4. `ComputeCombinedSteering(...)` adds group and avoidance influence.
 
@@ -295,12 +332,14 @@ The resulting value becomes the heading returned to the caller.
 
 ### 7.5 Arrival and Stop Checks
 
-If the session is in direct-travel mode with no active guide, `GetHeading(...)` may call `Arrive()` when:
+If the session is in direct-travel mode with no active guide, `GetHeading(...)`
+may call `Arrive()` when:
 
 - the agent is within the closing distance threshold
 - or there is effectively no movement input and the agent is not stuck
 
-This logic is intentionally separate from guide-based movement, where waypoint or field state still matters.
+This logic is intentionally separate from guide-based movement, where waypoint
+or field state still matters.
 
 ### 7.6 Stuck Checks
 
@@ -316,10 +355,13 @@ If it returns `false`, steering:
 
 If the target direction is non-zero:
 
-- `IWaypointGuide.AdvanceWaypoint()` may be called when `ShouldAdvanceToNextWaypoint()` returns true
-- `SetDeceleration(...)` can scale the heading magnitude down when approaching the target through a guide
+- `IWaypointGuide.AdvanceWaypoint()` may be called when
+  `ShouldAdvanceToNextWaypoint()` returns true
+- `SetDeceleration(...)` can scale the heading magnitude down when approaching
+  the target through a guide
 
-This is how `NavSteering` slows motion before the final stop instead of always driving at full heading magnitude.
+This is how `NavSteering` slows motion before the final stop instead of always
+driving at full heading magnitude.
 
 ## 8. Path Validation and Guide Resolution
 
@@ -337,11 +379,13 @@ It performs the following work:
 6. check direct line-of-sight via `IsDestinationInSight(...)`
 7. request a guide through `PathGuideFactory.RequestGuide(...)` if needed
 
-This means `NavSteering` does not blindly follow a cached guide forever. It revalidates from the current position.
+This means `NavSteering` does not blindly follow a cached guide forever. It
+revalidates from the current position.
 
 ### 8.2 Direct Travel
 
-If `PathManager.NeedsPath(...)` returns `false`, steering enters direct-travel mode:
+If `PathManager.NeedsPath(...)` returns `false`, steering enters direct-travel
+mode:
 
 - `HasLineOfSightPath = true`
 - no guide is required
@@ -355,26 +399,32 @@ If direct travel is not valid, steering requests a guide:
 
 - `AStarGuide` for waypoint-driven motion
 - `FlowFieldGuide` for field sampling
-- `VolumeGuide` for 3D voxel detours when a volume request loses straight-line access
+- `VolumeGuide` for 3D voxel detours when a volume request loses straight-line
+  access
 
 Guide creation and reuse are delegated to `PathGuideFactory`.
 
-For aerial requests, direct travel and guide-following are both valid runtime outcomes:
+For aerial requests, direct travel and guide-following are both valid runtime
+outcomes:
 
 - clear corridor: no guide allocation, steer directly at the 3D destination
-- blocked corridor: request a `VolumeGuide` and follow waypoint detours through compatible raw-volume voxels
+- blocked corridor: request a `VolumeGuide` and follow waypoint detours through
+  compatible raw-volume voxels
 
 ### 8.4 Guide Loss or Invalidity
 
-If guide resolution fails or the guide disappears, steering treats the path as invalid and stops or repaths rather than continuing with stale state.
+If guide resolution fails or the guide disappears, steering treats the path as
+invalid and stops or repaths rather than continuing with stale state.
 
-`SetTrailGuide(null)` is tolerated, but the next heading pass will collapse to a zero target unless a new valid path is produced.
+`SetTrailGuide(null)` is tolerated, but the next heading pass will collapse to a
+zero target unless a new valid path is produced.
 
 ## 9. Target Resolution
 
 ### 9.1 FindTargetDirection(...)
 
-This method determines the raw movement direction before avoidance/group blending.
+This method determines the raw movement direction before avoidance/group
+blending.
 
 It resolves in this order:
 
@@ -399,14 +449,16 @@ This keeps waypoint following from stalling at close range.
 
 ### 9.3 SetDeceleration(...)
 
-Guide-based movement can scale down `TargetDirection` as the agent approaches the remaining target distance.
+Guide-based movement can scale down `TargetDirection` as the agent approaches
+the remaining target distance.
 
 This uses:
 
 - current acceleration if available
 - otherwise `BrakingPower`
 
-This is not a full physical braking model. It is steering-side magnitude scaling to help the motor slow down naturally.
+This is not a full physical braking model. It is steering-side magnitude scaling
+to help the motor slow down naturally.
 
 ## 10. Stuck Detection and Repathing
 
@@ -433,7 +485,8 @@ Repath behavior includes:
 - otherwise scheduling a new path request for the next frame
 - disposing the current guide instead of returning a bad path to the pool
 
-This is one of the most important correctness paths in the class because it crosses:
+This is one of the most important correctness paths in the class because it
+crosses:
 
 - runtime movement
 - guide lifetime
@@ -503,14 +556,20 @@ This is why steering still needs guide resolution when LOS fails.
 
 ### 13.1 Movement-Group Target Shaping
 
-When multiple steering sessions share the same non-negative `groupId` and exact requested destination:
+When multiple steering sessions share the same non-negative `groupId` and exact
+requested destination:
 
 - the group center is computed from recently updated members
-- if the group stays compact, each member preserves its relative formation offset from that center
-- if the group spreads too far or is already close enough to the shared destination that the formation would collapse, steering falls back to the shared destination for each member
+- if the group stays compact, each member preserves its relative formation
+  offset from that center
+- if the group spreads too far or is already close enough to the shared
+  destination that the formation would collapse, steering falls back to the
+  shared destination for each member
 - that fallback uses a looser stop tolerance to reduce end-of-path crowding
 
-This behavior is host-transparent. Shared movement-group membership is tracked by an internal coordinator, but hosts do not drive a separate movement-group manager.
+This behavior is host-transparent. Shared movement-group membership is tracked
+by an internal coordinator, but hosts do not drive a separate movement-group
+manager.
 
 ### 13.2 Scan Radius
 
@@ -520,11 +579,13 @@ The steering scan radius is derived from:
 - `AvoidFactor`
 - agent radius
 
-It queries nearby voxel occupants through `GridScanManager.ScanRadiusInto(...)` against the bound context's `GridWorld`.
+It queries nearby voxel occupants through `GridScanManager.ScanRadiusInto(...)`
+against the bound context's `GridWorld`.
 
 ### 13.3 Group Behavior
 
-When `IsInGroup` is true, only nearby steering agents in the same movement group session contribute:
+When `IsInGroup` is true, only nearby steering agents in the same movement group
+session contribute:
 
 - separation force away from crowding
 - alignment force from neighbor velocity
@@ -532,11 +593,13 @@ When `IsInGroup` is true, only nearby steering agents in the same movement group
 
 Those contributions are weighted through `BehaviorWeights`.
 
-Avoidance still considers any nearby occupant, including agents outside the movement group.
+Avoidance still considers any nearby occupant, including agents outside the
+movement group.
 
 ### 13.4 Avoidance
 
-Avoidance tracks the nearest obstacle candidate inside the avoid radius and generates a perpendicular dodge direction.
+Avoidance tracks the nearest obstacle candidate inside the avoid radius and
+generates a perpendicular dodge direction.
 
 The current implementation:
 
@@ -548,8 +611,11 @@ The current implementation:
 
 There are still known rough edges here:
 
-- group sessions are inferred from active steering state, so `StopMove()` or `Arrive()` removes the member from the group immediately
-- path sharing still comes from the normal guide/cache system; `FlowFieldPathRequest` remains the best fit when many grouped units share one destination
+- group sessions are inferred from active steering state, so `StopMove()` or
+  `Arrive()` removes the member from the group immediately
+- path sharing still comes from the normal guide/cache system;
+  `FlowFieldPathRequest` remains the best fit when many grouped units share one
+  destination
 
 Treat this area as active infrastructure rather than final flocking design.
 
@@ -586,7 +652,9 @@ navigator.CommitFrameMotion();
 
 Under the hood:
 
-1. `Navigator.ApplyGuidedTrekRequest(...)` creates a built-in path request from the target position and navigator defaults, then forwards it to `NavSteering`.
+1. `Navigator.ApplyGuidedTrekRequest(...)` creates a built-in path request from
+   the target position and navigator defaults, then forwards it to
+   `NavSteering`.
 2. `Navigator.Simulate()` calls `Steering.GetHeading(this)`.
 3. The returned heading is passed to turning and motor systems.
 
@@ -608,15 +676,19 @@ The essential rule is:
 
 ### Mutating the active request externally
 
-`CurrentRequest` is a live object reference. If code mutates it externally, steering sees the mutation directly. This can make tests look like repathing happened even when only the request object changed in place.
+`CurrentRequest` is a live object reference. If code mutates it externally,
+steering sees the mutation directly. This can make tests look like repathing
+happened even when only the request object changed in place.
 
 There is already a test note in `NavSteering.Tests` calling this out.
 
 ### Forgetting that direct travel skips guide allocation
 
-`HasLineOfSightPath = true` means there may be no active guide at all. Do not assume every movement session owns a `TrailGuide`.
+`HasLineOfSightPath = true` means there may be no active guide at all. Do not
+assume every movement session owns a `TrailGuide`.
 
-This includes aerial and swim movement. Either mode can legitimately bounce between direct travel and a `VolumeGuide` over the life of one request.
+This includes aerial and swim movement. Either mode can legitimately bounce
+between direct travel and a `VolumeGuide` over the life of one request.
 
 ### Treating StopMove() as arrival
 
@@ -624,21 +696,34 @@ This includes aerial and swim movement. Either mode can legitimately bounce betw
 
 ### Expecting movement groups to be fully implemented
 
-They are steering-owned, context-local behavior. Hosts only pass `groupId` through the steering API; the owning context tracks shared membership while agents with the same `groupId` and exact destination preserve formation offsets when compact, then fall back to the shared destination when the group spreads out or reaches the end of the move.
+They are steering-owned, context-local behavior. Hosts only pass `groupId`
+through the steering API; the owning context tracks shared membership while
+agents with the same `groupId` and exact destination preserve formation offsets
+when compact, then fall back to the shared destination when the group spreads
+out or reaches the end of the move.
 
-When grouped sessions are restored from serialized state, call `PrewarmMovementGroup(ISteer navigator)` after load if you want the coordinator seeded before the next steering tick. If you do nothing, the same sessions will still rejoin lazily during `GetHeading(...)`.
+When grouped sessions are restored from serialized state, call
+`PrewarmMovementGroup(ISteer navigator)` after load if you want the coordinator
+seeded before the next steering tick. If you do nothing, the same sessions will
+still rejoin lazily during `GetHeading(...)`.
 
 ### Reusing a `groupId` for different destinations
 
-That is safe, but those sessions do not interact. Grouped steering only blends members that share both the `groupId` and the exact requested destination.
+That is safe, but those sessions do not interact. Grouped steering only blends
+members that share both the `groupId` and the exact requested destination.
 
 ### Assuming avoidance is full collision resolution
 
-It is not. It is a lightweight steering influence based on nearby occupants, not a substitute for motor-side collision and world constraints.
+It is not. It is a lightweight steering influence based on nearby occupants, not
+a substitute for motor-side collision and world constraints.
 
 ### Forgetting that CanPathfind can be disabled
 
-If `CanPathfind` is false, steering skips guide-based path validation and repathing. That is useful for simple direct movers, but it also means guide-backed requests will not correct invalid path assumptions automatically. The built-in aerial request still refreshes its endpoints because it does not rely on path generation.
+If `CanPathfind` is false, steering skips guide-based path validation and
+repathing. That is useful for simple direct movers, but it also means
+guide-backed requests will not correct invalid path assumptions automatically.
+The built-in aerial request still refreshes its endpoints because it does not
+rely on path generation.
 
 ## 17. Testing References
 
@@ -669,4 +754,5 @@ Those tests currently cover:
 - request mutation edge cases
 - guide cleanup on arrival
 
-If you change request validation, arrival thresholds, stuck logic, guide lifetime, or avoidance/group behavior, update those tests in the same pass.
+If you change request validation, arrival thresholds, stuck logic, guide
+lifetime, or avoidance/group behavior, update those tests in the same pass.

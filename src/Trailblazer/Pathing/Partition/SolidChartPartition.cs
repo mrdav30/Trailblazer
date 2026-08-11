@@ -181,10 +181,7 @@ public class SolidChartPartition : IVoxelPartition
         voxel.OnObstacleRemoved -= HandleChange;
 
         PathingWorldState? ownerState = OwnerState;
-        if (ownerState != null)
-            ownerState.PartitionPool.Release(this);
-        else
-            PathManager.PartitionPool.Release(this);
+        ownerState?.PartitionPool.Release(this);
     }
 
     /// <summary>

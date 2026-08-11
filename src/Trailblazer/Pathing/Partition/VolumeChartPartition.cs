@@ -103,10 +103,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
         voxel.OnObstacleRemoved -= HandleChange;
 
         PathingWorldState? ownerState = OwnerState;
-        if (ownerState != null)
-            ownerState.VolumeChartPartitionPool.Release(this);
-        else
-            PathManager.VolumeChartPartitionPool.Release(this);
+        ownerState?.VolumeChartPartitionPool.Release(this);
     }
 
     /// <summary>

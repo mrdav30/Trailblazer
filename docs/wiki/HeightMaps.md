@@ -1,12 +1,13 @@
 # Heightmaps
 
-Trailblazer heightmaps are deterministic, context-owned ground/contact-height lookups. They let a
-host ask "what is the environment Y at this X/Z contact point?" without doing a raycast inside
-Trailblazer.
+Trailblazer heightmaps are deterministic, context-owned ground/contact-height
+lookups. They let a host ask "what is the environment Y at this X/Z contact
+point?" without doing a raycast inside Trailblazer.
 
-Heightmaps are engine-agnostic. Trailblazer consumes prebuilt height data, but it does not bake terrain, meshes,
-colliders, or engine-specific scene data. Baking belongs in a host or engine module
-that can produce compressed samples for this core library.
+Heightmaps are engine-agnostic. Trailblazer consumes prebuilt height data, but
+it does not bake terrain, meshes, colliders, or engine-specific scene data.
+Baking belongs in a host or engine module that can produce compressed samples
+for this core library.
 
 ## 1. Model
 
@@ -15,10 +16,12 @@ A `HeightmapSurface` stores environment ground/contact Y over an X/Z lattice:
 - X/Z bounds come from `MinBounds`, `Interval`, `Width`, and `Depth`.
 - Y samples are compressed into `SwiftCollections.Dimensions.SwiftShortArray2D`.
 - Runtime sampling always uses the compressed representation.
-- Sampling uses deterministic fixed-point bilinear interpolation between neighboring samples.
+- Sampling uses deterministic fixed-point bilinear interpolation between
+  neighboring samples.
 
-The Y value is contact ground Y, not a navigator root/body Y. Navigator root projection adds
-`Navigator.FootPositionAdjust` and any configured heightmap `groundOffset` after sampling.
+The Y value is contact ground Y, not a navigator root/body Y. Navigator root
+projection adds `Navigator.FootPositionAdjust` and any configured heightmap
+`groundOffset` after sampling.
 
 ## 2. Storage And Compression
 
@@ -28,22 +31,23 @@ The Y value is contact ground Y, not a navigator root/body Y. Navigator root pro
 groundY = compression.ReferenceHeight + compressedSample * compression.HeightStep;
 ```
 
-`ReferenceHeight` is the world Y represented by compressed value `0`. `HeightStep` is the world Y
-delta represented by one compressed unit. Smaller steps give finer precision but less usable height
-range before clamping to `short.MinValue` or `short.MaxValue`. Larger steps give more range but
-coarser samples.
+`ReferenceHeight` is the world Y represented by compressed value `0`.
+`HeightStep` is the world Y delta represented by one compressed unit. Smaller
+steps give finer precision but less usable height range before clamping to
+`short.MinValue` or `short.MaxValue`. Larger steps give more range but coarser
+samples.
 
 Trailblazer exposes two factories:
 
-- `HeightmapSurface.FromCompressed(...)` is the preferred baked/runtime path. Use it when the host
-  already has compact samples from an authoring pipeline, serialized map data, or an engine-specific
-  baker.
-- `HeightmapSurface.FromHeights(...)` is a setup-time convenience. Use it for tests, generated maps,
-  or tooling that already has `Fixed64[,]` heights and wants Trailblazer to perform the one-time
-  quantization step.
+- `HeightmapSurface.FromCompressed(...)` is the preferred baked/runtime path.
+  Use it when the host already has compact samples from an authoring pipeline,
+  serialized map data, or an engine-specific baker.
+- `HeightmapSurface.FromHeights(...)` is a setup-time convenience. Use it for
+  tests, generated maps, or tooling that already has `Fixed64[,]` heights and
+  wants Trailblazer to perform the one-time quantization step.
 
-Both factories produce the same runtime shape: a compressed `SwiftShortArray2D` sampled through the
-same deterministic path.
+Both factories produce the same runtime shape: a compressed `SwiftShortArray2D`
+sampled through the same deterministic path.
 
 ## 3. Registration
 
@@ -80,11 +84,11 @@ context.Heightmaps.Register(
     maxSelectionY: (Fixed64)2);
 ```
 
-Layer names are unique inside one context. The same layer name can be registered independently in
-another `TrailblazerWorldContext`.
+Layer names are unique inside one context. The same layer name can be registered
+independently in another `TrailblazerWorldContext`.
 
-`TrailblazerHeightmapService.Reset()` clears only the current context's heightmap registry. Disposing
-the context also clears its heightmaps.
+`TrailblazerHeightmapService.Reset()` clears only the current context's
+heightmap registry. Disposing the context also clears its heightmaps.
 
 ## 4. Sampling
 
@@ -100,9 +104,10 @@ if (context.Heightmaps.TrySampleGround(contactQuery, out HeightmapSample sample)
 }
 ```
 
-The no-preference overload considers every registered layer that contains the query X/Z and whose
-vertical selection band contains the query Y. The preferred-layer overload first tries the supplied
-layer name, then falls back to deterministic candidate selection:
+The no-preference overload considers every registered layer that contains the
+query X/Z and whose vertical selection band contains the query Y. The
+preferred-layer overload first tries the supplied layer name, then falls back to
+deterministic candidate selection:
 
 ```csharp
 context.Heightmaps.TrySampleGround(
@@ -120,27 +125,30 @@ When several layers are valid, Trailblazer chooses:
 
 ## 5. Multi-Level Layers
 
-Multi-level worlds use one heightmap layer per selectable level. A platform above a floor can share
-the same X/Z area with the floor because each registration has a vertical selection band:
+Multi-level worlds use one heightmap layer per selectable level. A platform
+above a floor can share the same X/Z area with the floor because each
+registration has a vertical selection band:
 
 ```csharp
 context.Heightmaps.Register(groundSurface, minSelectionY: (Fixed64)(-1), maxSelectionY: (Fixed64)2);
 context.Heightmaps.Register(platformSurface, minSelectionY: (Fixed64)2, maxSelectionY: (Fixed64)5);
 ```
 
-Selection bands are inclusive at the lower bound and exclusive at the upper bound. The heightmap does
-not care about GridForge voxel levels; the grid/world only provides the context and world-space bounds
-that hosts use to decide which layers to register.
+Selection bands are inclusive at the lower bound and exclusive at the upper
+bound. The heightmap does not care about GridForge voxel levels; the grid/world
+only provides the context and world-space bounds that hosts use to decide which
+layers to register.
 
-For agents crossing between levels, keep passing the current active layer name when possible. The
-service will keep that layer while it remains valid and abandon it once the query contact Y leaves the
-layer's vertical band.
+For agents crossing between levels, keep passing the current active layer name
+when possible. The service will keep that layer while it remains valid and
+abandon it once the query contact Y leaves the layer's vertical band.
 
 ## 6. Example: Unity-Style Editor Bake
 
-One reasonable Unity workflow is to bake compact height samples in an editor tool, then feed the
-result to Trailblazer at runtime. The Unity-specific part is the scene query; the Trailblazer-facing
-result is just compressed samples plus compression metadata.
+One reasonable Unity workflow is to bake compact height samples in an editor
+tool, then feed the result to Trailblazer at runtime. The Unity-specific part is
+the scene query; the Trailblazer-facing result is just compressed samples plus
+compression metadata.
 
 A Unity-style editor baker should follow this shape:
 
@@ -201,19 +209,22 @@ context.Heightmaps.Register(
     maxSelectionY: maxHeight);
 ```
 
-For multi-level environments, run the same kind of bake once per selectable level or authored
-surface layer, then register each result with the vertical selection band that should choose that
-level. A floor and an overhead platform can share X/Z samples as long as their bands separate the
-contact-Y ranges.
+For multi-level environments, run the same kind of bake once per selectable
+level or authored surface layer, then register each result with the vertical
+selection band that should choose that level. A floor and an overhead platform
+can share X/Z samples as long as their bands separate the contact-Y ranges.
 
-Do not bake body/root offsets into the stored height samples. The heightmap should represent the
-environment contact Y while each navigator decides how its root sits above that contact.
+Do not bake body/root offsets into the stored height samples. The heightmap
+should represent the environment contact Y while each navigator decides how its
+root sits above that contact.
 
 ## 7. Navigator Grounding
 
-`Navigator` does not perform hidden heightmap probes. Concrete navigators or host adapters opt in by
-calling the protected `TryApplyHeightmapGrounding(...)` helper from their own traversal probing code,
-usually inside `CheckTrekCondition()` after deciding the navigator is grounded on solid terrain.
+`Navigator` does not perform hidden heightmap probes. Concrete navigators or
+host adapters opt in by calling the protected `TryApplyHeightmapGrounding(...)`
+helper from their own traversal probing code, usually inside
+`CheckTrekCondition()` after deciding the navigator is grounded on solid
+terrain.
 
 ```csharp
 using FixedMathSharp;
@@ -250,20 +261,22 @@ navigator.ConfigureHeightmapGrounding(
 Modes:
 
 - `HeightmapGroundingMode.Disabled` performs no sampling.
-- `HeightmapGroundingMode.SurfaceLevelOnly` updates `SurfaceLevel`/ground contact but does not move
-  the navigator root.
-- `HeightmapGroundingMode.SurfaceLevelAndPosition` updates ground contact and projects root Y to
-  `sample.GroundY + FootPositionAdjust + groundOffset`.
+- `HeightmapGroundingMode.SurfaceLevelOnly` updates `SurfaceLevel`/ground
+  contact but does not move the navigator root.
+- `HeightmapGroundingMode.SurfaceLevelAndPosition` updates ground contact and
+  projects root Y to `sample.GroundY + FootPositionAdjust + groundOffset`.
 
-Projection only runs while the current medium is `TraversalMedium.Solid`. This keeps airborne,
-swimming, and other host-owned traversal phases from being silently snapped by heightmaps. When
-projection does run, `Position` and `LastPosition` shift together so the correction does not create
-fake vertical velocity. If `snapTolerance` is set and the absolute correction exceeds it, the ground
-contact can update while root projection is skipped.
+Projection only runs while the current medium is `TraversalMedium.Solid`. This
+keeps airborne, swimming, and other host-owned traversal phases from being
+silently snapped by heightmaps. When projection does run, `Position` and
+`LastPosition` shift together so the correction does not create fake vertical
+velocity. If `snapTolerance` is set and the absolute correction exceeds it, the
+ground contact can update while root projection is skipped.
 
-The navigator caches `HeightmapGrounding.ActiveLayerName` after successful grounding and uses it as
-the preferred layer on later calls. These settings are serialized with the navigator, but heightmap
-surface data and context registrations are not.
+The navigator caches `HeightmapGrounding.ActiveLayerName` after successful
+grounding and uses it as the preferred layer on later calls. These settings are
+serialized with the navigator, but heightmap surface data and context
+registrations are not.
 
 ## 8. Host Responsibilities
 
@@ -273,8 +286,10 @@ Hosts own:
 - choosing `HeightmapCompression` precision/range
 - registering layers on the correct `TrailblazerWorldContext`
 - choosing vertical selection bands for multi-level worlds
-- deciding when a navigator is grounded before calling `TryApplyHeightmapGrounding(...)`
-- re-registering heightmaps on the context before loaded navigators use restored grounding settings
+- deciding when a navigator is grounded before calling
+  `TryApplyHeightmapGrounding(...)`
+- re-registering heightmaps on the context before loaded navigators use restored
+  grounding settings
 
-Trailblazer owns deterministic storage, sampling, context-local registration, layer selection, and
-the navigator opt-in helper.
+Trailblazer owns deterministic storage, sampling, context-local registration,
+layer selection, and the navigator opt-in helper.

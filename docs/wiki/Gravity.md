@@ -1,6 +1,7 @@
 # Trailblazer Gravity Model
 
-This document explains how vertical motion is currently handled in Trailblazer's navigation motor.
+This document explains how vertical motion is currently handled in Trailblazer's
+navigation motor.
 
 The source of truth for the behavior described here is the code in:
 
@@ -14,9 +15,11 @@ The source of truth for the behavior described here is the code in:
 
 ## 1. Where Gravity Lives
 
-Gravity is configured through a two-level system in `LocomotionHandler.Forces`: a simulation-wide global and an optional per-instance override.
+Gravity is configured through a two-level system in `LocomotionHandler.Forces`:
+a simulation-wide global and an optional per-instance override.
 
-Each `Navigator` owns a `NavMotor`, and each `NavMotor` owns its own `LocomotionHandler`, including its own `Forces` instance.
+Each `Navigator` owns a `NavMotor`, and each `NavMotor` owns its own
+`LocomotionHandler`, including its own `Forces` instance.
 
 ### 1.1 Global Gravity
 
@@ -28,12 +31,16 @@ LocomotionHandler.Forces.GlobalForces  // GlobalSettings
 
 It holds two fields:
 
-- `GlobalForces.GravityForce` — the gravity magnitude applied to all navigators that do not carry a per-instance override.
-- `GlobalForces.TerminalVelocity` — the terminal fall speed cap applied to all such navigators.
+- `GlobalForces.GravityForce` — the gravity magnitude applied to all navigators
+  that do not carry a per-instance override.
+- `GlobalForces.TerminalVelocity` — the terminal fall speed cap applied to all
+  such navigators.
 
-Both are initialized to the `GlobalForces` defaults. Call `GlobalForces.Reset()` to restore them.
+Both are initialized to the `GlobalForces` defaults. Call `GlobalForces.Reset()`
+to restore them.
 
-Changing either field takes effect for every unoverridden navigator on the very next frame:
+Changing either field takes effect for every unoverridden navigator on the very
+next frame:
 
 ```csharp
 // Shift the entire simulation to moon gravity
@@ -45,7 +52,10 @@ LocomotionHandler.Forces.GlobalForces.Reset();
 
 ### 1.2 Per-Instance Override
 
-`LocomotionHandler.Forces.GravityForce` and `LocomotionHandler.Forces.TerminalVelocity` are properties that store a per-instance override. Reading them returns that override when one is present, or the current global value otherwise.
+`LocomotionHandler.Forces.GravityForce` and
+`LocomotionHandler.Forces.TerminalVelocity` are properties that store a
+per-instance override. Reading them returns that override when one is present,
+or the current global value otherwise.
 
 ```csharp
 // Pin one navigator to heavy gravity (e.g. a gravity-well zone)
@@ -70,9 +80,14 @@ bool pinned = scout.Motor.Handler.Forces.HasGravityForceOverride;
 
 ### 1.3 Priority and Serialization
 
-The per-instance override always wins over the global. The global is only consulted when no override is set.
+The per-instance override always wins over the global. The global is only
+consulted when no override is set.
 
-Serializing a `LocomotionHandler.Forces` instance records whether an override was active at save time. On load, the override is restored if it was present, so a navigator that was pinned stays pinned. A navigator that was tracking the global continues to track whatever the global is at runtime — the saved global value is not baked into the snapshot.
+Serializing a `LocomotionHandler.Forces` instance records whether an override
+was active at save time. On load, the override is restored if it was present, so
+a navigator that was pinned stays pinned. A navigator that was tracking the
+global continues to track whatever the global is at runtime — the saved global
+value is not baked into the snapshot.
 
 ### 1.4 Defaults
 
@@ -89,11 +104,13 @@ The owning `TrailblazerWorldContext` provides the fixed simulation timing:
 - `context.InvDeltaTime`
 - `context.TotalTime`
 
-Those values are what make gravity and jumping deterministic from frame to frame.
+Those values are what make gravity and jumping deterministic from frame to
+frame.
 
 ## 2. Frame Order
 
-Vertical motion is not handled in isolation. It is part of the `NavMotor.TryTraversal(...)` pipeline:
+Vertical motion is not handled in isolation. It is part of the
+`NavMotor.TryTraversal(...)` pipeline:
 
 1. Cache the current frame request.
 2. Start `_forceOutput` from `Handler.Move.FrameVelocity`.
@@ -107,7 +124,8 @@ That ordering matters:
 
 - gravity and buoyancy are applied before jump impulse
 - jump can clear existing downward vertical output before injecting upward force
-- grounded and airborne state are determined from the current `TransitState`, not inferred ad hoc from velocity alone
+- grounded and airborne state are determined from the current `TransitState`,
+  not inferred ad hoc from velocity alone
 
 ## 3. Grounded Behavior
 
@@ -125,7 +143,8 @@ Implications:
 - a small downward bias is still applied every grounded frame
 - upward vertical output is suppressed while grounded
 
-This acts more like a ground-stick force than a textbook "normal force cancels gravity" explanation.
+This acts more like a ground-stick force than a textbook "normal force cancels
+gravity" explanation.
 
 Why it exists:
 
@@ -141,7 +160,8 @@ So if you are looking for the mental model, use this one:
 
 ## 4. Airborne Behavior
 
-When `CurrentState.Medium == TraversalMedium.Gas`, the motor applies gravity directly to the vertical component.
+When `CurrentState.Medium == TraversalMedium.Gas`, the motor applies gravity
+directly to the vertical component.
 
 Current flow:
 
@@ -165,13 +185,15 @@ What this means in practice:
 - fall speed is bounded by `MoveLocomotion.TerminalVelocity`
 - once falling fast enough, further downward acceleration is capped
 
-This is also where jump-hold behavior can partially offset gravity for a short time; that is covered below.
+This is also where jump-hold behavior can partially offset gravity for a short
+time; that is covered below.
 
 ## 5. Water Behavior
 
 Water does not use the same vertical rule as ground or air.
 
-When `CurrentState.Medium == TraversalMedium.Liquid`, Trailblazer applies buoyancy relative to gravity:
+When `CurrentState.Medium == TraversalMedium.Liquid`, Trailblazer applies
+buoyancy relative to gravity:
 
 ```csharp
 _forceOutput.y += gravityStep * (Handler.Water.BuoyancyFactor - Fixed64.One);
@@ -228,11 +250,13 @@ using:
 - `JumpLocomotion.PerpendicularJumpAmount`
 - `JumpLocomotion.SteepPerpendicularJumpAmount`
 
-This lets jumps lean away from slopes instead of always being perfectly vertical.
+This lets jumps lean away from slopes instead of always being perfectly
+vertical.
 
 ### 6.3 Held Jump
 
-While a jump is active and the jump input is still held, Trailblazer partially counteracts gravity for a limited window:
+While a jump is active and the jump input is still held, Trailblazer partially
+counteracts gravity for a limited window:
 
 ```csharp
 if (TotalTime <= extraJumpLimit)
@@ -256,13 +280,15 @@ _forceOutput.y = FixedMath.Max(Fixed64.Zero, _forceOutput.y);
 _forceOutput += jumpForce;
 ```
 
-This prevents a jump from being reduced by leftover downward momentum in the same frame.
+This prevents a jump from being reduced by leftover downward momentum in the
+same frame.
 
 ## 7. Ceiling Interaction
 
 Ceiling handling is finalized after traversal.
 
-If the motor detects upward velocity and the navigator has crossed `CurrentState.CeilingLevel`, it:
+If the motor detects upward velocity and the navigator has crossed
+`CurrentState.CeilingLevel`, it:
 
 - zeroes the upward `FrameVelocity.y`
 - clears `Jump.IsJumping`
@@ -281,13 +307,15 @@ Falling is tracked separately from raw gravity application.
 - where the fall ended
 - the total fall height
 
-`NavMotor.HandleFallState(...)` uses both traversal state and vertical output to decide when a fall begins.
+`NavMotor.HandleFallState(...)` uses both traversal state and vertical output to
+decide when a fall begins.
 
 The main rules are:
 
 - entering water clears fall state
 - landing ends the fall and records `FallEnd`
-- falling can start when the unit is in air or sliding too steeply and vertical output is downward
+- falling can start when the unit is in air or sliding too steeply and vertical
+  output is downward
 - downhill ground travel should not be treated as a fall
 
 Related events:
@@ -297,7 +325,8 @@ Related events:
 - `OnLandedFall`
 - `OnMaxFallHeightReached`
 
-This means gravity affects both motion and state transitions, but those concerns are intentionally split:
+This means gravity affects both motion and state transitions, but those concerns
+are intentionally split:
 
 - `ApplyEnvironmentalForces()` changes vertical movement
 - `HandleFallState(...)` classifies the current movement as a fall
@@ -312,7 +341,9 @@ The platform system can:
 - subtract platform velocity on landing to avoid double-applying motion
 - move the navigator through platform transforms while grounded or locked
 
-This matters for gravity because vertical motion after stepping off a moving platform is not purely "gravity from rest." The inherited platform motion becomes part of the airborne state before gravity continues to act on it.
+This matters for gravity because vertical motion after stepping off a moving
+platform is not purely "gravity from rest." The inherited platform motion
+becomes part of the airborne state before gravity continues to act on it.
 
 ## 10. Practical Tuning Knobs
 
@@ -352,17 +383,25 @@ Higher values:
 
 ### "Gravity is configured on TrailblazerWorldContext"
 
-It is not. `TrailblazerWorldContext` owns the fixed timestep. Gravity lives on `LocomotionHandler.Forces`.
+It is not. `TrailblazerWorldContext` owns the fixed timestep. Gravity lives on
+`LocomotionHandler.Forces`.
 
-The simulation-wide defaults are on `LocomotionHandler.Forces.GlobalForces`. Per-instance overrides are stored directly on each locomotion instance. When an override is set it wins; when it is not, the instance reads from `GlobalForces`. This keeps per-navigator tuning intact while letting one assignment propagate to every unoverridden navigator at once.
+The simulation-wide defaults are on `LocomotionHandler.Forces.GlobalForces`.
+Per-instance overrides are stored directly on each locomotion instance. When an
+override is set it wins; when it is not, the instance reads from `GlobalForces`.
+This keeps per-navigator tuning intact while letting one assignment propagate to
+every unoverridden navigator at once.
 
 ### "Grounded means gravity is canceled"
 
-Not exactly. Grounded frames still receive a downward bias. The current implementation is a grounded-stick model, not a pure equal-and-opposite-force simulation.
+Not exactly. Grounded frames still receive a downward bias. The current
+implementation is a grounded-stick model, not a pure equal-and-opposite-force
+simulation.
 
 ### "Water just disables gravity"
 
-No. Water uses buoyancy relative to gravity, plus swim drag and optional swim input.
+No. Water uses buoyancy relative to gravity, plus swim drag and optional swim
+input.
 
 ### "Jump height is only determined by one impulse"
 
@@ -381,6 +420,8 @@ Trailblazer's vertical model is deterministic and gameplay-oriented:
 - air applies gravity with a terminal velocity cap
 - water applies buoyancy relative to gravity
 - jump injects upward motion and can temporarily offset gravity while held
-- fall state, landing, ceilings, and water transitions are handled as explicit locomotion states
+- fall state, landing, ceilings, and water transitions are handled as explicit
+  locomotion states
 
-If you need the execution order for the full motor, read `NavMotor.md` alongside this file.
+If you need the execution order for the full motor, read `NavMotor.md` alongside
+this file.

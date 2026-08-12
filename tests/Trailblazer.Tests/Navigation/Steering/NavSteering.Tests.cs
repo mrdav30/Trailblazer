@@ -1,5 +1,6 @@
 ﻿using Chronicler;
 using FixedMathSharp;
+using FixedMathSharp.Assertions;
 using FluentAssertions;
 using GridForge;
 using GridForge.Configuration;
@@ -90,6 +91,30 @@ public class NavSteeringTests : IDisposable
         steer.ShouldMove.Should().BeFalse();
         steer.IsAtDestination.Should().BeTrue();
         steer.CurrentRequest.Should().BeNull();
+    }
+
+    [Fact]
+    public void FindTargetDirection_ShouldKeepZeroHeadingUnchanged()
+    {
+        var steer = new TestableNavSteering(Fixed64.One);
+        Vector3d position = new(3, 0, 4);
+        steer.ForceDirectDestination(position);
+
+        steer.InvokeFindTargetDirection(position).Should().Be(Vector3d.Zero);
+    }
+
+    [Fact]
+    public void FindTargetDirection_ShouldNormalizeNonZeroHeadingAndPreserveDistance()
+    {
+        var steer = new TestableNavSteering(Fixed64.One);
+        steer.ForceDirectDestination(new Vector3d(3, 0, 4));
+
+        Vector3d heading = steer.InvokeFindTargetDirection(Vector3d.Zero);
+
+        heading.Magnitude.Should().BeApproximately(Fixed64.One, Fixed64.FromRaw(8));
+        heading.X.Should().Be(Fixed64.FromFraction(3, 5));
+        heading.Z.Should().Be(Fixed64.FromFraction(4, 5));
+        steer.DistanceToTarget.Should().Be((Fixed64)5);
     }
 
     [Fact]
@@ -303,8 +328,8 @@ public class NavSteeringTests : IDisposable
 
         Vector3d obstaclePosition = new(1, 0, 0);
         var (obstacleGrid, obstacleVoxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, obstaclePosition);
-        var obstacleKey = new BoundsKey(obstaclePosition, obstaclePosition);
-        obstacleGrid!.TryAddObstacle(obstacleVoxel!, obstacleKey).Should().BeTrue();
+        ObstacleToken obstacleToken = TestWorld.World.AllocateObstacleToken();
+        obstacleGrid!.TryAddObstacle(obstacleVoxel!, obstacleToken).Should().BeTrue();
 
         var agent = new MockSteerAgent(Vector3d.Zero);
         var steer = NavSteering.CreateNew(TestWorld.Context, agent.Radius);
@@ -321,7 +346,7 @@ public class NavSteeringTests : IDisposable
         steer.HasLineOfSightPath.Should().BeFalse();
         steer.TrailGuide.Should().BeOfType<VolumeGuide>();
 
-        obstacleGrid!.TryRemoveObstacle(obstacleVoxel!, obstacleKey).Should().BeTrue();
+        obstacleGrid!.TryRemoveObstacle(obstacleVoxel!, obstacleToken).Should().BeTrue();
 
         steer.GetHeading(agent);
 
@@ -1529,7 +1554,7 @@ public class NavSteeringTests : IDisposable
             agent.Size,
             agent.GlobalId);
 
-        force.z.Should().BeLessThan(Fixed64.Zero);
+        force.Z.Should().BeLessThan(Fixed64.Zero);
 
         grid!.TryRemoveVoxelOccupant(neighbor);
     }
@@ -1604,6 +1629,14 @@ public class NavSteeringTests : IDisposable
             _hasLineOfSightPath = false;
             _distanceToTarget = distanceToTarget;
         }
+
+        public void ForceDirectDestination(Vector3d destination)
+        {
+            _destination = destination;
+            _hasLineOfSightPath = true;
+        }
+
+        public Vector3d InvokeFindTargetDirection(Vector3d position) => FindTargetDirection(position);
 
         public void InvokeSetDeceleration(Vector3d acceleration, Fixed64 speed) => SetDeceleration(acceleration, speed);
     }

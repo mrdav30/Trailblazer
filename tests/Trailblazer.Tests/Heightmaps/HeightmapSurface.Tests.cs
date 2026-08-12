@@ -139,6 +139,22 @@ public sealed class HeightmapSurfaceTests
         groundY.Should().Be((Fixed64)15);
     }
 
+    [Fact]
+    public void TrySampleGround_ShouldInterpolateNonMidpointFixedPointFractions()
+    {
+        HeightmapSurface surface = CreateSurface(
+            new short[2, 2]
+            {
+                { 0, 4 },
+                { 8, 12 }
+            });
+
+        Vector3d samplePosition = new(Fixed64.Quarter, Fixed64.Zero, Fixed64.Half);
+
+        surface.TrySampleGround(samplePosition, out Fixed64 groundY).Should().BeTrue();
+        groundY.Should().Be((Fixed64)4);
+    }
+
     private static HeightmapSurface CreateSurface(short[,] values)
     {
         return HeightmapSurface.FromCompressed(

@@ -277,7 +277,7 @@ internal static class SolidPartitionReachability
                         || !passablePartitions.ContainsKey(neighbor.WorldIndex)
                         || !neighbor.TryGetReachabilityComponent(snapshotId, version, out int neighborComponent)
                         || neighborComponent != 0
-                        || !CanTraverse(current, neighbor, (SpatialDirection)neighborIndex, passablePartitions, maxClimbHeight))
+                        || !CanTraverse(current, neighbor, (RectangularDirection)neighborIndex, passablePartitions, maxClimbHeight))
                     {
                         continue;
                     }
@@ -306,7 +306,7 @@ internal static class SolidPartitionReachability
             if (neighbor == null
                 || !neighbor.TryGetReachabilityComponent(snapshotId, version, out int neighborComponent)
                 || neighborComponent != targetComponent
-                || !CanTraverseFromMarkedStart(start, neighbor, (SpatialDirection)neighborIndex, snapshotId, version, maxClimbHeight))
+                || !CanTraverseFromMarkedStart(start, neighbor, (RectangularDirection)neighborIndex, snapshotId, version, maxClimbHeight))
             {
                 continue;
             }
@@ -320,46 +320,46 @@ internal static class SolidPartitionReachability
     private static bool CanTraverse(
         SolidChartPartition current,
         SolidChartPartition neighbor,
-        SpatialDirection direction,
+        RectangularDirection direction,
         SwiftDictionary<WorldVoxelIndex, SolidChartPartition> passablePartitions,
         Fixed64 maxClimbHeight)
     {
-        Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
+        Fixed64 heightDifference = (current.VoxelPosition.Y - neighbor.VoxelPosition.Y).Abs();
         if (heightDifference > maxClimbHeight)
             return false;
 
-        if (ContainsDirection(SpatialAwareness.PerpendicularDirections, direction))
+        if (ContainsDirection(RectangularDirectionUtility.Perpendicular, direction))
             return true;
 
-        return ContainsDirection(SpatialAwareness.DiagonalDirections, direction)
+        return ContainsDirection(RectangularDirectionUtility.Diagonal, direction)
             && HasValidDiagonalLegs(current, direction, passablePartitions);
     }
 
     private static bool CanTraverseFromMarkedStart(
         SolidChartPartition current,
         SolidChartPartition neighbor,
-        SpatialDirection direction,
+        RectangularDirection direction,
         int snapshotId,
         int version,
         Fixed64 maxClimbHeight)
     {
-        Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
+        Fixed64 heightDifference = (current.VoxelPosition.Y - neighbor.VoxelPosition.Y).Abs();
         if (heightDifference > maxClimbHeight)
             return false;
 
-        if (ContainsDirection(SpatialAwareness.PerpendicularDirections, direction))
+        if (ContainsDirection(RectangularDirectionUtility.Perpendicular, direction))
             return true;
 
-        return ContainsDirection(SpatialAwareness.DiagonalDirections, direction)
+        return ContainsDirection(RectangularDirectionUtility.Diagonal, direction)
             && HasValidDiagonalLegsFromMarkedStart(current, direction, snapshotId, version);
     }
 
     private static bool HasValidDiagonalLegs(
         SolidChartPartition current,
-        SpatialDirection diagonal,
+        RectangularDirection diagonal,
         SwiftDictionary<WorldVoxelIndex, SolidChartPartition> passablePartitions)
     {
-        (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
+        (int dx, int dy, int dz) = RectangularDirectionUtility.Offsets[(int)diagonal];
 
         if (dx != 0 && !IsLegClear(current, DiagonalTraversalLegs.ForXOffset(dx), passablePartitions))
             return false;
@@ -375,11 +375,11 @@ internal static class SolidPartitionReachability
 
     private static bool HasValidDiagonalLegsFromMarkedStart(
         SolidChartPartition current,
-        SpatialDirection diagonal,
+        RectangularDirection diagonal,
         int snapshotId,
         int version)
     {
-        (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
+        (int dx, int dy, int dz) = RectangularDirectionUtility.Offsets[(int)diagonal];
 
         if (dx != 0 && !IsMarkedLegClear(current, DiagonalTraversalLegs.ForXOffset(dx), snapshotId, version))
             return false;
@@ -395,7 +395,7 @@ internal static class SolidPartitionReachability
 
     private static bool IsLegClear(
         SolidChartPartition current,
-        SpatialDirection legDirection,
+        RectangularDirection legDirection,
         SwiftDictionary<WorldVoxelIndex, SolidChartPartition> passablePartitions)
     {
         SolidChartPartition? leg = current.Neighbors?[(int)legDirection];
@@ -404,7 +404,7 @@ internal static class SolidPartitionReachability
 
     private static bool IsMarkedLegClear(
         SolidChartPartition current,
-        SpatialDirection legDirection,
+        RectangularDirection legDirection,
         int snapshotId,
         int version)
     {
@@ -414,7 +414,7 @@ internal static class SolidPartitionReachability
             && componentId > 0;
     }
 
-    private static bool ContainsDirection(SpatialDirection[] directions, SpatialDirection direction)
+    private static bool ContainsDirection(ReadOnlySpan<RectangularDirection> directions, RectangularDirection direction)
     {
         for (int i = 0; i < directions.Length; i++)
         {

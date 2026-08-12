@@ -18,17 +18,17 @@ public class FlyLocomotion : ILocomotion
     /// <summary>
     /// Default maximum horizontal flight speed.
     /// </summary>
-    public static readonly Fixed64 DefaultMaxFlySpeed = (Fixed64)1.5d;
+    public static readonly Fixed64 DefaultMaxFlySpeed = Fixed64.FromFraction(3, 2);
 
     /// <summary>
     /// Default maximum upward flight speed.
     /// </summary>
-    public static readonly Fixed64 DefaultMaxAscendSpeed = (Fixed64)1.5d;
+    public static readonly Fixed64 DefaultMaxAscendSpeed = Fixed64.FromFraction(3, 2);
 
     /// <summary>
     /// Default maximum downward flight speed while actively descending.
     /// </summary>
-    public static readonly Fixed64 DefaultMaxDescendSpeed = (Fixed64)1.5d;
+    public static readonly Fixed64 DefaultMaxDescendSpeed = Fixed64.FromFraction(3, 2);
 
     /// <summary>
     /// Default acceleration used while actively flying.

@@ -69,7 +69,7 @@ public abstract class PathRequest : IPathRequest
         || StartNode == EndNode;
 
     /// <inheritdoc/>
-    public int RequestCacheKey => GetHashCode();
+    public abstract PathRequestCacheKey RequestCacheKey { get; }
 
     /// <inheritdoc/>
     public bool UpdateRequest(
@@ -130,8 +130,9 @@ public abstract class PathRequest : IPathRequest
             if (newVoxel == StartNode)
                 return true;
 
-            // force reset if grid changed
-            if (newVoxel.GridIndex != StartNode.GridIndex)
+            // A recycled slot is a different GridForge runtime identity even when GridIndex is unchanged.
+            if (!Context.World.TryGetGrid(StartNode.WorldIndex, out VoxelGrid? previousGrid)
+                || newVoxel.GridIndex != previousGrid!.GridIndex)
                 resetSearchRange = true;
         }
 
@@ -172,8 +173,9 @@ public abstract class PathRequest : IPathRequest
             if (newVoxel == EndNode)
                 return true;
 
-            // force reset if grid changed
-            if (newVoxel.GridIndex != EndNode.GridIndex)
+            // A recycled slot is a different GridForge runtime identity even when GridIndex is unchanged.
+            if (!Context.World.TryGetGrid(EndNode.WorldIndex, out VoxelGrid? previousGrid)
+                || newVoxel.GridIndex != previousGrid!.GridIndex)
                 resetSearchRange = true;
         }
 
@@ -201,5 +203,5 @@ public abstract class PathRequest : IPathRequest
     }
 
     /// <inheritdoc/>
-    public override abstract int GetHashCode();
+    public override int GetHashCode() => RequestCacheKey.GetHashCode();
 }

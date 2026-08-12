@@ -38,7 +38,7 @@ public class AlternativeVoxelFinderTests : IDisposable
         AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 1);
 
         Voxel voxel = TestRequire.Created(AlternativeFinder.GetVoxel(out Voxel? createdVoxel), createdVoxel);
-        voxel.WorldPosition.y.Should().Be(query.y);
+        voxel.WorldPosition.Y.Should().Be(query.Y);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class AlternativeVoxelFinderTests : IDisposable
         AlternativeFinder.SetQuery(TestWorld.Context, query, anchorVoxel, maxTestDistance: 2);
 
         Voxel voxel = TestRequire.Created(AlternativeFinder.GetVoxel(out Voxel? createdVoxel), createdVoxel);
-        voxel.WorldPosition.z.Should().BeLessThan(Fixed64.Zero);
+        voxel.WorldPosition.Z.Should().BeLessThan(Fixed64.Zero);
     }
 
     private static void BlockFirstRing(Vector3d center)

@@ -23,27 +23,27 @@ public class MoveLocomotion : ILocomotion
     /// <summary>
     /// Default maximum walking speed.
     /// </summary>
-    public static readonly Fixed64 DefaultMaxSlowSpeed = (Fixed64)0.1f;//1d;
+    public static readonly Fixed64 DefaultMaxSlowSpeed = Fixed64.FromFraction(1, 10);//1d;
 
     /// <summary>
     /// Default maximum jogging speed.
     /// </summary>
-    public static readonly Fixed64 DefaultMaxModerateSpeed = (Fixed64)0.25d;//2d;
+    public static readonly Fixed64 DefaultMaxModerateSpeed = Fixed64.Quarter;//2d;
 
     /// <summary>
     /// Default maximum sprinting speed.
     /// </summary>
-    public static readonly Fixed64 DefaultMaxFastSpeed = (Fixed64)0.5d;//3d;
+    public static readonly Fixed64 DefaultMaxFastSpeed = Fixed64.Half;//3d;
 
     /// <summary>
     /// Default maximum sideways movement speed.
     /// </summary>
-    public static readonly Fixed64 DefaultMaxSidewaysSpeed = (Fixed64)0.15d;//2d;
+    public static readonly Fixed64 DefaultMaxSidewaysSpeed = Fixed64.FromFraction(3, 20);//2d;
 
     /// <summary>
     /// Default maximum backward movement speed.
     /// </summary>
-    public static readonly Fixed64 DefaultMaxBackwardsSpeed = (Fixed64)0.15d;//2d;
+    public static readonly Fixed64 DefaultMaxBackwardsSpeed = Fixed64.FromFraction(3, 20);//2d;
 
     /// <summary>
     /// Default maximum acceleration when moving on the ground.
@@ -70,11 +70,11 @@ public class MoveLocomotion : ILocomotion
     /// - Full upward slope (90°) reduces speed to zero.
     /// </remarks>
     public static readonly FixedCurve DefaultSlopeSpeedModifier = new(FixedCurveMode.Linear,
-            new FixedCurveKey(-90, 1.5),  // Full downward slope boosts speed 1.5x
-            new FixedCurveKey(-45, 1.2),  // Moderate downward slope boosts speed 1.2x
-            new FixedCurveKey(0, 1),      // Flat ground, normal speed
-            new FixedCurveKey(45, 0.8),   // Moderate uphill slows down
-            new FixedCurveKey(90, 0)      // Full uphill completely stops movement
+            new FixedCurveKey((Fixed64)(-90), Fixed64.FromFraction(3, 2)),  // Full downward slope boosts speed 1.5x
+            new FixedCurveKey((Fixed64)(-45), Fixed64.FromFraction(6, 5)),  // Moderate downward slope boosts speed 1.2x
+            new FixedCurveKey(Fixed64.Zero, Fixed64.One),                  // Flat ground, normal speed
+            new FixedCurveKey((Fixed64)45, Fixed64.FromFraction(4, 5)),    // Moderate uphill slows down
+            new FixedCurveKey((Fixed64)90, Fixed64.Zero)                   // Full uphill completely stops movement
         );
 
     /// <summary>

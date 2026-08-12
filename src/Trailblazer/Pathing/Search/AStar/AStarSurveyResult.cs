@@ -43,18 +43,17 @@ public class AStarSurveyResult : SurveyResult
         TrailblazerWorldContext context,
         AStarWaypoint[] waypoints,
         string[] chartsUtilized,
-        int key)
+        PathRequestCacheKey key)
     {
         PathRequestContextResolver.ThrowIfUnusable(context);
         return new AStarSurveyResult()
         {
             IsValid = true,
-            IsInUse = false,
             Context = context,
             ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
             Waypoints = waypoints,
             LastUsedFrame = -1,
-            RequestHashKey = key
+            RequestCacheKey = key
         };
     }
 

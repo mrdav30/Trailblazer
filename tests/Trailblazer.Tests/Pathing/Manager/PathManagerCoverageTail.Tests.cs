@@ -1037,7 +1037,7 @@ public sealed class PathManagerCoverageTailTests : IDisposable
 
     private static GridEventInfo CreateGridEventInfo(
         ushort gridIndex,
-        int gridSpawnToken,
+        long gridSpawnToken,
         GridConfiguration configuration,
         uint gridVersion)
     {

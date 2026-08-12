@@ -122,7 +122,7 @@ public static class PathTestFactory
         {
             RegisterGeneratedVolumePoint(
                 context,
-                new Vector3d(start.x + i, start.y, start.z),
+                new Vector3d(start.X + i, start.Y, start.Z),
                 medium,
                 chartNamePrefix);
         }

@@ -272,7 +272,7 @@ It also computes `_closingDistance` from:
 
 - the agent radius
 - the bound context's `VoxelSize`, falling back to the active request context or
-  `GridWorld.DefaultVoxelSize`
+  `GridWorld.DefaultRectangularCellSize`
 
 That value is what later controls waypoint advancement and arrival tolerance.
 

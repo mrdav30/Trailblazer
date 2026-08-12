@@ -27,7 +27,7 @@ public class WaterLocomotionTests : IDisposable
         swim.BuoyancyFactor = Fixed64.One; // Neutral buoyancy
 
         // Act - Simulate multiple frames
-        Fixed64 initialY = agent.Position.y;
+        Fixed64 initialY = agent.Position.Y;
         for (int i = 0; i < 10; i++)
         {
             TestWorld.Context.Simulate();
@@ -35,7 +35,7 @@ public class WaterLocomotionTests : IDisposable
         }
 
         // Assert - Position should remain stable within a small range
-        agent.Position.y.Should().BeApproximately(
+        agent.Position.Y.Should().BeApproximately(
             initialY,
             Fixed64.FromRaw(0x00001000)); // Small tolerance
     }
@@ -54,7 +54,7 @@ public class WaterLocomotionTests : IDisposable
         TestWorld.Context.Simulate();
 
         agent.FrameCondition.Medium = TraversalMedium.Liquid;
-        agent.FrameCondition.SurfaceLevel = agent.Position.y;
+        agent.FrameCondition.SurfaceLevel = agent.Position.Y;
         agent.FrameRequest.IsRequestingSwim = true;
 
         agent.Simulate();
@@ -73,7 +73,7 @@ public class WaterLocomotionTests : IDisposable
 
         TestWorld.Context.Simulate();
         agent.FrameCondition.Medium = TraversalMedium.Liquid;
-        agent.FrameCondition.SurfaceLevel = agent.Position.y;
+        agent.FrameCondition.SurfaceLevel = agent.Position.Y;
         agent.Simulate();
 
         TestRequire.NotNull(TestRequire.NotNull(agent.Motor).Handler.Water).IsSwimming.Should().BeFalse();
@@ -148,7 +148,7 @@ public class WaterLocomotionTests : IDisposable
         TestWorld.Context.Simulate();
         agent.Simulate();
 
-        Fixed64 previousY = agent.Position.y;
+        Fixed64 previousY = agent.Position.Y;
 
         // Simulate multiple frames of floating
         for (int i = 0; i < 10; i++)
@@ -159,7 +159,7 @@ public class WaterLocomotionTests : IDisposable
 
         var tolerance = Fixed64.FromRaw(0x0800);
         // Assert
-        agent.Position.y.Should().BeApproximately(previousY, tolerance); // Allow some small float oscillation
+        agent.Position.Y.Should().BeApproximately(previousY, tolerance); // Allow some small float oscillation
     }
 
     [Fact]
@@ -175,18 +175,18 @@ public class WaterLocomotionTests : IDisposable
         swim.BuoyancyFactor = Fixed64.FromRaw(0x180000000L); // ~1.5, meaning agent is more buoyant
 
         // Act - Simulate multiple frames
-        Fixed64 initialY = agent.Position.y;
+        Fixed64 initialY = agent.Position.Y;
         for (int i = 0; i < 10; i++)
         {
             TestWorld.Context.Simulate();
             agent.Simulate();
-            if (agent.Position.y == Fixed64.Zero) // we hit the surface
+            if (agent.Position.Y == Fixed64.Zero) // we hit the surface
                 break;
         }
 
         // Assert - Scout should float higher
-        agent.Position.y.Should().BeGreaterThan(initialY);
-        move.FrameVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Position.Y.Should().BeGreaterThan(initialY);
+        move.FrameVelocity.Y.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -202,7 +202,7 @@ public class WaterLocomotionTests : IDisposable
         swim.BuoyancyFactor = Fixed64.Half; // ~0.5, meaning agent is heavier than water
 
         // Act - Simulate multiple frames
-        Fixed64 initialY = agent.Position.y;
+        Fixed64 initialY = agent.Position.Y;
         for (int i = 0; i < 10; i++)
         {
             TestWorld.Context.Simulate();
@@ -210,8 +210,8 @@ public class WaterLocomotionTests : IDisposable
         }
 
         // Assert - Scout should sink lower
-        agent.Position.y.Should().BeLessThan(initialY);
-        move.FrameVelocity.y.Should().BeLessThan(Fixed64.Zero);
+        agent.Position.Y.Should().BeLessThan(initialY);
+        move.FrameVelocity.Y.Should().BeLessThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public class WaterLocomotionTests : IDisposable
             agent.Simulate();
         }
 
-        agent.Position.y.Should().BeGreaterThan(initialPosition.y); // Should rise
+        agent.Position.Y.Should().BeGreaterThan(initialPosition.Y); // Should rise
     }
 
     [Fact]
@@ -309,7 +309,7 @@ public class WaterLocomotionTests : IDisposable
 
         jump.IsJumping.Should().BeTrue();
         breached.Should().BeTrue();
-        move.FrameVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
+        move.FrameVelocity.Y.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -333,7 +333,7 @@ public class WaterLocomotionTests : IDisposable
 
         jump.IsJumping.Should().BeFalse();
         breached.Should().BeFalse();
-        move.FrameVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
+        move.FrameVelocity.Y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
     }
 
     [Fact]

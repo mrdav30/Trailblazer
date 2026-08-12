@@ -93,6 +93,14 @@ attach/owned-world lifetime, independent frame rate and frame count,
 context-local lifecycle hooks, pathing state, transitions, volume rules,
 reachability snapshots, guide caches, navigator ids, and movement-group state.
 
+`VoxelSize` is the representative cell edge reported by GridForge topology
+metrics. The current pathing implementation requires every active grid in the
+world to use dense rectangular-prism storage, cubic cells, and the same cell
+edge. Hex, sparse, anisotropic, or conflicting metrics are rejected explicitly.
+Supporting those layouts is a planned fast-follow that will replace this
+compatibility seam with topology-aware pathfinding rather than silently applying
+cubic assumptions.
+
 ### 2.3 Pathing Service
 
 `TrailblazerWorldContext.Pathing` is the context-local chart registry and live
@@ -160,6 +168,13 @@ Shared request behavior is provided by `PathRequest`:
 - successful creation or endpoint reset derives `MaxPathSearchRange` from the
   request's `TrailblazerWorldContext`
 
+`RequestCacheKey` is an exact value identity, not a persisted integer hash. It
+compares complete GridForge world/grid generations, voxel indices, and the
+request options that affect survey output; its hash code is used only for cache
+bucket placement. Hybrid keys also capture ordered transition ids and the
+relevant registry versions, plus the exact origin and target positions embedded
+in their staged segment requests.
+
 Use context-bound factories. Requests carry their owning
 `TrailblazerWorldContext`, and guide resolution rejects requests from a
 different context.
@@ -201,10 +216,13 @@ FlowFieldPathRequest.TryCreate(context, origin, destination, out var request);
 
 One important difference from A*:
 
-- the flow-field cache key is based on destination and configuration, not the
-  specific start voxel
+- the flow-field cache key is based on the exact destination voxel identity and
+  configuration, not the specific start voxel
 - a single field can be reused by multiple agents as long as their current voxel
   exists in the generated field set
+- when a compatible cached field does not cover a farther start voxel,
+  Trailblazer computes a covering result without resetting the smaller field
+  while active guides may still reference it
 
 ### 3.3 VolumePathRequest
 

@@ -182,6 +182,22 @@ public sealed class VolumeVoxelFinderTests : IDisposable
     }
 
     [Fact]
+    public void HasClearance_ShouldRequireEveryVoxelInTheMultiCellFootprint()
+    {
+        ConfigureGrid(Vector3d.Zero, new Vector3d(4, 4, 4));
+
+        VolumeVoxelFinder.HasClearance(
+            TestWorld.Context,
+            TestRequire.VoxelAt(TestWorld.Context, new Vector3d(2, 2, 2)),
+            Fixed64.Two).Should().BeTrue();
+
+        VolumeVoxelFinder.HasClearance(
+            TestWorld.Context,
+            TestRequire.VoxelAt(TestWorld.Context, new Vector3d(0, 2, 2)),
+            Fixed64.Two).Should().BeFalse();
+    }
+
+    [Fact]
     public void VolumeRequest_ShouldAllowSizeFallback_WhenSolidBackedEndpointOnlyFailsClearance()
     {
         ConfigureGrid(Vector3d.Zero, new Vector3d(6, 6, 6));
@@ -402,7 +418,7 @@ public sealed class VolumeVoxelFinderTests : IDisposable
         for (int i = 0; i < length; i++)
         {
             PathTestFactory.RegisterGeneratedVolumePoint(
-                TestWorld.Context, new Vector3d(start.x + i, start.y, start.z),
+                TestWorld.Context, new Vector3d(start.X + i, start.Y, start.Z),
                 TraversalMedium.Gas,
                 chartNamePrefix);
         }

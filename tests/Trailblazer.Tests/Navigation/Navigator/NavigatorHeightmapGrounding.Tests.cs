@@ -52,7 +52,7 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
         navigator.ApplyHeightmapGrounding(updateMotorState: true, surfaceFriction: Fixed64.Half).Should().BeTrue();
         navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Solid);
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)3);
-        navigator.Position.y.Should().Be((Fixed64)10);
+        navigator.Position.Y.Should().Be((Fixed64)10);
         navigator.FrameCondition.GroundState.Should().NotBeNull();
         navigator.FrameCondition.GroundState!.Value.SurfaceFriction.Should().Be(Fixed64.Half);
         navigator.Motor!.CurrentState.SurfaceLevel.Should().Be((Fixed64)3);
@@ -71,7 +71,7 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
 
         navigator.ApplyHeightmapGrounding().Should().BeTrue();
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)3);
-        navigator.Position.y.Should().Be((Fixed64)4 + Fixed64.Half);
+        navigator.Position.Y.Should().Be((Fixed64)4 + Fixed64.Half);
     }
 
     [Fact]
@@ -84,8 +84,8 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
             .Should().BeTrue();
 
         Fixed64 expectedRootY = (Fixed64)5 + Navigator.DefaultFootPositionAdjust;
-        navigator.Position.y.Should().Be(expectedRootY);
-        navigator.LastPosition.y.Should().Be(expectedRootY);
+        navigator.Position.Y.Should().Be(expectedRootY);
+        navigator.LastPosition.Y.Should().Be(expectedRootY);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
         navigator.ApplyHeightmapGrounding().Should().BeFalse();
         navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Gas);
         navigator.FrameCondition.SurfaceLevel.Should().Be(Fixed64.Zero);
-        navigator.Position.y.Should().Be(Fixed64.One);
+        navigator.Position.Y.Should().Be(Fixed64.One);
     }
 
     [Fact]
@@ -117,8 +117,8 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
 
         navigator.ApplyHeightmapGrounding().Should().BeTrue();
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)5);
-        navigator.Position.y.Should().Be(Fixed64.One);
-        navigator.LastPosition.y.Should().Be(Fixed64.One);
+        navigator.Position.Y.Should().Be(Fixed64.One);
+        navigator.LastPosition.Y.Should().Be(Fixed64.One);
     }
 
     [Fact]
@@ -164,8 +164,8 @@ public sealed class NavigatorHeightmapGroundingTests : IDisposable
 
         navigator.ApplyHeightmapGrounding().Should().BeTrue();
         navigator.FrameCondition.SurfaceLevel.Should().Be((Fixed64)4);
-        navigator.Position.y.Should().Be((Fixed64)4 + Navigator.DefaultFootPositionAdjust);
-        navigator.LastPosition.y.Should().Be((Fixed64)4 + Navigator.DefaultFootPositionAdjust);
+        navigator.Position.Y.Should().Be((Fixed64)4 + Navigator.DefaultFootPositionAdjust);
+        navigator.LastPosition.Y.Should().Be((Fixed64)4 + Navigator.DefaultFootPositionAdjust);
         navigator.HeightmapGrounding.ActiveLayerName.Should().Be("UpperPlatform");
     }
 

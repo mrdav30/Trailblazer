@@ -36,31 +36,6 @@ internal static class BenchmarkScenarioFactory
         return configurations;
     }
 
-    public static BoundingArea[] CreateBlockerAreas(
-        int count,
-        int span,
-        int columns,
-        int stride,
-        int offset = 4)
-    {
-        BoundingArea[] areas = new BoundingArea[count];
-
-        for (int i = 0; i < areas.Length; i++)
-        {
-            int row = i / columns;
-            int column = i % columns;
-            int x = offset + column * stride + (row & 1);
-            int z = offset + row * stride + (column & 1);
-
-            Vector3d min = new(x, 0, z);
-            Vector3d max = new(x + span, 0, z + span);
-
-            areas[i] = new BoundingArea(min, max);
-        }
-
-        return areas;
-    }
-
     public static BenchmarkOccupant[] CreateOccupants(
         int count,
         int width,

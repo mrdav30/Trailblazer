@@ -176,13 +176,13 @@ public class FlowFieldPathRequestBenchmarks
 
         _prebuiltResult = result;
         _sampleExactPosition = new Vector3d(
-            origin.x + (Fixed64)(size / 2),
-            origin.y,
-            origin.z + (Fixed64)(size / 2));
+            origin.X + (Fixed64)(size / 2),
+            origin.Y,
+            origin.Z + (Fixed64)(size / 2));
         _sampleFractionalPosition = new Vector3d(
-            origin.x + (Fixed64)(size / 2) + Fixed64.Half,
-            origin.y,
-            origin.z + (Fixed64)(size / 2) + Fixed64.Half);
+            origin.X + (Fixed64)(size / 2) + Fixed64.Half,
+            origin.Y,
+            origin.Z + (Fixed64)(size / 2) + Fixed64.Half);
     }
 
     private void ValidateConfiguredRequests()
@@ -309,7 +309,7 @@ public class FlowFieldPathRequestBenchmarks
     /// <summary>Reads the cache key for a pre-created 64x64 open-plane flow-field request.</summary>
     [Benchmark]
     [BenchmarkCategory("Pathing", "FlowField", "Request", "Key")]
-    public int RequestCacheKey_OpenPlane64()
+    public PathRequestCacheKey RequestCacheKey_OpenPlane64()
     {
         return _openPlane64Request.RequestCacheKey;
     }

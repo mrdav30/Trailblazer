@@ -8,14 +8,15 @@
 		<IsTestProject>true</IsTestProject>
 		<Configurations>Debug;Release;ReleaseLean</Configurations>
 		<OutputType>Exe</OutputType>
+		<DisableMemoryPack Condition="'$(DisableMemoryPack)' == ''">false</DisableMemoryPack>
 		<RunSettingsFilePath>$(MSBuildThisFileDirectory)coverlet.runsettings</RunSettingsFilePath>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)' == 'ReleaseLean'">
+		<DisableMemoryPack>true</DisableMemoryPack>
 		<DefineConstants>$(DefineConstants);TRAILBLAZER_DISABLE_MEMORYPACK</DefineConstants>
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj" />
-		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="4.0.0" />
 		<PackageReference Include="FluentAssertions" Version="8.10.0" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
 		<PackageReference Include="Moq" Version="4.20.72" />
@@ -32,6 +33,12 @@
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 			<PrivateAssets>all</PrivateAssets>
 		</PackageReference>
+	</ItemGroup>
+	<ItemGroup Condition="'$(DisableMemoryPack)' != 'true'">
+		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="7.0.0" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(DisableMemoryPack)' == 'true'">
+		<PackageReference Include="FixedMathSharp.FluentAssertions.Lean" Version="7.0.0" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove=".gitignore" />

@@ -369,7 +369,7 @@ public class AStarPathRequestBenchmarks
     /// <summary>Reads the cache key for a pre-created 32x32 open-plane A* request.</summary>
     [Benchmark]
     [BenchmarkCategory("Pathing", "AStar", "Request", "Key")]
-    public int RequestCacheKey_OpenPlane32()
+    public PathRequestCacheKey RequestCacheKey_OpenPlane32()
     {
         return _openPlane32Request.RequestCacheKey;
     }

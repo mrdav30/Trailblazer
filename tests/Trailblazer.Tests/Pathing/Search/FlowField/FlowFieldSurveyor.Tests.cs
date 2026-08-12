@@ -181,7 +181,7 @@ public class FlowFieldSurveyorTests : IDisposable
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
         var dir = FlowFieldSurveyor.SampleFlowVector(TestWorld.Context, start, result);
 
-        var expected = (end - start).Normalize();
+        var expected = (end - start).Normalized;
         var angleDiff = Vector3d.Dot(expected, dir);
 
         Assert.True(angleDiff > Fixed64.Half);
@@ -322,6 +322,36 @@ public class FlowFieldSurveyorTests : IDisposable
     }
 
     [Fact]
+    public void TryGetNearestFlowAnchor_ShouldUseSquaredFixedPointDistanceWithinRange()
+    {
+        bool[,,] data = new bool[1, 3, 1]
+        {
+            { { true }, { true }, { true } }
+        };
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NearestFlowAnchorSquaredDistance", data, Vector3d.Zero);
+        FlowFieldPathRequest request = TestRequire.Created(
+            FlowFieldPathRequest.TryCreate(
+                TestWorld.Context,
+                Vector3d.Zero,
+                new Vector3d(2, 0, 0),
+                out FlowFieldPathRequest? createdRequest),
+            createdRequest);
+        FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
+
+        bool found = FlowFieldSurveyor.TryGetNearestFlowAnchor(
+            TestWorld.Context,
+            Vector3d.FromDouble(0.6, 0, 0),
+            TestRequire.NotNull(result.Fields),
+            Fixed64.Half,
+            out Voxel? anchor);
+
+        found.Should().BeTrue();
+        TestRequire.NotNull(anchor).WorldPosition.Should().Be(new Vector3d(1, 0, 0));
+
+        PathManager.UnloadChart("NearestFlowAnchorSquaredDistance");
+    }
+
+    [Fact]
     public void FlowField_ShouldRejectDiagonalCornerCutting()
     {
         bool[,,] data = new bool[1, 2, 2];
@@ -414,8 +444,8 @@ public class FlowFieldSurveyorTests : IDisposable
         FlowFieldSurveyResult result = FlowFieldSurveyor.Shared.FindPath(request);
         var vec = FlowFieldSurveyor.SampleFlowVector(TestWorld.Context, start, result);
 
-        Assert.True(vec.x > Fixed64.Zero); // ensure direction favors straight axis
-        Assert.True(vec.z.Abs() < Fixed64.Half);
+        Assert.True(vec.X > Fixed64.Zero); // ensure direction favors straight axis
+        Assert.True(vec.Z.Abs() < Fixed64.Half);
 
         PathManager.UnloadChart("ZigZag");
     }
@@ -477,8 +507,8 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d flow = FlowFieldSurveyor.SampleFlowVector(TestWorld.Context, start, result);
 
         // Expect a roughly diagonal vector toward the goal
-        flow.x.Should().BeGreaterThan(Fixed64.Zero);
-        flow.z.Should().BeGreaterThan(Fixed64.Zero);
+        flow.X.Should().BeGreaterThan(Fixed64.Zero);
+        flow.Z.Should().BeGreaterThan(Fixed64.Zero);
 
         PathManager.UnloadChart("DiagonalGoal");
     }
@@ -660,9 +690,9 @@ public class FlowFieldSurveyorTests : IDisposable
 
         Vector3d flow = FlowFieldSurveyor.SampleFlowVector(TestWorld.Context, start, result);
 
-        flow.x.Should().BeApproximately(flow.z, (Fixed64)0.05);
-        flow.x.Should().BeGreaterThan(Fixed64.Zero);
-        flow.z.Should().BeGreaterThan(Fixed64.Zero);
+        flow.X.Should().BeApproximately(flow.Z, (Fixed64)0.05);
+        flow.X.Should().BeGreaterThan(Fixed64.Zero);
+        flow.Z.Should().BeGreaterThan(Fixed64.Zero);
 
         PathManager.UnloadChart("DirectionalBias");
     }
@@ -798,7 +828,7 @@ public class FlowFieldSurveyorTests : IDisposable
         result.HasPath.Should().BeTrue();
         Vector3d flow = FlowFieldSurveyor.SampleFlowVector(TestWorld.Context, start, result);
         flow.Should().NotBe(Vector3d.Zero);
-        flow.Should().NotBe((goal - start).Normalize(), "the direct diagonal through the blocked center is invalid");
+        flow.Should().NotBe((goal - start).Normalized, "the direct diagonal through the blocked center is invalid");
 
         PathManager.UnloadChart("RerouteAroundBlockers");
     }
@@ -881,8 +911,8 @@ public class FlowFieldSurveyorTests : IDisposable
         Vector3d dir = FlowFieldSurveyor.SampleFlowVector(TestWorld.Context, start, result);
 
         // Expect diagonal movement to avoid center
-        dir.x.Should().NotBe(Fixed64.One, "the center partition is penalized");
-        dir.z.Abs().Should().BeGreaterThan(Fixed64.Zero, "path should detour around the penalty");
+        dir.X.Should().NotBe(Fixed64.One, "the center partition is penalized");
+        dir.Z.Abs().Should().BeGreaterThan(Fixed64.Zero, "path should detour around the penalty");
 
         // Cleanup
         PathManager.UnloadChart("HighCostModifier");
@@ -956,43 +986,6 @@ public class FlowFieldSurveyorTests : IDisposable
     }
 
     [Fact]
-    public void FlowFieldSurveyor_TryProcessDirection_ShouldUpdateExistingNeighbor_WhenLowerCostIsFound()
-    {
-        bool[,,] data = new bool[1, 3, 1]
-        {
-            {
-                { true },
-                { true },
-                { true }
-            }
-        };
-        PathTestFactory.RegisterFromData(TestWorld.Context, "FlowHelperUpdate", data, Vector3d.Zero);
-
-        Voxel currentVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
-        Voxel neighborVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
-        SolidChartPartition current = TestRequire.Partition<SolidChartPartition>(currentVoxel);
-        SolidChartPartition neighbor = TestRequire.Partition<SolidChartPartition>(neighborVoxel);
-
-        FlowFieldPathRequest request = TestRequire.Created(
-            FlowFieldPathRequest.TryCreate(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), out FlowFieldPathRequest? createdRequest),
-            createdRequest);
-
-        FlowFieldSurveyor surveyor = new();
-        ReflectionUtility.SetPrivateField(surveyor, "_request", request);
-
-        PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
-        heap.Add(neighbor, 9);
-
-        SpatialDirection positiveX = FindDirection(1, 0, 0);
-        ReflectionUtility.InvokePrivate<object?>(surveyor, "TryProcessDirection", current, new[] { positiveX }, 1, false);
-
-        heap.TryGetPathCost(neighbor, out int updatedPathCost).Should().BeTrue();
-        updatedPathCost.Should().Be(2);
-
-        PathManager.UnloadChart("FlowHelperUpdate");
-    }
-
-    [Fact]
     public void FlowFieldSurveyor_HasValidDiagonalLegs_ShouldAcceptPositiveVerticalDiagonal_WhenRequiredLegsAreClosed()
     {
         bool[,,] data = new bool[3, 3, 3];
@@ -1014,8 +1007,9 @@ public class FlowFieldSurveyorTests : IDisposable
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
         PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
-        SpatialDirection upwardDiagonal = SpatialAwareness.DiagonalDirections
-            .First(direction => SpatialAwareness.DirectionOffsets[(int)direction].y > 0);
+        RectangularDirection upwardDiagonal = RectangularDirectionUtility.Diagonal
+            .ToArray()
+            .First(direction => RectangularDirectionUtility.Offsets[(int)direction].y > 0);
 
         MarkRequiredLegsClosed(current, upwardDiagonal, heap, closeVerticalLeg: true);
 
@@ -1046,8 +1040,9 @@ public class FlowFieldSurveyorTests : IDisposable
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
         PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
-        SpatialDirection downwardDiagonal = SpatialAwareness.DiagonalDirections
-            .First(direction => SpatialAwareness.DirectionOffsets[(int)direction].y < 0);
+        RectangularDirection downwardDiagonal = RectangularDirectionUtility.Diagonal
+            .ToArray()
+            .First(direction => RectangularDirectionUtility.Offsets[(int)direction].y < 0);
 
         MarkRequiredLegsClosed(current, downwardDiagonal, heap, closeVerticalLeg: false);
 
@@ -1080,7 +1075,7 @@ public class FlowFieldSurveyorTests : IDisposable
         ReflectionUtility.SetPrivateField(surveyor, "_request", request);
 
         PathHeap<SolidChartPartition> heap = ReflectionUtility.GetPrivateField<PathHeap<SolidChartPartition>>(surveyor, "_heap");
-        SpatialDirection diagonal = FindDirection(dx, dy, dz);
+        RectangularDirection diagonal = FindDirection(dx, dy, dz);
 
         MarkRequiredLegsClosed(current, diagonal, heap, closeVerticalLeg: true);
 
@@ -1141,29 +1136,33 @@ public class FlowFieldSurveyorTests : IDisposable
     public void FlowFieldSurveyResult_Create_ShouldUseFallbackEmptyArray_WhenChartsUtilizedIsNull()
     {
         var fields = new SwiftCollections.SwiftDictionary<GridForge.Spatial.WorldVoxelIndex, FlowField>();
-        FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(TestWorld.Context, fields, null!, key: 1);
+        FlowFieldSurveyResult result = FlowFieldSurveyResult.Create(
+            TestWorld.Context,
+            fields,
+            null!,
+            TestPathRequest.CreateCacheKey(1));
 
         TestRequire.NotNull(result.ChartsUtilized).Should().BeEmpty();
     }
 
-    private static SpatialDirection FindDirection(int dx, int dy, int dz)
+    private static RectangularDirection FindDirection(int dx, int dy, int dz)
     {
-        return SpatialAwareness.AllDirections.First(direction =>
+        return RectangularDirectionUtility.All.ToArray().First(direction =>
         {
-            (int offsetX, int offsetY, int offsetZ) = SpatialAwareness.DirectionOffsets[(int)direction];
+            (int offsetX, int offsetY, int offsetZ) = RectangularDirectionUtility.Offsets[(int)direction];
             return offsetX == dx && offsetY == dy && offsetZ == dz;
         });
     }
 
     private static void MarkRequiredLegsClosed(
         SolidChartPartition current,
-        SpatialDirection diagonal,
+        RectangularDirection diagonal,
         PathHeap<SolidChartPartition> heap,
         bool closeVerticalLeg)
     {
         SolidChartPartition?[] neighbors = current.Neighbors
             ?? throw new InvalidOperationException("Expected the current partition to have bound neighbors.");
-        (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
+        (int dx, int dy, int dz) = RectangularDirectionUtility.Offsets[(int)diagonal];
 
         if (dx != 0)
             CloseLeg(neighbors[(int)DiagonalTraversalLegs.ForXOffset(dx)], heap);

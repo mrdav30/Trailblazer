@@ -231,12 +231,12 @@ public class NavigatorTests : IDisposable
         navigator.Simulate();
 
         AStarPathRequest followupRequest = steering.CurrentRequest.Should().BeOfType<AStarPathRequest>().Subject;
-        followupRequest.TargetPosition.x.Should().Be((Fixed64)4);
-        followupRequest.TargetPosition.y.Should().Be(Fixed64.Zero);
-        followupRequest.TargetPosition.z.Should().Be(Fixed64.Zero);
+        followupRequest.TargetPosition.X.Should().Be((Fixed64)4);
+        followupRequest.TargetPosition.Y.Should().Be(Fixed64.Zero);
+        followupRequest.TargetPosition.Z.Should().Be(Fixed64.Zero);
         followupRequest.AllowTraversalTransitions.Should().BeTrue();
         steering.TrailGuide.Should().BeOfType<AStarGuide>();
-        steering.Destination.x.Should().Be((Fixed64)4);
+        steering.Destination.X.Should().Be((Fixed64)4);
         steering.MovementGroupID.Should().Be(9);
         steering.ShouldMove.Should().BeTrue();
         navigator.FrameRequest.IsRequestingFlight.Should().BeFalse();
@@ -582,7 +582,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameRequest.IsRequestingSwim.Should().BeFalse();
         steering.MovementGroupID.Should().Be(7);
         steering.ShouldMove.Should().BeTrue();
-        navigator.FrameRequest.Direction.x.Should().BeGreaterThan(Fixed64.Zero);
+        navigator.FrameRequest.Direction.X.Should().BeGreaterThan(Fixed64.Zero);
 
         PathManager.UnloadChart("NavigatorSwimExitHandoff");
     }
@@ -762,7 +762,7 @@ public class NavigatorTests : IDisposable
 
         navigator.FrameRequest.Rate.Should().Be(TrekRate.Fast);
         navigator.FrameRequest.IsRequestingFlight.Should().BeTrue();
-        navigator.FrameRequest.Direction.y.Should().BeGreaterThan(Fixed64.Zero);
+        navigator.FrameRequest.Direction.Y.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -941,8 +941,8 @@ public class NavigatorTests : IDisposable
 
         navigator.Rotation.Should().Be(FixedQuaternion.Identity);
         navigator.Forward.Should().Be(Vector3d.Forward);
-        navigator.Position.z.Should().BeLessThan(Fixed64.Zero);
-        navigator.Velocity.z.Should().BeLessThan(Fixed64.Zero);
+        navigator.Position.Z.Should().BeLessThan(Fixed64.Zero);
+        navigator.Velocity.Z.Should().BeLessThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -1125,7 +1125,7 @@ public class NavigatorTests : IDisposable
         navigator.FrameCondition.Medium.Should().Be(TraversalMedium.Unknown);
         navigator.FrameCondition.SurfaceLevel.Should().Be(Fixed64.Zero);
         navigator.FrameCondition.GroundState.Should().BeNull();
-        navigator.FrameCondition.CeilingLevel.Should().Be(Fixed64.MAX_VALUE);
+        navigator.FrameCondition.CeilingLevel.Should().Be(Fixed64.MaxValue);
     }
 
     [Fact]

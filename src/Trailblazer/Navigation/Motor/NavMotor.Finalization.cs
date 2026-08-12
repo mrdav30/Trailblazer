@@ -147,15 +147,15 @@ public partial class NavMotor
     private void CheckJumpStatus(Vector3d position)
     {
         // Make sure we aren't hitting the ceiling
-        if (Handler.Move.FrameVelocity.y <= Fixed64.Zero || CurrentState.CeilingLevel == Fixed64.MAX_VALUE)
+        if (Handler.Move.FrameVelocity.Y <= Fixed64.Zero || CurrentState.CeilingLevel == Fixed64.MaxValue)
             return;
 
-        if (position.y <= CurrentState.CeilingLevel) return;
+        if (position.Y <= CurrentState.CeilingLevel) return;
 
         Handler.Move.FrameVelocity = new(
-            Handler.Move.FrameVelocity.x,
+            Handler.Move.FrameVelocity.X,
             Fixed64.Zero,
-            Handler.Move.FrameVelocity.z);
+            Handler.Move.FrameVelocity.Z);
 
         if (JumpModule != null)
         {
@@ -222,7 +222,7 @@ public partial class NavMotor
         if (WaterModule?.IsEnabled == true)
         {
             WaterModule.IsSwimming = WaterModule.CanSwim && hadSwimIntent;
-            WaterModule.IsDiving = position.y < CurrentState.SurfaceLevel;
+            WaterModule.IsDiving = position.Y < CurrentState.SurfaceLevel;
 
             WaterModule.UpdateDiveTime();
 
@@ -278,13 +278,13 @@ public partial class NavMotor
 
     private void UpdateActiveFallState(Vector3d position)
     {
-        if (position.y > Handler.Fall.FallStart)
-            Handler.Fall.FallStart = position.y;
+        if (position.Y > Handler.Fall.FallStart)
+            Handler.Fall.FallStart = position.Y;
 
         if (!IsInGas && !IsTooSteep(FrameSlopeAngle))
         {
             Handler.Fall.IsFalling = false;
-            Handler.Fall.FallEnd = position.y;
+            Handler.Fall.FallEnd = position.Y;
 
             if (Handler.Fall.FallHeight > Fixed64.Zero)
                 Events.OnStopFall?.Invoke(Handler.Fall.FallHeight);
@@ -293,7 +293,7 @@ public partial class NavMotor
             return;
         }
 
-        Fixed64 currentFallHeight = (Handler.Fall.FallStart - position.y).Abs();
+        Fixed64 currentFallHeight = (Handler.Fall.FallStart - position.Y).Abs();
         if (currentFallHeight > Handler.Fall.MaxFallHeight)
             Events?.OnMaxFallHeightReached?.Invoke();
     }
@@ -301,11 +301,11 @@ public partial class NavMotor
     private void TryStartFall(Vector3d position)
     {
         bool isSlidingTooSteep = IsTooSteep(FrameSlopeAngle);
-        if (!(IsInGas || isSlidingTooSteep) || _forceOutput.y >= Fixed64.Zero)
+        if (!(IsInGas || isSlidingTooSteep) || _forceOutput.Y >= Fixed64.Zero)
             return;
 
         Handler.Fall.IsFalling = true;
-        Handler.Fall.FallStart = position.y;
+        Handler.Fall.FallStart = position.Y;
 
         if (JumpModule != null && JumpModule.JumpCount > 0 && !JumpModule.IsCoolingDown)
             JumpModule.StartCooldown();
@@ -358,7 +358,7 @@ public partial class NavMotor
 
         Fixed64 tolerance = climbModule.ClimbStartTolerance;
         Vector3d mantleTargetPosition = climbModule.MantleTargetPosition.GetValueOrDefault();
-        return (mantleTargetPosition - position).SqrMagnitude <= tolerance * tolerance;
+        return (mantleTargetPosition - position).MagnitudeSquared <= tolerance * tolerance;
     }
 
     private void CompleteMantle()

@@ -284,7 +284,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             {
                 Medium = TraversalMedium.Liquid,
                 SurfaceLevel = Fixed64.Zero,
-                CeilingLevel = Fixed64.MAX_VALUE
+                CeilingLevel = Fixed64.MaxValue
             },
             agent.GetFootPosition());
 
@@ -311,7 +311,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             {
                 Medium = TraversalMedium.Liquid,
                 SurfaceLevel = Fixed64.Zero,
-                CeilingLevel = Fixed64.MAX_VALUE
+                CeilingLevel = Fixed64.MaxValue
             },
             newFootPosition: null);
 
@@ -337,7 +337,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             {
                 Medium = TraversalMedium.Solid,
                 SurfaceLevel = Fixed64.Zero,
-                CeilingLevel = Fixed64.MAX_VALUE,
+                CeilingLevel = Fixed64.MaxValue,
                 GroundState = new GroundCondition
                 {
                     Platform = new PlatformSnapshot(1, Fixed4x4.Identity)
@@ -360,7 +360,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             {
                 Medium = TraversalMedium.Solid,
                 SurfaceLevel = Fixed64.Zero,
-                CeilingLevel = Fixed64.MAX_VALUE,
+                CeilingLevel = Fixed64.MaxValue,
                 GroundState = new GroundCondition
                 {
                     Platform = new PlatformSnapshot(1, Fixed4x4.Identity)
@@ -388,7 +388,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             {
                 Medium = TraversalMedium.Solid,
                 SurfaceLevel = Fixed64.Zero,
-                CeilingLevel = Fixed64.MAX_VALUE,
+                CeilingLevel = Fixed64.MaxValue,
                 GroundState = new GroundCondition
                 {
                     Platform = new PlatformSnapshot(1, platformTransform),
@@ -397,7 +397,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             },
             agent.GetFootPosition());
 
-        agent.Motor.Handler.Move.FrameVelocity.x.Should().Be(-(Fixed64)2);
+        agent.Motor.Handler.Move.FrameVelocity.X.Should().Be(-(Fixed64)2);
         agent.Motor.Handler.Platform.HoldPlatform.Should().BeNull();
     }
 
@@ -418,7 +418,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             {
                 Medium = TraversalMedium.Solid,
                 SurfaceLevel = Fixed64.Zero,
-                CeilingLevel = Fixed64.MAX_VALUE,
+                CeilingLevel = Fixed64.MaxValue,
                 GroundState = new GroundCondition
                 {
                     Platform = new PlatformSnapshot(2, newPlatform),
@@ -467,7 +467,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             },
             agent.GetFootPosition());
 
-        agent.Motor.Handler.Move.FrameVelocity.y.Should().Be(Fixed64.Zero);
+        agent.Motor.Handler.Move.FrameVelocity.Y.Should().Be(Fixed64.Zero);
         agent.Motor.Handler.Jump.IsJumping.Should().BeFalse();
         agent.Motor.Handler.Jump.IsHoldingJump.Should().BeFalse();
     }
@@ -537,7 +537,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
 
         ReflectionUtility.InvokePrivate<object>(ceilingSafeAgent.Motor, "CheckJumpStatus", new Vector3d(0, 2, 0));
 
-        ceilingSafeAgent.Motor.Handler.Move.FrameVelocity.y.Should().Be((Fixed64)4);
+        ceilingSafeAgent.Motor.Handler.Move.FrameVelocity.Y.Should().Be((Fixed64)4);
         ceilingSafeAgent.Motor.Handler.Jump.IsJumping.Should().BeTrue();
 
         TrekRequest request = new()
@@ -638,7 +638,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             Rate = TrekRate.Slow
         };
 
-        ReflectionUtility.InvokePrivate<Vector3d>(flyingAgent.Motor, "GetFlightVelocity", upwardRequest).y
+        ReflectionUtility.InvokePrivate<Vector3d>(flyingAgent.Motor, "GetFlightVelocity", upwardRequest).Y
             .Should().Be((Fixed64)4);
 
         ReflectionUtility.InvokePrivate<Fixed64>(
@@ -780,7 +780,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
             "ApplyGroundVelocityConstraints",
             Vector3d.Forward * (Fixed64)3);
 
-        adjustedVelocity.y.Should().BeLessThan(Fixed64.Zero);
+        adjustedVelocity.Y.Should().BeLessThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -793,7 +793,7 @@ public sealed class NavMotorCoverageTailTests : IDisposable
 
         ReflectionUtility.InvokePrivate<object>(swimmingAgent.Motor, "ApplyEnvironmentalForces");
 
-        ReflectionUtility.GetPrivateField<Vector3d>(swimmingAgent.Motor, "_forceOutput").y
+        ReflectionUtility.GetPrivateField<Vector3d>(swimmingAgent.Motor, "_forceOutput").Y
             .Should().BeLessThan((Fixed64)(-2));
 
         var inactiveFallAgent = MockMotorAgentTestFactory.CreateMockAgent(startingMedium: TraversalMedium.Gas);

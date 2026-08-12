@@ -34,7 +34,7 @@ public class SlideLocomotion : ILocomotion
     /// <remarks>
     /// A value of 0.5 allows the scout to increase sliding speed up to 150% or reduce it to 50%.
     /// </remarks>
-    public static readonly Fixed64 DefaultSpeedControl = (Fixed64)0.5d;
+    public static readonly Fixed64 DefaultSpeedControl = Fixed64.Half;
 
     #endregion
 

@@ -11,6 +11,10 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Configurations>Debug;Release;ReleaseLean</Configurations>
+    <DisableMemoryPack Condition="'$(DisableMemoryPack)' == ''">false</DisableMemoryPack>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'ReleaseLean'">
+    <DisableMemoryPack>true</DisableMemoryPack>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj" />

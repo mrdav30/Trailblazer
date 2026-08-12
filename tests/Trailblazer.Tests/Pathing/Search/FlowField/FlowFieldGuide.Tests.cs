@@ -48,9 +48,9 @@ public sealed class FlowFieldGuideTests : IDisposable
         Voxel sample = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         VoxelIndex sampleLocalIndex = sample.WorldIndex.VoxelIndex;
         Vector3d originWorldPosition = new(
-            sample.WorldPosition.x - (Fixed64)sampleLocalIndex.x,
-            sample.WorldPosition.y - (Fixed64)sampleLocalIndex.y,
-            sample.WorldPosition.z - (Fixed64)sampleLocalIndex.z);
+            sample.WorldPosition.X - (Fixed64)sampleLocalIndex.x,
+            sample.WorldPosition.Y - (Fixed64)sampleLocalIndex.y,
+            sample.WorldPosition.Z - (Fixed64)sampleLocalIndex.z);
         var dense = new FlowFieldSamplingGrid(
             sample.WorldIndex,
             originWorldPosition,
@@ -112,12 +112,12 @@ public sealed class FlowFieldGuideTests : IDisposable
 
         guide.Initialize(survey).Should().BeTrue();
         guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d movement).Should().BeTrue();
-        movement.x.Should().BeGreaterThan(Fixed64.Zero);
+        movement.X.Should().BeGreaterThan(Fixed64.Zero);
 
         guide.FlowFieldContainsPosition(Vector3d.Zero).Should().BeTrue();
         guide.FlowFieldContainsPosition(new Vector3d(5, 0, 0)).Should().BeFalse();
 
-        guide.TryGetFallbackDirection(new Vector3d(0.25, 0, 0), out Vector3d fallback).Should().BeTrue();
+        guide.TryGetFallbackDirection(Vector3d.FromDouble(0.25, 0, 0), out Vector3d fallback).Should().BeTrue();
         fallback.Should().NotBe(Vector3d.Zero);
         guide.TryGetFallbackDirection(new Vector3d(5, 0, 0), out _).Should().BeFalse();
     }
@@ -143,13 +143,13 @@ public sealed class FlowFieldGuideTests : IDisposable
 
         guide.InitializeStaged(plan).Should().BeTrue();
         guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d firstDirection).Should().BeTrue();
-        firstDirection.x.Should().BeGreaterThan(Fixed64.Zero);
+        firstDirection.X.Should().BeGreaterThan(Fixed64.Zero);
 
         guide.TryGetFallbackDirection(Vector3d.Zero, out Vector3d fallback).Should().BeTrue();
-        fallback.x.Should().BeGreaterThan(Fixed64.Zero);
+        fallback.X.Should().BeGreaterThan(Fixed64.Zero);
 
         guide.TryGetMovementDirection(new Vector3d(1, 0, 0), out Vector3d secondDirection).Should().BeTrue();
-        secondDirection.x.Should().BeGreaterThan(Fixed64.Zero);
+        secondDirection.X.Should().BeGreaterThan(Fixed64.Zero);
 
         guide.TryGetMovementDirection(new Vector3d(2, 0, 0), out _).Should().BeFalse();
 
@@ -191,10 +191,10 @@ public sealed class FlowFieldGuideTests : IDisposable
         guide.InitializeStaged(plan).Should().BeTrue();
 
         guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d direction).Should().BeTrue();
-        direction.x.Should().BeGreaterThan(Fixed64.Zero);
+        direction.X.Should().BeGreaterThan(Fixed64.Zero);
 
         guide.FlowFieldContainsPosition(Vector3d.Zero).Should().BeTrue();
-        guide.TryGetFallbackDirection(new Vector3d(0.25, 0, 0), out Vector3d fallback).Should().BeTrue();
+        guide.TryGetFallbackDirection(Vector3d.FromDouble(0.25, 0, 0), out Vector3d fallback).Should().BeTrue();
         fallback.Should().NotBe(Vector3d.Zero);
 
         guide.ReleaseStagedResources(dispose: true);
@@ -324,7 +324,11 @@ public sealed class FlowFieldGuideTests : IDisposable
             });
         }
 
-        return FlowFieldSurveyResult.Create(TestWorld.Context, fields, Array.Empty<string>(), 1);
+        return FlowFieldSurveyResult.Create(
+            TestWorld.Context,
+            fields,
+            Array.Empty<string>(),
+            TestPathRequest.CreateCacheKey(1));
     }
 
     private sealed class UnsupportedRequest : IPathRequest
@@ -363,7 +367,7 @@ public sealed class FlowFieldGuideTests : IDisposable
 
         public bool IsValid => true;
 
-        public int RequestCacheKey => 314;
+        public PathRequestCacheKey RequestCacheKey => TestPathRequest.CreateCacheKey(314);
 
         public bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize) => false;
 

@@ -31,27 +31,27 @@ public class JumpLocomotion : ILocomotion
     /// <summary>
     /// Determines how much the scout's jump direction is influenced by the slope of the surface they are on.
     /// </summary>
-    public static readonly Fixed64 DefaultPerpendicularJumpAmount = (Fixed64)0.5f;
+    public static readonly Fixed64 DefaultPerpendicularJumpAmount = Fixed64.Half;
 
     /// <summary>
     /// Determines how much the scout's jump direction is influenced by steep slopes.
     /// </summary>
-    public static readonly Fixed64 DefaultSteepPerpendicularJumpAmount = (Fixed64)0.5f;
+    public static readonly Fixed64 DefaultSteepPerpendicularJumpAmount = Fixed64.Half;
 
     /// <summary>
     /// Determines how much movement input affects the scout while jumping.
     /// </summary>
-    public static readonly Fixed64 DefaultJumpControlMultiplier = (Fixed64)0.375f; // 75% control when jumping
+    public static readonly Fixed64 DefaultJumpControlMultiplier = Fixed64.FromFraction(3, 8); // 75% control when jumping
 
     /// <summary>
     /// The default cooldown time after a jump before the scout can jump again.
     /// </summary>
-    public static readonly Fixed64 DefaultCooldownTime = (Fixed64)0.2f;
+    public static readonly Fixed64 DefaultCooldownTime = Fixed64.FromFraction(1, 5);
 
     /// <summary>
     /// The default duration after jumping during which ground checks should be ignored.
     /// </summary>
-    public static readonly Fixed64 DefaultAvoidGroundingTimer = (Fixed64)0.05f;
+    public static readonly Fixed64 DefaultAvoidGroundingTimer = Fixed64.FromFraction(1, 20);
 
     #endregion
 

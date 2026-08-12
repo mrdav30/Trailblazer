@@ -38,7 +38,7 @@ public sealed class WaypointGuideTests : IDisposable
                 new Vector3d(1, 0, 0),
                 new Vector3d(2, 0, 0)),
             Array.Empty<string>(),
-            1);
+            TestPathRequest.CreateCacheKey(1));
 
         guide.Initialize(survey).Should().BeTrue();
         guide.CurrentWaypointIndex.Should().Be(0);
@@ -46,14 +46,14 @@ public sealed class WaypointGuideTests : IDisposable
 
         guide.GetIndex(new Vector3d(1, 0, 0)).Should().Be(1);
         guide.TryGetMovementDirection(new Vector3d(3, 0, 0), out Vector3d movement).Should().BeTrue();
-        movement.x.Should().BeLessThan(Fixed64.Zero);
+        movement.X.Should().BeLessThan(Fixed64.Zero);
 
         guide.GetCurrentWaypointDirection(Vector3d.Zero).Should().Be(Vector3d.Zero);
 
         guide.AdvanceWaypoint();
-        guide.GetCurrentWaypointDirection(Vector3d.Zero).x.Should().BeGreaterThan(Fixed64.Zero);
+        guide.GetCurrentWaypointDirection(Vector3d.Zero).X.Should().BeGreaterThan(Fixed64.Zero);
         guide.TryGetFallbackDirection(new Vector3d(3, 0, 0), out Vector3d fallback).Should().BeTrue();
-        fallback.x.Should().BeLessThan(Fixed64.Zero);
+        fallback.X.Should().BeLessThan(Fixed64.Zero);
 
         guide.TryGetWaypointAt(1, out AStarWaypoint waypoint).Should().BeTrue();
         waypoint.Position.Should().Be(new Vector3d(1, 0, 0));
@@ -74,7 +74,7 @@ public sealed class WaypointGuideTests : IDisposable
                 new Vector3d(1, 0, 0),
                 new Vector3d(2, 0, 0)),
             Array.Empty<string>(),
-            2)).Should().BeTrue();
+            TestPathRequest.CreateCacheKey(2))).Should().BeTrue();
 
         shortGuide.ActiveWaypoints.Should().HaveCount(3);
 
@@ -87,7 +87,7 @@ public sealed class WaypointGuideTests : IDisposable
                 new Vector3d(2, 0, 0),
                 new Vector3d(3, 0, 0)),
             Array.Empty<string>(),
-            3)).Should().BeTrue();
+            TestPathRequest.CreateCacheKey(3))).Should().BeTrue();
 
         smoothedGuide.ActiveWaypoints.Should().HaveCount(5);
         smoothedGuide.ActiveWaypoints[0].Position.Should().Be(Vector3d.Zero);
@@ -107,18 +107,18 @@ public sealed class WaypointGuideTests : IDisposable
                 new Vector3d(1, 0, 0),
                 new Vector3d(2, 0, 0)),
             Array.Empty<string>(),
-            4);
+            TestPathRequest.CreateCacheKey(4));
 
         guide.Initialize(survey).Should().BeTrue();
         guide.CurrentWaypointIndex.Should().Be(1);
         guide.GetIndex(new Vector3d(1, 0, 0)).Should().Be(1);
 
         guide.TryGetMovementDirection(new Vector3d(3, 0, 0), out Vector3d movement).Should().BeTrue();
-        movement.x.Should().BeLessThan(Fixed64.Zero);
+        movement.X.Should().BeLessThan(Fixed64.Zero);
 
-        guide.GetCurrentWaypointDirection(Vector3d.Zero).x.Should().BeGreaterThan(Fixed64.Zero);
+        guide.GetCurrentWaypointDirection(Vector3d.Zero).X.Should().BeGreaterThan(Fixed64.Zero);
         guide.TryGetFallbackDirection(new Vector3d(3, 0, 0), out Vector3d fallback).Should().BeTrue();
-        fallback.x.Should().BeLessThan(Fixed64.Zero);
+        fallback.X.Should().BeLessThan(Fixed64.Zero);
 
         guide.TryGetWaypointAt(2, out AStarWaypoint waypoint).Should().BeTrue();
         waypoint.IsGoal.Should().BeTrue();
@@ -155,7 +155,7 @@ public sealed class WaypointGuideTests : IDisposable
             TestWorld.Context,
             BuildWaypoints(new Vector3d(1, 0, 0), new Vector3d(2, 0, 0)),
             Array.Empty<string>(),
-            5);
+            TestPathRequest.CreateCacheKey(5));
 
         var guide = new VolumeGuide();
         guide.Initialize(survey).Should().BeTrue();
@@ -187,11 +187,11 @@ public sealed class WaypointGuideTests : IDisposable
         guide.GetIndex(new Vector3d(1, 0, 0)).Should().Be(1);
 
         guide.TryGetMovementDirection(new Vector3d(3, 0, 0), out Vector3d movement).Should().BeTrue();
-        movement.x.Should().BeLessThan(Fixed64.Zero);
+        movement.X.Should().BeLessThan(Fixed64.Zero);
 
-        guide.GetCurrentWaypointDirection(Vector3d.Zero).x.Should().BeGreaterThan(Fixed64.Zero);
+        guide.GetCurrentWaypointDirection(Vector3d.Zero).X.Should().BeGreaterThan(Fixed64.Zero);
         guide.TryGetFallbackDirection(new Vector3d(3, 0, 0), out Vector3d fallback).Should().BeTrue();
-        fallback.x.Should().BeLessThan(Fixed64.Zero);
+        fallback.X.Should().BeLessThan(Fixed64.Zero);
 
         guide.TryGetWaypointAt(0, out AStarWaypoint waypoint).Should().BeTrue();
         waypoint.Position.Should().Be(Vector3d.Zero);

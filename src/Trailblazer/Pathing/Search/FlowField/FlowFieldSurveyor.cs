@@ -141,13 +141,13 @@ public class FlowFieldSurveyor
     /// <param name="currentPathCost">The current flood distance stored for the partition.</param>
     private void AnalyzeNeighborDistance(SolidChartPartition current, int currentPathCost)
     {
-        TryProcessDirection(current, SpatialAwareness.PerpendicularDirections, currentPathCost);
-        TryProcessDirection(current, SpatialAwareness.DiagonalDirections, currentPathCost, true);
+        TryProcessDirection(current, RectangularDirectionUtility.Perpendicular, currentPathCost);
+        TryProcessDirection(current, RectangularDirectionUtility.Diagonal, currentPathCost, true);
     }
 
     private void TryProcessDirection(
         SolidChartPartition current,
-        SpatialDirection[] directions,
+        ReadOnlySpan<RectangularDirection> directions,
         int currentPathCost,
         bool checkEdges = false)
     {
@@ -156,7 +156,7 @@ public class FlowFieldSurveyor
         if (neighbors == null)
             return;
 
-        foreach (SpatialDirection dir in directions)
+        foreach (RectangularDirection dir in directions)
         {
             SolidChartPartition? neighbor = neighbors[(int)dir];
             if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(request.UnitSize))
@@ -186,14 +186,14 @@ public class FlowFieldSurveyor
     private bool ExceedsMaxClimbHeight(SolidChartPartition current, SolidChartPartition neighbor)
     {
         FlowFieldPathRequest request = _request!;
-        Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
+        Fixed64 heightDifference = (current.VoxelPosition.Y - neighbor.VoxelPosition.Y).Abs();
         return heightDifference > request.MaxClimbHeight;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool HasValidDiagonalLegs(SolidChartPartition current, SpatialDirection diagonal)
+    private bool HasValidDiagonalLegs(SolidChartPartition current, RectangularDirection diagonal)
     {
-        (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
+        (int dx, int dy, int dz) = RectangularDirectionUtility.Offsets[(int)diagonal];
 
         if (dx != 0 && !IsLegClear(current, DiagonalTraversalLegs.ForXOffset(dx)))
             return false;
@@ -208,7 +208,7 @@ public class FlowFieldSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool IsLegClear(SolidChartPartition current, SpatialDirection legDir)
+    private bool IsLegClear(SolidChartPartition current, RectangularDirection legDir)
     {
         FlowFieldPathRequest request = _request!;
         SolidChartPartition?[]? neighbors = current.Neighbors;
@@ -273,8 +273,8 @@ public class FlowFieldSurveyor
                 if (ExceedsMaxClimbHeight(current, nPart))
                     continue;
 
-                if (SpatialAwareness.IsDiagonalNeighbor((SpatialDirection)i)
-                    && !HasValidDiagonalLegs(current, (SpatialDirection)i))
+                if (RectangularDirectionUtility.IsDiagonalNeighbor((RectangularDirection)i)
+                    && !HasValidDiagonalLegs(current, (RectangularDirection)i))
                 {
                     continue;
                 }
@@ -375,11 +375,12 @@ public class FlowFieldSurveyor
 
     private static Vector3d[] CreateNormalizedDirectionLookup()
     {
-        Vector3d[] directions = new Vector3d[SpatialAwareness.DirectionOffsets.Length];
+        ReadOnlySpan<(int x, int y, int z)> offsets = RectangularDirectionUtility.Offsets;
+        Vector3d[] directions = new Vector3d[offsets.Length];
         for (int i = 0; i < directions.Length; i++)
         {
-            (int x, int y, int z) = SpatialAwareness.DirectionOffsets[i];
-            directions[i] = new Vector3d((Fixed64)x, (Fixed64)y, (Fixed64)z).Normalize();
+            (int x, int y, int z) = offsets[i];
+            directions[i] = new Vector3d((Fixed64)x, (Fixed64)y, (Fixed64)z).Normalized;
         }
 
         return directions;
@@ -419,14 +420,14 @@ public class FlowFieldSurveyor
 
         // Get bottom-left corner of the square the agent is standing in
         Vector3d corner = new(
-            FixedMath.Floor(worldPosition.x / voxelSize) * voxelSize,
-            FixedMath.Floor(worldPosition.y / voxelSize) * voxelSize,
-            FixedMath.Floor(worldPosition.z / voxelSize) * voxelSize
+            FixedMath.Floor(worldPosition.X / voxelSize) * voxelSize,
+            FixedMath.Floor(worldPosition.Y / voxelSize) * voxelSize,
+            FixedMath.Floor(worldPosition.Z / voxelSize) * voxelSize
         );
 
         // Compute normalized offset in cell (0..1)
-        Fixed64 dx = (worldPosition.x - corner.x) / voxelSize;
-        Fixed64 dz = (worldPosition.z - corner.z) / voxelSize;
+        Fixed64 dx = (worldPosition.X - corner.X) / voxelSize;
+        Fixed64 dz = (worldPosition.Z - corner.Z) / voxelSize;
 
         if (dx == Fixed64.Zero && dz == Fixed64.Zero)
             return GetFlowDirection(context, corner, fields, samplingGrids);
@@ -448,7 +449,7 @@ public class FlowFieldSurveyor
         Vector3d zLow = f01 * (Fixed64.One - dx) + f11 * dx;
         Vector3d blended = zHigh * (Fixed64.One - dz) + zLow * dz;
 
-        blended.Normalize();
+        blended.NormalizeInPlace();
         return blended;
     }
 
@@ -483,7 +484,7 @@ public class FlowFieldSurveyor
                 || flowVoxel == null)
                 continue;
 
-            Fixed64 distSq = Vector3d.SqrDistance(origin, flowVoxel.WorldPosition);
+            Fixed64 distSq = Vector3d.DistanceSquared(origin, flowVoxel.WorldPosition);
             if (distSq <= minDistanceSq)
             {
                 result = flowVoxel;
@@ -595,9 +596,9 @@ public class FlowFieldSurveyor
             _sampleIndex = sampleIndex;
             VoxelIndex localIndex = sampleIndex.VoxelIndex;
             _originWorldPosition = new Vector3d(
-                sampleWorldPosition.x - (voxelSize * (Fixed64)localIndex.x),
-                sampleWorldPosition.y - (voxelSize * (Fixed64)localIndex.y),
-                sampleWorldPosition.z - (voxelSize * (Fixed64)localIndex.z));
+                sampleWorldPosition.X - (voxelSize * (Fixed64)localIndex.x),
+                sampleWorldPosition.Y - (voxelSize * (Fixed64)localIndex.y),
+                sampleWorldPosition.Z - (voxelSize * (Fixed64)localIndex.z));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

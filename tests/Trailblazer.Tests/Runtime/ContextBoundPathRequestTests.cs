@@ -2,6 +2,9 @@ using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Grids.Storage;
+using GridForge.Grids.Topology;
+using GridForge.Spatial;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -17,6 +20,94 @@ public sealed class ContextBoundPathRequestTests : IDisposable
         TraversalTransitionRegistry.Reset();
         TestWorld.Reset();
         GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public void AStarCreate_ShouldRejectUnsupportedWorldTopologyAtAdmission()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.World.TryAddGrid(
+            new GridConfiguration(
+                Vector3d.Zero,
+                Vector3d.One,
+                topologyKind: GridTopologyKind.HexPrism,
+                topologyMetrics: GridTopologyMetrics.Hex(Fixed64.One, Fixed64.One)),
+            out _).Should().BeTrue();
+
+        Action create = () => AStarPathRequest.Create(
+            context,
+            Vector3d.Zero,
+            Vector3d.One,
+            Fixed64.One);
+
+        create.Should().Throw<NotSupportedException>().WithMessage("*hex*fast-follow*");
+    }
+
+    [Fact]
+    public void AStarCreate_ShouldRejectSparseWorldStorageAtAdmission()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.World.TryAddGrid(
+            new GridConfiguration(
+                Vector3d.Zero,
+                Vector3d.One,
+                storageKind: GridStorageKind.Sparse),
+            new[] { new VoxelIndex(0, 0, 0) },
+            out _).Should().BeTrue();
+
+        Action create = () => AStarPathRequest.Create(
+            context,
+            Vector3d.Zero,
+            Vector3d.One,
+            Fixed64.One);
+
+        create.Should().Throw<NotSupportedException>().WithMessage("*sparse*fast-follow*");
+    }
+
+    [Fact]
+    public void AStarCreate_ShouldRejectAnisotropicWorldMetricsAtAdmission()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.World.TryAddGrid(
+            new GridConfiguration(
+                Vector3d.Zero,
+                Vector3d.One,
+                topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One, (Fixed64)2, Fixed64.One)),
+            out _).Should().BeTrue();
+
+        Action create = () => AStarPathRequest.Create(
+            context,
+            Vector3d.Zero,
+            Vector3d.One,
+            Fixed64.One);
+
+        create.Should().Throw<NotSupportedException>().WithMessage("*anisotropic*fast-follow*");
+    }
+
+    [Fact]
+    public void AStarCreate_ShouldRejectConflictingActiveGridMetricsAtAdmission()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        context.World.TryAddGrid(
+            new GridConfiguration(
+                Vector3d.Zero,
+                Vector3d.One,
+                topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One)),
+            out _).Should().BeTrue();
+        context.World.TryAddGrid(
+            new GridConfiguration(
+                new Vector3d(2, 0, 0),
+                new Vector3d(4, 2, 2),
+                topologyMetrics: GridTopologyMetrics.Rectangular((Fixed64)2)),
+            out _).Should().BeTrue();
+
+        Action create = () => AStarPathRequest.Create(
+            context,
+            Vector3d.Zero,
+            Vector3d.One,
+            Fixed64.One);
+
+        create.Should().Throw<NotSupportedException>().WithMessage("*conflicting*fast-follow*");
     }
 
     [Fact]
@@ -150,9 +241,9 @@ public sealed class ContextBoundPathRequestTests : IDisposable
         {
             for (int i = 0; i < iterations; i++)
             {
-                aggregate += aStarRequest.RequestCacheKey;
-                aggregate += flowFieldRequest.RequestCacheKey;
-                aggregate += volumeRequest.RequestCacheKey;
+                aggregate += aStarRequest.RequestCacheKey.GetHashCode();
+                aggregate += flowFieldRequest.RequestCacheKey.GetHashCode();
+                aggregate += volumeRequest.RequestCacheKey.GetHashCode();
             }
         });
 

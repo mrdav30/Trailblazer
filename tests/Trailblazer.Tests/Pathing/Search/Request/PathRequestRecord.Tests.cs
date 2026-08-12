@@ -69,7 +69,9 @@ public sealed class PathRequestRecordTests : IDisposable
             HeuristicMethod.Euclidean,
             (Fixed64)4,
             allowUnwalkableEndpoints: true));
+        PathRequestCacheKey derivedHybridKey = hybrid.RequestCacheKey;
         hybrid.MaxPathSearchRange = 11;
+        hybrid.RequestCacheKey.Should().NotBe(derivedHybridKey);
 
         AssertRoundTrip(aStar, PathRequestRecordKind.AStar, recreated =>
         {
@@ -107,6 +109,7 @@ public sealed class PathRequestRecordTests : IDisposable
             recreatedHybrid.Heuristic.Should().Be(HeuristicMethod.Euclidean);
             recreatedHybrid.MaxClimbHeight.Should().Be((Fixed64)4);
             recreatedHybrid.MaxPathSearchRange.Should().Be(11);
+            recreatedHybrid.RequestCacheKey.Should().Be(hybrid.RequestCacheKey);
         });
     }
 
@@ -322,7 +325,7 @@ public sealed class PathRequestRecordTests : IDisposable
 
         public bool IsValid => true;
 
-        public int RequestCacheKey => 99;
+        public PathRequestCacheKey RequestCacheKey => TestPathRequest.CreateCacheKey(99);
 
         public bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize) => false;
 

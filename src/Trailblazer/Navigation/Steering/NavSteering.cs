@@ -2,16 +2,14 @@
 using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
-using System;
-using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering;
 
 /// <summary>
-/// Handles agent steering and path navigation logic by coordinating pathfinding, movement, 
-/// and group behaviors within a lockstep simulation. Supports both direct line-of-sight travel 
+/// Handles agent steering and path navigation logic by coordinating pathfinding, movement,
+/// and group behaviors within a lockstep simulation. Supports both direct line-of-sight travel
 /// and guided path traversal using IGuide implementations like AStar or FlowField.
 /// </summary>
 public partial class NavSteering : IRecordable
@@ -35,7 +33,7 @@ public partial class NavSteering : IRecordable
     {
         Separation = (Fixed64)2,
         Alignment = Fixed64.Half,
-        Cohesion = (Fixed64)0.2f,
+        Cohesion = Fixed64.FromFraction(1, 5),
         Avoidance = Fixed64.One
     };
 
@@ -57,7 +55,7 @@ public partial class NavSteering : IRecordable
     /// <summary>
     /// Default braking factor applied when decelerating or stopping motion.
     /// </summary>
-    public static readonly Fixed64 DefaultBrakingPower = (Fixed64)0.15d;
+    public static readonly Fixed64 DefaultBrakingPower = Fixed64.FromFraction(3, 20);
 
     /// <summary>
     /// Group fallback stop tolerance used when a formation breaks apart near the goal.

@@ -329,7 +329,7 @@ public class PathingScenarioBenchmarks
     /// </summary>
     [Benchmark]
     [BenchmarkCategory("Pathing", "Scenario", "Transition", "Request", "Key")]
-    public int TransitionRequestCacheKey_AStarJumpLink()
+    public PathRequestCacheKey TransitionRequestCacheKey_AStarJumpLink()
     {
         return _transitionAStarRequest.RequestCacheKey;
     }
@@ -353,7 +353,7 @@ public class PathingScenarioBenchmarks
     /// </summary>
     [Benchmark]
     [BenchmarkCategory("Pathing", "Scenario", "Transition", "Request", "Key")]
-    public int TransitionRequestCacheKey_FlowFieldJumpLink()
+    public PathRequestCacheKey TransitionRequestCacheKey_FlowFieldJumpLink()
     {
         return _transitionFlowFieldRequest.RequestCacheKey;
     }
@@ -579,7 +579,7 @@ public class PathingScenarioBenchmarks
 
                 created++;
                 keysRead++;
-                checksum ^= request.RequestCacheKey;
+                checksum ^= request.RequestCacheKey.GetHashCode();
             }
             else
             {
@@ -593,7 +593,7 @@ public class PathingScenarioBenchmarks
 
                 created++;
                 keysRead++;
-                checksum ^= request.RequestCacheKey;
+                checksum ^= request.RequestCacheKey.GetHashCode();
             }
         }
 

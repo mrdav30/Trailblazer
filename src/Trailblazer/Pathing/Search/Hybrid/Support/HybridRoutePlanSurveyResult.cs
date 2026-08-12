@@ -20,18 +20,17 @@ internal sealed class HybridRoutePlanSurveyResult : SurveyResult
         TrailblazerWorldContext context,
         HybridRoutePlan routePlan,
         string[] chartsUtilized,
-        int key)
+        PathRequestCacheKey key)
     {
         PathRequestContextResolver.ThrowIfUnusable(context);
         return new HybridRoutePlanSurveyResult
         {
             IsValid = true,
-            IsInUse = false,
             Context = context,
             ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
             RoutePlan = routePlan,
             LastUsedFrame = -1,
-            RequestHashKey = key
+            RequestCacheKey = key
         };
     }
 

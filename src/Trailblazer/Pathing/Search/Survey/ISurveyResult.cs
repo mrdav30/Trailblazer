@@ -20,7 +20,7 @@ public interface ISurveyResult
     bool HasPath { get; }
 
     /// <summary>
-    /// Indicates whether the result is currently in use by an agent.
+    /// Indicates whether one or more active guides currently reference the result.
     /// </summary>
     bool IsInUse { get; }
 
@@ -35,17 +35,17 @@ public interface ISurveyResult
     int LastUsedFrame { get; }
 
     /// <summary>
-    /// A unique hash key representing the request that generated this result.
+    /// The exact cache identity of the request that generated this result.
     /// </summary>
-    int RequestHashKey { get; }
+    PathRequestCacheKey RequestCacheKey { get; }
 
     /// <summary>
-    /// Marks the result as in use for the current frame or request.
+    /// Adds an active guide lease for the result.
     /// </summary>
     void Checkout();
 
     /// <summary>
-    /// Releases the result for reuse or reinitialization.
+    /// Releases one active guide lease and makes the result reusable after the final lease is returned.
     /// </summary>
     void Release();
 

@@ -236,6 +236,61 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
     }
 
     [Fact]
+    public void PathGuideFactory_ShouldRecomputeDestinationCentricFlowField_ForFartherOrigin()
+    {
+        PathTestFactory.RegisterSolidLine(
+            TestWorld.Context,
+            "GuideFactoryFlowFieldExpansion",
+            Vector3d.Zero,
+            8);
+        FlowFieldPathRequest nearRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            TestWorld.Context,
+            new Vector3d(6, 0, 0),
+            new Vector3d(7, 0, 0),
+            Fixed64.One));
+        nearRequest.ExtraFloodRange = 0;
+        FlowFieldPathRequest farRequest = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            TestWorld.Context,
+            Vector3d.Zero,
+            new Vector3d(7, 0, 0),
+            Fixed64.One));
+        farRequest.ExtraFloodRange = 0;
+        farRequest.RequestCacheKey.Should().Be(nearRequest.RequestCacheKey);
+
+        FlowFieldGuide nearGuide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(nearRequest, out FlowFieldGuide? createdNearGuide),
+            createdNearGuide);
+
+        FlowFieldGuide farGuide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(farRequest, out FlowFieldGuide? createdFarGuide),
+            createdFarGuide);
+        farGuide.TryGetMovementDirection(Vector3d.Zero, out Vector3d direction).Should().BeTrue();
+        direction.X.Should().BeGreaterThan(Fixed64.Zero);
+        nearGuide.TryGetMovementDirection(new Vector3d(6, 0, 0), out Vector3d nearDirection).Should().BeTrue();
+        nearDirection.X.Should().BeGreaterThan(Fixed64.Zero,
+            "the original active guide must retain its shared partial field");
+        FlowFieldSurveyResult promotedResult = TestRequire.NotNull(farGuide.FlowMap);
+
+        FlowFieldGuide repeatedFarGuide = TestRequire.Created(
+            PathGuideFactory.RequestGuide(farRequest, out FlowFieldGuide? createdRepeatedFarGuide),
+            createdRepeatedFarGuide);
+        repeatedFarGuide.FlowMap.Should().BeSameAs(promotedResult,
+            "the larger covering field should replace the partial destination entry for subsequent agents");
+
+        PathGuideFactory.InvalidateCacheFor("GuideFactoryFlowFieldExpansion");
+
+        nearGuide.TryGetMovementDirection(new Vector3d(6, 0, 0), out _).Should().BeFalse();
+        farGuide.TryGetMovementDirection(Vector3d.Zero, out _).Should().BeFalse(
+            "the active promoted field must not survive invalidation of its utilized chart");
+        PathGuideFactory.InUseFlowGuideCount.Should().Be(0);
+
+        PathGuideFactory.ReturnGuide(nearGuide);
+        PathGuideFactory.ReturnGuide(farGuide);
+        PathGuideFactory.ReturnGuide(repeatedFarGuide);
+        PathGuideFactory.InUseFlowGuideCount.Should().Be(0);
+    }
+
+    [Fact]
     public void PathGuideFactory_ShouldReturnFalse_WhenFlowFallbackIsAllowedButNoTransitionRouteExists()
     {
         PathTestFactory.RegisterSolidLine(TestWorld.Context, "GuideFactoryFallbackStart", Vector3d.Zero, 2);
@@ -387,9 +442,9 @@ public sealed class PathGuideFactoryCoverageTests : IDisposable
         {
             for (int i = 0; i < iterations; i++)
             {
-                aggregate += aStarRequest.RequestCacheKey;
-                aggregate += flowFieldRequest.RequestCacheKey;
-                aggregate += volumeRequest.RequestCacheKey;
+                aggregate += aStarRequest.RequestCacheKey.GetHashCode();
+                aggregate += flowFieldRequest.RequestCacheKey.GetHashCode();
+                aggregate += volumeRequest.RequestCacheKey.GetHashCode();
             }
         });
 

@@ -32,7 +32,7 @@ public class FlyLocomotionTests : IDisposable
         agent.FrameRequest.IsRequestingFlight = true;
         agent.Simulate();
 
-        agent.Position.y.Should().Be((Fixed64)10);
+        agent.Position.Y.Should().Be((Fixed64)10);
         fly.IsFlying.Should().BeTrue();
         fall.IsFalling.Should().BeFalse();
     }
@@ -75,7 +75,7 @@ public class FlyLocomotionTests : IDisposable
         agent.FrameRequest.IsRequestingFlight = true;
         agent.Simulate();
 
-        agent.Position.y.Should().BeLessThan((Fixed64)10);
+        agent.Position.Y.Should().BeLessThan((Fixed64)10);
         fly.IsFlying.Should().BeTrue();
         fall.IsFalling.Should().BeFalse();
     }

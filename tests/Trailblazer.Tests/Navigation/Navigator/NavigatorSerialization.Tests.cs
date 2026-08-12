@@ -403,7 +403,7 @@ public class NavigatorSerializationTests : IDisposable
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
-        target.FrameRequest.Direction.y.Should().BeGreaterThan(Fixed64.Zero);
+        target.FrameRequest.Direction.Y.Should().BeGreaterThan(Fixed64.Zero);
         target.FrameRequest.IsRequestingFlight.Should().BeTrue();
         targetSteering.ShouldMove.Should().BeTrue();
     }
@@ -514,7 +514,7 @@ public class NavigatorSerializationTests : IDisposable
         target.Simulate();
 
         target.FrameRequest.Direction.Should().NotBe(Vector3d.Zero);
-        target.FrameRequest.Direction.z.Should().BeGreaterThan(Fixed64.Zero);
+        target.FrameRequest.Direction.Z.Should().BeGreaterThan(Fixed64.Zero);
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
         target.FrameRequest.IsRequestingSwim.Should().BeTrue();
     }
@@ -567,7 +567,7 @@ public class NavigatorSerializationTests : IDisposable
         targetSteering.MovementGroupID.Should().Be(5);
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
         target.FrameRequest.IsRequestingSwim.Should().BeFalse();
-        target.FrameRequest.Direction.x.Should().BeGreaterThan(Fixed64.Zero);
+        target.FrameRequest.Direction.X.Should().BeGreaterThan(Fixed64.Zero);
 
         PathManager.UnloadChart("NavigatorSerializationSwimExitHandoff");
     }
@@ -616,12 +616,12 @@ public class NavigatorSerializationTests : IDisposable
         target.Simulate();
 
         AStarPathRequest followupRequest = Assert.IsType<AStarPathRequest>(TestRequire.NotNull(targetSteering.CurrentRequest));
-        followupRequest.TargetPosition.x.Should().Be((Fixed64)4);
-        followupRequest.TargetPosition.y.Should().Be(Fixed64.Zero);
-        followupRequest.TargetPosition.z.Should().Be(Fixed64.Zero);
+        followupRequest.TargetPosition.X.Should().Be((Fixed64)4);
+        followupRequest.TargetPosition.Y.Should().Be(Fixed64.Zero);
+        followupRequest.TargetPosition.Z.Should().Be(Fixed64.Zero);
         followupRequest.AllowTraversalTransitions.Should().BeTrue();
         targetSteering.MovementGroupID.Should().Be(6);
-        targetSteering.Destination.x.Should().Be((Fixed64)4);
+        targetSteering.Destination.X.Should().Be((Fixed64)4);
         target.FrameRequest.IsRequestingFlight.Should().BeFalse();
 
         UnloadAerialLandingHandoffScene(sceneKey);
@@ -1017,7 +1017,7 @@ public class NavigatorSerializationTests : IDisposable
 
         jump.MaxJumpCount = 2;
         jump.RegisterJump();
-        jump.FrameJumpDirection = new Vector3d(0, 1, 1).Normal;
+        jump.FrameJumpDirection = new Vector3d(0, 1, 1).Normalized;
         jump.StartCooldown();
 
         fall.IsFalling = true;

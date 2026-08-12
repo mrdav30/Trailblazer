@@ -248,16 +248,42 @@ public class SolidChartPartition : IVoxelPartition
             return;
         }
 
-        // for each of the 26 SpatialDirection values (except None)
-        foreach (SpatialDirection dir in SpatialAwareness.AllDirections)
+        VoxelGrid ownerGrid = grid!;
+        SwiftList<Voxel> contactNeighbors = SwiftListPool<Voxel>.Shared.Rent();
+        try
         {
-            // use Voxel’s cached neighbor lookup
-            if (voxel!.TryGetNeighborFromDirection(grid!, dir, out Voxel? neighborVoxel, useCache: true)
-             && neighborVoxel!.TryGetPartition(out SolidChartPartition? neighborPart))
+            voxel!.GetNeighborsInto(
+                ownerGrid,
+                contactNeighbors,
+                VoxelNeighborScope.SourceGrid | VoxelNeighborScope.SameTopologyGrids);
+
+            for (int i = 0; i < contactNeighbors.Count; i++)
             {
-                Neighbors[(int)dir] = neighborPart;
+                Voxel neighborVoxel = contactNeighbors[i];
+                if (!neighborVoxel.TryGetPartition(out SolidChartPartition? neighborPart))
+                    continue;
+
+                Vector3d offset = neighborVoxel.WorldPosition - VoxelPosition;
+                RectangularDirection direction = RectangularDirectionUtility.GetDirectionFromOffset((
+                    Fixed64.Sign(offset.X),
+                    Fixed64.Sign(offset.Y),
+                    Fixed64.Sign(offset.Z)));
+                if (direction == RectangularDirection.None)
+                    continue;
+
+                int directionIndex = (int)direction;
+                SolidChartPartition? existing = Neighbors[directionIndex];
+                if (existing == null
+                    || (neighborVoxel.WorldIndex.GridIndex == ownerGrid.GridIndex
+                        && existing.WorldIndex.GridIndex != ownerGrid.GridIndex))
+                {
+                    Neighbors[directionIndex] = neighborPart;
+                }
             }
-            // else leave null = “blocked or missing”
+        }
+        finally
+        {
+            SwiftListPool<Voxel>.Shared.Release(contactNeighbors);
         }
     }
 
@@ -279,7 +305,12 @@ public class SolidChartPartition : IVoxelPartition
             return false;
 
         PathingWorldState ownerState = RequireOwnerState();
-        Fixed64 voxelSize = ownerState.World.VoxelSize;
+        if (!ownerState.World.TryGetGrid(WorldIndex, out VoxelGrid? ownerGrid))
+            return true;
+
+        // Request admission already validated the world-wide cubic metric invariant. The expansion hot path
+        // reads only this partition's exact-generation owner instead of rescanning every active grid.
+        Fixed64 voxelSize = ownerGrid!.Configuration.TopologyMetrics.CellWidth;
         if (unitSize <= voxelSize)
             return !IsWalkable;
 
@@ -472,9 +503,9 @@ public class SolidChartPartition : IVoxelPartition
         {
             VoxelIndex voxelIndex = WorldIndex.VoxelIndex;
             int hash = 17;
-            hash = (hash * 31) + WorldIndex.WorldSpawnToken;
+            hash = (hash * 31) + WorldIndex.WorldSpawnToken.GetHashCode();
             hash = (hash * 31) + WorldIndex.GridIndex;
-            hash = (hash * 31) + WorldIndex.GridSpawnToken;
+            hash = (hash * 31) + WorldIndex.GridSpawnToken.GetHashCode();
             hash = (hash * 31) + voxelIndex.x;
             hash = (hash * 31) + voxelIndex.y;
             hash = (hash * 31) + voxelIndex.z;

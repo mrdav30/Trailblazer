@@ -220,6 +220,11 @@ Important lifecycle rules:
   touching the affected voxels
 - external grid add, remove, and change notifications rebuild only the
   overlapping initialized chart state and then reevaluate managed transitions
+- if a removed grid slot is populated by a new GridForge generation, managed
+  transition endpoints are rebound from their cached fixed-point positions;
+  stable ids, priority, registration order, and point overrides are preserved
+- managed manual endpoints are also rebound and reevaluated when no initialized
+  chart intersects the grid event, which keeps raw-volume transitions generation-safe
 - external `GridWorld.Reset()` is treated as simulation teardown and hard resets
   that context's pathing state, transition registry, volume rules, reachability
   snapshots, and guide caches

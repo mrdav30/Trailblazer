@@ -1,5 +1,6 @@
 using FixedMathSharp;
 using GridForge.Grids;
+using GridForge.Spatial;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Tests;
@@ -14,6 +15,11 @@ internal sealed class TestPathRequest : IPathRequest
     }
 
     public TestPathRequest(int requestCacheKey, TrailblazerWorldContext? context = null)
+        : this(CreateCacheKey(requestCacheKey), context)
+    {
+    }
+
+    public TestPathRequest(PathRequestCacheKey requestCacheKey, TrailblazerWorldContext? context = null)
         : this(context)
     {
         RequestCacheKey = requestCacheKey;
@@ -46,7 +52,23 @@ internal sealed class TestPathRequest : IPathRequest
 
     public bool IsValid { get; set; }
 
-    public int RequestCacheKey { get; set; } = 1234;
+    public PathRequestCacheKey RequestCacheKey { get; set; } = CreateCacheKey(1234);
+
+    internal static PathRequestCacheKey CreateCacheKey(int identity)
+    {
+        WorldVoxelIndex origin = new(1, 0, 1, new VoxelIndex(identity, 0, 0));
+        WorldVoxelIndex destination = new(1, 0, 1, new VoxelIndex(identity, 0, 1));
+        return PathRequestCacheKey.CreateAStar(
+            origin,
+            destination,
+            Fixed64.One,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            HeuristicMethod.Manhattan,
+            Fixed64.One,
+            maxPathSearchRange: 1,
+            transitionRegistryVersion: 0);
+    }
 
     public bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize) => false;
 
@@ -69,13 +91,20 @@ internal sealed class FakeSurveyResult : SurveyResult
         int requestKey,
         bool hasPath = true,
         string[]? chartsUtilized = null,
+        TrailblazerWorldContext? context = null) =>
+        Create(TestPathRequest.CreateCacheKey(requestKey), hasPath, chartsUtilized, context);
+
+    public static FakeSurveyResult Create(
+        PathRequestCacheKey requestKey,
+        bool hasPath = true,
+        string[]? chartsUtilized = null,
         TrailblazerWorldContext? context = null)
     {
         return new FakeSurveyResult
         {
             _hasPath = hasPath,
             IsValid = hasPath,
-            RequestHashKey = requestKey,
+            RequestCacheKey = requestKey,
             Context = context ?? TestWorld.Context,
             LastUsedFrame = -1,
             ChartsUtilized = chartsUtilized ?? System.Array.Empty<string>()

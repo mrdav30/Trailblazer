@@ -1,6 +1,10 @@
 using FixedMathSharp;
 using FluentAssertions;
+using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Grids.Storage;
+using GridForge.Grids.Topology;
+using GridForge.Spatial;
 using System;
 using System.Collections.Generic;
 using Xunit;
@@ -25,7 +29,7 @@ public sealed class TrailblazerWorldContextTests : IDisposable
         using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
 
         context.World.Should().BeSameAs(world);
-        context.VoxelSize.Should().Be(world.VoxelSize);
+        context.VoxelSize.Should().Be(GridWorld.DefaultRectangularCellSize);
 
         context.Dispose();
 
@@ -86,11 +90,102 @@ public sealed class TrailblazerWorldContextTests : IDisposable
         GridWorld world = context.World;
 
         world.IsActive.Should().BeTrue();
-        context.VoxelSize.Should().Be(world.VoxelSize);
+        context.VoxelSize.Should().Be(GridWorld.DefaultRectangularCellSize);
 
         context.Dispose();
 
         world.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void VoxelSize_ShouldUseConfiguredCubicCellEdge()
+    {
+        using var world = new GridWorld();
+        world.TryAddGrid(
+            new GridConfiguration(
+                Vector3d.Zero,
+                Vector3d.One,
+                topologyMetrics: GridTopologyMetrics.Rectangular((Fixed64)3)),
+            out _).Should().BeTrue();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+
+        context.VoxelSize.Should().Be((Fixed64)3);
+    }
+
+    [Fact]
+    public void VoxelSize_ShouldRejectHexTopology()
+    {
+        using var world = new GridWorld();
+        world.TryAddGrid(
+            new GridConfiguration(
+                Vector3d.Zero,
+                Vector3d.One,
+                topologyKind: GridTopologyKind.HexPrism,
+                topologyMetrics: GridTopologyMetrics.Hex(Fixed64.One, Fixed64.One)),
+            out _).Should().BeTrue();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+
+        Action readVoxelSize = () => _ = context.VoxelSize;
+
+        readVoxelSize.Should().Throw<NotSupportedException>().WithMessage("*hex*fast-follow*");
+    }
+
+    [Fact]
+    public void VoxelSize_ShouldRejectSparseStorage()
+    {
+        using var world = new GridWorld();
+        world.TryAddGrid(
+            new GridConfiguration(
+                Vector3d.Zero,
+                Vector3d.One,
+                storageKind: GridStorageKind.Sparse),
+            new[] { new VoxelIndex(0, 0, 0) },
+            out _).Should().BeTrue();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+
+        Action readVoxelSize = () => _ = context.VoxelSize;
+
+        readVoxelSize.Should().Throw<NotSupportedException>().WithMessage("*sparse*fast-follow*");
+    }
+
+    [Fact]
+    public void VoxelSize_ShouldRejectAnisotropicMetrics()
+    {
+        using var world = new GridWorld();
+        world.TryAddGrid(
+            new GridConfiguration(
+                Vector3d.Zero,
+                Vector3d.One,
+                topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One, (Fixed64)2, Fixed64.One)),
+            out _).Should().BeTrue();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+
+        Action readVoxelSize = () => _ = context.VoxelSize;
+
+        readVoxelSize.Should().Throw<NotSupportedException>().WithMessage("*anisotropic*fast-follow*");
+    }
+
+    [Fact]
+    public void VoxelSize_ShouldRejectConflictingActiveGridMetrics()
+    {
+        using var world = new GridWorld();
+        world.TryAddGrid(
+            new GridConfiguration(
+                Vector3d.Zero,
+                Vector3d.One,
+                topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One)),
+            out _).Should().BeTrue();
+        world.TryAddGrid(
+            new GridConfiguration(
+                new Vector3d(2, 0, 0),
+                new Vector3d(4, 2, 2),
+                topologyMetrics: GridTopologyMetrics.Rectangular((Fixed64)2)),
+            out _).Should().BeTrue();
+        using TrailblazerWorldContext context = TrailblazerWorldContext.Attach(world);
+
+        Action readVoxelSize = () => _ = context.VoxelSize;
+
+        readVoxelSize.Should().Throw<NotSupportedException>().WithMessage("*conflicting*fast-follow*");
     }
 
     [Fact]

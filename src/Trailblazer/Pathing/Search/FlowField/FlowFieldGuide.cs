@@ -111,7 +111,7 @@ public class FlowFieldGuide : IGuide
         if (direction == Vector3d.Zero)
             return false;
 
-        direction = direction.Normal;
+        direction = direction.Normalized;
         return true;
     }
 
@@ -165,7 +165,7 @@ public class FlowFieldGuide : IGuide
         }
 
         // Once the current voxel is already part of the flow map, its center is the nearest valid anchor.
-        fallbackDirection = (currentVoxel.WorldPosition - origin).Normalize();
+        fallbackDirection = (currentVoxel.WorldPosition - origin).Normalized;
         return true;
     }
 
@@ -208,7 +208,7 @@ public class FlowFieldGuide : IGuide
                 case HybridRouteStepKind.Waypoint:
                     // TryGetPreparedStage(...) already skipped completed waypoint stages, so a yielded waypoint
                     // must still be ahead of the caller and therefore resolves to a non-zero direction.
-                    direction = (currentStep.WaypointPosition - origin).Normalize();
+                    direction = (currentStep.WaypointPosition - origin).Normalized;
                     return true;
 
                 case HybridRouteStepKind.PathSegment:
@@ -268,7 +268,7 @@ public class FlowFieldGuide : IGuide
 
         if (currentStep.Kind == HybridRouteStepKind.Waypoint)
         {
-            fallbackDirection = (currentStep.WaypointPosition - origin).Normalize();
+            fallbackDirection = (currentStep.WaypointPosition - origin).Normalized;
             return true;
         }
 
@@ -405,7 +405,7 @@ public class FlowFieldGuide : IGuide
             ?? _stagedContext
             ?? throw new InvalidOperationException("Staged flow guide is missing its TrailblazerWorldContext.");
         Fixed64 completionDistance = context.VoxelSize * Fixed64.Half;
-        return (target - origin).SqrMagnitude <= completionDistance * completionDistance;
+        return (target - origin).MagnitudeSquared <= completionDistance * completionDistance;
     }
 
     private static TrailblazerWorldContext ResolveStagedContext(HybridRoutePlan routePlan)

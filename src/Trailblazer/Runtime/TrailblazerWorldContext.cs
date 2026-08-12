@@ -83,14 +83,14 @@ public sealed class TrailblazerWorldContext : IDisposable
     public bool IsDisposed => _disposed;
 
     /// <summary>
-    /// Gets the voxel size of this context's world.
+    /// Gets the representative cubic cell edge of this context's supported GridForge world.
     /// </summary>
     public Fixed64 VoxelSize
     {
         get
         {
             ThrowIfDisposed();
-            return World.VoxelSize;
+            return TrailblazerGridCompatibility.GetRepresentativeCellEdge(World);
         }
     }
 
@@ -209,15 +209,13 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// <summary>
     /// Creates a context with an owned <see cref="GridWorld"/>.
     /// </summary>
-    /// <param name="voxelSize">Optional voxel size for the created world.</param>
     /// <param name="spatialGridCellSize">Spatial hash cell size for the created world.</param>
     /// <returns>A context that owns its created world.</returns>
     public static TrailblazerWorldContext CreateOwned(
-        Fixed64? voxelSize = null,
         int spatialGridCellSize = GridWorld.DefaultSpatialGridCellSize)
     {
         return CreateRegistered(
-            new GridWorld(voxelSize, spatialGridCellSize),
+            new GridWorld(spatialGridCellSize),
             ownsWorld: true);
     }
 

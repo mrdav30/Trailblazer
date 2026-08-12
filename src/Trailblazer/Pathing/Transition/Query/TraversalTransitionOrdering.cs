@@ -81,14 +81,14 @@ internal static class TraversalTransitionOrdering
 
     private static int ComparePositions(Vector3d left, Vector3d right)
     {
-        int xComparison = left.x.CompareTo(right.x);
+        int xComparison = left.X.CompareTo(right.X);
         if (xComparison != 0)
             return xComparison;
 
-        int yComparison = left.y.CompareTo(right.y);
+        int yComparison = left.Y.CompareTo(right.Y);
         if (yComparison != 0)
             return yComparison;
 
-        return left.z.CompareTo(right.z);
+        return left.Z.CompareTo(right.Z);
     }
 }

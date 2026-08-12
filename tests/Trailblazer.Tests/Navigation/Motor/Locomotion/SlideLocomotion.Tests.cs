@@ -228,7 +228,7 @@ public class SlideLocomotionTests : IDisposable
         slide.IsSliding.Should().BeTrue();
 
         var velocity = scout.Motor.Handler.Move.FrameVelocity;
-        velocity.x.Should().NotBe(Fixed64.Zero, "Sideways input should influence sliding direction");
+        velocity.X.Should().NotBe(Fixed64.Zero, "Sideways input should influence sliding direction");
     }
 
     [Fact]

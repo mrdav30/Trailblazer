@@ -122,7 +122,7 @@ public sealed class VolumeSurveyor
 
         if (TryProcessDirections(
             current,
-            SpatialAwareness.PerpendicularDirections,
+            RectangularDirectionUtility.Perpendicular,
             data.MovementCost + AStarSurveyor.StraightCost))
         {
             return true;
@@ -130,7 +130,7 @@ public sealed class VolumeSurveyor
 
         if (TryProcessDirections(
             current,
-            SpatialAwareness.DiagonalDirections,
+            RectangularDirectionUtility.Diagonal,
             data.MovementCost + AStarSurveyor.DiagonalCost,
             checkEdges: true))
         {
@@ -142,16 +142,16 @@ public sealed class VolumeSurveyor
 
     private bool TryProcessDirections(
         Voxel current,
-        SpatialDirection[] directions,
+        ReadOnlySpan<RectangularDirection> directions,
         int movementCost,
         bool checkEdges = false)
     {
-        if (!_request!.Context.World.TryGetGrid(current.GridIndex, out VoxelGrid? grid))
+        if (!_request!.Context.World.TryGetGrid(current.WorldIndex, out VoxelGrid? grid))
             return false;
 
-        foreach (SpatialDirection dir in directions)
+        foreach (RectangularDirection dir in directions)
         {
-            if (!current.TryGetNeighborFromDirection(grid!, dir, out Voxel? neighbor, useCache: true)
+            if (!current.TryGetNeighbor(grid!, dir, out Voxel? neighbor)
                 || _heap.IsClosed(neighbor!))
             {
                 continue;
@@ -171,12 +171,12 @@ public sealed class VolumeSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool HasValidDiagonalLegs(Voxel current, SpatialDirection diagonal)
+    private bool HasValidDiagonalLegs(Voxel current, RectangularDirection diagonal)
     {
-        if (!_request!.Context.World.TryGetGrid(current.GridIndex, out VoxelGrid? grid))
+        if (!_request!.Context.World.TryGetGrid(current.WorldIndex, out VoxelGrid? grid))
             return false;
 
-        (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
+        (int dx, int dy, int dz) = RectangularDirectionUtility.Offsets[(int)diagonal];
 
         if (dx != 0 && !IsLegClear(grid!, current, DiagonalTraversalLegs.ForXOffset(dx)))
             return false;
@@ -191,9 +191,9 @@ public sealed class VolumeSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool IsLegClear(VoxelGrid grid, Voxel current, SpatialDirection legDir)
+    private bool IsLegClear(VoxelGrid grid, Voxel current, RectangularDirection legDir)
     {
-        return current.TryGetNeighborFromDirection(grid, legDir, out Voxel? leg, useCache: true)
+        return current.TryGetNeighbor(grid, legDir, out Voxel? leg)
             && CanTraverseVoxel(leg!);
     }
 
@@ -274,7 +274,7 @@ public sealed class VolumeSurveyor
         Vector3d lastDirection = Vector3d.Zero;
         for (int i = 1; i < _rawPath.Count - 1; i++)
         {
-            Vector3d direction = (_rawPath[i + 1].WorldPosition - _rawPath[i].WorldPosition).Normalize();
+            Vector3d direction = (_rawPath[i + 1].WorldPosition - _rawPath[i].WorldPosition).Normalized;
             if (!lastDirection.FuzzyEqual(direction))
             {
                 _waypoints.Add(new AStarWaypoint()

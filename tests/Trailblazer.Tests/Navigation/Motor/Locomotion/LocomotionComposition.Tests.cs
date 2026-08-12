@@ -64,7 +64,7 @@ public class LocomotionCompositionTests : IDisposable
         agent.FrameRequest.IsRequestingJump = true;
         agent.Simulate();
 
-        agent.Position.y.Should().Be(Fixed64.Zero);
+        agent.Position.Y.Should().Be(Fixed64.Zero);
         agent.Motor.IsOnSolid.Should().BeTrue();
         agent.Motor.Handler.Jump.Should().BeNull();
     }
@@ -80,8 +80,8 @@ public class LocomotionCompositionTests : IDisposable
         agent.FrameRequest.Rate = TrekRate.Fast;
         agent.Simulate();
 
-        agent.Position.x.Should().Be(Fixed64.Zero);
-        agent.Position.z.Should().Be(Fixed64.Zero);
+        agent.Position.X.Should().Be(Fixed64.Zero);
+        agent.Position.Z.Should().Be(Fixed64.Zero);
         agent.Motor.Handler.Water.Should().BeNull();
     }
 

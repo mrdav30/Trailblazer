@@ -26,9 +26,9 @@ public sealed class HeightmapSurface
         Width = samples.Width;
         Depth = samples.Height;
         MaxBounds = new Vector3d(
-            minBounds.x + (Width - 1) * interval,
-            minBounds.y,
-            minBounds.z + (Depth - 1) * interval);
+            minBounds.X + (Width - 1) * interval,
+            minBounds.Y,
+            minBounds.Z + (Depth - 1) * interval);
     }
 
     /// <summary>
@@ -143,9 +143,9 @@ public sealed class HeightmapSurface
         Fixed64 h01 = GetHeight(x0, z1);
         Fixed64 h11 = GetHeight(x1, z1);
 
-        Fixed64 xLerp0 = FixedMath.LinearInterpolate(h00, h10, fractionX);
-        Fixed64 xLerp1 = FixedMath.LinearInterpolate(h01, h11, fractionX);
-        groundY = FixedMath.LinearInterpolate(xLerp0, xLerp1, fractionZ);
+        Fixed64 xLerp0 = FixedMath.Lerp(h00, h10, fractionX);
+        Fixed64 xLerp1 = FixedMath.Lerp(h01, h11, fractionX);
+        groundY = FixedMath.Lerp(xLerp0, xLerp1, fractionZ);
         return true;
     }
 
@@ -158,8 +158,8 @@ public sealed class HeightmapSurface
         out Fixed64 fractionX,
         out Fixed64 fractionZ)
     {
-        Fixed64 localX = (worldPosition.x - MinBounds.x) / Interval;
-        Fixed64 localZ = (worldPosition.z - MinBounds.z) / Interval;
+        Fixed64 localX = (worldPosition.X - MinBounds.X) / Interval;
+        Fixed64 localZ = (worldPosition.Z - MinBounds.Z) / Interval;
         Fixed64 maxX = (Fixed64)(Width - 1);
         Fixed64 maxZ = (Fixed64)(Depth - 1);
         if (localX < Fixed64.Zero || localZ < Fixed64.Zero || localX > maxX || localZ > maxZ)

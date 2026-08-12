@@ -45,13 +45,13 @@ public class FlowFieldSurveyResult : SurveyResult
     /// <param name="context">The world context that owns the survey result.</param>
     /// <param name="fields">A dictionary mapping world voxel indices to their corresponding flow fields. Cannot be null.</param>
     /// <param name="chartsUtilized">An array of chart identifiers that were utilized during the survey. If null, an empty array is used.</param>
-    /// <param name="key">A unique integer key representing the request associated with this survey result.</param>
+    /// <param name="key">The exact cache identity of the request associated with this survey result.</param>
     /// <returns>A FlowFieldSurveyResult instance initialized with the provided flow fields, charts, and request key.</returns>
     public static FlowFieldSurveyResult Create(
         TrailblazerWorldContext context,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields,
         string[] chartsUtilized,
-        int key)
+        PathRequestCacheKey key)
     {
         PathRequestContextResolver.ThrowIfUnusable(context);
         return Create(
@@ -66,19 +66,18 @@ public class FlowFieldSurveyResult : SurveyResult
         TrailblazerWorldContext context,
         SwiftDictionary<WorldVoxelIndex, FlowField> fields,
         string[] chartsUtilized,
-        int key,
+        PathRequestCacheKey key,
         FlowFieldSamplingGrid[] samplingGrids)
     {
         return new FlowFieldSurveyResult()
         {
             IsValid = true,
-            IsInUse = false,
             Context = context,
             ChartsUtilized = chartsUtilized ?? Array.Empty<string>(),
             Fields = fields,
             SamplingGrids = samplingGrids ?? Array.Empty<FlowFieldSamplingGrid>(),
             LastUsedFrame = -1,
-            RequestHashKey = key
+            RequestCacheKey = key
         };
     }
 

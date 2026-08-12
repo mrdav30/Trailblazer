@@ -9,20 +9,20 @@ namespace Trailblazer.Pathing;
 internal static class DiagonalTraversalLegs
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static SpatialDirection ForXOffset(int xOffset)
+    public static RectangularDirection ForXOffset(int xOffset)
     {
-        return xOffset > 0 ? SpatialDirection.East : SpatialDirection.West;
+        return xOffset > 0 ? RectangularDirection.East : RectangularDirection.West;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static SpatialDirection ForYOffset(int yOffset)
+    public static RectangularDirection ForYOffset(int yOffset)
     {
-        return yOffset > 0 ? SpatialDirection.Above : SpatialDirection.Below;
+        return yOffset > 0 ? RectangularDirection.Above : RectangularDirection.Below;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static SpatialDirection ForZOffset(int zOffset)
+    public static RectangularDirection ForZOffset(int zOffset)
     {
-        return zOffset > 0 ? SpatialDirection.North : SpatialDirection.South;
+        return zOffset > 0 ? RectangularDirection.North : RectangularDirection.South;
     }
 }

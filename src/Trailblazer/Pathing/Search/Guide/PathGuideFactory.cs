@@ -228,7 +228,10 @@ internal static class PathGuideFactory
     public static FlowFieldGuide? RequestFlowField(FlowFieldPathRequest request)
     {
         if (request.AllowTraversalTransitions
-            && TryGetCachedTransitionFallbackFlowPlan(request, out HybridRoutePlan? cachedRoutePlan))
+            && TryGetCachedTransitionFallbackFlowPlan(
+                request,
+                request.HybridFallbackCacheKey,
+                out HybridRoutePlan? cachedRoutePlan))
         {
             FlowFieldGuide cachedGuide = _flowFieldGuides.Rent();
             if (cachedGuide.InitializeStaged(cachedRoutePlan))
@@ -244,6 +247,7 @@ internal static class PathGuideFactory
                 return cachedGuide;
 
             _cachedFlowResults.Return(cachedResult, dispose: false);
+            return RequestUncachedFlowField(request);
         }
 
         return RequestFlowFieldMiss(request);
@@ -263,6 +267,31 @@ internal static class PathGuideFactory
             && result.Fields.ContainsKey(request.StartNode.WorldIndex))
         {
             return RentFlowFieldGuide(result);
+        }
+
+        if (pathFound)
+            _cachedFlowResults.Return(result, dispose: false);
+
+        if (!request.AllowTraversalTransitions)
+            return null;
+
+        return TryBuildTransitionFallbackFlowGuide(request, out FlowFieldGuide? fallbackGuide)
+            ? fallbackGuide
+            : null;
+    }
+
+    private static FlowFieldGuide? RequestUncachedFlowField(FlowFieldPathRequest request)
+    {
+        bool pathFound = _cachedFlowResults.TryCreateUncached(
+            request,
+            () => _flowFieldSurveyor.FindPath(request),
+            out FlowFieldSurveyResult result);
+
+        if (pathFound
+            && TryRentFlowFieldGuide(request, result, out FlowFieldGuide? guide))
+        {
+            _cachedFlowResults.TryPromoteUncached(request, result);
+            return guide;
         }
 
         if (pathFound)
@@ -408,8 +437,20 @@ internal static class PathGuideFactory
     internal static bool TrySeedAStarCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
         TrailblazerWorldContext context = PathManager.ActiveState.Context;
+        WorldVoxelIndex origin = CreateSeedVoxelIndex(context, requestKey, z: 0);
+        WorldVoxelIndex destination = CreateSeedVoxelIndex(context, requestKey, z: 1);
+        PathRequestCacheKey cacheKey = PathRequestCacheKey.CreateAStar(
+            origin,
+            destination,
+            Fixed64.One,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            HeuristicMethod.Manhattan,
+            Fixed64.One,
+            maxPathSearchRange: 1,
+            transitionRegistryVersion: 0);
         return _cachedAStarResults.TrySeed(
-            AStarSurveyResult.Create(context, CreateSeedWaypoints(), chartKeys, requestKey),
+            AStarSurveyResult.Create(context, CreateSeedWaypoints(), chartKeys, cacheKey),
             checkout);
     }
 
@@ -426,16 +467,34 @@ internal static class PathGuideFactory
         };
 
         TrailblazerWorldContext context = PathManager.ActiveState.Context;
+        PathRequestCacheKey cacheKey = PathRequestCacheKey.CreateFlowField(
+            CreateSeedVoxelIndex(context, requestKey, z: 1),
+            Fixed64.One,
+            allowUnwalkableEndpoints: false,
+            allowTraversalTransitions: false,
+            Fixed64.One,
+            FlowFieldPathRequest.DefaultExtraFloodRange,
+            maxPathSearchRange: 1,
+            transitionRegistryVersion: 0);
         return _cachedFlowResults.TrySeed(
-            FlowFieldSurveyResult.Create(context, fields, chartKeys, requestKey),
+            FlowFieldSurveyResult.Create(context, fields, chartKeys, cacheKey),
             checkout);
     }
 
     internal static bool TrySeedVolumeCacheForBenchmark(int requestKey, string[] chartKeys, bool checkout)
     {
         TrailblazerWorldContext context = PathManager.ActiveState.Context;
+        PathRequestCacheKey cacheKey = PathRequestCacheKey.CreateVolume(
+            CreateSeedVoxelIndex(context, requestKey, z: 0),
+            CreateSeedVoxelIndex(context, requestKey, z: 1),
+            Fixed64.One,
+            allowUnwalkableEndpoints: false,
+            HeuristicMethod.Euclidean,
+            TraversalMedium.Gas,
+            maxPathSearchRange: 1,
+            context.Pathing.State.VolumeRulesState.RegistryVersion);
         return _cachedVolumeResults.TrySeed(
-            VolumeSurveyResult.Create(context, CreateSeedWaypoints(), chartKeys, requestKey),
+            VolumeSurveyResult.Create(context, CreateSeedWaypoints(), chartKeys, cacheKey),
             checkout);
     }
 
@@ -446,11 +505,30 @@ internal static class PathGuideFactory
             new[] { HybridRouteStep.Waypoint(context, Vector3d.Zero) },
             Array.Empty<TraversalTransition>(),
             totalPathCost: 0);
+        PathRequestCacheKey cacheKey = PathRequestCacheKey.CreateHybrid(
+            CreateSeedVoxelIndex(context, requestKey, z: 0),
+            CreateSeedVoxelIndex(context, requestKey, z: 1),
+            Fixed64.One,
+            HybridChartRequestKind.AStar,
+            allowUnwalkableEndpoints: false,
+            HeuristicMethod.Manhattan,
+            Fixed64.One,
+            extraFloodRange: 0,
+            maxPathSearchRange: 1,
+            routePlan.DirectedTransitions,
+            context.Pathing.State.TransitionRegistryState.RegistryVersion,
+            context.Pathing.State.VolumeRulesState.RegistryVersion);
 
         return _cachedHybridRoutePlans.TrySeed(
-            HybridRoutePlanSurveyResult.Create(context, routePlan, chartKeys, requestKey),
+            HybridRoutePlanSurveyResult.Create(context, routePlan, chartKeys, cacheKey),
             checkout);
     }
+
+    private static WorldVoxelIndex CreateSeedVoxelIndex(
+        TrailblazerWorldContext context,
+        int requestKey,
+        int z) =>
+        new(context.World.SpawnToken, gridIndex: 0, gridSpawnToken: 0, new VoxelIndex(requestKey, 0, z));
 
     internal static int CountIndexedCacheEntriesForBenchmark(string chartKey)
     {
@@ -615,9 +693,14 @@ internal static class PathGuideFactory
         [NotNullWhen(true)] out HybridRoutePlan? routePlan)
     {
         routePlan = null;
+        PathRequestCacheKey cacheKey = request.HybridFallbackCacheKey;
+        if (!TryCreateTransitionFallbackRequest(request, out HybridPathRequest? hybridRequest))
+            return false;
+
         bool pathFound = _cachedHybridRoutePlans.TryGetOrCreate(
-            request,
-            () => ResolveTransitionFallbackFlowPlan(request),
+            cacheKey,
+            request.Context,
+            () => ResolveTransitionFallbackFlowPlan(hybridRequest, cacheKey),
             out HybridRoutePlanSurveyResult result);
 
         if (!pathFound || result.RoutePlan == null)
@@ -630,11 +713,17 @@ internal static class PathGuideFactory
 
     private static bool TryGetCachedTransitionFallbackFlowPlan(
         FlowFieldPathRequest request,
+        PathRequestCacheKey cacheKey,
         [NotNullWhen(true)] out HybridRoutePlan? routePlan)
     {
         routePlan = null;
-        if (!_cachedHybridRoutePlans.TryCheckout(request, out HybridRoutePlanSurveyResult result))
+        if (!_cachedHybridRoutePlans.TryCheckout(
+            cacheKey,
+            request.Context,
+            out HybridRoutePlanSurveyResult result))
+        {
             return false;
+        }
 
         try
         {
@@ -647,21 +736,25 @@ internal static class PathGuideFactory
         }
     }
 
-    private static HybridRoutePlanSurveyResult ResolveTransitionFallbackFlowPlan(FlowFieldPathRequest request)
+    private static bool TryCreateTransitionFallbackRequest(
+        FlowFieldPathRequest request,
+        [NotNullWhen(true)] out HybridPathRequest? hybridRequest)
     {
-        HybridPathRequest? hybridRequest = HybridPathRequest.CreateFromFlowField(request);
-        HybridRoutePlan? routePlan = hybridRequest?.RoutePlan;
-        if (routePlan == null
-            || routePlan.DirectedTransitions.Length == 0)
-        {
-            return HybridRoutePlanSurveyResult.Empty;
-        }
+        hybridRequest = HybridPathRequest.CreateFromFlowField(request);
+        return hybridRequest?.RoutePlan?.DirectedTransitions.Length > 0;
+    }
+
+    private static HybridRoutePlanSurveyResult ResolveTransitionFallbackFlowPlan(
+        HybridPathRequest request,
+        PathRequestCacheKey cacheKey)
+    {
+        HybridRoutePlan routePlan = request.RoutePlan!;
 
         return HybridRoutePlanSurveyResult.Create(
             request.Context,
             routePlan,
             CollectRoutePlanChartKeys(routePlan),
-            request.RequestCacheKey);
+            cacheKey);
     }
 
     private static string[] CollectRoutePlanChartKeys(HybridRoutePlan routePlan)

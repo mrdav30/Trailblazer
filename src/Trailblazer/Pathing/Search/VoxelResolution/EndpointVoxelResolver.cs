@@ -97,12 +97,12 @@ internal static class EndpointVoxelResolver
     {
         PathRequestContextResolver.ThrowIfUnusable(context);
         closestNeighbor = null;
-        if (voxel == null || !context.World.TryGetGrid(voxel.WorldIndex.GridIndex, out VoxelGrid? grid))
+        if (voxel == null || !context.World.TryGetGrid(voxel.WorldIndex, out VoxelGrid? grid))
             return false;
 
-        foreach (SpatialDirection dir in SpatialAwareness.PerpendicularDirections)
+        foreach (RectangularDirection dir in RectangularDirectionUtility.Perpendicular)
         {
-            if (!voxel.TryGetNeighborFromDirection(grid!, dir, out Voxel? candidate)
+            if (!voxel.TryGetNeighbor(grid!, dir, out Voxel? candidate)
                 || candidate == null
                 || !policy.IsTraversable(candidate, unitSize))
             {
@@ -113,9 +113,9 @@ internal static class EndpointVoxelResolver
             return true;
         }
 
-        foreach (SpatialDirection dir in SpatialAwareness.DiagonalDirections)
+        foreach (RectangularDirection dir in RectangularDirectionUtility.Diagonal)
         {
-            if (!voxel.TryGetNeighborFromDirection(grid!, dir, out Voxel? candidate)
+            if (!voxel.TryGetNeighbor(grid!, dir, out Voxel? candidate)
                 || candidate == null
                 || !policy.IsTraversable(candidate, unitSize))
             {

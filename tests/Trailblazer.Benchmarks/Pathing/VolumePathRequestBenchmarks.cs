@@ -284,7 +284,7 @@ public class VolumePathRequestBenchmarks
     /// <summary>Reads the cache key for a pre-created direct gas-corridor volume request.</summary>
     [Benchmark]
     [BenchmarkCategory("Pathing", "Volume", "Request", "Key")]
-    public int RequestCacheKey_DirectGasCorridor()
+    public PathRequestCacheKey RequestCacheKey_DirectGasCorridor()
     {
         return _directCorridorRequest.RequestCacheKey;
     }

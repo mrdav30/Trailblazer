@@ -63,7 +63,7 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
         var overrideAnchor = new TraversalTransition(
             "same",
             TraversalTransitionType.Jump,
-            TraversalTransitionAnchor.Solid(voxel.WorldIndex, new Vector3d(0.25, 0, 0)),
+            TraversalTransitionAnchor.Solid(voxel.WorldIndex, Vector3d.FromDouble(0.25, 0, 0)),
             TraversalTransitionAnchor.Solid(new Vector3d(1, 0, 0)));
         var bidirectional = new TraversalTransition(
             "same",
@@ -100,7 +100,7 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
             "same",
             TraversalTransitionType.Jump,
             TraversalTransitionAnchor.Solid(Vector3d.Zero),
-            TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0), new Vector3d(2.25, 0, 0)),
+            TraversalTransitionAnchor.Solid(new Vector3d(2, 0, 0), Vector3d.FromDouble(2.25, 0, 0)),
             pathCostModifier: 2);
 
         TraversalTransitionOrdering.Compare(left, right).Should().BeLessThan(0);
@@ -198,12 +198,12 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
             "po",
             TraversalTransitionType.Jump,
             TraversalTransitionAnchor.Solid(Vector3d.Zero),
-            TraversalTransitionAnchor.Solid(destVoxel.WorldIndex, new Vector3d(1.1, 0, 0)));
+            TraversalTransitionAnchor.Solid(destVoxel.WorldIndex, Vector3d.FromDouble(1.1, 0, 0)));
         var right = new TraversalTransition(
             "po",
             TraversalTransitionType.Jump,
             TraversalTransitionAnchor.Solid(Vector3d.Zero),
-            TraversalTransitionAnchor.Solid(destVoxel.WorldIndex, new Vector3d(1.1, 0.1, 0)));
+            TraversalTransitionAnchor.Solid(destVoxel.WorldIndex, Vector3d.FromDouble(1.1, 0.1, 0)));
 
         TraversalTransitionOrdering.Compare(left, right).Should().NotBe(0);
 
@@ -212,12 +212,12 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
             "po",
             TraversalTransitionType.Jump,
             TraversalTransitionAnchor.Solid(Vector3d.Zero),
-            TraversalTransitionAnchor.Solid(destVoxel.WorldIndex, new Vector3d(1.1, 0, 0)));
+            TraversalTransitionAnchor.Solid(destVoxel.WorldIndex, Vector3d.FromDouble(1.1, 0, 0)));
         var rightZ = new TraversalTransition(
             "po",
             TraversalTransitionType.Jump,
             TraversalTransitionAnchor.Solid(Vector3d.Zero),
-            TraversalTransitionAnchor.Solid(destVoxel.WorldIndex, new Vector3d(1.1, 0, 0.1)));
+            TraversalTransitionAnchor.Solid(destVoxel.WorldIndex, Vector3d.FromDouble(1.1, 0, 0.1)));
 
         TraversalTransitionOrdering.Compare(leftZ, rightZ).Should().NotBe(0);
     }
@@ -275,12 +275,12 @@ public sealed class TraversalTransitionOrderingTests : IDisposable
             "cmp-point",
             TraversalTransitionType.Jump,
             TraversalTransitionAnchor.Solid(Vector3d.Zero),
-            TraversalTransitionAnchor.Solid(destinationVoxel.WorldIndex, new Vector3d(1.1, 0, 0)));
+            TraversalTransitionAnchor.Solid(destinationVoxel.WorldIndex, Vector3d.FromDouble(1.1, 0, 0)));
         var higherOverrideX = new TraversalTransition(
             "cmp-point",
             TraversalTransitionType.Jump,
             TraversalTransitionAnchor.Solid(Vector3d.Zero),
-            TraversalTransitionAnchor.Solid(destinationVoxel.WorldIndex, new Vector3d(1.2, 0, 0)));
+            TraversalTransitionAnchor.Solid(destinationVoxel.WorldIndex, Vector3d.FromDouble(1.2, 0, 0)));
 
         TraversalTransitionOrdering.Compare(lowerOverrideX, higherOverrideX).Should().BeLessThan(0);
     }

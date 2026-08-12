@@ -31,7 +31,7 @@ public sealed class SolidPartitionReachabilityTests : IDisposable
     {
         RegisterSolidCube("ReachabilityMarkedStartDiagonal");
         SolidChartPartition current = PartitionAt(new Vector3d(1, 1, 1));
-        SpatialDirection diagonal = FindDirection(dx: 1, dy: 1, dz: 1);
+        RectangularDirection diagonal = FindDirection(dx: 1, dy: 1, dz: 1);
         SolidChartPartition neighbor = TestRequire.NotNull(current.Neighbors?[(int)diagonal]);
         const int snapshotId = 97;
         const int version = 11;
@@ -69,7 +69,7 @@ public sealed class SolidPartitionReachabilityTests : IDisposable
     {
         RegisterSolidCube("ReachabilityMarkedStartNeighbors");
         SolidChartPartition current = PartitionAt(new Vector3d(1, 1, 1));
-        SpatialDirection diagonal = FindDirection(dx: 1, dy: 1, dz: 1);
+        RectangularDirection diagonal = FindDirection(dx: 1, dy: 1, dz: 1);
         SolidChartPartition neighbor = TestRequire.NotNull(current.Neighbors?[(int)diagonal]);
         const int snapshotId = 101;
         const int version = 5;
@@ -117,7 +117,7 @@ public sealed class SolidPartitionReachabilityTests : IDisposable
     private static bool InvokeCanTraverseFromMarkedStart(
         SolidChartPartition current,
         SolidChartPartition neighbor,
-        SpatialDirection direction,
+        RectangularDirection direction,
         int snapshotId,
         int version,
         Fixed64 maxClimbHeight)
@@ -159,12 +159,13 @@ public sealed class SolidPartitionReachabilityTests : IDisposable
         partition.SetReachabilityComponent(snapshotId, version, componentId);
     }
 
-    private static SpatialDirection FindDirection(int dx, int dy, int dz)
+    private static RectangularDirection FindDirection(int dx, int dy, int dz)
     {
-        for (int i = 0; i < SpatialAwareness.DiagonalDirections.Length; i++)
+        ReadOnlySpan<RectangularDirection> directions = RectangularDirectionUtility.Diagonal;
+        for (int i = 0; i < directions.Length; i++)
         {
-            SpatialDirection direction = SpatialAwareness.DiagonalDirections[i];
-            (int x, int y, int z) = SpatialAwareness.DirectionOffsets[(int)direction];
+            RectangularDirection direction = directions[i];
+            (int x, int y, int z) = RectangularDirectionUtility.Offsets[(int)direction];
             if (x == dx && y == dy && z == dz)
                 return direction;
         }

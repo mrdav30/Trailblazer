@@ -80,7 +80,7 @@ internal sealed class MovementGroupCoordinatorState
 
         Fixed64 maxSpreadSq = UpdateFormationOffsets(group, requestedDestination, minFrame, groupCenter);
         Fixed64 allowedSpreadSq = averageRadius * averageRadius * (Fixed64)(groupCount * 2);
-        Fixed64 distanceToSharedDestinationSq = (requestedDestination - groupCenter).SqrMagnitude;
+        Fixed64 distanceToSharedDestinationSq = (requestedDestination - groupCenter).MagnitudeSquared;
         if (maxSpreadSq > allowedSpreadSq || distanceToSharedDestinationSq <= maxSpreadSq)
             return new(MovementGroupTravelMode.GroupIndividual, requestedDestination);
 
@@ -243,7 +243,7 @@ internal sealed class MovementGroupCoordinatorState
                 member.HasFormationOffset = true;
             }
 
-            Fixed64 spreadSq = formationOffset.SqrMagnitude;
+            Fixed64 spreadSq = formationOffset.MagnitudeSquared;
             if (spreadSq > maxSpreadSq)
                 maxSpreadSq = spreadSq;
         }

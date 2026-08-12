@@ -192,9 +192,9 @@ public class NavigationChart
     /// <returns>True if the position is within bounds; otherwise, false.</returns>
     public bool TryWorldToIndex(Vector3d pos, out int x, out int y, out int z)
     {
-        x = ((pos.x - MinBounds.x) / Interval).FloorToInt();
-        y = ((pos.y - MinBounds.y) / Interval).FloorToInt();
-        z = ((pos.z - MinBounds.z) / Interval).FloorToInt();
+        x = ((pos.X - MinBounds.X) / Interval).FloorToInt();
+        y = ((pos.Y - MinBounds.Y) / Interval).FloorToInt();
+        z = ((pos.Z - MinBounds.Z) / Interval).FloorToInt();
 
         bool valid = x >= 0 && x < SizeX &&
                      y >= 0 && y < SizeY &&
@@ -391,9 +391,9 @@ public class NavigationChart
     internal Vector3d GetWorldPosition(int x, int y, int z)
     {
         return new Vector3d(
-            MinBounds.x + x * Interval,
-            MinBounds.y + y * Interval,
-            MinBounds.z + z * Interval);
+            MinBounds.X + x * Interval,
+            MinBounds.Y + y * Interval,
+            MinBounds.Z + z * Interval);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

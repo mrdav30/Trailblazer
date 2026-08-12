@@ -13,13 +13,20 @@ namespace Trailblazer.Pathing;
 /// </remarks>
 public abstract class SurveyResult : ISurveyResult
 {
+    private int _activeCheckoutCount;
+
     internal TrailblazerWorldContext? Context { get; set; }
 
     /// <inheritdoc/>
     public bool IsValid { get; protected set; }
 
     /// <inheritdoc/>
-    public bool IsInUse { get; protected set; }
+    public bool IsInUse => _activeCheckoutCount > 0;
+
+    /// <summary>
+    /// Gets the number of active guide leases that reference this result.
+    /// </summary>
+    internal int ActiveCheckoutCount => _activeCheckoutCount;
 
     /// <inheritdoc/>
     public string[] ChartsUtilized { get; protected set; } = Array.Empty<string>();
@@ -28,18 +35,34 @@ public abstract class SurveyResult : ISurveyResult
     public int LastUsedFrame { get; protected set; }
 
     /// <inheritdoc/>
-    public int RequestHashKey { get; protected set; }
+    public PathRequestCacheKey RequestCacheKey { get; protected set; }
 
     /// <inheritdoc/>
     public virtual bool HasPath => false;
 
     /// <inheritdoc/>
-    public void Checkout() => IsInUse = true;
+    public void Checkout() => _activeCheckoutCount++;
 
     /// <inheritdoc/>
     public void Release()
     {
-        IsInUse = false;
+        if (_activeCheckoutCount == 0)
+            return;
+
+        _activeCheckoutCount--;
+        if (_activeCheckoutCount == 0)
+            LastUsedFrame = Context?.FrameCount ?? -1;
+    }
+
+    /// <summary>
+    /// Releases every active lease when the owning cache invalidates or replaces this result.
+    /// </summary>
+    internal void ReleaseAllCheckouts()
+    {
+        if (_activeCheckoutCount == 0)
+            return;
+
+        _activeCheckoutCount = 0;
         LastUsedFrame = Context?.FrameCount ?? -1;
     }
 
@@ -47,10 +70,10 @@ public abstract class SurveyResult : ISurveyResult
     public virtual void Reset()
     {
         IsValid = false;
-        IsInUse = false;
+        _activeCheckoutCount = 0;
         Context = null;
         ChartsUtilized = Array.Empty<string>();
         LastUsedFrame = -1;
-        RequestHashKey = -1;
+        RequestCacheKey = default;
     }
 }

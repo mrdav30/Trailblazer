@@ -54,15 +54,15 @@ public abstract partial class Navigator
     private Vector3d GetHeightmapGroundingQueryPosition()
     {
         return new Vector3d(
-            _position.x,
-            _position.y - _footPositionAdjust - _heightmapGrounding.GroundOffset,
-            _position.z);
+            _position.X,
+            _position.Y - _footPositionAdjust - _heightmapGrounding.GroundOffset,
+            _position.Z);
     }
 
     private void TryProjectRootToHeightmapSample(HeightmapSample sample)
     {
         Fixed64 targetRootY = sample.GroundY + _footPositionAdjust + _heightmapGrounding.GroundOffset;
-        Fixed64 correctionY = targetRootY - _position.y;
+        Fixed64 correctionY = targetRootY - _position.Y;
         if (correctionY == Fixed64.Zero)
             return;
 

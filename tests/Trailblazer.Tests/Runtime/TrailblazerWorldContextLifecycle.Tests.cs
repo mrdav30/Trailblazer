@@ -267,7 +267,7 @@ public class TrailblazerWorldContextLifecycleTests : IDisposable
             context,
             new[] { new AStarWaypoint { Position = Vector3d.Zero, IsGoal = true } },
             new[] { "LifecycleDisposedCache" },
-            key: 3333);
+            TestPathRequest.CreateCacheKey(3333));
         context.Guides.TrySeedAStarCacheForBenchmark(3333, new[] { "LifecycleDisposedCache" }, checkout: false)
             .Should()
             .BeTrue();

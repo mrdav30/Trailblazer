@@ -407,9 +407,9 @@ route-plan family:
 - `_cachedHybridRoutePlans`
 
 These caches store survey results or route plans keyed by
-`request.RequestCacheKey`. Because the caches are context-local, equivalent
-request keys from different worlds do not share cached data. The request key
-does not include a world id; world separation comes from the cache owner.
+`request.RequestCacheKey`. The key stores exact GridForge world, grid,
+generation, voxel, and request-option identity; its hash code only selects a
+bucket. The caches remain context-local as an additional ownership boundary.
 
 Guide lifetime rules:
 

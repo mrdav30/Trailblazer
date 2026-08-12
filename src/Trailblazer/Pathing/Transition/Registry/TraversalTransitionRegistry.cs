@@ -655,6 +655,46 @@ internal static class TraversalTransitionRegistry
         }
     }
 
+    internal static void RebindManagedTransitionsToCurrentGrid()
+    {
+        _transitionLock.EnterWriteLock();
+        try
+        {
+            SwiftList<RegisteredTraversalTransition> reboundTransitions = new();
+            foreach (RegisteredTraversalTransition registered in _transitions.Values)
+            {
+                if (IsManagedOwnershipKind(registered.OwnershipKind)
+                    && TryRebindManagedTransition(registered, out RegisteredTraversalTransition rebound))
+                {
+                    reboundTransitions.Add(rebound);
+                }
+            }
+
+            if (reboundTransitions.Count == 0)
+                return;
+
+            for (int i = 0; i < reboundTransitions.Count; i++)
+            {
+                RegisteredTraversalTransition rebound = reboundTransitions[i];
+                RegisteredTraversalTransition previous = _transitions[rebound.Transition.Id];
+                if (previous.OwnershipKind == TraversalTransitionOwnershipKind.ManagedManual)
+                    RemoveManagedManualDependencyIndexes_NoLock(previous);
+
+                _transitions[rebound.Transition.Id] = rebound;
+
+                if (rebound.OwnershipKind == TraversalTransitionOwnershipKind.ManagedManual)
+                    AddManagedManualDependencyIndexes_NoLock(rebound);
+            }
+
+            RebuildActiveState_NoLock();
+            State.IncrementRegistryVersion();
+        }
+        finally
+        {
+            _transitionLock.ExitWriteLock();
+        }
+    }
+
     internal static void RefreshManagedManualTransitionsForVoxel(WorldVoxelIndex voxelIndex)
     {
         _transitionLock.EnterWriteLock();
@@ -786,6 +826,84 @@ internal static class TraversalTransitionRegistry
     {
         return DoesResolvedEndpointSupportMedium(registered.SourceVoxelIndex, registered.Transition.Source.Medium)
             && DoesResolvedEndpointSupportMedium(registered.DestinationVoxelIndex, registered.Transition.Destination.Medium);
+    }
+
+    private static bool TryRebindManagedTransition(
+        RegisteredTraversalTransition registered,
+        out RegisteredTraversalTransition rebound)
+    {
+        GridWorld world = PathManager.ActiveState.World;
+        if (!TryResolveCurrentEndpoint(
+                world,
+                registered.SourceVoxelIndex,
+                registered.SourcePosition,
+                out WorldVoxelIndex sourceVoxelIndex)
+            || !TryResolveCurrentEndpoint(
+                world,
+                registered.DestinationVoxelIndex,
+                registered.DestinationPosition,
+                out WorldVoxelIndex destinationVoxelIndex)
+            || (sourceVoxelIndex == registered.SourceVoxelIndex
+                && destinationVoxelIndex == registered.DestinationVoxelIndex))
+        {
+            rebound = default;
+            return false;
+        }
+
+        TraversalTransition transition = registered.Transition;
+        TraversalTransition reboundTransition = new(
+            transition.Id,
+            transition.Type,
+            RebindAnchor(transition.Source, sourceVoxelIndex),
+            RebindAnchor(transition.Destination, destinationVoxelIndex),
+            transition.PathCostModifier,
+            transition.IsBidirectional,
+            transition.RequestsClimbIntent,
+            transition.PreserveClimbIntentOnFollowup);
+
+        rebound = new RegisteredTraversalTransition(
+            reboundTransition,
+            registered.OwnershipKind,
+            registered.Priority,
+            registered.RegistrationOrder);
+        return true;
+    }
+
+    private static bool TryResolveCurrentEndpoint(
+        GridWorld world,
+        WorldVoxelIndex registeredVoxelIndex,
+        Vector3d registeredPosition,
+        out WorldVoxelIndex currentVoxelIndex)
+    {
+        if (world.TryGetGridAndVoxel(registeredVoxelIndex, out _, out _))
+        {
+            currentVoxelIndex = registeredVoxelIndex;
+            return true;
+        }
+
+        return TraversalTransitionAnchor.TryResolveVoxelIndex(
+            world,
+            registeredPosition,
+            out currentVoxelIndex);
+    }
+
+    private static TraversalTransitionAnchor RebindAnchor(
+        TraversalTransitionAnchor anchor,
+        WorldVoxelIndex voxelIndex)
+    {
+        return anchor.Medium switch
+        {
+            TraversalMedium.Solid => anchor.HasPointOverride
+                ? TraversalTransitionAnchor.Solid(voxelIndex, anchor.PointOverride)
+                : TraversalTransitionAnchor.Solid(voxelIndex),
+            TraversalMedium.Gas => anchor.HasPointOverride
+                ? TraversalTransitionAnchor.Gas(voxelIndex, anchor.PointOverride)
+                : TraversalTransitionAnchor.Gas(voxelIndex),
+            TraversalMedium.Liquid => anchor.HasPointOverride
+                ? TraversalTransitionAnchor.Liquid(voxelIndex, anchor.PointOverride)
+                : TraversalTransitionAnchor.Liquid(voxelIndex),
+            _ => throw new InvalidOperationException($"Unsupported transition anchor medium '{anchor.Medium}'.")
+        };
     }
 
     private static bool DoesResolvedEndpointSupportMedium(WorldVoxelIndex voxelIndex, TraversalMedium medium)

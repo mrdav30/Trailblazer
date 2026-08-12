@@ -80,9 +80,9 @@ internal static class BenchmarkChartFactory
         return (
             minBounds,
             new Vector3d(
-                minBounds.x + (Fixed64)(size - 1),
-                minBounds.y,
-                minBounds.z + (Fixed64)(size - 1)));
+                minBounds.X + (Fixed64)(size - 1),
+                minBounds.Y,
+                minBounds.Z + (Fixed64)(size - 1)));
     }
 
     // -------------------------------------------------------------------------
@@ -149,9 +149,9 @@ internal static class BenchmarkChartFactory
         return (
             minBounds,
             new Vector3d(
-                minBounds.x + (Fixed64)(size - 1),
-                minBounds.y,
-                minBounds.z + (Fixed64)(size - 1)));
+                minBounds.X + (Fixed64)(size - 1),
+                minBounds.Y,
+                minBounds.Z + (Fixed64)(size - 1)));
     }
 
     // -------------------------------------------------------------------------
@@ -222,9 +222,9 @@ internal static class BenchmarkChartFactory
         PathManager.Register(chart);
 
         var destination = new Vector3d(
-            minBounds.x + (Fixed64)(size - 1),
-            minBounds.y,
-            minBounds.z + (Fixed64)(size - 1));
+            minBounds.X + (Fixed64)(size - 1),
+            minBounds.Y,
+            minBounds.Z + (Fixed64)(size - 1));
         var starts = new Vector3d[startCount];
         int stride = Math.Max(1, (size - 2) / (int)Math.Ceiling(Math.Sqrt(startCount)));
         int index = 0;
@@ -232,9 +232,9 @@ internal static class BenchmarkChartFactory
         {
             for (int x = 0; x < size - 1 && index < startCount; x += stride)
                 starts[index++] = new Vector3d(
-                    minBounds.x + (Fixed64)x,
-                    minBounds.y,
-                    minBounds.z + (Fixed64)z);
+                    minBounds.X + (Fixed64)x,
+                    minBounds.Y,
+                    minBounds.Z + (Fixed64)z);
         }
 
         // Fill remaining with the first position if geometry ran out.

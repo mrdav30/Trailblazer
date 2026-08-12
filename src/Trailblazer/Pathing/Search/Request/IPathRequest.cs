@@ -6,7 +6,7 @@ namespace Trailblazer.Pathing;
 /// <summary>
 /// Interface representing a generic pathfinding request. Defines shared data such as start/end voxels,
 /// unit size, and optional parameters like walkability and search range limits. 
-/// Also provides a hash key for caching or pooling.
+/// Also provides an exact key for caching or pooling.
 /// </summary>
 public interface IPathRequest
 {
@@ -80,9 +80,9 @@ public interface IPathRequest
     bool IsValid { get; }
 
     /// <summary>
-    /// A unique hash for this path request, useful for caching and guide pooling.
+    /// The exact identity of this path request for caching and guide pooling.
     /// </summary>
-    public int RequestCacheKey { get; }
+    public PathRequestCacheKey RequestCacheKey { get; }
 
     /// <summary>
     /// Updates the request with new origin and destination positions, along with an optional unit size.

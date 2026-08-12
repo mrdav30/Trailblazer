@@ -54,13 +54,16 @@ Trailblazer is published in two build variants so you can choose between
 built-in `MemoryPack` support and a leaner dependency set:
 
 - `Trailblazer`: Includes `MemoryPack` and depends on the standard
-  `FixedMathSharp`, `SwiftCollections`, `GridForge`, and `Chronicler.Core`
+  `FixedMathSharp`, `FixedMathSharp.Chronicler`, `SwiftCollections`,
+  `SwiftCollections.FixedMathSharp`, `GridForge`, and `Chronicler.Core`
   packages. This is the best default choice for most .NET applications,
   especially if you want the MemoryPack-backed Chronicler transport available
   out of the box.
 - `Trailblazer.Lean`: Excludes the `MemoryPack` package, swaps to
-  `FixedMathSharp.NoMemoryPack`, `SwiftCollections.Lean`, `GridForge.Lean`, and
-  `Chronicler.Core.Lean`, and omits MemoryPack-specific source files. Choose
+  `FixedMathSharp.Lean`, `FixedMathSharp.Chronicler.Lean`,
+  `SwiftCollections.Lean`, `SwiftCollections.FixedMathSharp.Lean`,
+  `GridForge.Lean`, and `Chronicler.Core.Lean`, and omits MemoryPack-specific
+  source files. Choose
   this when you do not need built-in MemoryPack serialization, when you prefer a
   different serializer, or when you want the leanest dependency surface.
 
@@ -101,8 +104,8 @@ For local development against the repository, reference the project directly:
 Trailblazer is easiest to approach as a small pipeline:
 
 1. Create or attach a `TrailblazerWorldContext` for a `GridWorld`.
-2. Register `NavigationChart` data whose cell interval matches the context voxel
-   size.
+2. Register `NavigationChart` data whose cell interval matches the context's
+   representative cubic cell edge.
 3. Request an `IGuide` directly, or let a `Navigator` create and manage guide
    requests.
 4. Advance the context and navigators in your fixed-step simulation.
@@ -112,6 +115,12 @@ Trailblazer is easiest to approach as a small pipeline:
 Trailblazer owns navigation state. Your host still owns rendering, animation,
 entity lifetime, collision queries, environment probes, and any engine-specific
 integration.
+
+Trailblazer currently supports GridForge worlds whose active grids all use dense
+rectangular-prism storage with one shared cubic cell edge. Hex, sparse,
+anisotropic, or conflicting active-grid metrics fail fast at the context/request
+boundary. Those topologies require a dedicated pathfinding path and are planned
+as a fast-follow rather than being approximated by the cubic implementation.
 
 ## Quick Start
 

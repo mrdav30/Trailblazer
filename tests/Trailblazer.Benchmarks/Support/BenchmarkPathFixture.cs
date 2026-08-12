@@ -31,10 +31,9 @@ internal sealed class BenchmarkPathFixture
     /// Optionally adds a single grid using the provided configuration.
     /// </summary>
     /// <param name="config">Optional grid configuration to add to the world.</param>
-    /// <param name="voxelSize">Optional voxel size override for the world.</param>
-    public void Setup(GridConfiguration? config = null, Fixed64? voxelSize = null)
+    public void Setup(GridConfiguration? config = null)
     {
-        _world = BenchmarkEnvironment.PrepareWorld(voxelSize: voxelSize);
+        _world = BenchmarkEnvironment.PrepareWorld();
         _context = TrailblazerWorldContext.Attach(_world);
         _pathingScope = PathManager.EnterState(_context.Pathing.State);
 

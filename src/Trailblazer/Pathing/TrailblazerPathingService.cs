@@ -183,16 +183,16 @@ public sealed class TrailblazerPathingService
     {
         EnsureUsable();
         GridWorld world = _context.World;
-        if (!world.TryGetGrid(start.WorldIndex.GridIndex, out VoxelGrid? startGrid)
-            || !world.TryGetGrid(end.WorldIndex.GridIndex, out VoxelGrid? endGrid))
+        if (!world.TryGetGrid(start.WorldIndex, out VoxelGrid? startGrid)
+            || !world.TryGetGrid(end.WorldIndex, out VoxelGrid? endGrid))
         {
             maxSearchSize = 0;
             return false;
         }
 
         maxSearchSize = startGrid == endGrid
-            ? startGrid!.Size
-            : startGrid!.Size + endGrid!.Size;
+            ? startGrid!.ConfiguredVoxelCount
+            : startGrid!.ConfiguredVoxelCount + endGrid!.ConfiguredVoxelCount;
         return true;
     }
 

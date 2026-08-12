@@ -77,7 +77,7 @@ public sealed class PlatformLocomotionTailTests : IDisposable
 
         locomotion.UpdatePlatformVelocity();
 
-        locomotion.PlatformVelocity.x.Should().Be((Fixed64)2 * TestWorld.Context.InvDeltaTime);
+        locomotion.PlatformVelocity.X.Should().Be((Fixed64)2 * TestWorld.Context.InvDeltaTime);
 
         locomotion.GetPlatformInfluence(
             Vector3d.Zero,
@@ -98,10 +98,10 @@ public sealed class PlatformLocomotionTailTests : IDisposable
             out FixedQuaternion rotatedDelta);
 
         Fixed64 tolerance = Fixed64.FromRaw(0x00020000);
-        (rotatedDelta.x - turn.x).Abs().Should().BeLessThan(tolerance);
-        (rotatedDelta.y - turn.y).Abs().Should().BeLessThan(tolerance);
-        (rotatedDelta.z - turn.z).Abs().Should().BeLessThan(tolerance);
-        (rotatedDelta.w - turn.w).Abs().Should().BeLessThan(tolerance);
+        (rotatedDelta.X - turn.X).Abs().Should().BeLessThan(tolerance);
+        (rotatedDelta.Y - turn.Y).Abs().Should().BeLessThan(tolerance);
+        (rotatedDelta.Z - turn.Z).Abs().Should().BeLessThan(tolerance);
+        (rotatedDelta.W - turn.W).Abs().Should().BeLessThan(tolerance);
     }
 
     [Fact]

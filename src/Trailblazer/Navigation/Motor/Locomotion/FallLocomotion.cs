@@ -20,7 +20,7 @@ public class FallLocomotion : ILocomotion
     /// Default movement control multiplier when falling.
     /// Reduces movement responsiveness to simulate loss of control while airborne.
     /// </summary>
-    public static readonly Fixed64 DefaultFallControlMultiplier = (Fixed64)0.1875f; // 50% control when falling
+    public static readonly Fixed64 DefaultFallControlMultiplier = Fixed64.FromFraction(3, 16); // 50% control when falling
 
     #endregion
 

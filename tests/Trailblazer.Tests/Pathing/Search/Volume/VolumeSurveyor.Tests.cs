@@ -312,7 +312,11 @@ public sealed class VolumeSurveyorTests : IDisposable
     public void VolumeSurveyResult_Create_ShouldUseFallbackEmptyArray_WhenChartsUtilizedIsNull()
     {
         var waypoints = new[] { new AStarWaypoint { Position = Vector3d.Zero, IsGoal = true } };
-        VolumeSurveyResult result = VolumeSurveyResult.Create(TestWorld.Context, waypoints, null!, key: 1);
+        VolumeSurveyResult result = VolumeSurveyResult.Create(
+            TestWorld.Context,
+            waypoints,
+            null!,
+            TestPathRequest.CreateCacheKey(1));
 
         Assert.NotNull(result.ChartsUtilized);
         result.ChartsUtilized.Should().BeEmpty();

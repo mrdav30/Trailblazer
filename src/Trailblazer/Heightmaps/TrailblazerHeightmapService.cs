@@ -1,5 +1,4 @@
 using FixedMathSharp;
-using SwiftCollections;
 using System;
 
 namespace Trailblazer.Heightmaps;
@@ -155,7 +154,7 @@ public sealed class TrailblazerHeightmapService
         out Fixed64 groundY,
         out Fixed64 distance)
     {
-        if (!registration.ContainsSelectionY(worldPosition.y)
+        if (!registration.ContainsSelectionY(worldPosition.Y)
             || !registration.Surface.TrySampleGround(worldPosition, out groundY))
         {
             groundY = Fixed64.Zero;
@@ -163,7 +162,7 @@ public sealed class TrailblazerHeightmapService
             return false;
         }
 
-        distance = (worldPosition.y - groundY).Abs();
+        distance = (worldPosition.Y - groundY).Abs();
         return true;
     }
 

@@ -25,7 +25,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <summary>
     /// Default vertical offset used to determine the object’s contact point with the ground.
     /// </summary>
-    public static readonly Fixed64 DefaultFootPositionAdjust = new(0.25f);
+    public static readonly Fixed64 DefaultFootPositionAdjust = Fixed64.Quarter;
 
     #endregion
 

@@ -68,7 +68,7 @@ public class PlatformLocomotionTests : IDisposable
             {
                 Platform = new PlatformSnapshot(1, movedTransform)
             },
-            CeilingLevel = Fixed64.MAX_VALUE
+            CeilingLevel = Fixed64.MaxValue
         };
 
         TestWorld.Context.Simulate();
@@ -263,7 +263,7 @@ public class PlatformLocomotionTests : IDisposable
         scout.Simulate();
 
         // Assert - we didn't pick up any horizontal velocity from the platform
-        scout.Motor.Handler.Move.FrameVelocity.x.Should().Be(Fixed64.Zero);
+        scout.Motor.Handler.Move.FrameVelocity.X.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -279,7 +279,7 @@ public class PlatformLocomotionTests : IDisposable
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        scout.Motor.Handler.Move.FrameVelocity.x.Should().BeGreaterThan(Fixed64.Zero);
+        scout.Motor.Handler.Move.FrameVelocity.X.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -357,7 +357,7 @@ public class PlatformLocomotionTests : IDisposable
 
         Vector3d velocityAfterJump = scout.Motor.Handler.Move.FrameVelocity;
 
-        velocityAfterJump.x.Should().Be(initialPlatformVelocity.x);
+        velocityAfterJump.X.Should().Be(initialPlatformVelocity.X);
     }
 
     [Fact]
@@ -384,7 +384,7 @@ public class PlatformLocomotionTests : IDisposable
 
         // Assert
         scout.Motor.Handler.Move.FrameVelocity.Should().NotBe(Vector3d.Zero);
-        scout.Motor.Handler.Move.FrameVelocity.x.Should().Be(platformLocomotion.PlatformVelocity.x);
+        scout.Motor.Handler.Move.FrameVelocity.X.Should().Be(platformLocomotion.PlatformVelocity.X);
     }
 
     [Fact]

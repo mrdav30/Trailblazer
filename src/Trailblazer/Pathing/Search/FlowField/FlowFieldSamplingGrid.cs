@@ -13,9 +13,9 @@ internal sealed class FlowFieldSamplingGrid
 {
     private const int DenseSparsityFactor = 4;
 
-    private readonly int _worldSpawnToken;
+    private readonly long _worldSpawnToken;
     private readonly ushort _gridIndex;
-    private readonly int _gridSpawnToken;
+    private readonly long _gridSpawnToken;
     private readonly Vector3d _originWorldPosition;
     private readonly Fixed64 _voxelSize;
     private readonly int _minX;
@@ -93,9 +93,9 @@ internal sealed class FlowFieldSamplingGrid
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetDirection(Vector3d worldPosition, out Vector3d direction)
     {
-        Fixed64 localX = (worldPosition.x - _originWorldPosition.x) / _voxelSize;
-        Fixed64 localY = (worldPosition.y - _originWorldPosition.y) / _voxelSize;
-        Fixed64 localZ = (worldPosition.z - _originWorldPosition.z) / _voxelSize;
+        Fixed64 localX = (worldPosition.X - _originWorldPosition.X) / _voxelSize;
+        Fixed64 localY = (worldPosition.Y - _originWorldPosition.Y) / _voxelSize;
+        Fixed64 localZ = (worldPosition.Z - _originWorldPosition.Z) / _voxelSize;
 
         int x = localX.FloorToInt();
         int y = localY.FloorToInt();

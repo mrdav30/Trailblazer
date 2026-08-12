@@ -246,9 +246,6 @@ public static class VolumeVoxelFinder
         if (requiredRadius <= 0)
             return true;
 
-        if (!context.World.TryGetGrid(origin.GridIndex, out VoxelGrid? grid))
-            return false;
-
         for (int x = -requiredRadius; x <= requiredRadius; x++)
         {
             for (int y = -requiredRadius; y <= requiredRadius; y++)
@@ -258,8 +255,14 @@ public static class VolumeVoxelFinder
                     if (x == 0 && y == 0 && z == 0)
                         continue;
 
-                    if (!origin.TryGetNeighborFromOffset(grid!, (x, y, z), out Voxel? neighbor)
-                        || neighbor!.IsBlocked)
+                    Vector3d expectedPosition = origin.WorldPosition + new Vector3d(
+                        voxelSize * x,
+                        voxelSize * y,
+                        voxelSize * z);
+                    if (!context.World.TryGetGridAndVoxel(expectedPosition, out _, out Voxel? neighbor)
+                        || neighbor == null
+                        || neighbor.WorldPosition != expectedPosition
+                        || neighbor.IsBlocked)
                     {
                         return false;
                     }

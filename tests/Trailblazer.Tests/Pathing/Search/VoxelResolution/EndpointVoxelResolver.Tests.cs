@@ -2,6 +2,7 @@ using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Spatial;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -127,10 +128,59 @@ public sealed class EndpointVoxelResolverTests : IDisposable
         voxel.Should().BeNull();
     }
 
+    [Fact]
+    public void TryGetClosestTraversableVoxel_ShouldRejectVoxelFromRecycledGridGeneration()
+    {
+        Voxel stale = GetVoxel(Vector3d.Zero);
+        ushort gridIndex = (ushort)stale.GridIndex;
+        var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(8, 8, 8));
+
+        TestWorld.World.TryRemoveGrid(gridIndex).Should().BeTrue();
+        TestWorld.World.TryAddGrid(config, out ushort replacementGridIndex).Should().BeTrue();
+        replacementGridIndex.Should().Be(gridIndex);
+        Voxel replacement = GetVoxel(Vector3d.Zero);
+        replacement.WorldIndex.GridSpawnToken.Should().NotBe(stale.WorldIndex.GridSpawnToken);
+
+        EndpointVoxelResolver.TryGetClosestTraversableVoxel(
+                TestWorld.Context,
+                stale,
+                out Voxel? closest,
+                Fixed64.One,
+                new TestEndpointPolicy(isTraversable: _ => true))
+            .Should()
+            .BeFalse();
+        closest.Should().BeNull();
+    }
+
+    [Fact]
+    public void RectangularNeighbors_ShouldResolveAllPerpendicularAndDiagonalDirections()
+    {
+        Voxel origin = GetVoxel(Vector3d.Zero);
+        TestWorld.World.TryGetGrid(origin.GridIndex, out VoxelGrid? grid).Should().BeTrue();
+
+        AssertDirectionsResolve(origin, grid!, RectangularDirectionUtility.Perpendicular);
+        AssertDirectionsResolve(origin, grid!, RectangularDirectionUtility.Diagonal);
+    }
+
     private static Voxel GetVoxel(Vector3d position)
     {
         Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, position);
         return voxel;
+    }
+
+    private static void AssertDirectionsResolve(
+        Voxel origin,
+        VoxelGrid grid,
+        ReadOnlySpan<RectangularDirection> directions)
+    {
+        for (int i = 0; i < directions.Length; i++)
+        {
+            RectangularDirection direction = directions[i];
+            (int x, int y, int z) = RectangularDirectionUtility.Offsets[(int)direction];
+
+            origin.TryGetNeighbor(grid, direction, out Voxel? neighbor).Should().BeTrue();
+            TestRequire.NotNull(neighbor).WorldPosition.Should().Be(new Vector3d(x, y, z));
+        }
     }
 
     private readonly struct TestEndpointPolicy : IVoxelEndpointResolutionPolicy

@@ -49,7 +49,7 @@ public sealed class TraversalTransitionAnchorTests : IDisposable
     public void TraversalTransitionAnchor_ShouldCreateFromVoxelIndexWithPointOverride()
     {
         Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
-        var pointOverride = new Vector3d(1.1, 0, 0);
+        var pointOverride = Vector3d.FromDouble(1.1, 0, 0);
 
         var gasWithOverride = TraversalTransitionAnchor.Gas(voxel.WorldIndex, pointOverride);
         gasWithOverride.HasPointOverride.Should().BeTrue();

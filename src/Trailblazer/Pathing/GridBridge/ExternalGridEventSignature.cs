@@ -8,7 +8,7 @@ internal readonly struct ExternalGridEventSignature : IEquatable<ExternalGridEve
 {
     public ExternalGridEventSignature(
         ExternalGridEventKind eventKind,
-        int gridSpawnToken,
+        long gridSpawnToken,
         uint gridVersion,
         GridConfiguration configuration,
         Vector3d boundsMin,
@@ -24,7 +24,7 @@ internal readonly struct ExternalGridEventSignature : IEquatable<ExternalGridEve
 
     public ExternalGridEventKind EventKind { get; }
 
-    public int GridSpawnToken { get; }
+    public long GridSpawnToken { get; }
 
     public uint GridVersion { get; }
 

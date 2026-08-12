@@ -151,17 +151,17 @@ public class AStarSurveyor
         if (!_meta.TryGetValue(current.WorldIndex, out AStarVoxelMeta data))
             return false;
 
-        if (TryProcessDirection(current, SpatialAwareness.PerpendicularDirections, data.MovementCost + StraightCost))
+        if (TryProcessDirection(current, RectangularDirectionUtility.Perpendicular, data.MovementCost + StraightCost))
             return true;
-        if (TryProcessDirection(current, SpatialAwareness.DiagonalDirections, data.MovementCost + DiagonalCost, true))
+        if (TryProcessDirection(current, RectangularDirectionUtility.Diagonal, data.MovementCost + DiagonalCost, true))
             return true;
 
         return false;
     }
 
-    private bool TryProcessDirection(SolidChartPartition current, SpatialDirection[] directions, int cost, bool checkEdges = false)
+    private bool TryProcessDirection(SolidChartPartition current, ReadOnlySpan<RectangularDirection> directions, int cost, bool checkEdges = false)
     {
-        foreach (SpatialDirection dir in directions)
+        foreach (RectangularDirection dir in directions)
         {
             SolidChartPartition? neighbor = current.Neighbors?[(int)dir] ?? null;
             if (neighbor is null || _heap.IsClosed(neighbor) || neighbor.IsImpassable(_request!.UnitSize))
@@ -178,9 +178,9 @@ public class AStarSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool HasValidDiagonalLegs(SolidChartPartition current, SpatialDirection diagonal)
+    private bool HasValidDiagonalLegs(SolidChartPartition current, RectangularDirection diagonal)
     {
-        (int dx, int dy, int dz) = SpatialAwareness.DirectionOffsets[(int)diagonal];
+        (int dx, int dy, int dz) = RectangularDirectionUtility.Offsets[(int)diagonal];
 
         if (dx != 0 && !IsLegClear(current, DiagonalTraversalLegs.ForXOffset(dx)))
             return false;
@@ -195,7 +195,7 @@ public class AStarSurveyor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool IsLegClear(SolidChartPartition current, SpatialDirection legDir)
+    private bool IsLegClear(SolidChartPartition current, RectangularDirection legDir)
     {
         SolidChartPartition? leg = current.Neighbors?[(int)legDir] ?? null;
         // Diagonal legality is a topology check, not a search-order check. Requiring closed legs
@@ -213,7 +213,7 @@ public class AStarSurveyor
         int cost)
     {
         // Skip neighbors that have a height difference greater than the allowed maximum
-        Fixed64 heightDifference = (current.VoxelPosition.y - neighbor.VoxelPosition.y).Abs();
+        Fixed64 heightDifference = (current.VoxelPosition.Y - neighbor.VoxelPosition.Y).Abs();
         if (heightDifference > _request!.MaxClimbHeight)
             return false;
 
@@ -314,7 +314,7 @@ public class AStarSurveyor
         byte scaledUnitSize = (byte)((_request!.UnitSize / _request.Context.VoxelSize).CeilToInt() + 1);
         for (int i = 1; i < _rawPath.Count - 1; i++)
         {
-            Vector3d direction = (_rawPath[i + 1].VoxelPosition - _rawPath[i].VoxelPosition).Normalize();
+            Vector3d direction = (_rawPath[i + 1].VoxelPosition - _rawPath[i].VoxelPosition).Normalized;
 
 
             bool preserveUnwalkable = _rawPath[i].GetNeighborClearance() <= scaledUnitSize;
@@ -387,7 +387,7 @@ public class AStarSurveyor
         Vector3d targetPosition,
         HeuristicMethod heuristicMethod)
     {
-        Fixed64 heuristicCost = Fixed64.MAX_VALUE;
+        Fixed64 heuristicCost = Fixed64.MaxValue;
 
         // Calculate the absolute distance in each axis
         Vector3d dst = Vector3d.Abs(currentPosition - targetPosition);
@@ -396,19 +396,19 @@ public class AStarSurveyor
         {
             case HeuristicMethod.Manhattan:
                 // Sum the distances and multiply by 100 for the heuristic cost
-                heuristicCost = (dst.x + dst.y + dst.z) * StraightCost;
+                heuristicCost = (dst.X + dst.Y + dst.Z) * StraightCost;
                 break;
             case HeuristicMethod.Octile:
-                Fixed64 maxXY = FixedMath.Max(dst.x, dst.y);
-                Fixed64 max = FixedMath.Max(maxXY, dst.z);
-                Fixed64 minXY = FixedMath.Min(dst.x, dst.y);
-                Fixed64 min = FixedMath.Min(minXY, dst.z);
-                Fixed64 middle = dst.x + dst.y + dst.z - max - min;
+                Fixed64 maxXY = FixedMath.Max(dst.X, dst.Y);
+                Fixed64 max = FixedMath.Max(maxXY, dst.Z);
+                Fixed64 minXY = FixedMath.Min(dst.X, dst.Y);
+                Fixed64 min = FixedMath.Min(minXY, dst.Z);
+                Fixed64 middle = dst.X + dst.Y + dst.Z - max - min;
                 heuristicCost = (middle * DiagonalCost) + ((max - middle) * StraightCost);
                 break;
             case HeuristicMethod.Euclidean:
                 // Calculate the squared distance and find the square root
-                Fixed64 d = dst.x * dst.x + dst.y * dst.y + dst.z * dst.z;
+                Fixed64 d = dst.X * dst.X + dst.Y * dst.Y + dst.Z * dst.Z;
                 d = FixedMath.Sqrt(d);
                 // Multiply the result by 100 for the heuristic cost
                 heuristicCost = d * StraightCost;
@@ -447,7 +447,7 @@ public class AStarSurveyor
             // j starts at 1 to skip duplicate of first point
             for (int j = 1; j <= resolutionPerSegment; j++)
             {
-                Fixed64 t = new(j / (double)resolutionPerSegment);
+                Fixed64 t = (Fixed64)j / (Fixed64)resolutionPerSegment;
 
                 // You should create a new waypoint here:
                 output[outputIndex] = new AStarWaypoint

@@ -1,7 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using SwiftCollections;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -42,7 +41,7 @@ public sealed class PathRequestCoverageTests : IDisposable
         int originalRange = request.MaxPathSearchRange;
         originalRange.Should().BeGreaterThan(0);
 
-        request.TrySetOrigin(new Vector3d(0.2, 0, 0)).Should().BeTrue();
+        request.TrySetOrigin(Vector3d.FromDouble(0.2, 0, 0)).Should().BeTrue();
         request.MaxPathSearchRange.Should().Be(originalRange);
 
         request.TrySetOrigin(new Vector3d(1, 0, 0), resetSearchRange: true).Should().BeTrue();
@@ -52,6 +51,46 @@ public sealed class PathRequestCoverageTests : IDisposable
         request.TrySetDestination(new Vector3d(2, 0, 0), resetSearchRange: true).Should().BeTrue();
         TestRequire.NotNull(request.EndNode).WorldPosition.Should().Be(new Vector3d(2, 0, 0));
         request.MaxPathSearchRange.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Requests_ShouldRecomputeSearchRangeAfterSameSlotGridRespawn()
+    {
+        AStarPathRequest solid = TestRequire.NotNull(AStarPathRequest.Create(
+            TestWorld.Context,
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One));
+        VolumePathRequest volume = TestRequire.NotNull(VolumePathRequest.Create(
+            TestWorld.Context,
+            new Vector3d(0, 0, 2),
+            new Vector3d(2, 0, 2),
+            Fixed64.One,
+            medium: TraversalMedium.Gas));
+        int originalRange = solid.MaxPathSearchRange;
+        volume.MaxPathSearchRange.Should().Be(originalRange);
+        ushort gridIndex = (ushort)TestRequire.NotNull(solid.StartNode).GridIndex;
+
+        TestWorld.World.TryRemoveGrid(gridIndex).Should().BeTrue();
+        TestWorld.Context.Pathing.FlushPendingGridChanges();
+
+        var replacementConfig = new GridConfiguration(
+            new Vector3d(-4, -4, -4),
+            new Vector3d(10, 10, 10));
+        TestWorld.World.TryAddGrid(replacementConfig, out ushort replacementGridIndex).Should().BeTrue();
+        replacementGridIndex.Should().Be(gridIndex);
+        TestWorld.Context.Pathing.FlushPendingGridChanges();
+
+        int replacementRange = TestRequire.Grid(TestWorld.Context, replacementGridIndex).ConfiguredVoxelCount;
+        replacementRange.Should().NotBe(originalRange);
+
+        solid.TrySetOrigin(Vector3d.Zero).Should().BeTrue();
+        solid.TrySetDestination(new Vector3d(2, 0, 0)).Should().BeTrue();
+        solid.MaxPathSearchRange.Should().Be(replacementRange);
+
+        volume.TrySetOrigin(new Vector3d(0, 0, 2)).Should().BeTrue();
+        volume.TrySetDestination(new Vector3d(2, 0, 2)).Should().BeTrue();
+        volume.MaxPathSearchRange.Should().Be(replacementRange);
     }
 
     [Fact]
@@ -187,6 +226,24 @@ public sealed class PathRequestCoverageTests : IDisposable
     }
 
     [Fact]
+    public void FlowFieldPathRequest_Equality_ShouldRemainDestinationCentric()
+    {
+        FlowFieldPathRequest first = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            TestWorld.Context,
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One));
+        FlowFieldPathRequest second = TestRequire.NotNull(FlowFieldPathRequest.Create(
+            TestWorld.Context,
+            new Vector3d(1, 0, 0),
+            new Vector3d(2, 0, 0),
+            Fixed64.One));
+
+        first.RequestCacheKey.Should().Be(second.RequestCacheKey);
+        first.Should().Be(second);
+    }
+
+    [Fact]
     public void HybridPathRequest_ShouldCreateFromChartRequests_AndClearRouteWhenInvalidated()
     {
         AStarPathRequest aStar = TestRequire.NotNull(AStarPathRequest.Create(TestWorld.Context, Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
@@ -284,6 +341,26 @@ public sealed class PathRequestCoverageTests : IDisposable
     }
 
     [Fact]
+    public void HybridPathRequest_RequestCacheKeyReads_ShouldNotAllocateSteadyState()
+    {
+        HybridPathRequest request = TestRequire.NotNull(HybridPathRequest.Create(
+            TestWorld.Context,
+            Vector3d.Zero,
+            new Vector3d(2, 0, 0),
+            Fixed64.One));
+
+        long aggregate = 0;
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+        {
+            for (int i = 0; i < 1_024; i++)
+                aggregate += request.RequestCacheKey.GetHashCode();
+        });
+
+        aggregate.Should().NotBe(0);
+        allocated.Should().Be(0);
+    }
+
+    [Fact]
     public void HybridPathRequest_ShouldRebuildAndHashTransitionAwarePlans()
     {
         PathTestFactory.RegisterSingleWalkablePoint(TestWorld.Context, "HybridGapStart", new Vector3d(5, 0, 0));
@@ -363,7 +440,7 @@ public sealed class PathRequestCoverageTests : IDisposable
         for (int i = 0; i < length; i++)
         {
             PathTestFactory.RegisterGeneratedVolumePoint(
-                TestWorld.Context, new Vector3d(start.x + i, start.y, start.z),
+                TestWorld.Context, new Vector3d(start.X + i, start.Y, start.Z),
                 TraversalMedium.Gas,
                 chartNamePrefix);
         }
@@ -376,11 +453,6 @@ public sealed class PathRequestCoverageTests : IDisposable
             Context = TestWorld.Context;
         }
 
-        public override int GetHashCode() =>
-            (StartNode?.SpawnToken ?? 0,
-                EndNode?.SpawnToken ?? 0,
-                UnitSize,
-                AllowUnwalkableEndpoints,
-                MaxPathSearchRange).CombineHashCodes();
+        public override PathRequestCacheKey RequestCacheKey => default;
     }
 }

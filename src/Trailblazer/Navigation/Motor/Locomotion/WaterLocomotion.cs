@@ -31,7 +31,7 @@ public class WaterLocomotion : ILocomotion
     /// <summary>
     /// The default maximum swimming speed.
     /// </summary>
-    public static readonly Fixed64 DefaultMaxSwimSpeed = (Fixed64)1.5d;
+    public static readonly Fixed64 DefaultMaxSwimSpeed = Fixed64.FromFraction(3, 2);
 
     /// <summary>
     /// The default maximum sideways swimming speed.
@@ -56,7 +56,7 @@ public class WaterLocomotion : ILocomotion
     /// <summary>
     /// Default multiplier applied to jump force when breaching from water into air.
     /// </summary>
-    public static readonly Fixed64 DefaultBreachJumpMultiplier = (Fixed64)0.75d;
+    public static readonly Fixed64 DefaultBreachJumpMultiplier = Fixed64.FromFraction(3, 4);
 
     #endregion
 

@@ -77,7 +77,18 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         || StartNode == EndNode;
 
     /// <inheritdoc/>
-    public int RequestCacheKey => GetHashCode();
+    public PathRequestCacheKey RequestCacheKey =>
+        StartNode == null || EndNode == null
+            ? default
+            : PathRequestCacheKey.CreateVolume(
+                StartNode.WorldIndex,
+                EndNode.WorldIndex,
+                UnitSize,
+                AllowUnwalkableEndpoints,
+                Heuristic,
+                Medium,
+                MaxPathSearchRange,
+                Context.Pathing.State.VolumeRulesState.RegistryVersion);
 
     private VolumePathRequest() { }
 
@@ -216,7 +227,8 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             if (startNode == StartNode)
                 return true;
 
-            if (startNode.GridIndex != StartNode.GridIndex)
+            if (!Context.World.TryGetGrid(StartNode.WorldIndex, out VoxelGrid? previousGrid)
+                || startNode.GridIndex != previousGrid!.GridIndex)
                 resetSearchRange = true;
         }
 
@@ -260,7 +272,8 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
             if (endNode == EndNode)
                 return true;
 
-            if (endNode.GridIndex != EndNode.GridIndex)
+            if (!Context.World.TryGetGrid(EndNode.WorldIndex, out VoxelGrid? previousGrid)
+                || endNode.GridIndex != previousGrid!.GridIndex)
                 resetSearchRange = true;
         }
 
@@ -295,17 +308,5 @@ public sealed class VolumePathRequest : IPathRequest, IEquatable<VolumePathReque
         && RequestCacheKey == other.RequestCacheKey;
 
     /// <inheritdoc/>
-    public override int GetHashCode()
-    {
-        PathRequestHashBuilder hash = PathRequestHashBuilder.Create();
-        hash.Add(StartNode?.SpawnToken ?? 0);
-        hash.Add(EndNode?.SpawnToken ?? 0);
-        hash.Add(UnitSize.GetHashCode());
-        hash.Add(AllowUnwalkableEndpoints);
-        hash.Add((int)Heuristic);
-        hash.Add((int)Medium);
-        hash.Add(MaxPathSearchRange);
-        hash.Add(Context.Pathing.State.VolumeRulesState.RegistryVersion);
-        return hash.ToHashCode();
-    }
+    public override int GetHashCode() => RequestCacheKey.GetHashCode();
 }

@@ -65,7 +65,7 @@ public static class MockMotorAgentTestFactory
         {
             Medium = TraversalMedium.Gas,
             SurfaceLevel = surfaceLevel ?? -(Fixed64)999,
-            CeilingLevel = Fixed64.MAX_VALUE,
+            CeilingLevel = Fixed64.MaxValue,
         };
 
         if (platformMatrix.HasValue)
@@ -104,7 +104,7 @@ public static class MockMotorAgentTestFactory
         TrekCondition condition = new()
         {
             Medium = TraversalMedium.Solid,
-            CeilingLevel = Fixed64.MAX_VALUE,
+            CeilingLevel = Fixed64.MaxValue,
             GroundState = new GroundCondition
             {
                 Platform = new(1, platformMatrix ?? Fixed4x4.Identity, platformInert),
@@ -135,7 +135,7 @@ public static class MockMotorAgentTestFactory
         {
             Medium = TraversalMedium.Liquid,
             SurfaceLevel = surfaceLevel ?? Fixed64.Zero,
-            CeilingLevel = Fixed64.MAX_VALUE
+            CeilingLevel = Fixed64.MaxValue
         };
 
         MockMotorAgent agent = new(
@@ -156,7 +156,7 @@ public static class MockMotorAgentTestFactory
         TrekCondition condition = new()
         {
             Medium = TraversalMedium.Solid,
-            CeilingLevel = Fixed64.MAX_VALUE,
+            CeilingLevel = Fixed64.MaxValue,
             GroundState = new GroundCondition
             {
                 Platform = new(1, Fixed4x4.Identity)

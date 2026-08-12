@@ -77,7 +77,8 @@ public class MoveLocomotionTests : IDisposable
 
         // Assert
         var speed = agent.Motor.MaxHoritzontalSpeedInDirection(Vector3d.Forward, TrekRate.Slow);
-        var expected = ((Vector3d.Forward * speed) * 10) * TestWorld.Context.DeltaTime;
+        Vector3d expectedFrameDelta = (Vector3d.Forward * speed) * TestWorld.Context.DeltaTime;
+        Vector3d expected = expectedFrameDelta * 10;
 
         agent.Position.Should().Be(expected);
     }
@@ -261,7 +262,7 @@ public class MoveLocomotionTests : IDisposable
         }
 
         // Should be slowing down
-        agent.Motor.Handler.Move.FrameVelocity.x.Should().BeLessThan(iniitialVelocity.x);
+        agent.Motor.Handler.Move.FrameVelocity.X.Should().BeLessThan(iniitialVelocity.X);
     }
 
     [Fact]
@@ -281,7 +282,7 @@ public class MoveLocomotionTests : IDisposable
         var projectedVelocity = ((speed * Vector3d.Right) * TestWorld.Context.DeltaTime)
             * TestWorld.Context.InvDeltaTime;
 
-        agent.Motor.Handler.Move.FrameVelocity.x.Should().BeLessThan(projectedVelocity.x); // Moving sideways should project velocity down slope
+        agent.Motor.Handler.Move.FrameVelocity.X.Should().BeLessThan(projectedVelocity.X); // Moving sideways should project velocity down slope
     }
 
 
@@ -341,11 +342,7 @@ public class MoveLocomotionTests : IDisposable
         var slopeNormal = agent.Motor.CurrentState.SurfaceNormal;
         var expected = Vector3d.ProjectOnPlane(Vector3d.Forward, slopeNormal);
 
-        // Ensure downward movement on downhill slopes & upward movement on uphill slopes
-        if (Fixed64.Sign(expected.y) != Fixed64.Sign(agent.Motor.FrameSlopeAngle))
-            expected.y *= -1;
-
-        velocity.Normal.Should().BeApproximately(expected.Normal, Fixed64.Epsilon);
+        velocity.Normalized.Should().BeApproximately(expected.Normalized, Fixed64.Epsilon);
     }
 
     [Fact]
@@ -487,7 +484,7 @@ public class MoveLocomotionTests : IDisposable
     public void Given_AgentOnLowFrictionGround_When_StopsMoving_Then_ShouldSlideSlightly()
     {
         var agent = MockMotorAgentTestFactory.CreatePlatformAgent(
-            surfaceFriction: Fixed64.Fraction(1, 100)); // Very low friction
+            surfaceFriction: Fixed64.FromFraction(1, 100)); // Very low friction
 
         // Apply forward movement
         agent.FrameRequest.Direction = Vector3d.Forward;

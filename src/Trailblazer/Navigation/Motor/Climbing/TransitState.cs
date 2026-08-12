@@ -23,7 +23,7 @@ public class TransitState
     /// <summary>
     /// The ceiling height above the entity.
     /// </summary>
-    public Fixed64 CeilingLevel { get; private set; } = Fixed64.MAX_VALUE;
+    public Fixed64 CeilingLevel { get; private set; } = Fixed64.MaxValue;
 
     /// <summary>
     /// The ground state, if applicable.
@@ -122,7 +122,7 @@ public class TransitState
         if (moveDirection == Vector3d.Zero)
             moveDirection = Vector3d.Backward;
 
-        bool isDownhill = Vector3d.Dot(moveDirection.Normal, SurfaceNormal) < Fixed64.Zero;
+        bool isDownhill = Vector3d.Dot(moveDirection.Normalized, SurfaceNormal) < Fixed64.Zero;
         return isDownhill ? -SlopeAngle : SlopeAngle;
     }
 

@@ -51,6 +51,20 @@ public class NavTurningTests
     }
 
     [Fact]
+    public void NeedsTurn_ShouldCompareAgainstFullPhysicalQuaternionAngle()
+    {
+        Fixed64 physicalAngle = (Fixed64)8;
+        Vector3d targetDirection = FixedQuaternion.AngleAxis(physicalAngle, Vector3d.Up)
+            .Rotate(Vector3d.Forward);
+
+        NavTurning.NeedsTurn(
+                Vector3d.Forward,
+                targetDirection,
+                minAngle: (Fixed64)5)
+            .Should().BeTrue("the v7 quaternion angle is the full 8-degree physical rotation, not its 4-degree half-angle");
+    }
+
+    [Fact]
     public void SimulateTurn_ShouldBufferCollisionTurn_AfterMovingPastThreshold()
     {
         // Arrange
@@ -59,9 +73,10 @@ public class NavTurningTests
         {
             // We’re initially facing +X
             Forward = Vector3d.Right,
+            Rotation = FixedQuaternion.Identity,
             LastPosition = Vector3d.Zero,
             // Move along +Y so the collision‐turn delta = (0,1,0) != forward
-            Position = new Vector3d(0, 0.1, 0)
+            Position = Vector3d.FromDouble(0, 0.1, 0)
         };
 
         // Act — signal a collision
@@ -87,7 +102,7 @@ public class NavTurningTests
         var nav = new MockTurnAgent
         {
             LastPosition = Vector3d.Zero,
-            Position = new Vector3d(0.1, 0, 0),
+            Position = Vector3d.FromDouble(0.1, 0, 0),
             Forward = Vector3d.Right
         };
 
@@ -165,7 +180,7 @@ public class NavTurningTests
             Forward = Vector3d.Right
         };
         // forward and target differ by less than _minTurnRequiredAngle
-        var tinyOffset = new Vector3d(1, 0.00001, 0).Normal;
+        var tinyOffset = Vector3d.FromDouble(1, 0.00001, 0).Normalized;
 
         turning.RequestTurnDirection(nav.Forward, tinyOffset);
         turning.TargetReached.Should().BeTrue("no turn requested for angles below threshold");
@@ -228,8 +243,9 @@ public class NavTurningTests
         var nav = new MockTurnAgent
         {
             LastPosition = Vector3d.Zero,
-            Position = new Vector3d(0, 0.2, 0),
-            Forward = Vector3d.Right
+            Position = Vector3d.FromDouble(0, 0.2, 0),
+            Forward = Vector3d.Right,
+            Rotation = FixedQuaternion.Identity
         };
         turning.CanTurnOnCollision = () => true;
 

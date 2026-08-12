@@ -99,21 +99,24 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
         obj is AStarPathRequest other && Equals(other);
 
     /// <inheritdoc/>
-    public bool Equals(AStarPathRequest? other) => RequestCacheKey == other?.RequestCacheKey;
+    public bool Equals(AStarPathRequest? other) =>
+        other != null && RequestCacheKey == other.RequestCacheKey;
 
     /// <inheritdoc/>
-    public override int GetHashCode()
-    {
-        PathRequestHashBuilder hash = PathRequestHashBuilder.Create();
-        hash.Add(StartNode?.SpawnToken ?? 0);
-        hash.Add(EndNode?.SpawnToken ?? 0);
-        hash.Add(UnitSize.GetHashCode());
-        hash.Add(AllowUnwalkableEndpoints);
-        hash.Add(AllowTraversalTransitions);
-        hash.Add((int)Heuristic);
-        hash.Add(MaxClimbHeight.GetHashCode());
-        hash.Add(MaxPathSearchRange);
-        hash.Add(AllowTraversalTransitions ? Context.Pathing.State.TransitionRegistryState.RegistryVersion : 0);
-        return hash.ToHashCode();
-    }
+    public override int GetHashCode() => RequestCacheKey.GetHashCode();
+
+    /// <inheritdoc/>
+    public override PathRequestCacheKey RequestCacheKey =>
+        StartNode == null || EndNode == null
+            ? default
+            : PathRequestCacheKey.CreateAStar(
+                StartNode.WorldIndex,
+                EndNode.WorldIndex,
+                UnitSize,
+                AllowUnwalkableEndpoints,
+                AllowTraversalTransitions,
+                Heuristic,
+                MaxClimbHeight,
+                MaxPathSearchRange,
+                Context.Pathing.State.TransitionRegistryState.RegistryVersion);
 }

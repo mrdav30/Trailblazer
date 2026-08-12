@@ -61,7 +61,7 @@ public partial class NavSteering
                 continue;
 
             Vector3d offset = other.Position - position;
-            Fixed64 distSq = offset.SqrMagnitude;
+            Fixed64 distSq = offset.MagnitudeSquared;
             if (distSq <= Fixed64.Epsilon)
                 continue;
 
@@ -71,11 +71,11 @@ public partial class NavSteering
                 groupCount++;
                 Fixed64 d = FixedMath.Sqrt(distSq);
                 Fixed64 invD = Fixed64.One / d;
-                Vector3d norm = offset * invD;  // offset.Normal
+                Vector3d norm = offset * invD;  // offset.Normalized
                 // stronger separation the closer they are
                 Fixed64 push = (groupRadius - d) * invGR;
                 separation -= norm * push;
-                alignment += other.Velocity.Normal;
+                alignment += other.Velocity.Normalized;
                 cohesionCM += other.Position;
             }
 
@@ -92,8 +92,8 @@ public partial class NavSteering
         if (groupCount > 0)
         {
             Vector3d sep = separation * BehaviorWeights.Separation;
-            Vector3d align = (alignment / groupCount).Normal * BehaviorWeights.Alignment;
-            Vector3d coh = ((cohesionCM / groupCount - position).Normal) * BehaviorWeights.Cohesion;
+            Vector3d align = (alignment / groupCount).Normalized * BehaviorWeights.Alignment;
+            Vector3d coh = ((cohesionCM / groupCount - position).Normalized) * BehaviorWeights.Cohesion;
             groupForce = sep + align + coh;
         }
 
@@ -105,14 +105,14 @@ public partial class NavSteering
             // pick left/right dodge
             bool dodgeLeft = Vector3d.Dot(velocity, dir) >= Fixed64.Zero;
             Vector3d perp = dodgeLeft
-                ? new(-dir.z, Fixed64.Zero, dir.x)
-                : new(dir.z, Fixed64.Zero, -dir.x);
+                ? new(-dir.Z, Fixed64.Zero, dir.X)
+                : new(dir.Z, Fixed64.Zero, -dir.X);
 
             // prioritize evasive action when facing direct collision(dot ~ ±1),
             // and de-emphasize near misses(dot ~0)
-            Fixed64 dynamicAvoidWeight = Vector3d.Dot(velocity.Normal, dir.Normal);
+            Fixed64 dynamicAvoidWeight = Vector3d.Dot(velocity.Normalized, dir.Normalized);
             Fixed64 totalAvoidWeight = BehaviorWeights.Avoidance * dynamicAvoidWeight;
-            avoidance = perp.Normal
+            avoidance = perp.Normalized
                 * ((radius + closest.Radius) / FixedMath.Sqrt(closestDistSq))
                 * totalAvoidWeight;
         }

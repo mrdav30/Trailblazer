@@ -23,9 +23,9 @@ public struct TrekCondition : IRecordable
 
     /// <summary>
     /// Stores the height of the ceiling above the scout, if applicable.
-    /// Defaults to Fixed64.MAX_VALUE, meaning no ceiling.
+    /// Defaults to Fixed64.MaxValue, meaning no ceiling.
     /// </summary>
-    public Fixed64 CeilingLevel = Fixed64.MAX_VALUE;
+    public Fixed64 CeilingLevel = Fixed64.MaxValue;
 
     /// <summary>
     /// Contains data about the ground state, if applicable.
@@ -57,7 +57,7 @@ public struct TrekCondition : IRecordable
         Medium = TraversalMedium.Unknown;
         SurfaceLevel = Fixed64.Zero;
         GroundState = null;
-        CeilingLevel = Fixed64.MAX_VALUE;
+        CeilingLevel = Fixed64.MaxValue;
     }
 
     /// <inheritdoc/>
@@ -65,7 +65,7 @@ public struct TrekCondition : IRecordable
     {
         RecordValues.Look(chronicler, ref Medium, "Medium", TraversalMedium.Unknown);
         RecordValues.Look(chronicler, ref SurfaceLevel, "SurfaceLevel", Fixed64.Zero);
-        RecordValues.Look(chronicler, ref CeilingLevel, "CeilingLevel", Fixed64.MAX_VALUE);
+        RecordValues.Look(chronicler, ref CeilingLevel, "CeilingLevel", Fixed64.MaxValue);
         RecordNullableDeep.Look(chronicler, ref GroundState, "GroundState");
     }
 }

@@ -251,7 +251,7 @@ public sealed class HybridWaypointFlattenerTests : IDisposable
 
         public bool IsValid => true;
 
-        public int RequestCacheKey => 42;
+        public PathRequestCacheKey RequestCacheKey => TestPathRequest.CreateCacheKey(42);
 
         public bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize) => false;
 

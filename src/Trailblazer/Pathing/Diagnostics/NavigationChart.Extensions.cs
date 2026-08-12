@@ -25,7 +25,7 @@ public static class NavigationChartExtensions
         Console.WriteLine($"Walkable Positions for Chart [{chart.Name}]:");
 
         foreach (Vector3d pos in chart.GetWalkablePositions())
-            Console.WriteLine($"  ({pos.x}, {pos.y}, {pos.z})");
+            Console.WriteLine($"  ({pos.X}, {pos.Y}, {pos.Z})");
     }
 
     /// <summary>
@@ -42,9 +42,9 @@ public static class NavigationChartExtensions
     {
         Console.WriteLine($"XZ Plane at Y={yLevel} for Chart [{chart.Name}]:");
 
-        for (int z = (int)chart.MinBounds.z; z < (int)chart.MaxBounds.z; z++)
+        for (int z = (int)chart.MinBounds.Z; z < (int)chart.MaxBounds.Z; z++)
         {
-            for (int x = (int)chart.MinBounds.x; x < (int)chart.MaxBounds.x; x++)
+            for (int x = (int)chart.MinBounds.X; x < (int)chart.MaxBounds.X; x++)
             {
                 Vector3d pos = new(x, yLevel, z);
                 bool walkable = chart.IsWalkable(pos);

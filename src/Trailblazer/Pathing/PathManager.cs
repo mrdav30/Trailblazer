@@ -314,8 +314,7 @@ internal static class PathManager
             if (_navigationChartMap.ContainsKey(chart.Name))
                 return false;
 
-            ValidateChartVoxelSizeCompatibility(world, chart);
-
+            TrailblazerGridCompatibility.ValidateWorld(world, chart.Interval, nameof(chart));
             var registration = new NavigationChartRegistration(
                 chart,
                 unchecked(++_nextChartRegistrationOrder),
@@ -334,17 +333,6 @@ internal static class PathManager
             InitializeChart(world, chart.Name);
 
         return true;
-    }
-
-    private static void ValidateChartVoxelSizeCompatibility(GridWorld world, NavigationChart chart)
-    {
-        if (chart.Interval == world.VoxelSize)
-            return;
-
-        throw new ArgumentException(
-            $"Navigation chart '{chart.Name}' uses interval {chart.Interval}, but the owning GridWorld uses voxel size {world.VoxelSize}. " +
-            "Rebuild the chart with the context voxel size before registration.",
-            nameof(chart));
     }
 
     /// <summary>
@@ -633,7 +621,7 @@ internal static class PathManager
     {
         for (int i = 0; i < candidates.Length; i++)
         {
-            Fixed64 candidateDistanceSq = (candidates[i].Source.Position - worldPosition).SqrMagnitude;
+            Fixed64 candidateDistanceSq = (candidates[i].Source.Position - worldPosition).MagnitudeSquared;
             if (!found || candidateDistanceSq < closestDistanceSq)
             {
                 found = true;
@@ -648,9 +636,9 @@ internal static class PathManager
         Vector3d boundsMin,
         Vector3d boundsMax)
     {
-        Fixed64 xDistance = GetAxisDistanceToBounds(worldPosition.x, boundsMin.x, boundsMax.x);
-        Fixed64 yDistance = GetAxisDistanceToBounds(worldPosition.y, boundsMin.y, boundsMax.y);
-        Fixed64 zDistance = GetAxisDistanceToBounds(worldPosition.z, boundsMin.z, boundsMax.z);
+        Fixed64 xDistance = GetAxisDistanceToBounds(worldPosition.X, boundsMin.X, boundsMax.X);
+        Fixed64 yDistance = GetAxisDistanceToBounds(worldPosition.Y, boundsMin.Y, boundsMax.Y);
+        Fixed64 zDistance = GetAxisDistanceToBounds(worldPosition.Z, boundsMin.Z, boundsMax.Z);
         return xDistance * xDistance + yDistance * yDistance + zDistance * zDistance;
     }
 
@@ -911,7 +899,7 @@ internal static class PathManager
     /// Unloads the navigation chart identified by the specified key from the given world.
     /// </summary>
     /// <param name="chartKey">
-    /// The unique key identifying the navigation chart to unload. 
+    /// The unique key identifying the navigation chart to unload.
     /// If the key does not correspond to a loaded chart, no action is taken.</param>
     public static void UnloadChart(string chartKey)
     {
@@ -923,7 +911,7 @@ internal static class PathManager
     /// </summary>
     /// <param name="world">The world instance from which to unload the navigation chart.</param>
     /// <param name="chartKey">
-    /// The unique key identifying the navigation chart to unload. 
+    /// The unique key identifying the navigation chart to unload.
     /// If the key does not correspond to a loaded chart, no action is taken.</param>
     public static void UnloadChart(GridWorld world, string chartKey)
     {
@@ -1049,9 +1037,6 @@ internal static class PathManager
             return 0;
 
         NavigationChart[] initializedCharts = GetInitializedChartsAffectedByExternalGridRequestsSnapshot(rebuildRequests);
-        if (initializedCharts.Length == 0)
-            return 0;
-
         RebuildInitializedChartsAgainstCurrentGrids(world, initializedCharts);
         return initializedCharts.Length;
     }
@@ -1078,15 +1063,21 @@ internal static class PathManager
 
     private static void RebuildInitializedChartsAgainstCurrentGrids(GridWorld world, NavigationChart[] chartsToRebuild)
     {
-        SuppressManagedGeneratedTransitionsForCharts(chartsToRebuild);
+        if (chartsToRebuild.Length > 0)
+        {
+            SuppressManagedGeneratedTransitionsForCharts(chartsToRebuild);
 
-        for (int i = 0; i < chartsToRebuild.Length; i++)
-            ClearInitializedChartLiveStatePreservingRegistration(world, chartsToRebuild[i]);
+            for (int i = 0; i < chartsToRebuild.Length; i++)
+                ClearInitializedChartLiveStatePreservingRegistration(world, chartsToRebuild[i]);
 
-        for (int i = 0; i < chartsToRebuild.Length; i++)
-            InitializeChart(world, chartsToRebuild[i].Name);
+            for (int i = 0; i < chartsToRebuild.Length; i++)
+                InitializeChart(world, chartsToRebuild[i].Name);
+        }
 
-        RefreshManagedGeneratedTransitionsForCharts(world, GetInitializedChartsSnapshot());
+        TraversalTransitionRegistry.RebindManagedTransitionsToCurrentGrid();
+        if (chartsToRebuild.Length > 0)
+            RefreshManagedGeneratedTransitionsForCharts(world, GetInitializedChartsSnapshot());
+
         TraversalTransitionRegistry.RefreshManagedManualTransitions();
     }
 
@@ -1407,12 +1398,12 @@ internal static class PathManager
         Vector3d secondMin,
         Vector3d secondMax)
     {
-        return firstMin.x <= secondMax.x
-            && firstMax.x >= secondMin.x
-            && firstMin.y <= secondMax.y
-            && firstMax.y >= secondMin.y
-            && firstMin.z <= secondMax.z
-            && firstMax.z >= secondMin.z;
+        return firstMin.X <= secondMax.X
+            && firstMax.X >= secondMin.X
+            && firstMin.Y <= secondMax.Y
+            && firstMax.Y >= secondMin.Y
+            && firstMin.Z <= secondMax.Z
+            && firstMax.Z >= secondMin.Z;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1421,12 +1412,12 @@ internal static class PathManager
         Vector3d boundsMin,
         Vector3d boundsMax)
     {
-        return position.x >= boundsMin.x
-            && position.x <= boundsMax.x
-            && position.y >= boundsMin.y
-            && position.y <= boundsMax.y
-            && position.z >= boundsMin.z
-            && position.z <= boundsMax.z;
+        return position.X >= boundsMin.X
+            && position.X <= boundsMax.X
+            && position.Y >= boundsMin.Y
+            && position.Y <= boundsMax.Y
+            && position.Z >= boundsMin.Z
+            && position.Z <= boundsMax.Z;
     }
 
     private static void RemoveLivePathingPartitions(Voxel voxel)
@@ -2545,19 +2536,29 @@ internal static class PathManager
         Voxel voxel,
         SwiftHashSet<SolidChartPartition> partitionsToRebind)
     {
-        if (!world.TryGetGrid(voxel.WorldIndex.GridIndex, out VoxelGrid? grid))
+        if (!world.TryGetGrid(voxel.WorldIndex, out VoxelGrid? grid))
             return;
 
         if (voxel.TryGetPartition(out SolidChartPartition? currentPartition))
             partitionsToRebind.Add(currentPartition!);
 
-        foreach (SpatialDirection direction in SpatialAwareness.AllDirections)
+        SwiftList<Voxel> contactNeighbors = SwiftListPool<Voxel>.Shared.Rent();
+        try
         {
-            if (voxel.TryGetNeighborFromDirection(grid!, direction, out Voxel? neighborVoxel, useCache: true)
-                && neighborVoxel!.TryGetPartition(out SolidChartPartition? neighborPartition))
+            voxel.GetNeighborsInto(
+                grid!,
+                contactNeighbors,
+                VoxelNeighborScope.SourceGrid | VoxelNeighborScope.SameTopologyGrids);
+
+            for (int i = 0; i < contactNeighbors.Count; i++)
             {
-                partitionsToRebind.Add(neighborPartition!);
+                if (contactNeighbors[i].TryGetPartition(out SolidChartPartition? neighborPartition))
+                    partitionsToRebind.Add(neighborPartition!);
             }
+        }
+        finally
+        {
+            SwiftListPool<Voxel>.Shared.Release(contactNeighbors);
         }
     }
 
@@ -2586,16 +2587,17 @@ internal static class PathManager
     public static bool TryGetMaxSearchSize(GridWorld world, Voxel start, Voxel end, out int maxSearchSize)
     {
         LinkWorld(world);
-        if (!world.TryGetGrid(start.WorldIndex.GridIndex, out VoxelGrid? startGrid)
-            || !world.TryGetGrid(end.WorldIndex.GridIndex, out VoxelGrid? endGrid))
+        TrailblazerGridCompatibility.ValidateWorld(world);
+        if (!world.TryGetGrid(start.WorldIndex, out VoxelGrid? startGrid)
+            || !world.TryGetGrid(end.WorldIndex, out VoxelGrid? endGrid))
         {
             maxSearchSize = 0;
             return false;
         }
 
         maxSearchSize = startGrid == endGrid
-            ? startGrid!.Size
-            : startGrid!.Size + endGrid!.Size;
+            ? startGrid!.ConfiguredVoxelCount
+            : startGrid!.ConfiguredVoxelCount + endGrid!.ConfiguredVoxelCount;
         return true;
     }
 

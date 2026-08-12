@@ -5,7 +5,7 @@ namespace Trailblazer.Pathing;
 internal readonly struct PendingExternalGridChange
 {
     public PendingExternalGridChange(
-        int gridSpawnToken,
+        long gridSpawnToken,
         uint gridVersion,
         Vector3d boundsMin,
         Vector3d boundsMax,
@@ -20,7 +20,7 @@ internal readonly struct PendingExternalGridChange
         RequiresAuthoredCellBoundsSelection = requiresAuthoredCellBoundsSelection;
     }
 
-    public int GridSpawnToken { get; }
+    public long GridSpawnToken { get; }
 
     public uint GridVersion { get; }
 

@@ -66,7 +66,7 @@ public partial class NavSteering
         if (_currentRequest != null)
             return _currentRequest.Context.VoxelSize;
 
-        return GridWorld.DefaultVoxelSize;
+        return GridWorld.DefaultRectangularCellSize;
     }
 
     private TrailblazerWorldContext ResolveContext()
@@ -252,7 +252,7 @@ public partial class NavSteering
         }
 
         // This is now the direction we want to be travelling in 
-        return targetDirection.Normalize(out _distanceToTarget);
+        return targetDirection.NormalizeInPlace(out _distanceToTarget);
     }
 
     /// <summary>

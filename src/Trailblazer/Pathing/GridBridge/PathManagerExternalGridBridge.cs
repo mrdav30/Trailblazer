@@ -401,17 +401,17 @@ internal static class PathManagerExternalGridBridge
     private static Vector3d MinBounds(Vector3d left, Vector3d right)
     {
         return new Vector3d(
-            left.x <= right.x ? left.x : right.x,
-            left.y <= right.y ? left.y : right.y,
-            left.z <= right.z ? left.z : right.z);
+            left.X <= right.X ? left.X : right.X,
+            left.Y <= right.Y ? left.Y : right.Y,
+            left.Z <= right.Z ? left.Z : right.Z);
     }
 
     private static Vector3d MaxBounds(Vector3d left, Vector3d right)
     {
         return new Vector3d(
-            left.x >= right.x ? left.x : right.x,
-            left.y >= right.y ? left.y : right.y,
-            left.z >= right.z ? left.z : right.z);
+            left.X >= right.X ? left.X : right.X,
+            left.Y >= right.Y ? left.Y : right.Y,
+            left.Z >= right.Z ? left.Z : right.Z);
     }
 
 }

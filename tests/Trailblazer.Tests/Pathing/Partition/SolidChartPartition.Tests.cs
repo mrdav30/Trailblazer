@@ -3,6 +3,8 @@ using FluentAssertions;
 using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Grids.Topology;
+using GridForge.Spatial;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -12,8 +14,6 @@ namespace Trailblazer.Tests.Pathing;
 [Collection("PathingCollection")]
 public sealed class SolidChartPartitionTests : IDisposable
 {
-    private readonly BoundsKey _obstacleKey = new(Vector3d.Zero, Vector3d.Zero);
-
     public SolidChartPartitionTests()
     {
         TestWorld.Setup();
@@ -89,15 +89,43 @@ public sealed class SolidChartPartitionTests : IDisposable
         voxel!.TryGetPartition(out SolidChartPartition? partition).Should().BeTrue();
         partition!.IsWalkable.Should().BeTrue();
         partition.HasAnyOwners.Should().BeTrue();
+        ObstacleToken obstacleToken = TestWorld.World.AllocateObstacleToken();
 
-        grid!.TryAddObstacle(voxel, _obstacleKey).Should().BeTrue();
+        grid!.TryAddObstacle(voxel, obstacleToken).Should().BeTrue();
         partition.IsWalkable.Should().BeFalse();
 
-        grid!.TryRemoveObstacle(voxel, _obstacleKey).Should().BeTrue();
+        grid!.TryRemoveObstacle(voxel, obstacleToken).Should().BeTrue();
         partition.IsWalkable.Should().BeTrue();
 
         partition.HandleChange(default);
         partition.IsWalkable.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BindNeighbors_ShouldResolveAcrossConjoinedChartGridBoundary()
+    {
+        TestWorld.Reset();
+        GridWorld world = new();
+        TestWorld.Attach(world, takeOwnership: true);
+
+        world.TryAddGrid(
+            new GridConfiguration(new Vector3d(0, 0, 0), new Vector3d(1, 0, 0)),
+            out _).Should().BeTrue();
+        world.TryAddGrid(
+            new GridConfiguration(new Vector3d(1, 0, 0), new Vector3d(2, 0, 0)),
+            out _).Should().BeTrue();
+
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("LeftBoundaryChart", new Vector3d(1, 0, 0)))
+            .Should().BeTrue();
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("RightBoundaryChart", new Vector3d(2, 0, 0)))
+            .Should().BeTrue();
+
+        SolidChartPartition left = TestRequire.Partition<SolidChartPartition>(
+            TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0)));
+        SolidChartPartition right = TestRequire.Partition<SolidChartPartition>(
+            TestRequire.VoxelAt(TestWorld.Context, new Vector3d(2, 0, 0)));
+
+        left.Neighbors![(int)RectangularDirection.East].Should().BeSameAs(right);
     }
 
     [Fact]
@@ -117,7 +145,8 @@ public sealed class SolidChartPartitionTests : IDisposable
         SolidPartitionReachability.SolidPartitionReachabilityStats before =
             context.Guides.CaptureReachabilityStats();
 
-        Action act = () => grid!.TryAddObstacle(voxel!, _obstacleKey).Should().BeTrue();
+        ObstacleToken obstacleToken = context.World.AllocateObstacleToken();
+        Action act = () => grid!.TryAddObstacle(voxel!, obstacleToken).Should().BeTrue();
 
         act.Should().NotThrow();
         context.Guides.CaptureReachabilityStats().Version.Should().BeGreaterThan(before.Version);
@@ -175,6 +204,28 @@ public sealed class SolidChartPartitionTests : IDisposable
     }
 
     [Fact]
+    public void IsImpassable_ShouldUseOwningGridMetricsWithoutRevalidatingWholeWorld()
+    {
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("IsImpassableOwnerMetrics", Vector3d.Zero));
+        Voxel voxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        SolidChartPartition partition = TestRequire.Partition<SolidChartPartition>(voxel);
+
+        TestWorld.World.TryAddGrid(
+                new GridConfiguration(
+                    new Vector3d(20, 0, 0),
+                    Vector3d.One,
+                    topologyKind: GridTopologyKind.HexPrism,
+                    topologyMetrics: GridTopologyMetrics.Hex(Fixed64.One, Fixed64.One)),
+                out _)
+            .Should()
+            .BeTrue();
+
+        Action hotPathCheck = () => partition.IsImpassable(Fixed64.One).Should().BeFalse();
+        hotPathCheck.Should().NotThrow(
+            "whole-world compatibility is validated at admission, not for every expanded neighbor");
+    }
+
+    [Fact]
     public void GetNeighborClearance_ShouldReturnZero_WhenVoxelHasObstacle()
     {
         PathManager.Register(PathTestFactory.BuildSinglePointMap("ClearanceObstacle", Vector3d.Zero));
@@ -182,18 +233,38 @@ public sealed class SolidChartPartitionTests : IDisposable
 
         var (grid, voxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, Vector3d.Zero);
         voxel!.TryGetPartition(out SolidChartPartition? partition).Should().BeTrue();
+        ObstacleToken obstacleToken = TestWorld.World.AllocateObstacleToken();
 
         // Before obstacle: clearance should be at least 1.
         partition!.GetNeighborClearance().Should().BeGreaterThan(0);
         // Add obstacle → IsWalkable = false.
-        grid!.TryAddObstacle(voxel, _obstacleKey).Should().BeTrue();
+        grid!.TryAddObstacle(voxel, obstacleToken).Should().BeTrue();
 
         // CheckClearance: TryGetClearanceOrigin returns false because !IsWalkable.
         // origin.IsBlocked == true → clearance is set to 0.
         partition.GetNeighborClearance().Should().Be(0);
 
         // Cleanup.
-        grid!.TryRemoveObstacle(voxel, _obstacleKey).Should().BeTrue();
+        grid!.TryRemoveObstacle(voxel, obstacleToken).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Obstacles_ShouldRemainBlockedUntilEveryDistinctTokenIsRemoved()
+    {
+        PathManager.Register(PathTestFactory.BuildSinglePointMap("StackedSolidObstacles", Vector3d.Zero));
+        var (grid, voxel) = TestRequire.GridAndVoxelAt(TestWorld.Context, Vector3d.Zero);
+        SolidChartPartition partition = TestRequire.Partition<SolidChartPartition>(voxel!);
+        ObstacleToken first = TestWorld.World.AllocateObstacleToken();
+        ObstacleToken second = TestWorld.World.AllocateObstacleToken();
+
+        grid!.TryAddObstacle(voxel!, first).Should().BeTrue();
+        grid.TryAddObstacle(voxel, second).Should().BeTrue();
+        grid.TryRemoveObstacle(voxel, first).Should().BeTrue();
+
+        partition.IsWalkable.Should().BeFalse();
+
+        grid.TryRemoveObstacle(voxel, second).Should().BeTrue();
+        partition.IsWalkable.Should().BeTrue();
     }
 
     [Fact]

@@ -754,7 +754,7 @@ public class AStarSurveyorTests : IDisposable
             new Vector3d(1, 0, 0),
             undefinedHeuristic);
 
-        result.Should().Be(Fixed64.MAX_VALUE.CeilToInt());
+        result.Should().Be(Fixed64.MaxValue.CeilToInt());
     }
 
     [Fact]
@@ -776,7 +776,11 @@ public class AStarSurveyorTests : IDisposable
     public void AStarSurveyResult_Create_ShouldUseFallbackEmptyArray_WhenChartsUtilizedIsNull()
     {
         var waypoints = new[] { new AStarWaypoint { Position = Vector3d.Zero, IsGoal = true } };
-        AStarSurveyResult result = AStarSurveyResult.Create(TestWorld.Context, waypoints, null!, key: 1);
+        AStarSurveyResult result = AStarSurveyResult.Create(
+            TestWorld.Context,
+            waypoints,
+            null!,
+            TestPathRequest.CreateCacheKey(1));
 
         string[] chartsUtilized = TestRequire.NotNull(result.ChartsUtilized);
         chartsUtilized.Should().BeEmpty();
@@ -822,6 +826,28 @@ public class AStarSurveyorTests : IDisposable
         AStarWaypoint[] result = AStarSurveyor.CatmullSmooth(three);
 
         result.Should().BeSameAs(three);
+    }
+
+    [Fact]
+    public void CatmullSmooth_ShouldSampleIntermediatePointsWithFixedPointFractions()
+    {
+        AStarWaypoint[] input =
+        {
+            new() { Position = Vector3d.Zero },
+            new() { Position = new Vector3d(3, 0, 0) },
+            new() { Position = new Vector3d(6, 0, 0) },
+            new() { Position = new Vector3d(9, 0, 0) }
+        };
+
+        AStarWaypoint[] result = AStarSurveyor.CatmullSmooth(input, resolutionPerSegment: 3);
+
+        result.Should().HaveCount(5);
+        result[0].Position.Should().Be(input[0].Position);
+        result[1].Position.X.Should().BeGreaterThan((Fixed64)3);
+        result[2].Position.X.Should().BeGreaterThan(result[1].Position.X);
+        result[2].Position.X.Should().BeLessThan((Fixed64)6);
+        result[3].Position.Should().Be(input[2].Position);
+        result[4].Position.Should().Be(input[3].Position);
     }
 
     // -----------------------------------------------------------------
@@ -947,7 +973,14 @@ public class AStarSurveyorTests : IDisposable
     public void AStarGuide_ShouldReturnSafeDefaults_WhenTrailMapHasNoPath()
     {
         AStarGuide guide = new();
-        ReflectionUtility.SetPrivateField(guide, "<TrailMap>k__BackingField", AStarSurveyResult.Create(TestWorld.Context, Array.Empty<AStarWaypoint>(), Array.Empty<string>(), 0));
+        ReflectionUtility.SetPrivateField(
+            guide,
+            "<TrailMap>k__BackingField",
+            AStarSurveyResult.Create(
+                TestWorld.Context,
+                Array.Empty<AStarWaypoint>(),
+                Array.Empty<string>(),
+                TestPathRequest.CreateCacheKey(0)));
 
         guide.HasArrived().Should().BeFalse();
         guide.TryGetMovementDirection(Vector3d.Zero, out Vector3d movementDirection).Should().BeFalse();

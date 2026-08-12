@@ -1,6 +1,7 @@
 ﻿using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Spatial;
 using System;
 using Trailblazer.Pathing;
 using Xunit;
@@ -1909,6 +1910,12 @@ public class PathingNavigationMapTests : IDisposable
 
         Assert.True(TraversalTransitionRegistry.Register(manual));
         Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.True(TraversalTransitionRegistry.TryGetResolvedEndpoints(
+            manual.Id,
+            out WorldVoxelIndex originalSourceIndex,
+            out WorldVoxelIndex originalDestinationIndex));
+        RegisteredTraversalTransition originalRegistration =
+            PathManager.ActiveState.TransitionRegistryState.Transitions[manual.Id];
         Voxel sourceVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(sourceVoxel.TryGetPartition<SolidChartPartition>(out _));
 
@@ -1926,11 +1933,25 @@ public class PathingNavigationMapTests : IDisposable
         Assert.True(TestWorld.World.TryAddGrid(config, out _));
         FlushExternalGridBridge();
 
+        Voxel rebuiltSourceVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel rebuiltDestinationVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
+        Assert.True(TraversalTransitionRegistry.TryGetResolvedEndpoints(
+            manual.Id,
+            out WorldVoxelIndex reboundSourceIndex,
+            out WorldVoxelIndex reboundDestinationIndex));
+        Assert.NotEqual(originalSourceIndex, reboundSourceIndex);
+        Assert.NotEqual(originalDestinationIndex, reboundDestinationIndex);
+        Assert.Equal(rebuiltSourceVoxel.WorldIndex, reboundSourceIndex);
+        Assert.Equal(rebuiltDestinationVoxel.WorldIndex, reboundDestinationIndex);
+        RegisteredTraversalTransition reboundRegistration =
+            PathManager.ActiveState.TransitionRegistryState.Transitions[manual.Id];
+        Assert.Equal(originalRegistration.Transition.Id, reboundRegistration.Transition.Id);
+        Assert.Equal(originalRegistration.Priority, reboundRegistration.Priority);
+        Assert.Equal(originalRegistration.RegistrationOrder, reboundRegistration.RegistrationOrder);
         Assert.True(TraversalTransitionRegistry.IsRegistered(manual.Id));
         Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
         Assert.True(PathManager.TryGetEffectiveCell(Vector3d.Zero, out NavigationChartCell restoredCell));
         Assert.True(restoredCell.HasSolid);
-        Voxel rebuiltSourceVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
         Assert.True(rebuiltSourceVoxel.TryGetPartition<SolidChartPartition>(out _));
     }
 
@@ -1960,6 +1981,13 @@ public class PathingNavigationMapTests : IDisposable
         TraversalTransition[] beforeRemove = TraversalTransitionRegistry.GetOutgoingTransitions(Vector3d.Zero);
         Assert.Single(beforeRemove);
         string generatedTransitionId = beforeRemove[0].Id;
+        Vector3d generatedDestinationPosition = beforeRemove[0].Destination.Position;
+        Assert.True(TraversalTransitionRegistry.TryGetResolvedEndpoints(
+            generatedTransitionId,
+            out WorldVoxelIndex originalSourceIndex,
+            out WorldVoxelIndex originalDestinationIndex));
+        RegisteredTraversalTransition originalRegistration =
+            PathManager.ActiveState.TransitionRegistryState.Transitions[generatedTransitionId];
         Assert.Equal(TraversalTransitionType.SwimEntry, beforeRemove[0].Type);
 
         Assert.True(TestWorld.World.TryRemoveGrid(gridIndex));
@@ -1977,6 +2005,68 @@ public class PathingNavigationMapTests : IDisposable
         Assert.Single(afterAdd);
         Assert.Equal(generatedTransitionId, afterAdd[0].Id);
         Assert.Equal(TraversalTransitionType.SwimEntry, afterAdd[0].Type);
+        Assert.True(TraversalTransitionRegistry.TryGetResolvedEndpoints(
+            generatedTransitionId,
+            out WorldVoxelIndex reboundSourceIndex,
+            out WorldVoxelIndex reboundDestinationIndex));
+        Assert.NotEqual(originalSourceIndex, reboundSourceIndex);
+        Assert.NotEqual(originalDestinationIndex, reboundDestinationIndex);
+        Assert.Equal(TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero).WorldIndex, reboundSourceIndex);
+        Assert.Equal(TestRequire.VoxelAt(TestWorld.Context, generatedDestinationPosition).WorldIndex, reboundDestinationIndex);
+        RegisteredTraversalTransition reboundRegistration =
+            PathManager.ActiveState.TransitionRegistryState.Transitions[generatedTransitionId];
+        Assert.Equal(originalRegistration.Transition.Id, reboundRegistration.Transition.Id);
+        Assert.Equal(originalRegistration.Priority, reboundRegistration.Priority);
+        Assert.Equal(originalRegistration.RegistrationOrder, reboundRegistration.RegistrationOrder);
+    }
+
+    [Fact]
+    public void GlobalGridRemoveAndAdd_ShouldRebindManagedRawVolumeTransitionWithoutInitializedCharts()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        Assert.True(TestWorld.World.TryAddGrid(config, out ushort gridIndex));
+        FlushExternalGridBridge();
+
+        VolumeMediumRules.SetGasVoxelRule(static _ => true);
+        Voxel sourceVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel destinationVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
+        Assert.True(sourceVoxel.TryAddPartition(new SolidChartPartition()));
+        Assert.True(destinationVoxel.TryAddPartition(new SolidChartPartition()));
+
+        var manual = new TraversalTransition(
+            id: "external-no-chart-volume-transition",
+            type: TraversalTransitionType.Custom,
+            source: TraversalTransitionAnchor.Gas(Vector3d.Zero),
+            destination: TraversalTransitionAnchor.Gas(new Vector3d(1, 0, 0)));
+
+        Assert.True(TraversalTransitionRegistry.Register(manual));
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.True(TraversalTransitionRegistry.TryGetResolvedEndpoints(
+            manual.Id,
+            out WorldVoxelIndex originalSourceIndex,
+            out WorldVoxelIndex originalDestinationIndex));
+
+        Assert.True(TestWorld.World.TryRemoveGrid(gridIndex));
+        FlushExternalGridBridge();
+
+        Assert.False(TraversalTransitionRegistry.IsActive(manual.Id));
+
+        Assert.True(TestWorld.World.TryAddGrid(config, out _));
+        Voxel rebuiltSourceVoxel = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Voxel rebuiltDestinationVoxel = TestRequire.VoxelAt(TestWorld.Context, new Vector3d(1, 0, 0));
+        Assert.True(rebuiltSourceVoxel.TryAddPartition(new SolidChartPartition()));
+        Assert.True(rebuiltDestinationVoxel.TryAddPartition(new SolidChartPartition()));
+        FlushExternalGridBridge();
+
+        Assert.True(TraversalTransitionRegistry.IsActive(manual.Id));
+        Assert.True(TraversalTransitionRegistry.TryGetResolvedEndpoints(
+            manual.Id,
+            out WorldVoxelIndex reboundSourceIndex,
+            out WorldVoxelIndex reboundDestinationIndex));
+        Assert.NotEqual(originalSourceIndex, reboundSourceIndex);
+        Assert.NotEqual(originalDestinationIndex, reboundDestinationIndex);
+        Assert.Equal(rebuiltSourceVoxel.WorldIndex, reboundSourceIndex);
+        Assert.Equal(rebuiltDestinationVoxel.WorldIndex, reboundDestinationIndex);
     }
 
     [Fact]
@@ -2138,6 +2228,26 @@ public class PathingNavigationMapTests : IDisposable
     }
 
     [Fact]
+    public void TryGetMaxSearchSize_ShouldRejectVoxelFromRecycledGridGeneration()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, -4, -4), new Vector3d(4, 4, 4));
+        Assert.True(TestWorld.World.TryAddGrid(config, out ushort gridIndex));
+        Voxel stale = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+
+        Assert.True(TestWorld.World.TryRemoveGrid(gridIndex));
+        Assert.True(TestWorld.World.TryAddGrid(config, out ushort replacementGridIndex));
+        Assert.Equal(gridIndex, replacementGridIndex);
+
+        Voxel replacement = TestRequire.VoxelAt(TestWorld.Context, Vector3d.Zero);
+        Assert.NotEqual(stale.WorldIndex.GridSpawnToken, replacement.WorldIndex.GridSpawnToken);
+
+        Assert.False(PathManager.TryGetMaxSearchSize(TestWorld.World, stale, replacement, out int staticSearchSize));
+        Assert.Equal(0, staticSearchSize);
+        Assert.False(TestWorld.Context.Pathing.TryGetMaxSearchSize(stale, replacement, out int serviceSearchSize));
+        Assert.Equal(0, serviceSearchSize);
+    }
+
+    [Fact]
     public void NeedsPath_ShouldReturnTrue_WhenLineCrossesUnpartitionedVoxels()
     {
         var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
@@ -2157,6 +2267,24 @@ public class PathingNavigationMapTests : IDisposable
         Assert.False(PathManager.NeedsPath(Vector3d.Zero, new Vector3d(2, 0, 0), Fixed64.One));
 
         PathManager.UnloadChart("NeedsPathWalkableChart");
+    }
+
+    [Fact]
+    public void NeedsPath_ShouldTraceFractionalEndpointsAcrossIntermediateVoxels()
+    {
+        var config = new GridConfiguration(new Vector3d(-4, 0, -4), new Vector3d(4, 0, 4));
+        Assert.True(TestWorld.World.TryAddGrid(config, out _));
+
+        bool[,,] data = CreateThreeVoxelLine();
+        data[0, 1, 0] = false;
+        PathTestFactory.RegisterFromData(TestWorld.Context, "NeedsPathFractionalTrace", data, Vector3d.Zero);
+
+        Vector3d start = Vector3d.FromDouble(0.25, 0, 0);
+        Vector3d end = Vector3d.FromDouble(1.75, 0, 0);
+
+        Assert.True(PathManager.NeedsPath(start, end, Fixed64.One));
+
+        PathManager.UnloadChart("NeedsPathFractionalTrace");
     }
 
     [Fact]

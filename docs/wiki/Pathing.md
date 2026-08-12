@@ -112,10 +112,16 @@ Important model rules:
 - `Origin` and `TargetPosition` are exact points, not snapped voxel origins.
 - `StartNode` and `EndNode` are the resolved pathing hooks into the rest of the
   system.
-- `RequestCacheKey` is the request hash and is the cache key used by the
-  context-local guide cache.
-- The request key does not carry a world id; equivalent keys in different
-  contexts stay isolated because each context owns its own caches.
+- `RequestCacheKey` is an exact immutable request identity used by the context-local
+  guide cache. Its hash code only selects a bucket; equality still compares the
+  complete key.
+- Endpoint identities carry GridForge world id, world generation, grid id, grid
+  generation, and voxel index. Grid rebuilds and id reuse therefore cannot
+  alias stale cached routes.
+- A*, volume, and hybrid keys include their behavior-affecting request options.
+  Hybrid transition ids remain ordered and ordinal, and hybrid keys retain the
+  exact endpoint positions embedded in staged segment requests. Flow-field keys
+  remain destination-centric so agents can share a compatible field.
 - A request can have world positions stored and still be invalid if endpoints or
   search range cannot be resolved.
 
@@ -394,9 +400,9 @@ Routing by type:
 
 Cache behavior:
 
-- A*, flow-field, and volume survey results each use their own
-  `ReusableSurveyResultCache<T>`
-- the cache key is `request.RequestCacheKey`
+- A*, flow-field, and volume survey results plus hybrid route plans each use
+  their own `ReusableSurveyResultCache<T>`
+- the cache key is the exact `request.RequestCacheKey`
 - cached results are reused until invalidated or evicted
 - stale entries are culled by `TrailblazerWorldContext.Simulate()` using the
   context frame count
@@ -412,7 +418,7 @@ Invalidation sources:
   partitions
 - `PathManager.UnloadChart(...)`
 - `context.Pathing.Reset()`
-- transition-topology changes when the request hash includes
+- transition-topology changes when the request key includes
   `TraversalTransitionRegistry.RegistryVersion`
 
 ## 9. Choosing The Right Request

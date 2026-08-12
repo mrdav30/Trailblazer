@@ -13,13 +13,13 @@ public partial class NavTurning : IRecordable
     #region Constants
 
     /// <summary>
-    /// The minimum angular difference (in radians) required to initiate a turn.
+    /// The minimum physical angular difference (in degrees) required to initiate a turn.
     /// </summary>
     private static readonly Fixed64 _minTurnRequiredAngle =
         Fixed64.FromRaw(0x9520000L); // 0.036407470703125f * 2^32;
 
     /// <summary>
-    /// The angular threshold (in radians) below which a turn is considered complete.
+    /// The physical angular threshold (in degrees) below which a turn is considered complete.
     /// </summary>
     private static readonly Fixed64 _arriveThresholdAngle =
         Fixed64.FromRaw(0x68DB9L); // 0.0001M;
@@ -220,7 +220,7 @@ public partial class NavTurning : IRecordable
 
         // 1) compute delta first
         Vector3d delta = position - lastPosition;
-        if (delta.SqrMagnitude < GetCollisionTurnThreshold()
+        if (delta.MagnitudeSquared < GetCollisionTurnThreshold()
             || !TargetReached
             || (CanTurnOnCollision?.Invoke() == false))
         {
@@ -230,7 +230,7 @@ public partial class NavTurning : IRecordable
 
         // 2) now we know we’ll actually turn
         _isColliding = false;
-        delta.Normalize();
+        delta.NormalizeInPlace();
         RequestTurnDirection(curDirection, delta);
     }
 

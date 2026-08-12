@@ -34,7 +34,7 @@ public class JumpLocomotionTests : IDisposable
         scout.Simulate();
 
         // Assert
-        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeGreaterThan(Fixed64.Zero);
+        scout.Motor.Handler.Move.FrameVelocity.Y.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class JumpLocomotionTests : IDisposable
             startingMedium: TraversalMedium.Gas);
 
         Vector3d expectedVelocity = Vector3d.Down;
-        expectedVelocity.y += -scout.Motor.Handler.Forces.GravityForce * TestWorld.Context.DeltaTime;
+        expectedVelocity.Y += -scout.Motor.Handler.Forces.GravityForce * TestWorld.Context.DeltaTime;
 
         // Act
         scout.FrameRequest.IsRequestingJump = true;
@@ -113,7 +113,7 @@ public class JumpLocomotionTests : IDisposable
         fall.IsFalling.Should().BeFalse();
         jump.IsJumping.Should().BeFalse();
         jump.IsCoolingDown.Should().BeFalse(); // default cool down is .2 seconds, which would take 7 frames, we simulate 31
-        scout.Motor.Handler.Move.FrameVelocity.y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
+        scout.Motor.Handler.Move.FrameVelocity.Y.Should().Be(Fixed64.Zero); // Ground Force should have kicked in
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class JumpLocomotionTests : IDisposable
 
         scout.Simulate();
 
-        scout.Motor.Handler.Move.FrameVelocity.y.Should().Be(Fixed64.Zero);
+        scout.Motor.Handler.Move.FrameVelocity.Y.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -150,8 +150,8 @@ public class JumpLocomotionTests : IDisposable
         }
 
         // Assert
-        var expected = previousVelocity.y - (scout.Motor.Handler.Forces.GravityForce * TestWorld.Context.DeltaTime * 3);
-        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeGreaterThan(expected);
+        var expected = previousVelocity.Y - (scout.Motor.Handler.Forces.GravityForce * TestWorld.Context.DeltaTime * 3);
+        scout.Motor.Handler.Move.FrameVelocity.Y.Should().BeGreaterThan(expected);
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public class JumpLocomotionTests : IDisposable
         }
 
         // Higher than default jump height
-        scout.Position.y.Should().BeGreaterThan(jump.BaseJumpHeight);
+        scout.Position.Y.Should().BeGreaterThan(jump.BaseJumpHeight);
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public class JumpLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Position.y.Should().BeGreaterThan(jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
+        scout.Position.Y.Should().BeGreaterThan(jump.BaseJumpHeight + Fixed64.Epsilon); // Higher than default jump height
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public class JumpLocomotionTests : IDisposable
         // Jump should be canceled
         jump.IsJumping.Should().BeFalse();
         // Should stop rising
-        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
+        scout.Motor.Handler.Move.FrameVelocity.Y.Should().BeLessThanOrEqualTo(Fixed64.Zero);
     }
 
     [Fact]
@@ -248,7 +248,7 @@ public class JumpLocomotionTests : IDisposable
         {
             TestWorld.Context.Simulate();
             scout.Simulate();
-            if (scout.Position.y <= Fixed64.Zero) // If we've landed
+            if (scout.Position.Y <= Fixed64.Zero) // If we've landed
                 break;
         }
 
@@ -274,7 +274,7 @@ public class JumpLocomotionTests : IDisposable
         var jumpLocomotion = TestRequire.NotNull(TestRequire.NotNull(scout.Motor).Handler.Jump);
         Fixed64 maxExpectedHeight = jumpLocomotion.BaseJumpHeight + jumpLocomotion.ExtraJumpHeight;
 
-        Fixed64 maxY = scout.Position.y;
+        Fixed64 maxY = scout.Position.Y;
 
         // Start jump
         scout.FrameRequest.IsRequestingJump = true;
@@ -288,8 +288,8 @@ public class JumpLocomotionTests : IDisposable
             scout.FrameRequest.IsRequestingJump = true;
             scout.Simulate();
 
-            if (scout.Position.y > maxY)
-                maxY = scout.Position.y;
+            if (scout.Position.Y > maxY)
+                maxY = scout.Position.Y;
         }
 
         maxY.Should().BeLessThanOrEqualTo(maxExpectedHeight);
@@ -312,7 +312,7 @@ public class JumpLocomotionTests : IDisposable
             scout.Simulate();
         }
 
-        scout.Position.y.Should().BeGreaterThan((Fixed64)0.5).And.BeLessThan((Fixed64)1.0);
+        scout.Position.Y.Should().BeGreaterThan((Fixed64)0.5).And.BeLessThan((Fixed64)1.0);
     }
 
     [Fact]
@@ -366,7 +366,7 @@ public class JumpLocomotionTests : IDisposable
 
         // Velocity shouldn't increase anymore
         jump.JumpCount.Should().Be(2);
-        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeLessThan(currentVelocity.y);
+        scout.Motor.Handler.Move.FrameVelocity.Y.Should().BeLessThan(currentVelocity.Y);
     }
 
     [Fact]
@@ -390,7 +390,7 @@ public class JumpLocomotionTests : IDisposable
         {
             TestWorld.Context.Simulate();
             scout.Simulate();
-            if (scout.Position.y <= Fixed64.Zero) break;
+            if (scout.Position.Y <= Fixed64.Zero) break;
         }
 
         scout.FrameCondition.Medium = TraversalMedium.Solid;
@@ -411,7 +411,7 @@ public class JumpLocomotionTests : IDisposable
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        var velocityAfterFirstJump = scout.Motor.Handler.Move.FrameVelocity.y;
+        var velocityAfterFirstJump = scout.Motor.Handler.Move.FrameVelocity.Y;
 
         // Midair frame
         TestWorld.Context.Simulate();
@@ -421,7 +421,7 @@ public class JumpLocomotionTests : IDisposable
         scout.FrameRequest.IsRequestingJump = true;
         scout.Simulate();
 
-        var velocityAfterSecondJump = scout.Motor.Handler.Move.FrameVelocity.y;
+        var velocityAfterSecondJump = scout.Motor.Handler.Move.FrameVelocity.Y;
 
         velocityAfterSecondJump.Should().BeGreaterThan(velocityAfterFirstJump);
     }
@@ -455,7 +455,7 @@ public class JumpLocomotionTests : IDisposable
 
         // Jump count should not increase
         jump.JumpCount.Should().Be(1);
-        scout.Motor.Handler.Move.FrameVelocity.y.Should().BeLessThan(Fixed64.Zero);
+        scout.Motor.Handler.Move.FrameVelocity.Y.Should().BeLessThan(Fixed64.Zero);
     }
 
     [Fact]

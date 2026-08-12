@@ -218,7 +218,7 @@ public class PlatformLocomotion : ILocomotion
             rotationDelta = FixedQuaternion.Identity;
 
         Vector3d newGlobalPoint = ActivePlatform?.Transform.TransformPoint(ScoutLocalPoint) ?? Vector3d.Zero;
-        position.y += HeightAdjust;
+        position.Y += HeightAdjust;
         positionDelta = newGlobalPoint - position;
     }
 
@@ -349,7 +349,7 @@ public class PlatformLocomotion : ILocomotion
     /// </remarks>
     public void HandlePlatformMovement(Vector3d position, FixedQuaternion rotation)
     {
-        position.y += HeightAdjust;
+        position.Y += HeightAdjust;
         Fixed4x4 attachmentTransform = GetAttachmentTransform();
         ScoutLocalPoint = Fixed4x4.InverseTransformPoint(
             attachmentTransform,

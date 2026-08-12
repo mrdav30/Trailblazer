@@ -57,9 +57,9 @@ public class AlternativeVoxelFinder
         for (_layer = 1; _layer <= _maxTestDistance;)
         {
             Vector3d checkPosition = new(
-                _worldPos.x + _direction.x,
-                _worldPos.y,
-                _worldPos.z + _direction.z);
+                _worldPos.X + _direction.x,
+                _worldPos.Y,
+                _worldPos.Z + _direction.z);
             if (_world != null
                 && _world.TryGetVoxel(checkPosition, out Voxel? checkVoxel)
                 && checkVoxel != null
@@ -153,8 +153,8 @@ public class AlternativeVoxelFinder
     private void InitializeDirection()
     {
         Fixed64 halfVoxel = _voxelSize * Fixed64.Half;
-        Fixed64 xOffsetFromCenter = _worldPos.x - (_anchorVoxelPosition.x + halfVoxel);
-        Fixed64 zOffsetFromCenter = _worldPos.z - (_anchorVoxelPosition.z + halfVoxel);
+        Fixed64 xOffsetFromCenter = _worldPos.X - (_anchorVoxelPosition.X + halfVoxel);
+        Fixed64 zOffsetFromCenter = _worldPos.Z - (_anchorVoxelPosition.Z + halfVoxel);
 
         if (xOffsetFromCenter.Abs() >= zOffsetFromCenter.Abs())
         {

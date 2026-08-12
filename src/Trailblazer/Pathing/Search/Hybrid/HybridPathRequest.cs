@@ -17,6 +17,9 @@ namespace Trailblazer.Pathing;
 /// </remarks>
 internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathRequest>
 {
+    private int _maxPathSearchRange;
+    private PathRequestCacheKey _requestCacheKey;
+
     #region Properties
 
     /// <inheritdoc/>
@@ -38,16 +41,27 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     public Fixed64 UnitSize { get; private set; }
 
     /// <inheritdoc/>
-    public bool AllowUnwalkableEndpoints { get; set; }
+    public bool AllowUnwalkableEndpoints { get; private set; }
 
     /// <inheritdoc/>
-    public int MaxPathSearchRange { get; set; }
+    public int MaxPathSearchRange
+    {
+        get => _maxPathSearchRange;
+        set
+        {
+            if (_maxPathSearchRange == value)
+                return;
 
-    public HeuristicMethod Heuristic { get; set; }
+            _maxPathSearchRange = value;
+            RefreshCacheKey();
+        }
+    }
 
-    public Fixed64 MaxClimbHeight { get; set; }
+    public HeuristicMethod Heuristic { get; private set; }
 
-    public int ExtraFloodRange { get; set; }
+    public Fixed64 MaxClimbHeight { get; private set; }
+
+    public int ExtraFloodRange { get; private set; }
 
     /// <inheritdoc/>
     public bool HasOrigin => StartNode != null;
@@ -68,7 +82,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
             && (RoutePlan?.DirectedTransitions.Length ?? 0) == 0);
 
     /// <inheritdoc/>
-    public int RequestCacheKey => GetHashCode();
+    public PathRequestCacheKey RequestCacheKey => _requestCacheKey;
 
     internal HybridRoutePlan? RoutePlan { get; private set; }
 
@@ -314,28 +328,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     /// This hash code is used for caching and guide pooling, allowing for efficient retrieval of guides based on request parameters. 
     /// </summary>
     /// <returns>A hash code representing the current path request.</returns>
-    public override int GetHashCode()
-    {
-        PathRequestHashBuilder transitionHash = PathRequestHashBuilder.Create();
-        if (RoutePlan != null)
-        {
-            for (int i = 0; i < RoutePlan.DirectedTransitions.Length; i++)
-                transitionHash.AddOrdinalString(RoutePlan.DirectedTransitions[i].Id);
-        }
-
-        PathRequestHashBuilder hash = PathRequestHashBuilder.Create();
-        hash.Add(StartNode?.SpawnToken ?? 0);
-        hash.Add(EndNode?.SpawnToken ?? 0);
-        hash.Add(UnitSize.GetHashCode());
-        hash.Add((int)ChartRequestKind);
-        hash.Add(AllowUnwalkableEndpoints);
-        hash.Add((int)Heuristic);
-        hash.Add(MaxClimbHeight.GetHashCode());
-        hash.Add(ExtraFloodRange);
-        hash.Add(MaxPathSearchRange);
-        hash.Add(transitionHash.ToHashCode());
-        return hash.ToHashCode();
-    }
+    public override int GetHashCode() => RequestCacheKey.GetHashCode();
 
     /// <summary>
     /// Rebuilds the route plan for the current request using the HybridRoutePlanner. 
@@ -346,6 +339,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     {
         RoutePlan = null;
         MaxPathSearchRange = 0;
+        _requestCacheKey = default;
 
         if (!HasValidEndpoints)
             return false;
@@ -369,5 +363,31 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
 
         MaxPathSearchRange = totalSearchRange > 0 ? totalSearchRange : 1;
         return true;
+    }
+
+    private void RefreshCacheKey()
+    {
+        HybridRoutePlan? plan = RoutePlan;
+        if (plan == null || !HasValidEndpoints || MaxPathSearchRange <= 0)
+        {
+            _requestCacheKey = default;
+            return;
+        }
+
+        _requestCacheKey = PathRequestCacheKey.CreateHybrid(
+            StartNode!.WorldIndex,
+            EndNode!.WorldIndex,
+            UnitSize,
+            ChartRequestKind,
+            AllowUnwalkableEndpoints,
+            Heuristic,
+            MaxClimbHeight,
+            ExtraFloodRange,
+            MaxPathSearchRange,
+            plan.DirectedTransitions,
+            Context.Pathing.State.TransitionRegistryState.RegistryVersion,
+            Context.Pathing.State.VolumeRulesState.RegistryVersion,
+            Origin,
+            TargetPosition);
     }
 }

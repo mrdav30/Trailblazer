@@ -177,7 +177,7 @@ public sealed class ClimbLocomotionTests : IDisposable
 
         agent.Motor.IsClimbing.Should().BeTrue();
         agent.Motor.IsFalling.Should().BeFalse();
-        agent.Position.y.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Position.Y.Should().BeGreaterThan(Fixed64.Zero);
         startedCount.Should().Be(1);
     }
 
@@ -196,12 +196,12 @@ public sealed class ClimbLocomotionTests : IDisposable
         agent.Motor.Handler.Climb!.MaxClimbSpeed = (Fixed64)3;
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
-        Fixed64 firstHeight = agent.Position.y;
+        Fixed64 firstHeight = agent.Position.Y;
 
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
         agent.Motor.IsClimbing.Should().BeTrue();
-        agent.Position.y.Should().BeGreaterThan(firstHeight);
+        agent.Position.Y.Should().BeGreaterThan(firstHeight);
         startedCount.Should().Be(1);
     }
 
@@ -218,8 +218,8 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Right, TrekRate.Fast);
 
         agent.Motor.IsClimbing.Should().BeTrue();
-        agent.Position.x.Should().BeGreaterThan(Fixed64.Zero);
-        agent.Position.y.Should().Be(Fixed64.Zero);
+        agent.Position.X.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Position.Y.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Right, TrekRate.Fast);
 
         agent.Motor.IsClimbing.Should().BeTrue();
-        agent.Position.x.Should().Be(Fixed64.Zero);
+        agent.Position.X.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -256,8 +256,8 @@ public sealed class ClimbLocomotionTests : IDisposable
         resolver.Snapshot = CreateSurfaceSnapshot(
             allowLateralTraverse: true,
             attachmentPoint: new Vector3d(Fixed64.Zero, (Fixed64)0.25f, Fixed64.Zero),
-            surfaceNormal: new Vector3d((Fixed64)0.25f, Fixed64.Zero, -Fixed64.One).Normal,
-            upDirection: new Vector3d((Fixed64)0.1f, Fixed64.One, Fixed64.Zero).Normal,
+            surfaceNormal: new Vector3d((Fixed64)0.25f, Fixed64.Zero, -Fixed64.One).Normalized,
+            upDirection: new Vector3d((Fixed64)0.1f, Fixed64.One, Fixed64.Zero).Normalized,
             affordanceId: null);
 
         SimulateClimbFrame(agent, Vector3d.Up + Vector3d.Right, TrekRate.Fast);
@@ -265,15 +265,15 @@ public sealed class ClimbLocomotionTests : IDisposable
         resolver.Snapshot = CreateSurfaceSnapshot(
             allowLateralTraverse: true,
             attachmentPoint: new Vector3d((Fixed64)0.2f, (Fixed64)0.45f, Fixed64.Zero),
-            surfaceNormal: new Vector3d((Fixed64)0.4f, Fixed64.Zero, -Fixed64.One).Normal,
-            upDirection: new Vector3d((Fixed64)0.15f, Fixed64.One, Fixed64.Zero).Normal,
+            surfaceNormal: new Vector3d((Fixed64)0.4f, Fixed64.Zero, -Fixed64.One).Normalized,
+            upDirection: new Vector3d((Fixed64)0.15f, Fixed64.One, Fixed64.Zero).Normalized,
             affordanceId: null);
 
         SimulateClimbFrame(agent, Vector3d.Up + Vector3d.Right, TrekRate.Fast);
 
         agent.Motor.IsClimbing.Should().BeTrue();
-        agent.Position.y.Should().BeGreaterThan(Fixed64.Zero);
-        agent.Position.x.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Position.Y.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Position.X.Should().BeGreaterThan(Fixed64.Zero);
         startedCount.Should().Be(1);
     }
 
@@ -290,7 +290,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Down, TrekRate.Fast);
 
         agent.Motor.IsClimbing.Should().BeTrue();
-        agent.Position.y.Should().Be((Fixed64)2);
+        agent.Position.Y.Should().Be((Fixed64)2);
     }
 
     [Fact]
@@ -332,7 +332,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
         agent.Motor.IsClimbing.Should().BeFalse();
-        agent.Position.y.Should().Be(Fixed64.Zero);
+        agent.Position.Y.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -374,7 +374,7 @@ public sealed class ClimbLocomotionTests : IDisposable
 
         agent.Motor.IsClimbing.Should().BeTrue();
         agent.Motor.IsFalling.Should().BeFalse();
-        agent.Position.y.Should().Be(Fixed64.Zero);
+        agent.Position.Y.Should().Be(Fixed64.Zero);
     }
 
     [Fact]
@@ -480,7 +480,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
         agent.FrameCondition.Medium = TraversalMedium.Solid;
-        agent.FrameCondition.SurfaceLevel = agent.Position.y;
+        agent.FrameCondition.SurfaceLevel = agent.Position.Y;
         agent.FrameCondition.GroundState = new GroundCondition();
         agent.Motor.SyncTraversalState(agent.FrameCondition);
 
@@ -628,7 +628,7 @@ public sealed class ClimbLocomotionTests : IDisposable
         SimulateClimbFrame(agent, Vector3d.Up, TrekRate.Fast);
 
         agent.FrameCondition.Medium = TraversalMedium.Solid;
-        agent.FrameCondition.SurfaceLevel = agent.Position.y;
+        agent.FrameCondition.SurfaceLevel = agent.Position.Y;
         agent.FrameCondition.GroundState = new GroundCondition();
         agent.Motor.SyncTraversalState(agent.FrameCondition);
 
@@ -664,7 +664,7 @@ public sealed class ClimbLocomotionTests : IDisposable
 
         agent.Motor.IsClimbing.Should().BeFalse();
         agent.Motor.IsJumping.Should().BeTrue();
-        agent.Position.y.Should().BeGreaterThan(Fixed64.Zero);
+        agent.Position.Y.Should().BeGreaterThan(Fixed64.Zero);
     }
 
     private static MockMotorAgent CreateClimbingAgent(Vector3d? startPosition = null)

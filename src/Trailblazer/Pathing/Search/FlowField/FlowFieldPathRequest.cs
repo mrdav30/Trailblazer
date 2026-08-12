@@ -116,18 +116,35 @@ public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest
         other != null && RequestCacheKey == other.RequestCacheKey;
 
     /// <inheritdoc/>
-    public override int GetHashCode()
-    {
-        // Note: For FlowFields we don't care about the start voxel (only that the FlowField contains it)
-        PathRequestHashBuilder hash = PathRequestHashBuilder.Create();
-        hash.Add(EndNode?.SpawnToken ?? 0);
-        hash.Add(UnitSize.GetHashCode());
-        hash.Add(AllowUnwalkableEndpoints);
-        hash.Add(AllowTraversalTransitions);
-        hash.Add(MaxClimbHeight.GetHashCode());
-        hash.Add(ExtraFloodRange);
-        hash.Add(MaxPathSearchRange);
-        hash.Add(AllowTraversalTransitions ? Context.Pathing.State.TransitionRegistryState.RegistryVersion : 0);
-        return hash.ToHashCode();
-    }
+    public override int GetHashCode() => RequestCacheKey.GetHashCode();
+
+    /// <inheritdoc/>
+    public override PathRequestCacheKey RequestCacheKey =>
+        EndNode == null
+            ? default
+            : PathRequestCacheKey.CreateFlowField(
+                EndNode.WorldIndex,
+                UnitSize,
+                AllowUnwalkableEndpoints,
+                AllowTraversalTransitions,
+                MaxClimbHeight,
+                ExtraFloodRange,
+                MaxPathSearchRange,
+                Context.Pathing.State.TransitionRegistryState.RegistryVersion);
+
+    internal PathRequestCacheKey HybridFallbackCacheKey =>
+        StartNode == null || EndNode == null
+            ? default
+            : PathRequestCacheKey.CreateFlowFieldHybridFallback(
+                StartNode.WorldIndex,
+                EndNode.WorldIndex,
+                UnitSize,
+                AllowUnwalkableEndpoints,
+                MaxClimbHeight,
+                ExtraFloodRange,
+                MaxPathSearchRange,
+                Context.Pathing.State.TransitionRegistryState.RegistryVersion,
+                Context.Pathing.State.VolumeRulesState.RegistryVersion,
+                Origin,
+                TargetPosition);
 }

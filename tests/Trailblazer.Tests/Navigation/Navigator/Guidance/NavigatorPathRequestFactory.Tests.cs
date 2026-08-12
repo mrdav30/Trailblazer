@@ -555,7 +555,7 @@ public sealed class NavigatorPathRequestFactoryTests : IDisposable
         RegisterGasLandingChoiceTargetScene(sceneKey, new Vector3d(2, 0, 0), authoredGasLength: 2);
 
         NavigatorPathRequestFactory.TryCreate(TestWorld.Context, Vector3d.Zero,
-            new Vector3d(2.25f, 0, 0),
+            Vector3d.FromDouble(2.25, 0, 0),
             Fixed64.One,
             SolidPathAlgorithm.AStar,
             allowUnwalkableEndpoints: false,

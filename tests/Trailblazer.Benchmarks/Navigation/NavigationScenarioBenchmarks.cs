@@ -89,8 +89,8 @@ public class NavigationScenarioBenchmarks
             CombinedOccupantCount,
             width: 32,
             depth: 16,
-            originX: (int)CombinedOffset.x + 8,
-            originZ: (int)CombinedOffset.z + 8);
+            originX: (int)CombinedOffset.X + 8,
+            originZ: (int)CombinedOffset.Z + 8);
         RegisterOccupants(_combinedOccupants);
 
         _mixed100 = CreateMixedScenarios(MixedAgentCount100);

@@ -80,11 +80,11 @@ public class AStarGuide : IWaypointGuide
     /// <inheritdoc/>
     public int GetIndex(Vector3d from)
     {
-        Fixed64 minDistSq = Fixed64.MAX_VALUE;
+        Fixed64 minDistSq = Fixed64.MaxValue;
         int bestIndex = -1;
         for (int i = 0; i < ActiveWaypoints.Length; i++)
         {
-            Fixed64 distSq = (from - ActiveWaypoints[i].Position).SqrMagnitude;
+            Fixed64 distSq = (from - ActiveWaypoints[i].Position).MagnitudeSquared;
             if (distSq < minDistSq)
             {
                 minDistSq = distSq;
@@ -110,7 +110,7 @@ public class AStarGuide : IWaypointGuide
             return false;
 
         int closestIndex = GetIndex(origin);
-        direction = (ActiveWaypoints[closestIndex].Position - origin).Normalize();
+        direction = (ActiveWaypoints[closestIndex].Position - origin).Normalized;
         return true;
     }
 
@@ -124,7 +124,7 @@ public class AStarGuide : IWaypointGuide
         if (movementDirection == Vector3d.Zero)
             return Vector3d.Zero;
 
-        return (movementDirection - origin).Normal;
+        return (movementDirection - origin).Normalized;
     }
 
     /// <inheritdoc/>
@@ -138,12 +138,12 @@ public class AStarGuide : IWaypointGuide
         // Start from CurrentIndex + 1 and search forward
         int searchStart = FixedMath.Clamp(_lastTriedIndex, 0, ActiveWaypoints.Length - 1);
 
-        Fixed64 minDistSq = Fixed64.MAX_VALUE;
+        Fixed64 minDistSq = Fixed64.MaxValue;
         int bestIndex = searchStart;
 
         for (int i = searchStart; i < ActiveWaypoints.Length; i++)
         {
-            Fixed64 distSq = (from - ActiveWaypoints[i].Position).SqrMagnitude;
+            Fixed64 distSq = (from - ActiveWaypoints[i].Position).MagnitudeSquared;
             if (distSq < minDistSq)
             {
                 minDistSq = distSq;
@@ -151,7 +151,7 @@ public class AStarGuide : IWaypointGuide
             }
         }
 
-        fallbackDirection = (ActiveWaypoints[bestIndex].Position - from).Normal;
+        fallbackDirection = (ActiveWaypoints[bestIndex].Position - from).Normalized;
         _lastTriedIndex = bestIndex;
         return true;
     }

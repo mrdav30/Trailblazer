@@ -21,6 +21,12 @@ instead of burying it in notes.
 
 ## Active Coordination
 
+- [`Grid Topology Navigation Map Refactor`](gridTopologyNavigationMapRefactorPlan.md)
+  - Replace the dense cubic chart/partition pathing lattice with independently
+    baked per-grid navigation maps plus deterministic runtime semantic overlays,
+    composed into a topology-native graph supporting dense/sparse rectangular
+    and hex-prism GridForge grids. This is an intentional breaking-change track
+    with no compatibility surface.
 - [`Cross-Stack Issue Resolution`](issue-tracker.md)
   - Resolve cross-stack issues in dependency order: `FixedMathSharp`,
     `SwiftCollections`, `GridForge`, then Trailblazer. Package references are

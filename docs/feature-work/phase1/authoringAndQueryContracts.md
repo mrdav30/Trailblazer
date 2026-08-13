@@ -97,3 +97,25 @@ Use the direct test/benchmark project commands for release-quality local-stack
 validation because they propagate the selected configuration through sibling
 project references consistently. Package-based validation becomes authoritative
 again after the upstream releases are published.
+
+`UseLocalLsfStack` is the switch that selects the conditional project-reference
+group. The `AdditionalProperties` metadata on those references does not select
+local source: it propagates the active `Configuration` and pins each sibling's
+exact released `SemVer`. Keep those exact values rather than `SemVer=*`.
+The sibling projects otherwise default to assembly version `0.0.0`, while parts
+of the current local graph still consume the corresponding 7.0.0 packages; the
+pin prevents duplicate same-named assemblies with incompatible identities.
+
+A command-line property applies only to that invocation. An IDE that was opened
+normally therefore continues to evaluate the package-reference group. To make
+IDE design-time builds and dependency browsing use local source, close the IDE,
+set the environment property, and launch the IDE from that shell:
+
+```powershell
+$env:UseLocalLsfStack = 'true'
+devenv .\Trailblazer.slnx
+```
+
+Rider or another IDE may be launched the same way. Remove the environment value
+and restart the IDE to return to package references. The `.slnx` file itself does
+not persist arbitrary MSBuild properties.

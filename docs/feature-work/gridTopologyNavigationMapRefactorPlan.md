@@ -194,10 +194,16 @@ public readonly struct NavigationCellAddress
     public VoxelIndex Index { get; }
 }
 
+public readonly struct NavigationAreaId
+{
+    public ushort Value { get; }
+}
+
 public readonly struct NavigationCell
 {
     public TraversalMedia Media { get; }
     public TraversalCapability RequiredCapabilities { get; }
+    public NavigationAreaId Area { get; }
     public Fixed64 EnterCost { get; }
     public Fixed64 RadiusClearance { get; }
     public Fixed64 HeightClearance { get; }
@@ -249,6 +255,7 @@ public readonly struct PathQuery
     public NavigationEndpoint Start { get; }
     public NavigationEndpoint End { get; }
     public NavigationAgentProfile Agent { get; }
+    public NavigationAreaPolicyKey AreaPolicy { get; }
     public TraversalIntent Traversal { get; }
     public PathAlgorithm Algorithm { get; }
     public NavigationWorkBudget Budget { get; }
@@ -274,15 +281,67 @@ both GridForge storage kinds: it stores only authored navigation cells.
 Builders/importers may provide ergonomic dense rectangular input or explicit
 axial hex input, but they all normalize to the same address/value representation.
 
-`NavigationCell.RequiredCapabilities` makes media and gameplay semantics
-explicit. For example, water may require `Swim`, while lava may be suppressed,
-carry a prohibitive cost, or be handled by host gameplay logic. Trailblazer
-never assigns material-specific hazard semantics to `TraversalMedium.Liquid`;
-the complete cell payload is part of traversal evaluation and cache validity
-through graph dependency stamps.
+`NavigationCell.RequiredCapabilities` contains only generic physical traversal
+abilities. For example, water may require `Swim`, but Trailblazer never assigns
+material-specific hazard semantics to `TraversalMedium.Liquid` or adds concepts
+such as heat, poison, or acid immunity to `TraversalCapability`. Host-defined
+terrain, material, and hazard meaning uses `NavigationAreaId` and the area-policy
+contract below. The complete cell payload is part of traversal evaluation and
+cache validity through graph dependency stamps.
 Capability admission uses all-of semantics:
 `(agent.Capabilities & cell.RequiredCapabilities) ==
 cell.RequiredCapabilities`; map/delta/profile validation rejects unknown bits.
+
+### Host-defined navigation areas and committed gameplay behavior
+
+`NavigationAreaId` is a compact, explicitly assigned host value. Zero is the
+default area; other values may mean rock, asphalt, snow, lava, sulphuric-acid
+gas, sacred ground, or any other application concept. It is navigation metadata,
+not a GridForge partition and not a mutable object attached to a voxel. A cell
+overlay changes an area's local classification by replacing the complete
+`NavigationCell`; it never mutates a global area definition to express a local
+gameplay event.
+
+Each `TrailblazerWorldContext` owns a bounded immutable area-policy catalog.
+An area policy has a stable `PolicyId + Revision` and one direct-indexed rule per
+configured `NavigationAreaId`. The first contract supports only `Allowed` and a
+non-negative fixed-point `AdditionalEnterCost`. That is sufficient for an agent
+to reject or avoid a host-defined area without introducing game-specific core
+flags, while preserving the existing Euclidean lower bound. `NavigationCell.EnterCost`
+remains the authored cost shared by all agents; the area rule is query-specific.
+The same physical `NavigationAgentProfile` may therefore use different fastest,
+safest, stealth, or emergency policies.
+
+Policy registration validates explicit IDs independent of registration order,
+copies and freezes rule data, and publishes through the context's deterministic
+maintenance boundary. Search resolves `PathQuery.AreaPolicy` before expansion;
+the hot path performs a bounds check and indexed value read only. It performs no
+string lookup, dictionary lookup, delegate/interface dispatch, allocation, or
+host callback. The exact policy identity/revision participates in query and
+flow-field cache keys and guide dependencies. A rule replacement uses a new
+revision and invalidates dependent results; a cell area change advances the
+normal map/overlay dependency stamp.
+
+Pathfinding is speculative, so an area policy may only admit traversal and add
+cost. It must never apply damage, consume stamina, play audio, change friction,
+unlock a door, or otherwise mutate host state while A*, flow, reachability, or a
+navigation ray examines a cell. Phase 8 exposes deterministic committed
+cell/area-entry metadata from the controller after movement crosses into the
+effective cell. The host consumes that notification to run gameplay behavior.
+The committed record includes the stable cell address, area ID, graph/policy
+revision, and simulation frame so lockstep consumers can reject stale state or
+repath. The controller also exposes its last committed current area as read-only
+state before the next fixed step, allowing the host to choose locomotion inputs
+for snow, asphalt, water, or other terrain without a search callback. A dropped
+ladder remains an overlay-added connection/transition; it is not modeled as a
+cell material.
+
+This follows the proven shape used by Recast/Detour, Unity NavMesh, and Unreal:
+graph elements carry compact area classifications, query filters provide
+admission/cost policy, and links model discontinuous traversal. Trailblazer's
+version is fixed-point, immutable, versioned, capacity-bounded, and side-effect
+free to meet lockstep and hot-path requirements. Arbitrary per-cell behavior
+objects or virtual callbacks are intentionally not part of the first contract.
 
 `NavigationConnection` represents one directed authored physical graph
 connection or shortcut and belongs to the map containing its source cell. It
@@ -396,6 +455,7 @@ TrailblazerWorldContext
     compact cross-map seam table
     published version/dependency state
   TraversalEvaluator
+  immutable direct-indexed navigation-area policies
   A* / reverse-Dijkstra flow / reachability
   synchronized guide caches and compiled transition indexes
   bounded PathQueryWorkspace pool (one checkout per admitted batch query)
@@ -611,6 +671,7 @@ checks:
 
 - node presence and current graph generation;
 - cell media and agent capabilities;
+- the resolved navigation-area policy's admission and additional enter cost;
 - node and portal radius/height clearance;
 - GridForge blockage mirrored into graph state;
 - topology witness cells for diagonal/vertical-diagonal movement;
@@ -1358,11 +1419,17 @@ Exit criteria:
 
 **Goal:** land the only public model that will survive the branch.
 
+The accepted navigation-area policy addition is a Phase 1 contract amendment
+and lands before Phase 2 starts. It does not ship later as a compatibility
+overload or a second behavior system.
+
 Create focused types under new `Pathing/Map`, `Pathing/Traversal`, and
 `Pathing/Query` folders:
 
 - `NavigationCellAddress`
 - `NavigationCell`
+- `NavigationAreaId`, immutable area rules, policy identity/revision, and the
+  context registration contract
 - `NavigationCellEntry`
 - `NavigationConnection`
 - `TraversalTransitionDefinition`
@@ -1388,6 +1455,10 @@ Tasks:
   normalized grid binding, invalid body/profile dimensions, invalid clearance,
   and unknown topology. Setting an existing map ID is the explicit replacement
   operation, not a duplicate-registration error.
+- Require every cell area ID and query policy key to resolve through the
+  context's bounded immutable catalog. Reject duplicate policy identities with
+  different content, unknown/out-of-capacity area IDs, negative additional
+  costs, stale revisions, and registration-order-dependent policy layout.
 - Reject duplicate map-local connection/transition IDs, dangling local source
   endpoints/witnesses, and entry/exit anchors outside an available referenced
   cell's complete 3D prism. A cross-map destination may be absent for streaming
@@ -1433,6 +1504,10 @@ Tasks:
   cell slots, copy-on-write GridForge presence/blockage pages, incident seam
   indexes, dependency stamps, retired-byte tracking, and a bounded
   `PathQueryWorkspace` pool with exclusive checkout per admitted query.
+- Add the bounded context-owned navigation-area catalog and immutable policy
+  snapshots. Publish policy revisions at the same deterministic maintenance
+  boundary as graph state, and include their exact identity in cache/guide
+  dependencies without copying rule tables per query.
 - Move pathing coordination out of the thread-static `PathManager` ambient and
   behind `TrailblazerPathingService`.
 - Materialize map-before-grid and grid-before-map scenarios.
@@ -1501,7 +1576,11 @@ Tasks:
   corridor geometry, IDs, and component merge/split atomically without rebuilding
   unrelated baked connection tables.
 - Implement the shared `TraversalEvaluator` for media, profile, clearance,
-  blockers, steps/drops, witnesses, directionality, and costs.
+  blockers, steps/drops, witnesses, directionality, navigation-area admission,
+  and checked authored plus policy costs.
+- Resolve area policy once per admitted query and prove the zero/default and
+  custom-area expansion paths use direct indexed reads with zero allocations
+  and no virtual/host callback.
 - Enforce node, native-face, explicit-portal, witness, and swept-shortcut
   clearance in this phase, before any search uses the graph.
 - Pin duplicate suppression and this complete canonical edge order: target
@@ -1685,6 +1764,11 @@ Tasks:
   with explicit world-unit settings.
 - Port guide factories, guided volume exits, repath checks, and LOS calls.
 - Keep motor, turning, locomotion, and heightmap behavior topology-neutral.
+- Emit deterministic committed cell/area-entry metadata only after controller
+  movement commits, and expose the last committed area as read-only controller
+  state for the next fixed step. The host owns damage, audio, friction, status
+  effects, and every other material-specific side effect; speculative navigation
+  never runs them.
 - Replace the complete old serialized authority: `PathRequestRecord`, Navigator
   path mode/endpoint/heuristic/flow fields, NavSteering last-unit/request fields,
   and guided-volume chart/heuristic/range fields.
@@ -1757,6 +1841,7 @@ Build one reusable scenario fixture with these dimensions:
 | Lookup | direct ordinal table, compact sparse lookup |
 | Mutation | obstacle, sparse add/remove, grid remove/respawn, cell overlay, connection/transition overlay, one-map replacement/checkpoint |
 | Traversal | solid, gas, liquid, directed semantic transition |
+| Area policy | default, allowed with surcharge, denied, runtime revision |
 
 The reusable suites run every domain over the core 2x2
 storage/topology matrix. Metric, orientation, density, layout, mutation, and
@@ -1804,8 +1889,11 @@ Critical focused regressions:
   overlay/baked pair is the intentional override path, not a collision.
 - One atomic multi-map transaction can add/remove both directed halves of a
   cross-map connection; failure in either map rolls back both halves.
-- Water requiring `Swim` exercises all-of capability admission; material-specific
-  hazards and effects remain host gameplay policy.
+- Water requiring `Swim` exercises all-of capability admission. Rock/asphalt/
+  snow/lava/acid-gas area IDs exercise default, surcharge, denied, and revised
+  query policies without adding material-specific capabilities. Only committed
+  controller entry emits host-consumable area metadata; speculative searches
+  produce no gameplay side effects.
 - A checkpoint captured at overlay sequence N rejects `Stale` if a later delta
   publishes before its Clear commit; concurrent permutations never lose or
   double-apply either mutation.
@@ -1982,6 +2070,9 @@ freezing budgets.
 - Implicit native edges allocate no objects and store no per-node edge arrays.
 - A flow field stores one compact cost and selected-edge reference per settled
   node; portal/corridor geometry is not copied into the field.
+- A cell stores one compact area ID. An admitted query resolves one immutable
+  direct-indexed policy table; node expansion performs no behavior-object,
+  dictionary, string, delegate, or allocation work.
 - Query work is bounded by deterministic counters. Short queries do not clear
   metadata proportional to total world size.
 - Inert map baking may run away from the simulation tick. Runtime preparation
@@ -2018,7 +2109,10 @@ freezing budgets.
 9. Direct and nearest endpoint resolution by overlap count and map density:
    record candidate count, lookup operations, time, and temporary bytes.
 10. Native/explicit outgoing and incoming enumeration: evaluated edges,
-   nanoseconds per edge, branch behavior where available, and allocations.
+    nanoseconds per edge, branch behavior where available, and allocations.
+    Include the default-area fast path and custom allowed/surcharge/denied
+    policy paths at 1/16/128 configured areas, plus policy-revision publication
+    and guide/cache invalidation. All warmed expansion variants allocate zero.
 11. A* at 100, 1K, 10K, and 100K expanded nodes: p50/p95/p99, relaxed edges,
    heap operations, transient bytes per expanded node, and result bytes.
 12. Weighted flow: cold build, canonical-prefix promotion, concurrent near/far

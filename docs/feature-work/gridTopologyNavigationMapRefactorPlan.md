@@ -276,9 +276,10 @@ axial hex input, but they all normalize to the same address/value representation
 
 `NavigationCell.RequiredCapabilities` makes media and gameplay semantics
 explicit. For example, water may require `Swim`, while lava may be suppressed,
-carry a prohibitive cost, or require `Swim | HeatImmune`. Trailblazer never
-infers hazard policy from `TraversalMedium.Liquid`; the complete cell payload is
-part of traversal evaluation and cache validity through graph dependency stamps.
+carry a prohibitive cost, or be handled by host gameplay logic. Trailblazer
+never assigns material-specific hazard semantics to `TraversalMedium.Liquid`;
+the complete cell payload is part of traversal evaluation and cache validity
+through graph dependency stamps.
 Capability admission uses all-of semantics:
 `(agent.Capabilities & cell.RequiredCapabilities) ==
 cell.RequiredCapabilities`; map/delta/profile validation rejects unknown bits.
@@ -1803,8 +1804,8 @@ Critical focused regressions:
   overlay/baked pair is the intentional override path, not a collision.
 - One atomic multi-map transaction can add/remove both directed halves of a
   cross-map connection; failure in either map rolls back both halves.
-- Water requires `Swim` and lava requires `Swim | HeatImmune` under explicit
-  all-of capability tests; agents missing any required bit cannot enter.
+- Water requiring `Swim` exercises all-of capability admission; material-specific
+  hazards and effects remain host gameplay policy.
 - A checkpoint captured at overlay sequence N rejects `Stale` if a later delta
   publishes before its Clear commit; concurrent permutations never lose or
   double-apply either mutation.

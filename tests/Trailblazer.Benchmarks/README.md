@@ -40,6 +40,9 @@ arguments before any BenchmarkDotNet flags.
 | `guide-cache`             | `GuideCacheBenchmarks`           |
 | `navigation-scenario`     | `NavigationScenarioBenchmarks`   |
 | `nav-steering`            | `NavSteeringBenchmarks`          |
+| `navigation-connection-canonicalization` | `NavigationConnectionCanonicalizationBenchmarks` |
+| `navigation-map-bake`     | `NavigationMapBakeBenchmarks`    |
+| `navigation-operation-fold` | `NavigationOperationFoldBenchmarks` |
 | `path-heap`               | `PathHeapBenchmarks`             |
 | `pathing-scenario`        | `PathingScenarioBenchmarks`      |
 | `transition-fallback`     | `TransitionFallbackBenchmarks`   |

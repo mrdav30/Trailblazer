@@ -1,10 +1,9 @@
+using System;
+using System.Threading;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
-using GridForge.Spatial;
-using System;
-using System.Threading;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Tests;

@@ -1,4 +1,4 @@
-﻿//=======================================================================
+//=======================================================================
 // FlowFieldSurveyResult.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
@@ -6,9 +6,9 @@
 //=======================================================================
 
 
+using System;
 using GridForge.Spatial;
 using SwiftCollections;
-using System;
 
 namespace Trailblazer.Pathing;
 

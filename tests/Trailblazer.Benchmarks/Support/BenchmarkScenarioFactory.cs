@@ -1,6 +1,6 @@
-﻿using FixedMathSharp;
-using GridForge.Configuration;
 using System;
+using FixedMathSharp;
+using GridForge.Configuration;
 
 namespace Trailblazer.Benchmarks;
 

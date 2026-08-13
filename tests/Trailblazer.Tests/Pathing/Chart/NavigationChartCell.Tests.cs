@@ -1,5 +1,5 @@
-using FluentAssertions;
 using System;
+using FluentAssertions;
 using Trailblazer.Pathing;
 using Xunit;
 

@@ -1,8 +1,8 @@
-using FluentAssertions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using FluentAssertions;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -14,7 +14,11 @@ public sealed class NavigationContractArchitectureTests
     {
         typeof(KinematicBodyShape),
         typeof(NavigationAgentProfile),
+        typeof(NavigationAreaId),
+        typeof(NavigationAreaPolicyKey),
+        typeof(NavigationAreaRule),
         typeof(NavigationWorkBudget),
+        typeof(MaintenanceWorkBudget),
         typeof(GuideSampleWorkBudget),
         typeof(NavigationEndpoint),
         typeof(TraversalIntent),
@@ -29,6 +33,11 @@ public sealed class NavigationContractArchitectureTests
         typeof(GuideSampleWorkBudget),
         typeof(KinematicBodyShape),
         typeof(NavigationAgentProfile),
+        typeof(NavigationAreaId),
+        typeof(NavigationAreaPolicy),
+        typeof(NavigationAreaPolicyCommitOperation),
+        typeof(NavigationAreaPolicyKey),
+        typeof(NavigationAreaRule),
         typeof(NavigationCell),
         typeof(NavigationCellAddress),
         typeof(NavigationCellEntry),
@@ -66,6 +75,17 @@ public sealed class NavigationContractArchitectureTests
         typeof(TraversalTransitionDefinition),
         typeof(TraversalTransitionOverlayOperation),
         typeof(TraversalTransitionOverlayOperationKind)
+    };
+
+    private static readonly Type[] Phase2RuntimeContractTypes =
+    {
+        typeof(MaintenanceWorkBudget),
+        typeof(NavigationCellLookupKind),
+        typeof(NavigationCellSemanticSource),
+        typeof(NavigationGraphCellDiagnostic),
+        typeof(NavigationGraphMapDiagnostic),
+        typeof(NavigationGraphDiagnosticsSnapshot),
+        typeof(TrailblazerWorldContextSettings)
     };
 
     [Fact]
@@ -125,6 +145,40 @@ public sealed class NavigationContractArchitectureTests
             name => name.Contains("StorageKind", StringComparison.Ordinal)
                 || name.Contains("GridStorage", StringComparison.Ordinal),
             "dense and sparse materialization must share one authored cell identity");
+    }
+
+    [Fact]
+    public void Phase2RuntimeContracts_ShouldNotExposeVoxelObjectsOrLegacyChartOwnership()
+    {
+        string[] exposedTypeNames = Phase2RuntimeContractTypes
+            .SelectMany(GetPublicSignatureTypes)
+            .SelectMany(ExpandTypeGraph)
+            .Select(type => type.FullName ?? type.Name)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        exposedTypeNames.Should().NotContain(
+            name => string.Equals(name, "GridForge.Grids.Voxel", StringComparison.Ordinal)
+                || string.Equals(name, "GridForge.Spatial.WorldVoxelIndex", StringComparison.Ordinal)
+                || name.Contains("NavigationChart", StringComparison.Ordinal)
+                || name.Contains("Partition", StringComparison.Ordinal),
+            "the context graph owns exact copied identity and never exposes GridForge voxel or legacy chart ownership");
+    }
+
+    [Fact]
+    public void Phase2RuntimeContracts_ShouldNotExposeRecyclableRuntimeGridSlots()
+    {
+        string[] publicMemberNames = Phase2RuntimeContractTypes
+            .SelectMany(type => type.GetMembers(
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            .Select(member => member.Name)
+            .ToArray();
+
+        publicMemberNames.Should().NotContain(
+            name => string.Equals(name, "GridIndex", StringComparison.Ordinal)
+                || name.Contains("GridSlot", StringComparison.Ordinal)
+                || name.Contains("RuntimeSlot", StringComparison.Ordinal),
+            "public map identity uses world and grid generation tokens rather than recyclable runtime slots");
     }
 
     private static IEnumerable<Type> GetPublicSignatureTypes(Type contractType)

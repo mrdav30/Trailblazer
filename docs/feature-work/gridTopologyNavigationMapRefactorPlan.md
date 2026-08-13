@@ -1495,6 +1495,31 @@ Exit criteria:
 
 **Goal:** compose per-grid maps without touching GridForge voxels.
 
+#### Living implementation tracker
+
+| Checkpoint | Scope | Status |
+| --- | --- | --- |
+| 2A | Freeze the navigation-area contract amendment, context limits, and exact value/cache identity | Complete |
+| 2B | Context-owned immutable graph root, map registry, instance identity, and map-before/grid-before lifecycle | Complete |
+| 2C | Stable baked/dynamic slots plus semantic and physical copy-on-write state | Complete |
+| 2D | Deterministic event ingestion, maintenance carryover, snapshot publication/leases, and pressure handling | Complete |
+| 2E | Workspace/cache synchronization, diagnostics, lifecycle matrix, and performance gates | In progress: implementation and canonical evidence complete; two provisional pinned-contention latency cells remain over budget |
+| 2F | Full Release/ReleaseLean/local-stack verification and external review | Complete; Phase 2 exit remains held by 2E |
+
+Update this table only from fresh build/test/benchmark evidence. A checkpoint
+may be marked complete while later checkpoints remain in progress, but Phase 2
+does not exit until every task and exit criterion below is satisfied.
+
+Current evidence: Trailblazer passes 1,290 Release and 1,261 ReleaseLean tests;
+GridForge passes 599 tests in each configuration; both libraries build both
+target frameworks with zero warnings and errors; and the final adversarial code
+review reports no P0/P1 finding. Every structural, capacity, allocation, and
+publication performance gate passes. The archived pinned-contention capture
+retains two misses without changing its thresholds: concurrency-2 query p99 is
+26.705 us against 25 us (all five over-budget samples occurred in one of three
+launches), and concurrency-1 writer p50 is 41.15 us against 40 us. See
+`phase2/canonicalPerformanceResults.md` for the full tables and stress results.
+
 Tasks:
 
 - Add the context map registry, immutable `NavigationWorldGraph` snapshots,
@@ -1511,9 +1536,10 @@ Tasks:
 - Move pathing coordination out of the thread-static `PathManager` ambient and
   behind `TrailblazerPathingService`.
 - Materialize map-before-grid and grid-before-map scenarios.
-- Subscribe once per context to grid lifecycle, sparse mutation, reset, and
-  exact obstacle events before capturing any initialization baseline, or use the
-  atomic subscribe-plus-baseline-cursor contract.
+- Subscribe once per context to GridForge's ordered `GridWorld.OnChangeCommitted`
+  final-state feed before capturing any initialization baseline. Do not also
+  consume the legacy active-grid events, static exact-obstacle feeds, voxel
+  subscriptions, or partitions.
 - Initialize one map instance from its address-filtered atomic GridForge
   baseline and discard only matching scope/address envelopes represented through
   its high-water mark; unrelated envelopes are never pruned by sequence alone.
@@ -1521,6 +1547,13 @@ Tasks:
 - Implement inert off-tick bake preparation, deterministic effective-frame
   map/overlay commits, budgeted/fail-closed runtime composition, short atomic
   snapshot publication, snapshot leases, and final-state event coalescing order.
+  Phase 2 structural carryover uses a canonical MapId-ordered cursor over the
+  changed map record, its explicit connection/transition work, reverse
+  dependencies, and the prior affected weak-component members/incident edges.
+  The published affected component remains dormant until the final candidate
+  publishes atomically; unrelated components continue serving. Topology-native
+  edge, seam-candidate, and cache-invalidation meters remain zero here because
+  their producers are owned by Phases 3 and 4.
 - Implement transactional cell Set/Suppress/RevertToBake, including an address
   absent from the bake, mutation while its grid/voxel is absent, explicit overlay
   preservation/clear on rebake, and checkpoint compaction.
@@ -1531,8 +1564,10 @@ Tasks:
   workspace byte ceilings and pool trimming.
 - Implement the context-cache gate and prove concurrent readers use the stated
   snapshot-lease-before-cache-gate order.
-- Implement high-water queue detachment and exact/generic event pairing by
-  immutable GridForge cause ID; do not read past the frozen event prefix.
+- Implement high-water queue detachment from the single committed final-state
+  feed; do not read past the frozen event prefix. Reconcile each map baseline
+  only with matching exact-generation/address events after that baseline's
+  high-water sequence.
 - Mirror blocked state without retaining `Voxel` references.
 - Add graph diagnostics that enumerate map address, runtime identity, topology,
   baked/default versus effective cell state, overlay source, media/capabilities,
@@ -2053,9 +2088,12 @@ freezing budgets.
   compact semantic override/tombstone pages, physical masks, and incident seams,
   not a second full node graph.
 - One map set/replace/remove is `O(Mi + Ei + incident seam candidates)` for that
-  map plus any structural-component split it causes. Deleting a bridge cell/
-  edge may cost `O(Vc + Ec)` over the affected old effective node component,
-  including implicit native edges, but never scans unrelated components.
+  map plus any structural-component split it causes. With the persistent AVL
+  membership directory selected in Phase 2, deleting a bridge cell/edge costs
+  `O((Vc log M) + Ec)` over the affected old effective node component,
+  including implicit native edges, but never scans unrelated components. Split
+  benchmarks report copied persistent nodes/bytes so a measured dynamic-
+  connectivity replacement can be justified later instead of assumed.
 - Sparse presence/blockage mutation is `O(native degree + incident explicit
   edges + incident seams + log directory pages)` and never copies an active-map
   root, recomputes structural components, or shifts/re-sorts baked node slots.

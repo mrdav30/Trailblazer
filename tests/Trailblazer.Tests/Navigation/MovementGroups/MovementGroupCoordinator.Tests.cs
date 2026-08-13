@@ -1,7 +1,7 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using System;
 using Trailblazer.Navigation.MovementGroups;
 using Xunit;
 

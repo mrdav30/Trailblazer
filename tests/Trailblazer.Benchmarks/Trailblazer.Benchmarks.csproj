@@ -12,12 +12,17 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Configurations>Debug;Release;ReleaseLean</Configurations>
     <DisableMemoryPack Condition="'$(DisableMemoryPack)' == ''">false</DisableMemoryPack>
+    <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'ReleaseLean'">
     <DisableMemoryPack>true</DisableMemoryPack>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj" />
+    <ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
+                      Condition="'$(UseLocalLsfStack)' == 'true'"
+                      Targets="GetTargetPath"
+                      AdditionalProperties="Configuration=$(Configuration);SemVer=9.0.0" />
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- The Test SDK is required only for the VSTest Adapter to work -->
   </ItemGroup>

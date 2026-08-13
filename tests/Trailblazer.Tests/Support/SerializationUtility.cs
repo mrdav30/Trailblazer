@@ -1,5 +1,4 @@
 using Chronicler;
-using System;
 
 namespace Trailblazer.Tests;
 

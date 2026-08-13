@@ -5,10 +5,10 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using FixedMathSharp;
-using GridForge.Grids;
 using System;
 using System.Diagnostics.CodeAnalysis;
+using FixedMathSharp;
+using GridForge.Grids;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation;

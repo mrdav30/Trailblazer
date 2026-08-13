@@ -1,3 +1,4 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge;
@@ -5,7 +6,6 @@ using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Grids.Topology;
 using GridForge.Spatial;
-using System;
 using Trailblazer.Pathing;
 using Xunit;
 

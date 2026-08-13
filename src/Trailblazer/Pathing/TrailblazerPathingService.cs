@@ -5,11 +5,11 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
+using System.Collections.Generic;
 using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
-using System;
-using System.Collections.Generic;
 
 namespace Trailblazer.Pathing;
 
@@ -22,13 +22,87 @@ public sealed class TrailblazerPathingService
 
     private bool _disposed;
 
+    private readonly NavigationGraphRuntime _navigationGraph;
+
     internal TrailblazerPathingService(TrailblazerWorldContext context)
     {
         _context = context;
         State = new PathingWorldState(context);
+        _navigationGraph = new NavigationGraphRuntime(context.World, context.Settings);
+        context.World.OnChangeCommitted += HandleCommittedChange;
     }
 
     internal PathingWorldState State { get; }
+
+    internal int RetainedBaselineCaptureCount =>
+        _navigationGraph.RetainedBaselineCaptureCount;
+
+    internal NavigationWorldGraphStore NavigationGraphStore =>
+        _navigationGraph.Store;
+
+    internal int RetainedCompositionWorkCount =>
+        _navigationGraph.RetainedCompositionWorkCount;
+
+    internal long RetainedCompositionWorkBytes =>
+        _navigationGraph.RetainedCompositionWorkBytes;
+
+    internal long RetainedOperationWorkBytes =>
+        _navigationGraph.RetainedOperationWorkBytes;
+
+    internal int RetainedOperationWorkCount =>
+        _navigationGraph.RetainedOperationWorkCount;
+
+    internal int RetainedCompositionWorkPageCount =>
+        _navigationGraph.RetainedCompositionWorkPageCount;
+
+    internal int RetainedOperationWorkPageCount =>
+        _navigationGraph.RetainedOperationWorkPageCount;
+
+    internal int CompositionCopiedNodeRecords =>
+        _navigationGraph.CompositionCopiedNodeRecords;
+
+    internal int CompositionCopiedReverseRecords =>
+        _navigationGraph.CompositionCopiedReverseRecords;
+
+    internal int CompositionCopiedComponentRecords =>
+        _navigationGraph.CompositionCopiedComponentRecords;
+
+    internal int CompositionCopiedMembershipRecords =>
+        _navigationGraph.CompositionCopiedMembershipRecords;
+
+    internal MaintenanceWorkMeter NavigationMaintenanceMeter =>
+        _navigationGraph.MaintenanceMeter;
+
+    internal int LastAffectedMapCollectionCount =>
+        _navigationGraph.LastAffectedMapCollectionCount;
+
+    /// <summary>Admits one prepared map commit for deterministic fixed-step publication.</summary>
+    public bool Admit(NavigationMapCommitOperation operation)
+    {
+        EnsureUsable();
+        return _navigationGraph.Admit(operation);
+    }
+
+    /// <summary>Admits one map removal for deterministic fixed-step publication.</summary>
+    public bool Admit(NavigationMapRemoveOperation operation)
+    {
+        EnsureUsable();
+        return _navigationGraph.Admit(operation);
+    }
+
+    /// <summary>Admits one atomic semantic overlay transaction for deterministic fixed-step publication.</summary>
+    public bool Admit(NavigationOverlayCommitOperation operation)
+    {
+        EnsureUsable();
+        return _navigationGraph.Admit(operation);
+    }
+
+    /// <summary>Admits one immutable navigation-area policy revision for fixed-step publication.</summary>
+    public bool Admit(NavigationAreaPolicyCommitOperation operation)
+    {
+        EnsureUsable();
+        return _navigationGraph.Admit(operation);
+    }
 
     /// <summary>
     /// Gets a snapshot of all charts registered to this context.
@@ -177,6 +251,50 @@ public sealed class TrailblazerPathingService
         State.ExternalGridBridge.FlushPendingGridChanges();
     }
 
+    internal void MaintainNavigationGraph(int frame)
+    {
+        EnsureUsable();
+        _navigationGraph.Maintain(frame);
+    }
+
+    internal NavigationWorldGraphLease? TryAcquireNavigationGraph() =>
+        _navigationGraph.TryAcquire();
+
+    internal bool TryAdmitNavigationQuery(
+        in NavigationQueryAdmissionRequest request,
+        out NavigationQueryAdmissionLease? lease) =>
+        _navigationGraph.TryAdmitQuery(request, out lease);
+
+    internal int AdmitNavigationQueryBatch(
+        ReadOnlySpan<NavigationQueryAdmissionRequest> requests,
+        Span<NavigationQueryAdmissionLease?> leases) =>
+        _navigationGraph.AdmitQueryBatch(requests, leases);
+
+    internal bool TryGetNavigationGraphCellState(
+        string mapId,
+        VoxelIndex index,
+        out NavigationGraphCellState state)
+    {
+        EnsureUsable();
+        return _navigationGraph.TryGetCellState(mapId, index, out state);
+    }
+
+    internal bool TryResolveNavigationAreaPolicy(
+        NavigationAreaPolicyKey key,
+        out NavigationAreaPolicy? policy)
+    {
+        EnsureUsable();
+        return _navigationGraph.TryResolveAreaPolicy(key, out policy);
+    }
+
+    /// <summary>Copies a bounded immutable diagnostic view of the context navigation graph.</summary>
+    public NavigationGraphDiagnosticsSnapshot GetNavigationGraphDiagnostics()
+    {
+        EnsureUsable();
+        return _navigationGraph.GetDiagnostics(
+            _context.Settings.MaintenanceBudget.MaxBaselineAddresses);
+    }
+
     /// <summary>
     /// Gets diagnostics for this context's external-grid bridge.
     /// </summary>
@@ -225,7 +343,14 @@ public sealed class TrailblazerPathingService
     public void Reset()
     {
         EnsureUsable();
+        _navigationGraph.Reset();
         PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);
+    }
+
+    internal void ResetNavigationGraph()
+    {
+        EnsureUsable();
+        _navigationGraph.Reset();
     }
 
     internal void Dispose()
@@ -233,10 +358,20 @@ public sealed class TrailblazerPathingService
         if (_disposed)
             return;
 
+        _context.World.OnChangeCommitted -= HandleCommittedChange;
         State.ExternalGridBridge.Dispose();
+        _navigationGraph.Dispose();
         PathManager.ResetPathingState(State, resetScopedRegistries: true, flushGuideCache: true);
         State.Dispose();
         _disposed = true;
+    }
+
+    private void HandleCommittedChange(GridEventInfo eventInfo)
+    {
+        if (_disposed || eventInfo.WorldSpawnToken != _context.World.SpawnToken)
+            return;
+        _navigationGraph.EnqueueCommittedChange(eventInfo);
+        State.ExternalGridBridge.HandleCommittedChange(eventInfo);
     }
 
     private IDisposable EnterUsableState()
@@ -247,9 +382,12 @@ public sealed class TrailblazerPathingService
 
     private void EnsureUsable()
     {
-        if (_disposed || _context.IsDisposed)
-            throw new ObjectDisposedException(nameof(TrailblazerWorldContext));
-        if (!_context.World.IsActive)
-            throw new InvalidOperationException("TrailblazerPathingService is bound to an inactive GridWorld.");
+        SwiftThrowHelper.ThrowIfDisposed(
+            _disposed || _context.IsDisposed,
+            nameof(TrailblazerWorldContext));
+        SwiftThrowHelper.ThrowIfTrue(
+            !_context.World.IsActive,
+            nameof(TrailblazerPathingService),
+            "TrailblazerPathingService is bound to an inactive GridWorld.");
     }
 }

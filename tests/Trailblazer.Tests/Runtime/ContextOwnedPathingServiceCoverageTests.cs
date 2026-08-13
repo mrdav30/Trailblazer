@@ -1,9 +1,8 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Grids;
 using GridForge.Spatial;
-using System;
-using Trailblazer.Navigation;
 using Trailblazer.Pathing;
 using Trailblazer.Tests.Navigation;
 using Xunit;

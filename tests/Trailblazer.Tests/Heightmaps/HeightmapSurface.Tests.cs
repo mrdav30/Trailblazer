@@ -1,7 +1,7 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using SwiftCollections.Dimensions;
-using System;
 using Trailblazer.Heightmaps;
 using Xunit;
 

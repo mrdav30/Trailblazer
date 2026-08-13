@@ -13,6 +13,7 @@ public sealed class NavigationOverlayOperationTests
     private static readonly NavigationCell SolidCell = new(
         TraversalMedia.Solid,
         TraversalCapability.None,
+        default,
         Fixed64.Zero,
         Fixed64.One,
         Fixed64.One);

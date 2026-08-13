@@ -1,6 +1,6 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
-using System;
 using Trailblazer.Pathing;
 using Xunit;
 

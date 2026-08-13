@@ -1,7 +1,7 @@
+using System;
 using BenchmarkDotNet.Attributes;
 using FixedMathSharp;
 using GridForge.Grids;
-using System;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 

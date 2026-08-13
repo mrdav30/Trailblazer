@@ -1,7 +1,6 @@
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Spatial;
-using System;
 using Trailblazer.Pathing;
 using Xunit;
 

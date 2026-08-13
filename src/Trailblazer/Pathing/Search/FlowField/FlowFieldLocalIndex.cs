@@ -5,9 +5,9 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using GridForge.Spatial;
 using System;
 using System.Runtime.CompilerServices;
+using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
 

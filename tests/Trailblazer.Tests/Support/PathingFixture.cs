@@ -1,6 +1,6 @@
-﻿using GridForge;
-using SwiftCollections.Diagnostics;
 using System;
+using GridForge;
+using SwiftCollections.Diagnostics;
 using Xunit;
 
 namespace Trailblazer.Tests;

@@ -8,7 +8,6 @@
 using System;
 using FixedMathSharp;
 using SwiftCollections;
-using SwiftCollections.Diagnostics;
 
 namespace Trailblazer.Pathing;
 
@@ -118,6 +117,7 @@ public sealed class NavigationTokenLegend
             new NavigationCell(
                 media,
                 TraversalCapability.None,
+                default,
                 Fixed64.Zero,
                 radiusClearance,
                 heightClearance,

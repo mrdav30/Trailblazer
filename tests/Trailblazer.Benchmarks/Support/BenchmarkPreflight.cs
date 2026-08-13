@@ -1,5 +1,5 @@
-using FixedMathSharp;
 using System;
+using FixedMathSharp;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks;

@@ -1,7 +1,7 @@
-using FluentAssertions;
-using SwiftCollections;
 using System;
 using System.Collections.Generic;
+using FluentAssertions;
+using SwiftCollections;
 using Trailblazer.Pathing;
 using Xunit;
 

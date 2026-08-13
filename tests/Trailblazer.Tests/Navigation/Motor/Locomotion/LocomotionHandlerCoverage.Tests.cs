@@ -1,8 +1,8 @@
+using System;
+using System.Linq;
 using Chronicler;
 using FixedMathSharp;
 using FluentAssertions;
-using System;
-using System.Linq;
 using Trailblazer.Navigation.Motor;
 using Xunit;
 

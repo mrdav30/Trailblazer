@@ -5,9 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using SwiftCollections.Diagnostics;
-using System;
-
 namespace Trailblazer.Pathing;
 
 /// <summary>Identifies the final-state action for a source-owned semantic transition.</summary>

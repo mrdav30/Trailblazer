@@ -5,7 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using SwiftCollections.Diagnostics;
 using System;
 
 namespace Trailblazer.Pathing;
@@ -29,9 +28,10 @@ public sealed class PreparedNavigationMap
 
         Map = map;
         BakeVersion = bakeVersion;
+        BakedCellLookup = NavigationBakedCellLookup.Create(map);
         try
         {
-            RetainedBytes = EstimateRetainedBytes(map);
+            RetainedBytes = checked(EstimateRetainedBytes(map) + BakedCellLookup.RetainedBytes);
         }
         catch (OverflowException)
         {
@@ -54,6 +54,8 @@ public sealed class PreparedNavigationMap
 
     /// <summary>Gets the checkpoint base stamp, when this preparation absorbed overlay state.</summary>
     public NavigationMapCheckpointStamp? CheckpointStamp { get; }
+
+    internal NavigationBakedCellLookup BakedCellLookup { get; }
 
     private static long EstimateRetainedBytes(NavigationMap map)
     {

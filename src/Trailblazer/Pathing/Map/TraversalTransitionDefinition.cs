@@ -8,7 +8,6 @@
 using System;
 using FixedMathSharp;
 using GridForge.Spatial;
-using SwiftCollections.Diagnostics;
 using SwiftCollections.Utility;
 
 namespace Trailblazer.Pathing;

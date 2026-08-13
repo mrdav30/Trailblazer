@@ -8,7 +8,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using GridForge.Configuration;
 using SwiftCollections.Utility;
 
 namespace Trailblazer.Pathing;
@@ -49,6 +48,12 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
     /// Directed source-owned semantic transitions in ordinal ID order.
     /// </summary>
     public IReadOnlyList<TraversalTransitionDefinition> Transitions => _transitionView;
+
+    internal ReadOnlySpan<NavigationCellEntry> CellSpan => _cells;
+
+    internal ReadOnlySpan<NavigationConnection> ConnectionSpan => _connections;
+
+    internal ReadOnlySpan<TraversalTransitionDefinition> TransitionSpan => _transitions;
 
     internal NavigationMap(
         string mapId,
@@ -129,7 +134,7 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
     internal bool ContainsCell(GridForge.Spatial.VoxelIndex index) =>
         FindCellIndex(index) >= 0;
 
-    private int FindCellIndex(GridForge.Spatial.VoxelIndex index)
+    internal int FindCellIndex(GridForge.Spatial.VoxelIndex index)
     {
         int low = 0;
         int high = _cells.Length - 1;

@@ -6,7 +6,6 @@
 //=======================================================================
 
 using GridForge.Spatial;
-using SwiftCollections.Diagnostics;
 
 namespace Trailblazer.Pathing;
 

@@ -5,24 +5,269 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using SwiftCollections;
-using SwiftCollections.Utility;
 using System;
 using FixedMathSharp;
-using GridForge.Grids.Topology;
 
 namespace Trailblazer.Pathing;
 
-internal sealed class NavigationOperationCandidate
+internal sealed partial class NavigationOperationCandidate
 {
-    private readonly SwiftDictionary<string, MapState> _maps = new(
-        SwiftDictionary<string, MapState>.DefaultCapacity,
-        SwiftHashTools.GetDeterministicStringEqualityComparer());
-    private readonly SwiftDictionary<string, long> _bakeVersionHighWater = new(
-        SwiftDictionary<string, long>.DefaultCapacity,
-        SwiftHashTools.GetDeterministicStringEqualityComparer());
+    private readonly int _navigationAreaCount;
+    private PersistentStringMap<MapState> _maps = PersistentStringMap<MapState>.Empty;
+    private PersistentStringMap<long> _bakeVersionHighWater = PersistentStringMap<long>.Empty;
+    private PersistentStringMap<PersistentStringMap<bool>> _incomingSources =
+        PersistentStringMap<PersistentStringMap<bool>>.Empty;
+    private PersistentGridConfigurationMap<string> _gridBindings = PersistentGridConfigurationMap<string>.Empty;
+    private long _overlaySlotCount;
+    private long _overlayConnectionCount;
+    private long _overlayTransitionCount;
+    private long _seamCandidateCount;
+    private long _explicitEdgeCount;
+    private int _dynamicCellCount;
+    private long _mapStateRetainedBytes;
+    private int _mapStatePersistentPages;
+    private long _incomingSetRetainedBytes;
+    private int _incomingSetPersistentPages;
+    private long _workCopiedPersistentBytes;
+    private int _workCopiedPersistentPages;
+
+    internal NavigationOperationCandidate(int navigationAreaCount = ushort.MaxValue + 1)
+    {
+        _navigationAreaCount = navigationAreaCount;
+    }
 
     internal int MapCount => _maps.Count;
+
+    internal long OverlayCellCount => _overlaySlotCount;
+
+    internal long OverlayConnectionCount => _overlayConnectionCount;
+
+    internal long OverlayTransitionCount => _overlayTransitionCount;
+
+    internal int NavigationAreaCount => _navigationAreaCount;
+
+    internal long RetainedBytes => checked(
+        96L
+        + _maps.RetainedBytes
+        + _bakeVersionHighWater.RetainedBytes
+        + _incomingSources.RetainedBytes
+        + _gridBindings.RetainedBytes
+        + _mapStateRetainedBytes
+        + _incomingSetRetainedBytes);
+
+    internal int PersistentPageCount => checked(
+        4
+        + _maps.PersistentNodeCount
+        + _bakeVersionHighWater.PersistentNodeCount
+        + _incomingSources.PersistentNodeCount
+        + _gridBindings.Count
+        + _mapStatePersistentPages
+        + _incomingSetPersistentPages);
+
+    internal long WorkCopiedPersistentBytes => _workCopiedPersistentBytes;
+
+    internal int WorkCopiedPersistentPages => _workCopiedPersistentPages;
+
+    internal void ResetWorkCopiedPersistentOwnership()
+    {
+        _workCopiedPersistentBytes = 0;
+        _workCopiedPersistentPages = 0;
+    }
+
+    internal void RecordPersistentCopies(int copiedNodes, long bytesPerNode = 64L)
+    {
+        _workCopiedPersistentPages = checked(_workCopiedPersistentPages + copiedNodes);
+        _workCopiedPersistentBytes = checked(
+            _workCopiedPersistentBytes + (copiedNodes * bytesPerNode));
+    }
+
+    internal NavigationOperationRejection ReplaceOverlayState(
+        MapState current,
+        MapState next,
+        NavigationOperationLimits limits,
+        GridCellPrism[] corridorPrisms,
+        Vector3d[] corridorWaypoints)
+    {
+        if (next.Overlay.CellCount > limits.MaxOverlayCellsPerMap
+            || next.Overlay.ConnectionCount > limits.MaxOverlayConnectionsPerMap
+            || next.Overlay.TransitionCount > limits.MaxOverlayTransitionsPerMap)
+        {
+            return NavigationOperationRejection.CapacityExceeded;
+        }
+        long candidateCells = _overlaySlotCount
+            - current.Overlay.CellCount + next.Overlay.CellCount;
+        long candidateConnections = _overlayConnectionCount
+            - current.Overlay.ConnectionCount + next.Overlay.ConnectionCount;
+        long candidateTransitions = _overlayTransitionCount
+            - current.Overlay.TransitionCount + next.Overlay.TransitionCount;
+        if (candidateCells > limits.MaxOverlayCells
+            || candidateConnections > limits.MaxOverlayConnections
+            || candidateTransitions > limits.MaxOverlayTransitions)
+        {
+            return NavigationOperationRejection.CapacityExceeded;
+        }
+        ReplaceTotals(current, next);
+        SetMapState(current, next);
+        return NavigationOperationRejection.None;
+    }
+
+    internal NavigationOperationRejection ValidateOverlayCandidate(
+        NavigationOverlayTransaction transaction,
+        GridCellPrism[] corridorPrisms,
+        Vector3d[] corridorWaypoints)
+    {
+        ReadOnlySpan<NavigationMapOverlayDelta> deltas = transaction.MapSpan;
+        var ids = new string[deltas.Length];
+        var states = new MapState[deltas.Length];
+        for (int i = 0; i < deltas.Length; i++)
+        {
+            ids[i] = deltas[i].MapId;
+            if (!_maps.TryGetValue(ids[i], out states[i]!))
+                return NavigationOperationRejection.MissingMap;
+        }
+        return ValidateCandidate(
+            ids,
+            states,
+            corridorPrisms,
+            corridorWaypoints,
+            allowDormantEndpoints: true)
+            ? NavigationOperationRejection.None
+            : NavigationOperationRejection.ValidationFailed;
+    }
+
+    internal NavigationOperationCandidate Clone()
+    {
+        return new NavigationOperationCandidate(_navigationAreaCount)
+        {
+            _maps = _maps,
+            _bakeVersionHighWater = _bakeVersionHighWater,
+            _incomingSources = _incomingSources,
+            _gridBindings = _gridBindings,
+            _overlaySlotCount = _overlaySlotCount,
+            _overlayConnectionCount = _overlayConnectionCount,
+            _overlayTransitionCount = _overlayTransitionCount,
+            _seamCandidateCount = _seamCandidateCount,
+            _explicitEdgeCount = _explicitEdgeCount,
+            _dynamicCellCount = _dynamicCellCount,
+            _mapStateRetainedBytes = _mapStateRetainedBytes,
+            _mapStatePersistentPages = _mapStatePersistentPages,
+            _incomingSetRetainedBytes = _incomingSetRetainedBytes,
+            _incomingSetPersistentPages = _incomingSetPersistentPages,
+            _workCopiedPersistentBytes = _workCopiedPersistentBytes,
+            _workCopiedPersistentPages = _workCopiedPersistentPages
+        };
+    }
+
+    internal int GetIncomingSourceCount(string mapId) =>
+        _incomingSources.TryGetValue(mapId, out PersistentStringMap<bool> sources)
+            ? sources.Count
+            : 0;
+
+    internal string GetIncomingSource(string mapId, int ordinal)
+    {
+        _incomingSources.TryGetValue(mapId, out PersistentStringMap<bool> sources);
+        return sources.GetKeyAt(ordinal);
+    }
+
+    internal void UpdateIncomingSourceForWork(
+        string destinationMapId,
+        string sourceMapId,
+        bool remove) => UpdateIncomingSource(destinationMapId, sourceMapId, remove);
+
+    internal bool ValidateStateEdgeForWork(
+        MapState state,
+        int stage,
+        int index,
+        string[] changedMapIds,
+        MapState[] changedStates,
+        GridCellPrism[] corridorPrisms,
+        Vector3d[] corridorWaypoints,
+        bool allowDormantEndpoints)
+    {
+        switch (stage)
+        {
+            case 0:
+                NavigationConnection connection = state.Map.ConnectionSpan[index];
+                return state.Overlay.TryGetConnection(connection.Id, out _)
+                    || ValidateConnection(
+                        state,
+                        connection,
+                        changedMapIds,
+                        changedStates,
+                        corridorPrisms,
+                        corridorWaypoints,
+                        allowDormantEndpoints);
+            case 1:
+                NavigationConnectionOverlayOperation connectionOverlay =
+                    state.Overlay.GetConnectionAt(index);
+                return connectionOverlay.Kind != NavigationConnectionOverlayOperationKind.Upsert
+                    || ValidateConnection(
+                        state,
+                        connectionOverlay.Connection!,
+                        changedMapIds,
+                        changedStates,
+                        corridorPrisms,
+                        corridorWaypoints,
+                        allowDormantEndpoints);
+            case 2:
+                TraversalTransitionDefinition transition = state.Map.TransitionSpan[index];
+                return state.Overlay.TryGetTransition(transition.Id, out _)
+                    || ValidateTransition(
+                        state,
+                        transition,
+                        changedMapIds,
+                        changedStates,
+                        allowDormantEndpoints);
+            default:
+                TraversalTransitionOverlayOperation transitionOverlay =
+                    state.Overlay.GetTransitionAt(index);
+                return transitionOverlay.Kind != TraversalTransitionOverlayOperationKind.Upsert
+                    || ValidateTransition(
+                        state,
+                        transitionOverlay.Transition,
+                        changedMapIds,
+                        changedStates,
+                        allowDormantEndpoints);
+        }
+    }
+
+    internal bool ValidateAuthoredStateEdgeForWork(
+        MapState state,
+        bool connection,
+        int index,
+        string[] changedMapIds,
+        MapState[] changedStates,
+        GridCellPrism[] corridorPrisms,
+        Vector3d[] corridorWaypoints,
+        bool allowDormantEndpoints) => connection
+            ? ValidateConnection(
+                state,
+                state.Map.ConnectionSpan[index],
+                changedMapIds,
+                changedStates,
+                corridorPrisms,
+                corridorWaypoints,
+                allowDormantEndpoints,
+                useAuthoredFallback: true)
+            : ValidateTransition(
+                state,
+                state.Map.TransitionSpan[index],
+                changedMapIds,
+                changedStates,
+                allowDormantEndpoints,
+                useAuthoredFallback: true);
+
+    internal MapState[] CaptureStates()
+    {
+        var states = new MapState[_maps.Count];
+        _maps.CopyValuesTo(states);
+        return states;
+    }
+
+    internal int GetTotalDynamicCellCandidateCount()
+    {
+        return _dynamicCellCount;
+    }
 
     internal bool TryGetMap(string mapId, out NavigationMap map)
     {
@@ -35,6 +280,9 @@ internal sealed class NavigationOperationCandidate
         map = null!;
         return false;
     }
+
+    internal bool TryGetState(string mapId, out MapState? state) =>
+        _maps.TryGetValue(mapId, out state);
 
     internal bool TryGetOverlay(string mapId, out NavigationMapOverlayState overlay)
     {
@@ -70,18 +318,30 @@ internal sealed class NavigationOperationCandidate
         if (!replacing && _maps.Count >= limits.MaxMaps)
             return NavigationOperationRejection.CapacityExceeded;
 
-        foreach (MapState state in _maps.Values)
+        for (int cellIndex = 0; cellIndex < prepared.Map.Cells.Count; cellIndex++)
         {
-            if (!string.Equals(state.Map.MapId, mapId, StringComparison.Ordinal)
-                && state.Map.GridBinding.Key.Equals(prepared.Map.GridBinding.Key))
-            {
+            if (prepared.Map.Cells[cellIndex].Cell.Area.Value >= _navigationAreaCount)
                 return NavigationOperationRejection.ValidationFailed;
-            }
+        }
+
+        if (_gridBindings.TryGetValue(prepared.Map.GridBinding.Key, out string boundMapId)
+            && !string.Equals(boundMapId, mapId, StringComparison.Ordinal))
+        {
+            return NavigationOperationRejection.ValidationFailed;
         }
 
         NavigationMapOverlayState overlay = replacementPolicy == OverlayReplacementPolicy.Clear || !replacing
             ? NavigationMapOverlayState.Empty
             : current!.Overlay;
+        PersistentVoxelIndexMap<byte> dynamicAddresses = replacing
+            && replacementPolicy == OverlayReplacementPolicy.PreserveAndRevalidate
+                ? current!.DynamicAddresses
+                : PersistentVoxelIndexMap<byte>.Empty;
+        for (int dynamicIndex = 0; dynamicIndex < dynamicAddresses.Count; dynamicIndex++)
+        {
+            if (prepared.Map.ContainsCell(dynamicAddresses.GetKeyAt(dynamicIndex)))
+                return NavigationOperationRejection.ValidationFailed;
+        }
 
         if (prepared.CheckpointStamp.HasValue)
         {
@@ -97,24 +357,75 @@ internal sealed class NavigationOperationCandidate
         if (HasOversizedCorridor(prepared.Map, overlay, limits.MaxCorridorCells))
             return NavigationOperationRejection.CapacityExceeded;
 
-        var next = new MapState(prepared.Map, prepared.BakeVersion, overlay);
+        var next = new MapState(
+            prepared.Map,
+            prepared.BakeVersion,
+            prepared.RetainedBytes,
+            overlay,
+            replacing && replacementPolicy == OverlayReplacementPolicy.PreserveAndRevalidate
+                ? current!.DynamicSlotGeneration
+                : replacing
+                    ? checked(current!.DynamicSlotGeneration + 1)
+                    : 0,
+            dynamicAddresses,
+            prepared.BakedCellLookup);
+        string[] changedMapIds = new[] { mapId };
+        MapState[] changedStates = new[] { next };
+        for (int connectionIndex = 0; connectionIndex < prepared.Map.Connections.Count; connectionIndex++)
+        {
+            if (!ValidateConnection(
+                    next,
+                    prepared.Map.Connections[connectionIndex],
+                    changedMapIds,
+                    changedStates,
+                    corridorPrisms,
+                    corridorWaypoints,
+                    allowDormantEndpoints: false,
+                    useAuthoredFallback: true))
+                return NavigationOperationRejection.ValidationFailed;
+        }
+        for (int transitionIndex = 0; transitionIndex < prepared.Map.Transitions.Count; transitionIndex++)
+        {
+            if (!ValidateTransition(
+                    next,
+                    prepared.Map.Transitions[transitionIndex],
+                    changedMapIds,
+                    changedStates,
+                    allowDormantEndpoints: false,
+                    useAuthoredFallback: true))
+                return NavigationOperationRejection.ValidationFailed;
+        }
         if (!ValidateCandidate(
-                new[] { mapId },
-                new[] { next },
+                changedMapIds,
+                changedStates,
                 corridorPrisms,
-                corridorWaypoints))
+                corridorWaypoints,
+                allowDormantEndpoints: replacing
+                    && replacementPolicy == OverlayReplacementPolicy.PreserveAndRevalidate))
             return NavigationOperationRejection.ValidationFailed;
 
-        _maps[mapId] = next;
-        _bakeVersionHighWater[mapId] = prepared.BakeVersion;
+        SetMapState(replacing ? current : null, next);
+        if (replacing && !current!.Map.GridBinding.Key.Equals(prepared.Map.GridBinding.Key))
+            _gridBindings = _gridBindings.Remove(current.Map.GridBinding.Key);
+        _gridBindings = _gridBindings.Set(prepared.Map.GridBinding.Key, mapId);
+        UpdateIncomingDependencies(replacing ? current : null, next);
+        ReplaceTotals(replacing ? current : null, next);
+        _bakeVersionHighWater = _bakeVersionHighWater.Set(mapId, prepared.BakeVersion);
         return NavigationOperationRejection.None;
     }
 
     internal NavigationOperationRejection RemoveMap(string mapId)
     {
-        return _maps.Remove(mapId)
-            ? NavigationOperationRejection.None
-            : NavigationOperationRejection.MissingMap;
+        _maps.TryGetValue(mapId, out MapState? current);
+        _maps = _maps.Remove(mapId, out bool removed);
+        if (removed)
+        {
+            RemoveMapStateTotals(current!);
+            _gridBindings = _gridBindings.Remove(current!.Map.GridBinding.Key);
+            UpdateIncomingDependencies(current, next: null);
+            ReplaceTotals(current, next: null);
+        }
+        return removed ? NavigationOperationRejection.None : NavigationOperationRejection.MissingMap;
     }
 
     internal NavigationOperationRejection ApplyOverlay(
@@ -127,16 +438,9 @@ internal sealed class NavigationOperationCandidate
         ReadOnlySpan<NavigationMapOverlayDelta> deltas = transaction.MapSpan;
         var nextStates = new MapState[deltas.Length];
         var nextMapIds = new string[deltas.Length];
-        long candidateCellCount = 0;
-        long candidateConnectionCount = 0;
-        long candidateTransitionCount = 0;
-
-        foreach (MapState state in _maps.Values)
-        {
-            candidateCellCount += state.Overlay.Cells.Length;
-            candidateConnectionCount += state.Overlay.Connections.Length;
-            candidateTransitionCount += state.Overlay.Transitions.Length;
-        }
+        long candidateCellCount = _overlaySlotCount;
+        long candidateConnectionCount = _overlayConnectionCount;
+        long candidateTransitionCount = _overlayTransitionCount;
 
         for (int i = 0; i < deltas.Length; i++)
         {
@@ -144,21 +448,48 @@ internal sealed class NavigationOperationCandidate
             if (!_maps.TryGetValue(delta.MapId, out MapState? current))
                 return NavigationOperationRejection.MissingMap;
 
+            for (int cellIndex = 0; cellIndex < delta.Cells.Count; cellIndex++)
+            {
+                NavigationCellOverlayOperation operation = delta.Cells[cellIndex];
+                if (operation.Kind == NavigationCellOverlayOperationKind.Set
+                    && operation.Cell.Area.Value >= _navigationAreaCount)
+                {
+                    return NavigationOperationRejection.ValidationFailed;
+                }
+            }
+
             NavigationMapOverlayState nextOverlay = current.Overlay.Apply(delta, operationSequence);
+            PersistentVoxelIndexMap<byte> dynamicAddresses = current.DynamicAddresses;
+            for (int cellIndex = 0; cellIndex < delta.Cells.Count; cellIndex++)
+            {
+                NavigationCellOverlayOperation operation = delta.Cells[cellIndex];
+                if (operation.Kind == NavigationCellOverlayOperationKind.Set
+                    && !current.Map.ContainsCell(operation.Index))
+                {
+                    dynamicAddresses = dynamicAddresses.Set(operation.Index, 0);
+                }
+            }
             if (HasOversizedCorridor(current.Map, nextOverlay, limits.MaxCorridorCells))
                 return NavigationOperationRejection.CapacityExceeded;
-            if (nextOverlay.Cells.Length > limits.MaxOverlayCellsPerMap
-                || nextOverlay.Connections.Length > limits.MaxOverlayConnectionsPerMap
-                || nextOverlay.Transitions.Length > limits.MaxOverlayTransitionsPerMap)
+            if (nextOverlay.CellCount > limits.MaxOverlayCellsPerMap
+                || nextOverlay.ConnectionCount > limits.MaxOverlayConnectionsPerMap
+                || nextOverlay.TransitionCount > limits.MaxOverlayTransitionsPerMap)
             {
                 return NavigationOperationRejection.CapacityExceeded;
             }
 
-            candidateCellCount += nextOverlay.Cells.Length - current.Overlay.Cells.Length;
-            candidateConnectionCount += nextOverlay.Connections.Length - current.Overlay.Connections.Length;
-            candidateTransitionCount += nextOverlay.Transitions.Length - current.Overlay.Transitions.Length;
+            candidateCellCount += nextOverlay.CellCount - current.Overlay.CellCount;
+            candidateConnectionCount += nextOverlay.ConnectionCount - current.Overlay.ConnectionCount;
+            candidateTransitionCount += nextOverlay.TransitionCount - current.Overlay.TransitionCount;
             nextMapIds[i] = delta.MapId;
-            nextStates[i] = new MapState(current.Map, current.BakeVersion, nextOverlay);
+            nextStates[i] = new MapState(
+                current.Map,
+                current.BakeVersion,
+                current.PreparedMapRetainedBytes,
+                nextOverlay,
+                current.DynamicSlotGeneration,
+                dynamicAddresses,
+                current.BakedCellLookup);
         }
 
         if (candidateCellCount > limits.MaxOverlayCells
@@ -168,13 +499,126 @@ internal sealed class NavigationOperationCandidate
             return NavigationOperationRejection.CapacityExceeded;
         }
 
-        if (!ValidateCandidate(nextMapIds, nextStates, corridorPrisms, corridorWaypoints))
+        for (int i = 0; i < deltas.Length; i++)
+        {
+            ReadOnlySpan<NavigationConnectionOverlayOperation> connections = deltas[i].ConnectionSpan;
+            for (int connectionIndex = 0; connectionIndex < connections.Length; connectionIndex++)
+            {
+                NavigationConnectionOverlayOperation operation = connections[connectionIndex];
+                if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert
+                    && !ValidateConnection(
+                        nextStates[i],
+                        operation.Connection!,
+                        nextMapIds,
+                        nextStates,
+                        corridorPrisms,
+                        corridorWaypoints,
+                        allowDormantEndpoints: false))
+                {
+                    return NavigationOperationRejection.ValidationFailed;
+                }
+            }
+
+            ReadOnlySpan<TraversalTransitionOverlayOperation> transitions = deltas[i].TransitionSpan;
+            for (int transitionIndex = 0; transitionIndex < transitions.Length; transitionIndex++)
+            {
+                TraversalTransitionOverlayOperation operation = transitions[transitionIndex];
+                if (operation.Kind == TraversalTransitionOverlayOperationKind.Upsert
+                    && !ValidateTransition(
+                        nextStates[i],
+                        operation.Transition,
+                        nextMapIds,
+                        nextStates,
+                        allowDormantEndpoints: false))
+                {
+                    return NavigationOperationRejection.ValidationFailed;
+                }
+            }
+        }
+
+        if (!ValidateCandidate(
+                nextMapIds,
+                nextStates,
+                corridorPrisms,
+                corridorWaypoints,
+                allowDormantEndpoints: true))
             return NavigationOperationRejection.ValidationFailed;
 
         for (int i = 0; i < deltas.Length; i++)
-            _maps[deltas[i].MapId] = nextStates[i];
+        {
+            _maps.TryGetValue(deltas[i].MapId, out MapState? current);
+            UpdateIncomingDependencies(current, nextStates[i]);
+            ReplaceTotals(current, nextStates[i]);
+            SetMapState(current, nextStates[i]);
+        }
 
         return NavigationOperationRejection.None;
+    }
+
+    private void SetMapState(MapState? previous, MapState next)
+    {
+        if (previous != null)
+            RemoveMapStateTotals(previous);
+        AddMapStateTotals(next);
+        _maps = _maps.Set(next.Map.MapId, next, out int copiedNodes);
+        RecordPersistentCopies(copiedNodes);
+    }
+
+    private void AddMapStateTotals(MapState state)
+    {
+        _mapStateRetainedBytes = checked(
+            _mapStateRetainedBytes
+            + state.PreparedMapRetainedBytes
+            + state.Overlay.RetainedBytes
+            + state.DynamicAddresses.RetainedBytes);
+        _mapStatePersistentPages = checked(
+            _mapStatePersistentPages
+            + state.Overlay.PersistentNodeCount
+            + state.DynamicAddresses.PersistentNodeCount);
+    }
+
+    private void RemoveMapStateTotals(MapState state)
+    {
+        _mapStateRetainedBytes = checked(
+            _mapStateRetainedBytes
+            - state.PreparedMapRetainedBytes
+            - state.Overlay.RetainedBytes
+            - state.DynamicAddresses.RetainedBytes);
+        _mapStatePersistentPages = checked(
+            _mapStatePersistentPages
+            - state.Overlay.PersistentNodeCount
+            - state.DynamicAddresses.PersistentNodeCount);
+    }
+
+    private void ReplaceTotals(MapState? previous, MapState? next)
+    {
+        if (previous != null)
+        {
+            _overlaySlotCount -= previous.Overlay.CellCount;
+            _overlayConnectionCount -= previous.Overlay.ConnectionCount;
+            _overlayTransitionCount -= previous.Overlay.TransitionCount;
+            long previousConnections = previous.Map.ConnectionSpan.Length
+                + previous.Overlay.ConnectionCount;
+            _seamCandidateCount -= previousConnections;
+            _explicitEdgeCount -= previousConnections
+                + previous.Map.TransitionSpan.Length
+                + previous.Overlay.TransitionCount;
+            _dynamicCellCount = checked(_dynamicCellCount - previous.DynamicAddresses.Count);
+        }
+
+        if (next != null)
+        {
+            _overlaySlotCount += next.Overlay.CellCount;
+            _overlayConnectionCount += next.Overlay.ConnectionCount;
+            _overlayTransitionCount += next.Overlay.TransitionCount;
+            long nextConnections = next.Map.ConnectionSpan.Length
+                + next.Overlay.ConnectionCount;
+            _seamCandidateCount += nextConnections;
+            _explicitEdgeCount += nextConnections
+                + next.Map.TransitionSpan.Length
+                + next.Overlay.TransitionCount;
+            _dynamicCellCount = checked(_dynamicCellCount + next.DynamicAddresses.Count);
+        }
     }
 
     private static bool HasOversizedCorridor(
@@ -187,9 +631,9 @@ internal sealed class NavigationOperationCandidate
             if (map.Connections[i].Witnesses.Count > maxCorridorCells - 2)
                 return true;
         }
-        for (int i = 0; i < overlay.Connections.Length; i++)
+        for (int i = 0; i < overlay.ConnectionCount; i++)
         {
-            NavigationConnectionOverlayOperation operation = overlay.Connections[i];
+            NavigationConnectionOverlayOperation operation = overlay.GetConnectionAt(i);
             if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert
                 && operation.Connection!.Witnesses.Count > maxCorridorCells - 2)
             {
@@ -204,33 +648,139 @@ internal sealed class NavigationOperationCandidate
         string[] changedMapIds,
         MapState[] changedStates,
         GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
+        Vector3d[] corridorWaypoints,
+        bool allowDormantEndpoints)
     {
-        bool appendedNewMap = false;
-        foreach (MapState published in _maps.Values)
+        for (int changedIndex = 0; changedIndex < changedMapIds.Length; changedIndex++)
         {
-            MapState state = FindChangedState(published.Map.MapId, changedMapIds, changedStates) ?? published;
+            MapState state = changedStates[changedIndex];
             if (!ValidateState(
                     state,
                     changedMapIds,
                     changedStates,
                     corridorPrisms,
-                    corridorWaypoints))
+                    corridorWaypoints,
+                    allowDormantEndpoints))
                 return false;
 
-            if (string.Equals(state.Map.MapId, changedMapIds[0], StringComparison.Ordinal))
-                appendedNewMap = true;
+            if (!_incomingSources.TryGetValue(
+                    changedMapIds[changedIndex],
+                    out PersistentStringMap<bool> sources))
+                continue;
+            for (int sourceIndex = 0; sourceIndex < sources.Count; sourceIndex++)
+            {
+                string sourceId = sources.GetKeyAt(sourceIndex);
+                MapState? source = FindChangedState(sourceId, changedMapIds, changedStates);
+                if (source == null && !_maps.TryGetValue(sourceId, out source))
+                    continue;
+                if (!ValidateState(
+                        source,
+                        changedMapIds,
+                        changedStates,
+                        corridorPrisms,
+                        corridorWaypoints,
+                        allowDormantEndpoints))
+                    return false;
+            }
         }
 
-        if (!appendedNewMap && changedMapIds.Length == 1)
-            return ValidateState(
-                changedStates[0],
-                changedMapIds,
-                changedStates,
-                corridorPrisms,
-                corridorWaypoints);
-
         return true;
+    }
+
+    private void UpdateIncomingDependencies(MapState? previous, MapState? next)
+    {
+        if (previous != null)
+            VisitDestinationMapIds(previous, remove: true);
+        if (next != null)
+            VisitDestinationMapIds(next, remove: false);
+    }
+
+    private void VisitDestinationMapIds(MapState state, bool remove)
+    {
+        for (int i = 0; i < state.Map.Connections.Count; i++)
+        {
+            UpdateIncomingSource(state.Map.Connections[i].Destination.MapId, state.Map.MapId, remove);
+            for (int witness = 0; witness < state.Map.Connections[i].Witnesses.Count; witness++)
+            {
+                UpdateIncomingSource(
+                    state.Map.Connections[i].Witnesses[witness].MapId,
+                    state.Map.MapId,
+                    remove);
+            }
+        }
+        for (int i = 0; i < state.Map.Transitions.Count; i++)
+            UpdateIncomingSource(state.Map.Transitions[i].Destination.MapId, state.Map.MapId, remove);
+        for (int i = 0; i < state.Overlay.ConnectionCount; i++)
+        {
+            NavigationConnectionOverlayOperation operation = state.Overlay.GetConnectionAt(i);
+            if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert)
+            {
+                UpdateIncomingSource(operation.Connection!.Destination.MapId, state.Map.MapId, remove);
+                for (int witness = 0; witness < operation.Connection.Witnesses.Count; witness++)
+                {
+                    UpdateIncomingSource(
+                        operation.Connection.Witnesses[witness].MapId,
+                        state.Map.MapId,
+                        remove);
+                }
+            }
+        }
+        for (int i = 0; i < state.Overlay.TransitionCount; i++)
+        {
+            TraversalTransitionOverlayOperation operation = state.Overlay.GetTransitionAt(i);
+            if (operation.Kind == TraversalTransitionOverlayOperationKind.Upsert)
+                UpdateIncomingSource(operation.Transition.Destination.MapId, state.Map.MapId, remove);
+        }
+    }
+
+    private void UpdateIncomingSource(string destinationMapId, string sourceMapId, bool remove)
+    {
+        bool hadSources = _incomingSources.TryGetValue(
+            destinationMapId,
+            out PersistentStringMap<bool> sources);
+        sources ??= PersistentStringMap<bool>.Empty;
+        long previousBytes = hadSources ? sources.RetainedBytes : 0;
+        int previousPages = hadSources ? sources.PersistentNodeCount : 0;
+        if (remove)
+        {
+            sources = sources.Remove(sourceMapId, out bool removed, out int copiedNodes);
+            if (!removed)
+                return;
+            RecordPersistentCopies(copiedNodes);
+            if (sources.Count == 0)
+            {
+                _incomingSources = _incomingSources.Remove(
+                    destinationMapId,
+                    out _,
+                    out copiedNodes);
+            }
+            else
+            {
+                _incomingSources = _incomingSources.Set(
+                    destinationMapId,
+                    sources,
+                    out copiedNodes);
+            }
+            RecordPersistentCopies(copiedNodes);
+        }
+        else
+        {
+            if (sources.ContainsKey(sourceMapId))
+                return;
+            sources = sources.Set(sourceMapId, true, out int copiedNodes);
+            RecordPersistentCopies(copiedNodes);
+            _incomingSources = _incomingSources.Set(
+                destinationMapId,
+                sources,
+                out copiedNodes);
+            RecordPersistentCopies(copiedNodes);
+        }
+        long nextBytes = sources.Count == 0 ? 0 : sources.RetainedBytes;
+        int nextPages = sources.Count == 0 ? 0 : sources.PersistentNodeCount;
+        _incomingSetRetainedBytes = checked(
+            _incomingSetRetainedBytes - previousBytes + nextBytes);
+        _incomingSetPersistentPages = checked(
+            _incomingSetPersistentPages - previousPages + nextPages);
     }
 
     private bool ValidateState(
@@ -238,13 +788,14 @@ internal sealed class NavigationOperationCandidate
         string[] changedMapIds,
         MapState[] changedStates,
         GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
+        Vector3d[] corridorWaypoints,
+        bool allowDormantEndpoints)
     {
         NavigationMap map = state.Map;
         NavigationMapOverlayState overlay = state.Overlay;
-        for (int i = 0; i < overlay.Cells.Length; i++)
+        for (int i = 0; i < overlay.CellCount; i++)
         {
-            if (!map.GridBinding.IsValidIndex(overlay.Cells[i].Index))
+            if (!map.GridBinding.IsValidIndex(overlay.GetCellAt(i).Index))
                 return false;
         }
 
@@ -263,13 +814,14 @@ internal sealed class NavigationOperationCandidate
                     changedMapIds,
                     changedStates,
                     corridorPrisms,
-                    corridorWaypoints))
+                    corridorWaypoints,
+                    allowDormantEndpoints))
                 return false;
         }
 
-        for (int i = 0; i < overlay.Connections.Length; i++)
+        for (int i = 0; i < overlay.ConnectionCount; i++)
         {
-            NavigationConnectionOverlayOperation operation = overlay.Connections[i];
+            NavigationConnectionOverlayOperation operation = overlay.GetConnectionAt(i);
             if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert
                 && !ValidateConnection(
                     state,
@@ -277,7 +829,8 @@ internal sealed class NavigationOperationCandidate
                     changedMapIds,
                     changedStates,
                     corridorPrisms,
-                    corridorWaypoints))
+                    corridorWaypoints,
+                    allowDormantEndpoints))
             {
                 return false;
             }
@@ -292,15 +845,25 @@ internal sealed class NavigationOperationCandidate
                     continue;
             }
 
-            if (!ValidateTransition(state, transition, changedMapIds, changedStates))
+            if (!ValidateTransition(
+                    state,
+                    transition,
+                    changedMapIds,
+                    changedStates,
+                    allowDormantEndpoints))
                 return false;
         }
 
-        for (int i = 0; i < overlay.Transitions.Length; i++)
+        for (int i = 0; i < overlay.TransitionCount; i++)
         {
-            TraversalTransitionOverlayOperation operation = overlay.Transitions[i];
+            TraversalTransitionOverlayOperation operation = overlay.GetTransitionAt(i);
             if (operation.Kind == TraversalTransitionOverlayOperationKind.Upsert
-                && !ValidateTransition(state, operation.Transition, changedMapIds, changedStates))
+                && !ValidateTransition(
+                    state,
+                    operation.Transition,
+                    changedMapIds,
+                    changedStates,
+                    allowDormantEndpoints))
             {
                 return false;
             }
@@ -315,10 +878,17 @@ internal sealed class NavigationOperationCandidate
         string[] changedMapIds,
         MapState[] changedStates,
         GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
+        Vector3d[] corridorWaypoints,
+        bool allowDormantEndpoints,
+        bool useAuthoredFallback = false)
     {
-        if (!TryGetEffectiveCell(source, connection.SourceIndex, out NavigationCell sourceCell)
-            || connection.PortalRadiusClearance > sourceCell.RadiusClearance
+        if (!TryGetValidationCell(
+                source,
+                connection.SourceIndex,
+                useAuthoredFallback,
+                out NavigationCell sourceCell))
+            return allowDormantEndpoints;
+        if (connection.PortalRadiusClearance > sourceCell.RadiusClearance
             || connection.PortalHeightClearance > sourceCell.HeightClearance
             || !source.Map.GridBinding.TryGetCellPrism(connection.SourceIndex, out GridForge.Grids.Topology.GridCellPrism sourcePrism)
             || !sourcePrism.Contains(connection.EntryAnchor))
@@ -333,10 +903,15 @@ internal sealed class NavigationOperationCandidate
                 connection.ExitAnchor,
                 validateAnchor: true,
                 changedMapIds,
-                changedStates))
+                changedStates,
+                allowDormantEndpoints,
+                useAuthoredFallback,
+                out bool destinationDormant))
         {
             return false;
         }
+        if (destinationDormant)
+            return true;
 
         for (int i = 0; i < connection.Witnesses.Count; i++)
         {
@@ -347,10 +922,15 @@ internal sealed class NavigationOperationCandidate
                     anchor: default,
                     validateAnchor: false,
                     changedMapIds,
-                    changedStates))
+                    changedStates,
+                    allowDormantEndpoints,
+                    useAuthoredFallback,
+                    out bool witnessDormant))
             {
                 return false;
             }
+            if (witnessDormant)
+                return true;
         }
 
         return TryValidateCorridor(
@@ -404,7 +984,11 @@ internal sealed class NavigationOperationCandidate
         if (!valid || !connection.IsLowerBoundCertified)
             return valid;
 
-        if (!TryGetEffectiveCell(destination, connection.Destination.Index, out NavigationCell destinationCell))
+        if (!TryGetValidationCell(
+                destination,
+                connection.Destination.Index,
+                useAuthoredFallback: true,
+                out NavigationCell destinationCell))
             return false;
 
         Vector3d sourceAnchor = GetFootAnchor(corridorPrisms[0]);
@@ -426,13 +1010,18 @@ internal sealed class NavigationOperationCandidate
         MapState source,
         TraversalTransitionDefinition transition,
         string[] changedMapIds,
-        MapState[] changedStates)
+        MapState[] changedStates,
+        bool allowDormantEndpoints,
+        bool useAuthoredFallback = false)
     {
-        if (!TryGetEffectiveCell(source, transition.SourceIndex, out NavigationCell sourceCell)
-            || !SupportsMedium(sourceCell, transition.SourceMedium))
-        {
+        if (!TryGetValidationCell(
+                source,
+                transition.SourceIndex,
+                useAuthoredFallback,
+                out NavigationCell sourceCell))
+            return allowDormantEndpoints;
+        if (!SupportsMedium(sourceCell, transition.SourceMedium))
             return false;
-        }
 
         if (transition.HasSourcePointOverride
             && (!source.Map.GridBinding.TryGetCellPrism(transition.SourceIndex, out GridForge.Grids.Topology.GridCellPrism sourcePrism)
@@ -444,11 +1033,14 @@ internal sealed class NavigationOperationCandidate
         MapState? destination = FindChangedState(transition.Destination.MapId, changedMapIds, changedStates);
         if (destination == null && !_maps.TryGetValue(transition.Destination.MapId, out destination))
             return true;
-        if (!TryGetEffectiveCell(destination, transition.Destination.Index, out NavigationCell destinationCell)
-            || !SupportsMedium(destinationCell, transition.DestinationMedium))
-        {
+        if (!TryGetValidationCell(
+                destination,
+                transition.Destination.Index,
+                useAuthoredFallback,
+                out NavigationCell destinationCell))
+            return allowDormantEndpoints;
+        if (!SupportsMedium(destinationCell, transition.DestinationMedium))
             return false;
-        }
 
         return !transition.HasDestinationPointOverride
             || (destination.Map.GridBinding.TryGetCellPrism(transition.Destination.Index, out GridForge.Grids.Topology.GridCellPrism destinationPrism)
@@ -462,14 +1054,25 @@ internal sealed class NavigationOperationCandidate
         FixedMathSharp.Vector3d anchor,
         bool validateAnchor,
         string[] changedMapIds,
-        MapState[] changedStates)
+        MapState[] changedStates,
+        bool allowDormantEndpoints,
+        bool useAuthoredFallback,
+        out bool dormant)
     {
+        dormant = false;
         MapState? target = FindChangedState(address.MapId, changedMapIds, changedStates);
         if (target == null && !_maps.TryGetValue(address.MapId, out target))
+        {
+            dormant = true;
             return true;
+        }
 
-        if (!TryGetEffectiveCell(target, address.Index, out NavigationCell cell)
-            || radius > cell.RadiusClearance
+        if (!TryGetValidationCell(target, address.Index, useAuthoredFallback, out NavigationCell cell))
+        {
+            dormant = allowDormantEndpoints;
+            return allowDormantEndpoints;
+        }
+        if (radius > cell.RadiusClearance
             || height > cell.HeightClearance)
         {
             return false;
@@ -512,6 +1115,27 @@ internal sealed class NavigationOperationCandidate
         return false;
     }
 
+    private static bool TryGetValidationCell(
+        MapState state,
+        GridForge.Spatial.VoxelIndex index,
+        bool useAuthoredFallback,
+        out NavigationCell cell)
+    {
+        if (TryGetEffectiveCell(state, index, out cell))
+            return true;
+        if (useAuthoredFallback)
+        {
+            int baked = state.Map.FindCellIndex(index);
+            if (baked >= 0)
+            {
+                cell = state.Map.Cells[baked].Cell;
+                return true;
+            }
+        }
+        cell = default;
+        return false;
+    }
+
     private static bool SupportsMedium(NavigationCell cell, TraversalMedium medium) => medium switch
     {
         TraversalMedium.Solid => (cell.Media & TraversalMedia.Solid) != 0,
@@ -546,93 +1170,52 @@ internal sealed class NavigationOperationCandidate
         NavigationMapOverlayState overlay,
         GridForge.Spatial.VoxelIndex index,
         out NavigationCellOverlayOperation operation)
-    {
-        int low = 0;
-        int high = overlay.Cells.Length - 1;
-        while (low <= high)
-        {
-            int middle = low + ((high - low) >> 1);
-            int comparison = overlay.Cells[middle].Index.CompareTo(index);
-            if (comparison == 0)
-            {
-                operation = overlay.Cells[middle];
-                return true;
-            }
-            if (comparison < 0)
-                low = middle + 1;
-            else
-                high = middle - 1;
-        }
-
-        operation = default;
-        return false;
-    }
+        => overlay.TryGetCell(index, out operation);
 
     private static bool TryFindConnectionOverlay(
         NavigationMapOverlayState overlay,
         string id,
         out NavigationConnectionOverlayOperation operation)
-    {
-        int low = 0;
-        int high = overlay.Connections.Length - 1;
-        while (low <= high)
-        {
-            int middle = low + ((high - low) >> 1);
-            int comparison = string.CompareOrdinal(overlay.Connections[middle].Id, id);
-            if (comparison == 0)
-            {
-                operation = overlay.Connections[middle];
-                return true;
-            }
-            if (comparison < 0)
-                low = middle + 1;
-            else
-                high = middle - 1;
-        }
-
-        operation = default;
-        return false;
-    }
+        => overlay.TryGetConnection(id, out operation);
 
     private static bool TryFindTransitionOverlay(
         NavigationMapOverlayState overlay,
         string id,
         out TraversalTransitionOverlayOperation operation)
-    {
-        int low = 0;
-        int high = overlay.Transitions.Length - 1;
-        while (low <= high)
-        {
-            int middle = low + ((high - low) >> 1);
-            int comparison = string.CompareOrdinal(overlay.Transitions[middle].Id, id);
-            if (comparison == 0)
-            {
-                operation = overlay.Transitions[middle];
-                return true;
-            }
-            if (comparison < 0)
-                low = middle + 1;
-            else
-                high = middle - 1;
-        }
+        => overlay.TryGetTransition(id, out operation);
 
-        operation = default;
-        return false;
-    }
-
-    private sealed class MapState
+    internal sealed class MapState
     {
-        internal MapState(NavigationMap map, long bakeVersion, NavigationMapOverlayState overlay)
+        internal MapState(
+            NavigationMap map,
+            long bakeVersion,
+            long preparedMapRetainedBytes,
+            NavigationMapOverlayState overlay,
+            long dynamicSlotGeneration,
+            PersistentVoxelIndexMap<byte>? dynamicAddresses = null,
+            NavigationBakedCellLookup? bakedCellLookup = null)
         {
             Map = map;
             BakeVersion = bakeVersion;
+            PreparedMapRetainedBytes = preparedMapRetainedBytes;
             Overlay = overlay;
+            DynamicSlotGeneration = dynamicSlotGeneration;
+            DynamicAddresses = dynamicAddresses ?? PersistentVoxelIndexMap<byte>.Empty;
+            BakedCellLookup = bakedCellLookup ?? NavigationBakedCellLookup.Create(map);
         }
 
         internal NavigationMap Map { get; }
 
         internal long BakeVersion { get; }
 
+        internal long PreparedMapRetainedBytes { get; }
+
         internal NavigationMapOverlayState Overlay { get; }
+
+        internal long DynamicSlotGeneration { get; }
+
+        internal PersistentVoxelIndexMap<byte> DynamicAddresses { get; }
+
+        internal NavigationBakedCellLookup BakedCellLookup { get; }
     }
 }

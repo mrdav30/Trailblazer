@@ -1,14 +1,14 @@
-﻿//=======================================================================
+//=======================================================================
 // AStarPathRequest.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using FixedMathSharp;
-using GridForge.Grids;
 using System;
 using System.Runtime.CompilerServices;
+using FixedMathSharp;
+using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 

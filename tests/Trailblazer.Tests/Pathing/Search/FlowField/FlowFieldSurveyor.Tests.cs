@@ -1,11 +1,11 @@
-﻿using FixedMathSharp;
+using System;
+using System.Linq;
+using FixedMathSharp;
 using FixedMathSharp.Assertions;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
-using System;
-using System.Linq;
 using Trailblazer.Pathing;
 using Xunit;
 

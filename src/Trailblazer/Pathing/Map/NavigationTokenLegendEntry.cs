@@ -6,7 +6,6 @@
 //=======================================================================
 
 using FixedMathSharp;
-using SwiftCollections.Diagnostics;
 
 namespace Trailblazer.Pathing;
 
@@ -81,6 +80,7 @@ public readonly struct NavigationTokenLegendEntry
         return new NavigationCell(
             Cell.Media,
             Cell.RequiredCapabilities,
+            Cell.Area,
             hasInlineCost ? inlineCost : Cell.EnterCost,
             Cell.RadiusClearance,
             Cell.HeightClearance,

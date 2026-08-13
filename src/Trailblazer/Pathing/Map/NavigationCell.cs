@@ -42,6 +42,11 @@ public readonly struct NavigationCell : IEquatable<NavigationCell>
     public TraversalCapability RequiredCapabilities { get; }
 
     /// <summary>
+    /// The stable host-defined navigation area used by query-specific policies.
+    /// </summary>
+    public NavigationAreaId Area { get; }
+
+    /// <summary>
     /// The non-negative cost charged when an edge enters this cell.
     /// </summary>
     public Fixed64 EnterCost { get; }
@@ -67,6 +72,7 @@ public readonly struct NavigationCell : IEquatable<NavigationCell>
     public NavigationCell(
         TraversalMedia media,
         TraversalCapability requiredCapabilities,
+        NavigationAreaId area,
         Fixed64 enterCost,
         Fixed64 radiusClearance,
         Fixed64 heightClearance,
@@ -99,6 +105,7 @@ public readonly struct NavigationCell : IEquatable<NavigationCell>
 
         Media = media;
         RequiredCapabilities = requiredCapabilities;
+        Area = area;
         EnterCost = enterCost;
         RadiusClearance = radiusClearance;
         HeightClearance = heightClearance;
@@ -109,6 +116,7 @@ public readonly struct NavigationCell : IEquatable<NavigationCell>
     public bool Equals(NavigationCell other) =>
         Media == other.Media
         && RequiredCapabilities == other.RequiredCapabilities
+        && Area == other.Area
         && EnterCost == other.EnterCost
         && RadiusClearance == other.RadiusClearance
         && HeightClearance == other.HeightClearance
@@ -121,6 +129,7 @@ public readonly struct NavigationCell : IEquatable<NavigationCell>
     public override int GetHashCode()
     {
         int hash = SwiftHashTools.CombineHashCodes((int)Media, (int)RequiredCapabilities);
+        hash = SwiftHashTools.CombineHashCodes(hash, Area.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, EnterCost.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, RadiusClearance.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, HeightClearance.GetHashCode());

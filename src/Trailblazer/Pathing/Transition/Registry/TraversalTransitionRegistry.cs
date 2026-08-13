@@ -5,12 +5,12 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
+using System.Threading;
 using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
-using System;
-using System.Threading;
 
 namespace Trailblazer.Pathing;
 

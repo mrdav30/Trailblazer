@@ -19,6 +19,7 @@ public class NavigationMapBakeBenchmarks
     private static readonly NavigationCell Cell = new(
         TraversalMedia.Solid,
         TraversalCapability.None,
+        default,
         Fixed64.Zero,
         Fixed64.Zero,
         Fixed64.One);
@@ -58,6 +59,7 @@ public class NavigationConnectionCanonicalizationBenchmarks
     private static readonly NavigationCell Cell = new(
         TraversalMedia.Solid,
         TraversalCapability.None,
+        default,
         Fixed64.Zero,
         Fixed64.Zero,
         Fixed64.One);

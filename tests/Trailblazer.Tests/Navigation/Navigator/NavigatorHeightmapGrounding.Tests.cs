@@ -1,7 +1,7 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
-using System;
 using Trailblazer.Heightmaps;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.Motor;

@@ -1,5 +1,5 @@
-using FixedMathSharp;
 using System;
+using FixedMathSharp;
 using Trailblazer.Navigation;
 
 namespace Trailblazer.Benchmarks;

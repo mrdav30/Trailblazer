@@ -1,6 +1,6 @@
+using System;
 using BenchmarkDotNet.Attributes;
 using FixedMathSharp;
-using System;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks.Pathing;

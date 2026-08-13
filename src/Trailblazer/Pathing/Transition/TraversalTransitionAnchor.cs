@@ -5,10 +5,10 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
-using System;
 
 namespace Trailblazer.Pathing;
 

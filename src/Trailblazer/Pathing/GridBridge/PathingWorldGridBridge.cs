@@ -5,8 +5,8 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using GridForge.Grids;
 using System;
+using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
@@ -22,11 +22,27 @@ internal sealed class PathingWorldGridBridge : IDisposable
     internal PathingWorldGridBridge(PathingWorldState state)
     {
         _state = state;
-        GridWorld world = state.World;
-        world.OnActiveGridAdded += HandleGridAdded;
-        world.OnActiveGridRemoved += HandleGridRemoved;
-        world.OnActiveGridChange += HandleGridChanged;
-        world.OnReset += HandleGridReset;
+    }
+
+    internal void HandleCommittedChange(GridEventInfo eventInfo)
+    {
+        if (_disposed)
+            return;
+        switch (eventInfo.ChangeKind)
+        {
+            case GridEventKind.GridAdded:
+                HandleGridAdded(eventInfo);
+                break;
+            case GridEventKind.GridRemoved:
+                HandleGridRemoved(eventInfo);
+                break;
+            case GridEventKind.WorldReset:
+                HandleGridReset();
+                break;
+            default:
+                HandleGridChanged(eventInfo);
+                break;
+        }
     }
 
     internal ExternalGridBridgeDiagnosticsSnapshot GetDiagnosticsSnapshot()
@@ -76,13 +92,5 @@ internal sealed class PathingWorldGridBridge : IDisposable
             return;
 
         _disposed = true;
-        GridWorld world = _state.World;
-        if (!world.IsActive)
-            return;
-
-        world.OnActiveGridAdded -= HandleGridAdded;
-        world.OnActiveGridRemoved -= HandleGridRemoved;
-        world.OnActiveGridChange -= HandleGridChanged;
-        world.OnReset -= HandleGridReset;
     }
 }

@@ -1,8 +1,8 @@
-﻿using FixedMathSharp;
+using System;
+using FixedMathSharp;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
-using System;
 using Trailblazer.Pathing;
 using Xunit;
 

@@ -5,10 +5,10 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using GridForge.Spatial;
-using SwiftCollections;
 using System;
 using System.Threading;
+using GridForge.Spatial;
+using SwiftCollections;
 
 namespace Trailblazer.Pathing;
 

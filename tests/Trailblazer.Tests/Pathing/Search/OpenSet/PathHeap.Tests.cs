@@ -1,10 +1,10 @@
-﻿using FixedMathSharp;
-using GridForge.Configuration;
-using GridForge.Grids;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using FixedMathSharp;
+using GridForge.Configuration;
+using GridForge.Grids;
 using Trailblazer.Pathing;
 using Xunit;
 

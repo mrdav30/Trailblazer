@@ -1,5 +1,5 @@
-using BenchmarkDotNet.Attributes;
 using System;
+using BenchmarkDotNet.Attributes;
 
 namespace Trailblazer.Benchmarks.Phase0;
 

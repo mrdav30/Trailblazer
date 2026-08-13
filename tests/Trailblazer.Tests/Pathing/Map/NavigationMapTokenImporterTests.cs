@@ -48,6 +48,7 @@ public sealed class NavigationMapTokenImporterTests
         var expected = new NavigationCell(
             TraversalMedia.Gas,
             TraversalCapability.Fly,
+            default,
             Fixed64.Parse("3.25"),
             Fixed64.Parse("0.25"),
             Fixed64.One,

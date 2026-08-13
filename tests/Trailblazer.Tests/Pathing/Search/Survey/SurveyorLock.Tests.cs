@@ -1,9 +1,9 @@
-using FixedMathSharp;
-using FluentAssertions;
-using GridForge.Configuration;
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
+using FixedMathSharp;
+using FluentAssertions;
+using GridForge.Configuration;
 using Trailblazer.Pathing;
 using Xunit;
 

@@ -1,11 +1,10 @@
-﻿using FixedMathSharp;
+using System;
+using System.Reflection;
 using GridForge;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections.Diagnostics;
 using SwiftCollections.Pool;
-using System;
-using System.Reflection;
 
 namespace Trailblazer.Benchmarks;
 

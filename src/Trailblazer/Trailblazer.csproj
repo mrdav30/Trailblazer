@@ -8,6 +8,7 @@
 		<DisableMemoryPack Condition="'$(DisableMemoryPack)' == ''">false</DisableMemoryPack>
 		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
 		<Deterministic>true</Deterministic>
+		<DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
 	</PropertyGroup>
 
 	<!-- Git Versioning -->
@@ -76,7 +77,6 @@
 
 	<PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-		<IncludeTransitiveProjectReferences>false</IncludeTransitiveProjectReferences>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">

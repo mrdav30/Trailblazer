@@ -5,7 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using SwiftCollections.Diagnostics;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

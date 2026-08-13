@@ -1,6 +1,6 @@
-using BenchmarkDotNet.Attributes;
 using System;
 using System.Threading;
+using BenchmarkDotNet.Attributes;
 
 namespace Trailblazer.Benchmarks.Phase0;
 

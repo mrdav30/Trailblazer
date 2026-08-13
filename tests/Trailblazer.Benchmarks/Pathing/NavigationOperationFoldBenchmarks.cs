@@ -62,6 +62,7 @@ public class NavigationOperationFoldBenchmarks
         var cell = new NavigationCell(
             TraversalMedia.Solid,
             TraversalCapability.None,
+            default,
             Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.Zero);

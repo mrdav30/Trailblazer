@@ -1,6 +1,6 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
-using System;
 using Trailblazer.Pathing;
 using Xunit;
 
@@ -114,6 +114,7 @@ public sealed class PathQueryContractsTests
             valid.Start,
             valid.End,
             default,
+            valid.AreaPolicy,
             valid.Traversal,
             PathAlgorithm.AStar,
             valid.Budget,
@@ -122,6 +123,7 @@ public sealed class PathQueryContractsTests
             valid.Start,
             valid.End,
             valid.Agent,
+            valid.AreaPolicy,
             valid.Traversal,
             (PathAlgorithm)99,
             valid.Budget,
@@ -130,6 +132,7 @@ public sealed class PathQueryContractsTests
             valid.Start,
             valid.End,
             valid.Agent,
+            valid.AreaPolicy,
             valid.Traversal,
             PathAlgorithm.AStar,
             valid.Budget,
@@ -157,6 +160,7 @@ public sealed class PathQueryContractsTests
             new NavigationEndpoint(default, "Surface"),
             new NavigationEndpoint(new Vector3d((Fixed64)4, Fixed64.Zero, (Fixed64)5), "Caves", EndpointResolutionPolicy.NearestNavigable, (Fixed64)6),
             agent,
+            new NavigationAreaPolicyKey("default", 1),
             new TraversalIntent(TraversalDomain.Surface, TraversalMedium.Solid, TraversalDomain.Volume),
             PathAlgorithm.FlowField,
             budget,

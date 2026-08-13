@@ -1,15 +1,15 @@
-﻿//=======================================================================
+//=======================================================================
 // LocomotionHandler.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using Chronicler;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using Chronicler;
 
 namespace Trailblazer.Navigation.Motor;
 

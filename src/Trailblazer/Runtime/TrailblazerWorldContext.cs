@@ -5,10 +5,10 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using FixedMathSharp;
 using GridForge.Grids;
 using SwiftCollections;
-using System;
 using Trailblazer.Heightmaps;
 using Trailblazer.Navigation;
 using Trailblazer.Pathing;
@@ -37,9 +37,13 @@ public sealed class TrailblazerWorldContext : IDisposable
 
     private bool _disposed;
 
-    private TrailblazerWorldContext(GridWorld world, bool ownsWorld)
+    private TrailblazerWorldContext(
+        GridWorld world,
+        bool ownsWorld,
+        TrailblazerWorldContextSettings settings)
     {
         World = world;
+        Settings = settings;
         _ownsWorld = ownsWorld;
         Pathing = new TrailblazerPathingService(this);
         Transitions = new TrailblazerTransitionService(this, Pathing.State);
@@ -53,6 +57,9 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// Gets the explicit GridForge world owned or referenced by this context.
     /// </summary>
     public GridWorld World { get; }
+
+    /// <summary>Gets the immutable finite runtime ceilings for this context.</summary>
+    public TrailblazerWorldContextSettings Settings { get; }
 
     /// <summary>
     /// Gets this context's world-local pathing service.
@@ -202,28 +209,36 @@ public sealed class TrailblazerWorldContext : IDisposable
     /// </summary>
     /// <param name="world">The active world to bind.</param>
     /// <param name="takeOwnership">True when disposing this context should dispose the supplied world.</param>
+    /// <param name="settings">Optional immutable context ceilings; defaults to the recommended finite settings.</param>
     /// <returns>A context bound to <paramref name="world"/>.</returns>
-    public static TrailblazerWorldContext Attach(GridWorld world, bool takeOwnership = false)
+    public static TrailblazerWorldContext Attach(
+        GridWorld world,
+        bool takeOwnership = false,
+        TrailblazerWorldContextSettings? settings = null)
     {
-        if (world == null)
-            throw new ArgumentNullException(nameof(world));
-        if (!world.IsActive)
-            throw new InvalidOperationException("TrailblazerWorldContext requires an active GridWorld.");
+        SwiftThrowHelper.ThrowIfNull(world, nameof(world));
+        SwiftThrowHelper.ThrowIfTrue(
+            !world.IsActive,
+            nameof(TrailblazerWorldContext),
+            "TrailblazerWorldContext requires an active GridWorld.");
 
-        return CreateRegistered(world, takeOwnership);
+        return CreateRegistered(world, takeOwnership, settings ?? TrailblazerWorldContextSettings.Default);
     }
 
     /// <summary>
     /// Creates a context with an owned <see cref="GridWorld"/>.
     /// </summary>
     /// <param name="spatialGridCellSize">Spatial hash cell size for the created world.</param>
+    /// <param name="settings">Optional immutable context ceilings; defaults to the recommended finite settings.</param>
     /// <returns>A context that owns its created world.</returns>
     public static TrailblazerWorldContext CreateOwned(
-        int spatialGridCellSize = GridWorld.DefaultSpatialGridCellSize)
+        int spatialGridCellSize = GridWorld.DefaultSpatialGridCellSize,
+        TrailblazerWorldContextSettings? settings = null)
     {
         return CreateRegistered(
             new GridWorld(spatialGridCellSize),
-            ownsWorld: true);
+            ownsWorld: true,
+            settings ?? TrailblazerWorldContextSettings.Default);
     }
 
     /// <summary>
@@ -234,6 +249,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         ThrowIfDisposed();
         _clock.Simulate();
         Pathing.FlushPendingGridChanges();
+        Pathing.MaintainNavigationGraph(_clock.FrameCount);
         Guides.CullExpiredGuides(_clock.FrameCount);
         _hooks.InvokeSimulate();
     }
@@ -267,6 +283,7 @@ public sealed class TrailblazerWorldContext : IDisposable
         _clock.Reset();
         Navigation.Reset();
         Heightmaps.Reset();
+        Pathing.ResetNavigationGraph();
         _hooks.InvokeReset();
     }
 
@@ -340,12 +357,15 @@ public sealed class TrailblazerWorldContext : IDisposable
         }
     }
 
-    private static TrailblazerWorldContext CreateRegistered(GridWorld world, bool ownsWorld)
+    private static TrailblazerWorldContext CreateRegistered(
+        GridWorld world,
+        bool ownsWorld,
+        TrailblazerWorldContextSettings settings)
     {
         lock (_worldOwnershipLock)
         {
             ThrowIfWorldOwned(world);
-            TrailblazerWorldContext context = new(world, ownsWorld);
+            TrailblazerWorldContext context = new(world, ownsWorld, settings);
             _worldOwners[world] = new WeakReference<TrailblazerWorldContext>(context);
             return context;
         }

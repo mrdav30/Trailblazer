@@ -1,7 +1,7 @@
-using FluentAssertions;
-using SwiftCollections.Diagnostics;
 using System;
 using System.Collections.Generic;
+using FluentAssertions;
+using SwiftCollections.Diagnostics;
 using Xunit;
 
 namespace Trailblazer.Tests.Support;

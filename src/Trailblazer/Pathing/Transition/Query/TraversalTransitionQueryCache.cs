@@ -5,8 +5,8 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using SwiftCollections;
 using System;
+using SwiftCollections;
 
 namespace Trailblazer.Pathing;
 

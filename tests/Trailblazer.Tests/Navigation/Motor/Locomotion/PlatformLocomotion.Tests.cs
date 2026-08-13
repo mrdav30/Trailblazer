@@ -1,6 +1,6 @@
-﻿using FixedMathSharp;
-using FluentAssertions;
 using System;
+using FixedMathSharp;
+using FluentAssertions;
 using Trailblazer.Navigation.Motor;
 using Xunit;
 

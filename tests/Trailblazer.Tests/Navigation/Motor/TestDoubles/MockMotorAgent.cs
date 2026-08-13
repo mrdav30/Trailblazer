@@ -1,5 +1,5 @@
-﻿using FixedMathSharp;
 using System.Runtime.CompilerServices;
+using FixedMathSharp;
 using Trailblazer.Navigation.Motor;
 
 namespace Trailblazer.Tests.Navigation.Motor;

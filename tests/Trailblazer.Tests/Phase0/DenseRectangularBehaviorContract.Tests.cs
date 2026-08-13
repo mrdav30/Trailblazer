@@ -1,10 +1,10 @@
+using System;
+using System.Linq;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge;
 using GridForge.Configuration;
 using GridForge.Grids;
-using System;
-using System.Linq;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Pathing;
 using Trailblazer.Tests.Navigation.Steering;

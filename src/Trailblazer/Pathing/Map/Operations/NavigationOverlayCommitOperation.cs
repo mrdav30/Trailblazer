@@ -5,8 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using SwiftCollections.Diagnostics;
-
 namespace Trailblazer.Pathing;
 
 /// <summary>Describes one deterministic atomic overlay-transaction operation.</summary>

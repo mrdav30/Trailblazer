@@ -15,6 +15,7 @@ public sealed class NavigationOperationProcessorTests
     private static readonly NavigationCell SolidCell = new(
         TraversalMedia.Solid,
         TraversalCapability.None,
+        default,
         Fixed64.Zero,
         Fixed64.One,
         Fixed64.One);
@@ -118,8 +119,73 @@ public sealed class NavigationOperationProcessorTests
         overlay.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         processor.Candidate.TryGetOverlay("left", out NavigationMapOverlayState leftOverlay).Should().BeTrue();
         processor.Candidate.TryGetOverlay("right", out NavigationMapOverlayState rightOverlay).Should().BeTrue();
-        leftOverlay.Connections.Should().ContainSingle();
-        rightOverlay.Cells.Should().ContainSingle();
+        leftOverlay.ConnectionCount.Should().Be(1);
+        rightOverlay.CellCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void MultiWitnessConnection_ShouldConvergeWithOneExplicitEdgePerFrame()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        VoxelIndex source = new(2, 0, 0);
+        NavigationMap left = CreateMap("left", CreateBinding(Vector3d.Zero), source);
+        NavigationMap witnessA = CreateMap("witness-a", CreateBinding(new Vector3d(3, 0, 0)), default);
+        NavigationMap witnessB = CreateMap("witness-b", CreateBinding(new Vector3d(4, 0, 0)), default);
+        NavigationMap right = CreateMap("right", CreateBinding(new Vector3d(5, 0, 0)), default);
+        processor.Admit(Commit(left, 1, 0)).Should().BeTrue();
+        processor.Admit(Commit(witnessA, 2, 0)).Should().BeTrue();
+        processor.Admit(Commit(witnessB, 3, 0)).Should().BeTrue();
+        processor.Admit(Commit(right, 4, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+
+        NavigationConnection connection = new(
+            "multi-witness",
+            source,
+            new NavigationCellAddress("right", default),
+            GetFootAnchor(left.GridBinding, source),
+            GetFootAnchor(right.GridBinding, default),
+            Fixed64.Zero,
+            Fixed64.Half,
+            new[]
+            {
+                new NavigationCellAddress("witness-a", default),
+                new NavigationCellAddress("witness-b", default)
+            });
+        NavigationOverlayCommitOperation operation = new(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "left",
+                    connections: new[] { NavigationConnectionOverlayOperation.Upsert(connection) })
+            })),
+            5,
+            1);
+        processor.Admit(operation).Should().BeTrue();
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 8, 8, 8, 8, 1, 8, 8));
+
+        int frame = 1;
+        while (operation.Receipt.Status == NavigationOperationStatus.Pending && frame < 32)
+        {
+            meter.Reset();
+            processor.ProcessFrame(
+                frame++,
+                static (_, _, _, _) => NavigationCandidatePublication.Published,
+                meter);
+            meter.ExplicitEdges.Should().BeLessThanOrEqualTo(1);
+            if (operation.Receipt.Status == NavigationOperationStatus.Pending)
+            {
+                processor.Candidate.TryGetOverlay("left", out NavigationMapOverlayState current)
+                    .Should().BeTrue();
+                current.ConnectionCount.Should().Be(0,
+                    "a partially validated corridor must remain unpublished");
+            }
+        }
+
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        operation.Receipt.PublishedFrame.Should().BeGreaterThan(1);
+        processor.Candidate.TryGetOverlay("left", out NavigationMapOverlayState overlay)
+            .Should().BeTrue();
+        overlay.ConnectionCount.Should().Be(1);
     }
 
     [Fact]
@@ -160,7 +226,7 @@ public sealed class NavigationOperationProcessorTests
         operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
         operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed);
         processor.Candidate.TryGetOverlay("left", out NavigationMapOverlayState overlay).Should().BeTrue();
-        overlay.Connections.Should().BeEmpty();
+        overlay.ConnectionCount.Should().Be(0);
     }
 
     [Fact]
@@ -200,6 +266,152 @@ public sealed class NavigationOperationProcessorTests
     }
 
     [Fact]
+    public void SuppressingAndRestoringIncidentCell_ShouldKeepAuthoredLinksDormant()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        VoxelIndex source = default;
+        VoxelIndex destination = new(1, 0, 0);
+        NavigationConnection connection = new(
+            "step",
+            source,
+            new NavigationCellAddress("map", destination),
+            GetFootAnchor(binding, source),
+            GetFootAnchor(binding, destination),
+            Fixed64.Zero,
+            Fixed64.Half);
+        TraversalTransitionDefinition transition = new(
+            "ladder",
+            TraversalTransitionType.Climb,
+            source,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("map", destination),
+            TraversalMedium.Solid,
+            TraversalCapability.Climb);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(source, SolidCell)
+            .AddCell(destination, SolidCell)
+            .AddConnection(connection)
+            .AddTransition(transition)
+            .Build();
+        processor.Admit(Commit(map, 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+
+        NavigationOverlayCommitOperation suppress = Overlay(
+            "map",
+            NavigationCellOverlayOperation.Suppress(source),
+            2,
+            1);
+        processor.Admit(suppress).Should().BeTrue();
+        processor.ProcessFrame(1);
+
+        suppress.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        NavigationOverlayCommitOperation restore = Overlay(
+            "map",
+            NavigationCellOverlayOperation.RevertToBake(source),
+            3,
+            2);
+        processor.Admit(restore).Should().BeTrue();
+        processor.ProcessFrame(2);
+
+        restore.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+    }
+
+    [Fact]
+    public void NewLinkUpsert_ShouldNotBeAcceptedAsDormantBySameTransactionSuppression()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        VoxelIndex source = default;
+        VoxelIndex destination = new(1, 0, 0);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(source, SolidCell)
+            .AddCell(destination, SolidCell)
+            .Build();
+        processor.Admit(Commit(map, 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+
+        NavigationConnection connection = new(
+            "new-link",
+            source,
+            new NavigationCellAddress("map", destination),
+            GetFootAnchor(binding, source),
+            GetFootAnchor(binding, destination),
+            Fixed64.Zero,
+            Fixed64.Half);
+        var delta = new NavigationMapOverlayDelta(
+            "map",
+            new[] { NavigationCellOverlayOperation.Suppress(source) },
+            new[] { NavigationConnectionOverlayOperation.Upsert(connection) });
+        var operation = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[] { delta })),
+            2,
+            1);
+
+        processor.Admit(operation).Should().BeTrue();
+        processor.ProcessFrame(1);
+
+        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed);
+        processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState overlay).Should().BeTrue();
+        overlay.CellCount.Should().Be(0);
+        overlay.ConnectionCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void PreserveReplacement_ShouldValidateNewBakedLinkBehindSuppressedSource()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        NormalizedGridConfiguration otherBinding = CreateBinding(new Vector3d(10, 0, 0));
+        VoxelIndex source = default;
+        VoxelIndex destination = new(1, 0, 0);
+        NavigationMap original = new NavigationMapBuilder("map", binding)
+            .AddCell(source, SolidCell)
+            .AddCell(destination, SolidCell)
+            .Build();
+        processor.Admit(Commit(original, 1, 0, bakeVersion: 1)).Should().BeTrue();
+        NavigationMap other = new NavigationMapBuilder("other", otherBinding)
+            .AddCell(default, SolidCell)
+            .Build();
+        processor.Admit(Commit(other, 2, 0, bakeVersion: 1)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        NavigationOverlayCommitOperation suppress = Overlay(
+            "map",
+            NavigationCellOverlayOperation.Suppress(source),
+            3,
+            1);
+        processor.Admit(suppress).Should().BeTrue();
+        processor.ProcessFrame(1);
+
+        NavigationConnection invalid = new(
+            "invalid",
+            source,
+            new NavigationCellAddress("other", destination),
+            GetFootAnchor(binding, source),
+            GetFootAnchor(otherBinding, destination),
+            Fixed64.Zero,
+            Fixed64.Half);
+        NavigationMap replacement = new NavigationMapBuilder("map", binding)
+            .AddCell(source, SolidCell)
+            .AddCell(destination, SolidCell)
+            .AddConnection(invalid)
+            .Build();
+        NavigationMapCommitOperation operation = new(
+            new PreparedNavigationMap(replacement, 2),
+            OverlayReplacementPolicy.PreserveAndRevalidate,
+            4,
+            2);
+
+        processor.Admit(operation).Should().BeTrue();
+        processor.ProcessFrame(2);
+
+        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed);
+        processor.Candidate.TryGetMap("map", out NavigationMap published).Should().BeTrue();
+        published.Should().BeSameAs(original);
+    }
+
+    [Fact]
     public void AdmissionAndFrameBatchLimitsCompleteReceiptsDeterministically()
     {
         NavigationOperationLimits limits = CreateLimits(maxPendingOperations: 1, maxBatchItems: 1);
@@ -215,6 +427,519 @@ public sealed class NavigationOperationProcessorTests
         processor.ProcessFrame(0);
         first.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         first.Receipt.PublishedFrame.Should().Be(0);
+    }
+
+    [Fact]
+    public void MeteredMapWork_ShouldCarryCommitAndRemovalWithoutOvertaking()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 8, 1, 8));
+        NormalizedGridConfiguration firstBinding = CreateBinding(Vector3d.Zero);
+        var firstBuilder = new NavigationMapBuilder("first", firstBinding)
+            .AddCell(default, SolidCell)
+            .AddCell(new VoxelIndex(1, 0, 0), SolidCell)
+            .AddCell(new VoxelIndex(2, 0, 0), SolidCell);
+        for (int i = 0; i < 3; i++)
+        {
+            firstBuilder.AddTransition(new TraversalTransitionDefinition(
+                $"to-later-{i}",
+                TraversalTransitionType.Climb,
+                default,
+                TraversalMedium.Solid,
+                new NavigationCellAddress("later", default),
+                TraversalMedium.Solid,
+                TraversalCapability.Climb));
+        }
+        NavigationMap firstMap = firstBuilder.Build();
+        NavigationMapCommitOperation first = Commit(firstMap, 1, 0);
+        NavigationMapCommitOperation later = Commit(
+            CreateMap("later", CreateBinding(new Vector3d(10, 0, 0)), default),
+            2,
+            0);
+        processor.Admit(first).Should().BeTrue();
+        processor.Admit(later).Should().BeTrue();
+
+        processor.ProcessFrame(0, static (_, _, _, _) => NavigationCandidatePublication.Published, meter)
+            .Should().Be(NavigationOperationFrameResult.Deferred);
+
+        first.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        later.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        processor.Candidate.MapCount.Should().Be(0);
+        var deferredStructuralIds = new string[4];
+        processor.CopyDeferredStructuralMapIds(deferredStructuralIds).Should().Be(1);
+        deferredStructuralIds[0].Should().Be("first");
+        int frame = 1;
+        while (later.Receipt.Status == NavigationOperationStatus.Pending && frame < 32)
+        {
+            meter.Reset();
+            processor.ProcessFrame(frame++, static (_, _, _, _) => NavigationCandidatePublication.Published, meter);
+        }
+        first.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        later.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        first.Receipt.PublishedFrame.Should().Be(later.Receipt.PublishedFrame);
+        processor.Candidate.MapCount.Should().Be(2);
+
+        var remove = new NavigationMapRemoveOperation("first", 3, frame);
+        NavigationMapCommitOperation afterRemove = Commit(
+            CreateMap("after", CreateBinding(new Vector3d(20, 0, 0)), default),
+            4,
+            frame);
+        processor.Admit(remove).Should().BeTrue();
+        processor.Admit(afterRemove).Should().BeTrue();
+        meter.Reset();
+        processor.ProcessFrame(frame++, static (_, _, _, _) => NavigationCandidatePublication.Published, meter)
+            .Should().Be(NavigationOperationFrameResult.Deferred);
+        remove.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        afterRemove.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        processor.Candidate.TryGetMap("first", out _).Should().BeTrue();
+        while (afterRemove.Receipt.Status == NavigationOperationStatus.Pending && frame < 64)
+        {
+            meter.Reset();
+            processor.ProcessFrame(frame++, static (_, _, _, _) => NavigationCandidatePublication.Published, meter);
+        }
+        remove.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        afterRemove.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        remove.Receipt.PublishedFrame.Should().Be(afterRemove.Receipt.PublishedFrame);
+        processor.Candidate.TryGetMap("first", out _).Should().BeFalse();
+        processor.Candidate.TryGetMap("after", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public void MeteredPreserveReplacement_ShouldRejectInvalidAuthoredEdgeHiddenBySuppress()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        NormalizedGridConfiguration otherBinding = CreateBinding(new Vector3d(10, 0, 0));
+        VoxelIndex source = default;
+        VoxelIndex invalidDestination = new(1, 0, 0);
+        NavigationMap original = new NavigationMapBuilder("map", binding)
+            .AddCell(source, SolidCell)
+            .Build();
+        processor.Admit(Commit(original, 1, 0)).Should().BeTrue();
+        processor.Admit(Commit(
+            CreateMap("other", otherBinding, default), 2, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        NavigationOverlayCommitOperation suppress = Overlay(
+            "map", NavigationCellOverlayOperation.Suppress(source), 3, 1);
+        processor.Admit(suppress).Should().BeTrue();
+        processor.ProcessFrame(1);
+        NavigationConnection invalid = new(
+            "hidden",
+            source,
+            new NavigationCellAddress("other", invalidDestination),
+            GetFootAnchor(binding, source),
+            GetFootAnchor(otherBinding, default),
+            Fixed64.Zero,
+            Fixed64.Half);
+        NavigationMap replacement = new NavigationMapBuilder("map", binding)
+            .AddCell(source, SolidCell)
+            .AddConnection(invalid)
+            .Build();
+        var operation = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(replacement, 2),
+            OverlayReplacementPolicy.PreserveAndRevalidate,
+            4,
+            2);
+        processor.Admit(operation).Should().BeTrue();
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 1, 1, 8));
+        for (int frame = 2; frame < 32 && operation.Receipt.Status == NavigationOperationStatus.Pending; frame++)
+        {
+            meter.Reset();
+            processor.ProcessFrame(frame, static (_, _, _, _) => NavigationCandidatePublication.Published, meter);
+        }
+
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed);
+        processor.Candidate.TryGetMap("map", out NavigationMap published).Should().BeTrue();
+        published.Should().BeSameAs(original);
+    }
+
+    [Fact]
+    public void ResumedOverlayValidationFailure_ShouldRestoreFoldSourceAndKeepPriorPrefix()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        NavigationMap map = CreateMap("map", binding, default);
+        processor.Admit(Commit(map, 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        NavigationOverlayCommitOperation valid = Overlay(
+            "map",
+            NavigationCellOverlayOperation.Set(new VoxelIndex(1, 0, 0), SolidCell),
+            2,
+            1);
+        NavigationConnection invalid = new(
+            "invalid",
+            default,
+            new NavigationCellAddress("map", default),
+            default,
+            GetFootAnchor(binding, default),
+            Fixed64.Zero,
+            Fixed64.Half);
+        NavigationOverlayCommitOperation rejected = ConnectionOverlay(invalid, 3, 1);
+        processor.Admit(valid).Should().BeTrue();
+        processor.Admit(rejected).Should().BeTrue();
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 1, 1, 8));
+
+        int frame = 1;
+        while (rejected.Receipt.Status == NavigationOperationStatus.Pending && frame < 32)
+        {
+            meter.Reset();
+            processor.ProcessFrame(
+                frame++,
+                static (_, _, _, _) => NavigationCandidatePublication.Published,
+                meter);
+        }
+
+        valid.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        rejected.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        rejected.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed);
+        processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState overlay).Should().BeTrue();
+        overlay.CellCount.Should().Be(1, "the earlier successful prefix remains authoritative");
+        overlay.ConnectionCount.Should().Be(0, "the rejected resumed fold cannot leak its partial root");
+    }
+
+    [Fact]
+    public void MeteredSupersedence_ShouldCarryCoverageWithoutPublishingFoldedStateEarly()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NavigationMap map = CreateMap("map", CreateBinding(Vector3d.Zero), default);
+        processor.Admit(Commit(map, 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        var overlay = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta("map", new[]
+                {
+                    NavigationCellOverlayOperation.Set(new VoxelIndex(1, 0, 0), SolidCell),
+                    NavigationCellOverlayOperation.Set(new VoxelIndex(2, 0, 0), SolidCell),
+                    NavigationCellOverlayOperation.Set(new VoxelIndex(3, 0, 0), SolidCell)
+                })
+            })),
+            2,
+            1);
+        processor.Admit(overlay).Should().BeTrue();
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 3, 8, 8, 8, 8, 8, 8));
+
+        int publicationCount = 0;
+        NavigationCandidatePublication Publish(
+            NavigationOperationCandidate _,
+            int __,
+            NavigationOperationFrameChange[] ___,
+            int ____)
+        {
+            publicationCount++;
+            return NavigationCandidatePublication.Published;
+        }
+        processor.ProcessFrame(1, Publish, meter)
+            .Should().Be(NavigationOperationFrameResult.Deferred);
+
+        meter.OverlaySlots.Should().Be(3);
+        overlay.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        publicationCount.Should().Be(0);
+        processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState current).Should().BeTrue();
+        current.CellCount.Should().Be(0);
+        int frame = 2;
+        while (overlay.Receipt.Status == NavigationOperationStatus.Pending && frame < 16)
+        {
+            meter.Reset();
+            processor.ProcessFrame(frame++, Publish, meter);
+            meter.OverlaySlots.Should().BeLessThanOrEqualTo(3);
+            if (overlay.Receipt.Status == NavigationOperationStatus.Pending)
+            {
+                publicationCount.Should().Be(0);
+                processor.Candidate.TryGetOverlay("map", out current).Should().BeTrue();
+                current.CellCount.Should().Be(0);
+            }
+        }
+        overlay.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        publicationCount.Should().Be(1);
+        overlay.Receipt.PublishedFrame.Should().BeGreaterThan(1);
+        processor.Candidate.TryGetOverlay("map", out current).Should().BeTrue();
+        current.CellCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void RetainedGuard_ShouldChargePreparedMapGrowthDuringReplacement()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        var initialPrepared = new PreparedNavigationMap(
+            new NavigationMapBuilder("map", binding)
+                .AddCell(default, SolidCell)
+                .Build(),
+            1);
+        var initial = new NavigationMapCommitOperation(
+            initialPrepared,
+            OverlayReplacementPolicy.Clear,
+            1,
+            0);
+        processor.Admit(initial).Should().BeTrue();
+        processor.ProcessFrame(0);
+
+        var replacementPrepared = new PreparedNavigationMap(
+            new NavigationMapBuilder("map", binding)
+                .AddCell(default, SolidCell)
+                .AddCell(new VoxelIndex(1, 0, 0), SolidCell)
+                .AddCell(new VoxelIndex(2, 0, 0), SolidCell)
+                .Build(),
+            2);
+        var replacement = new NavigationMapCommitOperation(
+            replacementPrepared,
+            OverlayReplacementPolicy.Clear,
+            2,
+            1);
+        processor.Admit(replacement).Should().BeTrue();
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 8, 8, 8));
+        long maximumGuardBytes = 0;
+        int frame = 1;
+        while (replacement.Receipt.Status == NavigationOperationStatus.Pending && frame < 16)
+        {
+            meter.Reset();
+            processor.ProcessFrame(
+                frame++,
+                static (_, _, _, _) => NavigationCandidatePublication.Published,
+                meter,
+                (bytes, _) =>
+                {
+                    maximumGuardBytes = Math.Max(maximumGuardBytes, bytes);
+                    return true;
+                });
+        }
+
+        replacement.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        maximumGuardBytes.Should().BeGreaterThanOrEqualTo(
+            replacementPrepared.RetainedBytes - initialPrepared.RetainedBytes,
+            "pending prepared-map growth must be charged before the replacement is attached");
+    }
+
+    [Fact]
+    public void RetainedGuard_ShouldChargeSameCountPayloadGrowthAndClampShrinkToZero()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        processor.Admit(Commit(CreateMap("map", binding, default), 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+
+        NavigationConnection small = new(
+            "connection",
+            default,
+            new NavigationCellAddress("d", default),
+            GetFootAnchor(binding, default),
+            default,
+            Fixed64.Zero,
+            Fixed64.Half);
+        var witnesses = new NavigationCellAddress[16];
+        for (int i = 0; i < witnesses.Length; i++)
+            witnesses[i] = new NavigationCellAddress($"witness-{i:D2}-{new string('x', 64)}", default);
+        NavigationConnection large = new(
+            "connection",
+            default,
+            new NavigationCellAddress(new string('d', 256), default),
+            GetFootAnchor(binding, default),
+            default,
+            Fixed64.Zero,
+            Fixed64.Half,
+            witnesses);
+        NavigationOverlayCommitOperation smallOperation = ConnectionOverlay(small, 2, 1);
+        processor.Admit(smallOperation).Should().BeTrue();
+        processor.ProcessFrame(1);
+        long beforeGrowth = processor.Candidate.RetainedBytes;
+
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 1, 8, 8));
+        long maximumGrowthGuardBytes = 0;
+        NavigationOverlayCommitOperation growth = ConnectionOverlay(large, 3, 2);
+        processor.Admit(growth).Should().BeTrue();
+        int frame = 2;
+        while (growth.Receipt.Status == NavigationOperationStatus.Pending && frame < 64)
+        {
+            meter.Reset();
+            processor.ProcessFrame(
+                frame++,
+                static (_, _, _, _) => NavigationCandidatePublication.Published,
+                meter,
+                (bytes, pages) =>
+                {
+                    bytes.Should().BeGreaterThanOrEqualTo(0);
+                    pages.Should().BeGreaterThanOrEqualTo(0);
+                    maximumGrowthGuardBytes = Math.Max(maximumGrowthGuardBytes, bytes);
+                    return true;
+                });
+        }
+        growth.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        processor.Candidate.OverlayConnectionCount.Should().Be(1);
+        long payloadGrowth = processor.Candidate.RetainedBytes - beforeGrowth;
+        payloadGrowth.Should().BePositive();
+        maximumGrowthGuardBytes.Should().BeGreaterThanOrEqualTo(payloadGrowth);
+
+        NavigationOverlayCommitOperation shrink = ConnectionOverlay(small, 4, frame);
+        processor.Admit(shrink).Should().BeTrue();
+        while (shrink.Receipt.Status == NavigationOperationStatus.Pending && frame < 96)
+        {
+            meter.Reset();
+            processor.ProcessFrame(
+                frame++,
+                static (_, _, _, _) => NavigationCandidatePublication.Published,
+                meter,
+                (bytes, pages) =>
+                {
+                    bytes.Should().BeGreaterThanOrEqualTo(0,
+                        "source-relative retained deltas clamp shrinkage instead of underflowing");
+                    pages.Should().BeGreaterThanOrEqualTo(0);
+                    return true;
+                });
+        }
+        shrink.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        processor.Candidate.OverlayConnectionCount.Should().Be(1);
+        processor.Candidate.RetainedBytes.Should().Be(beforeGrowth);
+    }
+
+    [Fact]
+    public void RetainedGuard_ShouldRejectSameCountMultiMapOverlayCopyBeyondTightCap()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration firstBinding = CreateBinding(Vector3d.Zero);
+        NormalizedGridConfiguration secondBinding = CreateBinding(new Vector3d(10, 0, 0));
+        processor.Admit(Commit(CreateMap("first", firstBinding, default), 1, 0)).Should().BeTrue();
+        processor.Admit(Commit(CreateMap("second", secondBinding, default), 2, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        NavigationMapOverlayDelta[] initialDeltas =
+        {
+            new("first", new[] { NavigationCellOverlayOperation.Set(default, SolidCell) }),
+            new("second", new[] { NavigationCellOverlayOperation.Set(default, SolidCell) })
+        };
+        var initial = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(initialDeltas)),
+            3,
+            1);
+        processor.Admit(initial).Should().BeTrue();
+        processor.ProcessFrame(1);
+        initial.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        long sourceBytes = processor.Candidate.RetainedBytes;
+        int sourcePages = processor.Candidate.PersistentPageCount;
+
+        NavigationCell replacement = new(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            new NavigationAreaId(0),
+            Fixed64.One,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMapOverlayDelta[] replacementDeltas =
+        {
+            new("first", new[] { NavigationCellOverlayOperation.Set(default, replacement) }),
+            new("second", new[] { NavigationCellOverlayOperation.Set(default, replacement) })
+        };
+        var operation = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(replacementDeltas)),
+            4,
+            2);
+        processor.Admit(operation).Should().BeTrue();
+        var meter = new MaintenanceWorkMeter(
+            new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 8, 8, 8));
+        long tightByteCap = -1;
+        int tightPageCap = -1;
+        long maximumBytes = 0;
+        int maximumPages = 0;
+
+        bool Guard(long bytes, int pages)
+        {
+            maximumBytes = Math.Max(maximumBytes, bytes);
+            maximumPages = Math.Max(maximumPages, pages);
+            if (tightByteCap < 0)
+            {
+                tightByteCap = bytes;
+                tightPageCap = pages;
+                return true;
+            }
+            return bytes <= tightByteCap && pages <= tightPageCap;
+        }
+
+        processor.ProcessFrame(
+            2,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            meter,
+            Guard).Should().Be(NavigationOperationFrameResult.Deferred);
+        for (int frame = 3;
+             frame < 16 && operation.Receipt.Status == NavigationOperationStatus.Pending;
+             frame++)
+        {
+            meter.Reset();
+            processor.ProcessFrame(
+                frame,
+                static (_, _, _, _) => NavigationCandidatePublication.Published,
+                meter,
+                Guard);
+        }
+
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        (maximumBytes > tightByteCap || maximumPages > tightPageCap).Should().BeTrue(
+            "same-count persistent replacements still retain copied tree paths");
+        processor.Candidate.RetainedBytes.Should().Be(sourceBytes);
+        processor.Candidate.PersistentPageCount.Should().Be(sourcePages);
+    }
+
+    [Fact]
+    public void RetainedGuard_ShouldKeepCompletedSameCountCopiesAfterFoldCarryover()
+    {
+        NavigationOperationLimits limits = CreateLimits();
+        var processor = new NavigationOperationProcessor(limits);
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        processor.Admit(Commit(CreateMap("map", binding, default), 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        var initial = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta("map", new[]
+                {
+                    NavigationCellOverlayOperation.Set(default, SolidCell),
+                    NavigationCellOverlayOperation.Set(new VoxelIndex(1, 0, 0), SolidCell)
+                })
+            })),
+            2,
+            1);
+        processor.Admit(initial).Should().BeTrue();
+        processor.ProcessFrame(1);
+        initial.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        NavigationCell replacement = new(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            default,
+            Fixed64.One,
+            Fixed64.One,
+            Fixed64.One);
+        var operation = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta("map", new[]
+                {
+                    NavigationCellOverlayOperation.Set(default, replacement),
+                    NavigationCellOverlayOperation.Set(new VoxelIndex(1, 0, 0), replacement)
+                })
+            })),
+            3,
+            2);
+        processor.Admit(operation).Should().BeTrue();
+        var meter = new MaintenanceWorkMeter(
+            new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 8, 8, 8));
+
+        bool Guard(long bytes, int _) => bytes <= processor.CoverageScratchBytes;
+
+        processor.ProcessFrame(
+            2,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            meter,
+            Guard)
+            .Should().Be(NavigationOperationFrameResult.Deferred);
+        meter.Reset();
+        processor.ProcessFrame(
+            3,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            meter,
+            Guard);
+
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
     }
 
     [Fact]
@@ -357,8 +1082,8 @@ public sealed class NavigationOperationProcessorTests
         first.Receipt.Status.Should().Be(NavigationOperationStatus.Superseded);
         last.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState overlay).Should().BeTrue();
-        overlay.Cells.Should().ContainSingle();
-        overlay.Cells[0].Kind.Should().Be(NavigationCellOverlayOperationKind.Set);
+        overlay.CellCount.Should().Be(1);
+        overlay.GetCellAt(0).Kind.Should().Be(NavigationCellOverlayOperationKind.Set);
     }
 
     [Fact]
@@ -534,7 +1259,7 @@ public sealed class NavigationOperationProcessorTests
         stale.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
         stale.Receipt.Rejection.Should().Be(NavigationOperationRejection.Stale);
         processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState state).Should().BeTrue();
-        state.Cells.Should().ContainSingle();
+        state.CellCount.Should().Be(1);
     }
 
     [Fact]
@@ -604,12 +1329,139 @@ public sealed class NavigationOperationProcessorTests
     }
 
     [Fact]
+    public void ConfiguredAreaLayout_ShouldRejectUnknownBakedAndOverlayAreas()
+    {
+        var processor = new NavigationOperationProcessor(
+            CreateLimits(),
+            navigationAreaCount: 1);
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        var unknownAreaCell = new NavigationCell(
+            TraversalMedia.Solid,
+            TraversalCapability.None,
+            new NavigationAreaId(1),
+            Fixed64.Zero,
+            Fixed64.One,
+            Fixed64.One);
+        NavigationMap invalidMap = new NavigationMapBuilder("invalid", binding)
+            .AddCell(default, unknownAreaCell)
+            .Build();
+        NavigationMapCommitOperation invalidInstall = Commit(invalidMap, 1, 0);
+
+        processor.Admit(invalidInstall).Should().BeTrue();
+        processor.ProcessFrame(0);
+
+        invalidInstall.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed);
+
+        NavigationMap validMap = CreateMap("valid", binding, default);
+        NavigationMapCommitOperation validInstall = Commit(validMap, 2, 1);
+        processor.Admit(validInstall).Should().BeTrue();
+        processor.ProcessFrame(1);
+
+        NavigationOverlayCommitOperation invalidOverlay = Overlay(
+            "valid",
+            NavigationCellOverlayOperation.Set(default, unknownAreaCell),
+            3,
+            2);
+        processor.Admit(invalidOverlay).Should().BeTrue();
+        processor.ProcessFrame(2);
+
+        invalidOverlay.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed);
+        processor.Candidate.TryGetOverlay("valid", out NavigationMapOverlayState overlay).Should().BeTrue();
+        overlay.CellCount.Should().Be(0);
+    }
+
+    [Fact]
     public void OperationLimits_RejectBatchSizeAboveDeterministicCoalescingCeiling()
     {
         Action create = () => _ = CreateLimits(
             maxBatchItems: NavigationOperationLimits.MaximumBatchItems + 1);
 
         create.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void LargeOverlay_PointUpdatesCopyOnlyPersistentPathsAndKeepExactTotals()
+    {
+        const int existingCount = 511;
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        var configuration = new GridConfiguration(
+            Vector3d.Zero,
+            new Vector3d(1024, 2, 2),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap map = CreateMap("map", binding, default);
+        processor.Admit(Commit(map, 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+
+        var initial = new NavigationCellOverlayOperation[existingCount];
+        for (int i = 0; i < initial.Length; i++)
+        {
+            initial[i] = NavigationCellOverlayOperation.Set(
+                new VoxelIndex(i + 1, 0, 0),
+                SolidCell);
+        }
+        var install = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(
+                new NavigationOverlayTransaction(
+                    new[] { new NavigationMapOverlayDelta("map", initial) })),
+            2,
+            1);
+        processor.Admit(install).Should().BeTrue();
+        processor.ProcessFrame(1);
+        install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState before).Should().BeTrue();
+        before.PersistentNodeCount.Should().Be(existingCount);
+
+        var set = Overlay(
+            "map",
+            NavigationCellOverlayOperation.Set(new VoxelIndex(existingCount + 1, 0, 0), SolidCell),
+            3,
+            2);
+        processor.Admit(set).Should().BeTrue();
+        processor.ProcessFrame(2);
+        set.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState afterSet).Should().BeTrue();
+        afterSet.CellCount.Should().Be(existingCount + 1);
+        afterSet.LastApplyCopiedNodeCount.Should().BeLessThan(32);
+        (afterSet.RetainedBytes - before.RetainedBytes).Should().Be(128);
+        processor.Candidate.OverlayCellCount.Should().Be(existingCount + 1);
+
+        var suppress = Overlay(
+            "map",
+            NavigationCellOverlayOperation.Suppress(new VoxelIndex(existingCount / 2, 0, 0)),
+            4,
+            3);
+        processor.Admit(suppress).Should().BeTrue();
+        processor.ProcessFrame(3);
+        suppress.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState afterSuppress).Should().BeTrue();
+        afterSuppress.CellCount.Should().Be(existingCount + 1);
+        afterSuppress.LastApplyCopiedNodeCount.Should().BeLessThan(32);
+        afterSuppress.TryGetCell(
+                new VoxelIndex(existingCount / 2, 0, 0),
+                out NavigationCellOverlayOperation suppressed)
+            .Should().BeTrue();
+        suppressed.Kind.Should().Be(NavigationCellOverlayOperationKind.Suppress);
+        processor.Candidate.OverlayCellCount.Should().Be(existingCount + 1);
+
+        var revert = Overlay(
+            "map",
+            NavigationCellOverlayOperation.RevertToBake(new VoxelIndex(existingCount / 2, 0, 0)),
+            5,
+            4);
+        processor.Admit(revert).Should().BeTrue();
+        processor.ProcessFrame(4);
+        revert.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState afterRevert).Should().BeTrue();
+        afterRevert.CellCount.Should().Be(existingCount);
+        afterRevert.LastApplyCopiedNodeCount.Should().BeLessThan(32);
+        (afterSuppress.RetainedBytes - afterRevert.RetainedBytes).Should().Be(128);
+        processor.Candidate.OverlayCellCount.Should().Be(existingCount);
+        afterRevert.GetCellAt(0).Index.Should().Be(new VoxelIndex(1, 0, 0));
+        afterRevert.GetCellAt(existingCount - 1).Index.Should().Be(new VoxelIndex(existingCount + 1, 0, 0));
     }
 
     private static NavigationMapCommitOperation Commit(
@@ -630,6 +1482,21 @@ public sealed class NavigationOperationProcessorTests
             new PreparedNavigationOverlay(
                 new NavigationOverlayTransaction(
                     new[] { new NavigationMapOverlayDelta(mapId, new[] { operation }) })),
+            sequence,
+            frame);
+
+    private static NavigationOverlayCommitOperation ConnectionOverlay(
+        NavigationConnection connection,
+        long sequence,
+        int frame) => new(
+            new PreparedNavigationOverlay(
+                new NavigationOverlayTransaction(
+                    new[]
+                    {
+                        new NavigationMapOverlayDelta(
+                            "map",
+                            connections: new[] { NavigationConnectionOverlayOperation.Upsert(connection) })
+                    })),
             sequence,
             frame);
 

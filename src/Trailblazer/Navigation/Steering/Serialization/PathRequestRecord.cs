@@ -5,9 +5,9 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
 using Chronicler;
 using FixedMathSharp;
-using System;
 using Trailblazer.Pathing;
 
 namespace Trailblazer.Navigation.Steering;

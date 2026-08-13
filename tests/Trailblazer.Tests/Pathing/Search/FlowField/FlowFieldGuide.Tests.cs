@@ -1,10 +1,10 @@
+using System;
 using FixedMathSharp;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
-using System;
 using Trailblazer.Pathing;
 using Xunit;
 

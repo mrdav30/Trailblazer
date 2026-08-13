@@ -1,15 +1,15 @@
-﻿//=======================================================================
+//=======================================================================
 // Navigator.cs
 //=======================================================================
 // MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System;
+using System.Runtime.CompilerServices;
 using Chronicler;
 using FixedMathSharp;
 using GridForge.Grids;
-using System;
-using System.Runtime.CompilerServices;
 using Trailblazer.Navigation.Motor;
 using Trailblazer.Navigation.Steering;
 using Trailblazer.Navigation.Turning;

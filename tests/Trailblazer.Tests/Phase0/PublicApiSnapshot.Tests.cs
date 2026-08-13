@@ -1,4 +1,3 @@
-using FluentAssertions;
 using System;
 using System.Globalization;
 using System.IO;
@@ -6,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using FluentAssertions;
 using Xunit;
 
 namespace Trailblazer.Tests.Phase0;

@@ -5,9 +5,8 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using FixedMathSharp;
-using SwiftCollections.Diagnostics;
 using System;
+using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 

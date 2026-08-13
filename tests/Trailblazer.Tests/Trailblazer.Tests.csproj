@@ -10,6 +10,7 @@
 		<OutputType>Exe</OutputType>
 		<DisableMemoryPack Condition="'$(DisableMemoryPack)' == ''">false</DisableMemoryPack>
 		<RunSettingsFilePath>$(MSBuildThisFileDirectory)coverlet.runsettings</RunSettingsFilePath>
+		<DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)' == 'ReleaseLean'">
 		<DisableMemoryPack>true</DisableMemoryPack>
@@ -35,10 +36,16 @@
 		</PackageReference>
 	</ItemGroup>
 	<ItemGroup Condition="'$(DisableMemoryPack)' != 'true'">
-		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="7.0.0" />
+		<PackageReference Include="FixedMathSharp.FluentAssertions" Version="7.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(DisableMemoryPack)' == 'true'">
-		<PackageReference Include="FixedMathSharp.FluentAssertions.Lean" Version="7.0.0" />
+		<PackageReference Include="FixedMathSharp.FluentAssertions.Lean" Version="7.0.0" Condition="'$(UseLocalLsfStack)' != 'true'" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(UseLocalLsfStack)' == 'true'">
+		<ProjectReference Include="..\..\..\FixedMathSharp\src\FixedMathSharp.FluentAssertions\FixedMathSharp.FluentAssertions.csproj"
+			AdditionalProperties="Configuration=$(Configuration);SemVer=7.0.0" />
+		<ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
+			AdditionalProperties="Configuration=$(Configuration);SemVer=9.0.0" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove=".gitignore" />

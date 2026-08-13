@@ -16,6 +16,7 @@ public sealed class NavigationMapBuilderTests
     private static readonly NavigationCell SolidCell = new(
         TraversalMedia.Solid,
         TraversalCapability.None,
+        default,
         Fixed64.Zero,
         Fixed64.One,
         Fixed64.One);
@@ -341,18 +342,21 @@ public sealed class NavigationMapBuilderTests
         Action negative = () => _ = new NavigationCell(
             TraversalMedia.Solid,
             TraversalCapability.None,
+            default,
             -Fixed64.One,
             Fixed64.Zero,
             Fixed64.One);
         Action unknownMedia = () => _ = new NavigationCell(
             (TraversalMedia)(1 << 12),
             TraversalCapability.None,
+            default,
             Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.One);
         Action unknownCapability = () => _ = new NavigationCell(
             TraversalMedia.Solid,
             (TraversalCapability)(1 << 12),
+            default,
             Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.One);

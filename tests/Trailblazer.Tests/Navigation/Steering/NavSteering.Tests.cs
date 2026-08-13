@@ -1,4 +1,5 @@
-﻿using Chronicler;
+using System;
+using Chronicler;
 using FixedMathSharp;
 using FixedMathSharp.Assertions;
 using FluentAssertions;
@@ -8,7 +9,6 @@ using GridForge.Grids;
 using GridForge.Spatial;
 using Moq;
 using SwiftCollections;
-using System;
 using Trailblazer.Navigation;
 using Trailblazer.Navigation.MovementGroups;
 using Trailblazer.Navigation.Steering;

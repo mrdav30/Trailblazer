@@ -5,9 +5,8 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using SwiftCollections.Diagnostics;
-using SwiftCollections.Utility;
 using System;
+using SwiftCollections.Utility;
 
 namespace Trailblazer.Pathing;
 
@@ -24,6 +23,9 @@ public readonly struct PathQuery : IEquatable<PathQuery>
 
     /// <summary>Gets the exact agent profile used to evaluate traversal.</summary>
     public NavigationAgentProfile Agent { get; }
+
+    /// <summary>Gets the exact query-specific navigation-area policy identity.</summary>
+    public NavigationAreaPolicyKey AreaPolicy { get; }
 
     /// <summary>Gets the requested traversal domains and starting medium.</summary>
     public TraversalIntent Traversal { get; }
@@ -49,6 +51,7 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         NavigationEndpoint start,
         NavigationEndpoint end,
         NavigationAgentProfile agent,
+        NavigationAreaPolicyKey areaPolicy,
         TraversalIntent traversal,
         PathAlgorithm algorithm,
         NavigationWorkBudget budget,
@@ -58,6 +61,7 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         start.Validate(nameof(start));
         end.Validate(nameof(end));
         agent.Validate(nameof(agent));
+        areaPolicy.Validate(nameof(areaPolicy));
         traversal.Validate(nameof(traversal));
         budget.Validate(nameof(budget));
         flowField.Validate(nameof(flowField));
@@ -74,6 +78,7 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         Start = start;
         End = end;
         Agent = agent;
+        AreaPolicy = areaPolicy;
         Traversal = traversal;
         Algorithm = algorithm;
         Budget = budget;
@@ -86,6 +91,7 @@ public readonly struct PathQuery : IEquatable<PathQuery>
         Start == other.Start
         && End == other.End
         && Agent == other.Agent
+        && AreaPolicy == other.AreaPolicy
         && Traversal == other.Traversal
         && Algorithm == other.Algorithm
         && Budget == other.Budget
@@ -100,6 +106,7 @@ public readonly struct PathQuery : IEquatable<PathQuery>
     {
         int hash = SwiftHashTools.CombineHashCodes(Start.GetHashCode(), End.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, Agent.GetHashCode());
+        hash = SwiftHashTools.CombineHashCodes(hash, AreaPolicy.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, Traversal.GetHashCode());
         hash = SwiftHashTools.CombineHashCodes(hash, (int)Algorithm);
         hash = SwiftHashTools.CombineHashCodes(hash, Budget.GetHashCode());

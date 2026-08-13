@@ -5,12 +5,12 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using FixedMathSharp;
 using GridForge;
 using GridForge.Grids;
 using GridForge.Utility;
-using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 
 namespace Trailblazer.Pathing;
 

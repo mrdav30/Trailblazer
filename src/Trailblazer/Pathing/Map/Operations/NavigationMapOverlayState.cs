@@ -6,154 +6,251 @@
 //=======================================================================
 
 using System;
+using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
 
+/// <summary>Stores one map's immutable overlay roots in canonical key order.</summary>
 internal sealed class NavigationMapOverlayState
 {
     internal static readonly NavigationMapOverlayState Empty = new(
-        Array.Empty<NavigationCellOverlayOperation>(),
-        Array.Empty<NavigationConnectionOverlayOperation>(),
-        Array.Empty<TraversalTransitionOverlayOperation>(),
-        highWaterSequence: 0);
+        PersistentVoxelIndexMap<NavigationCellOverlayOperation>.Empty,
+        PersistentStringMap<NavigationConnectionOverlayOperation>.Empty,
+        PersistentStringMap<TraversalTransitionOverlayOperation>.Empty,
+        highWaterSequence: 0,
+        lastApplyCopiedNodeCount: 0,
+        retainedPayloadBytes: 0);
+
+    private readonly PersistentVoxelIndexMap<NavigationCellOverlayOperation> _cells;
+    private readonly PersistentStringMap<NavigationConnectionOverlayOperation> _connections;
+    private readonly PersistentStringMap<TraversalTransitionOverlayOperation> _transitions;
 
     private NavigationMapOverlayState(
-        NavigationCellOverlayOperation[] cells,
-        NavigationConnectionOverlayOperation[] connections,
-        TraversalTransitionOverlayOperation[] transitions,
-        long highWaterSequence)
+        PersistentVoxelIndexMap<NavigationCellOverlayOperation> cells,
+        PersistentStringMap<NavigationConnectionOverlayOperation> connections,
+        PersistentStringMap<TraversalTransitionOverlayOperation> transitions,
+        long highWaterSequence,
+        int lastApplyCopiedNodeCount,
+        long retainedPayloadBytes)
     {
-        Cells = cells;
-        Connections = connections;
-        Transitions = transitions;
+        _cells = cells;
+        _connections = connections;
+        _transitions = transitions;
         HighWaterSequence = highWaterSequence;
+        LastApplyCopiedNodeCount = lastApplyCopiedNodeCount;
+        RetainedPayloadBytes = retainedPayloadBytes;
     }
 
-    internal NavigationCellOverlayOperation[] Cells { get; }
+    internal int CellCount => _cells.Count;
 
-    internal NavigationConnectionOverlayOperation[] Connections { get; }
+    internal int ConnectionCount => _connections.Count;
 
-    internal TraversalTransitionOverlayOperation[] Transitions { get; }
+    internal int TransitionCount => _transitions.Count;
+
+    internal int PersistentNodeCount => checked(
+        _cells.PersistentNodeCount
+        + _connections.PersistentNodeCount
+        + _transitions.PersistentNodeCount);
+
+    internal long RetainedBytes => checked(
+        48L
+        + _cells.RetainedBytes
+        + _connections.RetainedBytes
+        + _transitions.RetainedBytes
+        + RetainedPayloadBytes);
+
+    internal long RetainedPayloadBytes { get; }
+
+    internal int LastApplyCopiedNodeCount { get; }
 
     internal long HighWaterSequence { get; }
 
+    internal NavigationCellOverlayOperation GetCellAt(int ordinal) =>
+        _cells.GetValueAt(ordinal);
+
+    internal NavigationConnectionOverlayOperation GetConnectionAt(int ordinal) =>
+        _connections.GetValueAt(ordinal);
+
+    internal TraversalTransitionOverlayOperation GetTransitionAt(int ordinal) =>
+        _transitions.GetValueAt(ordinal);
+
+    internal bool TryGetCell(VoxelIndex index, out NavigationCellOverlayOperation operation) =>
+        _cells.TryGetValue(index, out operation);
+
+    internal bool TryGetConnection(
+        string id,
+        out NavigationConnectionOverlayOperation operation) =>
+        _connections.TryGetValue(id, out operation);
+
+    internal bool TryGetTransition(
+        string id,
+        out TraversalTransitionOverlayOperation operation) =>
+        _transitions.TryGetValue(id, out operation);
+
+    internal bool HasSameCellRoot(NavigationMapOverlayState other) =>
+        ReferenceEquals(_cells, other._cells);
+
     internal NavigationMapOverlayState Apply(NavigationMapOverlayDelta delta, long operationSequence)
     {
+        PersistentVoxelIndexMap<NavigationCellOverlayOperation> cells = _cells;
+        PersistentStringMap<NavigationConnectionOverlayOperation> connections = _connections;
+        PersistentStringMap<TraversalTransitionOverlayOperation> transitions = _transitions;
+        int copiedNodeCount = 0;
+        long retainedPayloadBytes = RetainedPayloadBytes;
+
+        ReadOnlySpan<NavigationCellOverlayOperation> cellChanges = delta.CellSpan;
+        for (int i = 0; i < cellChanges.Length; i++)
+        {
+            NavigationCellOverlayOperation change = cellChanges[i];
+            if (cells.TryGetValue(change.Index, out NavigationCellOverlayOperation prior))
+            {
+                retainedPayloadBytes = checked(
+                    retainedPayloadBytes
+                    - NavigationMapOverlayDelta.EstimateRetainedPayload(prior));
+            }
+            int copied;
+            if (change.Kind == NavigationCellOverlayOperationKind.RevertToBake)
+                cells = cells.Remove(change.Index, out _, out copied);
+            else
+            {
+                cells = cells.Set(change.Index, change, out copied);
+                retainedPayloadBytes = checked(
+                    retainedPayloadBytes
+                    + NavigationMapOverlayDelta.EstimateRetainedPayload(change));
+            }
+            copiedNodeCount = checked(copiedNodeCount + copied);
+        }
+
+        ReadOnlySpan<NavigationConnectionOverlayOperation> connectionChanges = delta.ConnectionSpan;
+        for (int i = 0; i < connectionChanges.Length; i++)
+        {
+            NavigationConnectionOverlayOperation change = connectionChanges[i];
+            if (connections.TryGetValue(change.Id, out NavigationConnectionOverlayOperation prior))
+            {
+                retainedPayloadBytes = checked(
+                    retainedPayloadBytes
+                    - NavigationMapOverlayDelta.EstimateRetainedPayload(prior));
+            }
+            int copied;
+            if (change.Kind == NavigationConnectionOverlayOperationKind.RevertToBake)
+                connections = connections.Remove(change.Id, out _, out copied);
+            else
+            {
+                connections = connections.Set(change.Id, change, out copied);
+                retainedPayloadBytes = checked(
+                    retainedPayloadBytes
+                    + NavigationMapOverlayDelta.EstimateRetainedPayload(change));
+            }
+            copiedNodeCount = checked(copiedNodeCount + copied);
+        }
+
+        ReadOnlySpan<TraversalTransitionOverlayOperation> transitionChanges = delta.TransitionSpan;
+        for (int i = 0; i < transitionChanges.Length; i++)
+        {
+            TraversalTransitionOverlayOperation change = transitionChanges[i];
+            if (transitions.TryGetValue(change.Id, out TraversalTransitionOverlayOperation prior))
+            {
+                retainedPayloadBytes = checked(
+                    retainedPayloadBytes
+                    - NavigationMapOverlayDelta.EstimateRetainedPayload(prior));
+            }
+            int copied;
+            if (change.Kind == TraversalTransitionOverlayOperationKind.RevertToBake)
+                transitions = transitions.Remove(change.Id, out _, out copied);
+            else
+            {
+                transitions = transitions.Set(change.Id, change, out copied);
+                retainedPayloadBytes = checked(
+                    retainedPayloadBytes
+                    + NavigationMapOverlayDelta.EstimateRetainedPayload(change));
+            }
+            copiedNodeCount = checked(copiedNodeCount + copied);
+        }
+
         return new NavigationMapOverlayState(
-            MergeCells(Cells, delta.CellSpan),
-            MergeConnections(Connections, delta.ConnectionSpan),
-            MergeTransitions(Transitions, delta.TransitionSpan),
-            operationSequence);
+            cells,
+            connections,
+            transitions,
+            operationSequence,
+            copiedNodeCount,
+            retainedPayloadBytes);
     }
 
-    private static NavigationCellOverlayOperation[] MergeCells(
-        NavigationCellOverlayOperation[] current,
-        ReadOnlySpan<NavigationCellOverlayOperation> changes)
+    internal NavigationMapOverlayState Apply(
+        NavigationCellOverlayOperation change,
+        long operationSequence)
     {
-        var result = new NavigationCellOverlayOperation[current.Length + changes.Length];
-        int currentIndex = 0;
-        int changeIndex = 0;
-        int resultCount = 0;
-
-        while (currentIndex < current.Length || changeIndex < changes.Length)
+        long retainedPayloadBytes = RetainedPayloadBytes;
+        if (_cells.TryGetValue(change.Index, out NavigationCellOverlayOperation prior))
+            retainedPayloadBytes -= NavigationMapOverlayDelta.EstimateRetainedPayload(prior);
+        int copied;
+        PersistentVoxelIndexMap<NavigationCellOverlayOperation> cells;
+        if (change.Kind == NavigationCellOverlayOperationKind.RevertToBake)
+            cells = _cells.Remove(change.Index, out _, out copied);
+        else
         {
-            int comparison = currentIndex >= current.Length
-                ? 1
-                : changeIndex >= changes.Length
-                    ? -1
-                    : current[currentIndex].Index.CompareTo(changes[changeIndex].Index);
-
-            if (comparison < 0)
-            {
-                result[resultCount++] = current[currentIndex++];
-                continue;
-            }
-
-            NavigationCellOverlayOperation change = changes[changeIndex++];
-            if (comparison == 0)
-                currentIndex++;
-            if (change.Kind != NavigationCellOverlayOperationKind.RevertToBake)
-                result[resultCount++] = change;
+            cells = _cells.Set(change.Index, change, out copied);
+            retainedPayloadBytes = checked(
+                retainedPayloadBytes + NavigationMapOverlayDelta.EstimateRetainedPayload(change));
         }
-
-        return Trim(result, resultCount);
+        return new NavigationMapOverlayState(
+            cells,
+            _connections,
+            _transitions,
+            operationSequence,
+            copied,
+            retainedPayloadBytes);
     }
 
-    private static NavigationConnectionOverlayOperation[] MergeConnections(
-        NavigationConnectionOverlayOperation[] current,
-        ReadOnlySpan<NavigationConnectionOverlayOperation> changes)
+    internal NavigationMapOverlayState Apply(
+        NavigationConnectionOverlayOperation change,
+        long operationSequence)
     {
-        var result = new NavigationConnectionOverlayOperation[current.Length + changes.Length];
-        int currentIndex = 0;
-        int changeIndex = 0;
-        int resultCount = 0;
-
-        while (currentIndex < current.Length || changeIndex < changes.Length)
+        long retainedPayloadBytes = RetainedPayloadBytes;
+        if (_connections.TryGetValue(change.Id, out NavigationConnectionOverlayOperation prior))
+            retainedPayloadBytes -= NavigationMapOverlayDelta.EstimateRetainedPayload(prior);
+        int copied;
+        PersistentStringMap<NavigationConnectionOverlayOperation> connections;
+        if (change.Kind == NavigationConnectionOverlayOperationKind.RevertToBake)
+            connections = _connections.Remove(change.Id, out _, out copied);
+        else
         {
-            int comparison = currentIndex >= current.Length
-                ? 1
-                : changeIndex >= changes.Length
-                    ? -1
-                    : string.CompareOrdinal(current[currentIndex].Id, changes[changeIndex].Id);
-
-            if (comparison < 0)
-            {
-                result[resultCount++] = current[currentIndex++];
-                continue;
-            }
-
-            NavigationConnectionOverlayOperation change = changes[changeIndex++];
-            if (comparison == 0)
-                currentIndex++;
-            if (change.Kind != NavigationConnectionOverlayOperationKind.RevertToBake)
-                result[resultCount++] = change;
+            connections = _connections.Set(change.Id, change, out copied);
+            retainedPayloadBytes = checked(
+                retainedPayloadBytes + NavigationMapOverlayDelta.EstimateRetainedPayload(change));
         }
-
-        return Trim(result, resultCount);
+        return new NavigationMapOverlayState(
+            _cells,
+            connections,
+            _transitions,
+            operationSequence,
+            copied,
+            retainedPayloadBytes);
     }
 
-    private static TraversalTransitionOverlayOperation[] MergeTransitions(
-        TraversalTransitionOverlayOperation[] current,
-        ReadOnlySpan<TraversalTransitionOverlayOperation> changes)
+    internal NavigationMapOverlayState Apply(
+        TraversalTransitionOverlayOperation change,
+        long operationSequence)
     {
-        var result = new TraversalTransitionOverlayOperation[current.Length + changes.Length];
-        int currentIndex = 0;
-        int changeIndex = 0;
-        int resultCount = 0;
-
-        while (currentIndex < current.Length || changeIndex < changes.Length)
+        long retainedPayloadBytes = RetainedPayloadBytes;
+        if (_transitions.TryGetValue(change.Id, out TraversalTransitionOverlayOperation prior))
+            retainedPayloadBytes -= NavigationMapOverlayDelta.EstimateRetainedPayload(prior);
+        int copied;
+        PersistentStringMap<TraversalTransitionOverlayOperation> transitions;
+        if (change.Kind == TraversalTransitionOverlayOperationKind.RevertToBake)
+            transitions = _transitions.Remove(change.Id, out _, out copied);
+        else
         {
-            int comparison = currentIndex >= current.Length
-                ? 1
-                : changeIndex >= changes.Length
-                    ? -1
-                    : string.CompareOrdinal(current[currentIndex].Id, changes[changeIndex].Id);
-
-            if (comparison < 0)
-            {
-                result[resultCount++] = current[currentIndex++];
-                continue;
-            }
-
-            TraversalTransitionOverlayOperation change = changes[changeIndex++];
-            if (comparison == 0)
-                currentIndex++;
-            if (change.Kind != TraversalTransitionOverlayOperationKind.RevertToBake)
-                result[resultCount++] = change;
+            transitions = _transitions.Set(change.Id, change, out copied);
+            retainedPayloadBytes = checked(
+                retainedPayloadBytes + NavigationMapOverlayDelta.EstimateRetainedPayload(change));
         }
-
-        return Trim(result, resultCount);
-    }
-
-    private static T[] Trim<T>(T[] values, int count)
-    {
-        if (count == values.Length)
-            return values;
-        if (count == 0)
-            return Array.Empty<T>();
-
-        var trimmed = new T[count];
-        Array.Copy(values, trimmed, count);
-        return trimmed;
+        return new NavigationMapOverlayState(
+            _cells,
+            _connections,
+            transitions,
+            operationSequence,
+            copied,
+            retainedPayloadBytes);
     }
 }

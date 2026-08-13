@@ -5,8 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using GridForge.Spatial;
-using SwiftCollections.Diagnostics;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -209,26 +207,13 @@ public sealed class NavigationMapOverlayDelta
             + EstimateIdOperations(_transitions));
     }
 
+    internal static long EstimateRetainedPayload(NavigationCellOverlayOperation operation) => 64L;
+
     private static long EstimateIdOperations(NavigationConnectionOverlayOperation[] operations)
     {
         long bytes = 0;
         for (int i = 0; i < operations.Length; i++)
-        {
-            NavigationConnectionOverlayOperation operation = operations[i];
-            bytes = checked(bytes + 96L + (operation.Id.Length * sizeof(char)));
-            if (operation.Kind != NavigationConnectionOverlayOperationKind.Upsert)
-                continue;
-
-            NavigationConnection connection = operation.Connection!;
-            bytes = checked(bytes + 96L + (connection.Destination.MapId.Length * sizeof(char)));
-            for (int witness = 0; witness < connection.Witnesses.Count; witness++)
-            {
-                bytes = checked(
-                    bytes
-                    + 32L
-                    + (connection.Witnesses[witness].MapId.Length * sizeof(char)));
-            }
-        }
+            bytes = checked(bytes + EstimateRetainedPayload(operations[i]));
         return bytes;
     }
 
@@ -236,16 +221,37 @@ public sealed class NavigationMapOverlayDelta
     {
         long bytes = 0;
         for (int i = 0; i < operations.Length; i++)
+            bytes = checked(bytes + EstimateRetainedPayload(operations[i]));
+        return bytes;
+    }
+
+    internal static long EstimateRetainedPayload(NavigationConnectionOverlayOperation operation)
+    {
+        long bytes = checked(96L + (operation.Id.Length * sizeof(char)));
+        if (operation.Kind != NavigationConnectionOverlayOperationKind.Upsert)
+            return bytes;
+
+        NavigationConnection connection = operation.Connection!;
+        bytes = checked(bytes + 96L + (connection.Destination.MapId.Length * sizeof(char)));
+        for (int witness = 0; witness < connection.Witnesses.Count; witness++)
         {
-            TraversalTransitionOverlayOperation operation = operations[i];
-            bytes = checked(bytes + 96L + (operation.Id.Length * sizeof(char)));
-            if (operation.Kind == TraversalTransitionOverlayOperationKind.Upsert)
-            {
-                bytes = checked(
-                    bytes
-                    + 64L
-                    + (operation.Transition.Destination.MapId.Length * sizeof(char)));
-            }
+            bytes = checked(
+                bytes
+                + 32L
+                + (connection.Witnesses[witness].MapId.Length * sizeof(char)));
+        }
+        return bytes;
+    }
+
+    internal static long EstimateRetainedPayload(TraversalTransitionOverlayOperation operation)
+    {
+        long bytes = checked(96L + (operation.Id.Length * sizeof(char)));
+        if (operation.Kind == TraversalTransitionOverlayOperationKind.Upsert)
+        {
+            bytes = checked(
+                bytes
+                + 64L
+                + (operation.Transition.Destination.MapId.Length * sizeof(char)));
         }
         return bytes;
     }

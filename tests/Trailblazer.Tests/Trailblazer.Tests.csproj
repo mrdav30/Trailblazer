@@ -42,5 +42,6 @@
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove=".gitignore" />
+		<None Update="Phase0\PublicApiSnapshot.txt" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 </Project>

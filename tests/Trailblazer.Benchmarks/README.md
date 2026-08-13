@@ -66,14 +66,14 @@ dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj 
 dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- all --list flat
 ```
 
-### Fast development check (InProcessShortRunConfig)
+### Fast development check (in-process short job)
 
-`InProcessShortRunConfig` is registered for quick local smoke runs. Use it
-during development to verify benchmark code compiles and produces plausible
-numbers without a full benchmark run.
+Use BenchmarkDotNet's built-in short job with the in-process toolchain during
+development to verify benchmark code compiles and produces plausible numbers
+without a full benchmark run.
 
 ```bash
-dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request --config InProcessShortRunConfig
+dotnet run --project tests/Trailblazer.Benchmarks/Trailblazer.Benchmarks.csproj -c Release -f net8.0 -- a-star-path-request --job short --inProcess
 ```
 
 Do not treat results from short-run mode as canonical measurements.

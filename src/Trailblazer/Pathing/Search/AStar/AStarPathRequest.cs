@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// AStarPathRequest.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 using System;
 using System.Runtime.CompilerServices;
@@ -21,7 +28,7 @@ public class AStarPathRequest : PathRequest, IEquatable<AStarPathRequest>
     /// Gets or sets the heuristic method used for evaluating or guiding the algorithm.
     /// </summary>
     /// <remarks>
-    /// Set this property to specify which heuristic strategy the algorithm should use. 
+    /// Set this property to specify which heuristic strategy the algorithm should use.
     /// The selected heuristic can affect the performance and outcome of the algorithm.
     /// </remarks>
     public HeuristicMethod Heuristic { get; set; }

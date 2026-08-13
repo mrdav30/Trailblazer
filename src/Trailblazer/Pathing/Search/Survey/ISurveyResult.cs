@@ -1,10 +1,17 @@
-﻿namespace Trailblazer.Pathing;
+﻿//=======================================================================
+// ISurveyResult.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+namespace Trailblazer.Pathing;
 
 /// <summary>
 /// Represents the result of a survey operation, providing access to its state, usage information, and lifecycle management methods.
 /// </summary>
 /// <remarks>
-/// Implementations of this interface expose properties to determine the validity, usage status, and associated metadata of a survey result. 
+/// Implementations of this interface expose properties to determine the validity, usage status, and associated metadata of a survey result.
 /// Methods are provided to manage the lifecycle of the result, including marking it as in use, releasing it for reuse, and resetting its state.
 /// </remarks>
 public interface ISurveyResult

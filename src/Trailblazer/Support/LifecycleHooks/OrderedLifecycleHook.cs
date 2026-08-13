@@ -1,3 +1,10 @@
+//=======================================================================
+// OrderedLifecycleHook.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using System;
 
 namespace Trailblazer.Support;
@@ -26,13 +33,13 @@ public sealed class OrderedLifecycleHook
     public string Owner { get; }
 
     /// <summary>
-    /// Gets the execution order of the lifecycle hook, determining the sequence in which it will be invoked relative to other hooks. 
+    /// Gets the execution order of the lifecycle hook, determining the sequence in which it will be invoked relative to other hooks.
     /// Hooks with lower order values will be executed before those with higher values.
     /// </summary>
     public int Order { get; }
 
     /// <summary>
-    /// Gets the callback action associated with the lifecycle hook, which will be invoked when the hook is executed. 
+    /// Gets the callback action associated with the lifecycle hook, which will be invoked when the hook is executed.
     /// This action defines the behavior that will occur when the lifecycle event associated with the hook is triggered.
     /// </summary>
     public Action Callback { get; }

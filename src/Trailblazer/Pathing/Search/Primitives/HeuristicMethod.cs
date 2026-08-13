@@ -1,3 +1,10 @@
+//=======================================================================
+// HeuristicMethod.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 namespace Trailblazer.Pathing;
 
 /// <summary>
@@ -5,7 +12,7 @@ namespace Trailblazer.Pathing;
 /// </summary>
 /// <remarks>
 /// Use this enumeration to select the distance calculation strategy appropriate for the grid or
-/// coordinate system in use. 
+/// coordinate system in use.
 /// Manhattan is typically used for four-directional grids, Octile for eight-directional
 /// grids, and Euclidean for continuous or diagonal movement scenarios.
 /// </remarks>
@@ -17,7 +24,7 @@ public enum HeuristicMethod
     /// </summary>
     Manhattan,
     /// <summary>
-    /// Represents the Octile distance metric, which is a modification of the Manhattan distance that accounts for 
+    /// Represents the Octile distance metric, which is a modification of the Manhattan distance that accounts for
     /// diagonal movement in grid-based pathfinding.
     /// </summary>
     Octile,

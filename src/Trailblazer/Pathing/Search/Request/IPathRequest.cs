@@ -1,11 +1,18 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// IPathRequest.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 
 namespace Trailblazer.Pathing;
 
 /// <summary>
 /// Interface representing a generic pathfinding request. Defines shared data such as start/end voxels,
-/// unit size, and optional parameters like walkability and search range limits. 
+/// unit size, and optional parameters like walkability and search range limits.
 /// Also provides an exact key for caching or pooling.
 /// </summary>
 public interface IPathRequest
@@ -26,7 +33,7 @@ public interface IPathRequest
     Voxel? StartNode { get; }
 
     /// <summary>
-    /// The target world position. 
+    /// The target world position.
     /// </summary>
     Vector3d TargetPosition { get; }
 
@@ -57,7 +64,7 @@ public interface IPathRequest
     int MaxPathSearchRange { get; set; }
 
     /// <summary>
-    /// Whether the request has a valid start voxel. 
+    /// Whether the request has a valid start voxel.
     /// Requests with null start or end voxels are considered invalid.
     /// </summary>
     bool HasOrigin { get; }
@@ -74,7 +81,7 @@ public interface IPathRequest
     bool HasValidEndpoints { get; }
 
     /// <summary>
-    /// Whether the request is valid and can be processed. 
+    /// Whether the request is valid and can be processed.
     /// Requests must have valid endpoints and a positive search range to be considered valid.
     /// </summary>
     bool IsValid { get; }
@@ -97,7 +104,7 @@ public interface IPathRequest
     bool UpdateRequest(Vector3d origin, Vector3d destination, Fixed64? unitSize);
 
     /// <summary>
-    /// Attempts to update the request's origin position and corresponding start voxel. 
+    /// Attempts to update the request's origin position and corresponding start voxel.
     /// Returns true if successful, or false if the new origin is invalid (e.g. no valid start voxel could be found).
     /// </summary>
     /// <param name="origin"></param>

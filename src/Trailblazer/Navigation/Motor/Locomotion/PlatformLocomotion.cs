@@ -1,4 +1,11 @@
-﻿using Chronicler;
+﻿//=======================================================================
+// PlatformLocomotion.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using Chronicler;
 using FixedMathSharp;
 using System;
 using System.Runtime.CompilerServices;
@@ -83,7 +90,7 @@ public class PlatformLocomotion : ILocomotion
     public PlatformSnapshot? PreviousPlatform { get; set; }
 
     /// <summary>
-    /// A flag to preserve the previous platform's transform for attachment calculations, 
+    /// A flag to preserve the previous platform's transform for attachment calculations,
     /// used when refreshing the same platform with a new transform.
     /// </summary>
     private bool _preservePreviousTransformForAttachment;
@@ -257,7 +264,7 @@ public class PlatformLocomotion : ILocomotion
     /// </summary>
     /// <remarks>
     /// This method should be called whenever the underlying platform or ground condition changes,
-    /// such as when stepping onto a new platform or leaving one. 
+    /// such as when stepping onto a new platform or leaving one.
     /// It resets and updates platform movement and transfer state as needed.
     /// </remarks>
     /// <param name="condition">The ground condition representing the current platform state. May be null if there is no platform contact.</param>

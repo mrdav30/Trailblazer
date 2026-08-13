@@ -1,3 +1,10 @@
+//=======================================================================
+// NavigatorPathRequestFactory.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using FixedMathSharp;
 using GridForge.Grids;
 using System.Diagnostics.CodeAnalysis;
@@ -28,11 +35,11 @@ public static class NavigatorPathRequestFactory
         PathRequestContextResolver.ThrowIfUnusable(context);
         handoff = null;
 
-        // For gas and liquid traversal, we only support volume path requests, 
-        // so we bypass the path mode switch and go straight to trying to create a volume request. 
-        // If that fails and traversal transitions are allowed, 
-        // we attempt to create a guided volume exit handoff request which will plan a 
-        // volume path to an exit if needed before transitioning to a chart-based path for 
+        // For gas and liquid traversal, we only support volume path requests,
+        // so we bypass the path mode switch and go straight to trying to create a volume request.
+        // If that fails and traversal transitions are allowed,
+        // we attempt to create a guided volume exit handoff request which will plan a
+        // volume path to an exit if needed before transitioning to a chart-based path for
         // the remainder of the journey.
         if (traversalMedium == TraversalMedium.Gas || traversalMedium == TraversalMedium.Liquid)
         {

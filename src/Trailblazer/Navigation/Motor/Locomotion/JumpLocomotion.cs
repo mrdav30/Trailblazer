@@ -1,4 +1,11 @@
-﻿using Chronicler;
+﻿//=======================================================================
+// JumpLocomotion.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using Chronicler;
 using FixedMathSharp;
 using System;
 using Trailblazer.Support;
@@ -9,7 +16,7 @@ namespace Trailblazer.Navigation.Motor;
 /// Handles the scout’s jumping mechanics, including jump height, cooldown, and movement control while airborne.
 /// </summary>
 /// <remarks>
-/// This locomotion component determines how high the scout can jump, how much control they retain mid-air,  
+/// This locomotion component determines how high the scout can jump, how much control they retain mid-air,
 /// and enforces a cooldown period between consecutive jumps.
 /// </remarks>
 public class JumpLocomotion : ILocomotion

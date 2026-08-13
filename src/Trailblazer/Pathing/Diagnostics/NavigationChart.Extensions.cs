@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// NavigationChart.Extensions.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using System;
 
 namespace Trailblazer.Pathing;
@@ -7,8 +14,8 @@ namespace Trailblazer.Pathing;
 /// Provides extension methods for displaying information about walkable positions and XZ plane slices in a NavigationChart.
 /// </summary>
 /// <remarks>
-/// These extension methods are intended to assist with debugging or visualizing navigation data by printing walkable positions 
-/// and 2D slices of the navigation chart to the console. 
+/// These extension methods are intended to assist with debugging or visualizing navigation data by printing walkable positions
+/// and 2D slices of the navigation chart to the console.
 /// </remarks>
 public static class NavigationChartExtensions
 {
@@ -16,7 +23,7 @@ public static class NavigationChartExtensions
     /// Prints all walkable positions in the specified navigation chart to the console.
     /// </summary>
     /// <remarks>
-    /// Each walkable position is printed in the format (x, y, z) under a header containing the chart's name. 
+    /// Each walkable position is printed in the format (x, y, z) under a header containing the chart's name.
     /// This method is intended for debugging or informational purposes and writes output directly to the standard console.
     /// </remarks>
     /// <param name="chart">The navigation chart from which to retrieve and display walkable positions. Cannot be null.</param>
@@ -32,8 +39,8 @@ public static class NavigationChartExtensions
     /// Prints a visual representation of the XZ plane at the specified Y level for the given navigation chart to the console.
     /// </summary>
     /// <remarks>
-    /// Each cell in the output represents whether the corresponding position is walkable. 
-    /// Walkable positions are indicated by 'O', and non-walkable positions by '.'. 
+    /// Each cell in the output represents whether the corresponding position is walkable.
+    /// Walkable positions are indicated by 'O', and non-walkable positions by '.'.
     /// This method is intended for debugging or visualization purposes.
     /// </remarks>
     /// <param name="chart">The navigation chart from which to extract and display the XZ plane.</param>

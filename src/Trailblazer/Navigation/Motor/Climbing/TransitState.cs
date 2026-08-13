@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// TransitState.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 
 namespace Trailblazer.Navigation.Motor;
 
@@ -105,12 +112,12 @@ public class TransitState
     /// Calculates the signed angle of the current surface slope relative to the specified movement direction.
     /// </summary>
     /// <param name="moveDirection">
-    /// The movement direction vector used to determine the orientation relative to the slope. 
+    /// The movement direction vector used to determine the orientation relative to the slope.
     /// If this value is <see cref="Vector3d.Zero"/>, the method treats the movement as oriented downhill.
     /// </param>
     /// <returns>
-    /// The signed slope angle in degrees. 
-    /// A negative value indicates movement downhill, and a positive value indicates movement uphill. 
+    /// The signed slope angle in degrees.
+    /// A negative value indicates movement downhill, and a positive value indicates movement uphill.
     /// Returns zero if the surface is flat.
     /// </returns>
     public Fixed64 GetSignedSlopeAngle(Vector3d moveDirection)

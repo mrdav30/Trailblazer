@@ -1,3 +1,10 @@
+//=======================================================================
+// LifecycleHookHandler.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using SwiftCollections;
 using System;
 using System.Collections.Generic;
@@ -12,8 +19,8 @@ public class LifecycleHookHandler
     private readonly object _lifecycleHookLock = new();
 
     /// <summary>
-    /// Registers a lifecycle hook with the specified owner, order, and callback. 
-    /// Hooks are executed in order of their specified order, and if orders are equal, they are sorted by owner name. 
+    /// Registers a lifecycle hook with the specified owner, order, and callback.
+    /// Hooks are executed in order of their specified order, and if orders are equal, they are sorted by owner name.
     /// The returned IDisposable can be used to unregister the hook when it is no longer needed.
     /// </summary>
     /// <param name="hooks">The list of hooks to register the new hook with.</param>

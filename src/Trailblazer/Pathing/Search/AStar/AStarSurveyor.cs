@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// AStarSurveyor.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
@@ -78,7 +85,7 @@ public class AStarSurveyor
     private AStarPathRequest? _request;
 
     /// <summary>
-    /// Attempts to find a path between the start and end points provided in the request. 
+    /// Attempts to find a path between the start and end points provided in the request.
     /// Returns true if a valid path was found and outputs the resulting waypoint list.
     /// </summary>
     /// <param name="request">The pathfinding request containing start/end info and constraints.</param>
@@ -436,7 +443,7 @@ public class AStarSurveyor
         // Add the starting point
         output[0] = input[0];
 
-        int outputIndex = 1; // Start at 1 because output[0] = input[0] 
+        int outputIndex = 1; // Start at 1 because output[0] = input[0]
         for (int i = 0; i < input.Length - 3; i++)
         {
             Vector3d p0 = input[i].Position;

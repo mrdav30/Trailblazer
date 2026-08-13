@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// FlowFieldPathRequest.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 using System;
 using System.Diagnostics.CodeAnalysis;
@@ -7,8 +14,8 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// A pathfinding request used for flow field generation. Contains configuration for 
-/// destination targeting, dynamic agent sizing, and walkability override. 
+/// A pathfinding request used for flow field generation. Contains configuration for
+/// destination targeting, dynamic agent sizing, and walkability override.
 /// Implements value-based equality for guide pooling.
 /// </summary>
 public class FlowFieldPathRequest : PathRequest, IEquatable<FlowFieldPathRequest>

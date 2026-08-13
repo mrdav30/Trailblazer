@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// SolidChartPartition.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
@@ -67,7 +74,7 @@ public class SolidChartPartition : IVoxelPartition
 
     /// <summary>
     /// A cost bias for this partition. Positive values make the partition less desirable.
-    /// The public setter preserves caller-controlled adjustments, 
+    /// The public setter preserves caller-controlled adjustments,
     /// while chart-authored modifiers are aggregated separately.
     /// </summary>
     public int PathCostModifier
@@ -86,7 +93,7 @@ public class SolidChartPartition : IVoxelPartition
     /// Gets the neighboring partitions adjacent to this partition.
     /// </summary>
     /// <remarks>
-    /// Each element in the array represents a neighboring partition in a specific direction or position. 
+    /// Each element in the array represents a neighboring partition in a specific direction or position.
     /// The array may contain null values if a neighbor does not exist in that position.
     /// </remarks>
     public SolidChartPartition?[]? Neighbors { get; private set; }
@@ -234,7 +241,7 @@ public class SolidChartPartition : IVoxelPartition
     /// </summary>
     /// <remarks>
     /// If the grid or voxel corresponding to WorldIndex cannot be found, Neighbors is set to null.
-    /// Each entry in the Neighbors array corresponds to a spatial direction; 
+    /// Each entry in the Neighbors array corresponds to a spatial direction;
     /// entries remain null if a neighbor is blocked or missing.
     /// </remarks>
     public void BindNeighbors()
@@ -314,7 +321,7 @@ public class SolidChartPartition : IVoxelPartition
         if (unitSize <= voxelSize)
             return !IsWalkable;
 
-        // Only evaluates local radial clearance from current voxel. 
+        // Only evaluates local radial clearance from current voxel.
         // Does not account for directional corner blocking
         CheckClearance();
 

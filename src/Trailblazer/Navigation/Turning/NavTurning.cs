@@ -1,4 +1,11 @@
-﻿using Chronicler;
+﻿//=======================================================================
+// NavTurning.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using Chronicler;
 using FixedMathSharp;
 using System;
 using System.Runtime.CompilerServices;
@@ -28,7 +35,7 @@ public partial class NavTurning : IRecordable
     /// Represents the default turn rate value used for rotation calculations.
     /// </summary>
     /// <remarks>
-    /// This value is typically used as a standard or baseline turn rate in movement or rotation logic. 
+    /// This value is typically used as a standard or baseline turn rate in movement or rotation logic.
     /// The specific value is one eighth of a full rotation, which may correspond to 45 degrees if a full rotation is considered 360 degrees.
     /// </remarks>
     public static readonly Fixed64 DefaultTurnRate = Fixed64.One / 8;
@@ -284,5 +291,12 @@ public partial class NavTurning : IRecordable
     public void NotifyCollision()
     {
         _isColliding = true;
+    }
+
+    /// <inheritdoc />
+    public void RecordData(IChronicler chronicler)
+    {
+        RecordValues.Look(chronicler, ref CanTurn, "CanTurn", true);
+        RecordValues.Look(chronicler, ref TurnRate, "TurnRate", DefaultTurnRate);
     }
 }

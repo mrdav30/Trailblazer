@@ -1,11 +1,19 @@
-﻿using GridForge.Spatial;
+﻿//=======================================================================
+// FlowFieldSurveyResult.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+
+using GridForge.Spatial;
 using SwiftCollections;
 using System;
 
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Represents the result of a flow field survey operation, including the mapping of world voxel indices 
+/// Represents the result of a flow field survey operation, including the mapping of world voxel indices
 /// to their associated flow fields and related survey metadata.
 /// </summary>
 /// <remarks>

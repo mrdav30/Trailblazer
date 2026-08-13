@@ -1,3 +1,10 @@
+//=======================================================================
+// VolumeChartPartition.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
@@ -73,7 +80,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// Initializes the obstacle's state based on the specified voxel and subscribes to voxel change events.
     /// </summary>
     /// <remarks>
-    /// This method updates the obstacle's world index, position, and walkability status to match the provided voxel. 
+    /// This method updates the obstacle's world index, position, and walkability status to match the provided voxel.
     /// It also attaches event handlers to respond to changes in the voxel's obstacle state.
     /// </remarks>
     /// <param name="voxel">The voxel to which the obstacle is being added. Cannot be null.</param>
@@ -92,7 +99,7 @@ public sealed class VolumeChartPartition : IVoxelPartition
     /// Handles cleanup when this object is removed from the specified voxel, including detaching event handlers and releasing resources.
     /// </summary>
     /// <remarks>
-    /// After calling this method, the object should not be used with the specified voxel unless re-added. 
+    /// After calling this method, the object should not be used with the specified voxel unless re-added.
     /// This method also releases the object back to the partition pool for reuse.
     /// </remarks>
     /// <param name="voxel">The voxel from which this object is being removed. Cannot be null.</param>

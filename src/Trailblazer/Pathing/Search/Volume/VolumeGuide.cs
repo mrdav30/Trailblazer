@@ -1,3 +1,10 @@
+//=======================================================================
+// VolumeGuide.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using FixedMathSharp;
 using System;
 
@@ -135,7 +142,7 @@ public sealed class VolumeGuide : IWaypointGuide
     /// <remarks>Returns false if the trail map is null, does not have a path, or if the index is out of range.</remarks>
     /// <param name="index">The zero-based index of the waypoint to retrieve. Must be within the bounds of the active waypoints collection.</param>
     /// <param name="waypoint">
-    /// When this method returns, contains the waypoint at the specified index if the operation succeeds; otherwise, 
+    /// When this method returns, contains the waypoint at the specified index if the operation succeeds; otherwise,
     /// the default value for <see cref="AStarWaypoint"/>.
     /// </param>
     /// <returns>true if the waypoint at the specified index was successfully retrieved; otherwise, false.</returns>

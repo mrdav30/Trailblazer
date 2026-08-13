@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// NavSteering.Simulation.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 using System;
 using System.Runtime.CompilerServices;
@@ -251,7 +258,7 @@ public partial class NavSteering
             return Vector3d.Zero;
         }
 
-        // This is now the direction we want to be travelling in 
+        // This is now the direction we want to be travelling in
         return targetDirection.NormalizeInPlace(out _distanceToTarget);
     }
 
@@ -485,11 +492,11 @@ public partial class NavSteering
     /// acceleration and current speed.
     /// </summary>
     /// <remarks>
-    /// This method is intended to be overridden in derived classes to customize deceleration behavior. 
+    /// This method is intended to be overridden in derived classes to customize deceleration behavior.
     /// It modulates the target direction to ensure smooth slowing as the object nears its target.
     /// </remarks>
     /// <param name="acceleration">
-    /// The acceleration vector used to determine the deceleration rate. 
+    /// The acceleration vector used to determine the deceleration rate.
     /// If the vector is zero, a default braking power is used.
     /// </param>
     /// <param name="speed">The current speed of the object, used to calculate the distance required to slow down.</param>

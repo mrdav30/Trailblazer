@@ -1,6 +1,12 @@
-﻿using Chronicler;
+﻿//=======================================================================
+// NavMotor.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using Chronicler;
 using FixedMathSharp;
-using SwiftCollections;
 using System;
 
 namespace Trailblazer.Navigation.Motor;
@@ -9,7 +15,7 @@ namespace Trailblazer.Navigation.Motor;
 /// Controls character movement using an acceleration-based approach in a deterministic, lockstep simulation.
 /// </summary>
 /// <remarks>
-/// This controller processes movement requests, applies forces such as gravity and platform adjustments, 
+/// This controller processes movement requests, applies forces such as gravity and platform adjustments,
 /// and finalizes traversal states for consistent movement across frames.
 /// </remarks>
 [Serializable]
@@ -31,7 +37,7 @@ public partial class NavMotor : IRecordable
     public NavMotorEvents Events = new();
 
     /// <summary>
-    /// This stores the current <see cref="Navigator._frameCondition"/> for the frame.  
+    /// This stores the current <see cref="Navigator._frameCondition"/> for the frame.
     /// </summary>
     /// <remarks>
     /// This is set on <see cref="OnInitialize"/>, can be explicitly synchronized before traversal
@@ -266,7 +272,7 @@ public partial class NavMotor : IRecordable
 
     #region Properties
 
-    /// <inheritdoc cref="_handler"/> 
+    /// <inheritdoc cref="_handler"/>
     public LocomotionHandler Handler => _handler;
 
     #endregion

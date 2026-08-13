@@ -1,4 +1,11 @@
-﻿using Chronicler;
+﻿//=======================================================================
+// Navigator.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using Chronicler;
 using FixedMathSharp;
 using GridForge.Grids;
 using System;
@@ -14,7 +21,7 @@ namespace Trailblazer.Navigation;
 /// Base class representing a object, responsible for handling movement, traversal state, and simulation flow.
 /// </summary>
 /// <remarks>
-/// This class acts as a bridge between the simulation logic and the entity's external representation.  
+/// This class acts as a bridge between the simulation logic and the entity's external representation.
 /// It defines common traversal behaviors and lifecycle methods that can be extended by concrete implementations.
 /// </remarks>
 [Serializable]
@@ -447,7 +454,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// <remarks>
     /// Call this method to reinitialize the object for reuse or to clear any ongoing operations.
     /// After calling this method, the object will be in the same state as after construction, and any previous state or
-    /// intent will be lost. 
+    /// intent will be lost.
     /// This method is intended to be overridden in derived classes to extend the reset behavior as needed.
     /// </remarks>
     public virtual void Reset()
@@ -813,7 +820,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// Finalizes traversal by updating movement calculations and applying corrections.
     /// </summary>
     /// <remarks>
-    /// Should be called once every rendering/player interfacing frame, 
+    /// Should be called once every rendering/player interfacing frame,
     /// after physics bodies apply velocity changes.
     /// </remarks>
     public virtual void CommitFrameMotion()
@@ -856,7 +863,7 @@ public abstract partial class Navigator : INavigate, IRecordable
 
         Motor!.FinalizeTraversal(Position, LastPosition, Rotation, _frameCondition, newFootPosition: GetFootPosition());
 
-        // If the object is currently following a guided path, 
+        // If the object is currently following a guided path,
         // reset only the transient request state to preserve path-following values.
         if (IsGuideded)
             _frameRequest.ResetTransient();
@@ -1011,7 +1018,7 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// Applies a positional delta to the current position and updates the last known position accordingly.
     /// </summary>
     /// <remarks>
-    /// This method adjusts both the current and last positions to maintain consistent velocity calculations. 
+    /// This method adjusts both the current and last positions to maintain consistent velocity calculations.
     /// Use this method to apply external position changes without affecting velocity tracking.
     /// </remarks>
     /// <param name="delta">
@@ -1062,11 +1069,11 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// Calculates the world-space position of the object's foot, adjusted by the configured foot position offset.
     /// </summary>
     /// <remarks>
-    /// Use this method to obtain the precise ground contact point for the object, 
+    /// Use this method to obtain the precise ground contact point for the object,
     /// which may be offset from its origin depending on the foot adjustment value.
     /// </remarks>
     /// <returns>
-    /// A <see cref="Vector3d"/> representing the foot position in world coordinates, 
+    /// A <see cref="Vector3d"/> representing the foot position in world coordinates,
     /// or <see langword="null"/> if the position is undefined.
     /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1124,10 +1131,10 @@ public abstract partial class Navigator : INavigate, IRecordable
     /// </summary>
     /// <remarks>
     /// This method ensures that the object is registered as an occupant in the correct voxel and
-    /// removed from the previous voxel if the position has changed. 
+    /// removed from the previous voxel if the position has changed.
     /// It should be called whenever the object's position may have changed to maintain accurate occupancy tracking.
     /// </remarks>
-    /// <param name="init">Indicates whether the occupancy check is being performed during initialization. 
+    /// <param name="init">Indicates whether the occupancy check is being performed during initialization.
     /// If set to <see langword="true"/>, the check is performed regardless of position changes.
     /// </param>
     protected virtual void CheckVoxelOccupancy(bool init = false)

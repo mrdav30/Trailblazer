@@ -1,10 +1,17 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// ISteer.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Spatial;
 
 namespace Trailblazer.Navigation;
 
 /// <summary>
-/// Defines the contract for an agent that can move and steer within a voxel-based world, providing access 
+/// Defines the contract for an agent that can move and steer within a voxel-based world, providing access
 /// to its velocity, speed, acceleration, and spatial characteristics.
 /// </summary>
 public interface ISteer : IVoxelOccupant

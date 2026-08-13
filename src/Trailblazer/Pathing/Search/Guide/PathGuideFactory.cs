@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// PathGuideFactory.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
@@ -21,7 +28,7 @@ internal static class PathGuideFactory
     private const int MaxFramesUnused = 600;
 
     /// <summary>
-    /// A shared cache for A* survey results, keyed by request parameters. 
+    /// A shared cache for A* survey results, keyed by request parameters.
     /// This allows for efficient reuse of recently computed paths without needing to re-run the A* algorithm for identical requests.
     /// </summary>
     private static TrailblazerGuideState GuideState => PathManager.ActiveState.GuideState;
@@ -402,7 +409,7 @@ internal static class PathGuideFactory
     /// </summary>
     /// <remarks>
     /// Call this method to ensure that any cached data related to the specified chart is removed and
-    /// will be recalculated on the next access. 
+    /// will be recalculated on the next access.
     /// This is useful when the underlying chart data has changed and stale cache entries must be cleared.
     /// </remarks>
     /// <param name="chartKey">The unique key identifying the chart whose cached results should be invalidated. Cannot be null or empty.</param>

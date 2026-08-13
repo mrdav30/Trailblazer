@@ -1,3 +1,10 @@
+//=======================================================================
+// HybridPathRequest.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using FixedMathSharp;
 using GridForge.Grids;
 using System;
@@ -164,7 +171,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
     }
 
     /// <summary>
-    /// Creates a new HybridPathRequest based on an existing AStarPathRequest. 
+    /// Creates a new HybridPathRequest based on an existing AStarPathRequest.
     /// This factory method is used to convert a standard A* path request into a hybrid request that can be processed by the hybrid pathfinding system, allowing for more complex routing that may involve transitions and multiple pathfinding strategies.
     ///  The method checks the validity of the input request and attempts to build a corresponding route plan for the hybrid system, returning null if the conversion fails or if the input request is invalid.
     /// </summary>
@@ -194,7 +201,7 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
 
     /// <summary>
     /// Creates a new HybridPathRequest based on an existing FlowFieldPathRequest.
-    /// This factory method is used to convert a standard flow field path request into a hybrid request that can be processed by the hybrid pathfinding system, allowing for more complex routing that may involve transitions and multiple pathfinding strategies. 
+    /// This factory method is used to convert a standard flow field path request into a hybrid request that can be processed by the hybrid pathfinding system, allowing for more complex routing that may involve transitions and multiple pathfinding strategies.
     /// The method checks the validity of the input request and attempts to build a corresponding route plan for the hybrid system, returning null if the conversion fails or if the input request is invalid.
     /// </summary>
     /// <param name="request">The FlowFieldPathRequest to convert into a HybridPathRequest.</param>
@@ -324,15 +331,15 @@ internal sealed class HybridPathRequest : IPathRequest, IEquatable<HybridPathReq
         && RequestCacheKey == other.RequestCacheKey;
 
     /// <summary>
-    /// Generates a hash code for the current path request based on its properties and route plan. 
-    /// This hash code is used for caching and guide pooling, allowing for efficient retrieval of guides based on request parameters. 
+    /// Generates a hash code for the current path request based on its properties and route plan.
+    /// This hash code is used for caching and guide pooling, allowing for efficient retrieval of guides based on request parameters.
     /// </summary>
     /// <returns>A hash code representing the current path request.</returns>
     public override int GetHashCode() => RequestCacheKey.GetHashCode();
 
     /// <summary>
-    /// Rebuilds the route plan for the current request using the HybridRoutePlanner. 
-    /// This method is called whenever the request parameters are updated (e.g. origin, destination, unit size) to ensure that the route plan reflects the current state of the request. 
+    /// Rebuilds the route plan for the current request using the HybridRoutePlanner.
+    /// This method is called whenever the request parameters are updated (e.g. origin, destination, unit size) to ensure that the route plan reflects the current state of the request.
     /// </summary>
     /// <returns>True if the route plan was successfully rebuilt; otherwise, false.</returns>
     internal bool RebuildPlan()

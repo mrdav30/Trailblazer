@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// PathRequest.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 using System;
 
@@ -10,8 +17,8 @@ namespace Trailblazer.Pathing;
 /// </summary>
 /// <remarks>
 /// PathRequest provides a common interface and shared logic for specifying origins, destinations, and
-/// traversal options for pathfinding operations. 
-/// Derived classes should implement additional behavior as needed for specific pathfinding scenarios. 
+/// traversal options for pathfinding operations.
+/// Derived classes should implement additional behavior as needed for specific pathfinding scenarios.
 /// Thread safety is not guaranteed; synchronize access if used concurrently.
 /// </remarks>
 public abstract class PathRequest : IPathRequest

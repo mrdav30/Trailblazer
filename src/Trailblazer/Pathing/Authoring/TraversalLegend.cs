@@ -1,3 +1,10 @@
+//=======================================================================
+// TraversalLegend.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using SwiftCollections;
 using System;
 using System.Runtime.CompilerServices;
@@ -44,7 +51,7 @@ public sealed class TraversalLegend
     }
 
     /// <summary>
-    /// Registers a new token mapping in the legend. 
+    /// Registers a new token mapping in the legend.
     /// Tokens are normalized by trimming whitespace, and cannot include the transition marker character '!'.
     /// </summary>
     /// <param name="token">The token to register.</param>

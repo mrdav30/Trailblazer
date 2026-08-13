@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// FlowFieldGuide.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 using GridForge.Spatial;
 using SwiftCollections;
@@ -33,13 +40,13 @@ public class FlowFieldGuide : IGuide
     private TrailblazerWorldContext? _stagedContext;
 
     /// <summary>
-    /// The index of the currently active step within the staged plan. 
+    /// The index of the currently active step within the staged plan.
     /// This allows the guide to track progression through the plan and determine which sub-guide to use for providing directions.
     /// </summary>
     private int _stagedStepIndex;
 
     /// <summary>
-    /// The currently active sub-guide for the active step in the staged plan. 
+    /// The currently active sub-guide for the active step in the staged plan.
     /// This is used to delegate direction requests to the appropriate guide based on the current step type (e.g. flow field or A*).
     /// </summary>
     private IGuide? _activeStageGuide;

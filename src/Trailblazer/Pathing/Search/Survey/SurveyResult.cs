@@ -1,4 +1,11 @@
-﻿using System;
+﻿//=======================================================================
+// SurveyResult.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using System;
 
 namespace Trailblazer.Pathing;
 
@@ -7,8 +14,8 @@ namespace Trailblazer.Pathing;
 /// </summary>
 /// <remarks>
 /// This abstract class defines shared properties and methods used to manage the lifecycle and
-/// state of survey results, such as validity, usage tracking, and chart utilization. 
-/// Derived classes should implement additional functionality specific to their survey result type. 
+/// state of survey results, such as validity, usage tracking, and chart utilization.
+/// Derived classes should implement additional functionality specific to their survey result type.
 /// Thread safety is not guaranteed; callers should ensure appropriate synchronization if instances are accessed concurrently.
 /// </remarks>
 public abstract class SurveyResult : ISurveyResult

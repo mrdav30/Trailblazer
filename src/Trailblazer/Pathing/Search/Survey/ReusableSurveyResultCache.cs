@@ -1,4 +1,11 @@
-﻿using SwiftCollections;
+﻿//=======================================================================
+// ReusableSurveyResultCache.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using SwiftCollections;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -6,7 +13,7 @@ using System.Threading;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Caches and reuses <see cref="ISurveyResult"/> instances to reduce allocation overhead 
+/// Caches and reuses <see cref="ISurveyResult"/> instances to reduce allocation overhead
 /// and improve pathfinding performance.
 /// Supports LRU eviction and optional pooling of released guides.
 /// </summary>
@@ -50,7 +57,7 @@ internal class ReusableSurveyResultCache<T> : IDisposable where T : SurveyResult
     }
 
     /// <summary>
-    /// Attempts to retrieve a valid <see cref="SurveyResult"/> from the cache, 
+    /// Attempts to retrieve a valid <see cref="SurveyResult"/> from the cache,
     /// or creates and initializes a new one if none are reusable.
     /// Evicts the least recently used guide if the cache is at capacity.
     /// </summary>

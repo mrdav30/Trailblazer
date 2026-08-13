@@ -1,3 +1,10 @@
+//=======================================================================
+// ClimbAffordanceSnapshot.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using FixedMathSharp;
 
 namespace Trailblazer.Navigation.Motor;
@@ -97,7 +104,7 @@ public readonly struct ClimbAffordanceSnapshot
     /// Gets the target position for the mantle action, if available.
     /// </summary>
     /// <remarks>
-    /// The target position is determined when a mantle action is in progress. 
+    /// The target position is determined when a mantle action is in progress.
     /// If no mantle is being performed, the value is null.
     /// </remarks>
     public Vector3d? MantleTargetPosition { get; }

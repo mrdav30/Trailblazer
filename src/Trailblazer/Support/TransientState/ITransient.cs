@@ -1,4 +1,11 @@
-﻿namespace Trailblazer.Support;
+﻿//=======================================================================
+// ITransient.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+namespace Trailblazer.Support;
 
 /// <summary>
 /// Defines support for runtime properties marked with <see cref="TransientAttribute"/>.

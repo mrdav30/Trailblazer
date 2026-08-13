@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// SolidVoxelFinder.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 using GridForge.Grids;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -6,7 +13,7 @@ using System.Runtime.CompilerServices;
 namespace Trailblazer.Pathing;
 
 /// <summary>
-/// Utility for resolving valid start and end voxels for pathfinding based on world positions, 
+/// Utility for resolving valid start and end voxels for pathfinding based on world positions,
 /// with optional size consideration and walkability fallback.
 /// </summary>
 public static class SolidVoxelFinder

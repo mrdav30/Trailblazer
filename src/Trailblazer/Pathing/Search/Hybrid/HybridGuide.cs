@@ -1,3 +1,10 @@
+//=======================================================================
+// HybridGuide.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using FixedMathSharp;
 using System;
 
@@ -9,21 +16,21 @@ namespace Trailblazer.Pathing;
 internal sealed class HybridGuide : IWaypointGuide
 {
     /// <summary>
-    /// The active waypoints for this guide, which may be generated from either A* or flow field segments depending on the current stage of the plan. 
+    /// The active waypoints for this guide, which may be generated from either A* or flow field segments depending on the current stage of the plan.
     /// This allows the guide to provide consistent waypoint-based navigation regardless of the underlying pathfinding strategy used for each segment of the route.
     /// </summary>
     public AStarWaypoint[] ActiveWaypoints { get; private set; } = Array.Empty<AStarWaypoint>();
 
     /// <summary>
-    /// Returns the index of the current waypoint being pursued. 
-    /// This is used to track progression through the waypoints of the current stage in the plan, and it allows the guide to determine which waypoint to target for movement directions. 
+    /// Returns the index of the current waypoint being pursued.
+    /// This is used to track progression through the waypoints of the current stage in the plan, and it allows the guide to determine which waypoint to target for movement directions.
     /// The index is updated as the agent reaches each waypoint, and it helps ensure that the guide provides directions toward the correct target as the agent moves along the route.
     /// </summary>
     public int CurrentWaypointIndex { get; private set; }
 
     /// <summary>
-    /// Tracks the last waypoint index that was used to provide a fallback direction. 
-    /// This helps ensure that fallback directions are provided in a forward progression along the path, rather than repeatedly returning the same fallback when the agent is stuck. 
+    /// Tracks the last waypoint index that was used to provide a fallback direction.
+    /// This helps ensure that fallback directions are provided in a forward progression along the path, rather than repeatedly returning the same fallback when the agent is stuck.
     /// By updating this index each time a fallback direction is provided, the guide can offer more dynamic and contextually relevant fallback directions as the agent navigates through the waypoints of the current stage in the plan.
     /// </summary>
     private int _lastTriedIndex;
@@ -132,8 +139,8 @@ internal sealed class HybridGuide : IWaypointGuide
     }
 
     /// <summary>
-    /// Attempts to get the waypoint at the specified index. 
-    /// This can be used to retrieve specific waypoints for debugging, visualization, or advanced navigation logic that may require direct access to the waypoints of the current stage in the plan. 
+    /// Attempts to get the waypoint at the specified index.
+    /// This can be used to retrieve specific waypoints for debugging, visualization, or advanced navigation logic that may require direct access to the waypoints of the current stage in the plan.
     /// By providing a method to access waypoints by index, the guide allows for greater flexibility and control over how the waypoints are utilized within the broader pathing system.
     /// </summary>
     /// <param name="index">The index of the waypoint to retrieve.</param>

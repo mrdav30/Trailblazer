@@ -1,4 +1,11 @@
-﻿using FixedMathSharp;
+﻿//=======================================================================
+// AStarGuide.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
 
@@ -14,7 +21,7 @@ public class AStarGuide : IWaypointGuide
     public AStarSurveyResult TrailMap { get; private set; } = AStarSurveyResult.Empty;
 
     /// <summary>
-    /// Cached smoothed waypoints generated from the original TrailMap waypoints. 
+    /// Cached smoothed waypoints generated from the original TrailMap waypoints.
     /// This allows for optional smoothing (e.g. Catmull-Rom interpolation) without modifying the original path data.
     /// </summary>
     private AStarWaypoint[]? _smoothedWaypoints;
@@ -28,8 +35,8 @@ public class AStarGuide : IWaypointGuide
     public bool UseSplineSmoothing { get; set; }
 
     /// <summary>
-    /// Tracks the last waypoint index that was used to provide a fallback direction. 
-    /// This helps ensure that fallback directions are provided in a forward progression along the path, 
+    /// Tracks the last waypoint index that was used to provide a fallback direction.
+    /// This helps ensure that fallback directions are provided in a forward progression along the path,
     /// rather than repeatedly returning the same fallback when the agent is stuck.
     /// </summary>
     private int _lastTriedIndex;
@@ -157,7 +164,7 @@ public class AStarGuide : IWaypointGuide
     }
 
     /// <summary>
-    /// Attempts to get the waypoint at the specified index. 
+    /// Attempts to get the waypoint at the specified index.
     /// </summary>
     /// <param name="index">The index of the waypoint to retrieve.</param>
     /// <param name="waypoint">The waypoint at the specified index, if found.</param>

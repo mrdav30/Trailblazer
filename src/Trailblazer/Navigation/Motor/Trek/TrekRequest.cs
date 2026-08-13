@@ -1,4 +1,11 @@
-﻿using Chronicler;
+﻿//=======================================================================
+// TrekRequest.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using Chronicler;
 using FixedMathSharp;
 using System;
 using System.Runtime.CompilerServices;
@@ -13,7 +20,7 @@ namespace Trailblazer.Navigation.Motor;
 public struct TrekRequest : IRecordable
 {
     /// <summary>
-    /// The world position from which the scout is requesting movement. 
+    /// The world position from which the scout is requesting movement.
     /// </summary>
     public Vector3d Origin;
 
@@ -85,7 +92,7 @@ public struct TrekRequest : IRecordable
     /// <param name="isRequestingSwim">true to request active swim control while in liquid; otherwise, false.</param>
     /// <param name="isRequestingClimb">true to request a climb action; otherwise, false.</param>
     /// <param name="facingDirection">
-    /// An optional vector specifying the desired facing direction. 
+    /// An optional vector specifying the desired facing direction.
     /// If null or equal to Vector3d.Zero, the facing direction is not changed.</param>
     /// <param name="canAffordJump">true if the jump action can be afforded; otherwise, false. Defaults to true.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -133,7 +140,7 @@ public struct TrekRequest : IRecordable
         FootPosition = footPosition;
         Rotation = rotation;
 
-        // Only update direction if a new value is provided, 
+        // Only update direction if a new value is provided,
         // otherwise preserve the existing direction for this frame.
         if (direction.HasValue)
             Direction = direction.Value;
@@ -177,7 +184,7 @@ public struct TrekRequest : IRecordable
     }
 
     /// <summary>
-    /// Resets only the transient movement data that should be cleared each frame, 
+    /// Resets only the transient movement data that should be cleared each frame,
     /// while preserving any persistent data that may be set externally.
     /// </summary>
     public void ResetTransient()

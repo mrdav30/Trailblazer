@@ -255,6 +255,35 @@ public sealed class NavigationNativeSurfaceEdgeTests
     }
 
     [Fact]
+    public void HexNativePortalTemplate_ShouldMatchDirectCompilationForRawFractionalRadius()
+    {
+        Fixed64 radius = Fixed64.FromRaw(4_294_967_302L);
+        GridConfiguration configuration = new(
+            new Vector3d(-8, 3, -20),
+            new Vector3d(8, 5, -4),
+            topologyKind: GridTopologyKind.HexPrism,
+            topologyMetrics: GridTopologyMetrics.Hex(radius, (Fixed64)2, HexOrientation.PointyTop));
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap map = new NavigationMapBuilder("map", binding).Build();
+        var sourceIndex = new VoxelIndex(1, 0, 1);
+        VoxelIndex offset = HexDirectionUtility.GetOffset(HexDirection.QNegativeRPositive);
+        var targetIndex = new VoxelIndex(
+            sourceIndex.x + offset.x,
+            sourceIndex.y + offset.y,
+            sourceIndex.z + offset.z);
+        binding.TryGetCellPrism(sourceIndex, out GridCellPrism source).Should().BeTrue();
+        binding.TryGetCellPrism(targetIndex, out GridCellPrism target).Should().BeTrue();
+        GridCellGeometry.TryCreateNavigationPortal(source, target, out GridNavigationPortal direct)
+            .Should().BeTrue();
+        map.GetNativePortalTemplate(1)
+            .TryTranslate(source.Center, out GridNavigationPortal translated)
+            .Should().BeTrue();
+
+        direct.CanonicalFacePoint.Z.m_rawValue.Should().Be(-76_235_669_491L);
+        AssertPortal(translated, direct);
+    }
+
+    [Fact]
     public void NodeState_ShouldDeriveExactBakedAndDynamicAnchorsWithoutPerCellAnchorArrays()
     {
         GridConfiguration configuration = new(

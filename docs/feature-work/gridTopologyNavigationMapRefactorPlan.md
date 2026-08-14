@@ -1712,13 +1712,14 @@ Tasks:
   partial seam candidate and restarts from ordinal zero; the cursor retains no
   `Voxel` reference, no chunk mixes generations, and the first chunk may not
   hide an unbounded pair or potential-source-voxel collection pass.
-- Add `GridCellGeometry.TryResolveNavigationPortal(...)` over one exact
-  precomputed manifold. Composition calls it once to produce an
-  agent-independent directed portal record containing fixed canonical source/
-  target anchors, maximum certified radius/height capacity, and lower-bound
-  certification. `TraversalEvaluator` performs direct profile-fit and
-  participant-cell-clearance comparisons only; body-specific geometry never
-  changes legality, anchors, or cost during expansion, and Trailblazer never
+- Add `GridCellGeometry.TryCreateNavigationPortal(...)` over two exact cell
+  prisms. Composition calls it once to produce an agent-independent immutable
+  `GridNavigationPortal` containing canonical face geometry, direction, and
+  exact conservative radius/height capacity. Its allocation-free profile
+  resolver performs only direct capacity comparisons and checked fixed-point
+  anchor arithmetic. A horizontal step's lower-cell foot anchor necessarily
+  shifts by body height; no body size triggers contact discovery, convex
+  clipping, iteration, or live-grid access during expansion. Trailblazer never
   duplicates GridForge's prism/polygon logic.
 - Materialize sorted explicit connections and only exact positive-area
   cross-grid portals through that bounded composition cursor. Point, edge,

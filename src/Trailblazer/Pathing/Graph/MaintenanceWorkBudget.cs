@@ -21,6 +21,7 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
         int maxBaselineAddresses,
         int maxOverlaySlots,
         int maxComponentNodes,
+        int maxSeamCandidateProbes,
         int maxExplicitEdges,
         int maxDependencyEntries)
     {
@@ -41,6 +42,10 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
             maxComponentNodes,
             nameof(maxComponentNodes));
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            maxSeamCandidateProbes <= 0,
+            maxSeamCandidateProbes,
+            nameof(maxSeamCandidateProbes));
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
             maxExplicitEdges <= 0,
             maxExplicitEdges,
             nameof(maxExplicitEdges));
@@ -53,6 +58,7 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
         MaxBaselineAddresses = maxBaselineAddresses;
         MaxOverlaySlots = maxOverlaySlots;
         MaxComponentNodes = maxComponentNodes;
+        MaxSeamCandidateProbes = maxSeamCandidateProbes;
         MaxExplicitEdges = maxExplicitEdges;
         MaxDependencyEntries = maxDependencyEntries;
     }
@@ -69,7 +75,10 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
     /// <summary>Gets the maximum structural-component nodes processed.</summary>
     public int MaxComponentNodes { get; }
 
-    /// <summary>Gets the maximum explicit, seam, or transition edges processed.</summary>
+    /// <summary>Gets the maximum automatic-seam pair, source-address, and target-address probes.</summary>
+    public int MaxSeamCandidateProbes { get; }
+
+    /// <summary>Gets the maximum accepted explicit, seam, or transition edges processed.</summary>
     public int MaxExplicitEdges { get; }
 
     /// <summary>Gets the maximum dependency-index entries processed.</summary>
@@ -81,6 +90,7 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
         && MaxBaselineAddresses == other.MaxBaselineAddresses
         && MaxOverlaySlots == other.MaxOverlaySlots
         && MaxComponentNodes == other.MaxComponentNodes
+        && MaxSeamCandidateProbes == other.MaxSeamCandidateProbes
         && MaxExplicitEdges == other.MaxExplicitEdges
         && MaxDependencyEntries == other.MaxDependencyEntries;
 
@@ -93,6 +103,7 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
         int hash = SwiftHashTools.CombineHashCodes(MaxConsumedEnvelopes, MaxBaselineAddresses);
         hash = SwiftHashTools.CombineHashCodes(hash, MaxOverlaySlots);
         hash = SwiftHashTools.CombineHashCodes(hash, MaxComponentNodes);
+        hash = SwiftHashTools.CombineHashCodes(hash, MaxSeamCandidateProbes);
         hash = SwiftHashTools.CombineHashCodes(hash, MaxExplicitEdges);
         return SwiftHashTools.CombineHashCodes(hash, MaxDependencyEntries);
     }

@@ -33,8 +33,10 @@ internal sealed unsafe class NavigationGridChangeIngress
     private int _freeHead;
     private int _count;
     private int _scopeCount;
+    private int _topologyLifecycleCount;
     private bool _scopeTrackingAll;
     private bool _overflowed;
+    private bool _overflowedTopologyLifecycle;
     private bool _disposed;
 
     internal NavigationGridChangeIngress(int capacity, int maximumScopes = 16)
@@ -89,11 +91,16 @@ internal sealed unsafe class NavigationGridChangeIngress
             if (_overflowed)
             {
                 TrackScope(eventInfo);
+                _overflowedTopologyLifecycle |= IsTopologyLifecycle(eventInfo);
                 return;
             }
             if (EventKey.TryCreate(eventInfo, out EventKey key)
                 && _coalescedIndexes.TryGetValue(key, out int existing))
             {
+                bool priorTopologyLifecycle = IsTopologyLifecycle(_events[existing]);
+                bool nextTopologyLifecycle = IsTopologyLifecycle(eventInfo);
+                if (priorTopologyLifecycle != nextTopologyLifecycle)
+                    _topologyLifecycleCount += nextTopologyLifecycle ? 1 : -1;
                 Unlink(existing);
                 _events[existing] = eventInfo;
                 Append(existing);
@@ -103,6 +110,7 @@ internal sealed unsafe class NavigationGridChangeIngress
             {
                 _overflowed = true;
                 TrackScope(eventInfo);
+                _overflowedTopologyLifecycle = IsTopologyLifecycle(eventInfo);
                 return;
             }
             int insertion = _freeHead;
@@ -110,6 +118,8 @@ internal sealed unsafe class NavigationGridChangeIngress
             _events[insertion] = eventInfo;
             Append(insertion);
             _count++;
+            if (IsTopologyLifecycle(eventInfo))
+                _topologyLifecycleCount++;
             if (key.IsValid)
                 _coalescedIndexes[key] = insertion;
             TrackScope(eventInfo);
@@ -120,12 +130,26 @@ internal sealed unsafe class NavigationGridChangeIngress
         Span<GridEventInfo> destination,
         Span<NavigationGridChangeScope> blockedScopes,
         out int blockedScopeCount,
-        out bool blockAll)
+        out bool blockAll) => DetachInto(
+            destination,
+            blockedScopes,
+            out blockedScopeCount,
+            out blockAll,
+            out _);
+
+    internal int DetachInto(
+        Span<GridEventInfo> destination,
+        Span<NavigationGridChangeScope> blockedScopes,
+        out int blockedScopeCount,
+        out bool blockAll,
+        out bool topologyLifecycleCoverageLost)
     {
         lock (_sync)
         {
             if (_overflowed)
             {
+                topologyLifecycleCoverageLost = _topologyLifecycleCount != 0
+                    || _overflowedTopologyLifecycle;
                 blockedScopeCount = CopyBlockedScopes(blockedScopes, out blockAll);
                 _coalescedIndexes.Clear();
                 ResetSlots();
@@ -146,11 +170,14 @@ internal sealed unsafe class NavigationGridChangeIngress
                     _coalescedIndexes.Remove(key);
                 }
                 UntrackScope(eventInfo);
+                if (IsTopologyLifecycle(eventInfo))
+                    _topologyLifecycleCount--;
                 _next[slot] = _freeHead;
                 _previous[slot] = -1;
                 _freeHead = slot;
             }
             _count -= count;
+            topologyLifecycleCoverageLost = false;
             blockAll = false;
             blockedScopeCount = _count > 0
                 ? CopyBlockedScopes(blockedScopes, out blockAll)
@@ -180,7 +207,10 @@ internal sealed unsafe class NavigationGridChangeIngress
             if (_overflowed || !IsOrderedBeforeCurrent(prefix))
             {
                 for (int i = 0; i < prefix.Length; i++)
+                {
                     TrackScope(prefix[i]);
+                    _overflowedTopologyLifecycle |= IsTopologyLifecycle(prefix[i]);
+                }
                 _overflowed = true;
                 return;
             }
@@ -197,7 +227,10 @@ internal sealed unsafe class NavigationGridChangeIngress
                 if (_events[existing].ChangeSequence < prefix[i].ChangeSequence)
                 {
                     for (int scope = 0; scope < prefix.Length; scope++)
+                    {
                         TrackScope(prefix[scope]);
+                        _overflowedTopologyLifecycle |= IsTopologyLifecycle(prefix[scope]);
+                    }
                     _overflowed = true;
                     return;
                 }
@@ -205,7 +238,10 @@ internal sealed unsafe class NavigationGridChangeIngress
             if (insertionCount > _events.Length - _count)
             {
                 for (int i = 0; i < prefix.Length; i++)
+                {
                     TrackScope(prefix[i]);
+                    _overflowedTopologyLifecycle |= IsTopologyLifecycle(prefix[i]);
+                }
                 _overflowed = true;
                 return;
             }
@@ -221,6 +257,8 @@ internal sealed unsafe class NavigationGridChangeIngress
                 _events[insertion] = eventInfo;
                 Prepend(insertion);
                 _count++;
+                if (IsTopologyLifecycle(eventInfo))
+                    _topologyLifecycleCount++;
                 if (keyed)
                     _coalescedIndexes[key] = insertion;
                 TrackScope(eventInfo);
@@ -308,8 +346,10 @@ internal sealed unsafe class NavigationGridChangeIngress
         _tail = -1;
         _count = 0;
         _scopeCount = 0;
+        _topologyLifecycleCount = 0;
         _scopeTrackingAll = false;
         _overflowed = false;
+        _overflowedTopologyLifecycle = false;
         _freeHead = _events.Length == 0 ? -1 : 0;
         for (int i = 0; i < _events.Length; i++)
         {
@@ -317,6 +357,11 @@ internal sealed unsafe class NavigationGridChangeIngress
             _next[i] = i + 1 < _events.Length ? i + 1 : -1;
         }
     }
+
+    private static bool IsTopologyLifecycle(in GridEventInfo eventInfo) =>
+        eventInfo.ChangeKind == GridEventKind.GridAdded
+        || eventInfo.ChangeKind == GridEventKind.GridRemoved
+        || eventInfo.ChangeKind == GridEventKind.WorldReset;
 
     private static int GetIndexCapacity(int capacity)
     {

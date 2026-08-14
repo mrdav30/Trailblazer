@@ -9,39 +9,49 @@ using System;
 
 namespace Trailblazer.Pathing;
 
-/// <summary>Merges native and compiled explicit surface edges in durable canonical order.</summary>
+/// <summary>Merges native, explicit, and automatic-seam edges in durable canonical order.</summary>
 internal ref struct NavigationSurfaceEdgeEnumerator
 {
     private readonly NavigationWorldGraph? _graph;
     private readonly NavigationCellAddress _origin;
     private NavigationPagedSequence<NavigationConnectionOwnerKey>.Enumerator _incident;
     private NavigationNativeSurfaceEdgeEnumerator _native;
+    private NavigationAutomaticSeamIndex.EndpointEnumerator _seam;
     private readonly bool _incoming;
     private readonly bool _includeNative;
+    private readonly bool _includeAutomaticSeams;
     private bool _nativeComplete;
     private bool _hasNative;
     private bool _hasExplicit;
+    private bool _hasSeam;
     private NavigationGraphEdge _nativeEdge;
     private NavigationGraphEdge _explicitEdge;
+    private NavigationGraphEdge _seamEdge;
     private NavigationCellAddress _nativeEndpoint;
     private NavigationCellAddress _explicitEndpoint;
+    private NavigationCellAddress _seamEndpoint;
 
     internal NavigationSurfaceEdgeEnumerator(
         NavigationWorldGraph graph,
         NavigationNodeRef origin,
         bool incoming,
-        bool includeNative)
+        bool includeNative,
+        bool includeAutomaticSeams)
     {
         _graph = graph;
         _incoming = incoming;
         _includeNative = includeNative;
+        _includeAutomaticSeams = includeAutomaticSeams;
         _nativeComplete = !includeNative;
         _hasNative = false;
         _hasExplicit = false;
+        _hasSeam = false;
         _nativeEdge = default;
         _explicitEdge = default;
+        _seamEdge = default;
         _nativeEndpoint = default;
         _explicitEndpoint = default;
+        _seamEndpoint = default;
         Current = default;
         if (!graph.TryGetNodeAddress(origin, out _origin)
             || !graph.TryGetNodeState(origin, out NavigationNodeState state)
@@ -51,11 +61,15 @@ internal ref struct NavigationSurfaceEdgeEnumerator
             _origin = default;
             _incident = default;
             _native = default;
+            _seam = default;
             return;
         }
         NavigationPagedSequence<NavigationConnectionOwnerKey> endpoints =
             graph.ExplicitConnections.GetEndpointOwnerRow(_origin);
         _incident = endpoints.GetEnumerator();
+        _seam = includeAutomaticSeams
+            ? graph.AutomaticSeams.GetActiveEndpointEnumerator(_origin)
+            : default;
         _native = includeNative ? graph.EnumerateNativeSurfaceEdges(origin) : default;
     }
 
@@ -67,25 +81,51 @@ internal ref struct NavigationSurfaceEdgeEnumerator
             return false;
         FillNative();
         FillExplicit();
-        if (!_hasNative && !_hasExplicit)
+        FillSeam();
+        if (!_hasNative && !_hasExplicit && !_hasSeam)
         {
             Current = default;
             return false;
         }
-        if (!_hasExplicit
-            || (_hasNative
-                && Compare(
-                    _nativeEdge,
-                    _nativeEndpoint,
-                    _explicitEdge,
-                    _explicitEndpoint) <= 0))
+        NavigationGraphEdge selected = default;
+        NavigationCellAddress selectedEndpoint = default;
+        int selectedKind = -1;
+        if (_hasNative)
         {
-            Current = _nativeEdge;
-            _hasNative = false;
-            return true;
+            selected = _nativeEdge;
+            selectedEndpoint = _nativeEndpoint;
+            selectedKind = 0;
         }
-        Current = _explicitEdge;
-        _hasExplicit = false;
+        if (_hasExplicit
+            && (selectedKind < 0
+                || Compare(
+                    _explicitEdge,
+                    _explicitEndpoint,
+                    selected,
+                    selectedEndpoint) < 0))
+        {
+            selected = _explicitEdge;
+            selectedEndpoint = _explicitEndpoint;
+            selectedKind = 1;
+        }
+        if (_hasSeam
+            && (selectedKind < 0
+                || Compare(
+                    _seamEdge,
+                    _seamEndpoint,
+                    selected,
+                    selectedEndpoint) < 0))
+        {
+            selected = _seamEdge;
+            selectedKind = 2;
+        }
+        Current = selected;
+        if (selectedKind == 0)
+            _hasNative = false;
+        else if (selectedKind == 1)
+            _hasExplicit = false;
+        else
+            _hasSeam = false;
         return true;
     }
 
@@ -139,6 +179,27 @@ internal ref struct NavigationSurfaceEdgeEnumerator
         }
     }
 
+    private void FillSeam()
+    {
+        if (_hasSeam || !_includeAutomaticSeams)
+            return;
+        while (_seam.MoveNext())
+        {
+            NavigationAutomaticSeamRef seam = _seam.Current;
+            NavigationCellAddress endpoint = seam.Destination;
+            if (!_graph!.TryGetNodeRef(endpoint, out NavigationNodeRef target)
+                || !_graph.TryGetNodeState(target, out NavigationNodeState state)
+                || !state.IsPresent)
+            {
+                continue;
+            }
+            _seamEndpoint = endpoint;
+            _seamEdge = new NavigationGraphEdge(target, seam);
+            _hasSeam = true;
+            return;
+        }
+    }
+
     private static int Compare(
         in NavigationGraphEdge left,
         NavigationCellAddress leftEndpoint,
@@ -148,11 +209,13 @@ internal ref struct NavigationSurfaceEdgeEnumerator
         int comparison = leftEndpoint.CompareTo(rightEndpoint);
         if (comparison != 0)
             return comparison;
-        comparison = left.Kind.CompareTo(right.Kind);
+        comparison = (int)left.Kind - (int)right.Kind;
         if (comparison != 0)
             return comparison;
         if (left.Kind == NavigationGraphEdgeKind.Native)
             return left.NativeDirectionOrdinal.CompareTo(right.NativeDirectionOrdinal);
+        if (left.Kind == NavigationGraphEdgeKind.Seam)
+            return 0;
         comparison = string.CompareOrdinal(
             left.ExplicitConnection.Owner.ConnectionId,
             right.ExplicitConnection.Owner.ConnectionId);

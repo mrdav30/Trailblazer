@@ -1683,8 +1683,8 @@ future-facing abstraction.
 | Checkpoint | Scope | Status |
 | --- | --- | --- |
 | 3/4A | Freeze status/lease, edge/evaluator/search, GridForge seam, and deletion contracts | Complete |
-| 3/4B | Rectangular/hex surface native edges, compiled explicit connections, exact seams, canonical ordering | In progress - native and explicit edges complete; exact automatic seams pending |
-| 3/4C | Shared allocation-free surface evaluation, conservative component/page dependencies, maintenance integration | In progress - native/explicit evaluation and component/page maintenance complete; seam/search integration pending |
+| 3/4B | Rectangular/hex surface native edges, compiled explicit connections, exact seams, canonical ordering | Complete |
+| 3/4C | Shared allocation-free surface evaluation, conservative component/page dependencies, maintenance integration | Complete for the surface graph; bounded endpoint admission/search cutover remains in 3/4D |
 | 3/4D | Bounded endpoint resolution, real A* admission, concrete workspace/cache, and dependency capture | Pending |
 | 3/4E | Internal unreachable fixed-point weighted surface A* and immutable result/guide lifecycle | Pending |
 | 3/4F | Pull guided profile/schema forward, atomically port callers, switch authority, and delete legacy A* | Pending |

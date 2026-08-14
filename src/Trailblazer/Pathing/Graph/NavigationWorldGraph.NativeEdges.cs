@@ -100,14 +100,20 @@ internal sealed partial class NavigationWorldGraph
     }
 
     internal NavigationSurfaceEdgeEnumerator EnumerateSurfaceEdges(
-        NavigationNodeRef source) => new(this, source, incoming: false, includeNative: true);
+        NavigationNodeRef source) => new(
+            this,
+            source,
+            incoming: false,
+            includeNative: true,
+            includeAutomaticSeams: true);
 
     internal NavigationSurfaceEdgeEnumerator EnumerateIncomingExplicitSurfaceEdges(
         NavigationNodeRef destination) => new(
             this,
             destination,
             incoming: true,
-            includeNative: false);
+            includeNative: false,
+            includeAutomaticSeams: false);
 
     private bool TryGetNodeLocation(
         NavigationNodeRef node,

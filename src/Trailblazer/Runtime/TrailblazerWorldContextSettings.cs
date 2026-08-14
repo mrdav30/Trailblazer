@@ -196,6 +196,7 @@ public sealed class TrailblazerWorldContextSettings
             maxBaselineAddresses: 65_536,
             maxOverlaySlots: 16_384,
             maxComponentNodes: 65_536,
+            maxSeamCandidateProbes: 65_536,
             maxExplicitEdges: 65_536,
             maxDependencyEntries: 65_536),
         maxIngressEntries: 16_384,

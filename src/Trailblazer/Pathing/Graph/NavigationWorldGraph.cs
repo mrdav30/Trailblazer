@@ -9,6 +9,7 @@ using System;
 using System.Threading;
 using GridForge.Configuration;
 using GridForge.Grids;
+using GridForge.Grids.Topology;
 using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
@@ -23,6 +24,7 @@ internal sealed partial class NavigationWorldGraph
     private readonly PersistentStringMap<bool> _closedStructuralComponents;
     private readonly bool _allStructuralComponentsClosed;
     private readonly NavigationExplicitConnectionIndex _explicitConnections;
+    private readonly NavigationAutomaticSeamIndex _automaticSeams;
     private int _leaseCount;
 
     internal NavigationWorldGraph(
@@ -31,13 +33,15 @@ internal sealed partial class NavigationWorldGraph
         NavigationAreaCatalog? areaCatalog = null,
         PersistentGridConfigurationMap<string>? mapIndex = null,
         NavigationCompositionIndex? composition = null,
-        NavigationExplicitConnectionIndex? explicitConnections = null)
+        NavigationExplicitConnectionIndex? explicitConnections = null,
+        NavigationAutomaticSeamIndex? automaticSeams = null)
     {
         GraphVersion = graphVersion;
         _instances = NavigationInstanceDirectory.Create(instances);
         AreaCatalog = areaCatalog ?? NavigationAreaCatalog.Empty;
         _mapIndex = mapIndex ?? BuildMapIndex(instances);
         _explicitConnections = explicitConnections ?? NavigationExplicitConnectionIndex.Empty;
+        _automaticSeams = automaticSeams ?? NavigationAutomaticSeamIndex.Empty;
         Composition = composition ?? NavigationCompositionIndex.Empty;
         _closedStructuralComponents = PersistentStringMap<bool>.Empty;
         _allStructuralComponentsClosed = false;
@@ -48,12 +52,14 @@ internal sealed partial class NavigationWorldGraph
             + _closedStructuralComponents.RetainedBytes
             + Composition.RetainedBytes
             + _explicitConnections.RetainedBytes
+            + _automaticSeams.RetainedBytes
             + AreaCatalog.RetainedBytes);
         PersistentPageCount = _instances.PersistentPageCount
             + 1 + _mapIndex.Count
             + _closedStructuralComponents.PersistentNodeCount
             + Composition.PersistentPageCount
             + _explicitConnections.PersistentPageCount
+            + _automaticSeams.PersistentPageCount
             + AreaCatalog.PersistentPageCount;
         for (int i = 0; i < instances.Length; i++)
         {
@@ -70,6 +76,7 @@ internal sealed partial class NavigationWorldGraph
         PersistentGridConfigurationMap<string> mapIndex,
         NavigationCompositionIndex composition,
         NavigationExplicitConnectionIndex explicitConnections,
+        NavigationAutomaticSeamIndex automaticSeams,
         PersistentStringMap<bool> closedStructuralComponents,
         bool allStructuralComponentsClosed,
         long retainedBytes,
@@ -81,6 +88,7 @@ internal sealed partial class NavigationWorldGraph
         _mapIndex = mapIndex;
         Composition = composition;
         _explicitConnections = explicitConnections;
+        _automaticSeams = automaticSeams;
         _closedStructuralComponents = closedStructuralComponents;
         _allStructuralComponentsClosed = allStructuralComponentsClosed;
         RetainedBytes = retainedBytes;
@@ -99,6 +107,29 @@ internal sealed partial class NavigationWorldGraph
     internal NavigationCompositionIndex Composition { get; }
 
     internal NavigationExplicitConnectionIndex ExplicitConnections => _explicitConnections;
+
+    internal NavigationAutomaticSeamIndex AutomaticSeams => _automaticSeams;
+
+    internal bool TryGetMapId(GridConfigurationKey key, out string mapId) =>
+        _mapIndex.TryGetValue(key, out mapId!);
+
+    internal bool TryGetSeamPrism(
+        NavigationCellAddress address,
+        out GridCellPrism prism)
+    {
+        if (_instances.TryGet(address.MapId, out NavigationMapInstance instance)
+            && instance.Map.GridBinding.TryGetCellPrism(address.Index, out prism))
+        {
+            return true;
+        }
+        prism = default;
+        return false;
+    }
+
+    internal bool HasEffectiveCell(NavigationCellAddress address) =>
+        _instances.TryGet(address.MapId, out NavigationMapInstance instance)
+        && instance.TryGetSlot(address.Index, out int slot)
+        && instance.TryGetEffectiveCell(slot, out _);
 
     internal int MapCount => _instances.Count;
 
@@ -159,6 +190,7 @@ internal sealed partial class NavigationWorldGraph
             source.Composition,
             _instances,
             _explicitConnections,
+            _automaticSeams,
             changedMapIds,
             compositionVersion,
             componentVersion,
@@ -183,10 +215,30 @@ internal sealed partial class NavigationWorldGraph
             _mapIndex,
             composition,
             _explicitConnections,
+            _automaticSeams,
             openComponents,
             false,
             bytes,
             pages);
+    }
+
+    internal NavigationWorldGraph WithAutomaticSeams(NavigationAutomaticSeamIndex seams)
+    {
+        if (ReferenceEquals(seams, _automaticSeams))
+            return this;
+        return new NavigationWorldGraph(
+            GraphVersion,
+            _instances,
+            AreaCatalog,
+            _mapIndex,
+            Composition,
+            _explicitConnections,
+            seams,
+            _closedStructuralComponents,
+            _allStructuralComponentsClosed,
+            checked(RetainedBytes - _automaticSeams.RetainedBytes + seams.RetainedBytes),
+            PersistentPageCount - _automaticSeams.PersistentPageCount
+                + seams.PersistentPageCount);
     }
 
     internal static bool HasStructuralChanges(
@@ -234,6 +286,7 @@ internal sealed partial class NavigationWorldGraph
             _mapIndex,
             Composition,
             _explicitConnections,
+            _automaticSeams,
             closed,
             closeAllStructuralComponents,
             checked(RetainedBytes - _closedStructuralComponents.RetainedBytes + closed.RetainedBytes),
@@ -256,6 +309,7 @@ internal sealed partial class NavigationWorldGraph
             _mapIndex,
             Composition,
             _explicitConnections,
+            _automaticSeams,
             open,
             false,
             checked(RetainedBytes - _closedStructuralComponents.RetainedBytes + open.RetainedBytes),
@@ -620,6 +674,7 @@ internal sealed partial class NavigationWorldGraph
                 _mapIndex,
                 composition,
                 _explicitConnections,
+                _automaticSeams,
                 _closedStructuralComponents,
                 _allStructuralComponentsClosed,
                 retainedBytes,
@@ -641,6 +696,7 @@ internal sealed partial class NavigationWorldGraph
             _mapIndex,
             Composition,
             _explicitConnections,
+            _automaticSeams,
             _closedStructuralComponents,
             _allStructuralComponentsClosed,
             retainedBytes,

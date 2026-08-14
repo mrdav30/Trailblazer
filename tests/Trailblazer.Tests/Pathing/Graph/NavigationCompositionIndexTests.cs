@@ -94,6 +94,34 @@ public sealed class NavigationCompositionIndexTests
     }
 
     [Fact]
+    public void UpdateWork_RemovingLastExplicitBridge_ShouldSplitComponentsWithoutAutomaticSeams()
+    {
+        using var world = new GridWorld();
+        NavigationInstanceDirectory directory = NavigationInstanceDirectory.Create(new[]
+        {
+            CreateInstance(world, CreateMap("A"), null, 1),
+            CreateInstance(world, CreateMap("B"), null, 1)
+        });
+        NavigationExplicitConnectionIndex sourceEdges =
+            NavigationExplicitConnectionIndex.Empty.SetOwner(
+                CreateExplicitRecord("A", "B"),
+                out _);
+        NavigationCompositionIndex source = BuildComposition(directory, 1, sourceEdges);
+
+        source.GetComponentRecord("A").Should().BeSameAs(source.GetComponentRecord("B"));
+
+        NavigationCompositionIndex result = UpdateComposition(
+            source,
+            directory,
+            NavigationExplicitConnectionIndex.Empty,
+            new[] { "A", "B" },
+            2);
+
+        result.GetComponentRecord("A").Should().NotBeSameAs(result.GetComponentRecord("B"));
+        result.ComponentCount.Should().Be(2);
+    }
+
+    [Fact]
     public void UpdateWork_ShouldNotScanDisconnectedMapsOutsideTheAffectedDomain()
     {
         using var world = new GridWorld();
@@ -123,7 +151,7 @@ public sealed class NavigationCompositionIndexTests
             CreateChangeRoot(new[] { "map-000" }),
             2,
             new NavigationCompositionWorkspace(instances.Length));
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 8, 1, 1, 8));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 8, 1, 1, 1, 8));
 
         for (int frame = 0; frame < 32 && !work.IsComplete; frame++)
         {
@@ -324,6 +352,7 @@ public sealed class NavigationCompositionIndexTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             maxDependencyEntries: 1));
         long exactPeak = work.RetainedBytes;
@@ -412,6 +441,7 @@ public sealed class NavigationCompositionIndexTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             maxComponentNodes: 1,
+            maxSeamCandidateProbes: DestinationCount,
             maxExplicitEdges: DestinationCount,
             maxDependencyEntries: 1));
         int initialPages = work.PersistentPageCount;
@@ -467,6 +497,7 @@ public sealed class NavigationCompositionIndexTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             maxDependencyEntries: 1));
         int dependencyWork = 0;

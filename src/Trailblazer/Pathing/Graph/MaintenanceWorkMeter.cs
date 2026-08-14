@@ -15,6 +15,7 @@ internal sealed class MaintenanceWorkMeter
     private int _baselineAddresses;
     private int _overlaySlots;
     private int _componentNodes;
+    private int _seamCandidateProbes;
     private int _explicitEdges;
     private int _dependencyEntries;
 
@@ -24,6 +25,7 @@ internal sealed class MaintenanceWorkMeter
     internal int BaselineAddresses => _baselineAddresses;
     internal int OverlaySlots => _overlaySlots;
     internal int ComponentNodes => _componentNodes;
+    internal int SeamCandidateProbes => _seamCandidateProbes;
     internal int ExplicitEdges => _explicitEdges;
     internal int DependencyEntries => _dependencyEntries;
 
@@ -31,6 +33,8 @@ internal sealed class MaintenanceWorkMeter
     internal int RemainingBaselineAddresses => _budget.MaxBaselineAddresses - BaselineAddresses;
     internal int RemainingOverlaySlots => _budget.MaxOverlaySlots - OverlaySlots;
     internal int RemainingComponentNodes => _budget.MaxComponentNodes - ComponentNodes;
+    internal int RemainingSeamCandidateProbes =>
+        _budget.MaxSeamCandidateProbes - SeamCandidateProbes;
     internal int RemainingExplicitEdges => _budget.MaxExplicitEdges - ExplicitEdges;
     internal int RemainingDependencyEntries => _budget.MaxDependencyEntries - DependencyEntries;
 
@@ -40,6 +44,7 @@ internal sealed class MaintenanceWorkMeter
         _baselineAddresses = 0;
         _overlaySlots = 0;
         _componentNodes = 0;
+        _seamCandidateProbes = 0;
         _explicitEdges = 0;
         _dependencyEntries = 0;
     }
@@ -55,6 +60,9 @@ internal sealed class MaintenanceWorkMeter
 
     internal bool TryConsumeComponentNodes(int count) =>
         TryConsume(ref _componentNodes, count, _budget.MaxComponentNodes);
+
+    internal bool TryConsumeSeamCandidateProbes(int count) =>
+        TryConsume(ref _seamCandidateProbes, count, _budget.MaxSeamCandidateProbes);
 
     internal bool TryConsumeExplicitEdges(int count) =>
         TryConsume(ref _explicitEdges, count, _budget.MaxExplicitEdges);

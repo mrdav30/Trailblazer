@@ -66,9 +66,12 @@ internal readonly struct TraversalEvaluator
         in NavigationGraphEdge edge,
         out Fixed64 cost)
     {
-        return edge.Kind == NavigationGraphEdgeKind.Explicit
-            ? EvaluateExplicitEdge(source, edge, out cost)
-            : EvaluateNative(source, edge, out cost);
+        return edge.Kind switch
+        {
+            NavigationGraphEdgeKind.Explicit => EvaluateExplicitEdge(source, edge, out cost),
+            NavigationGraphEdgeKind.Seam => EvaluateAutomaticSeam(source, edge, out cost),
+            _ => EvaluateNative(source, edge, out cost)
+        };
     }
 
     private TraversalEvaluationStatus EvaluateNative(
@@ -185,6 +188,69 @@ internal readonly struct TraversalEvaluator
             || !Fixed64.TryAdd(sourceDistance, record.CorridorCost, out Fixed64 total)
             || !Fixed64.TryAdd(total, targetDistance, out total)
             || !Fixed64.TryAdd(total, connection.AdditionalCost, out total)
+            || !Fixed64.TryAdd(total, targetState.Cell.EnterCost, out total)
+            || !Fixed64.TryAdd(total, targetRule.AdditionalEnterCost, out total))
+        {
+            return TraversalEvaluationStatus.CostOverflow;
+        }
+
+        cost = total;
+        return TraversalEvaluationStatus.Passable;
+    }
+
+    private TraversalEvaluationStatus EvaluateAutomaticSeam(
+        NavigationNodeRef source,
+        in NavigationGraphEdge edge,
+        out Fixed64 cost)
+    {
+        cost = Fixed64.Zero;
+        NavigationAutomaticSeamRef seam = edge.AutomaticSeam;
+        if (edge.Kind != NavigationGraphEdgeKind.Seam
+            || seam.Pair == null
+            || !_graph.AutomaticSeams.IsActive(seam)
+            || !_graph.TryGetNodeAddress(source, out NavigationCellAddress sourceAddress)
+            || !sourceAddress.Equals(seam.Source)
+            || !_graph.TryGetNodeAddress(edge.Target, out NavigationCellAddress targetAddress)
+            || !targetAddress.Equals(seam.Destination)
+            || !TryGetPassableNode(source, out NavigationNodeState sourceState, out _)
+            || !TryGetPassableNode(
+                edge.Target,
+                out NavigationNodeState targetState,
+                out NavigationAreaRule targetRule))
+        {
+            return TraversalEvaluationStatus.Impassable;
+        }
+
+        KinematicBodyShape shape = _profile.Shape;
+        GridNavigationPortal portal = seam.Portal;
+        if (!portal.IsValid
+            || shape.Radius > portal.MaximumHorizontalRadius
+            || shape.Height > portal.MaximumBodyHeight)
+        {
+            return TraversalEvaluationStatus.Impassable;
+        }
+        if (!portal.TryResolveProfile(
+                shape.Radius,
+                shape.Height,
+                out Vector3d firstFoot,
+                out Vector3d secondFoot))
+        {
+            return TraversalEvaluationStatus.CostOverflow;
+        }
+        Vector3d sourcePortalFoot = seam.IsReverse ? secondFoot : firstFoot;
+        Vector3d targetPortalFoot = seam.IsReverse ? firstFoot : secondFoot;
+        TraversalEvaluationStatus vertical = EvaluateVerticalDelta(sourceState, targetState);
+        if (vertical != TraversalEvaluationStatus.Passable)
+            return vertical;
+        if (!Vector3d.TryGetDistance(
+                sourceState.FootAnchor,
+                sourcePortalFoot,
+                out Fixed64 sourceDistance)
+            || !Vector3d.TryGetDistance(
+                targetPortalFoot,
+                targetState.FootAnchor,
+                out Fixed64 targetDistance)
+            || !Fixed64.TryAdd(sourceDistance, targetDistance, out Fixed64 total)
             || !Fixed64.TryAdd(total, targetState.Cell.EnterCost, out total)
             || !Fixed64.TryAdd(total, targetRule.AdditionalEnterCost, out total))
         {

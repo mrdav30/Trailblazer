@@ -137,6 +137,45 @@ internal sealed class NavigationExplicitConnectionIndex
         return map.GetValueAt(ordinal);
     }
 
+    internal int GetActiveIncidentEdgeCount(string mapId)
+    {
+        int count = 0;
+        if (_owners.TryGetValue(
+                mapId,
+                out PersistentStringMap<NavigationExplicitConnectionRecord> owners))
+        {
+            for (int i = 0; i < owners.Count; i++)
+            {
+                if (owners.GetValueAt(i).IsActive)
+                    count = checked(count + 1);
+            }
+        }
+        if (!_endpoints.TryGetValue(
+                mapId,
+                out PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>> addresses))
+        {
+            return count;
+        }
+        for (int i = 0; i < addresses.Count; i++)
+        {
+            NavigationPagedSequence<NavigationConnectionOwnerKey>.Enumerator endpoints =
+                addresses.GetValueAt(i).GetEnumerator();
+            while (endpoints.MoveNext())
+            {
+                NavigationConnectionOwnerKey owner = endpoints.Current;
+                if (string.Equals(owner.MapId, mapId, StringComparison.Ordinal)
+                    || !TryGet(owner, out NavigationExplicitConnectionRecord record)
+                    || !record.IsActive
+                    || !string.Equals(record.Destination.MapId, mapId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                count = checked(count + 1);
+            }
+        }
+        return count;
+    }
+
     internal NavigationPagedSequence<NavigationConnectionOwnerKey>.Enumerator
         GetIncidentOwnerEnumerator(NavigationCellAddress address) =>
             GetIncidentOwnerRow(address).GetEnumerator();

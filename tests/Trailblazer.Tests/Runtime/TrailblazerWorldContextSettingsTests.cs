@@ -32,6 +32,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaintenanceBudget.MaxBaselineAddresses.Should().Be(65_536);
         settings.MaintenanceBudget.MaxOverlaySlots.Should().Be(16_384);
         settings.MaintenanceBudget.MaxComponentNodes.Should().Be(65_536);
+        settings.MaintenanceBudget.MaxSeamCandidateProbes.Should().Be(65_536);
         settings.MaintenanceBudget.MaxExplicitEdges.Should().Be(65_536);
         settings.MaintenanceBudget.MaxDependencyEntries.Should().Be(65_536);
 
@@ -54,7 +55,7 @@ public sealed class TrailblazerWorldContextSettingsTests
     public void Constructor_ShouldRetainExplicitLimits()
     {
         NavigationOperationLimits operationLimits = CreateOperationLimits();
-        var maintenanceBudget = new MaintenanceWorkBudget(1, 32, 3, 4, 7, 21);
+        var maintenanceBudget = new MaintenanceWorkBudget(1, 32, 3, 4, 5, 7, 21);
 
         var settings = new TrailblazerWorldContextSettings(
             operationLimits,
@@ -79,10 +80,12 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxIngressEntries.Should().Be(10);
         settings.MaxIngressBytes.Should().Be(256);
         settings.MaxActiveSnapshots.Should().Be(12);
-        settings.MaxActiveSnapshotBytes.Should().Be(2_088);
+        settings.MaxActiveSnapshotBytes.Should().Be(
+            TrailblazerWorldContextSettings.MinimumActiveSnapshotBytes);
         settings.MaxRetiredSnapshots.Should().Be(14);
         settings.MaxRetiredSnapshotBytes.Should().Be(15);
-        settings.MaxPersistentGraphPages.Should().Be(30);
+        settings.MaxPersistentGraphPages.Should().Be(
+            TrailblazerWorldContextSettings.MinimumPersistentGraphPages);
         settings.MaxDynamicCellSlotsPerMap.Should().Be(17);
         settings.MaxDynamicCellSlots.Should().Be(18);
         settings.NavigationAreaCount.Should().Be(19);
@@ -95,9 +98,9 @@ public sealed class TrailblazerWorldContextSettingsTests
     [Fact]
     public void MaintenanceBudget_ShouldRejectNonPositiveCounters()
     {
-        for (int invalidIndex = 0; invalidIndex < 6; invalidIndex++)
+        for (int invalidIndex = 0; invalidIndex < 7; invalidIndex++)
         {
-            int[] values = { 1, 1, 1, 1, 1, 1 };
+            int[] values = { 1, 1, 1, 1, 1, 1, 1 };
             values[invalidIndex] = 0;
 
             Action create = () => _ = new MaintenanceWorkBudget(
@@ -106,7 +109,8 @@ public sealed class TrailblazerWorldContextSettingsTests
                 values[2],
                 values[3],
                 values[4],
-                values[5]);
+                values[5],
+                values[6]);
 
             create.Should().Throw<ArgumentOutOfRangeException>();
         }
@@ -134,9 +138,9 @@ public sealed class TrailblazerWorldContextSettingsTests
         Action areaRules = () => _ = CreateSettings(maxAreaRules: 0);
         Action concurrentLeases = () => _ = CreateSettings(maxConcurrentSnapshotLeases: 0);
         Action areaPolicyWork = () => _ = CreateSettings(
-            maintenanceBudget: new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1));
+            maintenanceBudget: new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 1));
         Action catalogCopyWork = () => _ = CreateSettings(
-            maintenanceBudget: new MaintenanceWorkBudget(1, 1, 1, 1, 1, 4),
+            maintenanceBudget: new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 4),
             navigationAreaCount: 1,
             maxAreaPolicies: 2,
             maxAreaRulesPerPolicy: 1,
@@ -204,10 +208,10 @@ public sealed class TrailblazerWorldContextSettingsTests
         int maxIngressEntries = 1,
         long maxIngressBytes = 256,
         int maxActiveSnapshots = 3,
-        long maxActiveSnapshotBytes = 2_088,
+        long? maxActiveSnapshotBytes = null,
         int maxRetiredSnapshots = 1,
         long maxRetiredSnapshotBytes = 1,
-        int maxPersistentGraphPages = 30,
+        int? maxPersistentGraphPages = null,
         int maxDynamicCellSlotsPerMap = 1,
         int maxDynamicCellSlots = 1,
         int navigationAreaCount = 1,
@@ -216,14 +220,14 @@ public sealed class TrailblazerWorldContextSettingsTests
         int maxAreaRules = 1,
         int maxConcurrentSnapshotLeases = 1) => new(
             operationLimits ?? CreateOperationLimits(),
-            maintenanceBudget ?? new MaintenanceWorkBudget(1, 1, 1, 1, 1, 3),
+            maintenanceBudget ?? new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 3),
             maxIngressEntries,
             maxIngressBytes,
             maxActiveSnapshots,
-            maxActiveSnapshotBytes,
+            maxActiveSnapshotBytes ?? TrailblazerWorldContextSettings.MinimumActiveSnapshotBytes,
             maxRetiredSnapshots,
             maxRetiredSnapshotBytes,
-            maxPersistentGraphPages,
+            maxPersistentGraphPages ?? TrailblazerWorldContextSettings.MinimumPersistentGraphPages,
             maxDynamicCellSlotsPerMap,
             maxDynamicCellSlots,
             navigationAreaCount,

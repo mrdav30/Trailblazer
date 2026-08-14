@@ -140,6 +140,34 @@ public sealed class NavigationGraphCapacityTests
     }
 
     [Fact]
+    public void IngressOverflow_ShouldReportLostTopologyLifecycleCoverage()
+    {
+        var ingress = new NavigationGridChangeIngress(capacity: 1);
+        GridConfiguration configuration = CreateConfiguration();
+        ingress.Enqueue(new GridEventInfo(
+            1,
+            0,
+            1,
+            configuration,
+            1,
+            GridEventKind.GridRemoved));
+        ingress.Enqueue(CreateVoxelEvent(configuration, sequence: 2, obstacleCount: 1));
+
+        var detached = new GridEventInfo[1];
+        var blocked = new NavigationGridChangeScope[1];
+        ingress.DetachInto(
+                detached,
+                blocked,
+                out _,
+                out _,
+                out bool topologyLifecycleCoverageLost)
+            .Should().Be(0);
+
+        topologyLifecycleCoverageLost.Should().BeTrue(
+            "overflow discarded an exact grid-generation lifecycle event");
+    }
+
+    [Fact]
     public void Ingress_ShouldRetainConfiguredCapacityWithoutCallbackAllocationOrResize()
     {
         const int capacity = 32;
@@ -460,13 +488,15 @@ public sealed class NavigationGraphCapacityTests
         NavigationGraphDiagnosticsSnapshot diagnostics = context.Pathing.GetNavigationGraphDiagnostics();
         diagnostics.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(settings.MaxActiveSnapshotBytes);
         diagnostics.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(settings.MaxPersistentGraphPages);
-        diagnostics.ActiveSnapshotBytes.Should().Be(12_953_856,
+        diagnostics.ActiveSnapshotBytes.Should().Be(12_954_080,
             "endpoint incidence adds a 32-byte index field block, a 288-byte outer root, "
             + "262,528 bytes for four 1,025-address inner maps, and 885,600 bytes for "
-            + "4,100 one-page owner rows");
-        diagnostics.PersistentGraphPageCount.Should().Be(127_622,
+            + "4,100 one-page owner rows; the automatic seam index adds its 224-byte "
+            + "empty immutable root");
+        diagnostics.PersistentGraphPageCount.Should().Be(127_626,
             "the endpoint index adds one root page, 4 outer/4,100 inner nodes, and "
-            + "12,300 fixed-row pages for the 4,100 distinct endpoint addresses");
+            + "12,300 fixed-row pages for the 4,100 distinct endpoint addresses; the "
+            + "empty automatic seam index owns four roots");
         for (int mapIndex = 0; mapIndex < 4; mapIndex++)
         {
             context.Pathing.TryGetNavigationGraphCellState(
@@ -625,7 +655,7 @@ public sealed class NavigationGraphCapacityTests
         materializedWork.PersistentPageCount.Should().Be(dormantWork.PersistentPageCount);
 
         var meter = new MaintenanceWorkMeter(
-            new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1));
+            new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 1));
         materializedWork.Advance(meter).Should().BeTrue();
         materializedWork.Result.TryGetPhysicalState(
             0,
@@ -644,6 +674,7 @@ public sealed class NavigationGraphCapacityTests
             maxBaselineAddresses: defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots: defaults.MaintenanceBudget.MaxOverlaySlots,
             maxComponentNodes: defaults.MaintenanceBudget.MaxComponentNodes,
+            maxSeamCandidateProbes: defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             maxExplicitEdges: defaults.MaintenanceBudget.MaxExplicitEdges,
             maxDependencyEntries: defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
@@ -674,18 +705,26 @@ public sealed class NavigationGraphCapacityTests
         NavigationMap unrelated = new NavigationMapBuilder("unrelated", unrelatedBinding)
             .AddCell(default, cell)
             .Build();
-        context.Pathing.Admit(new NavigationMapCommitOperation(
+        var firstInstall = new NavigationMapCommitOperation(
             new PreparedNavigationMap(map, 1),
             OverlayReplacementPolicy.Clear,
             1,
-            1)).Should().BeTrue();
-        context.Pathing.Admit(new NavigationMapCommitOperation(
+            1);
+        var unrelatedInstall = new NavigationMapCommitOperation(
             new PreparedNavigationMap(unrelated, 1),
             OverlayReplacementPolicy.Clear,
             2,
-            1)).Should().BeTrue();
-        context.Simulate();
-        context.Simulate();
+            1);
+        context.Pathing.Admit(firstInstall).Should().BeTrue();
+        context.Pathing.Admit(unrelatedInstall).Should().BeTrue();
+        SimulateUntil(
+            context,
+            () => firstInstall.Receipt.Status != NavigationOperationStatus.Pending
+                && unrelatedInstall.Receipt.Status != NavigationOperationStatus.Pending
+                && IsMaterialized(context, "map")
+                && IsMaterialized(context, "unrelated"));
+        firstInstall.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        unrelatedInstall.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         context.Pathing.TryGetNavigationGraphCellState(
                 "unrelated",
                 default,
@@ -742,12 +781,17 @@ public sealed class NavigationGraphCapacityTests
         NavigationMap map = new NavigationMapBuilder("map", binding)
             .AddCell(default, cell)
             .Build();
-        context.Pathing.Admit(new NavigationMapCommitOperation(
+        var install = new NavigationMapCommitOperation(
             new PreparedNavigationMap(map, 1),
             OverlayReplacementPolicy.Clear,
             1,
-            1)).Should().BeTrue();
-        context.Simulate();
+            1);
+        context.Pathing.Admit(install).Should().BeTrue();
+        SimulateUntil(
+            context,
+            () => install.Receipt.Status != NavigationOperationStatus.Pending
+                && IsMaterialized(context, "map"));
+        install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         long firstGeneration = GetCellState(context, "map").GridSpawnToken;
 
         context.World.TryRemoveGrid(firstGridIndex).Should().BeTrue();
@@ -758,7 +802,7 @@ public sealed class NavigationGraphCapacityTests
         context.Simulate();
         GetCellState(context, "map").IsMaterialized.Should().BeFalse();
 
-        context.Simulate();
+        SimulateUntil(context, () => IsMaterialized(context, "map"));
         NavigationGraphCellState replacement = GetCellState(context, "map");
         replacement.IsMaterialized.Should().BeTrue();
         replacement.GridSpawnToken.Should().NotBe(firstGeneration);
@@ -773,6 +817,7 @@ public sealed class NavigationGraphCapacityTests
             maxBaselineAddresses: 3,
             maxOverlaySlots: defaults.MaintenanceBudget.MaxOverlaySlots,
             maxComponentNodes: defaults.MaintenanceBudget.MaxComponentNodes,
+            maxSeamCandidateProbes: defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             maxExplicitEdges: defaults.MaintenanceBudget.MaxExplicitEdges,
             maxDependencyEntries: defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
@@ -803,24 +848,32 @@ public sealed class NavigationGraphCapacityTests
             Fixed64.Zero,
             Fixed64.Zero,
             Fixed64.One);
-        context.Pathing.Admit(new NavigationMapCommitOperation(
+        var firstInstall = new NavigationMapCommitOperation(
             new PreparedNavigationMap(new NavigationMapBuilder("first", firstBinding)
                 .AddCell(default, cell)
                 .AddCell(new VoxelIndex(1, 0, 0), cell)
                 .Build(), 1),
             OverlayReplacementPolicy.Clear,
             1,
-            1)).Should().BeTrue();
-        context.Pathing.Admit(new NavigationMapCommitOperation(
+            1);
+        var secondInstall = new NavigationMapCommitOperation(
             new PreparedNavigationMap(new NavigationMapBuilder("second", secondBinding)
                 .AddCell(default, cell)
                 .AddCell(new VoxelIndex(1, 0, 0), cell)
                 .Build(), 1),
             OverlayReplacementPolicy.Clear,
             2,
-            1)).Should().BeTrue();
-        context.Simulate();
-        context.Simulate();
+            1);
+        context.Pathing.Admit(firstInstall).Should().BeTrue();
+        context.Pathing.Admit(secondInstall).Should().BeTrue();
+        SimulateUntil(
+            context,
+            () => firstInstall.Receipt.Status != NavigationOperationStatus.Pending
+                && secondInstall.Receipt.Status != NavigationOperationStatus.Pending
+                && IsMaterialized(context, "first")
+                && IsMaterialized(context, "second"));
+        firstInstall.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        secondInstall.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         VoxelGrid firstGrid = context.World.ActiveGrids[firstGridIndex];
         VoxelGrid secondGrid = context.World.ActiveGrids[secondGridIndex];
         firstGrid.TryGetVoxel(default(VoxelIndex), out Voxel? firstVoxel).Should().BeTrue();
@@ -849,6 +902,7 @@ public sealed class NavigationGraphCapacityTests
             maxBaselineAddresses: 2,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
@@ -916,6 +970,7 @@ public sealed class NavigationGraphCapacityTests
             maxBaselineAddresses: 2,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
@@ -1184,6 +1239,7 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             maxComponentNodes: 1,
+            maxSeamCandidateProbes: defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
@@ -1333,6 +1389,7 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots: 1,
             defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
@@ -1412,6 +1469,7 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots: 1,
             defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
@@ -1498,6 +1556,7 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots: 1,
             defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
@@ -1593,6 +1652,16 @@ public sealed class NavigationGraphCapacityTests
         sequence,
         frame);
 
+    private static void SimulateUntil(
+        TrailblazerWorldContext context,
+        System.Func<bool> condition,
+        int maximumFrames = 512)
+    {
+        for (int frame = 0; frame < maximumFrames && !condition(); frame++)
+            context.Simulate();
+        condition().Should().BeTrue("the bounded maintenance pipeline must converge");
+    }
+
     private static NavigationGraphCellState GetCellState(
         TrailblazerWorldContext context,
         string mapId)
@@ -1601,6 +1670,14 @@ public sealed class NavigationGraphCapacityTests
             .Should().BeTrue();
         return state;
     }
+
+    private static bool IsMaterialized(
+        TrailblazerWorldContext context,
+        string mapId) => context.Pathing.TryGetNavigationGraphCellState(
+            mapId,
+            default,
+            out NavigationGraphCellState state)
+        && state.IsMaterialized;
 
     private static TrailblazerWorldContextSettings CreateSettings(
         int maxConcurrentSnapshotLeases = 2,
@@ -1644,6 +1721,7 @@ public sealed class NavigationGraphCapacityTests
             maxBaselineAddresses: 64,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             defaults.MaintenanceBudget.MaxDependencyEntries);
         TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(

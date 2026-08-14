@@ -256,6 +256,7 @@ public class NavigationGraphCompositionBenchmarks
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             maxComponentNodes: 8,
+            maxSeamCandidateProbes: 8,
             maxExplicitEdges: 8,
             maxDependencyEntries: minimumAreaPolicyPublicationWork);
         return new TrailblazerWorldContextSettings(

@@ -292,14 +292,14 @@ public sealed class NavigationAreaCatalogProcessorTests
     public void Runtime_ShouldRejectAreaPolicyWhenCatalogCannotFitSnapshotCapacity()
     {
         TrailblazerWorldContextSettings settings = CreateSettings(
-            navigationAreaCount: 64,
+            navigationAreaCount: 80,
             maxAreaPolicies: 1,
-            maxAreaRules: 64,
-            maxDependencyEntries: 65,
+            maxAreaRules: 80,
+            maxDependencyEntries: 81,
             maxActiveSnapshotBytes: TrailblazerWorldContextSettings.MinimumActiveSnapshotBytes);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
         var operation = new NavigationAreaPolicyCommitOperation(
-            CreatePolicy("ground", 1, 64),
+            CreatePolicy("ground", 1, 80),
             1,
             context.FrameCount + 1);
 
@@ -398,6 +398,7 @@ public sealed class NavigationAreaCatalogProcessorTests
             budget.MaxBaselineAddresses,
             budget.MaxOverlaySlots,
             budget.MaxComponentNodes,
+            budget.MaxSeamCandidateProbes,
             budget.MaxExplicitEdges,
             maxDependencyEntries);
         return new TrailblazerWorldContextSettings(

@@ -107,33 +107,6 @@ internal sealed partial class NavigationCompositionIndex
         return GetRootComponent(mapId).Version;
     }
 
-    internal int GetIncidentEdgeCount(int mapOrdinal)
-    {
-        string mapId = _nodes.GetKeyAt(mapOrdinal);
-        _nodes.TryGetValue(mapId, out NavigationStructuralNode node);
-        int count = 0;
-        NavigationPagedSequence<NavigationStructuralLink>.Enumerator links =
-            node.GetLinkEnumerator();
-        while (links.MoveNext())
-        {
-            NavigationStructuralLink outgoing = links.Current;
-            if (_nodes.ContainsKey(outgoing.DestinationMapId))
-                count = checked(count + outgoing.Count);
-        }
-        if (!_incoming.TryGetValue(mapId, out NavigationIncomingDependencyRecord incoming))
-            return count;
-        for (int i = 0; i < incoming.Count; i++)
-        {
-            NavigationIncomingDependency source = incoming.GetAt(i);
-            if (!string.Equals(source.SourceMapId, mapId, StringComparison.Ordinal)
-                && _nodes.ContainsKey(source.SourceMapId))
-            {
-                count = checked(count + source.Count);
-            }
-        }
-        return count;
-    }
-
     internal NavigationStructuralComponent GetComponentRecord(string mapId) =>
         GetRootComponent(mapId);
 
@@ -172,6 +145,25 @@ internal sealed partial class NavigationCompositionIndex
             _nodes,
             _incoming,
             components,
+            _componentMembership,
+            _nodeValueBytes,
+            _incomingValueBytes,
+            _componentValueBytes,
+            _nodeValuePages,
+            _incomingValuePages,
+            _componentValuePages,
+            LastUpdate);
+    }
+
+    internal NavigationCompositionIndex WithVersion(long version)
+    {
+        if (Version == version)
+            return this;
+        return new NavigationCompositionIndex(
+            version,
+            _nodes,
+            _incoming,
+            _components,
             _componentMembership,
             _nodeValueBytes,
             _incomingValueBytes,

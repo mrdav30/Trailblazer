@@ -17,6 +17,7 @@ internal sealed partial class NavigationCompositionIndex
         private readonly NavigationCompositionIndex _source;
         private readonly NavigationInstanceDirectory _directory;
         private readonly NavigationExplicitConnectionIndex _explicitConnections;
+        private readonly NavigationAutomaticSeamIndex _automaticSeams;
         private readonly PersistentStringMap<bool> _changes;
         private readonly long _compositionVersion;
         private readonly long _componentVersion;
@@ -108,6 +109,7 @@ internal sealed partial class NavigationCompositionIndex
                 source,
                 directory,
                 NavigationExplicitConnectionIndex.Empty,
+                NavigationAutomaticSeamIndex.Empty,
                 changedMapIds,
                 version,
                 version,
@@ -126,6 +128,7 @@ internal sealed partial class NavigationCompositionIndex
                 source,
                 directory,
                 explicitConnections,
+                NavigationAutomaticSeamIndex.Empty,
                 changedMapIds,
                 version,
                 version,
@@ -137,6 +140,7 @@ internal sealed partial class NavigationCompositionIndex
             NavigationCompositionIndex source,
             NavigationInstanceDirectory directory,
             NavigationExplicitConnectionIndex explicitConnections,
+            NavigationAutomaticSeamIndex automaticSeams,
             PersistentStringMap<bool> changedMapIds,
             long compositionVersion,
             long componentVersion,
@@ -145,6 +149,7 @@ internal sealed partial class NavigationCompositionIndex
             _source = source;
             _directory = directory;
             _explicitConnections = explicitConnections;
+            _automaticSeams = automaticSeams;
             _changes = changedMapIds;
             _compositionVersion = compositionVersion;
             _componentVersion = componentVersion;
@@ -300,6 +305,7 @@ internal sealed partial class NavigationCompositionIndex
                         _nodeWork = new StructuralNodeWork(
                             next,
                             _explicitConnections,
+                            _automaticSeams,
                             _oldNode);
                     }
                 }
@@ -908,21 +914,29 @@ internal sealed partial class NavigationCompositionIndex
     {
         private readonly NavigationMapInstance _instance;
         private readonly NavigationExplicitConnectionIndex _explicitConnections;
+        private readonly NavigationAutomaticSeamIndex _automaticSeams;
         private readonly NavigationStructuralNode? _oldNode;
         private NavigationPagedSequence<NavigationStructuralLink>.Enumerator _oldLinks;
         private PersistentStringMap<int> _counts = PersistentStringMap<int>.Empty;
         private int _index;
+        private int _seamRemaining;
+        private int _seamCurrent;
+        private string? _seamDestination;
+        private NavigationPagedSequence<NavigationStructuralLink>.Enumerator _seamLinks;
         private bool _ownersCaptured;
+        private bool _seamsCaptured;
         private bool _matchesOld;
         private NavigationPagedSequence<NavigationStructuralLink>.Builder? _links;
 
         internal StructuralNodeWork(
             NavigationMapInstance instance,
             NavigationExplicitConnectionIndex explicitConnections,
+            NavigationAutomaticSeamIndex automaticSeams,
             NavigationStructuralNode? oldNode)
         {
             _instance = instance;
             _explicitConnections = explicitConnections;
+            _automaticSeams = automaticSeams;
             _oldNode = oldNode;
             _matchesOld = oldNode != null;
             if (oldNode != null)
@@ -965,6 +979,34 @@ internal sealed partial class NavigationCompositionIndex
                     _counts = _counts.Set(destination, checked(current + 1));
                 }
                 _ownersCaptured = true;
+                _index = 0;
+            }
+            if (!_seamsCaptured)
+            {
+                if (_index == 0 && _seamDestination == null)
+                    _seamLinks = _automaticSeams.GetStructuralLinks(_instance.MapId).GetEnumerator();
+                while (true)
+                {
+                    if (_seamDestination == null)
+                    {
+                        if (!_seamLinks.MoveNext())
+                            break;
+                        NavigationStructuralLink seamLink = _seamLinks.Current;
+                        _seamDestination = seamLink.DestinationMapId;
+                        _seamRemaining = seamLink.Count;
+                        _counts.TryGetValue(_seamDestination, out _seamCurrent);
+                    }
+                    while (_seamRemaining > 0)
+                    {
+                        if (!meter.TryConsumeExplicitEdges(1))
+                            return false;
+                        _seamCurrent = checked(_seamCurrent + 1);
+                        _seamRemaining--;
+                        _counts = _counts.Set(_seamDestination, _seamCurrent);
+                    }
+                    _seamDestination = null;
+                }
+                _seamsCaptured = true;
                 _index = 0;
             }
             while (_index < _counts.Count)

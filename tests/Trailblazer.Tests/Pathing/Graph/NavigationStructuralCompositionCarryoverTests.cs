@@ -22,8 +22,124 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         Fixed64.One);
 
     [Fact]
+    public void MinimumScratch_ShouldReserveTheUnconditionalSeamRefreshShell()
+    {
+        const int SourceMaps = 2;
+        const int CandidateMaps = 3;
+        const int ChangedMaps = 1;
+        const long OverlayCells = 0;
+        long updateBytes = NavigationCompositionIndex.UpdateWork.GetMinimumScratchBytes(
+            SourceMaps,
+            CandidateMaps,
+            ChangedMaps);
+
+        NavigationStructuralCompositionWork.GetMinimumScratchBytes(
+                SourceMaps,
+                CandidateMaps,
+                ChangedMaps,
+                OverlayCells)
+            .Should().Be(
+                updateBytes
+                + 256L
+                + (CandidateMaps * 256L)
+                + NavigationAutomaticSeamRefreshWork.FixedRetainedBytes);
+        NavigationStructuralCompositionWork.GetMinimumScratchPages(
+                CandidateMaps,
+                OverlayCells)
+            .Should().Be(2 + (CandidateMaps * 2) + 4);
+    }
+
+    [Fact]
+    public void HighBudgetSeamRefresh_ShouldRejectAtOneByteBelowItsInternalPeak()
+    {
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        using var world = new GridWorld();
+        GridTopologyMetrics sourceMetrics = GridTopologyMetrics.Rectangular((Fixed64)2);
+        GridTopologyMetrics targetMetrics = GridTopologyMetrics.Rectangular(
+            (Fixed64)2,
+            (Fixed64)2,
+            Fixed64.One);
+        var sourceConfiguration = new GridConfiguration(
+            Vector3d.Zero,
+            Vector3d.Zero,
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: sourceMetrics,
+            storageKind: GridStorageKind.Dense);
+        var targetMinimum = new Vector3d((Fixed64)2, Fixed64.Zero, -Fixed64.One);
+        var targetMaximum = new Vector3d((Fixed64)2, Fixed64.Zero, Fixed64.Zero);
+        var targetConfiguration = new GridConfiguration(
+            targetMinimum,
+            targetMaximum,
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: targetMetrics,
+            storageKind: GridStorageKind.Dense);
+        world.TryAddGrid(sourceConfiguration, out _).Should().BeTrue();
+        world.TryAddGrid(targetConfiguration, out _).Should().BeTrue();
+        sourceConfiguration.TryNormalize(out NormalizedGridConfiguration sourceBinding)
+            .Should().BeTrue();
+        targetConfiguration.TryNormalize(out NormalizedGridConfiguration targetBinding)
+            .Should().BeTrue();
+        PreparedNavigationMap source = new(
+            new NavigationMapBuilder("source", sourceBinding)
+                .AddCell(default, Cell)
+                .Build(),
+            1);
+        PreparedNavigationMap target = new(
+            new NavigationMapBuilder("target", targetBinding)
+                .AddCell(default, Cell)
+                .AddCell(new VoxelIndex(0, 0, 1), Cell)
+                .Build(),
+            1);
+        NavigationOperationCandidate candidate = FoldMap(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            source,
+            OverlayReplacementPolicy.Clear,
+            defaults);
+        candidate = FoldMap(
+            candidate,
+            target,
+            OverlayReplacementPolicy.Clear,
+            defaults);
+        NavigationOperationFrameChange[] changes =
+        {
+            NavigationOperationFrameChange.MapCommit(
+                source,
+                OverlayReplacementPolicy.Clear,
+                1),
+            NavigationOperationFrameChange.MapCommit(
+                target,
+                OverlayReplacementPolicy.Clear,
+                2)
+        };
+
+        long lower = 1;
+        long upper = defaults.MaxActiveSnapshotBytes;
+        while (lower < upper)
+        {
+            long middle = lower + ((upper - lower) >> 1);
+            RunSeamWork(world, candidate, changes, middle, out bool exceeded);
+            if (exceeded)
+                lower = middle + 1;
+            else
+                upper = middle;
+        }
+
+        lower.Should().Be(13_344L,
+            "the exact retained peak is a deterministic accounting boundary");
+
+        RunSeamWork(world, candidate, changes, lower, out bool exactExceeded)
+            .Should().BeTrue();
+        exactExceeded.Should().BeFalse();
+        RunSeamWork(world, candidate, changes, lower - 1, out bool belowExceeded)
+            .Should().BeFalse();
+        belowExceeded.Should().BeTrue(
+            "the completed final index can be smaller than an intermediate row/journal peak");
+    }
+
+    [Fact]
     public void ChangedMapCapture_ShouldNotScanBeforeMeteredAdvance()
     {
+        using var world = new GridWorld();
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         NavigationMap first = new NavigationMapBuilder("A", CreateBinding(0))
             .AddCell(default, Cell)
@@ -60,12 +176,13 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         };
 
         var work = new NavigationStructuralCompositionWork(
+            world,
             NavigationWorldGraph.Empty,
             candidate,
             changes,
             changes.Length,
             updateComposition: true,
-            new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
+            workspace: new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
 
         work.CapturedChangedMapCount.Should().Be(0,
             "construction may retain sources but must not scan or copy changed map IDs");
@@ -77,6 +194,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             defaultsBudget.MaxBaselineAddresses,
             defaultsBudget.MaxOverlaySlots,
             maxComponentNodes: 1,
+            maxSeamCandidateProbes: defaultsBudget.MaxSeamCandidateProbes,
             defaultsBudget.MaxExplicitEdges,
             maxDependencyEntries: 2);
         var meter = new MaintenanceWorkMeter(budget);
@@ -92,7 +210,8 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             meter.Reset();
         }
 
-        work.IsChangedMapCaptureComplete.Should().BeTrue();
+        work.IsChangedMapCaptureComplete.Should().BeFalse(
+            "operation IDs are canonical before the bounded automatic-seam capture completes");
         work.CapturedChangedMapCount.Should().Be(2,
             "duplicate IDs must be canonicalized in the metered root");
         work.GetCapturedChangedMapIdAt(0).Should().Be("A");
@@ -100,6 +219,12 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         componentUnits.Should().Be(3);
         dependencyUnits.Should().Be(2,
             "only unique changed-root insertions consume dependency units when no prior component exists");
+        for (int frame = 0; frame < 512 && !work.IsChangedMapCaptureComplete; frame++)
+        {
+            meter.Reset();
+            work.Advance(meter);
+        }
+        work.IsChangedMapCaptureComplete.Should().BeTrue();
     }
 
     [Fact]
@@ -127,12 +252,13 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                 2)
         };
         var work = new NavigationStructuralCompositionWork(
+            context.World,
             lease.Graph,
             candidate,
             changes,
             changes.Length,
             updateComposition: true,
-            new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
+            workspace: new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
         work.MarkAllClosePublished();
 
         var meter = new MaintenanceWorkMeter(defaults.MaintenanceBudget);
@@ -189,19 +315,21 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         }
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
         var preparationOnly = new NavigationStructuralCompositionWork(
+            context.World,
             lease.Graph,
             candidate,
             changes,
             changes.Length,
             updateComposition: false,
-            new NavigationCompositionWorkspace(MapCount));
+            workspace: new NavigationCompositionWorkspace(MapCount));
         var withUpdate = new NavigationStructuralCompositionWork(
+            context.World,
             lease.Graph,
             candidate,
             changes,
             changes.Length,
             updateComposition: true,
-            new NavigationCompositionWorkspace(MapCount));
+            workspace: new NavigationCompositionWorkspace(MapCount));
         var meter = new MaintenanceWorkMeter(defaults.MaintenanceBudget);
         for (int frame = 0; frame < 4096 && !preparationOnly.IsComplete; frame++)
         {
@@ -226,22 +354,25 @@ public sealed class NavigationStructuralCompositionCarryoverTests
     [Fact]
     public void EmptyCompositionUpdate_ShouldNotSubtractPublishedObjectHeader()
     {
+        using var world = new GridWorld();
         var changes = Array.Empty<NavigationOperationFrameChange>();
         var candidate = new NavigationOperationCandidate(navigationAreaCount: 1);
         var preparationOnly = new NavigationStructuralCompositionWork(
+            world,
             NavigationWorldGraph.Empty,
             candidate,
             changes,
             changeCount: 0,
             updateComposition: false,
-            new NavigationCompositionWorkspace(1));
+            workspace: new NavigationCompositionWorkspace(1));
         var withUpdate = new NavigationStructuralCompositionWork(
+            world,
             NavigationWorldGraph.Empty,
             candidate,
             changes,
             changeCount: 0,
             updateComposition: true,
-            new NavigationCompositionWorkspace(1));
+            workspace: new NavigationCompositionWorkspace(1));
         var meter = new MaintenanceWorkMeter(
             TrailblazerWorldContextSettings.Default.MaintenanceBudget);
         preparationOnly.Advance(meter).Should().BeTrue();
@@ -512,6 +643,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             maxComponentNodes: 1,
+            maxSeamCandidateProbes: 1,
             maxExplicitEdges: 1,
             maxDependencyEntries: 3);
         var settings = new TrailblazerWorldContextSettings(
@@ -602,6 +734,30 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                 Fixed64.One));
         }
         return builder.Build();
+    }
+
+    private static bool RunSeamWork(
+        GridWorld world,
+        NavigationOperationCandidate candidate,
+        NavigationOperationFrameChange[] changes,
+        long maximumRetainedBytes,
+        out bool capacityExceeded)
+    {
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        var work = new NavigationStructuralCompositionWork(
+            world,
+            NavigationWorldGraph.Empty,
+            candidate,
+            changes,
+            changes.Length,
+            updateComposition: true,
+            workspace: new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
+        var meter = new MaintenanceWorkMeter(defaults.MaintenanceBudget);
+        return work.Advance(
+            meter,
+            maximumRetainedBytes,
+            int.MaxValue,
+            out capacityExceeded);
     }
 
     private static NormalizedGridConfiguration CreateBinding(int origin)
@@ -736,6 +892,11 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                     {
                         new NavigationMapOverlayDelta(
                             mapId,
+                            new[]
+                            {
+                                NavigationCellOverlayOperation.Suppress(
+                                    new VoxelIndex(2, 0, 0))
+                            },
                             connections: new[]
                             {
                                 NavigationConnectionOverlayOperation.Suppress(transitionId)
@@ -751,7 +912,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         TrailblazerWorldContext context,
         NavigationOperationReceipt receipt)
     {
-        for (int i = 0; i < 64 && receipt.Status == NavigationOperationStatus.Pending; i++)
+        for (int i = 0; i < 512 && receipt.Status == NavigationOperationStatus.Pending; i++)
             context.Simulate();
     }
 

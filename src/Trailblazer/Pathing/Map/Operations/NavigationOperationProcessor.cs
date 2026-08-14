@@ -38,6 +38,7 @@ internal sealed class NavigationOperationProcessor
             int.MaxValue,
             int.MaxValue,
             int.MaxValue,
+            int.MaxValue,
             int.MaxValue));
     private readonly NavigationOperationRejection[] _outcomes;
     private readonly bool[] _superseded;

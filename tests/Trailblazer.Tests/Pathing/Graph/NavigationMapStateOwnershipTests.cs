@@ -259,7 +259,7 @@ public sealed class NavigationMapStateOwnershipTests
             changes.Length,
             "map",
             version: 2);
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 1));
         int componentUnits = 0;
         int dependencyUnits = 0;
         int overlayUnits = 0;
@@ -522,6 +522,7 @@ public sealed class NavigationMapStateOwnershipTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots: 1,
             maxComponentNodes: 1,
+            maxSeamCandidateProbes: 1,
             maxExplicitEdges: 1,
             defaults.MaintenanceBudget.MaxDependencyEntries);
         var settings = new TrailblazerWorldContextSettings(

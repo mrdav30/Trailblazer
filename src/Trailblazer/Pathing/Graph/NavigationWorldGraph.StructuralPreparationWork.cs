@@ -130,6 +130,7 @@ internal sealed partial class NavigationWorldGraph
                 _mapIndex,
                 _source.Composition,
                 _candidate.ExplicitConnections,
+                _source._automaticSeams,
                 _source._closedStructuralComponents,
                 _source._allStructuralComponentsClosed,
                 _retainedBytes,

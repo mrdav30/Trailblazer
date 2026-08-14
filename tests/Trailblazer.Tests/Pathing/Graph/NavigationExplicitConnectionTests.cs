@@ -107,8 +107,8 @@ public sealed class NavigationExplicitConnectionTests
         context.Simulate();
         var owner = new NavigationConnectionOwnerKey("left", "bridge");
         using NavigationWorldGraphLease oldLease = context.Pathing.TryAcquireNavigationGraph()!;
-        oldLease.Graph.Composition.GetIncidentEdgeCount(0).Should().Be(1);
-        oldLease.Graph.Composition.GetIncidentEdgeCount(1).Should().Be(1);
+        oldLease.Graph.ExplicitConnections.GetActiveIncidentEdgeCount("left").Should().Be(1);
+        oldLease.Graph.ExplicitConnections.GetActiveIncidentEdgeCount("right").Should().Be(1);
 
         CommitCell(context, "right", NavigationCellOverlayOperation.Suppress(destinationIndex), 3);
         context.Simulate();
@@ -118,8 +118,8 @@ public sealed class NavigationExplicitConnectionTests
                 .Should().BeTrue();
             dormant.IsActive.Should().BeFalse();
             dormant.PortalWaypoints.Count.Should().Be(0);
-            dormantLease.Graph.Composition.GetIncidentEdgeCount(0).Should().Be(0);
-            dormantLease.Graph.Composition.GetIncidentEdgeCount(1).Should().Be(0);
+            dormantLease.Graph.ExplicitConnections.GetActiveIncidentEdgeCount("left").Should().Be(0);
+            dormantLease.Graph.ExplicitConnections.GetActiveIncidentEdgeCount("right").Should().Be(0);
         }
         oldLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord old)
             .Should().BeTrue();
@@ -164,14 +164,15 @@ public sealed class NavigationExplicitConnectionTests
                 .AddCell(default, SolidCell)
                 .Build(),
             2);
-        Admit(
+        NavigationMapCommitOperation leftCommit = Admit(
             context,
             new NavigationMapBuilder("left", left)
                 .AddCell(sourceIndex, SolidCell)
                 .AddConnection(connection)
                 .Build(),
             3);
-        context.Simulate();
+        SimulateUntilTerminal(context, leftCommit.Receipt);
+        leftCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         var owner = new NavigationConnectionOwnerKey("left", "bridge");
         NavigationMapInstance priorLeft;
         long priorComponentVersion;
@@ -219,9 +220,10 @@ public sealed class NavigationExplicitConnectionTests
     {
         using TrailblazerWorldContext context = CreateContextWithExplicitBudget(1);
         NormalizedGridConfiguration left = AddGrid(context, 0);
-        NormalizedGridConfiguration middle = AddGrid(context, 3);
-        NormalizedGridConfiguration right = AddGrid(context, 4);
-        VoxelIndex sourceIndex = new(2, 0, 0);
+        NormalizedGridConfiguration middle = AddGrid(context, 4);
+        NormalizedGridConfiguration right = AddGrid(context, 8);
+        VoxelIndex sourceIndex = new(3, 0, 0);
+        NavigationCellAddress[] witnesses = CreateInteriorWitnessCorridor("middle");
         var connection = new NavigationConnection(
             "bridge",
             sourceIndex,
@@ -230,14 +232,14 @@ public sealed class NavigationExplicitConnectionTests
             GetFoot(right, default),
             Fixed64.Zero,
             Fixed64.One,
-            new[] { new NavigationCellAddress("middle", default) });
+            witnesses);
         NavigationMapCommitOperation rightCommit = Admit(
             context,
             new NavigationMapBuilder("right", right).AddCell(default, SolidCell).Build(),
             1);
         NavigationMapCommitOperation middleCommit = Admit(
             context,
-            new NavigationMapBuilder("middle", middle).AddCell(default, SolidCell).Build(),
+            CreateCorridorMap("middle", middle),
             2);
         NavigationMapCommitOperation leftCommit = Admit(
             context,
@@ -252,7 +254,7 @@ public sealed class NavigationExplicitConnectionTests
         NavigationOverlayCommitOperation suppression = CommitCell(
             context,
             "middle",
-            NavigationCellOverlayOperation.Suppress(default),
+            NavigationCellOverlayOperation.Suppress(new VoxelIndex(1, 0, 0)),
             4);
         context.Simulate();
 
@@ -268,11 +270,21 @@ public sealed class NavigationExplicitConnectionTests
                 new NavigationCellAddress("left", sourceIndex),
                 out NavigationNodeRef source)
             .Should().BeTrue();
-        lease.Graph.EnumerateSurfaceEdges(source).MoveNext().Should().BeFalse(
-            "the old explicit edge cannot remain queryable while witness suppression is deferred");
+        NavigationSurfaceEdgeEnumerator pendingEdges = lease.Graph.EnumerateSurfaceEdges(source);
+        while (pendingEdges.MoveNext())
+        {
+            pendingEdges.Current.Kind.Should().NotBe(NavigationGraphEdgeKind.Explicit,
+                "the old explicit edge cannot remain queryable while witness suppression is deferred");
+        }
 
         SimulateUntilTerminal(context, suppression.Receipt);
         suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease dormantLease = context.Pathing.TryAcquireNavigationGraph()!;
+        dormantLease.Graph.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("left", "bridge"),
+                out NavigationExplicitConnectionRecord dormant)
+            .Should().BeTrue();
+        dormant.IsActive.Should().BeFalse();
     }
 
     [Fact]
@@ -288,18 +300,19 @@ public sealed class NavigationExplicitConnectionTests
         {
             string mapId = $"unrelated-{i}";
             unrelatedMapIds[i] = mapId;
-            NormalizedGridConfiguration binding = AddGrid(context, 20 + (i * 2));
+            NormalizedGridConfiguration binding = AddGrid(context, 100 + (i * 10));
             Admit(
                 context,
                 new NavigationMapBuilder(mapId, binding).AddCell(default, SolidCell).Build(),
                 ++sequence);
         }
         NormalizedGridConfiguration left = AddGrid(context, 0);
-        NormalizedGridConfiguration middle = AddGrid(context, 3);
-        NormalizedGridConfiguration right = AddGrid(context, 5);
+        NormalizedGridConfiguration middle = AddGrid(context, 4);
+        NormalizedGridConfiguration right = AddGrid(context, 8);
         VoxelIndex sourceIndex = new(3, 0, 0);
         VoxelIndex firstMiddle = default;
         VoxelIndex witnessIndex = new(1, 0, 0);
+        NavigationCellAddress[] witnesses = CreateInteriorWitnessCorridor("middle");
         var connection = new NavigationConnection(
             "bridge",
             sourceIndex,
@@ -308,7 +321,7 @@ public sealed class NavigationExplicitConnectionTests
             GetFoot(right, default),
             Fixed64.Zero,
             Fixed64.One,
-            new[] { new NavigationCellAddress("middle", witnessIndex) });
+            witnesses);
         NavigationMapCommitOperation rightCommit = Admit(
             context,
             new NavigationMapBuilder("right", right).AddCell(default, SolidCell).Build(),
@@ -318,6 +331,8 @@ public sealed class NavigationExplicitConnectionTests
             new NavigationMapBuilder("middle", middle)
                 .AddCell(firstMiddle, SolidCell)
                 .AddCell(witnessIndex, SolidCell)
+                .AddCell(new VoxelIndex(2, 0, 0), SolidCell)
+                .AddCell(new VoxelIndex(3, 0, 0), SolidCell)
                 .Build(),
             ++sequence);
         NavigationMapCommitOperation leftCommit = Admit(
@@ -414,10 +429,10 @@ public sealed class NavigationExplicitConnectionTests
             maxDependencyEntries: 3,
             maxRetiredSnapshots: 1);
         long sequence = 0;
-        NormalizedGridConfiguration unrelated = AddGrid(context, 20);
+        NormalizedGridConfiguration unrelated = AddGrid(context, 100);
         NormalizedGridConfiguration left = AddGrid(context, 0);
-        NormalizedGridConfiguration middle = AddGrid(context, 3);
-        NormalizedGridConfiguration right = AddGrid(context, 5);
+        NormalizedGridConfiguration middle = AddGrid(context, 4);
+        NormalizedGridConfiguration right = AddGrid(context, 8);
         var sourceIndex = new VoxelIndex(3, 0, 0);
         var witnessIndex = new VoxelIndex(1, 0, 0);
         Admit(
@@ -433,6 +448,8 @@ public sealed class NavigationExplicitConnectionTests
             new NavigationMapBuilder("middle", middle)
                 .AddCell(default, SolidCell)
                 .AddCell(witnessIndex, SolidCell)
+                .AddCell(new VoxelIndex(2, 0, 0), SolidCell)
+                .AddCell(new VoxelIndex(3, 0, 0), SolidCell)
                 .Build(),
             ++sequence);
         var connection = new NavigationConnection(
@@ -443,7 +460,7 @@ public sealed class NavigationExplicitConnectionTests
             GetFoot(right, default),
             Fixed64.Zero,
             Fixed64.One,
-            new[] { new NavigationCellAddress("middle", witnessIndex) });
+            CreateInteriorWitnessCorridor("middle"));
         NavigationMapCommitOperation leftCommit = Admit(
             context,
             new NavigationMapBuilder("left", left)
@@ -512,19 +529,20 @@ public sealed class NavigationExplicitConnectionTests
     public void DeferredExplicitNarrowing_ShouldChargeEveryDiscoveredSource()
     {
         const int ownerCount = 4;
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
-            maxExplicitEdges: 1,
+            maxExplicitEdges: defaults.MaintenanceBudget.MaxExplicitEdges,
             maxOverlaySlots: 1,
             maxComponentNodes: 1,
             maxDependencyEntries: 3);
         long sequence = 0;
-        NormalizedGridConfiguration unrelated = AddGrid(context, 20);
+        NormalizedGridConfiguration unrelated = AddGrid(context, 100);
         Admit(
             context,
             new NavigationMapBuilder("unrelated", unrelated).AddCell(default, SolidCell).Build(),
             ++sequence);
-        NormalizedGridConfiguration middle = AddGrid(context, 3);
-        NormalizedGridConfiguration right = AddGrid(context, 5);
+        NormalizedGridConfiguration middle = AddGrid(context, 4);
+        NormalizedGridConfiguration right = AddGrid(context, 8);
         var sourceIndex = new VoxelIndex(3, 0, 0);
         var witnessIndex = new VoxelIndex(1, 0, 0);
         Admit(
@@ -536,26 +554,32 @@ public sealed class NavigationExplicitConnectionTests
             new NavigationMapBuilder("middle", middle)
                 .AddCell(default, SolidCell)
                 .AddCell(witnessIndex, SolidCell)
+                .AddCell(new VoxelIndex(2, 0, 0), SolidCell)
+                .AddCell(new VoxelIndex(3, 0, 0), SolidCell)
                 .Build(),
             ++sequence);
         NavigationMapCommitOperation last = default;
         for (int i = 0; i < ownerCount; i++)
         {
             string mapId = $"source-{i}";
-            NormalizedGridConfiguration sourceBinding = AddGridWithExtent(context, 0, 3 + i);
+            NormalizedGridConfiguration sourceBinding = AddGridWithExtent(
+                context,
+                -i,
+                3 + i);
+            var ownerSourceIndex = new VoxelIndex(3 + i, 0, 0);
             var connection = new NavigationConnection(
                 "bridge",
-                sourceIndex,
+                ownerSourceIndex,
                 new NavigationCellAddress("right", default),
-                GetFoot(sourceBinding, sourceIndex),
+                GetFoot(sourceBinding, ownerSourceIndex),
                 GetFoot(right, default),
                 Fixed64.Zero,
                 Fixed64.One,
-                new[] { new NavigationCellAddress("middle", witnessIndex) });
+                CreateInteriorWitnessCorridor("middle"));
             last = Admit(
                 context,
                 new NavigationMapBuilder(mapId, sourceBinding)
-                    .AddCell(sourceIndex, SolidCell)
+                    .AddCell(ownerSourceIndex, SolidCell)
                     .AddConnection(connection)
                     .Build(),
                 ++sequence);
@@ -612,8 +636,8 @@ public sealed class NavigationExplicitConnectionTests
         using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
             defaults.MaintenanceBudget.MaxExplicitEdges);
         long sequence = 0;
-        NormalizedGridConfiguration middle = AddGrid(context, 3);
-        NormalizedGridConfiguration right = AddGrid(context, 5);
+        NormalizedGridConfiguration middle = AddGrid(context, 4);
+        NormalizedGridConfiguration right = AddGrid(context, 8);
         var sourceIndex = new VoxelIndex(3, 0, 0);
         var witnessIndex = new VoxelIndex(1, 0, 0);
         Admit(
@@ -625,26 +649,32 @@ public sealed class NavigationExplicitConnectionTests
             new NavigationMapBuilder("middle", middle)
                 .AddCell(default, SolidCell)
                 .AddCell(witnessIndex, SolidCell)
+                .AddCell(new VoxelIndex(2, 0, 0), SolidCell)
+                .AddCell(new VoxelIndex(3, 0, 0), SolidCell)
                 .Build(),
             ++sequence);
         NavigationMapCommitOperation last = default;
         for (int i = 0; i < ownerCount; i++)
         {
             string mapId = $"source-{i:D2}";
-            NormalizedGridConfiguration binding = AddGridWithExtent(context, 0, 3 + i);
+            NormalizedGridConfiguration binding = AddGridWithExtent(
+                context,
+                -i,
+                3 + i);
+            var ownerSourceIndex = new VoxelIndex(3 + i, 0, 0);
             var connection = new NavigationConnection(
                 "bridge",
-                sourceIndex,
+                ownerSourceIndex,
                 new NavigationCellAddress("right", default),
-                GetFoot(binding, sourceIndex),
+                GetFoot(binding, ownerSourceIndex),
                 GetFoot(right, default),
                 Fixed64.Zero,
                 Fixed64.One,
-                new[] { new NavigationCellAddress("middle", witnessIndex) });
+                CreateInteriorWitnessCorridor("middle"));
             last = Admit(
                 context,
                 new NavigationMapBuilder(mapId, binding)
-                    .AddCell(sourceIndex, SolidCell)
+                    .AddCell(ownerSourceIndex, SolidCell)
                     .AddConnection(connection)
                     .Build(),
                 ++sequence);
@@ -718,6 +748,7 @@ public sealed class NavigationExplicitConnectionTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
             defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             defaults.MaintenanceBudget.MaxExplicitEdges,
             maxDependencyEntries: 1));
         int dependencyWork = 0;
@@ -819,6 +850,7 @@ public sealed class NavigationExplicitConnectionTests
                 defaults.MaintenanceBudget.MaxBaselineAddresses,
                 defaults.MaintenanceBudget.MaxOverlaySlots,
                 defaults.MaintenanceBudget.MaxComponentNodes,
+                defaults.MaintenanceBudget.MaxSeamCandidateProbes,
                 defaults.MaintenanceBudget.MaxExplicitEdges,
                 dependencyEntries));
         NavigationMapFoldWork beforeTree = CreateWork();
@@ -1479,6 +1511,7 @@ public sealed class NavigationExplicitConnectionTests
             maxBaselineAddresses: 1,
             maxOverlaySlots: 1,
             maxComponentNodes: 1,
+            maxSeamCandidateProbes: 1,
             maxExplicitEdges: 1,
             maxDependencyEntries: 16));
         VoxelIndex[] expected = { source, firstWitness, secondWitness, destination };
@@ -1551,7 +1584,7 @@ public sealed class NavigationExplicitConnectionTests
             new Vector3d[2],
             new NavigationCellAddress[2],
             new NavigationAddressStampSet(2));
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(1, 1, 1, 1, 16, 1));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(1, 1, 1, 1, 16, 16, 1));
         var sourceAddress = new NavigationCellAddress("map", source);
         var destinationAddress = new NavigationCellAddress("map", destination);
 
@@ -1884,8 +1917,12 @@ public sealed class NavigationExplicitConnectionTests
             endpoints.Add(address);
         }
 
-        kinds.Should().Equal(NavigationGraphEdgeKind.Explicit, NavigationGraphEdgeKind.Native);
+        kinds.Should().Equal(
+            NavigationGraphEdgeKind.Explicit,
+            NavigationGraphEdgeKind.Seam,
+            NavigationGraphEdgeKind.Native);
         endpoints.Should().Equal(
+            new NavigationCellAddress("a-destination", explicitIndex),
             new NavigationCellAddress("a-destination", explicitIndex),
             new NavigationCellAddress("z-source", nativeIndex));
     }
@@ -1937,7 +1974,7 @@ public sealed class NavigationExplicitConnectionTests
         using TrailblazerWorldContext context = CreateExplicitEvaluationContext();
         VoxelIndex witnessIndex = new(1, 0, 0);
         VoxelIndex destinationIndex = new(2, 0, 0);
-        CommitCell(
+        NavigationOverlayCommitOperation costChange = CommitCell(
             context,
             "map",
             NavigationCellOverlayOperation.Set(
@@ -1950,6 +1987,8 @@ public sealed class NavigationExplicitConnectionTests
                     Fixed64.Half,
                     Fixed64.One)),
             2);
+        SimulateUntilTerminal(context, costChange.Receipt);
+        costChange.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
 
         VoxelGrid grid = context.World.ActiveGrids[0];
         grid.TryGetVoxel(witnessIndex, out Voxel? witness).Should().BeTrue();
@@ -2281,6 +2320,30 @@ public sealed class NavigationExplicitConnectionTests
                 new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
             TraversalMedium.Solid);
         int checksum = 0;
+        NavigationGraphEdge seamEdge = default;
+        NavigationSurfaceEdgeEnumerator initialEdges = lease.Graph.EnumerateSurfaceEdges(source);
+        while (initialEdges.MoveNext())
+        {
+            if (initialEdges.Current.Kind == NavigationGraphEdgeKind.Seam)
+                seamEdge = initialEdges.Current;
+        }
+        seamEdge.Kind.Should().Be(NavigationGraphEdgeKind.Seam);
+        context.Pathing.GetNavigationGraphDiagnostics().Maps.Should().OnlyContain(
+            map => map.IncidentExplicitEdgeCount == 1,
+            "automatic seams must not inflate the explicit-only diagnostic");
+        System.Action checkSeamActive = () =>
+        {
+            for (int i = 0; i < 10_000; i++)
+                checksum += lease.Graph.AutomaticSeams.IsActive(seamEdge.AutomaticSeam) ? 1 : 0;
+        };
+        System.Action evaluateSeam = () =>
+        {
+            for (int i = 0; i < 10_000; i++)
+            {
+                checksum += (int)evaluator.EvaluateEdge(source, seamEdge, out Fixed64 cost);
+                checksum += cost.GetHashCode();
+            }
+        };
         System.Action enumerateAndEvaluate = () =>
         {
             for (int i = 0; i < 10_000; i++)
@@ -2293,8 +2356,14 @@ public sealed class NavigationExplicitConnectionTests
                 }
             }
         };
+        checkSeamActive();
+        evaluateSeam();
         enumerateAndEvaluate();
 
+        AllocationTestUtility.MeasureAllocatedBytes(checkSeamActive).Should().Be(0,
+            "active seam authentication is part of the warmed surface hot path");
+        AllocationTestUtility.MeasureAllocatedBytes(evaluateSeam).Should().Be(0,
+            "automatic seam evaluation is part of the warmed surface hot path");
         AllocationTestUtility.MeasureAllocatedBytes(enumerateAndEvaluate).Should().Be(0);
         checksum.Should().NotBe(0);
     }
@@ -2336,6 +2405,24 @@ public sealed class NavigationExplicitConnectionTests
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
         return binding;
     }
+
+    private static NavigationCellAddress[] CreateInteriorWitnessCorridor(string mapId) =>
+        new[]
+        {
+            new NavigationCellAddress(mapId, default),
+            new NavigationCellAddress(mapId, new VoxelIndex(1, 0, 0)),
+            new NavigationCellAddress(mapId, new VoxelIndex(2, 0, 0)),
+            new NavigationCellAddress(mapId, new VoxelIndex(3, 0, 0))
+        };
+
+    private static NavigationMap CreateCorridorMap(
+        string mapId,
+        NormalizedGridConfiguration binding) => new NavigationMapBuilder(mapId, binding)
+        .AddCell(default, SolidCell)
+        .AddCell(new VoxelIndex(1, 0, 0), SolidCell)
+        .AddCell(new VoxelIndex(2, 0, 0), SolidCell)
+        .AddCell(new VoxelIndex(3, 0, 0), SolidCell)
+        .Build();
 
     private static NormalizedGridConfiguration CreateBinding(int minimumX, int maximumX)
     {
@@ -2574,6 +2661,7 @@ public sealed class NavigationExplicitConnectionTests
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots ?? defaults.MaintenanceBudget.MaxOverlaySlots,
             maxComponentNodes ?? defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxSeamCandidateProbes,
             maxExplicitEdges,
             maxDependencyEntries ?? defaults.MaintenanceBudget.MaxDependencyEntries);
         var settings = new TrailblazerWorldContextSettings(
@@ -2673,7 +2761,7 @@ public sealed class NavigationExplicitConnectionTests
         TrailblazerWorldContext context,
         NavigationOperationReceipt receipt)
     {
-        for (int i = 0; i < 256 && receipt.Status == NavigationOperationStatus.Pending; i++)
+        for (int i = 0; i < 4096 && receipt.Status == NavigationOperationStatus.Pending; i++)
             context.Simulate();
     }
 

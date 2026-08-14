@@ -126,7 +126,14 @@ public class NavigationGraphLifecycleBenchmarks
             maxOverlayTransitions: 32_768);
         return new TrailblazerWorldContextSettings(
             operations,
-            new MaintenanceWorkBudget(4_096, 65_536, 65_536, 65_536, 65_536, 65_536),
+            new MaintenanceWorkBudget(
+                4_096,
+                65_536,
+                65_536,
+                65_536,
+                65_536,
+                65_536,
+                65_536),
             maxIngressEntries: 4_096,
             maxIngressBytes: 4_096 * 256L,
             maxActiveSnapshots: 3,

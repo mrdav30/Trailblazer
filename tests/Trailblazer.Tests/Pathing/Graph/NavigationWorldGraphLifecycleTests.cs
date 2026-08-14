@@ -39,7 +39,7 @@ public sealed class NavigationWorldGraphLifecycleTests
 
         GetState(context, default).IsMaterialized.Should().BeFalse();
         AddGrid(context.World, configuration, storage, default);
-        context.Simulate();
+        SimulateUntil(context, () => GetState(context, default).IsMaterialized);
 
         NavigationGraphCellState state = GetState(context, default);
         state.IsMaterialized.Should().BeTrue();
@@ -319,7 +319,7 @@ public sealed class NavigationWorldGraphLifecycleTests
 
         context.World.TryAddGrid(configuration, new[] { default(VoxelIndex), dynamic }, out _)
             .Should().BeTrue();
-        context.Simulate();
+        SimulateUntil(context, () => GetState(context, dynamic).IsMaterialized);
 
         NavigationGraphCellState materialized = GetState(context, dynamic);
         materialized.IsMaterialized.Should().BeTrue();
@@ -382,12 +382,18 @@ public sealed class NavigationWorldGraphLifecycleTests
         long firstGeneration = GetState(context, default).GridSpawnToken;
 
         context.World.TryRemoveGrid(first.GridIndex).Should().BeTrue();
-        context.Simulate();
+        SimulateUntil(context, () => !GetState(context, default).IsMaterialized);
         GetState(context, default).IsMaterialized.Should().BeFalse();
 
         VoxelGrid replacement = AddGrid(context.World, configuration, GridStorageKind.Dense, default);
         replacement.GridIndex.Should().Be(first.GridIndex);
-        context.Simulate();
+        SimulateUntil(
+            context,
+            () =>
+            {
+                NavigationGraphCellState current = GetState(context, default);
+                return current.IsMaterialized && current.GridSpawnToken != firstGeneration;
+            });
         NavigationGraphCellState state = GetState(context, default);
         state.IsMaterialized.Should().BeTrue();
         state.GridSpawnToken.Should().NotBe(firstGeneration);
@@ -566,8 +572,8 @@ public sealed class NavigationWorldGraphLifecycleTests
             GridTopologyKind.RectangularPrism,
             GridStorageKind.Dense);
         GridConfiguration secondConfiguration = new(
-            new Vector3d(10, 0, 0),
-            new Vector3d(12, 1, 1),
+            new Vector3d(3, 0, 0),
+            new Vector3d(5, 1, 1),
             topologyKind: GridTopologyKind.RectangularPrism,
             topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
             storageKind: GridStorageKind.Dense);
@@ -588,7 +594,10 @@ public sealed class NavigationWorldGraphLifecycleTests
             2,
             context.FrameCount + 1);
         context.Pathing.Admit(second).Should().BeTrue();
-        context.Simulate();
+        SimulateUntil(
+            context,
+            () => second.Receipt.Status != NavigationOperationStatus.Pending);
+        second.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
 
         GetState(context, default).IsBlocked.Should().BeTrue();
         context.Pathing.TryGetNavigationGraphCellState("other", default, out NavigationGraphCellState other)
@@ -686,7 +695,7 @@ public sealed class NavigationWorldGraphLifecycleTests
     }
 
     [Fact]
-    public void ExplicitDependencyOverlay_ShouldSplitStructuralComponentsDeterministically()
+    public void ExplicitDependencyOverlay_ShouldSuppressExplicitEdgeWhileAutomaticSeamPreservesComponent()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
         GridConfiguration firstConfiguration = CreateConfiguration(
@@ -725,9 +734,15 @@ public sealed class NavigationWorldGraphLifecycleTests
         NavigationMap secondMap = new NavigationMapBuilder("other", secondBinding)
             .AddCell(default, SolidCell)
             .Build();
-        AdmitMap(context, firstMap, 1, 1);
-        AdmitMap(context, secondMap, 2, 1);
-        context.Simulate();
+        NavigationMapCommitOperation firstCommit = AdmitMap(context, firstMap, 1, 1);
+        NavigationMapCommitOperation secondCommit = AdmitMap(context, secondMap, 2, 1);
+        SimulateUntil(
+            context,
+            () => secondCommit.Receipt.Status != NavigationOperationStatus.Pending);
+        firstCommit.Receipt.Status.Should().Be(
+            NavigationOperationStatus.Applied,
+            $"rejection={firstCommit.Receipt.Rejection}");
+        secondCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
 
         NavigationGraphDiagnosticsSnapshot connected = context.Pathing.GetNavigationGraphDiagnostics();
         connected.Maps[0].ComponentId.Should().Be(connected.Maps[1].ComponentId);
@@ -745,12 +760,17 @@ public sealed class NavigationWorldGraphLifecycleTests
             3,
             context.FrameCount + 1);
         context.Pathing.Admit(suppress).Should().BeTrue();
-        context.Simulate();
+        SimulateUntil(
+            context,
+            () => suppress.Receipt.Status != NavigationOperationStatus.Pending);
+        suppress.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
 
-        NavigationGraphDiagnosticsSnapshot split = context.Pathing.GetNavigationGraphDiagnostics();
-        split.Maps[0].ComponentId.Should().NotBe(split.Maps[1].ComponentId);
-        split.Maps.Should().OnlyContain(map => map.IncidentExplicitEdgeCount == 0);
-        split.Maps[0].ComponentVersion.Should().BeGreaterThan(connected.Maps[0].ComponentVersion);
+        NavigationGraphDiagnosticsSnapshot suppressed = context.Pathing.GetNavigationGraphDiagnostics();
+        suppressed.Maps[0].ComponentId.Should().Be(suppressed.Maps[1].ComponentId,
+            "the independent automatic seam still connects the adjacent maps");
+        suppressed.Maps.Should().OnlyContain(map => map.IncidentExplicitEdgeCount == 0,
+            "suppressing the authored connection must update explicit-only diagnostics");
+        suppressed.Maps[0].ComponentVersion.Should().BeGreaterThan(connected.Maps[0].ComponentVersion);
     }
 
     [Fact]
@@ -918,7 +938,7 @@ public sealed class NavigationWorldGraphLifecycleTests
         state.HasCell.Should().BeFalse();
     }
 
-    private static void AdmitMap(
+    private static NavigationMapCommitOperation AdmitMap(
         TrailblazerWorldContext context,
         NavigationMap map,
         long sequence,
@@ -930,15 +950,16 @@ public sealed class NavigationWorldGraphLifecycleTests
             sequence,
             context.FrameCount + 1);
         context.Pathing.Admit(operation).Should().BeTrue();
+        return operation;
     }
 
-    private static void AdmitCellOverlay(
+    private static NavigationOverlayCommitOperation AdmitCellOverlay(
         TrailblazerWorldContext context,
         NavigationCellOverlayOperation cell,
         long sequence) =>
         AdmitCellOverlay(context, "map", cell, sequence);
 
-    private static void AdmitCellOverlay(
+    private static NavigationOverlayCommitOperation AdmitCellOverlay(
         TrailblazerWorldContext context,
         string mapId,
         NavigationCellOverlayOperation cell,
@@ -951,6 +972,17 @@ public sealed class NavigationWorldGraphLifecycleTests
             sequence,
             context.FrameCount + 1);
         context.Pathing.Admit(operation).Should().BeTrue();
+        return operation;
+    }
+
+    private static void SimulateUntil(
+        TrailblazerWorldContext context,
+        System.Func<bool> condition,
+        int maximumFrames = 512)
+    {
+        for (int frame = 0; frame < maximumFrames && !condition(); frame++)
+            context.Simulate();
+        condition().Should().BeTrue("the bounded maintenance pipeline must converge");
     }
 
     private static NavigationGraphCellState GetState(

@@ -13,7 +13,8 @@ namespace Trailblazer.Pathing;
 internal enum NavigationGraphEdgeKind : byte
 {
     Native = 0,
-    Explicit = 1
+    Explicit = 1,
+    Seam = 2
 }
 
 /// <summary>Describes one allocation-free graph edge result.</summary>
@@ -30,6 +31,7 @@ internal readonly struct NavigationGraphEdge
         NativePortal = nativePortal;
         NativeDirectionOrdinal = nativeDirectionOrdinal;
         ExplicitConnection = null!;
+        AutomaticSeam = default;
     }
 
     internal NavigationGraphEdge(
@@ -41,6 +43,19 @@ internal readonly struct NavigationGraphEdge
         NativePortal = default;
         NativeDirectionOrdinal = -1;
         ExplicitConnection = explicitConnection;
+        AutomaticSeam = default;
+    }
+
+    internal NavigationGraphEdge(
+        NavigationNodeRef target,
+        NavigationAutomaticSeamRef automaticSeam)
+    {
+        Target = target;
+        Kind = NavigationGraphEdgeKind.Seam;
+        NativePortal = default;
+        NativeDirectionOrdinal = -1;
+        ExplicitConnection = null!;
+        AutomaticSeam = automaticSeam;
     }
 
     internal NavigationNodeRef Target { get; }
@@ -52,4 +67,6 @@ internal readonly struct NavigationGraphEdge
     internal int NativeDirectionOrdinal { get; }
 
     internal NavigationExplicitConnectionRecord ExplicitConnection { get; }
+
+    internal NavigationAutomaticSeamRef AutomaticSeam { get; }
 }

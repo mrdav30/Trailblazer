@@ -79,10 +79,10 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxIngressEntries.Should().Be(10);
         settings.MaxIngressBytes.Should().Be(256);
         settings.MaxActiveSnapshots.Should().Be(12);
-        settings.MaxActiveSnapshotBytes.Should().Be(1_584);
+        settings.MaxActiveSnapshotBytes.Should().Be(2_016);
         settings.MaxRetiredSnapshots.Should().Be(14);
         settings.MaxRetiredSnapshotBytes.Should().Be(15);
-        settings.MaxPersistentGraphPages.Should().Be(24);
+        settings.MaxPersistentGraphPages.Should().Be(30);
         settings.MaxDynamicCellSlotsPerMap.Should().Be(17);
         settings.MaxDynamicCellSlots.Should().Be(18);
         settings.NavigationAreaCount.Should().Be(19);
@@ -204,10 +204,10 @@ public sealed class TrailblazerWorldContextSettingsTests
         int maxIngressEntries = 1,
         long maxIngressBytes = 256,
         int maxActiveSnapshots = 3,
-        long maxActiveSnapshotBytes = 1_584,
+        long maxActiveSnapshotBytes = 2_016,
         int maxRetiredSnapshots = 1,
         long maxRetiredSnapshotBytes = 1,
-        int maxPersistentGraphPages = 24,
+        int maxPersistentGraphPages = 30,
         int maxDynamicCellSlotsPerMap = 1,
         int maxDynamicCellSlots = 1,
         int navigationAreaCount = 1,

@@ -18,6 +18,7 @@ internal sealed partial class NavigationCompositionIndex
     {
         private readonly NavigationCompositionIndex _source;
         private readonly NavigationInstanceDirectory _directory;
+        private readonly NavigationExplicitConnectionIndex _explicitConnections;
         private readonly string[] _changes;
         private readonly long _version;
         private readonly SwiftHashSet<string> _domain;
@@ -83,9 +84,25 @@ internal sealed partial class NavigationCompositionIndex
             NavigationInstanceDirectory directory,
             ReadOnlySpan<string> changedMapIds,
             long version)
+            : this(
+                source,
+                directory,
+                NavigationExplicitConnectionIndex.Empty,
+                changedMapIds,
+                version)
+        {
+        }
+
+        internal UpdateWork(
+            NavigationCompositionIndex source,
+            NavigationInstanceDirectory directory,
+            NavigationExplicitConnectionIndex explicitConnections,
+            ReadOnlySpan<string> changedMapIds,
+            long version)
         {
             _source = source;
             _directory = directory;
+            _explicitConnections = explicitConnections;
             _changes = NormalizeChanges(changedMapIds);
             _version = version;
             _nodes = source._nodes;
@@ -222,7 +239,7 @@ internal sealed partial class NavigationCompositionIndex
                         _rootKeys[_rootKeyCount++] = oldRoot.Key;
                     }
                     if (_directory.TryGet(mapId, out NavigationMapInstance next))
-                        _nodeWork = new StructuralNodeWork(next);
+                        _nodeWork = new StructuralNodeWork(next, _explicitConnections);
                 }
                 if (_nodeWork != null && !_nodeWork.Advance(meter))
                     return false;
@@ -669,12 +686,19 @@ internal sealed partial class NavigationCompositionIndex
     private sealed class StructuralNodeWork
     {
         private readonly NavigationMapInstance _instance;
+        private readonly NavigationExplicitConnectionIndex _explicitConnections;
         private PersistentStringMap<int> _counts = PersistentStringMap<int>.Empty;
         private int _stage;
         private int _index;
         private NavigationStructuralLink[]? _links;
 
-        internal StructuralNodeWork(NavigationMapInstance instance) => _instance = instance;
+        internal StructuralNodeWork(
+            NavigationMapInstance instance,
+            NavigationExplicitConnectionIndex explicitConnections)
+        {
+            _instance = instance;
+            _explicitConnections = explicitConnections;
+        }
 
         internal NavigationStructuralNode Result { get; private set; } = null!;
 
@@ -685,7 +709,7 @@ internal sealed partial class NavigationCompositionIndex
 
         internal bool Advance(MaintenanceWorkMeter meter)
         {
-            while (_stage < 5)
+            while (_stage < 3)
             {
                 int count = GetStageCount();
                 while (_index < count)
@@ -717,10 +741,9 @@ internal sealed partial class NavigationCompositionIndex
 
         private int GetStageCount() => _stage switch
         {
-            0 => _instance.Map.ConnectionSpan.Length,
+            0 => _explicitConnections.GetSourceOwnerCount(_instance.MapId),
             1 => _instance.Map.TransitionSpan.Length,
-            2 => _instance.Overlay.ConnectionCount,
-            3 => _instance.Overlay.TransitionCount,
+            2 => _instance.Overlay.TransitionCount,
             _ => 0
         };
 
@@ -729,21 +752,14 @@ internal sealed partial class NavigationCompositionIndex
             switch (_stage)
             {
                 case 0:
-                    NavigationConnection connection = _instance.Map.ConnectionSpan[index];
-                    return _instance.Overlay.TryGetConnection(connection.Id, out _)
-                        ? null
-                        : connection.Destination.MapId;
+                    NavigationExplicitConnectionRecord record =
+                        _explicitConnections.GetSourceOwnerAt(_instance.MapId, index);
+                    return record.IsActive ? record.Destination.MapId : null;
                 case 1:
                     TraversalTransitionDefinition transition = _instance.Map.TransitionSpan[index];
                     return _instance.Overlay.TryGetTransition(transition.Id, out _)
                         ? null
                         : transition.Destination.MapId;
-                case 2:
-                    NavigationConnectionOverlayOperation connectionOverlay =
-                        _instance.Overlay.GetConnectionAt(index);
-                    return connectionOverlay.Kind == NavigationConnectionOverlayOperationKind.Upsert
-                        ? connectionOverlay.Connection!.Destination.MapId
-                        : null;
                 default:
                     TraversalTransitionOverlayOperation transitionOverlay =
                         _instance.Overlay.GetTransitionAt(index);

@@ -13,6 +13,11 @@ namespace Trailblazer.Pathing;
 
 internal sealed partial class NavigationWorldGraph
 {
+    internal bool TryGetExplicitConnection(
+        NavigationConnectionOwnerKey owner,
+        out NavigationExplicitConnectionRecord record) =>
+        _explicitConnections.TryGet(owner, out record);
+
     internal bool TryGetNodeRef(
         int mapOrdinal,
         VoxelIndex index,
@@ -34,6 +39,14 @@ internal sealed partial class NavigationWorldGraph
 
         node = new NavigationNodeRef(mapOrdinal, slot);
         return node.IsValid;
+    }
+
+    internal bool TryGetNodeRef(
+        NavigationCellAddress address,
+        out NavigationNodeRef node)
+    {
+        int mapOrdinal = FindMapOrdinal(address.MapId);
+        return TryGetNodeRef(mapOrdinal, address.Index, out node);
     }
 
     internal bool TryGetNodeAddress(
@@ -90,6 +103,16 @@ internal sealed partial class NavigationWorldGraph
             instance!,
             sourceIndex);
     }
+
+    internal NavigationSurfaceEdgeEnumerator EnumerateSurfaceEdges(
+        NavigationNodeRef source) => new(this, source, incoming: false, includeNative: true);
+
+    internal NavigationSurfaceEdgeEnumerator EnumerateIncomingExplicitSurfaceEdges(
+        NavigationNodeRef destination) => new(
+            this,
+            destination,
+            incoming: true,
+            includeNative: false);
 
     private bool TryGetNodeLocation(
         NavigationNodeRef node,

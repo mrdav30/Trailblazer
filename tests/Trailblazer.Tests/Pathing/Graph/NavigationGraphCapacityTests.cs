@@ -460,9 +460,9 @@ public sealed class NavigationGraphCapacityTests
         NavigationGraphDiagnosticsSnapshot diagnostics = context.Pathing.GetNavigationGraphDiagnostics();
         diagnostics.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(settings.MaxActiveSnapshotBytes);
         diagnostics.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(settings.MaxPersistentGraphPages);
-        diagnostics.ActiveSnapshotBytes.Should().Be(8_819_928,
+        diagnostics.ActiveSnapshotBytes.Should().Be(9_902_440,
             "the default envelope measurement pins the honest owned-root accounting used to size defaults");
-        diagnostics.PersistentGraphPageCount.Should().Be(74_296);
+        diagnostics.PersistentGraphPageCount.Should().Be(82_502);
         for (int mapIndex = 0; mapIndex < 4; mapIndex++)
         {
             context.Pathing.TryGetNavigationGraphCellState(
@@ -978,7 +978,9 @@ public sealed class NavigationGraphCapacityTests
     public void ChunkedBaseline_ShouldRemainFailClosedAtUnpublishedPageCeiling()
     {
         int firstChunkPageCount;
-        using (TrailblazerWorldContext probe = CreateChunkedBaselineContext(1_000))
+        using (TrailblazerWorldContext probe = CreateChunkedBaselineContext(
+            1_000,
+            includeExplicitConnection: true))
         {
             probe.Simulate();
             NavigationGraphDiagnosticsSnapshot diagnostics =
@@ -988,7 +990,9 @@ public sealed class NavigationGraphCapacityTests
             firstChunkPageCount = diagnostics.PersistentGraphPageCount;
         }
 
-        using TrailblazerWorldContext capped = CreateChunkedBaselineContext(firstChunkPageCount);
+        using TrailblazerWorldContext capped = CreateChunkedBaselineContext(
+            firstChunkPageCount,
+            includeExplicitConnection: true);
         capped.Simulate();
         NavigationGraphDiagnosticsSnapshot first = capped.Pathing.GetNavigationGraphDiagnostics();
         first.PersistentGraphPageCount.Should().Be(firstChunkPageCount);
@@ -1595,7 +1599,8 @@ public sealed class NavigationGraphCapacityTests
     }
 
     private static TrailblazerWorldContext CreateChunkedBaselineContext(
-        int maxPersistentGraphPages)
+        int maxPersistentGraphPages,
+        bool includeExplicitConnection = false)
     {
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         MaintenanceWorkBudget budget = new(
@@ -1636,6 +1641,20 @@ public sealed class NavigationGraphCapacityTests
             var builder = new NavigationMapBuilder("map", binding);
             for (int x = 0; x < 129; x++)
                 builder.AddCell(new VoxelIndex(x, 0, 0), cell);
+            if (includeExplicitConnection)
+            {
+                binding.TryGetCellPrism(default, out GridCellPrism source).Should().BeTrue();
+                binding.TryGetCellPrism(new VoxelIndex(1, 0, 0), out GridCellPrism destination)
+                    .Should().BeTrue();
+                builder.AddConnection(new NavigationConnection(
+                    "page-ceiling",
+                    default,
+                    new NavigationCellAddress("map", new VoxelIndex(1, 0, 0)),
+                    new Vector3d(source.Center.X, source.VerticalMin, source.Center.Z),
+                    new Vector3d(destination.Center.X, destination.VerticalMin, destination.Center.Z),
+                    Fixed64.Zero,
+                    Fixed64.One));
+            }
             context.Pathing.Admit(new NavigationMapCommitOperation(
                 new PreparedNavigationMap(builder.Build(), 1),
                 OverlayReplacementPolicy.Clear,

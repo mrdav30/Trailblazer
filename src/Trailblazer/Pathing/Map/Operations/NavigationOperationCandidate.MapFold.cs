@@ -25,7 +25,14 @@ internal sealed partial class NavigationOperationCandidate
             corridorPrisms,
             corridorWaypoints);
 
-    internal MapFoldCursor BeginMapRemovalFold(string mapId) => new(this, mapId);
+    internal MapFoldCursor BeginMapRemovalFold(
+        string mapId,
+        GridCellPrism[] corridorPrisms,
+        Vector3d[] corridorWaypoints) => new(
+            this,
+            mapId,
+            corridorPrisms,
+            corridorWaypoints);
 
     internal sealed class MapFoldCursor
     {
@@ -55,8 +62,8 @@ internal sealed partial class NavigationOperationCandidate
         private int _validationWorkIndex;
         private int _dependencyStage;
         private int _dependencyIndex;
-        private int _dependencyAddressIndex;
         private bool _removeDependencies = true;
+        private ExplicitConnectionRefreshWork? _explicitRefresh;
         private Stage _stage;
 
         internal MapFoldCursor(
@@ -81,7 +88,11 @@ internal sealed partial class NavigationOperationCandidate
             PrepareCommit();
         }
 
-        internal MapFoldCursor(NavigationOperationCandidate source, string mapId)
+        internal MapFoldCursor(
+            NavigationOperationCandidate source,
+            string mapId,
+            GridCellPrism[] corridorPrisms,
+            Vector3d[] corridorWaypoints)
         {
             _working = source.Clone();
             _sourceRetainedBytes = source.RetainedBytes;
@@ -90,6 +101,8 @@ internal sealed partial class NavigationOperationCandidate
             _replacementPolicy = OverlayReplacementPolicy.Clear;
             _limits = default;
             _mapId = mapId;
+            _corridorPrisms = corridorPrisms;
+            _corridorWaypoints = corridorWaypoints;
             _working._maps.TryGetValue(mapId, out _current);
             _changedMapIds[0] = mapId;
             _stage = _current == null ? Stage.Complete : Stage.Dependencies;
@@ -109,12 +122,14 @@ internal sealed partial class NavigationOperationCandidate
             + ((long)(_changedMapIds.Length + _changedStates.Length) * System.IntPtr.Size)
             + System.Math.Max(0L, _working.RetainedBytes - _sourceRetainedBytes)
             + _working.WorkCopiedPersistentBytes
+            + (_explicitRefresh?.RetainedBytes ?? 0)
             + GetPendingStateGrowthBytes());
 
         internal int PersistentPageCount => checked(
             1
             + System.Math.Max(0, _working.PersistentPageCount - _sourcePersistentPageCount)
             + _working.WorkCopiedPersistentPages
+            + (_explicitRefresh?.PersistentPageCount ?? 0)
             + GetPendingStateGrowthPages());
 
         private long GetPendingStateGrowthBytes()
@@ -186,6 +201,17 @@ internal sealed partial class NavigationOperationCandidate
             }
             if (_stage == Stage.Commit)
                 Commit();
+            if (_stage == Stage.ExplicitConnections)
+            {
+                if (!_explicitRefresh!.Advance(meter))
+                {
+                    rejection = NavigationOperationRejection.None;
+                    return false;
+                }
+                if (!_explicitRefresh.IsValid)
+                    _rejection = NavigationOperationRejection.ValidationFailed;
+                _stage = Stage.Complete;
+            }
             rejection = _rejection;
             return true;
         }
@@ -305,6 +331,20 @@ internal sealed partial class NavigationOperationCandidate
                     : _next!.Map.TransitionSpan.Length;
                 while (_authoredIndex < count)
                 {
+                    if (_authoredStage == 0
+                        && _next!.Map.ConnectionSpan[_authoredIndex].Witnesses.Count
+                            > _limits.MaxCorridorCells - 2)
+                    {
+                        _rejection = NavigationOperationRejection.CapacityExceeded;
+                        _stage = Stage.Complete;
+                        return true;
+                    }
+                    if (_authoredStage == 0
+                        && !RequiresAuthoredConnectionValidation(_next!, _authoredIndex))
+                    {
+                        _authoredIndex++;
+                        continue;
+                    }
                     int workUnits = _authoredStage == 0
                         ? _next!.Map.ConnectionSpan[_authoredIndex].Witnesses.Count + 2
                         : 1;
@@ -316,14 +356,6 @@ internal sealed partial class NavigationOperationCandidate
                     }
                     int edgeIndex = _authoredIndex++;
                     _authoredWorkIndex = 0;
-                    if (_authoredStage == 0
-                        && _next.Map.ConnectionSpan[edgeIndex].Witnesses.Count
-                            > _limits.MaxCorridorCells - 2)
-                    {
-                        _rejection = NavigationOperationRejection.CapacityExceeded;
-                        _stage = Stage.Complete;
-                        return true;
-                    }
                     if (!_working.ValidateAuthoredStateEdgeForWork(
                             _next,
                             connection: _authoredStage == 0,
@@ -332,7 +364,7 @@ internal sealed partial class NavigationOperationCandidate
                             _changedStates,
                             _corridorPrisms!,
                             _corridorWaypoints!,
-                            allowDormantEndpoints: false))
+                            allowDormantEndpoints: true))
                     {
                         _rejection = NavigationOperationRejection.ValidationFailed;
                         _stage = Stage.Complete;
@@ -399,6 +431,11 @@ internal sealed partial class NavigationOperationCandidate
                 };
                 while (_validationIndex < count)
                 {
+                    if (_validationStage < 2)
+                    {
+                        _validationIndex++;
+                        continue;
+                    }
                     int workUnits = GetWitnessCount(state, _validationStage, _validationIndex) + 1;
                     while (_validationWorkIndex < workUnits)
                     {
@@ -423,8 +460,7 @@ internal sealed partial class NavigationOperationCandidate
                             _changedStates,
                             _corridorPrisms!,
                             _corridorWaypoints!,
-                            allowDormantEndpoints: _current != null
-                                && _replacementPolicy == OverlayReplacementPolicy.PreserveAndRevalidate))
+                            allowDormantEndpoints: true))
                     {
                         _rejection = NavigationOperationRejection.ValidationFailed;
                         _stage = Stage.Complete;
@@ -472,61 +508,29 @@ internal sealed partial class NavigationOperationCandidate
             bool remove,
             MaintenanceWorkMeter meter)
         {
-            while (_dependencyStage < 4)
+            while (_dependencyStage < 2)
             {
-                int count = _dependencyStage switch
-                {
-                    0 => state.Map.ConnectionSpan.Length,
-                    1 => state.Map.TransitionSpan.Length,
-                    2 => state.Overlay.ConnectionCount,
-                    _ => state.Overlay.TransitionCount
-                };
+                int count = _dependencyStage == 0
+                    ? state.Map.TransitionSpan.Length
+                    : state.Overlay.TransitionCount;
                 while (_dependencyIndex < count)
                 {
-                    if (_dependencyStage is 0 or 2)
+                    TraversalTransitionOverlayOperation overlay = _dependencyStage == 1
+                        ? state.Overlay.GetTransitionAt(_dependencyIndex)
+                        : default;
+                    if (_dependencyStage == 1
+                        && overlay.Kind != TraversalTransitionOverlayOperationKind.Upsert)
                     {
-                        NavigationConnection? connection = _dependencyStage == 0
-                            ? state.Map.ConnectionSpan[_dependencyIndex]
-                            : state.Overlay.GetConnectionAt(_dependencyIndex).Kind
-                                == NavigationConnectionOverlayOperationKind.Upsert
-                                    ? state.Overlay.GetConnectionAt(_dependencyIndex).Connection
-                                    : null;
-                        if (connection == null)
-                        {
-                            _dependencyIndex++;
-                            continue;
-                        }
-                        int addresses = connection.Witnesses.Count + 1;
-                        while (_dependencyAddressIndex < addresses)
-                        {
-                            if (!meter.TryConsumeDependencyEntries(1))
-                                return false;
-                            string destination = _dependencyAddressIndex++ == 0
-                                ? connection.Destination.MapId
-                                : connection.Witnesses[_dependencyAddressIndex - 2].MapId;
-                            _working.UpdateIncomingSource(destination, state.Map.MapId, remove);
-                        }
+                        _dependencyIndex++;
+                        continue;
                     }
-                    else
-                    {
-                        TraversalTransitionOverlayOperation overlay = _dependencyStage == 3
-                            ? state.Overlay.GetTransitionAt(_dependencyIndex)
-                            : default;
-                        if (_dependencyStage == 3
-                            && overlay.Kind != TraversalTransitionOverlayOperationKind.Upsert)
-                        {
-                            _dependencyIndex++;
-                            continue;
-                        }
-                        if (!meter.TryConsumeDependencyEntries(1))
-                            return false;
-                        string destination = _dependencyStage == 1
-                            ? state.Map.TransitionSpan[_dependencyIndex].Destination.MapId
-                            : overlay.Transition.Destination.MapId;
-                        _working.UpdateIncomingSource(destination, state.Map.MapId, remove);
-                    }
+                    if (!meter.TryConsumeDependencyEntries(1))
+                        return false;
+                    string destination = _dependencyStage == 0
+                        ? state.Map.TransitionSpan[_dependencyIndex].Destination.MapId
+                        : overlay.Transition.Destination.MapId;
+                    _working.UpdateIncomingSource(destination, state.Map.MapId, remove);
                     _dependencyIndex++;
-                    _dependencyAddressIndex = 0;
                 }
                 _dependencyStage++;
                 _dependencyIndex = 0;
@@ -574,14 +578,17 @@ internal sealed partial class NavigationOperationCandidate
                     out int versionCopies);
                 _working.RecordPersistentCopies(versionCopies);
             }
-            _stage = Stage.Complete;
+            _explicitRefresh = _working.BeginExplicitConnectionRefresh(
+                _mapId,
+                _corridorPrisms!,
+                _corridorWaypoints!);
+            _stage = Stage.ExplicitConnections;
         }
 
         private void ResetDependencyCursor()
         {
             _dependencyStage = 0;
             _dependencyIndex = 0;
-            _dependencyAddressIndex = 0;
         }
 
         private enum Stage
@@ -592,6 +599,7 @@ internal sealed partial class NavigationOperationCandidate
             Validation,
             Dependencies,
             Commit,
+            ExplicitConnections,
             Complete
         }
     }

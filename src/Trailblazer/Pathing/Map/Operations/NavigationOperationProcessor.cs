@@ -29,6 +29,14 @@ internal sealed class NavigationOperationProcessor
     private NavigationOperationCandidate _candidate;
     private readonly GridCellPrism[] _corridorPrisms;
     private readonly Vector3d[] _corridorWaypoints;
+    private readonly MaintenanceWorkMeter _unboundedMaintenanceMeter = new(
+        new MaintenanceWorkBudget(
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue,
+            int.MaxValue));
     private readonly NavigationOperationRejection[] _outcomes;
     private readonly bool[] _superseded;
     private readonly NavigationOperationFrameChange[] _changes;
@@ -224,6 +232,11 @@ internal sealed class NavigationOperationProcessor
         SwiftThrowHelper.ThrowIfNull(publishCandidate, nameof(publishCandidate));
         SwiftThrowHelper.ThrowIfArgument(frame <= _lastProcessedFrame, nameof(frame));
         _lastProcessedFrame = frame;
+        if (maintenanceMeter == null)
+        {
+            _unboundedMaintenanceMeter.Reset();
+            maintenanceMeter = _unboundedMaintenanceMeter;
+        }
 
         int eligibleCount = 0;
         long batchDescriptorBytes = 0;
@@ -268,7 +281,11 @@ internal sealed class NavigationOperationProcessor
                         _limits,
                         _corridorPrisms,
                         _corridorWaypoints)
-                    : new NavigationMapFoldWork(_candidate, _pending[i].MapId!);
+                    : new NavigationMapFoldWork(
+                        _candidate,
+                        _pending[i].MapId!,
+                        _corridorPrisms,
+                        _corridorWaypoints);
                 _activeFoldSourceCandidate ??= _candidate;
                 _foldOperationIndex = i;
                 if (retainedWorkGuard != null
@@ -343,7 +360,7 @@ internal sealed class NavigationOperationProcessor
             }
             else
             {
-                _outcomes[i] = Apply(_pending[i]);
+                _outcomes[i] = NavigationOperationRejection.InvalidOperation;
             }
             _foldOperationIndex = i + 1;
             _superseded[i] = false;
@@ -401,8 +418,6 @@ internal sealed class NavigationOperationProcessor
             }
         }
 
-        if (maintenanceMeter == null)
-            MarkConservativeSuperseded(eligibleCount);
         for (int i = 0; i < eligibleCount; i++)
         {
             PendingOperation operation = _pending[i];
@@ -481,58 +496,6 @@ internal sealed class NavigationOperationProcessor
         }
 
         return NavigationOperationRejection.None;
-    }
-
-    private NavigationOperationRejection Apply(PendingOperation operation)
-    {
-        return operation.Kind switch
-        {
-            PendingOperationKind.MapCommit => _candidate.ApplyMap(
-                operation.PreparedMap!,
-                operation.ReplacementPolicy,
-                _limits,
-                _corridorPrisms,
-                _corridorWaypoints),
-            PendingOperationKind.MapRemove => _candidate.RemoveMap(operation.MapId!),
-            PendingOperationKind.Overlay => _candidate.ApplyOverlay(
-                operation.PreparedOverlay!.Transaction,
-                operation.OperationSequence,
-                _limits,
-                _corridorPrisms,
-                _corridorWaypoints),
-            _ => NavigationOperationRejection.InvalidOperation
-        };
-    }
-
-    private void MarkConservativeSuperseded(int eligibleCount)
-    {
-        _mapOverwriters.Clear();
-        _coveredCells.Clear();
-        _coveredConnections.Clear();
-        _coveredTransitions.Clear();
-
-        for (int index = eligibleCount - 1; index >= 0; index--)
-        {
-            if (_outcomes[index] != NavigationOperationRejection.None)
-                continue;
-
-            PendingOperation operation = _pending[index];
-            if (operation.IsMapOperation)
-            {
-                _superseded[index] = _mapOverwriters.Contains(operation.MapId!);
-                if (operation.Kind == PendingOperationKind.MapRemove
-                    || (operation.Kind == PendingOperationKind.MapCommit
-                        && operation.ReplacementPolicy == OverlayReplacementPolicy.Clear))
-                {
-                    _mapOverwriters.Add(operation.MapId!);
-                }
-                continue;
-            }
-
-            NavigationOverlayTransaction transaction = operation.PreparedOverlay!.Transaction;
-            _superseded[index] = IsOverlayCovered(transaction);
-            AddOverlayCoverage(transaction);
-        }
     }
 
     private bool AdvanceSupersedence(int eligibleCount, MaintenanceWorkMeter meter)

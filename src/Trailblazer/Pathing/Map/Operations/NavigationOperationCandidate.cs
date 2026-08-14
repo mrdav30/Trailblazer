@@ -19,6 +19,10 @@ internal sealed partial class NavigationOperationCandidate
     private PersistentStringMap<PersistentStringMap<bool>> _incomingSources =
         PersistentStringMap<PersistentStringMap<bool>>.Empty;
     private PersistentGridConfigurationMap<string> _gridBindings = PersistentGridConfigurationMap<string>.Empty;
+    private NavigationExplicitConnectionIndex _explicitConnections =
+        NavigationExplicitConnectionIndex.Empty;
+    private PersistentStringMap<bool> _explicitChangedSources =
+        PersistentStringMap<bool>.Empty;
     private long _overlaySlotCount;
     private long _overlayConnectionCount;
     private long _overlayTransitionCount;
@@ -53,6 +57,8 @@ internal sealed partial class NavigationOperationCandidate
         + _bakeVersionHighWater.RetainedBytes
         + _incomingSources.RetainedBytes
         + _gridBindings.RetainedBytes
+        + _explicitConnections.RetainedBytes
+        + _explicitChangedSources.RetainedBytes
         + _mapStateRetainedBytes
         + _incomingSetRetainedBytes);
 
@@ -62,6 +68,8 @@ internal sealed partial class NavigationOperationCandidate
         + _bakeVersionHighWater.PersistentNodeCount
         + _incomingSources.PersistentNodeCount
         + _gridBindings.Count
+        + _explicitConnections.PersistentPageCount
+        + _explicitChangedSources.PersistentNodeCount
         + _mapStatePersistentPages
         + _incomingSetPersistentPages);
 
@@ -73,6 +81,7 @@ internal sealed partial class NavigationOperationCandidate
     {
         _workCopiedPersistentBytes = 0;
         _workCopiedPersistentPages = 0;
+        _explicitChangedSources = PersistentStringMap<bool>.Empty;
     }
 
     internal void RecordPersistentCopies(int copiedNodes, long bytesPerNode = 64L)
@@ -144,6 +153,8 @@ internal sealed partial class NavigationOperationCandidate
             _bakeVersionHighWater = _bakeVersionHighWater,
             _incomingSources = _incomingSources,
             _gridBindings = _gridBindings,
+            _explicitConnections = _explicitConnections,
+            _explicitChangedSources = _explicitChangedSources,
             _overlaySlotCount = _overlaySlotCount,
             _overlayConnectionCount = _overlayConnectionCount,
             _overlayTransitionCount = _overlayTransitionCount,
@@ -188,28 +199,8 @@ internal sealed partial class NavigationOperationCandidate
         switch (stage)
         {
             case 0:
-                NavigationConnection connection = state.Map.ConnectionSpan[index];
-                return state.Overlay.TryGetConnection(connection.Id, out _)
-                    || ValidateConnection(
-                        state,
-                        connection,
-                        changedMapIds,
-                        changedStates,
-                        corridorPrisms,
-                        corridorWaypoints,
-                        allowDormantEndpoints);
             case 1:
-                NavigationConnectionOverlayOperation connectionOverlay =
-                    state.Overlay.GetConnectionAt(index);
-                return connectionOverlay.Kind != NavigationConnectionOverlayOperationKind.Upsert
-                    || ValidateConnection(
-                        state,
-                        connectionOverlay.Connection!,
-                        changedMapIds,
-                        changedStates,
-                        corridorPrisms,
-                        corridorWaypoints,
-                        allowDormantEndpoints);
+                return true;
             case 2:
                 TraversalTransitionDefinition transition = state.Map.TransitionSpan[index];
                 return state.Overlay.TryGetTransition(transition.Id, out _)
@@ -241,7 +232,8 @@ internal sealed partial class NavigationOperationCandidate
         GridCellPrism[] corridorPrisms,
         Vector3d[] corridorWaypoints,
         bool allowDormantEndpoints) => connection
-            ? ValidateConnection(
+            ? !RequiresAuthoredConnectionValidation(state, index)
+                || ValidateConnection(
                 state,
                 state.Map.ConnectionSpan[index],
                 changedMapIds,
@@ -257,6 +249,9 @@ internal sealed partial class NavigationOperationCandidate
                 changedStates,
                 allowDormantEndpoints,
                 useAuthoredFallback: true);
+
+    internal static bool RequiresAuthoredConnectionValidation(MapState state, int index) =>
+        state.Overlay.TryGetConnection(state.Map.ConnectionSpan[index].Id, out _);
 
     internal MapState[] CaptureStates()
     {
@@ -698,34 +693,8 @@ internal sealed partial class NavigationOperationCandidate
 
     private void VisitDestinationMapIds(MapState state, bool remove)
     {
-        for (int i = 0; i < state.Map.Connections.Count; i++)
-        {
-            UpdateIncomingSource(state.Map.Connections[i].Destination.MapId, state.Map.MapId, remove);
-            for (int witness = 0; witness < state.Map.Connections[i].Witnesses.Count; witness++)
-            {
-                UpdateIncomingSource(
-                    state.Map.Connections[i].Witnesses[witness].MapId,
-                    state.Map.MapId,
-                    remove);
-            }
-        }
         for (int i = 0; i < state.Map.Transitions.Count; i++)
             UpdateIncomingSource(state.Map.Transitions[i].Destination.MapId, state.Map.MapId, remove);
-        for (int i = 0; i < state.Overlay.ConnectionCount; i++)
-        {
-            NavigationConnectionOverlayOperation operation = state.Overlay.GetConnectionAt(i);
-            if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert)
-            {
-                UpdateIncomingSource(operation.Connection!.Destination.MapId, state.Map.MapId, remove);
-                for (int witness = 0; witness < operation.Connection.Witnesses.Count; witness++)
-                {
-                    UpdateIncomingSource(
-                        operation.Connection.Witnesses[witness].MapId,
-                        state.Map.MapId,
-                        remove);
-                }
-            }
-        }
         for (int i = 0; i < state.Overlay.TransitionCount; i++)
         {
             TraversalTransitionOverlayOperation operation = state.Overlay.GetTransitionAt(i);
@@ -888,7 +857,10 @@ internal sealed partial class NavigationOperationCandidate
                 connection.SourceIndex,
                 useAuthoredFallback,
                 out NavigationCell sourceCell))
-            return allowDormantEndpoints;
+        {
+            return allowDormantEndpoints
+                && IsKnownSuppressed(source, connection.SourceIndex);
+        }
         if (connection.PortalRadiusClearance > sourceCell.RadiusClearance
             || connection.PortalHeightClearance > sourceCell.HeightClearance
             || !source.Map.GridBinding.TryGetCellPrism(connection.SourceIndex, out GridForge.Grids.Topology.GridCellPrism sourcePrism)
@@ -1070,8 +1042,9 @@ internal sealed partial class NavigationOperationCandidate
 
         if (!TryGetValidationCell(target, address.Index, useAuthoredFallback, out NavigationCell cell))
         {
-            dormant = allowDormantEndpoints;
-            return allowDormantEndpoints;
+            dormant = allowDormantEndpoints
+                && IsKnownSuppressed(target, address.Index);
+            return dormant;
         }
         if (radius > cell.RadiusClearance
             || height > cell.HeightClearance)

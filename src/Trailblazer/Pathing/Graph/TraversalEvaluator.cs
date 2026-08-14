@@ -59,6 +59,21 @@ internal readonly struct TraversalEvaluator
     internal TraversalEvaluationStatus EvaluateNativeEdge(
         NavigationNodeRef source,
         in NavigationGraphEdge edge,
+        out Fixed64 cost) => EvaluateEdge(source, edge, out cost);
+
+    internal TraversalEvaluationStatus EvaluateEdge(
+        NavigationNodeRef source,
+        in NavigationGraphEdge edge,
+        out Fixed64 cost)
+    {
+        return edge.Kind == NavigationGraphEdgeKind.Explicit
+            ? EvaluateExplicitEdge(source, edge, out cost)
+            : EvaluateNative(source, edge, out cost);
+    }
+
+    private TraversalEvaluationStatus EvaluateNative(
+        NavigationNodeRef source,
+        in NavigationGraphEdge edge,
         out Fixed64 cost)
     {
         cost = Fixed64.Zero;
@@ -114,6 +129,66 @@ internal readonly struct TraversalEvaluator
                 targetState.FootAnchor,
                 out Fixed64 targetDistance)
             || !Fixed64.TryAdd(sourceDistance, targetDistance, out Fixed64 total)
+            || !Fixed64.TryAdd(total, targetState.Cell.EnterCost, out total)
+            || !Fixed64.TryAdd(total, targetRule.AdditionalEnterCost, out total))
+        {
+            return TraversalEvaluationStatus.CostOverflow;
+        }
+
+        cost = total;
+        return TraversalEvaluationStatus.Passable;
+    }
+
+    private TraversalEvaluationStatus EvaluateExplicitEdge(
+        NavigationNodeRef source,
+        in NavigationGraphEdge edge,
+        out Fixed64 cost)
+    {
+        cost = Fixed64.Zero;
+        NavigationExplicitConnectionRecord record = edge.ExplicitConnection;
+        if (record == null
+            || !record.IsActive
+            || edge.Kind != NavigationGraphEdgeKind.Explicit
+            || !_graph.TryGetNodeAddress(source, out NavigationCellAddress sourceAddress)
+            || !sourceAddress.Equals(record.Source)
+            || !_graph.TryGetNodeAddress(edge.Target, out NavigationCellAddress targetAddress)
+            || !targetAddress.Equals(record.Destination)
+            || !TryGetPassableNode(source, out NavigationNodeState sourceState, out _)
+            || !TryGetPassableNode(
+                edge.Target,
+                out NavigationNodeState targetState,
+                out NavigationAreaRule targetRule))
+        {
+            return TraversalEvaluationStatus.Impassable;
+        }
+
+        KinematicBodyShape shape = _profile.Shape;
+        NavigationConnection connection = record.Definition;
+        if (shape.Radius > connection.PortalRadiusClearance
+            || shape.Height > connection.PortalHeightClearance)
+        {
+            return TraversalEvaluationStatus.Impassable;
+        }
+        for (int i = 0; i < connection.Witnesses.Count; i++)
+        {
+            if (!_graph.TryGetNodeRef(connection.Witnesses[i], out NavigationNodeRef witness)
+                || !TryGetPassableNode(witness, out _, out _))
+            {
+                return TraversalEvaluationStatus.Impassable;
+            }
+        }
+
+        if (!Vector3d.TryGetDistance(
+                sourceState.FootAnchor,
+                connection.EntryAnchor,
+                out Fixed64 sourceDistance)
+            || !Vector3d.TryGetDistance(
+                connection.ExitAnchor,
+                targetState.FootAnchor,
+                out Fixed64 targetDistance)
+            || !Fixed64.TryAdd(sourceDistance, record.CorridorCost, out Fixed64 total)
+            || !Fixed64.TryAdd(total, targetDistance, out total)
+            || !Fixed64.TryAdd(total, connection.AdditionalCost, out total)
             || !Fixed64.TryAdd(total, targetState.Cell.EnterCost, out total)
             || !Fixed64.TryAdd(total, targetRule.AdditionalEnterCost, out total))
         {

@@ -21,14 +21,18 @@ internal sealed class NavigationStructuralNode
 
     internal long RetainedBytes => checked(32L + ((long)_links.Length * 16L));
 
-    internal static NavigationStructuralNode Capture(NavigationMapInstance instance)
+    internal static NavigationStructuralNode Capture(
+        NavigationMapInstance instance,
+        NavigationExplicitConnectionIndex explicitConnections)
     {
         var destinations = new SwiftList<string>();
-        ReadOnlySpan<NavigationConnection> connections = instance.Map.ConnectionSpan;
-        for (int i = 0; i < connections.Length; i++)
+        int ownerCount = explicitConnections.GetSourceOwnerCount(instance.MapId);
+        for (int i = 0; i < ownerCount; i++)
         {
-            if (!instance.Overlay.TryGetConnection(connections[i].Id, out _))
-                destinations.Add(connections[i].Destination.MapId);
+            NavigationExplicitConnectionRecord record =
+                explicitConnections.GetSourceOwnerAt(instance.MapId, i);
+            if (record.IsActive)
+                destinations.Add(record.Destination.MapId);
         }
 
         ReadOnlySpan<TraversalTransitionDefinition> transitions = instance.Map.TransitionSpan;
@@ -36,13 +40,6 @@ internal sealed class NavigationStructuralNode
         {
             if (!instance.Overlay.TryGetTransition(transitions[i].Id, out _))
                 destinations.Add(transitions[i].Destination.MapId);
-        }
-
-        for (int i = 0; i < instance.Overlay.ConnectionCount; i++)
-        {
-            NavigationConnectionOverlayOperation operation = instance.Overlay.GetConnectionAt(i);
-            if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert)
-                destinations.Add(operation.Connection!.Destination.MapId);
         }
 
         for (int i = 0; i < instance.Overlay.TransitionCount; i++)

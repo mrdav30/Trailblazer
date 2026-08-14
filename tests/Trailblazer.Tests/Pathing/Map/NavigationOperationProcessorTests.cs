@@ -189,6 +189,36 @@ public sealed class NavigationOperationProcessorTests
     }
 
     [Fact]
+    public void OversizedBakedConnection_ShouldRejectAtCorridorCapacity()
+    {
+        var witnesses = new NavigationCellAddress[63];
+        for (int i = 0; i < witnesses.Length; i++)
+            witnesses[i] = new NavigationCellAddress($"witness-{i:D2}", default);
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        NavigationConnection connection = new(
+            "oversized",
+            default,
+            new NavigationCellAddress("destination", default),
+            GetFootAnchor(binding, default),
+            Vector3d.Zero,
+            Fixed64.Zero,
+            Fixed64.Half,
+            witnesses);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(default, SolidCell)
+            .AddConnection(connection)
+            .Build();
+        var operation = Commit(map, 1, 0);
+        var processor = new NavigationOperationProcessor(CreateLimits());
+
+        processor.Admit(operation).Should().BeTrue();
+        processor.ProcessFrame(0);
+
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+    }
+
+    [Fact]
     public void CrossMapOverlay_RejectsNonContiguousWitnessCorridorWithoutMutation()
     {
         var processor = new NavigationOperationProcessor(CreateLimits());
@@ -319,7 +349,7 @@ public sealed class NavigationOperationProcessorTests
     }
 
     [Fact]
-    public void NewLinkUpsert_ShouldNotBeAcceptedAsDormantBySameTransactionSuppression()
+    public void NewLinkUpsert_WithSameTransactionSuppression_ShouldPublishDormantOwner()
     {
         var processor = new NavigationOperationProcessor(CreateLimits());
         NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
@@ -352,10 +382,15 @@ public sealed class NavigationOperationProcessorTests
         processor.Admit(operation).Should().BeTrue();
         processor.ProcessFrame(1);
 
-        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.ValidationFailed);
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState overlay).Should().BeTrue();
-        overlay.CellCount.Should().Be(0);
-        overlay.ConnectionCount.Should().Be(0);
+        overlay.CellCount.Should().Be(1);
+        overlay.ConnectionCount.Should().Be(1);
+        processor.Candidate.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("map", "new-link"),
+                out NavigationExplicitConnectionRecord record)
+            .Should().BeTrue();
+        record.IsActive.Should().BeFalse();
     }
 
     [Fact]
@@ -596,6 +631,10 @@ public sealed class NavigationOperationProcessorTests
         processor.Candidate.TryGetOverlay("map", out NavigationMapOverlayState overlay).Should().BeTrue();
         overlay.CellCount.Should().Be(1, "the earlier successful prefix remains authoritative");
         overlay.ConnectionCount.Should().Be(0, "the rejected resumed fold cannot leak its partial root");
+        processor.Candidate.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("map", "invalid"),
+                out _)
+            .Should().BeFalse("the rejected later operation cannot leak a compiled owner root");
     }
 
     [Fact]

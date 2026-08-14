@@ -61,7 +61,8 @@ internal ref struct NavigationNativeSurfaceEdgeEnumerator
             Current = new NavigationGraphEdge(
                 target,
                 NavigationGraphEdgeKind.Native,
-                _instance.Map.GetNativePortalTemplate(directionIndex));
+                _instance.Map.GetNativePortalTemplate(directionIndex),
+                directionIndex);
             return true;
         }
 

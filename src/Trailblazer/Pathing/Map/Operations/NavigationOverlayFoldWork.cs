@@ -33,7 +33,6 @@ internal sealed class NavigationOverlayFoldWork
     private int _dependencyMapIndex;
     private int _dependencyStage;
     private int _dependencyIndex;
-    private int _dependencyAddressIndex;
     private bool _removeDependencies = true;
     private int _validationMapIndex;
     private int _validationSourceIndex = -1;
@@ -41,6 +40,7 @@ internal sealed class NavigationOverlayFoldWork
     private int _validationEdgeIndex;
     private int _validationWorkIndex;
     private Stage _stage;
+    private NavigationOperationCandidate.ExplicitConnectionRefreshWork? _explicitRefresh;
 
     internal NavigationOverlayFoldWork(
         NavigationOperationCandidate source,
@@ -75,11 +75,13 @@ internal sealed class NavigationOverlayFoldWork
         + ((long)(_priorStates.Length + _nextStates.Length + _changedMapIds.Length)
             * IntPtr.Size)
         + _working.WorkCopiedPersistentBytes
+        + (_explicitRefresh?.RetainedBytes ?? 0)
         + Math.Max(0L, _working.RetainedBytes - _source.RetainedBytes));
 
     internal int PersistentPageCount => checked(
         1
         + _working.WorkCopiedPersistentPages
+        + (_explicitRefresh?.PersistentPageCount ?? 0)
         + Math.Max(0, _working.PersistentPageCount - _source.PersistentPageCount));
 
     internal bool Advance(
@@ -254,6 +256,20 @@ internal sealed class NavigationOverlayFoldWork
             else
                 _validationSourceIndex++;
         }
+        _explicitRefresh ??= _working.BeginExplicitConnectionRefresh(
+            _transaction,
+            _corridorPrisms,
+            _corridorWaypoints);
+        if (!_explicitRefresh.Advance(meter))
+        {
+            rejection = NavigationOperationRejection.None;
+            return false;
+        }
+        if (!_explicitRefresh.IsValid)
+        {
+            rejection = NavigationOperationRejection.ValidationFailed;
+            return true;
+        }
         _stage = Stage.Complete;
         rejection = NavigationOperationRejection.None;
         return true;
@@ -264,62 +280,29 @@ internal sealed class NavigationOverlayFoldWork
         bool remove,
         MaintenanceWorkMeter meter)
     {
-        while (_dependencyStage < 4)
+        while (_dependencyStage < 2)
         {
-            int count = _dependencyStage switch
-            {
-                0 => state.Map.ConnectionSpan.Length,
-                1 => state.Map.TransitionSpan.Length,
-                2 => state.Overlay.ConnectionCount,
-                _ => state.Overlay.TransitionCount
-            };
+            int count = _dependencyStage == 0
+                ? state.Map.TransitionSpan.Length
+                : state.Overlay.TransitionCount;
             while (_dependencyIndex < count)
             {
-                if (_dependencyStage is 0 or 2)
+                TraversalTransitionOverlayOperation overlay = _dependencyStage == 1
+                    ? state.Overlay.GetTransitionAt(_dependencyIndex)
+                    : default;
+                if (_dependencyStage == 1
+                    && overlay.Kind != TraversalTransitionOverlayOperationKind.Upsert)
                 {
-                    NavigationConnection? connection = _dependencyStage == 0
-                        ? state.Map.ConnectionSpan[_dependencyIndex]
-                        : state.Overlay.GetConnectionAt(_dependencyIndex).Kind
-                            == NavigationConnectionOverlayOperationKind.Upsert
-                                ? state.Overlay.GetConnectionAt(_dependencyIndex).Connection
-                                : null;
-                    if (connection == null)
-                    {
-                        _dependencyIndex++;
-                        _dependencyAddressIndex = 0;
-                        continue;
-                    }
-                    int addressCount = connection.Witnesses.Count + 1;
-                    while (_dependencyAddressIndex < addressCount)
-                    {
-                        if (!meter.TryConsumeDependencyEntries(1))
-                            return false;
-                        string destination = _dependencyAddressIndex++ == 0
-                            ? connection.Destination.MapId
-                            : connection.Witnesses[_dependencyAddressIndex - 2].MapId;
-                        _working.UpdateIncomingSourceForWork(destination, state.Map.MapId, remove);
-                    }
+                    _dependencyIndex++;
+                    continue;
                 }
-                else
-                {
-                    TraversalTransitionOverlayOperation overlay = _dependencyStage == 3
-                        ? state.Overlay.GetTransitionAt(_dependencyIndex)
-                        : default;
-                    if (_dependencyStage == 3
-                        && overlay.Kind != TraversalTransitionOverlayOperationKind.Upsert)
-                    {
-                        _dependencyIndex++;
-                        continue;
-                    }
-                    if (!meter.TryConsumeDependencyEntries(1))
-                        return false;
-                    string destination = _dependencyStage == 1
-                        ? state.Map.TransitionSpan[_dependencyIndex].Destination.MapId
-                        : overlay.Transition.Destination.MapId;
-                    _working.UpdateIncomingSourceForWork(destination, state.Map.MapId, remove);
-                }
+                if (!meter.TryConsumeDependencyEntries(1))
+                    return false;
+                string destination = _dependencyStage == 0
+                    ? state.Map.TransitionSpan[_dependencyIndex].Destination.MapId
+                    : overlay.Transition.Destination.MapId;
+                _working.UpdateIncomingSourceForWork(destination, state.Map.MapId, remove);
                 _dependencyIndex++;
-                _dependencyAddressIndex = 0;
             }
             _dependencyStage++;
             _dependencyIndex = 0;
@@ -343,6 +326,11 @@ internal sealed class NavigationOverlayFoldWork
             };
             while (_validationEdgeIndex < count)
             {
+                if (_validationStage < 2)
+                {
+                    _validationEdgeIndex++;
+                    continue;
+                }
                 int workUnits = GetValidationWorkUnits(
                     state,
                     _validationStage,
@@ -398,7 +386,6 @@ internal sealed class NavigationOverlayFoldWork
     {
         _dependencyStage = 0;
         _dependencyIndex = 0;
-        _dependencyAddressIndex = 0;
     }
 
     private enum Stage

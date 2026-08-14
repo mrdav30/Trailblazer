@@ -112,12 +112,19 @@ internal sealed partial class NavigationWorldGraph
                     return false;
                 _changeIndex++;
             }
+            _retainedBytes = checked(
+                _retainedBytes
+                - _source._explicitConnections.RetainedBytes
+                + _candidate.ExplicitConnections.RetainedBytes);
+            _persistentPages += _candidate.ExplicitConnections.PersistentPageCount
+                - _source._explicitConnections.PersistentPageCount;
             Result = new NavigationWorldGraph(
                 _version,
                 _directory,
                 _source.AreaCatalog,
                 _mapIndex,
                 _source.Composition,
+                _candidate.ExplicitConnections,
                 _source._closedStructuralComponents,
                 _retainedBytes,
                 _persistentPages);

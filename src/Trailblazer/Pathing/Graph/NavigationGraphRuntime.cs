@@ -596,7 +596,11 @@ internal sealed class NavigationGraphRuntime : IDisposable
         }
 
         NavigationWorldGraph current = _store.Current;
-        bool hasStructuralChanges = NavigationWorldGraph.HasStructuralChanges(changes, changeCount);
+        bool hasStructuralChanges = NavigationWorldGraph.HasStructuralChanges(
+            changes,
+            changeCount,
+            candidate,
+            current);
         long nextVersion = current.GraphVersion + 1;
         NavigationWorldGraph? completedStructural = null;
         if (changeCount > 0)

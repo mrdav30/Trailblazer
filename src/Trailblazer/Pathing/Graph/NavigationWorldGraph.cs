@@ -21,6 +21,7 @@ internal sealed partial class NavigationWorldGraph
     private readonly NavigationInstanceDirectory _instances;
     private readonly PersistentGridConfigurationMap<string> _mapIndex;
     private readonly PersistentStringMap<bool> _closedStructuralComponents;
+    private readonly NavigationExplicitConnectionIndex _explicitConnections;
     private int _leaseCount;
 
     internal NavigationWorldGraph(
@@ -28,13 +29,18 @@ internal sealed partial class NavigationWorldGraph
         NavigationMapInstance[] instances,
         NavigationAreaCatalog? areaCatalog = null,
         PersistentGridConfigurationMap<string>? mapIndex = null,
-        NavigationCompositionIndex? composition = null)
+        NavigationCompositionIndex? composition = null,
+        NavigationExplicitConnectionIndex? explicitConnections = null)
     {
         GraphVersion = graphVersion;
         _instances = NavigationInstanceDirectory.Create(instances);
         AreaCatalog = areaCatalog ?? NavigationAreaCatalog.Empty;
         _mapIndex = mapIndex ?? BuildMapIndex(instances);
-        Composition = composition ?? NavigationCompositionIndex.Build(instances, graphVersion);
+        _explicitConnections = explicitConnections ?? NavigationExplicitConnectionIndex.Empty;
+        Composition = composition ?? NavigationCompositionIndex.Build(
+            instances,
+            graphVersion,
+            _explicitConnections);
         _closedStructuralComponents = PersistentStringMap<bool>.Empty;
         long bytes = checked(
             BaseRetainedBytes
@@ -42,11 +48,13 @@ internal sealed partial class NavigationWorldGraph
             + _mapIndex.RetainedBytes
             + _closedStructuralComponents.RetainedBytes
             + Composition.RetainedBytes
+            + _explicitConnections.RetainedBytes
             + AreaCatalog.RetainedBytes);
         PersistentPageCount = _instances.PersistentPageCount
             + 1 + _mapIndex.Count
             + _closedStructuralComponents.PersistentNodeCount
             + Composition.PersistentPageCount
+            + _explicitConnections.PersistentPageCount
             + AreaCatalog.PersistentPageCount;
         for (int i = 0; i < instances.Length; i++)
         {
@@ -62,6 +70,7 @@ internal sealed partial class NavigationWorldGraph
         NavigationAreaCatalog areaCatalog,
         PersistentGridConfigurationMap<string> mapIndex,
         NavigationCompositionIndex composition,
+        NavigationExplicitConnectionIndex explicitConnections,
         PersistentStringMap<bool> closedStructuralComponents,
         long retainedBytes,
         int persistentPageCount)
@@ -71,6 +80,7 @@ internal sealed partial class NavigationWorldGraph
         AreaCatalog = areaCatalog;
         _mapIndex = mapIndex;
         Composition = composition;
+        _explicitConnections = explicitConnections;
         _closedStructuralComponents = closedStructuralComponents;
         RetainedBytes = retainedBytes;
         PersistentPageCount = persistentPageCount;
@@ -86,6 +96,8 @@ internal sealed partial class NavigationWorldGraph
     internal NavigationAreaCatalog AreaCatalog { get; }
 
     internal NavigationCompositionIndex Composition { get; }
+
+    internal NavigationExplicitConnectionIndex ExplicitConnections => _explicitConnections;
 
     internal int MapCount => _instances.Count;
 
@@ -169,7 +181,11 @@ internal sealed partial class NavigationWorldGraph
             previous.TryGetMap(states[i].Map.MapId, out NavigationMapInstance? prior);
             instances[i] = NavigationMapInstance.ComposeDetached(states[i], prior, graphVersion);
         }
-        return new NavigationWorldGraph(graphVersion, instances, previous.AreaCatalog);
+        return new NavigationWorldGraph(
+            graphVersion,
+            instances,
+            previous.AreaCatalog,
+            explicitConnections: candidate.ExplicitConnections);
     }
 
     internal static NavigationWorldGraph PrepareStructuralCandidate(
@@ -196,7 +212,12 @@ internal sealed partial class NavigationWorldGraph
     internal NavigationCompositionIndex.UpdateWork BeginCompositionUpdate(
         NavigationWorldGraph source,
         ReadOnlySpan<string> changedMapIds,
-        long version) => new(source.Composition, _instances, changedMapIds, version);
+        long version) => new(
+            source.Composition,
+            _instances,
+            _explicitConnections,
+            changedMapIds,
+            version);
 
     internal NavigationWorldGraph WithComposition(NavigationCompositionIndex composition)
     {
@@ -216,6 +237,7 @@ internal sealed partial class NavigationWorldGraph
             AreaCatalog,
             _mapIndex,
             composition,
+            _explicitConnections,
             openComponents,
             bytes,
             pages);
@@ -223,8 +245,12 @@ internal sealed partial class NavigationWorldGraph
 
     internal static bool HasStructuralChanges(
         NavigationOperationFrameChange[] changes,
-        int changeCount)
+        int changeCount,
+        NavigationOperationCandidate candidate,
+        NavigationWorldGraph current)
     {
+        if (!ReferenceEquals(candidate.ExplicitConnections, current._explicitConnections))
+            return true;
         for (int i = 0; i < changeCount; i++)
         {
             NavigationOperationFrameChange change = changes[i];
@@ -265,6 +291,7 @@ internal sealed partial class NavigationWorldGraph
                 AreaCatalog,
                 _mapIndex,
                 Composition,
+                _explicitConnections,
                 closed,
                 checked(RetainedBytes - _closedStructuralComponents.RetainedBytes + closed.RetainedBytes),
                 PersistentPageCount - _closedStructuralComponents.PersistentNodeCount
@@ -282,6 +309,7 @@ internal sealed partial class NavigationWorldGraph
             AreaCatalog,
             _mapIndex,
             Composition,
+            _explicitConnections,
             open,
             checked(RetainedBytes - _closedStructuralComponents.RetainedBytes + open.RetainedBytes),
             PersistentPageCount - _closedStructuralComponents.PersistentNodeCount);
@@ -435,6 +463,7 @@ internal sealed partial class NavigationWorldGraph
         {
             composition = Composition.Update(
                 directory,
+                candidate.ExplicitConnections,
                 changedMapIds.AsSpan(0, changedMapCount),
                 graphVersion);
         }
@@ -447,6 +476,7 @@ internal sealed partial class NavigationWorldGraph
             AreaCatalog,
             mapIndex,
             composition,
+            candidate.ExplicitConnections,
             _closedStructuralComponents,
             retainedBytes,
             persistentPages);
@@ -524,6 +554,7 @@ internal sealed partial class NavigationWorldGraph
                 AreaCatalog,
                 _mapIndex,
                 Composition,
+                _explicitConnections,
                 _closedStructuralComponents,
                 retainedBytes,
                 persistentPages);
@@ -877,6 +908,7 @@ internal sealed partial class NavigationWorldGraph
                 AreaCatalog,
                 _mapIndex,
                 Composition,
+                _explicitConnections,
                 _closedStructuralComponents,
                 retainedBytes,
                 persistentPages);
@@ -896,6 +928,7 @@ internal sealed partial class NavigationWorldGraph
             catalog,
             _mapIndex,
             Composition,
+            _explicitConnections,
             _closedStructuralComponents,
             retainedBytes,
             persistentPages);

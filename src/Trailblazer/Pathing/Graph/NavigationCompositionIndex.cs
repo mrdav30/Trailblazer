@@ -155,11 +155,26 @@ internal sealed partial class NavigationCompositionIndex
     internal static NavigationCompositionIndex Build(
         NavigationMapInstance[] instances,
         long version) =>
-        Build(NavigationInstanceDirectory.Create(instances), version);
+        Build(
+            NavigationInstanceDirectory.Create(instances),
+            version,
+            NavigationExplicitConnectionIndex.Empty);
+
+    internal static NavigationCompositionIndex Build(
+        NavigationMapInstance[] instances,
+        long version,
+        NavigationExplicitConnectionIndex explicitConnections) =>
+        Build(NavigationInstanceDirectory.Create(instances), version, explicitConnections);
 
     internal static NavigationCompositionIndex Build(
         NavigationInstanceDirectory directory,
-        long version)
+        long version) =>
+        Build(directory, version, NavigationExplicitConnectionIndex.Empty);
+
+    internal static NavigationCompositionIndex Build(
+        NavigationInstanceDirectory directory,
+        long version,
+        NavigationExplicitConnectionIndex explicitConnections)
     {
         PersistentStringMap<NavigationStructuralNode> nodes =
             PersistentStringMap<NavigationStructuralNode>.Empty;
@@ -171,7 +186,9 @@ internal sealed partial class NavigationCompositionIndex
         for (int i = 0; i < directory.Count; i++)
         {
             NavigationMapInstance instance = directory.Get(i);
-            NavigationStructuralNode node = NavigationStructuralNode.Capture(instance);
+            NavigationStructuralNode node = NavigationStructuralNode.Capture(
+                instance,
+                explicitConnections);
             nodes = nodes.Set(instance.MapId, node);
             nodeBytes = checked(nodeBytes + node.RetainedBytes);
             ReadOnlySpan<NavigationStructuralLink> links = node.Links;
@@ -236,6 +253,16 @@ internal sealed partial class NavigationCompositionIndex
     internal NavigationCompositionIndex Update(
         NavigationInstanceDirectory directory,
         ReadOnlySpan<string> changedMapIds,
+        long version) => Update(
+            directory,
+            NavigationExplicitConnectionIndex.Empty,
+            changedMapIds,
+            version);
+
+    internal NavigationCompositionIndex Update(
+        NavigationInstanceDirectory directory,
+        NavigationExplicitConnectionIndex explicitConnections,
+        ReadOnlySpan<string> changedMapIds,
         long version)
     {
         string[] changes = NormalizeChanges(changedMapIds);
@@ -265,7 +292,7 @@ internal sealed partial class NavigationCompositionIndex
             bool hadOld = _nodes.TryGetValue(mapId, out NavigationStructuralNode oldNode);
             bool hasNext = directory.TryGet(mapId, out NavigationMapInstance nextInstance);
             NavigationStructuralNode? nextNode = hasNext
-                ? NavigationStructuralNode.Capture(nextInstance)
+                ? NavigationStructuralNode.Capture(nextInstance, explicitConnections)
                 : null;
 
             bool removesConnectivity = hadOld

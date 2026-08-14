@@ -40,7 +40,10 @@ internal sealed class NavigationStructuralCompositionWork
                 _batchSequence = changes[i].OperationSequence;
         }
 
-        ChangedMapIds = CaptureChangedMapIds(changes, changeCount);
+        ChangedMapIds = CaptureChangedMapIds(
+            candidate,
+            changes,
+            changeCount);
         _preparation = new NavigationWorldGraph.StructuralPreparationWork(
             sourceGraph,
             candidate,
@@ -156,10 +159,11 @@ internal sealed class NavigationStructuralCompositionWork
     }
 
     private static string[] CaptureChangedMapIds(
+        NavigationOperationCandidate candidate,
         NavigationOperationFrameChange[] changes,
         int changeCount)
     {
-        int capacity = 0;
+        int capacity = candidate.ExplicitChangedSourceCount;
         for (int i = 0; i < changeCount; i++)
         {
             capacity = checked(capacity + (changes[i].Kind == NavigationOperationFrameChangeKind.Overlay
@@ -167,24 +171,29 @@ internal sealed class NavigationStructuralCompositionWork
                 : 1));
         }
         var mapIds = new string[capacity];
-        int count = 0;
+        int offset = 0;
+        for (int i = 0; i < candidate.ExplicitChangedSourceCount; i++)
+            mapIds[offset++] = candidate.GetExplicitChangedSourceAt(i);
         for (int i = 0; i < changeCount; i++)
         {
             NavigationOperationFrameChange change = changes[i];
             if (change.Kind != NavigationOperationFrameChangeKind.Overlay)
             {
-                mapIds[count++] = change.MapId!;
+                mapIds[offset++] = change.MapId!;
                 continue;
             }
             ReadOnlySpan<NavigationMapOverlayDelta> maps =
                 change.PreparedOverlay!.Transaction.MapSpan;
             for (int mapIndex = 0; mapIndex < maps.Length; mapIndex++)
-                mapIds[count++] = maps[mapIndex].MapId;
+            {
+                NavigationMapOverlayDelta map = maps[mapIndex];
+                mapIds[offset++] = map.MapId;
+            }
         }
         Array.Sort(mapIds, StringComparer.Ordinal);
         if (mapIds.Length == 0)
             return mapIds;
-        count = 1;
+        int count = 1;
         for (int i = 1; i < mapIds.Length; i++)
         {
             if (!string.Equals(mapIds[count - 1], mapIds[i], StringComparison.Ordinal))

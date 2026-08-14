@@ -33,9 +33,11 @@ internal sealed class NavigationMapFoldWork
 
     internal NavigationMapFoldWork(
         NavigationOperationCandidate source,
-        string mapId)
+        string mapId,
+        GridCellPrism[] corridorPrisms,
+        Vector3d[] corridorWaypoints)
     {
-        _cursor = source.BeginMapRemovalFold(mapId);
+        _cursor = source.BeginMapRemovalFold(mapId, corridorPrisms, corridorWaypoints);
     }
 
     internal NavigationOperationCandidate Candidate => _cursor.Candidate;

@@ -34,9 +34,6 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         (context.Pathing.RetainedCompositionWorkCount
             + context.Pathing.RetainedOperationWorkCount).Should().Be(1);
         context.Pathing.NavigationMaintenanceMeter.OverlaySlots.Should().Be(1);
-        context.Pathing.NavigationMaintenanceMeter.ImplicitEdges.Should().Be(0);
-        context.Pathing.NavigationMaintenanceMeter.SeamCandidates.Should().Be(0);
-        context.Pathing.NavigationMaintenanceMeter.CacheInvalidations.Should().Be(0);
         GetCell(context, "A").IsMaterialized.Should().BeFalse();
         GetCell(context, "B").IsMaterialized.Should().BeFalse();
         GetCell(context, "C").IsMaterialized.Should().BeFalse();
@@ -335,12 +332,9 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
-            defaults.MaintenanceBudget.MaxSeamCandidates,
             maxComponentNodes: 1,
-            defaults.MaintenanceBudget.MaxImplicitEdges,
             maxExplicitEdges: 1,
-            maxDependencyEntries: 3,
-            defaults.MaintenanceBudget.MaxCacheInvalidations);
+            maxDependencyEntries: 3);
         var settings = new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             budget,
@@ -357,10 +351,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             maxAreaPolicies: 1,
             defaults.MaxAreaRulesPerPolicy,
             defaults.MaxAreaRules,
-            defaults.MaxConcurrentPathQueries,
-            defaults.MaxActiveWorkspaceBytes,
-            defaults.MaxRetainedWorkspaceBytes,
-            defaults.MaxActiveQueryResultBytes);
+            defaults.MaxConcurrentSnapshotLeases);
         TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
         NavigationMap a = AddGridAndCreateMap(context, "A", 0, "B", "ab");
         NavigationMap b = AddGridAndCreateMap(context, "B", 10, "C", "bc");

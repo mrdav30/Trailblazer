@@ -179,47 +179,17 @@ public sealed class NavigationGraphCapacityTests
     }
 
     [Fact]
-    public void WorkspacePool_ShouldBoundConcurrencyAndReuseExclusiveScratch()
-    {
-        TrailblazerWorldContextSettings settings = CreateSettings(
-            maxConcurrent: 2,
-            maxActiveWorkspaceBytes: 1_000,
-            maxRetainedWorkspaceBytes: 500);
-        var pool = new PathQueryWorkspacePool(settings);
-
-        pool.TryCheckout(8, out PathQueryWorkspaceLease? first).Should().BeTrue();
-        pool.TryCheckout(8, out PathQueryWorkspaceLease? second).Should().BeTrue();
-        pool.TryCheckout(8, out _).Should().BeFalse();
-        PathQueryWorkspace firstWorkspace = first!.Workspace;
-
-        first.Dispose();
-        pool.TryCheckout(4, out PathQueryWorkspaceLease? reused).Should().BeTrue();
-        reused!.Workspace.Should().BeSameAs(firstWorkspace);
-        reused.Workspace.Should().NotBeSameAs(second!.Workspace);
-
-        second.Dispose();
-        reused.Dispose();
-        pool.ActiveCount.Should().Be(0);
-        pool.RetainedBytes.Should().BeLessThanOrEqualTo(500);
-    }
-
-    [Fact]
-    public void WarmIdleMaintenanceAndWorkspaceReuse_ShouldAllocateZero()
+    public void WarmIdleMaintenanceAndSnapshotLeaseReuse_ShouldAllocateZero()
     {
         TrailblazerWorldContextSettings settings = CreateSettings();
         using var world = new GridWorld();
         using var runtime = new NavigationGraphRuntime(world, settings);
         runtime.Maintain(1);
         runtime.TryAcquire()!.Dispose();
-        var pool = new PathQueryWorkspacePool(settings);
-        pool.TryCheckout(8, out PathQueryWorkspaceLease? warm).Should().BeTrue();
-        warm!.Dispose();
         for (int frame = 2; frame < 34; frame++)
         {
             runtime.Maintain(frame);
             runtime.TryAcquire()!.Dispose();
-            pool.TryCheckout(8, out PathQueryWorkspaceLease? warmLease).Should().BeTrue();
-            warmLease!.Dispose();
         }
 
         long before = GC.GetAllocatedBytesForCurrentThread();
@@ -229,8 +199,6 @@ public sealed class NavigationGraphCapacityTests
             runtime.Maintain(frame);
             using NavigationWorldGraphLease? graphLease = runtime.TryAcquire();
             allCheckedOut &= graphLease != null;
-            allCheckedOut &= pool.TryCheckout(8, out PathQueryWorkspaceLease? lease);
-            lease?.Dispose();
         }
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
@@ -292,124 +260,7 @@ public sealed class NavigationGraphCapacityTests
     }
 
     [Fact]
-    public void PendingSafetyPressure_ShouldRejectPrePressureCacheResultsUntilExactCatchup()
-    {
-        TrailblazerWorldContextSettings settings = CreateSettings(
-            maxRetiredSnapshots: 1,
-            maxRetiredSnapshotBytes: 1_000_000);
-        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
-        GridConfiguration configuration = CreateConfiguration();
-        context.World.TryAddGrid(configuration, out ushort gridIndex).Should().BeTrue();
-        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
-        NavigationCell cell = new(
-            TraversalMedia.Solid,
-            TraversalCapability.None,
-            default,
-            Fixed64.Zero,
-            Fixed64.Zero,
-            Fixed64.One);
-        NavigationMap map = new NavigationMapBuilder("map", binding)
-            .AddCell(default, cell)
-            .Build();
-        context.Pathing.Admit(new NavigationMapCommitOperation(
-            new PreparedNavigationMap(map, 1),
-            OverlayReplacementPolicy.Clear,
-            1,
-            1)).Should().BeTrue();
-        var policyKey = new NavigationAreaPolicyKey("ground", 1);
-        context.Pathing.Admit(new NavigationAreaPolicyCommitOperation(
-            new NavigationAreaPolicy(
-                policyKey,
-                new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
-            publicationSequence: 2,
-            effectiveFrame: 1)).Should().BeTrue();
-        context.Simulate();
-
-        NavigationWorldGraphStore store = context.Pathing.NavigationGraphStore;
-        using var cache = new NavigationContextResultCache<object>(store, settings);
-        context.Pathing.TryAdmitNavigationQuery(
-                new NavigationQueryAdmissionRequest(1, 4, 192),
-                out NavigationQueryAdmissionLease? query)
-            .Should().BeTrue();
-        query!.Graph.TryGetDependencyStamp(
-                policyKey,
-                Array.Empty<string>(),
-                Array.Empty<GraphPageDependencyAddress>(),
-                out GraphDependencyStamp stamp)
-            .Should().BeTrue();
-        PathRequestCacheKey cachedKey = TestPathRequest.CreateCacheKey(1);
-        cache.TryCreateDetached(
-                query,
-                cachedKey,
-                new object(),
-                stamp,
-                64,
-                out NavigationResultEntryLease<object>? cached)
-            .Should().Be(NavigationResultCacheStatus.Detached);
-        cache.TryPromote(query, cached!)
-            .Should().Be(NavigationResultCacheStatus.Published);
-        cache.TryCreateDetached(
-                query,
-                TestPathRequest.CreateCacheKey(2),
-                new object(),
-                stamp,
-                64,
-                out NavigationResultEntryLease<object>? detached)
-            .Should().Be(NavigationResultCacheStatus.Detached);
-
-        VoxelGrid grid = context.World.ActiveGrids[gridIndex];
-        grid.TryGetVoxel(default(VoxelIndex), out Voxel? voxel).Should().BeTrue();
-        grid.TryAddObstacle(voxel!, context.World.AllocateObstacleToken()).Should().BeTrue();
-        context.Simulate();
-        NavigationWorldGraph pinnedCurrent = store.Current;
-        pinnedCurrent.Checkout();
-        try
-        {
-            grid.TryAddObstacle(voxel!, context.World.AllocateObstacleToken()).Should().BeTrue();
-            context.Simulate();
-
-            store.CacheGate.IsSafetyPending.Should().BeTrue();
-            context.Pathing.TryAdmitNavigationQuery(
-                    new NavigationQueryAdmissionRequest(2, 4, 1),
-                    out _)
-                .Should().BeFalse();
-            cache.TryPromote(query, detached!)
-                .Should().Be(NavigationResultCacheStatus.Stale);
-            cache.TryCheckout(cachedKey, out NavigationResultEntryLease<object>? stale)
-                .Should().BeFalse();
-            stale.Should().BeNull();
-            cached!.Dispose();
-            detached!.Dispose();
-            cache.EntryCount.Should().Be(0);
-        }
-        finally
-        {
-            query.Dispose();
-            pinnedCurrent.Return();
-        }
-
-        context.Simulate();
-        store.CacheGate.IsSafetyPending.Should().BeTrue(
-            "the first post-pressure publication is the fail-closed root, not exact catch-up");
-        context.Pathing.TryAdmitNavigationQuery(
-                new NavigationQueryAdmissionRequest(3, 4, 1),
-                out _)
-            .Should().BeFalse();
-        context.Simulate();
-
-        context.Pathing.TryGetNavigationGraphCellState("map", default, out NavigationGraphCellState caughtUp)
-            .Should().BeTrue();
-        caughtUp.ObstacleCount.Should().Be(2);
-        store.CacheGate.IsSafetyPending.Should().BeFalse();
-        context.Pathing.TryAdmitNavigationQuery(
-                new NavigationQueryAdmissionRequest(4, 4, 1),
-                out NavigationQueryAdmissionLease? afterCatchup)
-            .Should().BeTrue();
-        afterCatchup!.Dispose();
-    }
-
-    [Fact]
-    public void DeferredReset_ShouldCloseQueryAdmissionUntilEmptyRootPublishes()
+    public void DeferredReset_ShouldCloseSnapshotAdmissionUntilEmptyRootPublishes()
     {
         TrailblazerWorldContextSettings settings = CreateSettings(
             maxRetiredSnapshots: 1,
@@ -451,11 +302,8 @@ public sealed class NavigationGraphCapacityTests
         {
             context.Pathing.Reset();
 
-            store.CacheGate.IsSafetyPending.Should().BeTrue();
-            context.Pathing.TryAdmitNavigationQuery(
-                    new NavigationQueryAdmissionRequest(1, 4, 1),
-                    out _)
-                .Should().BeFalse();
+            store.IsSafetyPending.Should().BeTrue();
+            context.Pathing.TryAcquireNavigationGraph().Should().BeNull();
             context.Pathing.TryGetNavigationGraphCellState("map", default, out _)
                 .Should().BeTrue("the old root remains physically retained but is not query-admissible");
         }
@@ -466,13 +314,10 @@ public sealed class NavigationGraphCapacityTests
         }
 
         context.Simulate();
-        store.CacheGate.IsSafetyPending.Should().BeFalse();
+        store.IsSafetyPending.Should().BeFalse();
         context.Pathing.TryGetNavigationGraphCellState("map", default, out _).Should().BeFalse();
-        context.Pathing.TryAdmitNavigationQuery(
-                new NavigationQueryAdmissionRequest(2, 4, 1),
-                out NavigationQueryAdmissionLease? afterReset)
-            .Should().BeTrue();
-        afterReset!.Dispose();
+        using NavigationWorldGraphLease afterReset = context.Pathing.TryAcquireNavigationGraph()!;
+        afterReset.Should().NotBeNull();
     }
 
     [Fact]
@@ -704,8 +549,7 @@ public sealed class NavigationGraphCapacityTests
             maxRetiredBytes: 1_000_000,
             maxActiveBytes: byteCeiling,
             maxPersistentPages: 1_000,
-            maxConcurrentLeases: 1,
-            maxResultBytes: 1_000_000);
+            maxConcurrentLeases: 1);
 
         store.TryPublish(smallGraph).Should().Be(NavigationCandidatePublication.Published);
         store.TryPublish(largeGraph).Should().Be(NavigationCandidatePublication.PermanentCapacity);
@@ -779,7 +623,7 @@ public sealed class NavigationGraphCapacityTests
             .Should().Be(materialized.PersistentPageCount - dormant.PersistentPageCount);
 
         var meter = new MaintenanceWorkMeter(
-            new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 1, 1, 1));
+            new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1));
         materializedWork.Advance(meter).Should().BeTrue();
         materializedWork.Result.TryGetPhysicalState(
             0,
@@ -797,12 +641,9 @@ public sealed class NavigationGraphCapacityTests
             maxConsumedEnvelopes: 1,
             maxBaselineAddresses: defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots: defaults.MaintenanceBudget.MaxOverlaySlots,
-            maxSeamCandidates: defaults.MaintenanceBudget.MaxSeamCandidates,
             maxComponentNodes: defaults.MaintenanceBudget.MaxComponentNodes,
-            maxImplicitEdges: defaults.MaintenanceBudget.MaxImplicitEdges,
             maxExplicitEdges: defaults.MaintenanceBudget.MaxExplicitEdges,
-            maxDependencyEntries: defaults.MaintenanceBudget.MaxDependencyEntries,
-            maxCacheInvalidations: defaults.MaintenanceBudget.MaxCacheInvalidations);
+            maxDependencyEntries: defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings(maintenanceBudget: budget));
         GridConfiguration configuration = CreateConfiguration();
@@ -929,12 +770,9 @@ public sealed class NavigationGraphCapacityTests
             maxConsumedEnvelopes: defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             maxBaselineAddresses: 3,
             maxOverlaySlots: defaults.MaintenanceBudget.MaxOverlaySlots,
-            maxSeamCandidates: defaults.MaintenanceBudget.MaxSeamCandidates,
             maxComponentNodes: defaults.MaintenanceBudget.MaxComponentNodes,
-            maxImplicitEdges: defaults.MaintenanceBudget.MaxImplicitEdges,
             maxExplicitEdges: defaults.MaintenanceBudget.MaxExplicitEdges,
-            maxDependencyEntries: defaults.MaintenanceBudget.MaxDependencyEntries,
-            maxCacheInvalidations: defaults.MaintenanceBudget.MaxCacheInvalidations);
+            maxDependencyEntries: defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings(
             maintenanceBudget: budget,
@@ -1008,12 +846,9 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             maxBaselineAddresses: 2,
             defaults.MaintenanceBudget.MaxOverlaySlots,
-            defaults.MaintenanceBudget.MaxSeamCandidates,
             defaults.MaintenanceBudget.MaxComponentNodes,
-            defaults.MaintenanceBudget.MaxImplicitEdges,
             defaults.MaintenanceBudget.MaxExplicitEdges,
-            defaults.MaintenanceBudget.MaxDependencyEntries,
-            defaults.MaintenanceBudget.MaxCacheInvalidations);
+            defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings(
                 maintenanceBudget: budget,
@@ -1078,12 +913,9 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             maxBaselineAddresses: 2,
             defaults.MaintenanceBudget.MaxOverlaySlots,
-            defaults.MaintenanceBudget.MaxSeamCandidates,
             defaults.MaintenanceBudget.MaxComponentNodes,
-            defaults.MaintenanceBudget.MaxImplicitEdges,
             defaults.MaintenanceBudget.MaxExplicitEdges,
-            defaults.MaintenanceBudget.MaxDependencyEntries,
-            defaults.MaintenanceBudget.MaxCacheInvalidations);
+            defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings(
                 maintenanceBudget: budget,
@@ -1325,12 +1157,9 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
-            defaults.MaintenanceBudget.MaxSeamCandidates,
             maxComponentNodes: 1,
-            defaults.MaintenanceBudget.MaxImplicitEdges,
             defaults.MaintenanceBudget.MaxExplicitEdges,
-            defaults.MaintenanceBudget.MaxDependencyEntries,
-            defaults.MaintenanceBudget.MaxCacheInvalidations);
+            defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings(maintenanceBudget: budget));
         GridConfiguration firstConfiguration = CreateConfiguration();
@@ -1463,12 +1292,9 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots: 1,
-            defaults.MaintenanceBudget.MaxSeamCandidates,
             defaults.MaintenanceBudget.MaxComponentNodes,
-            defaults.MaintenanceBudget.MaxImplicitEdges,
             defaults.MaintenanceBudget.MaxExplicitEdges,
-            defaults.MaintenanceBudget.MaxDependencyEntries,
-            defaults.MaintenanceBudget.MaxCacheInvalidations);
+            defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings(maintenanceBudget: budget));
         GridConfiguration configuration = new(
@@ -1545,12 +1371,9 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots: 1,
-            defaults.MaintenanceBudget.MaxSeamCandidates,
             defaults.MaintenanceBudget.MaxComponentNodes,
-            defaults.MaintenanceBudget.MaxImplicitEdges,
             defaults.MaintenanceBudget.MaxExplicitEdges,
-            defaults.MaintenanceBudget.MaxDependencyEntries,
-            defaults.MaintenanceBudget.MaxCacheInvalidations);
+            defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings(maintenanceBudget: budget));
         var configuration = new GridConfiguration(
@@ -1634,12 +1457,9 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             maxOverlaySlots: 1,
-            defaults.MaintenanceBudget.MaxSeamCandidates,
             defaults.MaintenanceBudget.MaxComponentNodes,
-            defaults.MaintenanceBudget.MaxImplicitEdges,
             defaults.MaintenanceBudget.MaxExplicitEdges,
-            defaults.MaintenanceBudget.MaxDependencyEntries,
-            defaults.MaintenanceBudget.MaxCacheInvalidations);
+            defaults.MaintenanceBudget.MaxDependencyEntries);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings(maintenanceBudget: budget));
         GridConfiguration configuration = new(
@@ -1743,9 +1563,7 @@ public sealed class NavigationGraphCapacityTests
     }
 
     private static TrailblazerWorldContextSettings CreateSettings(
-        int maxConcurrent = 2,
-        long maxActiveWorkspaceBytes = 1_000_000,
-        long maxRetainedWorkspaceBytes = 1_000_000,
+        int maxConcurrentSnapshotLeases = 2,
         int maxRetiredSnapshots = 2,
         long maxRetiredSnapshotBytes = 2_000_000,
         long maxActiveSnapshotBytes = 1_000_000,
@@ -1773,10 +1591,7 @@ public sealed class NavigationGraphCapacityTests
             maxAreaPolicies: 8,
             maxAreaRulesPerPolicy: 32,
             maxAreaRules: 64,
-            maxConcurrentPathQueries: maxConcurrent,
-            maxActiveWorkspaceBytes,
-            maxRetainedWorkspaceBytes,
-            maxActiveQueryResultBytes: 1_000_000);
+            maxConcurrentSnapshotLeases);
     }
 
     private static TrailblazerWorldContext CreateChunkedBaselineContext(
@@ -1787,12 +1602,9 @@ public sealed class NavigationGraphCapacityTests
             defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             maxBaselineAddresses: 64,
             defaults.MaintenanceBudget.MaxOverlaySlots,
-            defaults.MaintenanceBudget.MaxSeamCandidates,
             defaults.MaintenanceBudget.MaxComponentNodes,
-            defaults.MaintenanceBudget.MaxImplicitEdges,
             defaults.MaintenanceBudget.MaxExplicitEdges,
-            defaults.MaintenanceBudget.MaxDependencyEntries,
-            defaults.MaintenanceBudget.MaxCacheInvalidations);
+            defaults.MaintenanceBudget.MaxDependencyEntries);
         TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings(
                 maxActiveSnapshotBytes: 4_000_000,

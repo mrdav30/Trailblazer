@@ -181,10 +181,6 @@ public sealed class NavigationGraphDiagnosticsSnapshot
         int persistentGraphPageCount,
         int retiredGenerationCount,
         long retiredSnapshotBytes,
-        int activeQueryCount,
-        long activeWorkspaceBytes,
-        long retainedWorkspaceBytes,
-        long activeQueryResultBytes,
         int pendingAreaPolicyCount,
         int pendingAreaRuleCount,
         long pendingAreaPolicyBytes,
@@ -203,10 +199,6 @@ public sealed class NavigationGraphDiagnosticsSnapshot
         PersistentGraphPageCount = persistentGraphPageCount;
         RetiredGenerationCount = retiredGenerationCount;
         RetiredSnapshotBytes = retiredSnapshotBytes;
-        ActiveQueryCount = activeQueryCount;
-        ActiveWorkspaceBytes = activeWorkspaceBytes;
-        RetainedWorkspaceBytes = retainedWorkspaceBytes;
-        ActiveQueryResultBytes = activeQueryResultBytes;
         PendingAreaPolicyCount = pendingAreaPolicyCount;
         PendingAreaRuleCount = pendingAreaRuleCount;
         PendingAreaPolicyBytes = pendingAreaPolicyBytes;
@@ -234,14 +226,6 @@ public sealed class NavigationGraphDiagnosticsSnapshot
     public int RetiredGenerationCount { get; }
     /// <summary>Gets conservative leased retired-root bytes.</summary>
     public long RetiredSnapshotBytes { get; }
-    /// <summary>Gets the number of admitted queries holding all required resources.</summary>
-    public int ActiveQueryCount { get; }
-    /// <summary>Gets bytes checked out by active query workspaces.</summary>
-    public long ActiveWorkspaceBytes { get; }
-    /// <summary>Gets bytes retained by idle query workspaces.</summary>
-    public long RetainedWorkspaceBytes { get; }
-    /// <summary>Gets aggregate query reservations plus cached and detached result-payload bytes.</summary>
-    public long ActiveQueryResultBytes { get; }
     /// <summary>Gets the number of admitted area-policy revisions awaiting terminal publication.</summary>
     public int PendingAreaPolicyCount { get; }
     /// <summary>Gets direct-indexed rules retained by pending area-policy revisions.</summary>

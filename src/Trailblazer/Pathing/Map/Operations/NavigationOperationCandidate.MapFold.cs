@@ -6,6 +6,7 @@
 //=======================================================================
 
 using FixedMathSharp;
+using GridForge.Grids.Topology;
 
 namespace Trailblazer.Pathing;
 

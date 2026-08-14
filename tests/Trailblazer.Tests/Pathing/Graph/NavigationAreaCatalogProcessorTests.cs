@@ -397,12 +397,9 @@ public sealed class NavigationAreaCatalogProcessorTests
             budget.MaxConsumedEnvelopes,
             budget.MaxBaselineAddresses,
             budget.MaxOverlaySlots,
-            budget.MaxSeamCandidates,
             budget.MaxComponentNodes,
-            budget.MaxImplicitEdges,
             budget.MaxExplicitEdges,
-            maxDependencyEntries,
-            budget.MaxCacheInvalidations);
+            maxDependencyEntries);
         return new TrailblazerWorldContextSettings(
             operationLimits,
             maintenanceBudget,
@@ -419,9 +416,6 @@ public sealed class NavigationAreaCatalogProcessorTests
             maxAreaPolicies,
             navigationAreaCount,
             maxAreaRules,
-            defaults.MaxConcurrentPathQueries,
-            defaults.MaxActiveWorkspaceBytes,
-            defaults.MaxRetainedWorkspaceBytes,
-            defaults.MaxActiveQueryResultBytes);
+            defaults.MaxConcurrentSnapshotLeases);
     }
 }

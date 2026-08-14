@@ -19,7 +19,7 @@ using Trailblazer.Pathing;
 
 namespace Trailblazer.Benchmarks.Pathing;
 
-/// <summary>Measures pinned-root pressure and active query-admission contention at the frozen 1/2/4/8-reader gate.</summary>
+/// <summary>Measures immutable snapshot acquisition and publication at the 1/2/4/8-reader gate.</summary>
 [MemoryDiagnoser]
 [AllStatisticsColumn]
 [Config(typeof(Phase2GateConfig))]
@@ -33,7 +33,6 @@ public class NavigationGraphContentionBenchmarks
     private ObstacleToken _obstacle;
     private Thread[] _readers;
     private AutoResetEvent[] _readerSignals;
-    private NavigationQueryAdmissionRequest _queryRequest;
     private int _activeReaderCount;
     private int _readerMode;
     private int _generation;
@@ -51,24 +50,19 @@ public class NavigationGraphContentionBenchmarks
     private long _maximumRetiredSnapshotBytes;
     private long _maximumActiveSnapshotBytes;
     private int _maximumPersistentGraphPages;
-    private int _maximumRepathWaves;
     private long _minimumWriterVersionAdvance = long.MaxValue;
     private int _writerSamples;
-    private int _maximumActiveQueryCount;
-    private long _maximumActiveWorkspaceBytes;
-    private long _maximumRetainedWorkspaceBytes;
-    private long _maximumActiveResultBytes;
-    private long _activeAdmissionAttempts;
-    private long _activeAdmissionSuccesses;
-    private long _activeAdmissionRejections;
+    private long _activeLeaseAttempts;
+    private long _activeLeaseSuccesses;
+    private long _activeLeaseRejections;
     private long _activeLookupCount;
     private long _activeLookupFailures;
-    private int _activeAdmissionLeaseCount;
-    private int _maximumActiveAdmissionLeaseCount;
+    private int _activeCyclingLeaseCount;
+    private int _maximumActiveCyclingLeaseCount;
 
-    /// <summary>Number of background readers; the active-query case adds one timed foreground admission.</summary>
+    /// <summary>Number of concurrent snapshot readers, including the timed foreground acquisition.</summary>
     [Params(1, 2, 4, 8)]
-    public int QueryThreads { get; set; }
+    public int ReaderThreads { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -103,12 +97,11 @@ public class NavigationGraphContentionBenchmarks
             1));
         _runtime.Maintain(1);
         _frame = 1;
-        _queryRequest = new NavigationQueryAdmissionRequest(0, 4, 64);
         _grid = _world.ActiveGrids[gridIndex];
         _grid.TryGetVoxel(default(VoxelIndex), out _voxel);
 
-        _readers = new Thread[QueryThreads];
-        _readerSignals = new AutoResetEvent[QueryThreads];
+        _readers = new Thread[ReaderThreads];
+        _readerSignals = new AutoResetEvent[ReaderThreads];
         for (int i = 0; i < _readers.Length; i++)
         {
             int readerIndex = i;
@@ -137,24 +130,19 @@ public class NavigationGraphContentionBenchmarks
             _readerSignals[i].Dispose();
         }
         Console.WriteLine(
-            $"PHASE2_CONTENTION query_threads={QueryThreads} "
+            $"PHASE2_SNAPSHOT_CONTENTION reader_threads={ReaderThreads} "
             + $"active_snapshots={_maximumActiveSnapshotCount} "
             + $"active_leases={_maximumActiveLeaseCount} "
             + $"retired_generations={_maximumRetiredGenerationCount} "
             + $"retired_bytes={_maximumRetiredSnapshotBytes} "
             + $"active_snapshot_bytes={_maximumActiveSnapshotBytes} "
             + $"persistent_graph_pages={_maximumPersistentGraphPages} "
-            + $"active_queries={_maximumActiveQueryCount} "
-            + $"active_workspace_bytes={_maximumActiveWorkspaceBytes} "
-            + $"retained_workspace_bytes={_maximumRetainedWorkspaceBytes} "
-            + $"active_result_bytes={_maximumActiveResultBytes} "
-            + $"repath_waves={_maximumRepathWaves} "
-            + $"active_admission_attempts={_activeAdmissionAttempts} "
-            + $"active_admission_successes={_activeAdmissionSuccesses} "
-            + $"active_admission_rejections={_activeAdmissionRejections} "
+            + $"active_lease_attempts={_activeLeaseAttempts} "
+            + $"active_lease_successes={_activeLeaseSuccesses} "
+            + $"active_lease_rejections={_activeLeaseRejections} "
             + $"active_lookups={_activeLookupCount} "
             + $"active_lookup_failures={_activeLookupFailures} "
-            + $"maximum_active_admission_leases={_maximumActiveAdmissionLeaseCount} "
+            + $"maximum_active_cycling_leases={_maximumActiveCyclingLeaseCount} "
             + $"minimum_writer_version_advance="
             + $"{(_writerSamples == 0 ? 0 : _minimumWriterVersionAdvance)}");
         _world.OnChangeCommitted -= _runtime.EnqueueCommittedChange;
@@ -162,14 +150,14 @@ public class NavigationGraphContentionBenchmarks
         _world.Dispose();
     }
 
-    [IterationSetup(Target = nameof(PinnedSnapshotQueryWait))]
-    public void BeginPinnedQueryPressure() => BeginReaderWave(QueryThreads - 1, ReaderMode.Pinned);
+    [IterationSetup(Target = nameof(PinnedSnapshotLeaseAcquire))]
+    public void BeginPinnedLeasePressure() => BeginReaderWave(ReaderThreads - 1, ReaderMode.Pinned);
 
-    [IterationCleanup(Target = nameof(PinnedSnapshotQueryWait))]
-    public void EndPinnedQueryPressure() => EndReaderWave();
+    [IterationCleanup(Target = nameof(PinnedSnapshotLeaseAcquire))]
+    public void EndPinnedLeasePressure() => EndReaderWave();
 
     [IterationSetup(Target = nameof(PinnedSnapshotPublicationWriterWait))]
-    public void BeginPinnedWriterPressure() => BeginReaderWave(QueryThreads, ReaderMode.Pinned);
+    public void BeginPinnedWriterPressure() => BeginReaderWave(ReaderThreads, ReaderMode.Pinned);
 
     [IterationCleanup(Target = nameof(PinnedSnapshotPublicationWriterWait))]
     public void EndPinnedWriterPressure()
@@ -179,14 +167,14 @@ public class NavigationGraphContentionBenchmarks
         RecordDiagnostics();
     }
 
-    [IterationSetup(Target = nameof(ActiveSnapshotQueryWait))]
-    public void BeginActiveQueryContention() => BeginReaderWave(QueryThreads, ReaderMode.Active);
+    [IterationSetup(Target = nameof(ActiveSnapshotLeaseAcquire))]
+    public void BeginActiveLeaseContention() => BeginReaderWave(ReaderThreads - 1, ReaderMode.Active);
 
-    [IterationCleanup(Target = nameof(ActiveSnapshotQueryWait))]
-    public void EndActiveQueryContention() => EndReaderWave(requireExactLookups: true);
+    [IterationCleanup(Target = nameof(ActiveSnapshotLeaseAcquire))]
+    public void EndActiveLeaseContention() => EndReaderWave(requireExactLookups: true);
 
     [IterationSetup(Target = nameof(ActiveSnapshotPublicationWriterWait))]
-    public void BeginActiveWriterContention() => BeginReaderWave(QueryThreads, ReaderMode.Active);
+    public void BeginActiveWriterContention() => BeginReaderWave(ReaderThreads, ReaderMode.Active);
 
     [IterationCleanup(Target = nameof(ActiveSnapshotPublicationWriterWait))]
     public void EndActiveWriterContention()
@@ -217,34 +205,19 @@ public class NavigationGraphContentionBenchmarks
         _maximumPersistentGraphPages = Math.Max(
             _maximumPersistentGraphPages,
             diagnostics.PersistentGraphPageCount);
-        _maximumActiveQueryCount = Math.Max(
-            _maximumActiveQueryCount,
-            diagnostics.ActiveQueryCount);
-        _maximumActiveWorkspaceBytes = Math.Max(
-            _maximumActiveWorkspaceBytes,
-            diagnostics.ActiveWorkspaceBytes);
-        _maximumRetainedWorkspaceBytes = Math.Max(
-            _maximumRetainedWorkspaceBytes,
-            diagnostics.RetainedWorkspaceBytes);
-        _maximumActiveResultBytes = Math.Max(
-            _maximumActiveResultBytes,
-            diagnostics.ActiveQueryResultBytes);
-        _maximumRepathWaves = Math.Max(
-            _maximumRepathWaves,
-            _runtime.MaintenanceMeter.CacheInvalidations);
     }
 
-    /// <summary>Measures one admitted snapshot query while older leases pin the requested total query concurrency.</summary>
+    /// <summary>Measures one snapshot acquisition while older roots are pinned by parked readers.</summary>
     [Benchmark(Baseline = true)]
-    public long PinnedSnapshotQueryWait()
+    public long PinnedSnapshotLeaseAcquire()
     {
-        if (!_runtime.TryAdmitQuery(_queryRequest, out NavigationQueryAdmissionLease lease)
-            || lease == null)
-            throw new InvalidOperationException("The pinned query benchmark could not admit its foreground query.");
+        NavigationWorldGraphLease lease = _runtime.TryAcquire();
+        if (lease == null)
+            throw new InvalidOperationException("The pinned snapshot benchmark could not acquire its foreground lease.");
         using (lease)
         {
             if (!lease.Graph.TryGetMap("map", out _))
-                throw new InvalidOperationException("The pinned query benchmark could not resolve its exact MapId.");
+                throw new InvalidOperationException("The pinned snapshot benchmark could not resolve its exact MapId.");
             return lease.Graph.GraphVersion;
         }
     }
@@ -253,49 +226,49 @@ public class NavigationGraphContentionBenchmarks
     [Benchmark]
     public long PinnedSnapshotPublicationWriterWait() => PublishPhysicalMutation();
 
-    /// <summary>Measures one admitted snapshot query while the requested background readers continuously admit queries.</summary>
+    /// <summary>Measures one snapshot acquisition while background readers continuously cycle leases.</summary>
     [Benchmark]
-    public long ActiveSnapshotQueryWait()
+    public long ActiveSnapshotLeaseAcquire()
     {
         var spinner = new SpinWait();
         for (int spin = 0; spin < MaximumSpins; spin++)
         {
-            Interlocked.Increment(ref _activeAdmissionAttempts);
-            if (!_runtime.TryAdmitQuery(_queryRequest, out NavigationQueryAdmissionLease lease)
-                || lease == null)
+            Interlocked.Increment(ref _activeLeaseAttempts);
+            NavigationWorldGraphLease lease = _runtime.TryAcquire();
+            if (lease == null)
             {
-                Interlocked.Increment(ref _activeAdmissionRejections);
+                Interlocked.Increment(ref _activeLeaseRejections);
                 spinner.SpinOnce();
                 continue;
             }
 
-            Interlocked.Increment(ref _activeAdmissionSuccesses);
+            Interlocked.Increment(ref _activeLeaseSuccesses);
             using (lease)
             {
-                BeginActiveAdmissionLease();
+                BeginActiveCyclingLease();
                 try
                 {
                     if (!lease.Graph.TryGetMap("map", out _))
                     {
                         Interlocked.Increment(ref _activeLookupFailures);
                         throw new InvalidOperationException(
-                            "The active query benchmark could not resolve its exact MapId.");
+                            "The active snapshot benchmark could not resolve its exact MapId.");
                     }
                     Interlocked.Increment(ref _activeLookupCount);
                     return lease.Graph.GraphVersion;
                 }
                 finally
                 {
-                    Interlocked.Decrement(ref _activeAdmissionLeaseCount);
+                    Interlocked.Decrement(ref _activeCyclingLeaseCount);
                 }
             }
         }
 
         throw new TimeoutException(
-            "The active query benchmark could not admit its foreground query within the deterministic spin ceiling.");
+            "The active snapshot benchmark could not acquire its foreground lease within the deterministic spin ceiling.");
     }
 
-    /// <summary>Measures one exact physical publication while the requested background readers continuously admit queries.</summary>
+    /// <summary>Measures one exact physical publication while background readers cycle snapshot leases.</summary>
     [Benchmark]
     public long ActiveSnapshotPublicationWriterWait() => PublishPhysicalMutation();
 
@@ -367,7 +340,7 @@ public class NavigationGraphContentionBenchmarks
             spinner.Reset();
             if ((ReaderMode)Volatile.Read(ref _readerMode) == ReaderMode.Active)
             {
-                ReadActiveQueries(next, ref spinner);
+                ReadActiveSnapshots(next, ref spinner);
                 continue;
             }
             while (Volatile.Read(ref _releasedGeneration) < next
@@ -376,10 +349,10 @@ public class NavigationGraphContentionBenchmarks
                 spinner.SpinOnce();
             }
             spinner.Reset();
-            NavigationQueryAdmissionLease lease = null;
+            NavigationWorldGraphLease lease = null;
             while (lease == null && Volatile.Read(ref _stopping) == 0)
             {
-                _runtime.TryAdmitQuery(_queryRequest, out lease);
+                lease = _runtime.TryAcquire();
                 if (lease == null)
                     spinner.SpinOnce();
             }
@@ -393,25 +366,25 @@ public class NavigationGraphContentionBenchmarks
         }
     }
 
-    private void ReadActiveQueries(int generation, ref SpinWait spinner)
+    private void ReadActiveSnapshots(int generation, ref SpinWait spinner)
     {
         bool ready = false;
         while (Volatile.Read(ref _completedGeneration) < generation
             && Volatile.Read(ref _stopping) == 0)
         {
-            Interlocked.Increment(ref _activeAdmissionAttempts);
-            if (!_runtime.TryAdmitQuery(_queryRequest, out NavigationQueryAdmissionLease lease)
-                || lease == null)
+            Interlocked.Increment(ref _activeLeaseAttempts);
+            NavigationWorldGraphLease lease = _runtime.TryAcquire();
+            if (lease == null)
             {
-                Interlocked.Increment(ref _activeAdmissionRejections);
+                Interlocked.Increment(ref _activeLeaseRejections);
                 spinner.SpinOnce();
                 continue;
             }
 
-            Interlocked.Increment(ref _activeAdmissionSuccesses);
+            Interlocked.Increment(ref _activeLeaseSuccesses);
             using (lease)
             {
-                BeginActiveAdmissionLease();
+                BeginActiveCyclingLease();
                 try
                 {
                     if (lease.Graph.TryGetMap("map", out _))
@@ -431,7 +404,7 @@ public class NavigationGraphContentionBenchmarks
                 }
                 finally
                 {
-                    Interlocked.Decrement(ref _activeAdmissionLeaseCount);
+                    Interlocked.Decrement(ref _activeCyclingLeaseCount);
                 }
             }
             spinner.Reset();
@@ -439,14 +412,14 @@ public class NavigationGraphContentionBenchmarks
         Interlocked.Increment(ref _completed);
     }
 
-    private void BeginActiveAdmissionLease()
+    private void BeginActiveCyclingLease()
     {
-        int active = Interlocked.Increment(ref _activeAdmissionLeaseCount);
-        int maximum = Volatile.Read(ref _maximumActiveAdmissionLeaseCount);
+        int active = Interlocked.Increment(ref _activeCyclingLeaseCount);
+        int maximum = Volatile.Read(ref _maximumActiveCyclingLeaseCount);
         while (active > maximum)
         {
             int observed = Interlocked.CompareExchange(
-                ref _maximumActiveAdmissionLeaseCount,
+                ref _maximumActiveCyclingLeaseCount,
                 active,
                 maximum);
             if (observed == maximum)

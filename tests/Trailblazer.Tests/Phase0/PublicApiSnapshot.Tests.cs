@@ -23,7 +23,6 @@ public sealed class PublicApiSnapshotTests
             .Where(line => line.Length > 0 && !line.StartsWith('#'))
             .ToArray();
         string[] actual = CaptureSnapshot(typeof(TrailblazerWorldContext).Assembly);
-
         actual.Should().Equal(expected,
             "public API changes during the clean-break refactor must update the checked-in Phase 0 snapshot intentionally");
     }

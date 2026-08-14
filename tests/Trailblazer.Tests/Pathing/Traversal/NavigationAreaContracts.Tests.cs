@@ -28,10 +28,7 @@ public sealed class NavigationAreaContractsTests
             defaults.MaxAreaPolicies,
             defaults.MaxAreaRulesPerPolicy,
             defaults.MaxAreaRules,
-            defaults.MaxConcurrentPathQueries,
-            defaults.MaxActiveWorkspaceBytes,
-            defaults.MaxRetainedWorkspaceBytes,
-            defaults.MaxActiveQueryResultBytes);
+            defaults.MaxConcurrentSnapshotLeases);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
         var undersized = new NavigationAreaPolicy(
             new NavigationAreaPolicyKey("undersized", 1),

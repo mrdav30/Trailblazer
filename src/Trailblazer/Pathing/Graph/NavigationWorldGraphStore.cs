@@ -14,7 +14,6 @@ namespace Trailblazer.Pathing;
 internal sealed class NavigationWorldGraphStore : System.IDisposable
 {
     private readonly object _sync = new();
-    private readonly NavigationContextCacheGate _cacheGate;
     private readonly SwiftList<NavigationWorldGraph> _retired = new();
     private readonly SwiftList<NavigationWorldGraphLease> _leasePool = new();
     private NavigationWorldGraph _current = NavigationWorldGraph.Empty;
@@ -26,6 +25,7 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
     private readonly int _maxPersistentPages;
     private readonly int _maxConcurrentLeases;
     private int _activeLeaseCount;
+    private bool _safetyPending;
     private bool _disposed;
 
     internal NavigationWorldGraphStore(
@@ -34,8 +34,7 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
         long maxRetiredBytes,
         long maxActiveBytes,
         int maxPersistentPages,
-        int maxConcurrentLeases,
-        long maxResultBytes)
+        int maxConcurrentLeases)
     {
         _maxActiveSnapshots = maxActiveSnapshots;
         _maxRetiredSnapshots = maxRetiredSnapshots;
@@ -43,12 +42,9 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
         _maxActiveBytes = maxActiveBytes;
         _maxPersistentPages = maxPersistentPages;
         _maxConcurrentLeases = maxConcurrentLeases;
-        _cacheGate = new NavigationContextCacheGate(maxResultBytes);
     }
 
     internal NavigationWorldGraph Current => Volatile.Read(ref _current);
-
-    internal NavigationContextCacheGate CacheGate => _cacheGate;
 
     internal int ActiveLeaseCount
     {
@@ -100,6 +96,7 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
         {
             CollectReleased();
             if (_disposed
+                || _safetyPending
                 || _activeLeaseCount >= _maxConcurrentLeases
                 || WouldExceedRetiredCapacityAfterLease(Current))
                 return null;
@@ -129,25 +126,22 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
 
     internal NavigationCandidatePublication TryPublish(NavigationWorldGraph next)
     {
-        lock (_cacheGate.SyncRoot)
+        lock (_sync)
         {
-            lock (_sync)
-            {
-                CollectReleased();
-                if (_disposed)
-                    return NavigationCandidatePublication.Deferred;
-                if (next.RetainedBytes > _maxActiveBytes
-                    || next.PersistentPageCount > _maxPersistentPages)
-                    return NavigationCandidatePublication.PermanentCapacity;
-                if (WouldExceedRetiredCapacity(_current))
-                    return NavigationCandidatePublication.Deferred;
-                NavigationWorldGraph prior = _current;
-                Volatile.Write(ref _current, next);
-                if (prior.LeaseCount > 0)
-                    _retired.Add(prior);
-                CollectReleased();
-                return NavigationCandidatePublication.Published;
-            }
+            CollectReleased();
+            if (_disposed)
+                return NavigationCandidatePublication.Deferred;
+            if (next.RetainedBytes > _maxActiveBytes
+                || next.PersistentPageCount > _maxPersistentPages)
+                return NavigationCandidatePublication.PermanentCapacity;
+            if (WouldExceedRetiredCapacity(_current))
+                return NavigationCandidatePublication.Deferred;
+            NavigationWorldGraph prior = _current;
+            Volatile.Write(ref _current, next);
+            if (prior.LeaseCount > 0)
+                _retired.Add(prior);
+            CollectReleased();
+            return NavigationCandidatePublication.Published;
         }
     }
 
@@ -161,6 +155,23 @@ internal sealed class NavigationWorldGraphStore : System.IDisposable
                 return !_disposed && !WouldExceedRetiredCapacity(_current);
             }
         }
+    }
+
+    internal bool IsSafetyPending
+    {
+        get { lock (_sync) return _safetyPending; }
+    }
+
+    internal void MarkSafetyPending()
+    {
+        lock (_sync)
+            _safetyPending = true;
+    }
+
+    internal void ClearSafetyPending()
+    {
+        lock (_sync)
+            _safetyPending = false;
     }
 
     public void Dispose()

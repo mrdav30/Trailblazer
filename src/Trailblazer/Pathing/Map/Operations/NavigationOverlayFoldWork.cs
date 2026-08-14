@@ -6,6 +6,7 @@
 //=======================================================================
 
 using System;
+using GridForge.Grids.Topology;
 
 namespace Trailblazer.Pathing;
 

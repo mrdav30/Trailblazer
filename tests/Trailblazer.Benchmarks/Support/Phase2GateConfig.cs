@@ -29,7 +29,10 @@ internal sealed class Phase2GateConfig : ManualConfig
             .WithIterationCount(100)
             .WithInvocationCount(1)
             .WithUnrollFactor(1)
-            .WithMsBuildArguments("/p:UseLocalLsfStack=true"));
+            .WithMsBuildArguments(
+                "/p:UseLocalLsfStack=true",
+                "/p:UsePrebuiltLocalLsfStack=true",
+                "/m:1"));
         AddColumn(StatisticColumn.P95, Phase2P99Column.Instance);
         AddExporter(MarkdownExporter.Default, JsonExporter.FullCompressed);
     }

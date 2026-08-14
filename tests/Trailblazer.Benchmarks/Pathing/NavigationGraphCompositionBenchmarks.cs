@@ -255,12 +255,9 @@ public class NavigationGraphCompositionBenchmarks
             defaults.MaintenanceBudget.MaxConsumedEnvelopes,
             defaults.MaintenanceBudget.MaxBaselineAddresses,
             defaults.MaintenanceBudget.MaxOverlaySlots,
-            defaults.MaintenanceBudget.MaxSeamCandidates,
             maxComponentNodes: 8,
-            defaults.MaintenanceBudget.MaxImplicitEdges,
             maxExplicitEdges: 8,
-            maxDependencyEntries: minimumAreaPolicyPublicationWork,
-            defaults.MaintenanceBudget.MaxCacheInvalidations);
+            maxDependencyEntries: minimumAreaPolicyPublicationWork);
         return new TrailblazerWorldContextSettings(
             defaults.OperationLimits,
             budget,
@@ -277,9 +274,6 @@ public class NavigationGraphCompositionBenchmarks
             defaults.MaxAreaPolicies,
             defaults.MaxAreaRulesPerPolicy,
             defaults.MaxAreaRules,
-            defaults.MaxConcurrentPathQueries,
-            defaults.MaxActiveWorkspaceBytes,
-            defaults.MaxRetainedWorkspaceBytes,
-            defaults.MaxActiveQueryResultBytes);
+            defaults.MaxConcurrentSnapshotLeases);
     }
 }

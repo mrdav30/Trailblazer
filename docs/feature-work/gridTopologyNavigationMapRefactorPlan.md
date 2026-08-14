@@ -1503,22 +1503,30 @@ Exit criteria:
 | 2B | Context-owned immutable graph root, map registry, instance identity, and map-before/grid-before lifecycle | Complete |
 | 2C | Stable baked/dynamic slots plus semantic and physical copy-on-write state | Complete |
 | 2D | Deterministic event ingestion, maintenance carryover, snapshot publication/leases, and pressure handling | Complete |
-| 2E | Workspace/cache synchronization, diagnostics, lifecycle matrix, and performance gates | In progress: implementation and canonical evidence complete; two provisional pinned-contention latency cells remain over budget |
-| 2F | Full Release/ReleaseLean/local-stack verification and external review | Complete; Phase 2 exit remains held by 2E |
+| 2E | Snapshot-lease synchronization, diagnostics, lifecycle matrix, and performance gates | Complete: direct snapshot-lease and publication gates pass at 1/2/4/8 readers |
+| 2F | Full Release/ReleaseLean/local-stack verification and external review | Complete after the Phase 2 simplification pass |
 
 Update this table only from fresh build/test/benchmark evidence. A checkpoint
 may be marked complete while later checkpoints remain in progress, but Phase 2
 does not exit until every task and exit criterion below is satisfied.
 
-Current evidence: Trailblazer passes 1,290 Release and 1,261 ReleaseLean tests;
-GridForge passes 599 tests in each configuration; both libraries build both
-target frameworks with zero warnings and errors; and the final adversarial code
-review reports no P0/P1 finding. Every structural, capacity, allocation, and
-publication performance gate passes. The archived pinned-contention capture
-retains two misses without changing its thresholds: concurrency-2 query p99 is
-26.705 us against 25 us (all five over-budget samples occurred in one of three
-launches), and concurrency-1 writer p50 is 41.15 us against 40 us. See
-`phase2/canonicalPerformanceResults.md` for the full tables and stress results.
+The pre-simplification implementation passed its correctness and structural
+performance gates, but it also introduced query-admission, workspace-pooling,
+and result-cache infrastructure before any new A*/flow consumer existed. That
+layer was removed instead of being carried as speculative compatibility code.
+Phase 2 retains the bounded
+immutable graph, safety-aware snapshot leases, publication pressure, and exact
+dependency primitives. Phase 4 owns query admission, workspaces, and result
+caching when the first real search consumer can define and test their lifetimes.
+Canonical Phase 2 evidence now measures the resulting snapshot-lease API
+directly; all pinned latency and capacity gates pass without widening a limit.
+
+One deliberate legacy boundary remains until the final consumer cutover:
+`TrailblazerPathingService` still forwards the existing chart-facing API to
+`PathManager`/`PathingWorldGridBridge`. The Phase 2 graph namespace has no
+dependency on charts, partitions, `PathManager`, or that bridge, and this pass
+does not add another compatibility path. Remove the legacy forwarding layer
+only when the existing A*/flow/navigation consumers move to the new graph.
 
 Tasks:
 
@@ -1527,8 +1535,7 @@ Tasks:
   a persistent paged MapId registry plus instance/component/index roots,
   persistent semantic override/tombstone pages, bounded non-reused dynamic
   cell slots, copy-on-write GridForge presence/blockage pages, incident seam
-  indexes, dependency stamps, retired-byte tracking, and a bounded
-  `PathQueryWorkspace` pool with exclusive checkout per admitted query.
+  indexes, dependency stamps, and retired-byte tracking.
 - Add the bounded context-owned navigation-area catalog and immutable policy
   snapshots. Publish policy revisions at the same deterministic maintenance
   boundary as graph state, and include their exact identity in cache/guide
@@ -1560,10 +1567,12 @@ Tasks:
 - Implement bounded ingress coalescing, scope resnapshot on overflow,
   `MaintenanceWorkBudget`, bounded snapshot-generation pressure handling, and
   deterministic carryover.
-- Implement deterministic query-batch admission plus concurrent/active/retained
-  workspace byte ceilings and pool trimming.
-- Implement the context-cache gate and prove concurrent readers use the stated
-  snapshot-lease-before-cache-gate order.
+- Enforce the concurrent snapshot-lease ceiling and mandatory safety barrier in
+  the graph store itself. Raw/internal leases may not bypass catch-up closure.
+- Do not ship a query admission gate, query workspace pool, or result cache in
+  Phase 2. Add them with their first production A*/flow consumer in Phase 4 so
+  their contracts and performance evidence exercise real work rather than a
+  synthetic future seam.
 - Implement high-water queue detachment from the single committed final-state
   feed; do not read past the frozen event prefix. Reconcile each map baseline
   only with matching exact-generation/address events after that baseline's
@@ -1646,6 +1655,10 @@ Tasks:
   farther than a cell on another map.
 - Add immutable resolved queries with exact endpoints, snapshot leases, and
   captured dependency stamps.
+- Add deterministic query-batch admission, exclusive bounded search workspaces,
+  aggregate result-payload reservations, and the context result cache. The
+  store-owned safety barrier remains authoritative; cache promotion/return must
+  revalidate exact dependencies against the currently published root.
 - Convert heap metadata, A* metadata, waypoint costs, survey results, and guide
   costs to `Fixed64`.
 - Implement stable three-part heap ordering.
@@ -1851,6 +1864,10 @@ Tasks:
   after release verification.
 - Run full package, local-stack, multi-target, deterministic-repeat,
   allocation, and benchmark gates.
+- Run a project-wide line/branch coverage and CRAP-score audit after the hard
+  cutover. Add focused tests for high-risk uncovered methods or explicitly
+  document why generated, defensive, or unreachable code is excluded; do not
+  use raw coverage percentage as a substitute for behavioral matrix coverage.
 
 Exit criteria:
 
@@ -1859,7 +1876,9 @@ Exit criteria:
 - all required matrix, lifecycle, determinism, serialization, and controller
   tests pass in Release;
 - performance gates below are satisfied or deviations are explicitly reviewed
-  with measurements.
+  with measurements;
+- the final coverage/CRAP report has no unexplained high-risk hotspot in the new
+  graph, topology, query, cache, guide, controller, or serialization paths.
 
 ## Required Test Matrix
 
@@ -2227,13 +2246,13 @@ freezing budgets.
   composition invalidation must satisfy the
   frozen streaming repath-wave/cache-discard budget or be dependency-scoped
   further before Phase 2 exits.
-- Snapshot publication and cache synchronization meet the frozen p95/p99
-  contention/writer-delay budget at 1/2/4/8 query threads.
-- Query batches, workspace pools, event ingress, maintenance carryover, active
-  result/payload reservations, generations, and retired memory stay within
-  frozen aggregate byte/count ceilings under overload; mandatory GridForge
-  safety changes converge without admitting navigation through stale affected
-  scopes.
+- Snapshot acquisition/publication meet the frozen p95/p99
+  contention/writer-delay budget at 1/2/4/8 concurrent lease holders. Phase 4
+  adds the separate query/cache contention gate with real search consumers.
+- Event ingress, maintenance carryover, active generations, leases, and retired
+  memory stay within frozen aggregate byte/count ceilings under overload;
+  mandatory GridForge safety changes converge without admitting navigation
+  through stale affected scopes.
 - Pending prepared bakes and batch descriptors/sorting scratch have explicit
   count/byte ceilings; guide samples have finite per-call/batch work counters.
 - No request rescans all active grids to recover a representative metric, and

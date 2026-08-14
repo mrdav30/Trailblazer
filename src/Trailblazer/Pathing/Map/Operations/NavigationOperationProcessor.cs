@@ -7,6 +7,7 @@
 
 using System;
 using FixedMathSharp;
+using GridForge.Grids.Topology;
 using SwiftCollections;
 using SwiftCollections.Utility;
 

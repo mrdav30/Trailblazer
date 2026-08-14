@@ -260,16 +260,6 @@ public sealed class TrailblazerPathingService
     internal NavigationWorldGraphLease? TryAcquireNavigationGraph() =>
         _navigationGraph.TryAcquire();
 
-    internal bool TryAdmitNavigationQuery(
-        in NavigationQueryAdmissionRequest request,
-        out NavigationQueryAdmissionLease? lease) =>
-        _navigationGraph.TryAdmitQuery(request, out lease);
-
-    internal int AdmitNavigationQueryBatch(
-        ReadOnlySpan<NavigationQueryAdmissionRequest> requests,
-        Span<NavigationQueryAdmissionLease?> leases) =>
-        _navigationGraph.AdmitQueryBatch(requests, leases);
-
     internal bool TryGetNavigationGraphCellState(
         string mapId,
         VoxelIndex index,

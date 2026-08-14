@@ -142,7 +142,7 @@ public sealed class NavigationCompositionIndexTests
             nextDirectory,
             new[] { "map-000" },
             2);
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 8, 8, 1, 8, 1, 8, 8));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 8, 1, 1, 8));
 
         for (int frame = 0; frame < 32 && !work.IsComplete; frame++)
         {

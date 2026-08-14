@@ -31,12 +31,9 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaintenanceBudget.MaxConsumedEnvelopes.Should().Be(4_096);
         settings.MaintenanceBudget.MaxBaselineAddresses.Should().Be(65_536);
         settings.MaintenanceBudget.MaxOverlaySlots.Should().Be(16_384);
-        settings.MaintenanceBudget.MaxSeamCandidates.Should().Be(16_384);
         settings.MaintenanceBudget.MaxComponentNodes.Should().Be(65_536);
-        settings.MaintenanceBudget.MaxImplicitEdges.Should().Be(262_144);
         settings.MaintenanceBudget.MaxExplicitEdges.Should().Be(65_536);
         settings.MaintenanceBudget.MaxDependencyEntries.Should().Be(65_536);
-        settings.MaintenanceBudget.MaxCacheInvalidations.Should().Be(16_384);
 
         settings.MaxIngressEntries.Should().Be(16_384);
         settings.MaxIngressBytes.Should().Be(4_194_304);
@@ -50,17 +47,14 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxAreaPolicies.Should().Be(64);
         settings.MaxAreaRulesPerPolicy.Should().Be(4_096);
         settings.MaxAreaRules.Should().Be(65_536);
-        settings.MaxConcurrentPathQueries.Should().Be(8);
-        settings.MaxActiveWorkspaceBytes.Should().Be(8_388_608);
-        settings.MaxRetainedWorkspaceBytes.Should().Be(16_777_216);
-        settings.MaxActiveQueryResultBytes.Should().Be(16_777_216);
+        settings.MaxConcurrentSnapshotLeases.Should().Be(8);
     }
 
     [Fact]
     public void Constructor_ShouldRetainExplicitLimits()
     {
         NavigationOperationLimits operationLimits = CreateOperationLimits();
-        var maintenanceBudget = new MaintenanceWorkBudget(1, 32, 3, 4, 5, 6, 7, 21, 9);
+        var maintenanceBudget = new MaintenanceWorkBudget(1, 32, 3, 4, 7, 21);
 
         var settings = new TrailblazerWorldContextSettings(
             operationLimits,
@@ -78,10 +72,7 @@ public sealed class TrailblazerWorldContextSettingsTests
             maxAreaPolicies: 20,
             maxAreaRulesPerPolicy: 21,
             maxAreaRules: 22,
-            maxConcurrentPathQueries: 23,
-            maxActiveWorkspaceBytes: 24,
-            maxRetainedWorkspaceBytes: 25,
-            maxActiveQueryResultBytes: 26);
+            maxConcurrentSnapshotLeases: 23);
 
         settings.OperationLimits.Should().Be(operationLimits);
         settings.MaintenanceBudget.Should().Be(maintenanceBudget);
@@ -98,18 +89,15 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxAreaPolicies.Should().Be(20);
         settings.MaxAreaRulesPerPolicy.Should().Be(21);
         settings.MaxAreaRules.Should().Be(22);
-        settings.MaxConcurrentPathQueries.Should().Be(23);
-        settings.MaxActiveWorkspaceBytes.Should().Be(24);
-        settings.MaxRetainedWorkspaceBytes.Should().Be(25);
-        settings.MaxActiveQueryResultBytes.Should().Be(26);
+        settings.MaxConcurrentSnapshotLeases.Should().Be(23);
     }
 
     [Fact]
     public void MaintenanceBudget_ShouldRejectNonPositiveCounters()
     {
-        for (int invalidIndex = 0; invalidIndex < 9; invalidIndex++)
+        for (int invalidIndex = 0; invalidIndex < 6; invalidIndex++)
         {
-            int[] values = { 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+            int[] values = { 1, 1, 1, 1, 1, 1 };
             values[invalidIndex] = 0;
 
             Action create = () => _ = new MaintenanceWorkBudget(
@@ -118,10 +106,7 @@ public sealed class TrailblazerWorldContextSettingsTests
                 values[2],
                 values[3],
                 values[4],
-                values[5],
-                values[6],
-                values[7],
-                values[8]);
+                values[5]);
 
             create.Should().Throw<ArgumentOutOfRangeException>();
         }
@@ -147,13 +132,11 @@ public sealed class TrailblazerWorldContextSettingsTests
         Action areaPolicies = () => _ = CreateSettings(maxAreaPolicies: 0);
         Action areaRulesPerPolicy = () => _ = CreateSettings(maxAreaRulesPerPolicy: 0);
         Action areaRules = () => _ = CreateSettings(maxAreaRules: 0);
-        Action concurrentQueries = () => _ = CreateSettings(maxConcurrentPathQueries: 0);
-        Action activeWorkspaceBytes = () => _ = CreateSettings(maxActiveWorkspaceBytes: 0);
-        Action activeResultBytes = () => _ = CreateSettings(maxActiveQueryResultBytes: 0);
+        Action concurrentLeases = () => _ = CreateSettings(maxConcurrentSnapshotLeases: 0);
         Action areaPolicyWork = () => _ = CreateSettings(
-            maintenanceBudget: new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 1, 1, 1));
+            maintenanceBudget: new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1));
         Action catalogCopyWork = () => _ = CreateSettings(
-            maintenanceBudget: new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 1, 4, 1),
+            maintenanceBudget: new MaintenanceWorkBudget(1, 1, 1, 1, 1, 4),
             navigationAreaCount: 1,
             maxAreaPolicies: 2,
             maxAreaRulesPerPolicy: 1,
@@ -173,9 +156,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         areaPolicies.Should().Throw<ArgumentOutOfRangeException>();
         areaRulesPerPolicy.Should().Throw<ArgumentOutOfRangeException>();
         areaRules.Should().Throw<ArgumentOutOfRangeException>();
-        concurrentQueries.Should().Throw<ArgumentOutOfRangeException>();
-        activeWorkspaceBytes.Should().Throw<ArgumentOutOfRangeException>();
-        activeResultBytes.Should().Throw<ArgumentOutOfRangeException>();
+        concurrentLeases.Should().Throw<ArgumentOutOfRangeException>();
         areaPolicyWork.Should().Throw<ArgumentException>();
         catalogCopyWork.Should().Throw<ArgumentException>();
     }
@@ -187,14 +168,12 @@ public sealed class TrailblazerWorldContextSettingsTests
             maxRetiredSnapshots: 0,
             maxRetiredSnapshotBytes: 0,
             maxDynamicCellSlotsPerMap: 0,
-            maxDynamicCellSlots: 0,
-            maxRetainedWorkspaceBytes: 0);
+            maxDynamicCellSlots: 0);
 
         settings.MaxRetiredSnapshots.Should().Be(0);
         settings.MaxRetiredSnapshotBytes.Should().Be(0);
         settings.MaxDynamicCellSlotsPerMap.Should().Be(0);
         settings.MaxDynamicCellSlots.Should().Be(0);
-        settings.MaxRetainedWorkspaceBytes.Should().Be(0);
     }
 
     [Fact]
@@ -210,7 +189,6 @@ public sealed class TrailblazerWorldContextSettingsTests
         Action areaAggregate = () => _ = CreateSettings(
             maxAreaRulesPerPolicy: 2,
             maxAreaRules: 1);
-        Action retainedWorkspaceBytes = () => _ = CreateSettings(maxRetainedWorkspaceBytes: -1);
 
         retiredSnapshots.Should().Throw<ArgumentOutOfRangeException>();
         retiredSnapshotBytes.Should().Throw<ArgumentOutOfRangeException>();
@@ -218,7 +196,6 @@ public sealed class TrailblazerWorldContextSettingsTests
         dynamicTotal.Should().Throw<ArgumentOutOfRangeException>();
         dynamicAggregate.Should().Throw<ArgumentException>();
         areaAggregate.Should().Throw<ArgumentException>();
-        retainedWorkspaceBytes.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     private static TrailblazerWorldContextSettings CreateSettings(
@@ -237,12 +214,9 @@ public sealed class TrailblazerWorldContextSettingsTests
         int maxAreaPolicies = 1,
         int maxAreaRulesPerPolicy = 1,
         int maxAreaRules = 1,
-        int maxConcurrentPathQueries = 1,
-        long maxActiveWorkspaceBytes = 1,
-        long maxRetainedWorkspaceBytes = 1,
-        long maxActiveQueryResultBytes = 1) => new(
+        int maxConcurrentSnapshotLeases = 1) => new(
             operationLimits ?? CreateOperationLimits(),
-            maintenanceBudget ?? new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1, 1, 3, 1),
+            maintenanceBudget ?? new MaintenanceWorkBudget(1, 1, 1, 1, 1, 3),
             maxIngressEntries,
             maxIngressBytes,
             maxActiveSnapshots,
@@ -256,10 +230,7 @@ public sealed class TrailblazerWorldContextSettingsTests
             maxAreaPolicies,
             maxAreaRulesPerPolicy,
             maxAreaRules,
-            maxConcurrentPathQueries,
-            maxActiveWorkspaceBytes,
-            maxRetainedWorkspaceBytes,
-            maxActiveQueryResultBytes);
+            maxConcurrentSnapshotLeases);
 
     private static NavigationOperationLimits CreateOperationLimits() => new(
         maxPendingOperations: 1,

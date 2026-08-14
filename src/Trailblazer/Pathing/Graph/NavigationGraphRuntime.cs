@@ -19,8 +19,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
     private readonly NavigationGridChangeIngress _ingress;
     private readonly NavigationWorldGraphStore _store;
     private readonly NavigationAreaCatalogProcessor _areaPolicies;
-    private readonly PathQueryWorkspacePool _workspaces;
-    private readonly NavigationQueryAdmissionGate _queryAdmission;
     private readonly MaintenanceWorkBudget _maintenanceBudget;
     private readonly MaintenanceWorkMeter _maintenanceMeter;
     private readonly int _maxDynamicSlotsPerMap;
@@ -95,14 +93,8 @@ internal sealed class NavigationGraphRuntime : IDisposable
             settings.MaxRetiredSnapshotBytes,
             settings.MaxActiveSnapshotBytes,
             settings.MaxPersistentGraphPages,
-            settings.MaxConcurrentPathQueries,
-            settings.MaxActiveQueryResultBytes);
+            settings.MaxConcurrentSnapshotLeases);
         _areaPolicies = new NavigationAreaCatalogProcessor(settings);
-        _workspaces = new PathQueryWorkspacePool(settings);
-        _queryAdmission = new NavigationQueryAdmissionGate(
-            _store,
-            _workspaces,
-            settings);
         _maintenanceBudget = settings.MaintenanceBudget;
         _maintenanceMeter = new MaintenanceWorkMeter(_maintenanceBudget);
         _maxDynamicSlotsPerMap = settings.MaxDynamicCellSlotsPerMap;
@@ -202,22 +194,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
         return _store.TryAcquire();
     }
 
-    internal bool TryAdmitQuery(
-        in NavigationQueryAdmissionRequest request,
-        out NavigationQueryAdmissionLease? lease)
-    {
-        EnsureUsable();
-        return _queryAdmission.TryAdmit(request, out lease);
-    }
-
-    internal int AdmitQueryBatch(
-        ReadOnlySpan<NavigationQueryAdmissionRequest> requests,
-        Span<NavigationQueryAdmissionLease?> leases)
-    {
-        EnsureUsable();
-        return _queryAdmission.AdmitBatch(requests, leases);
-    }
-
     internal void Maintain(int frame)
     {
         EnsureUsable();
@@ -230,7 +206,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
             if (resetPublication != NavigationCandidatePublication.Published)
                 return;
             _resetPending = false;
-            _store.CacheGate.ClearSafetyPending();
+            _store.ClearSafetyPending();
         }
         if (!_store.CanPublish)
         {
@@ -403,14 +379,14 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 _publicationBlockAll,
                 _snapshotDeferredScopeCount,
                 _snapshotDeferAll);
-            if (_store.CacheGate.IsSafetyPending
+            if (_store.IsSafetyPending
                 && _publicationResnapshotAll
                 && !_publicationBlockAll
                 && _publicationBlockedScopeCount == 0
                 && !_snapshotDeferAll
                 && _snapshotDeferredScopeCount == 0)
             {
-                _store.CacheGate.ClearSafetyPending();
+                _store.ClearSafetyPending();
             }
         }
         else
@@ -508,10 +484,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 + _areaPolicies.PendingCount),
             _store.RetiredGenerationCount,
             _store.RetiredBytes,
-            _queryAdmission.ActiveCount,
-            _workspaces.ActiveBytes,
-            _workspaces.RetainedBytes,
-            _store.CacheGate.TotalResultBytes,
             _areaPolicies.PendingCount,
             _areaPolicies.PendingRuleCount,
             _areaPolicies.PendingRetainedBytes,
@@ -534,14 +506,13 @@ internal sealed class NavigationGraphRuntime : IDisposable
         _baselineRebuilds = PersistentStringMap<NavigationBaselineRebuild>.Empty;
         _compositionWork = null;
         Array.Clear(_baselineCaptures, 0, _baselineCaptures.Length);
-        _workspaces.ClearRetained();
         _resetPending = _store.TryPublish(
             NavigationWorldGraph.CreateEmpty(_store.Current.GraphVersion + 1))
             != NavigationCandidatePublication.Published;
         if (_resetPending)
-            _store.CacheGate.MarkSafetyPending();
+            _store.MarkSafetyPending();
         else
-            _store.CacheGate.ClearSafetyPending();
+            _store.ClearSafetyPending();
     }
 
     public void Dispose()
@@ -553,8 +524,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
         _compositionWork = null;
         Array.Clear(_baselineCaptures, 0, _baselineCaptures.Length);
         _ingress.Dispose();
-        _queryAdmission.Dispose();
-        _workspaces.Dispose();
         _store.Dispose();
     }
 
@@ -859,10 +828,10 @@ internal sealed class NavigationGraphRuntime : IDisposable
         _maintenanceMeter.TryConsumeEnvelopes(count);
         if (count != 0 || blockedScopeCount != 0 || blockAll)
         {
-            // Query admission is already closed by the store while the bounded leased generations
+            // Snapshot admission is already closed by the store while bounded leased generations
             // prevent publication. Drain a bounded final-state prefix now, then require an exact
             // baseline before any affected scope can reopen once publication pressure clears.
-            _store.CacheGate.MarkSafetyPending();
+            _store.MarkSafetyPending();
             _ingress.MarkResnapshotRequired();
         }
     }

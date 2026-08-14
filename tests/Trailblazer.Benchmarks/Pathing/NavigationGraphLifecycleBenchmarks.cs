@@ -126,7 +126,7 @@ public class NavigationGraphLifecycleBenchmarks
             maxOverlayTransitions: 32_768);
         return new TrailblazerWorldContextSettings(
             operations,
-            new MaintenanceWorkBudget(4_096, 65_536, 65_536, 65_536, 65_536, 262_144, 65_536, 65_536, 65_536),
+            new MaintenanceWorkBudget(4_096, 65_536, 65_536, 65_536, 65_536, 65_536),
             maxIngressEntries: 4_096,
             maxIngressBytes: 4_096 * 256L,
             maxActiveSnapshots: 3,
@@ -140,9 +140,6 @@ public class NavigationGraphLifecycleBenchmarks
             maxAreaPolicies: 64,
             maxAreaRulesPerPolicy: 4_096,
             maxAreaRules: 65_536,
-            maxConcurrentPathQueries: 8,
-            maxActiveWorkspaceBytes: 8_000_000,
-            maxRetainedWorkspaceBytes: 16_000_000,
-            maxActiveQueryResultBytes: 16_000_000);
+            maxConcurrentSnapshotLeases: 8);
     }
 }

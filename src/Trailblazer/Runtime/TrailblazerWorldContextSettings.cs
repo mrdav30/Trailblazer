@@ -40,10 +40,7 @@ public sealed class TrailblazerWorldContextSettings
         int maxAreaPolicies,
         int maxAreaRulesPerPolicy,
         int maxAreaRules,
-        int maxConcurrentPathQueries,
-        long maxActiveWorkspaceBytes,
-        long maxRetainedWorkspaceBytes,
-        long maxActiveQueryResultBytes)
+        int maxConcurrentSnapshotLeases)
     {
         SwiftThrowHelper.ThrowIfArgument(
             operationLimits.MaxPendingOperations <= 0,
@@ -109,10 +106,7 @@ public sealed class TrailblazerWorldContextSettings
             maintenanceBudget.MaxDependencyEntries < minimumAreaPolicyWork,
             nameof(maintenanceBudget),
             "Dependency work must fit one exact area-policy publication.");
-        ThrowIfNonPositive(maxConcurrentPathQueries, nameof(maxConcurrentPathQueries));
-        ThrowIfNonPositive(maxActiveWorkspaceBytes, nameof(maxActiveWorkspaceBytes));
-        ThrowIfNegative(maxRetainedWorkspaceBytes, nameof(maxRetainedWorkspaceBytes));
-        ThrowIfNonPositive(maxActiveQueryResultBytes, nameof(maxActiveQueryResultBytes));
+        ThrowIfNonPositive(maxConcurrentSnapshotLeases, nameof(maxConcurrentSnapshotLeases));
 
         OperationLimits = operationLimits;
         MaintenanceBudget = maintenanceBudget;
@@ -129,10 +123,7 @@ public sealed class TrailblazerWorldContextSettings
         MaxAreaPolicies = maxAreaPolicies;
         MaxAreaRulesPerPolicy = maxAreaRulesPerPolicy;
         MaxAreaRules = maxAreaRules;
-        MaxConcurrentPathQueries = maxConcurrentPathQueries;
-        MaxActiveWorkspaceBytes = maxActiveWorkspaceBytes;
-        MaxRetainedWorkspaceBytes = maxRetainedWorkspaceBytes;
-        MaxActiveQueryResultBytes = maxActiveQueryResultBytes;
+        MaxConcurrentSnapshotLeases = maxConcurrentSnapshotLeases;
     }
 
     /// <summary>Gets the map-operation, preparation, and semantic-overlay ceilings.</summary>
@@ -180,17 +171,8 @@ public sealed class TrailblazerWorldContextSettings
     /// <summary>Gets the maximum direct-indexed area rules retained across the context.</summary>
     public int MaxAreaRules { get; }
 
-    /// <summary>Gets the maximum concurrently admitted path queries.</summary>
-    public int MaxConcurrentPathQueries { get; }
-
-    /// <summary>Gets the maximum bytes checked out by active path-query workspaces.</summary>
-    public long MaxActiveWorkspaceBytes { get; }
-
-    /// <summary>Gets the maximum bytes retained by the idle path-query workspace pool.</summary>
-    public long MaxRetainedWorkspaceBytes { get; }
-
-    /// <summary>Gets the maximum result bytes reserved by concurrently admitted path queries.</summary>
-    public long MaxActiveQueryResultBytes { get; }
+    /// <summary>Gets the maximum concurrently checked-out immutable graph snapshots.</summary>
+    public int MaxConcurrentSnapshotLeases { get; }
 
     private static TrailblazerWorldContextSettings CreateDefault() => new(
         new NavigationOperationLimits(
@@ -213,12 +195,9 @@ public sealed class TrailblazerWorldContextSettings
             maxConsumedEnvelopes: 4_096,
             maxBaselineAddresses: 65_536,
             maxOverlaySlots: 16_384,
-            maxSeamCandidates: 16_384,
             maxComponentNodes: 65_536,
-            maxImplicitEdges: 262_144,
             maxExplicitEdges: 65_536,
-            maxDependencyEntries: 65_536,
-            maxCacheInvalidations: 16_384),
+            maxDependencyEntries: 65_536),
         maxIngressEntries: 16_384,
         maxIngressBytes: 4_194_304,
         maxActiveSnapshots: 3,
@@ -232,10 +211,7 @@ public sealed class TrailblazerWorldContextSettings
         maxAreaPolicies: 64,
         maxAreaRulesPerPolicy: 4_096,
         maxAreaRules: 65_536,
-        maxConcurrentPathQueries: 8,
-        maxActiveWorkspaceBytes: 8_388_608,
-        maxRetainedWorkspaceBytes: 16_777_216,
-        maxActiveQueryResultBytes: 16_777_216);
+        maxConcurrentSnapshotLeases: 8);
 
     private static void ThrowIfNonPositive(int value, string parameterName) =>
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(value <= 0, value, parameterName);

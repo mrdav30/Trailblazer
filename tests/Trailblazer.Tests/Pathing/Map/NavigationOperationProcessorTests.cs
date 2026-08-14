@@ -161,7 +161,7 @@ public sealed class NavigationOperationProcessorTests
             5,
             1);
         processor.Admit(operation).Should().BeTrue();
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 8, 8, 8, 8, 1, 8, 8));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 8, 8, 1, 8));
 
         int frame = 1;
         while (operation.Receipt.Status == NavigationOperationStatus.Pending && frame < 32)
@@ -433,7 +433,7 @@ public sealed class NavigationOperationProcessorTests
     public void MeteredMapWork_ShouldCarryCommitAndRemovalWithoutOvertaking()
     {
         var processor = new NavigationOperationProcessor(CreateLimits());
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 8, 1, 8));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 1));
         NormalizedGridConfiguration firstBinding = CreateBinding(Vector3d.Zero);
         var firstBuilder = new NavigationMapBuilder("first", firstBinding)
             .AddCell(default, SolidCell)
@@ -541,7 +541,7 @@ public sealed class NavigationOperationProcessorTests
             4,
             2);
         processor.Admit(operation).Should().BeTrue();
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 1, 1, 8));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 1, 1));
         for (int frame = 2; frame < 32 && operation.Receipt.Status == NavigationOperationStatus.Pending; frame++)
         {
             meter.Reset();
@@ -578,7 +578,7 @@ public sealed class NavigationOperationProcessorTests
         NavigationOverlayCommitOperation rejected = ConnectionOverlay(invalid, 3, 1);
         processor.Admit(valid).Should().BeTrue();
         processor.Admit(rejected).Should().BeTrue();
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 1, 1, 8));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 1, 1));
 
         int frame = 1;
         while (rejected.Receipt.Status == NavigationOperationStatus.Pending && frame < 32)
@@ -618,7 +618,7 @@ public sealed class NavigationOperationProcessorTests
             2,
             1);
         processor.Admit(overlay).Should().BeTrue();
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 3, 8, 8, 8, 8, 8, 8));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 3, 8, 8, 8));
 
         int publicationCount = 0;
         NavigationCandidatePublication Publish(
@@ -689,7 +689,7 @@ public sealed class NavigationOperationProcessorTests
             2,
             1);
         processor.Admit(replacement).Should().BeTrue();
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 8, 8, 8));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8));
         long maximumGuardBytes = 0;
         int frame = 1;
         while (replacement.Receipt.Status == NavigationOperationStatus.Pending && frame < 16)
@@ -745,7 +745,7 @@ public sealed class NavigationOperationProcessorTests
         processor.ProcessFrame(1);
         long beforeGrowth = processor.Candidate.RetainedBytes;
 
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 1, 8, 8));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 1, 8));
         long maximumGrowthGuardBytes = 0;
         NavigationOverlayCommitOperation growth = ConnectionOverlay(large, 3, 2);
         processor.Admit(growth).Should().BeTrue();
@@ -835,7 +835,7 @@ public sealed class NavigationOperationProcessorTests
             2);
         processor.Admit(operation).Should().BeTrue();
         var meter = new MaintenanceWorkMeter(
-            new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 8, 8, 8));
+            new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8));
         long tightByteCap = -1;
         int tightPageCap = -1;
         long maximumBytes = 0;
@@ -921,7 +921,7 @@ public sealed class NavigationOperationProcessorTests
             2);
         processor.Admit(operation).Should().BeTrue();
         var meter = new MaintenanceWorkMeter(
-            new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8, 8, 8, 8));
+            new MaintenanceWorkBudget(8, 8, 1, 8, 8, 8));
 
         bool Guard(long bytes, int _) => bytes <= processor.CoverageScratchBytes;
 

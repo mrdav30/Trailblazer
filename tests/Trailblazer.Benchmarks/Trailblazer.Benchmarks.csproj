@@ -18,13 +18,25 @@
     <DisableMemoryPack>true</DisableMemoryPack>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj" />
+    <ProjectReference Include="..\..\src\Trailblazer\Trailblazer.csproj"
+                      Condition="'$(UsePrebuiltLocalLsfStack)' != 'true'" />
     <ProjectReference Include="..\..\..\GridForge\src\GridForge\GridForge.csproj"
-                      Condition="'$(UseLocalLsfStack)' == 'true'"
+                      Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' != 'true'"
                       Targets="GetTargetPath"
                       AdditionalProperties="Configuration=$(Configuration);SemVer=9.0.0" />
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- The Test SDK is required only for the VSTest Adapter to work -->
+  </ItemGroup>
+  <!-- Generated BenchmarkDotNet projects consume the already-verified local build.
+       This prevents nested project-reference builds from overwriting versioned LSF binaries. -->
+  <ItemGroup Condition="'$(UseLocalLsfStack)' == 'true' And '$(UsePrebuiltLocalLsfStack)' == 'true'">
+    <Reference Include="Trailblazer" HintPath="..\..\src\Trailblazer\bin\$(Configuration)\net8.0\Trailblazer.dll" Private="true" />
+    <Reference Include="GridForge" HintPath="..\..\..\GridForge\src\GridForge\bin\$(Configuration)\net8.0\GridForge.dll" Private="true" />
+    <Reference Include="FixedMathSharp" HintPath="..\..\..\FixedMathSharp\src\FixedMathSharp\bin\$(Configuration)\net8.0\FixedMathSharp.dll" Private="true" />
+    <Reference Include="SwiftCollections" HintPath="..\..\..\SwiftCollections\src\SwiftCollections\bin\$(Configuration)\net8.0\SwiftCollections.dll" Private="true" />
+    <Reference Include="SwiftCollections.FixedMathSharp" HintPath="..\..\..\SwiftCollections\src\SwiftCollections.FixedMathSharp\bin\$(Configuration)\net8.0\SwiftCollections.FixedMathSharp.dll" Private="true" />
+    <Reference Include="Chronicler" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net8.0\Chronicler.dll" Private="true" />
+    <Reference Include="MemoryPack.Core" HintPath="$(MSBuildThisFileDirectory)bin\$(Configuration)\net8.0\MemoryPack.Core.dll" Private="true" />
   </ItemGroup>
   <ItemGroup>
     <None Remove=".gitignore" />

@@ -21,6 +21,7 @@ internal sealed partial class NavigationWorldGraph
     private readonly NavigationInstanceDirectory _instances;
     private readonly PersistentGridConfigurationMap<string> _mapIndex;
     private readonly PersistentStringMap<bool> _closedStructuralComponents;
+    private readonly bool _allStructuralComponentsClosed;
     private readonly NavigationExplicitConnectionIndex _explicitConnections;
     private int _leaseCount;
 
@@ -37,11 +38,9 @@ internal sealed partial class NavigationWorldGraph
         AreaCatalog = areaCatalog ?? NavigationAreaCatalog.Empty;
         _mapIndex = mapIndex ?? BuildMapIndex(instances);
         _explicitConnections = explicitConnections ?? NavigationExplicitConnectionIndex.Empty;
-        Composition = composition ?? NavigationCompositionIndex.Build(
-            instances,
-            graphVersion,
-            _explicitConnections);
+        Composition = composition ?? NavigationCompositionIndex.Empty;
         _closedStructuralComponents = PersistentStringMap<bool>.Empty;
+        _allStructuralComponentsClosed = false;
         long bytes = checked(
             BaseRetainedBytes
             + _instances.RetainedBytes
@@ -72,6 +71,7 @@ internal sealed partial class NavigationWorldGraph
         NavigationCompositionIndex composition,
         NavigationExplicitConnectionIndex explicitConnections,
         PersistentStringMap<bool> closedStructuralComponents,
+        bool allStructuralComponentsClosed,
         long retainedBytes,
         int persistentPageCount)
     {
@@ -82,6 +82,7 @@ internal sealed partial class NavigationWorldGraph
         Composition = composition;
         _explicitConnections = explicitConnections;
         _closedStructuralComponents = closedStructuralComponents;
+        _allStructuralComponentsClosed = allStructuralComponentsClosed;
         RetainedBytes = retainedBytes;
         PersistentPageCount = persistentPageCount;
     }
@@ -145,79 +146,23 @@ internal sealed partial class NavigationWorldGraph
     }
 
     internal bool IsStructuralScopeClosed(string mapId) =>
-        Composition.TryGetComponentKey(mapId, out string componentKey)
-        && _closedStructuralComponents.ContainsKey(componentKey);
-
-    internal static NavigationWorldGraph Compose(
-        NavigationOperationCandidate candidate,
-        NavigationWorldGraph previous,
-        long graphVersion,
-        NavigationOperationFrameChange[] changes,
-        int changeCount)
-    {
-        if (previous.TryComposeCellOverlay(
-                candidate,
-                graphVersion,
-                changes,
-                changeCount,
-                out NavigationWorldGraph? local))
-        {
-            return local!;
-        }
-        if (previous.TryComposeStructuralChanges(
-                candidate,
-                graphVersion,
-                changes,
-                changeCount,
-                updateComposition: true,
-                out local))
-        {
-            return local!;
-        }
-        NavigationOperationCandidate.MapState[] states = candidate.CaptureStates();
-        var instances = new NavigationMapInstance[states.Length];
-        for (int i = 0; i < states.Length; i++)
-        {
-            previous.TryGetMap(states[i].Map.MapId, out NavigationMapInstance? prior);
-            instances[i] = NavigationMapInstance.ComposeDetached(states[i], prior, graphVersion);
-        }
-        return new NavigationWorldGraph(
-            graphVersion,
-            instances,
-            previous.AreaCatalog,
-            explicitConnections: candidate.ExplicitConnections);
-    }
-
-    internal static NavigationWorldGraph PrepareStructuralCandidate(
-        NavigationOperationCandidate candidate,
-        NavigationWorldGraph previous,
-        long graphVersion,
-        NavigationOperationFrameChange[] changes,
-        int changeCount)
-    {
-        bool prepared = previous.TryComposeStructuralChanges(
-            candidate,
-            graphVersion,
-            changes,
-            changeCount,
-            updateComposition: false,
-            out NavigationWorldGraph? graph);
-        SwiftCollections.Diagnostics.SwiftThrowHelper.ThrowIfTrue(
-            !prepared || graph == null,
-            nameof(NavigationWorldGraph),
-            "A structural candidate requires at least one structural change.");
-        return graph!;
-    }
+        _allStructuralComponentsClosed
+        || (Composition.TryGetComponentKey(mapId, out string componentKey)
+            && _closedStructuralComponents.ContainsKey(componentKey));
 
     internal NavigationCompositionIndex.UpdateWork BeginCompositionUpdate(
         NavigationWorldGraph source,
-        ReadOnlySpan<string> changedMapIds,
-        long version) => new(
+        PersistentStringMap<bool> changedMapIds,
+        long compositionVersion,
+        long componentVersion,
+        NavigationCompositionWorkspace workspace) => new(
             source.Composition,
             _instances,
             _explicitConnections,
             changedMapIds,
-            version);
+            compositionVersion,
+            componentVersion,
+            workspace);
 
     internal NavigationWorldGraph WithComposition(NavigationCompositionIndex composition)
     {
@@ -239,6 +184,7 @@ internal sealed partial class NavigationWorldGraph
             composition,
             _explicitConnections,
             openComponents,
+            false,
             bytes,
             pages);
     }
@@ -260,7 +206,8 @@ internal sealed partial class NavigationWorldGraph
                 change.PreparedOverlay!.Transaction.MapSpan;
             for (int mapIndex = 0; mapIndex < maps.Length; mapIndex++)
             {
-                if (!maps[mapIndex].ConnectionSpan.IsEmpty
+                if (!maps[mapIndex].CellSpan.IsEmpty
+                    || !maps[mapIndex].ConnectionSpan.IsEmpty
                     || !maps[mapIndex].TransitionSpan.IsEmpty)
                 {
                     return true;
@@ -270,37 +217,36 @@ internal sealed partial class NavigationWorldGraph
         return false;
     }
 
-    internal NavigationWorldGraph FailClosedStructuralScope(
-        ReadOnlySpan<string> changedMapIds,
+    internal NavigationWorldGraph WithClosedStructuralComponents(
+        PersistentStringMap<bool> closed,
+        bool closeAllStructuralComponents,
         long graphVersion)
     {
-        if (changedMapIds.IsEmpty)
-            return this;
-
-        PersistentStringMap<bool> closed = _closedStructuralComponents;
-        for (int i = 0; i < changedMapIds.Length; i++)
+        if (ReferenceEquals(closed, _closedStructuralComponents)
+            && closeAllStructuralComponents == _allStructuralComponentsClosed)
         {
-            if (Composition.TryGetComponentKey(changedMapIds[i], out string componentKey))
-                closed = closed.Set(componentKey, true);
+            return this;
         }
-        return ReferenceEquals(closed, _closedStructuralComponents)
-            ? this
-            : new NavigationWorldGraph(
-                graphVersion,
-                _instances,
-                AreaCatalog,
-                _mapIndex,
-                Composition,
-                _explicitConnections,
-                closed,
-                checked(RetainedBytes - _closedStructuralComponents.RetainedBytes + closed.RetainedBytes),
-                PersistentPageCount - _closedStructuralComponents.PersistentNodeCount
-                    + closed.PersistentNodeCount);
+        return new NavigationWorldGraph(
+            graphVersion,
+            _instances,
+            AreaCatalog,
+            _mapIndex,
+            Composition,
+            _explicitConnections,
+            closed,
+            closeAllStructuralComponents,
+            checked(RetainedBytes - _closedStructuralComponents.RetainedBytes + closed.RetainedBytes),
+            PersistentPageCount - _closedStructuralComponents.PersistentNodeCount
+                + closed.PersistentNodeCount);
     }
+
+    internal bool HasClosedStructuralScope =>
+        _allStructuralComponentsClosed || _closedStructuralComponents.Count != 0;
 
     internal NavigationWorldGraph ReopenStructuralScopes(long graphVersion)
     {
-        if (_closedStructuralComponents.Count == 0)
+        if (!_allStructuralComponentsClosed && _closedStructuralComponents.Count == 0)
             return this;
         PersistentStringMap<bool> open = PersistentStringMap<bool>.Empty;
         return new NavigationWorldGraph(
@@ -311,254 +257,9 @@ internal sealed partial class NavigationWorldGraph
             Composition,
             _explicitConnections,
             open,
+            false,
             checked(RetainedBytes - _closedStructuralComponents.RetainedBytes + open.RetainedBytes),
             PersistentPageCount - _closedStructuralComponents.PersistentNodeCount);
-    }
-
-    private bool TryComposeStructuralChanges(
-        NavigationOperationCandidate candidate,
-        long graphVersion,
-        NavigationOperationFrameChange[] changes,
-        int changeCount,
-        bool updateComposition,
-        out NavigationWorldGraph? graph)
-    {
-        if (changeCount == 0)
-        {
-            graph = null;
-            return false;
-        }
-
-        NavigationInstanceDirectory directory = _instances;
-        PersistentGridConfigurationMap<string> mapIndex = _mapIndex;
-        NavigationCompositionIndex composition = Composition;
-        long retainedBytes = RetainedBytes;
-        int persistentPages = PersistentPageCount;
-        int changedCapacity = 0;
-        for (int i = 0; i < changeCount; i++)
-        {
-            NavigationOperationFrameChange change = changes[i];
-            changedCapacity = checked(changedCapacity +
-                (change.Kind == NavigationOperationFrameChangeKind.Overlay
-                    ? change.PreparedOverlay!.Transaction.MapSpan.Length
-                    : 1));
-        }
-        var changedMapIds = new string[changedCapacity];
-        int changedMapCount = 0;
-        for (int i = 0; i < changeCount; i++)
-        {
-            NavigationOperationFrameChange change = changes[i];
-            if (change.Kind == NavigationOperationFrameChangeKind.MapRemove)
-            {
-                if (!directory.TryGet(change.MapId!, out NavigationMapInstance current))
-                    continue;
-                NavigationInstanceDirectory nextDirectory =
-                    directory.Remove(change.MapId!, out bool removed);
-                if (!removed)
-                    continue;
-                retainedBytes = checked(
-                    retainedBytes
-                    - directory.RetainedBytes
-                    + nextDirectory.RetainedBytes
-                    - current.RetainedBytes);
-                persistentPages +=
-                    nextDirectory.PersistentPageCount
-                    - directory.PersistentPageCount
-                    - current.PersistentPageCount;
-                directory = nextDirectory;
-
-                PersistentGridConfigurationMap<string> nextMapIndex =
-                    mapIndex.Remove(current.Map.GridBinding.Key);
-                retainedBytes = checked(
-                    retainedBytes - mapIndex.RetainedBytes + nextMapIndex.RetainedBytes);
-                persistentPages += nextMapIndex.Count - mapIndex.Count;
-                mapIndex = nextMapIndex;
-                changedMapIds[changedMapCount++] = change.MapId!;
-                continue;
-            }
-
-            if (change.Kind == NavigationOperationFrameChangeKind.MapCommit)
-            {
-                if (!candidate.TryGetState(change.MapId!, out NavigationOperationCandidate.MapState? state)
-                    || state == null)
-                {
-                    graph = null;
-                    return false;
-                }
-                bool hadPrior = directory.TryGet(
-                    change.MapId!,
-                    out NavigationMapInstance prior);
-                NavigationMapInstance next = NavigationMapInstance.ComposeDetached(
-                    state,
-                    hadPrior ? prior : null,
-                    graphVersion);
-                NavigationInstanceDirectory nextDirectory = directory.Set(change.MapId!, next);
-                retainedBytes = checked(
-                    retainedBytes
-                    - directory.RetainedBytes
-                    + nextDirectory.RetainedBytes
-                    + next.RetainedBytes
-                    - (hadPrior ? prior.RetainedBytes : 0));
-                persistentPages +=
-                    nextDirectory.PersistentPageCount
-                    - directory.PersistentPageCount
-                    + next.PersistentPageCount
-                    - (hadPrior ? prior.PersistentPageCount : 0);
-                directory = nextDirectory;
-
-                PersistentGridConfigurationMap<string> priorMapIndex = mapIndex;
-                if (hadPrior && !prior.Map.GridBinding.Key.Equals(next.Map.GridBinding.Key))
-                    mapIndex = mapIndex.Remove(prior.Map.GridBinding.Key);
-                PersistentGridConfigurationMap<string> nextMapIndex =
-                    mapIndex.Set(next.Map.GridBinding.Key, next.MapId);
-                retainedBytes = checked(
-                    retainedBytes - priorMapIndex.RetainedBytes + nextMapIndex.RetainedBytes);
-                persistentPages += nextMapIndex.Count - priorMapIndex.Count;
-                mapIndex = nextMapIndex;
-                changedMapIds[changedMapCount++] = change.MapId!;
-                continue;
-            }
-
-            ReadOnlySpan<NavigationMapOverlayDelta> deltas = change.PreparedOverlay!.Transaction.MapSpan;
-            for (int delta = 0; delta < deltas.Length; delta++)
-            {
-                if (!candidate.TryGetState(deltas[delta].MapId, out NavigationOperationCandidate.MapState? state)
-                    || state == null
-                    || !directory.TryGet(deltas[delta].MapId, out NavigationMapInstance current))
-                {
-                    graph = null;
-                    return false;
-                }
-                NavigationMapInstance next = NavigationMapInstance.ComposeDetached(
-                    state,
-                    current,
-                    graphVersion);
-                if (ReferenceEquals(current, next))
-                    continue;
-                NavigationInstanceDirectory nextDirectory =
-                    directory.Set(deltas[delta].MapId, next);
-                retainedBytes = checked(
-                    retainedBytes
-                    - directory.RetainedBytes
-                    + nextDirectory.RetainedBytes
-                    - current.RetainedBytes
-                    + next.RetainedBytes);
-                persistentPages +=
-                    nextDirectory.PersistentPageCount
-                    - directory.PersistentPageCount
-                    - current.PersistentPageCount
-                    + next.PersistentPageCount;
-                directory = nextDirectory;
-                changedMapIds[changedMapCount++] = deltas[delta].MapId;
-            }
-        }
-
-        if (changedMapCount == 0)
-        {
-            graph = this;
-            return true;
-        }
-
-        if (updateComposition)
-        {
-            composition = Composition.Update(
-                directory,
-                candidate.ExplicitConnections,
-                changedMapIds.AsSpan(0, changedMapCount),
-                graphVersion);
-        }
-        retainedBytes = checked(
-            retainedBytes - Composition.RetainedBytes + composition.RetainedBytes);
-        persistentPages += composition.PersistentPageCount - Composition.PersistentPageCount;
-        graph = new NavigationWorldGraph(
-            graphVersion,
-            directory,
-            AreaCatalog,
-            mapIndex,
-            composition,
-            candidate.ExplicitConnections,
-            _closedStructuralComponents,
-            retainedBytes,
-            persistentPages);
-        return true;
-    }
-
-    private bool TryComposeCellOverlay(
-        NavigationOperationCandidate candidate,
-        long graphVersion,
-        NavigationOperationFrameChange[] changes,
-        int changeCount,
-        out NavigationWorldGraph? graph)
-    {
-        if (changeCount == 0)
-        {
-            graph = null;
-            return false;
-        }
-        for (int i = 0; i < changeCount; i++)
-        {
-            if (changes[i].Kind != NavigationOperationFrameChangeKind.Overlay)
-            {
-                graph = null;
-                return false;
-            }
-            ReadOnlySpan<NavigationMapOverlayDelta> deltas =
-                changes[i].PreparedOverlay!.Transaction.MapSpan;
-            for (int delta = 0; delta < deltas.Length; delta++)
-            {
-                if (!deltas[delta].ConnectionSpan.IsEmpty
-                    || !deltas[delta].TransitionSpan.IsEmpty)
-                {
-                    graph = null;
-                    return false;
-                }
-            }
-        }
-
-        NavigationInstanceDirectory directory = _instances;
-        long retainedBytes = RetainedBytes;
-        int persistentPages = PersistentPageCount;
-        for (int i = 0; i < changeCount; i++)
-        {
-            ReadOnlySpan<NavigationMapOverlayDelta> deltas =
-                changes[i].PreparedOverlay!.Transaction.MapSpan;
-            for (int delta = 0; delta < deltas.Length; delta++)
-            {
-                int ordinal = FindMapOrdinal(deltas[delta].MapId);
-                if (ordinal < 0
-                    || !candidate.TryGetState(
-                        deltas[delta].MapId,
-                        out NavigationOperationCandidate.MapState? state)
-                    || state == null)
-                {
-                    graph = null;
-                    return false;
-                }
-                NavigationMapInstance current = directory.Get(ordinal);
-                NavigationMapInstance next = current.ApplyCellOverlayDetached(
-                    state,
-                    deltas[delta].CellSpan,
-                    graphVersion);
-                if (ReferenceEquals(current, next))
-                    continue;
-                retainedBytes = checked(retainedBytes - current.RetainedBytes + next.RetainedBytes);
-                persistentPages += next.PersistentPageCount - current.PersistentPageCount;
-                directory = directory.With(ordinal, next);
-            }
-        }
-        graph = ReferenceEquals(directory, _instances)
-            ? this
-            : new NavigationWorldGraph(
-                graphVersion,
-                directory,
-                AreaCatalog,
-                _mapIndex,
-                Composition,
-                _explicitConnections,
-                _closedStructuralComponents,
-                retainedBytes,
-                persistentPages);
-        return true;
     }
 
     internal int CaptureMaintenanceSnapshot(
@@ -857,6 +558,7 @@ internal sealed partial class NavigationWorldGraph
         long graphVersion)
     {
         NavigationInstanceDirectory changed = _instances;
+        NavigationCompositionIndex composition = Composition;
         long retainedBytes = RetainedBytes;
         int persistentPages = PersistentPageCount;
         for (int affectedIndex = 0; affectedIndex < affectedCount; affectedIndex++)
@@ -893,6 +595,8 @@ internal sealed partial class NavigationWorldGraph
             {
                 next = current.Materialize(baselineCaptures[mapIndex], graphVersion);
             }
+            if (next.PhysicalVersion != current.PhysicalVersion)
+                composition = composition.WithComponentVersion(current.MapId, graphVersion);
             if (!ReferenceEquals(current, next))
             {
                 retainedBytes = checked(retainedBytes - current.RetainedBytes + next.RetainedBytes);
@@ -900,16 +604,24 @@ internal sealed partial class NavigationWorldGraph
                 changed = changed.With(mapIndex, next);
             }
         }
-        return ReferenceEquals(changed, _instances)
-            ? this
-            : new NavigationWorldGraph(
+        if (ReferenceEquals(changed, _instances)
+            && ReferenceEquals(composition, Composition))
+        {
+            return this;
+        }
+        retainedBytes = checked(
+            retainedBytes - Composition.RetainedBytes + composition.RetainedBytes);
+        persistentPages = persistentPages - Composition.PersistentPageCount
+            + composition.PersistentPageCount;
+        return new NavigationWorldGraph(
                 graphVersion,
                 changed,
                 AreaCatalog,
                 _mapIndex,
-                Composition,
+                composition,
                 _explicitConnections,
                 _closedStructuralComponents,
+                _allStructuralComponentsClosed,
                 retainedBytes,
                 persistentPages);
     }
@@ -930,6 +642,7 @@ internal sealed partial class NavigationWorldGraph
             Composition,
             _explicitConnections,
             _closedStructuralComponents,
+            _allStructuralComponentsClosed,
             retainedBytes,
             persistentPages);
     }

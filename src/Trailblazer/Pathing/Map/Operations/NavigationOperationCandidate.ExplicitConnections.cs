@@ -8,7 +8,6 @@
 using System;
 using FixedMathSharp;
 using GridForge.Grids.Topology;
-using SwiftCollections;
 
 namespace Trailblazer.Pathing;
 
@@ -23,23 +22,35 @@ internal sealed partial class NavigationOperationCandidate
 
     internal ExplicitConnectionRefreshWork BeginExplicitConnectionRefresh(
         string mapId,
+        NavigationExplicitConnectionIndex foldSource,
         GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints) => new(
+        Vector3d[] corridorWaypoints,
+        NavigationCellAddress[] corridorAddresses,
+        NavigationAddressStampSet corridorAddressSet) => new(
             this,
+            foldSource,
             mapId,
             transaction: null,
             corridorPrisms,
-            corridorWaypoints);
+            corridorWaypoints,
+            corridorAddresses,
+            corridorAddressSet);
 
     internal ExplicitConnectionRefreshWork BeginExplicitConnectionRefresh(
         NavigationOverlayTransaction transaction,
+        NavigationExplicitConnectionIndex foldSource,
         GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints) => new(
+        Vector3d[] corridorWaypoints,
+        NavigationCellAddress[] corridorAddresses,
+        NavigationAddressStampSet corridorAddressSet) => new(
             this,
+            foldSource,
             mapId: null,
             transaction,
             corridorPrisms,
-            corridorWaypoints);
+            corridorWaypoints,
+            corridorAddresses,
+            corridorAddressSet);
 
     private bool TrySelectConnection(
         NavigationConnectionOwnerKey owner,
@@ -154,7 +165,7 @@ internal sealed partial class NavigationOperationCandidate
             connection,
             isActive: false,
             Fixed64.Zero,
-            Array.Empty<Vector3d>());
+            NavigationPagedSequence<Vector3d>.Empty);
 
     private static bool IsKnownSuppressed(MapState state, GridForge.Spatial.VoxelIndex index) =>
         state.Overlay.TryGetCell(index, out NavigationCellOverlayOperation operation)
@@ -162,17 +173,26 @@ internal sealed partial class NavigationOperationCandidate
 
     internal sealed class ExplicitConnectionRefreshWork
     {
+        private const long BaseRetainedBytes = 688L;
+
         private readonly NavigationOperationCandidate _candidate;
+        private readonly NavigationExplicitConnectionIndex _foldSource;
         private readonly string? _mapId;
         private readonly NavigationOverlayTransaction? _transaction;
         private readonly GridCellPrism[] _corridorPrisms;
         private readonly Vector3d[] _corridorWaypoints;
+        private readonly NavigationCellAddress[] _corridorAddresses;
+        private readonly NavigationAddressStampSet _corridorAddressSet;
         private PersistentStringMap<PersistentStringMap<bool>> _owners =
             PersistentStringMap<PersistentStringMap<bool>>.Empty;
         private int _stage;
         private int _mapIndex;
         private int _itemIndex;
-        private int _ownerIndex;
+        private NavigationPagedSequence<NavigationConnectionOwnerKey>.Enumerator
+            _incidentOwnerEnumerator;
+        private NavigationConnectionOwnerKey _pendingIncidentOwner;
+        private bool _incidentOwnerEnumerationStarted;
+        private bool _hasPendingIncidentOwner;
         private int _compileMapIndex;
         private int _compileOwnerIndex;
         private NavigationConnectionOwnerKey _currentOwner;
@@ -182,43 +202,110 @@ internal sealed partial class NavigationOperationCandidate
         private NavigationExplicitConnectionRecord? _preparedRecord;
         private NavigationCell _destinationCell;
         private int _semanticIndex;
-        private int _oldIncidenceIndex;
-        private int _newIncidenceIndex;
+        private int _rawAddressIndex;
+        private int _distinctAddressCount;
+        private int _touchAddressIndex;
         private bool _currentInitialized;
         private bool _selectionCharged;
         private bool _isDormant;
+        private bool _incidenceUnchanged;
         private bool _ownerUpdated;
+        private bool _ownerJournaled;
+        private bool _corridorStarted;
+        private GridNavigationCorridorValidationCursor _corridorCursor;
+        private NavigationPagedSequence<Vector3d>.Builder? _waypointBuilder;
+        private int _waypointCopyIndex;
+        private PersistentStringMap<PersistentVoxelIndexMap<IncidenceRowDelta>> _rowDeltas =
+            PersistentStringMap<PersistentVoxelIndexMap<IncidenceRowDelta>>.Empty;
+        private IncidenceOwnerTree _finalOwners;
+        private IncidenceOwnerTree.Node? _additionOwner;
+        private NavigationConnection? _additionDefinition;
+        private int _additionAddressIndex;
+        private bool _additionOwnerInitialized;
+        private int _rowMapIndex;
+        private int _rowAddressIndex;
+        private NavigationCellAddress _rowAddress;
+        private IncidenceRowDelta? _rowDelta;
+        private NavigationPagedSequence<NavigationConnectionOwnerKey>.Enumerator _priorRowOwners;
+        private NavigationPagedSequence<NavigationConnectionOwnerKey>.Enumerator _additionRowOwners;
+        private NavigationConnectionOwnerKey _priorRowOwner;
+        private NavigationConnectionOwnerKey _additionRowOwner;
+        private int _priorRowRemaining;
+        private int _additionRowRemaining;
+        private bool _priorRowOwnerReady;
+        private bool _additionRowOwnerReady;
+        private NavigationPagedSequence<NavigationConnectionOwnerKey>.Builder? _finalRowBuilder;
+        private NavigationPagedSequence<NavigationConnectionOwnerKey>.Builder? _endpointRowBuilder;
+        private NavigationConnectionOwnerKey _pendingEndpointOwner;
+        private bool _endpointOwnerPending;
+        private bool _incidentRowCommitted;
+        private bool _rowInitialized;
+        private long _rowDeltaInnerBytes;
+        private int _rowDeltaInnerPages;
+        private long _rowDeltaValueBytes;
+        private int _rowDeltaValuePages;
         private long _innerOwnerBytes;
         private int _innerOwnerPages;
+        private long _displacedSourcePayloadBytes;
+        private int _displacedSourcePayloadPages;
 
         internal ExplicitConnectionRefreshWork(
             NavigationOperationCandidate candidate,
+            NavigationExplicitConnectionIndex foldSource,
             string? mapId,
             NavigationOverlayTransaction? transaction,
             GridCellPrism[] corridorPrisms,
-            Vector3d[] corridorWaypoints)
+            Vector3d[] corridorWaypoints,
+            NavigationCellAddress[] corridorAddresses,
+            NavigationAddressStampSet corridorAddressSet)
         {
             _candidate = candidate;
+            _foldSource = foldSource;
             _mapId = mapId;
             _transaction = transaction;
             _corridorPrisms = corridorPrisms;
             _corridorWaypoints = corridorWaypoints;
+            _corridorAddresses = corridorAddresses;
+            _corridorAddressSet = corridorAddressSet;
         }
 
         internal bool IsValid { get; private set; } = true;
 
+        internal bool IsGatherComplete => _stage == 4;
+
+        internal long DisplacedSourcePayloadBytes => _displacedSourcePayloadBytes;
+
+        internal int DisplacedSourcePayloadPages => _displacedSourcePayloadPages;
+
         internal long RetainedBytes => checked(
-            128L
+            BaseRetainedBytes
             + _owners.RetainedBytes
             + _innerOwnerBytes
+            + _rowDeltas.RetainedBytes
+            + _rowDeltaInnerBytes
+            + _rowDeltaValueBytes
+            + _finalOwners.RetainedBytes
+            + (_finalRowBuilder?.RetainedBytes ?? 0)
+            + (_endpointRowBuilder?.RetainedBytes ?? 0)
+            + (_waypointBuilder?.RetainedBytes ?? 0)
             + (_ownerUpdated ? 0 : _preparedRecord?.RetainedBytes ?? 0));
 
         internal int PersistentPageCount => checked(
-            1 + _owners.PersistentNodeCount + _innerOwnerPages);
+            1
+            + _owners.PersistentNodeCount
+            + _innerOwnerPages
+            + _rowDeltas.PersistentNodeCount
+            + _rowDeltaInnerPages
+            + _rowDeltaValuePages
+            + _finalOwners.PersistentPageCount
+            + (_finalRowBuilder?.PersistentPageCount ?? 0)
+            + (_endpointRowBuilder?.PersistentPageCount ?? 0)
+            + (_waypointBuilder?.PersistentPageCount ?? 0)
+            + (_ownerUpdated ? 0 : _preparedRecord?.PersistentPageCount ?? 0));
 
         internal bool Advance(MaintenanceWorkMeter meter)
         {
-            if (_stage == 0 && !AdvanceGather(meter))
+            if (_stage < 4 && !AdvanceGather(meter))
                 return false;
             while (_compileMapIndex < _owners.Count)
             {
@@ -231,22 +318,47 @@ internal sealed partial class NavigationOperationCandidate
                         return false;
                     if (!IsValid)
                         return true;
-                    if (!AdvanceOldIncidence(meter))
-                        return false;
-                    UpdateOwner();
-                    if (!AdvanceNewIncidence(meter))
-                        return false;
+                    _incidenceUnchanged = _priorRecord != null
+                        && _preparedRecord != null
+                        && ReferenceEquals(
+                            _priorRecord.Definition,
+                            _preparedRecord.Definition);
+                    if (_incidenceUnchanged)
+                        UpdateOwner();
+                    if (!_ownerUpdated)
+                    {
+                        if (!AdvanceDistinctAddresses(_priorRecord?.Definition, meter))
+                            return false;
+                        if (!AdvanceOldIncidenceTouches(meter))
+                            return false;
+                        UpdateOwner();
+                    }
+                    if (!_incidenceUnchanged && !_ownerJournaled)
+                    {
+                        if (_preparedRecord != null)
+                        {
+                            if (!meter.TryConsumeDependencyEntries(1))
+                                return false;
+                            _finalOwners.Add(
+                                _currentOwner,
+                                _candidate._explicitConnections);
+                        }
+                        _ownerJournaled = true;
+                    }
                     _compileOwnerIndex++;
                     ResetCurrent();
                 }
                 _compileMapIndex++;
                 _compileOwnerIndex = 0;
             }
-            return true;
+            if (!AdvanceFinalAdditions(meter))
+                return false;
+            return AdvanceIncidenceRows(meter);
         }
 
         private void InitializeCurrent(PersistentStringMap<bool> map)
         {
+            _corridorAddressSet.Reset();
             _currentOwner = new NavigationConnectionOwnerKey(
                 _owners.GetKeyAt(_compileMapIndex),
                 map.GetKeyAt(_compileOwnerIndex));
@@ -301,35 +413,54 @@ internal sealed partial class NavigationOperationCandidate
             }
 
             int prismCount = semanticCount;
-            // Admission caps this one GridForge certificate primitive at MaxCorridorCells;
-            // the semantic cells it walks were each captured under the explicit-edge meter.
-            if (!GridCellGeometry.TryValidateNavigationCorridor(
-                    _corridorPrisms.AsSpan(0, prismCount),
+            if (!_corridorStarted)
+            {
+                _corridorCursor = new GridNavigationCorridorValidationCursor(
+                    prismCount,
                     _currentDefinition.EntryAnchor,
                     _currentDefinition.ExitAnchor,
                     _currentDefinition.PortalRadiusClearance,
-                    _currentDefinition.PortalHeightClearance,
+                    _currentDefinition.PortalHeightClearance);
+                _corridorStarted = true;
+            }
+            while (_corridorCursor.Status == GridNavigationCorridorValidationStatus.InProgress)
+            {
+                if (!meter.TryConsumeExplicitEdges(1))
+                    return false;
+                _corridorCursor.Advance(
+                    _corridorPrisms.AsSpan(0, prismCount),
                     _corridorWaypoints.AsSpan(0, (prismCount - 1) * 2),
-                    out int waypointCount,
-                    out Fixed64 corridorCost)
+                    maxWork: 1);
+            }
+            if (_corridorCursor.Status != GridNavigationCorridorValidationStatus.Complete
                 || (_currentDefinition.IsLowerBoundCertified
                     && !ValidateLowerBound(
                         _corridorPrisms[0],
                         _corridorPrisms[prismCount - 1],
                         _destinationCell,
                         _currentDefinition,
-                        corridorCost)))
+                        _corridorCursor.GeometricCost)))
             {
                 IsValid = false;
                 return true;
             }
-            var waypoints = new Vector3d[waypointCount];
-            _corridorWaypoints.AsSpan(0, waypointCount).CopyTo(waypoints);
+            int waypointCount = _corridorCursor.PortalWaypointCount;
+            while (_waypointCopyIndex < waypointCount)
+            {
+                if (!meter.TryConsumeExplicitEdges(1))
+                    return false;
+                _waypointBuilder ??= new NavigationPagedSequence<Vector3d>.Builder(
+                    elementBytes: 24);
+                _waypointBuilder.Append(_corridorWaypoints[_waypointCopyIndex++]);
+            }
+            NavigationPagedSequence<Vector3d> waypoints = _waypointBuilder?.Seal()
+                ?? NavigationPagedSequence<Vector3d>.Empty;
+            _waypointBuilder = null;
             _preparedRecord = new NavigationExplicitConnectionRecord(
                 _currentOwner,
                 _currentDefinition,
                 isActive: true,
-                corridorCost,
+                _corridorCursor.GeometricCost,
                 waypoints,
                 isLowerBoundCertified: _currentDefinition.IsLowerBoundCertified);
             return true;
@@ -386,26 +517,39 @@ internal sealed partial class NavigationOperationCandidate
             return true;
         }
 
-        private bool AdvanceOldIncidence(MaintenanceWorkMeter meter)
+        private bool AdvanceDistinctAddresses(
+            NavigationConnection? definition,
+            MaintenanceWorkMeter meter)
         {
-            if (_priorRecord == null)
+            if (definition == null)
                 return true;
-            int nextIndex = _oldIncidenceIndex;
-            while (TryGetNextDistinctAddress(
-                _priorRecord.Owner,
-                _priorRecord.Definition,
-                ref nextIndex,
-                out NavigationCellAddress address))
+            int rawCount = definition.Witnesses.Count + 2;
+            while (_rawAddressIndex < rawCount)
             {
                 if (!meter.TryConsumeDependencyEntries(1))
                     return false;
-                _oldIncidenceIndex = nextIndex;
-                _candidate._explicitConnections = _candidate._explicitConnections.UpdateIncidence(
-                    address,
+                NavigationCellAddress address = GetRawAddress(
                     _currentOwner,
-                    add: false,
-                    out int copiedNodes);
-                _candidate.RecordPersistentCopies(copiedNodes);
+                    definition,
+                    _rawAddressIndex++);
+                if (_corridorAddressSet.Add(address))
+                    _corridorAddresses[_distinctAddressCount++] = address;
+            }
+            return true;
+        }
+
+        private bool AdvanceOldIncidenceTouches(MaintenanceWorkMeter meter)
+        {
+            if (_priorRecord == null)
+                return true;
+            while (_touchAddressIndex < _distinctAddressCount)
+            {
+                if (!meter.TryConsumeDependencyEntries(1))
+                    return false;
+                NavigationCellAddress address = _corridorAddresses[_touchAddressIndex++];
+                IncidenceRowDelta row = GetOrCreateRowDelta(address);
+                if (IsEndpoint(address, _currentOwner, _priorRecord.Definition))
+                    row.MarkEndpointTouched();
             }
             return true;
         }
@@ -416,6 +560,12 @@ internal sealed partial class NavigationOperationCandidate
                 return;
             if (_preparedRecord != null)
             {
+                _candidate.RecordExplicitRecordOwnership(
+                    _currentOwner,
+                    _preparedRecord,
+                    _foldSource,
+                    ref _displacedSourcePayloadBytes,
+                    ref _displacedSourcePayloadPages);
                 _candidate._explicitConnections = _candidate._explicitConnections.SetOwner(
                     _preparedRecord,
                     out int copiedNodes);
@@ -423,6 +573,12 @@ internal sealed partial class NavigationOperationCandidate
             }
             else
             {
+                _candidate.RecordExplicitRecordOwnership(
+                    _currentOwner,
+                    next: null,
+                    _foldSource,
+                    ref _displacedSourcePayloadBytes,
+                    ref _displacedSourcePayloadPages);
                 _candidate._explicitConnections = _candidate._explicitConnections.RemoveOwner(
                     _currentOwner,
                     out _,
@@ -432,50 +588,308 @@ internal sealed partial class NavigationOperationCandidate
             _ownerUpdated = true;
         }
 
-        private bool AdvanceNewIncidence(MaintenanceWorkMeter meter)
+        private bool AdvanceFinalAdditions(MaintenanceWorkMeter meter)
         {
-            if (_preparedRecord == null)
-                return true;
-            int nextIndex = _newIncidenceIndex;
-            while (TryGetNextDistinctAddress(
-                _preparedRecord.Owner,
-                _preparedRecord.Definition,
-                ref nextIndex,
-                out NavigationCellAddress address))
+            while (true)
+            {
+                if (!_additionOwnerInitialized)
+                {
+                    _additionOwner = _finalOwners.GetSuccessor(_additionOwner);
+                    if (_additionOwner == null)
+                    {
+                        _finalOwners.Clear();
+                        return true;
+                    }
+                    _currentOwner = _additionOwner.Owner;
+                    _candidate._explicitConnections.TryGet(
+                        _currentOwner,
+                        out NavigationExplicitConnectionRecord record);
+                    _additionDefinition = record.Definition;
+                    _corridorAddressSet.Reset();
+                    _rawAddressIndex = 0;
+                    _distinctAddressCount = 0;
+                    _additionAddressIndex = 0;
+                    _additionOwnerInitialized = true;
+                }
+                if (!AdvanceDistinctAddresses(_additionDefinition, meter))
+                    return false;
+                while (_additionAddressIndex < _distinctAddressCount)
+                {
+                    if (!meter.TryConsumeDependencyEntries(1))
+                        return false;
+                    IncidenceRowDelta row = GetOrCreateRowDelta(
+                        _corridorAddresses[_additionAddressIndex++]);
+                    long priorBytes = row.RetainedBytes;
+                    int priorPages = row.PersistentPageCount;
+                    row.AppendAddition(_currentOwner);
+                    NavigationCellAddress address =
+                        _corridorAddresses[_additionAddressIndex - 1];
+                    if (IsEndpoint(address, _currentOwner, _additionDefinition!))
+                        row.MarkEndpointTouched();
+                    _rowDeltaValueBytes = checked(
+                        _rowDeltaValueBytes - priorBytes + row.RetainedBytes);
+                    _rowDeltaValuePages = checked(
+                        _rowDeltaValuePages - priorPages + row.PersistentPageCount);
+                }
+                _additionOwnerInitialized = false;
+            }
+        }
+
+        private bool AdvanceIncidenceRows(MaintenanceWorkMeter meter)
+        {
+            while (_rowMapIndex < _rowDeltas.Count)
+            {
+                PersistentVoxelIndexMap<IncidenceRowDelta> map =
+                    _rowDeltas.GetValueAt(_rowMapIndex);
+                while (_rowAddressIndex < map.Count)
+                {
+                    if (!_rowInitialized)
+                        InitializeRow(map);
+                    if (!AdvancePriorRowFilter(meter))
+                        return false;
+                    if (!AdvanceRowMerge(meter))
+                        return false;
+                    if (!_incidentRowCommitted)
+                    {
+                        if (!meter.TryConsumeDependencyEntries(1))
+                            return false;
+                        NavigationPagedSequence<NavigationConnectionOwnerKey> next =
+                            _finalRowBuilder?.Seal()
+                                ?? NavigationPagedSequence<NavigationConnectionOwnerKey>.Empty;
+                        _finalRowBuilder = null;
+                        NavigationPagedSequence<NavigationConnectionOwnerKey> prior =
+                            _candidate._explicitConnections.GetIncidentOwnerRow(_rowAddress);
+                        _candidate.RecordExplicitIncidenceOwnership(
+                            _rowAddress,
+                            next,
+                            _foldSource,
+                            ref _displacedSourcePayloadBytes,
+                            ref _displacedSourcePayloadPages);
+                        _candidate._explicitConnections =
+                            _candidate._explicitConnections.SetIncidentRow(
+                                _rowAddress,
+                                prior,
+                                next,
+                                out int copiedNodes);
+                        _candidate.RecordPersistentCopies(copiedNodes);
+                        _incidentRowCommitted = true;
+                    }
+                    if (_rowDelta!.EndpointTouched)
+                    {
+                        if (!meter.TryConsumeDependencyEntries(1))
+                            return false;
+                        NavigationPagedSequence<NavigationConnectionOwnerKey> next =
+                            _endpointRowBuilder?.Seal()
+                                ?? NavigationPagedSequence<NavigationConnectionOwnerKey>.Empty;
+                        _endpointRowBuilder = null;
+                        NavigationPagedSequence<NavigationConnectionOwnerKey> prior =
+                            _candidate._explicitConnections.GetEndpointOwnerRow(_rowAddress);
+                        _candidate.RecordExplicitEndpointOwnership(
+                            _rowAddress,
+                            next,
+                            _foldSource,
+                            ref _displacedSourcePayloadBytes,
+                            ref _displacedSourcePayloadPages);
+                        _candidate._explicitConnections =
+                            _candidate._explicitConnections.SetEndpointRow(
+                                _rowAddress,
+                                prior,
+                                next,
+                                out int copiedNodes);
+                        _candidate.RecordPersistentCopies(copiedNodes);
+                    }
+                    ReleaseCurrentRow();
+                    _rowAddressIndex++;
+                }
+                _rowMapIndex++;
+                _rowAddressIndex = 0;
+            }
+            _rowDeltas =
+                PersistentStringMap<PersistentVoxelIndexMap<IncidenceRowDelta>>.Empty;
+            _rowDeltaInnerBytes = 0;
+            _rowDeltaInnerPages = 0;
+            _rowDeltaValueBytes = 0;
+            _rowDeltaValuePages = 0;
+            return true;
+        }
+
+        private void InitializeRow(PersistentVoxelIndexMap<IncidenceRowDelta> map)
+        {
+            _rowAddress = new NavigationCellAddress(
+                _rowDeltas.GetKeyAt(_rowMapIndex),
+                map.GetKeyAt(_rowAddressIndex));
+            _rowDelta = map.GetValueAt(_rowAddressIndex);
+            long priorBytes = _rowDelta.RetainedBytes;
+            int priorPages = _rowDelta.PersistentPageCount;
+            NavigationPagedSequence<NavigationConnectionOwnerKey> additions =
+                _rowDelta.SealAdditions();
+            _rowDeltaValueBytes = checked(
+                _rowDeltaValueBytes - priorBytes + _rowDelta.RetainedBytes);
+            _rowDeltaValuePages = checked(
+                _rowDeltaValuePages - priorPages + _rowDelta.PersistentPageCount);
+            NavigationPagedSequence<NavigationConnectionOwnerKey> prior =
+                _candidate._explicitConnections.GetIncidentOwnerRow(_rowAddress);
+            _priorRowOwners = prior.GetEnumerator();
+            _priorRowRemaining = prior.Count;
+            _additionRowOwners = additions.GetEnumerator();
+            _additionRowRemaining = additions.Count;
+            _rowInitialized = true;
+        }
+
+        private bool AdvancePriorRowFilter(MaintenanceWorkMeter meter)
+        {
+            while (!_priorRowOwnerReady && _priorRowRemaining != 0)
             {
                 if (!meter.TryConsumeDependencyEntries(1))
                     return false;
-                _newIncidenceIndex = nextIndex;
-                _candidate._explicitConnections = _candidate._explicitConnections.UpdateIncidence(
-                    address,
-                    _currentOwner,
-                    add: true,
-                    out int copiedNodes);
-                _candidate.RecordPersistentCopies(copiedNodes);
+                _priorRowOwners.MoveNext();
+                _priorRowOwner = _priorRowOwners.Current;
+                _priorRowRemaining--;
+                if (!IsIncidenceChanged(_priorRowOwner))
+                    _priorRowOwnerReady = true;
             }
             return true;
         }
 
-        private static bool TryGetNextDistinctAddress(
-            NavigationConnectionOwnerKey owner,
-            NavigationConnection connection,
-            ref int rawIndex,
-            out NavigationCellAddress address)
+        private bool AdvanceRowMerge(MaintenanceWorkMeter meter)
         {
-            int rawCount = connection.Witnesses.Count + 2;
-            while (rawIndex < rawCount)
+            while (_priorRowOwnerReady || _priorRowRemaining != 0
+                || _additionRowOwnerReady || _additionRowRemaining != 0
+                || _endpointOwnerPending)
             {
-                int current = rawIndex++;
-                address = GetRawAddress(owner, connection, current);
-                bool duplicate = false;
-                for (int prior = 0; prior < current; prior++)
-                    duplicate |= address.Equals(GetRawAddress(owner, connection, prior));
-                if (!duplicate)
+                if (_endpointOwnerPending)
+                {
+                    if (!meter.TryConsumeDependencyEntries(1))
+                        return false;
+                    _endpointRowBuilder ??=
+                        new NavigationPagedSequence<NavigationConnectionOwnerKey>.Builder(16);
+                    _endpointRowBuilder.Append(_pendingEndpointOwner);
+                    _endpointOwnerPending = false;
+                    continue;
+                }
+                if (!_priorRowOwnerReady && !AdvancePriorRowFilter(meter))
+                    return false;
+                if (!_additionRowOwnerReady && _additionRowRemaining != 0)
+                {
+                    _additionRowOwners.MoveNext();
+                    _additionRowOwner = _additionRowOwners.Current;
+                    _additionRowRemaining--;
+                    _additionRowOwnerReady = true;
+                }
+                if (!_priorRowOwnerReady && !_additionRowOwnerReady)
                     return true;
+                if (!meter.TryConsumeDependencyEntries(1))
+                    return false;
+                NavigationConnectionOwnerKey next;
+                if (!_priorRowOwnerReady)
+                {
+                    next = _additionRowOwner;
+                    _additionRowOwnerReady = false;
+                }
+                else if (!_additionRowOwnerReady)
+                {
+                    next = _priorRowOwner;
+                    _priorRowOwnerReady = false;
+                }
+                else if (_candidate._explicitConnections.CompareOwners(
+                             _priorRowOwner,
+                             _additionRowOwner) <= 0)
+                {
+                    next = _priorRowOwner;
+                    _priorRowOwnerReady = false;
+                }
+                else
+                {
+                    next = _additionRowOwner;
+                    _additionRowOwnerReady = false;
+                }
+                _finalRowBuilder ??=
+                    new NavigationPagedSequence<NavigationConnectionOwnerKey>.Builder(16);
+                _finalRowBuilder.Append(next);
+                if (_rowDelta!.EndpointTouched
+                    && _candidate._explicitConnections.TryGet(
+                        next,
+                        out NavigationExplicitConnectionRecord record)
+                    && IsEndpoint(_rowAddress, next, record.Definition))
+                {
+                    _pendingEndpointOwner = next;
+                    _endpointOwnerPending = true;
+                }
             }
-            address = default;
-            return false;
+            return true;
         }
+
+        private bool IsIncidenceChanged(NavigationConnectionOwnerKey owner)
+        {
+            if (!_owners.TryGetValue(owner.MapId, out PersistentStringMap<bool> map)
+                || !map.ContainsKey(owner.ConnectionId))
+            {
+                return false;
+            }
+            bool hadPrior = _foldSource.TryGet(
+                owner,
+                out NavigationExplicitConnectionRecord prior);
+            bool hasFinal = _candidate._explicitConnections.TryGet(
+                owner,
+                out NavigationExplicitConnectionRecord final);
+            return hadPrior != hasFinal
+                || (hadPrior && !ReferenceEquals(prior.Definition, final.Definition));
+        }
+
+        private IncidenceRowDelta GetOrCreateRowDelta(NavigationCellAddress address)
+        {
+            bool hadMap = _rowDeltas.TryGetValue(
+                address.MapId,
+                out PersistentVoxelIndexMap<IncidenceRowDelta> existing);
+            PersistentVoxelIndexMap<IncidenceRowDelta> map = hadMap
+                ? existing
+                : PersistentVoxelIndexMap<IncidenceRowDelta>.Empty;
+            if (map.TryGetValue(address.Index, out IncidenceRowDelta delta))
+                return delta;
+            delta = new IncidenceRowDelta();
+            long priorMapBytes = hadMap ? map.RetainedBytes : 0;
+            int priorMapPages = hadMap ? map.PersistentNodeCount : 0;
+            map = map.Set(address.Index, delta);
+            _rowDeltas = _rowDeltas.Set(address.MapId, map);
+            _rowDeltaInnerBytes = checked(
+                _rowDeltaInnerBytes - priorMapBytes + map.RetainedBytes);
+            _rowDeltaInnerPages = checked(
+                _rowDeltaInnerPages - priorMapPages + map.PersistentNodeCount);
+            _rowDeltaValueBytes = checked(_rowDeltaValueBytes + delta.RetainedBytes);
+            _rowDeltaValuePages = checked(
+                _rowDeltaValuePages + delta.PersistentPageCount);
+            return delta;
+        }
+
+        private void ReleaseCurrentRow()
+        {
+            long priorBytes = _rowDelta!.RetainedBytes;
+            int priorPages = _rowDelta.PersistentPageCount;
+            _rowDelta.ReleaseAdditions();
+            _rowDeltaValueBytes = checked(
+                _rowDeltaValueBytes - priorBytes + _rowDelta.RetainedBytes);
+            _rowDeltaValuePages = checked(
+                _rowDeltaValuePages - priorPages + _rowDelta.PersistentPageCount);
+            _rowDelta = null;
+            _priorRowOwners = default;
+            _additionRowOwners = default;
+            _priorRowRemaining = 0;
+            _additionRowRemaining = 0;
+            _priorRowOwnerReady = false;
+            _additionRowOwnerReady = false;
+            _endpointRowBuilder = null;
+            _pendingEndpointOwner = default;
+            _endpointOwnerPending = false;
+            _incidentRowCommitted = false;
+            _rowInitialized = false;
+        }
+
+        private static bool IsEndpoint(
+            NavigationCellAddress address,
+            NavigationConnectionOwnerKey owner,
+            NavigationConnection definition) =>
+                address.Equals(new NavigationCellAddress(owner.MapId, definition.SourceIndex))
+                || address.Equals(definition.Destination);
 
         private static NavigationCellAddress GetRawAddress(
             NavigationConnectionOwnerKey owner,
@@ -498,12 +912,19 @@ internal sealed partial class NavigationOperationCandidate
             _preparedRecord = null;
             _destinationCell = default;
             _semanticIndex = 0;
-            _oldIncidenceIndex = 0;
-            _newIncidenceIndex = 0;
+            _rawAddressIndex = 0;
+            _distinctAddressCount = 0;
+            _touchAddressIndex = 0;
             _currentInitialized = false;
             _selectionCharged = false;
             _isDormant = false;
+            _incidenceUnchanged = false;
             _ownerUpdated = false;
+            _ownerJournaled = false;
+            _corridorStarted = false;
+            _corridorCursor = default;
+            _waypointBuilder = null;
+            _waypointCopyIndex = 0;
         }
 
         private bool AdvanceGather(MaintenanceWorkMeter meter)
@@ -526,15 +947,8 @@ internal sealed partial class NavigationOperationCandidate
                     {
                         NavigationCellAddress address = _candidate._explicitConnections
                             .GetIncidentAddressAt(_mapId!, _itemIndex);
-                        ReadOnlySpan<NavigationConnectionOwnerKey> incident =
-                            _candidate._explicitConnections.GetIncidentOwners(address);
-                        while (_ownerIndex < incident.Length)
-                        {
-                            if (!AddOwner(incident[_ownerIndex], meter))
-                                return false;
-                            _ownerIndex++;
-                        }
-                        _ownerIndex = 0;
+                        if (!AdvanceIncidentOwners(address, meter))
+                            return false;
                         _itemIndex++;
                         continue;
                     }
@@ -570,16 +984,12 @@ internal sealed partial class NavigationOperationCandidate
                     ReadOnlySpan<NavigationCellOverlayOperation> cells = map.CellSpan;
                     while (_itemIndex < cells.Length)
                     {
-                        ReadOnlySpan<NavigationConnectionOwnerKey> incident =
-                            _candidate._explicitConnections.GetIncidentOwners(
-                                new NavigationCellAddress(map.MapId, cells[_itemIndex].Index));
-                        while (_ownerIndex < incident.Length)
+                        if (!AdvanceIncidentOwners(
+                                new NavigationCellAddress(map.MapId, cells[_itemIndex].Index),
+                                meter))
                         {
-                            if (!AddOwner(incident[_ownerIndex], meter))
-                                return false;
-                            _ownerIndex++;
+                            return false;
                         }
-                        _ownerIndex = 0;
                         _itemIndex++;
                     }
                     _stage = 1;
@@ -628,6 +1038,243 @@ internal sealed partial class NavigationOperationCandidate
                     _candidate._explicitChangedSources.Set(owner.MapId, true);
             }
             return true;
+        }
+
+        private bool AdvanceIncidentOwners(
+            NavigationCellAddress address,
+            MaintenanceWorkMeter meter)
+        {
+            if (!_incidentOwnerEnumerationStarted)
+            {
+                _incidentOwnerEnumerator =
+                    _candidate._explicitConnections.GetIncidentOwnerEnumerator(address);
+                _incidentOwnerEnumerationStarted = true;
+            }
+            while (true)
+            {
+                if (!_hasPendingIncidentOwner)
+                {
+                    if (!_incidentOwnerEnumerator.MoveNext())
+                    {
+                        _incidentOwnerEnumerationStarted = false;
+                        return true;
+                    }
+                    _pendingIncidentOwner = _incidentOwnerEnumerator.Current;
+                    _hasPendingIncidentOwner = true;
+                }
+                if (!AddOwner(_pendingIncidentOwner, meter))
+                    return false;
+                _hasPendingIncidentOwner = false;
+            }
+        }
+
+        private sealed class IncidenceRowDelta
+        {
+            private NavigationPagedSequence<NavigationConnectionOwnerKey>.Builder?
+                _additionBuilder;
+            private NavigationPagedSequence<NavigationConnectionOwnerKey>? _additions;
+
+            internal long RetainedBytes => checked(
+                40L
+                + (_additionBuilder?.RetainedBytes ?? _additions?.RetainedBytes ?? 0));
+
+            internal int PersistentPageCount => checked(
+                1
+                + (_additionBuilder?.PersistentPageCount
+                    ?? _additions?.PersistentPageCount
+                    ?? 0));
+
+            internal void AppendAddition(NavigationConnectionOwnerKey owner)
+            {
+                _additionBuilder ??=
+                    new NavigationPagedSequence<NavigationConnectionOwnerKey>.Builder(16);
+                _additionBuilder.Append(owner);
+            }
+
+            internal bool EndpointTouched { get; private set; }
+
+            internal void MarkEndpointTouched() => EndpointTouched = true;
+
+            internal NavigationPagedSequence<NavigationConnectionOwnerKey> SealAdditions()
+            {
+                if (_additions != null)
+                    return _additions;
+                _additions = _additionBuilder?.Seal()
+                    ?? NavigationPagedSequence<NavigationConnectionOwnerKey>.Empty;
+                _additionBuilder = null;
+                return _additions;
+            }
+
+            internal void ReleaseAdditions()
+            {
+                _additionBuilder = null;
+                _additions = null;
+            }
+        }
+
+        private struct IncidenceOwnerTree
+        {
+            private Node? _root;
+            private int _count;
+
+            internal long RetainedBytes => checked((long)_count * 64L);
+
+            internal int PersistentPageCount => _count;
+
+            internal void Add(
+                NavigationConnectionOwnerKey owner,
+                NavigationExplicitConnectionIndex index)
+            {
+                if (_root == null)
+                {
+                    _root = new Node(owner, null);
+                    _count = 1;
+                    return;
+                }
+                Node current = _root;
+                while (true)
+                {
+                    int comparison = index.CompareOwners(owner, current.Owner);
+                    if (comparison == 0)
+                        return;
+                    if (comparison < 0)
+                    {
+                        if (current.Left != null)
+                        {
+                            current = current.Left;
+                            continue;
+                        }
+                        current.Left = new Node(owner, current);
+                        _count++;
+                        Rebalance(current);
+                        return;
+                    }
+                    if (current.Right != null)
+                    {
+                        current = current.Right;
+                        continue;
+                    }
+                    current.Right = new Node(owner, current);
+                    _count++;
+                    Rebalance(current);
+                    return;
+                }
+            }
+
+            internal Node? GetSuccessor(Node? current)
+            {
+                if (current == null)
+                    return Minimum(_root);
+                if (current.Right != null)
+                    return Minimum(current.Right);
+                Node child = current;
+                Node? parent = current.Parent;
+                while (parent != null && ReferenceEquals(parent.Right, child))
+                {
+                    child = parent;
+                    parent = parent.Parent;
+                }
+                return parent;
+            }
+
+            internal void Clear()
+            {
+                _root = null;
+                _count = 0;
+            }
+
+            private static Node? Minimum(Node? node)
+            {
+                while (node?.Left != null)
+                    node = node.Left;
+                return node;
+            }
+
+            private void Rebalance(Node? node)
+            {
+                while (node != null)
+                {
+                    UpdateHeight(node);
+                    int balance = Height(node.Left) - Height(node.Right);
+                    if (balance > 1)
+                    {
+                        if (Height(node.Left!.Left) < Height(node.Left.Right))
+                            RotateLeft(node.Left);
+                        node = RotateRight(node);
+                    }
+                    else if (balance < -1)
+                    {
+                        if (Height(node.Right!.Right) < Height(node.Right.Left))
+                            RotateRight(node.Right);
+                        node = RotateLeft(node);
+                    }
+                    node = node.Parent;
+                }
+            }
+
+            private Node RotateLeft(Node node)
+            {
+                Node pivot = node.Right!;
+                ReplaceParentLink(node, pivot);
+                node.Right = pivot.Left;
+                if (node.Right != null)
+                    node.Right.Parent = node;
+                pivot.Left = node;
+                node.Parent = pivot;
+                UpdateHeight(node);
+                UpdateHeight(pivot);
+                return pivot;
+            }
+
+            private Node RotateRight(Node node)
+            {
+                Node pivot = node.Left!;
+                ReplaceParentLink(node, pivot);
+                node.Left = pivot.Right;
+                if (node.Left != null)
+                    node.Left.Parent = node;
+                pivot.Right = node;
+                node.Parent = pivot;
+                UpdateHeight(node);
+                UpdateHeight(pivot);
+                return pivot;
+            }
+
+            private void ReplaceParentLink(Node node, Node replacement)
+            {
+                Node? parent = node.Parent;
+                replacement.Parent = parent;
+                if (parent == null)
+                    _root = replacement;
+                else if (ReferenceEquals(parent.Left, node))
+                    parent.Left = replacement;
+                else
+                    parent.Right = replacement;
+            }
+
+            private static int Height(Node? node) => node?.Height ?? 0;
+
+            private static void UpdateHeight(Node node) =>
+                node.Height = 1 + Math.Max(Height(node.Left), Height(node.Right));
+
+            internal sealed class Node
+            {
+                internal Node(NavigationConnectionOwnerKey owner, Node? parent)
+                {
+                    Owner = owner;
+                    Parent = parent;
+                }
+
+                internal NavigationConnectionOwnerKey Owner { get; }
+
+                internal Node? Parent { get; set; }
+
+                internal Node? Left { get; set; }
+
+                internal Node? Right { get; set; }
+
+                internal int Height { get; set; } = 1;
+            }
         }
     }
 }

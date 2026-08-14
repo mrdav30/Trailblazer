@@ -35,6 +35,13 @@ internal sealed partial class NavigationOperationCandidate
     private int _incomingSetPersistentPages;
     private long _workCopiedPersistentBytes;
     private int _workCopiedPersistentPages;
+    private NavigationExplicitConnectionIndex _workPublishedExplicitConnections =
+        NavigationExplicitConnectionIndex.Empty;
+    private PersistentStringMap<MapState> _workPublishedMaps = PersistentStringMap<MapState>.Empty;
+    private long _workOwnedExplicitPayloadBytes;
+    private int _workOwnedExplicitPayloadPages;
+    private long _workOwnedMapStatePayloadBytes;
+    private int _workOwnedMapStatePayloadPages;
 
     internal NavigationOperationCandidate(int navigationAreaCount = ushort.MaxValue + 1)
     {
@@ -77,10 +84,34 @@ internal sealed partial class NavigationOperationCandidate
 
     internal int WorkCopiedPersistentPages => _workCopiedPersistentPages;
 
+    internal long WorkOwnedExplicitPayloadBytes => _workOwnedExplicitPayloadBytes;
+
+    internal int WorkOwnedExplicitPayloadPages => _workOwnedExplicitPayloadPages;
+
+    internal long WorkOwnedMapStatePayloadBytes => _workOwnedMapStatePayloadBytes;
+
+    internal int WorkOwnedMapStatePayloadPages => _workOwnedMapStatePayloadPages;
+
+    internal long NonPayloadRetainedBytes => checked(
+        RetainedBytes
+        - _explicitConnections.PayloadRetainedBytes
+        - _mapStateRetainedBytes);
+
+    internal int NonPayloadPersistentPageCount => checked(
+        PersistentPageCount
+        - _explicitConnections.PayloadPersistentPageCount
+        - _mapStatePersistentPages);
+
     internal void ResetWorkCopiedPersistentOwnership()
     {
         _workCopiedPersistentBytes = 0;
         _workCopiedPersistentPages = 0;
+        _workOwnedExplicitPayloadBytes = 0;
+        _workOwnedExplicitPayloadPages = 0;
+        _workOwnedMapStatePayloadBytes = 0;
+        _workOwnedMapStatePayloadPages = 0;
+        _workPublishedExplicitConnections = _explicitConnections;
+        _workPublishedMaps = _maps;
         _explicitChangedSources = PersistentStringMap<bool>.Empty;
     }
 
@@ -91,12 +122,286 @@ internal sealed partial class NavigationOperationCandidate
             _workCopiedPersistentBytes + (copiedNodes * bytesPerNode));
     }
 
+    internal void RecordExplicitRecordOwnership(
+        NavigationConnectionOwnerKey owner,
+        NavigationExplicitConnectionRecord? next,
+        NavigationExplicitConnectionIndex foldSource,
+        ref long displacedBytes,
+        ref int displacedPages)
+    {
+        _explicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord prior);
+        _workPublishedExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord published);
+        foldSource.TryGet(owner, out NavigationExplicitConnectionRecord source);
+        ReplaceCurrentPayloadOwnership(
+            prior,
+            next,
+            published,
+            ref _workOwnedExplicitPayloadBytes,
+            ref _workOwnedExplicitPayloadPages);
+        ReplaceDisplacedPayloadOwnership(
+            prior,
+            next,
+            published,
+            source,
+            ref displacedBytes,
+            ref displacedPages);
+    }
+
+    internal void RecordExplicitIncidenceOwnership(
+        NavigationCellAddress address,
+        NavigationPagedSequence<NavigationConnectionOwnerKey> next,
+        NavigationExplicitConnectionIndex foldSource,
+        ref long displacedBytes,
+        ref int displacedPages)
+    {
+        NavigationPagedSequence<NavigationConnectionOwnerKey> prior =
+            _explicitConnections.GetIncidentOwnerRow(address);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> published =
+            _workPublishedExplicitConnections.GetIncidentOwnerRow(address);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> source =
+            foldSource.GetIncidentOwnerRow(address);
+        ReplaceCurrentPayloadOwnership(
+            prior,
+            next,
+            published,
+            ref _workOwnedExplicitPayloadBytes,
+            ref _workOwnedExplicitPayloadPages);
+        ReplaceDisplacedPayloadOwnership(
+            prior,
+            next,
+            published,
+            source,
+            ref displacedBytes,
+            ref displacedPages);
+    }
+
+    internal void RecordExplicitEndpointOwnership(
+        NavigationCellAddress address,
+        NavigationPagedSequence<NavigationConnectionOwnerKey> next,
+        NavigationExplicitConnectionIndex foldSource,
+        ref long displacedBytes,
+        ref int displacedPages)
+    {
+        NavigationPagedSequence<NavigationConnectionOwnerKey> prior =
+            _explicitConnections.GetEndpointOwnerRow(address);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> published =
+            _workPublishedExplicitConnections.GetEndpointOwnerRow(address);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> source =
+            foldSource.GetEndpointOwnerRow(address);
+        ReplaceCurrentPayloadOwnership(
+            prior,
+            next,
+            published,
+            ref _workOwnedExplicitPayloadBytes,
+            ref _workOwnedExplicitPayloadPages);
+        ReplaceDisplacedPayloadOwnership(
+            prior,
+            next,
+            published,
+            source,
+            ref displacedBytes,
+            ref displacedPages);
+    }
+
+    private static void ReplaceCurrentPayloadOwnership<T>(
+        T? prior,
+        T? next,
+        T? published,
+        ref long bytes,
+        ref int pages)
+        where T : class
+    {
+        GetPayloadOwnership(prior, published, out long priorBytes, out int priorPages);
+        GetPayloadOwnership(next, published, out long nextBytes, out int nextPages);
+        bytes = checked(bytes - priorBytes + nextBytes);
+        pages = checked(pages - priorPages + nextPages);
+    }
+
+    private static void ReplaceDisplacedPayloadOwnership<T>(
+        T? prior,
+        T? next,
+        T? published,
+        T? source,
+        ref long bytes,
+        ref int pages)
+        where T : class
+    {
+        if (source == null || ReferenceEquals(source, published))
+            return;
+        if (ReferenceEquals(prior, source) && !ReferenceEquals(next, source))
+        {
+            GetPayloadSize(source, out long sourceBytes, out int sourcePages);
+            bytes = checked(bytes + sourceBytes);
+            pages = checked(pages + sourcePages);
+        }
+        else if (!ReferenceEquals(prior, source) && ReferenceEquals(next, source))
+        {
+            GetPayloadSize(source, out long sourceBytes, out int sourcePages);
+            bytes = checked(bytes - sourceBytes);
+            pages = checked(pages - sourcePages);
+        }
+    }
+
+    private static void GetPayloadOwnership<T>(
+        T? value,
+        T? published,
+        out long bytes,
+        out int pages)
+        where T : class
+    {
+        if (value == null || ReferenceEquals(value, published))
+        {
+            bytes = 0;
+            pages = 0;
+            return;
+        }
+        GetPayloadSize(value, out bytes, out pages);
+    }
+
+    private static void GetPayloadSize<T>(T value, out long bytes, out int pages)
+        where T : class
+    {
+        if (value is NavigationExplicitConnectionRecord record)
+        {
+            bytes = record.RetainedBytes;
+            pages = record.PersistentPageCount;
+            return;
+        }
+        var row = (NavigationPagedSequence<NavigationConnectionOwnerKey>)(object)value;
+        bytes = row.RetainedBytes;
+        pages = row.PersistentPageCount;
+    }
+
+    internal void RecordMapStateOwnership(
+        string mapId,
+        MapState? next,
+        NavigationOperationCandidate foldSource,
+        ref long displacedBytes,
+        ref int displacedPages)
+    {
+        _maps.TryGetValue(mapId, out MapState prior);
+        _workPublishedMaps.TryGetValue(mapId, out MapState published);
+        foldSource._maps.TryGetValue(mapId, out MapState source);
+        GetAdditionalMapStatePayload(prior, published, out long priorBytes, out int priorPages);
+        GetAdditionalMapStatePayload(next, published, out long nextBytes, out int nextPages);
+        _workOwnedMapStatePayloadBytes = checked(
+            _workOwnedMapStatePayloadBytes - priorBytes + nextBytes);
+        _workOwnedMapStatePayloadPages = checked(
+            _workOwnedMapStatePayloadPages - priorPages + nextPages);
+        ReplaceDisplacedMapStateOwnership(
+            prior,
+            next,
+            published,
+            source,
+            ref displacedBytes,
+            ref displacedPages);
+    }
+
+    internal static void GetAdditionalMapStatePayload(
+        MapState? value,
+        MapState? shared,
+        out long bytes,
+        out int pages)
+    {
+        bytes = 0;
+        pages = 0;
+        if (value == null)
+            return;
+        if (shared == null || !ReferenceEquals(value.Map, shared.Map))
+        {
+            bytes = checked(
+                bytes + value.PreparedMapRetainedBytes - value.BakedCellLookup.RetainedBytes);
+        }
+        if (shared == null || !ReferenceEquals(value.BakedCellLookup, shared.BakedCellLookup))
+            bytes = checked(bytes + value.BakedCellLookup.RetainedBytes);
+        if (shared == null || !ReferenceEquals(value.Overlay, shared.Overlay))
+        {
+            bytes = checked(bytes + value.Overlay.RetainedBytes);
+            pages = checked(pages + value.Overlay.PersistentNodeCount);
+        }
+        if (shared == null || !ReferenceEquals(value.DynamicAddresses, shared.DynamicAddresses))
+        {
+            bytes = checked(bytes + value.DynamicAddresses.RetainedBytes);
+            pages = checked(pages + value.DynamicAddresses.PersistentNodeCount);
+        }
+    }
+
+    private static void ReplaceDisplacedMapStateOwnership(
+        MapState? prior,
+        MapState? next,
+        MapState? published,
+        MapState? source,
+        ref long bytes,
+        ref int pages)
+    {
+        if (source == null)
+            return;
+        ReplaceDisplacedMapStateComponent(
+            prior?.Map,
+            next?.Map,
+            published?.Map,
+            source.Map,
+            source.PreparedMapRetainedBytes - source.BakedCellLookup.RetainedBytes,
+            0,
+            ref bytes,
+            ref pages);
+        ReplaceDisplacedMapStateComponent(
+            prior?.BakedCellLookup,
+            next?.BakedCellLookup,
+            published?.BakedCellLookup,
+            source.BakedCellLookup,
+            source.BakedCellLookup.RetainedBytes,
+            0,
+            ref bytes,
+            ref pages);
+        ReplaceDisplacedMapStateComponent(
+            prior?.Overlay,
+            next?.Overlay,
+            published?.Overlay,
+            source.Overlay,
+            source.Overlay.RetainedBytes,
+            source.Overlay.PersistentNodeCount,
+            ref bytes,
+            ref pages);
+        ReplaceDisplacedMapStateComponent(
+            prior?.DynamicAddresses,
+            next?.DynamicAddresses,
+            published?.DynamicAddresses,
+            source.DynamicAddresses,
+            source.DynamicAddresses.RetainedBytes,
+            source.DynamicAddresses.PersistentNodeCount,
+            ref bytes,
+            ref pages);
+    }
+
+    private static void ReplaceDisplacedMapStateComponent(
+        object? prior,
+        object? next,
+        object? published,
+        object source,
+        long sourceBytes,
+        int sourcePages,
+        ref long bytes,
+        ref int pages)
+    {
+        if (ReferenceEquals(source, published))
+            return;
+        if (ReferenceEquals(prior, source) && !ReferenceEquals(next, source))
+        {
+            bytes = checked(bytes + sourceBytes);
+            pages = checked(pages + sourcePages);
+        }
+        else if (!ReferenceEquals(prior, source) && ReferenceEquals(next, source))
+        {
+            bytes = checked(bytes - sourceBytes);
+            pages = checked(pages - sourcePages);
+        }
+    }
+
     internal NavigationOperationRejection ReplaceOverlayState(
         MapState current,
         MapState next,
-        NavigationOperationLimits limits,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
+        NavigationOperationLimits limits)
     {
         if (next.Overlay.CellCount > limits.MaxOverlayCellsPerMap
             || next.Overlay.ConnectionCount > limits.MaxOverlayConnectionsPerMap
@@ -121,30 +426,6 @@ internal sealed partial class NavigationOperationCandidate
         return NavigationOperationRejection.None;
     }
 
-    internal NavigationOperationRejection ValidateOverlayCandidate(
-        NavigationOverlayTransaction transaction,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
-    {
-        ReadOnlySpan<NavigationMapOverlayDelta> deltas = transaction.MapSpan;
-        var ids = new string[deltas.Length];
-        var states = new MapState[deltas.Length];
-        for (int i = 0; i < deltas.Length; i++)
-        {
-            ids[i] = deltas[i].MapId;
-            if (!_maps.TryGetValue(ids[i], out states[i]!))
-                return NavigationOperationRejection.MissingMap;
-        }
-        return ValidateCandidate(
-            ids,
-            states,
-            corridorPrisms,
-            corridorWaypoints,
-            allowDormantEndpoints: true)
-            ? NavigationOperationRejection.None
-            : NavigationOperationRejection.ValidationFailed;
-    }
-
     internal NavigationOperationCandidate Clone()
     {
         return new NavigationOperationCandidate(_navigationAreaCount)
@@ -166,7 +447,13 @@ internal sealed partial class NavigationOperationCandidate
             _incomingSetRetainedBytes = _incomingSetRetainedBytes,
             _incomingSetPersistentPages = _incomingSetPersistentPages,
             _workCopiedPersistentBytes = _workCopiedPersistentBytes,
-            _workCopiedPersistentPages = _workCopiedPersistentPages
+            _workCopiedPersistentPages = _workCopiedPersistentPages,
+            _workPublishedExplicitConnections = _workPublishedExplicitConnections,
+            _workOwnedExplicitPayloadBytes = _workOwnedExplicitPayloadBytes,
+            _workOwnedExplicitPayloadPages = _workOwnedExplicitPayloadPages,
+            _workPublishedMaps = _workPublishedMaps,
+            _workOwnedMapStatePayloadBytes = _workOwnedMapStatePayloadBytes,
+            _workOwnedMapStatePayloadPages = _workOwnedMapStatePayloadPages
         };
     }
 
@@ -186,78 +473,33 @@ internal sealed partial class NavigationOperationCandidate
         string sourceMapId,
         bool remove) => UpdateIncomingSource(destinationMapId, sourceMapId, remove);
 
-    internal bool ValidateStateEdgeForWork(
+    internal bool ValidateTransitionForWork(
         MapState state,
-        int stage,
+        bool overlay,
         int index,
         string[] changedMapIds,
         MapState[] changedStates,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints,
         bool allowDormantEndpoints)
     {
-        switch (stage)
+        if (!overlay)
         {
-            case 0:
-            case 1:
-                return true;
-            case 2:
-                TraversalTransitionDefinition transition = state.Map.TransitionSpan[index];
-                return state.Overlay.TryGetTransition(transition.Id, out _)
-                    || ValidateTransition(
-                        state,
-                        transition,
-                        changedMapIds,
-                        changedStates,
-                        allowDormantEndpoints);
-            default:
-                TraversalTransitionOverlayOperation transitionOverlay =
-                    state.Overlay.GetTransitionAt(index);
-                return transitionOverlay.Kind != TraversalTransitionOverlayOperationKind.Upsert
-                    || ValidateTransition(
-                        state,
-                        transitionOverlay.Transition,
-                        changedMapIds,
-                        changedStates,
-                        allowDormantEndpoints);
+            TraversalTransitionDefinition transition = state.Map.TransitionSpan[index];
+            return state.Overlay.TryGetTransition(transition.Id, out _)
+                || ValidateTransition(
+                    state,
+                    transition,
+                    changedMapIds,
+                    changedStates,
+                    allowDormantEndpoints);
         }
-    }
-
-    internal bool ValidateAuthoredStateEdgeForWork(
-        MapState state,
-        bool connection,
-        int index,
-        string[] changedMapIds,
-        MapState[] changedStates,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints,
-        bool allowDormantEndpoints) => connection
-            ? !RequiresAuthoredConnectionValidation(state, index)
-                || ValidateConnection(
+        TraversalTransitionOverlayOperation operation = state.Overlay.GetTransitionAt(index);
+        return operation.Kind != TraversalTransitionOverlayOperationKind.Upsert
+            || ValidateTransition(
                 state,
-                state.Map.ConnectionSpan[index],
+                operation.Transition,
                 changedMapIds,
                 changedStates,
-                corridorPrisms,
-                corridorWaypoints,
-                allowDormantEndpoints,
-                useAuthoredFallback: true)
-            : ValidateTransition(
-                state,
-                state.Map.TransitionSpan[index],
-                changedMapIds,
-                changedStates,
-                allowDormantEndpoints,
-                useAuthoredFallback: true);
-
-    internal static bool RequiresAuthoredConnectionValidation(MapState state, int index) =>
-        state.Overlay.TryGetConnection(state.Map.ConnectionSpan[index].Id, out _);
-
-    internal MapState[] CaptureStates()
-    {
-        var states = new MapState[_maps.Count];
-        _maps.CopyValuesTo(states);
-        return states;
+                allowDormantEndpoints);
     }
 
     internal int GetTotalDynamicCellCandidateCount()
@@ -290,265 +532,6 @@ internal sealed partial class NavigationOperationCandidate
 
         overlay = NavigationMapOverlayState.Empty;
         return false;
-    }
-
-    internal NavigationOperationRejection ApplyMap(
-        PreparedNavigationMap prepared,
-        OverlayReplacementPolicy replacementPolicy,
-        NavigationOperationLimits limits,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
-    {
-        string mapId = prepared.Map.MapId;
-        bool replacing = _maps.TryGetValue(mapId, out MapState? current);
-        if (_bakeVersionHighWater.TryGetValue(mapId, out long bakeVersionHighWater)
-            && prepared.BakeVersion <= bakeVersionHighWater)
-        {
-            return NavigationOperationRejection.Stale;
-        }
-        if (!_bakeVersionHighWater.ContainsKey(mapId)
-            && _bakeVersionHighWater.Count >= limits.MaxRetainedMapIdentities)
-        {
-            return NavigationOperationRejection.CapacityExceeded;
-        }
-        if (!replacing && _maps.Count >= limits.MaxMaps)
-            return NavigationOperationRejection.CapacityExceeded;
-
-        for (int cellIndex = 0; cellIndex < prepared.Map.Cells.Count; cellIndex++)
-        {
-            if (prepared.Map.Cells[cellIndex].Cell.Area.Value >= _navigationAreaCount)
-                return NavigationOperationRejection.ValidationFailed;
-        }
-
-        if (_gridBindings.TryGetValue(prepared.Map.GridBinding.Key, out string boundMapId)
-            && !string.Equals(boundMapId, mapId, StringComparison.Ordinal))
-        {
-            return NavigationOperationRejection.ValidationFailed;
-        }
-
-        NavigationMapOverlayState overlay = replacementPolicy == OverlayReplacementPolicy.Clear || !replacing
-            ? NavigationMapOverlayState.Empty
-            : current!.Overlay;
-        PersistentVoxelIndexMap<byte> dynamicAddresses = replacing
-            && replacementPolicy == OverlayReplacementPolicy.PreserveAndRevalidate
-                ? current!.DynamicAddresses
-                : PersistentVoxelIndexMap<byte>.Empty;
-        for (int dynamicIndex = 0; dynamicIndex < dynamicAddresses.Count; dynamicIndex++)
-        {
-            if (prepared.Map.ContainsCell(dynamicAddresses.GetKeyAt(dynamicIndex)))
-                return NavigationOperationRejection.ValidationFailed;
-        }
-
-        if (prepared.CheckpointStamp.HasValue)
-        {
-            NavigationMapCheckpointStamp stamp = prepared.CheckpointStamp.Value;
-            if (!replacing
-                || current!.BakeVersion != stamp.BakeVersion
-                || current.Overlay.HighWaterSequence != stamp.OverlayHighWaterSequence)
-            {
-                return NavigationOperationRejection.Stale;
-            }
-        }
-
-        if (HasOversizedCorridor(prepared.Map, overlay, limits.MaxCorridorCells))
-            return NavigationOperationRejection.CapacityExceeded;
-
-        var next = new MapState(
-            prepared.Map,
-            prepared.BakeVersion,
-            prepared.RetainedBytes,
-            overlay,
-            replacing && replacementPolicy == OverlayReplacementPolicy.PreserveAndRevalidate
-                ? current!.DynamicSlotGeneration
-                : replacing
-                    ? checked(current!.DynamicSlotGeneration + 1)
-                    : 0,
-            dynamicAddresses,
-            prepared.BakedCellLookup);
-        string[] changedMapIds = new[] { mapId };
-        MapState[] changedStates = new[] { next };
-        for (int connectionIndex = 0; connectionIndex < prepared.Map.Connections.Count; connectionIndex++)
-        {
-            if (!ValidateConnection(
-                    next,
-                    prepared.Map.Connections[connectionIndex],
-                    changedMapIds,
-                    changedStates,
-                    corridorPrisms,
-                    corridorWaypoints,
-                    allowDormantEndpoints: false,
-                    useAuthoredFallback: true))
-                return NavigationOperationRejection.ValidationFailed;
-        }
-        for (int transitionIndex = 0; transitionIndex < prepared.Map.Transitions.Count; transitionIndex++)
-        {
-            if (!ValidateTransition(
-                    next,
-                    prepared.Map.Transitions[transitionIndex],
-                    changedMapIds,
-                    changedStates,
-                    allowDormantEndpoints: false,
-                    useAuthoredFallback: true))
-                return NavigationOperationRejection.ValidationFailed;
-        }
-        if (!ValidateCandidate(
-                changedMapIds,
-                changedStates,
-                corridorPrisms,
-                corridorWaypoints,
-                allowDormantEndpoints: replacing
-                    && replacementPolicy == OverlayReplacementPolicy.PreserveAndRevalidate))
-            return NavigationOperationRejection.ValidationFailed;
-
-        SetMapState(replacing ? current : null, next);
-        if (replacing && !current!.Map.GridBinding.Key.Equals(prepared.Map.GridBinding.Key))
-            _gridBindings = _gridBindings.Remove(current.Map.GridBinding.Key);
-        _gridBindings = _gridBindings.Set(prepared.Map.GridBinding.Key, mapId);
-        UpdateIncomingDependencies(replacing ? current : null, next);
-        ReplaceTotals(replacing ? current : null, next);
-        _bakeVersionHighWater = _bakeVersionHighWater.Set(mapId, prepared.BakeVersion);
-        return NavigationOperationRejection.None;
-    }
-
-    internal NavigationOperationRejection RemoveMap(string mapId)
-    {
-        _maps.TryGetValue(mapId, out MapState? current);
-        _maps = _maps.Remove(mapId, out bool removed);
-        if (removed)
-        {
-            RemoveMapStateTotals(current!);
-            _gridBindings = _gridBindings.Remove(current!.Map.GridBinding.Key);
-            UpdateIncomingDependencies(current, next: null);
-            ReplaceTotals(current, next: null);
-        }
-        return removed ? NavigationOperationRejection.None : NavigationOperationRejection.MissingMap;
-    }
-
-    internal NavigationOperationRejection ApplyOverlay(
-        NavigationOverlayTransaction transaction,
-        long operationSequence,
-        NavigationOperationLimits limits,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
-    {
-        ReadOnlySpan<NavigationMapOverlayDelta> deltas = transaction.MapSpan;
-        var nextStates = new MapState[deltas.Length];
-        var nextMapIds = new string[deltas.Length];
-        long candidateCellCount = _overlaySlotCount;
-        long candidateConnectionCount = _overlayConnectionCount;
-        long candidateTransitionCount = _overlayTransitionCount;
-
-        for (int i = 0; i < deltas.Length; i++)
-        {
-            NavigationMapOverlayDelta delta = deltas[i];
-            if (!_maps.TryGetValue(delta.MapId, out MapState? current))
-                return NavigationOperationRejection.MissingMap;
-
-            for (int cellIndex = 0; cellIndex < delta.Cells.Count; cellIndex++)
-            {
-                NavigationCellOverlayOperation operation = delta.Cells[cellIndex];
-                if (operation.Kind == NavigationCellOverlayOperationKind.Set
-                    && operation.Cell.Area.Value >= _navigationAreaCount)
-                {
-                    return NavigationOperationRejection.ValidationFailed;
-                }
-            }
-
-            NavigationMapOverlayState nextOverlay = current.Overlay.Apply(delta, operationSequence);
-            PersistentVoxelIndexMap<byte> dynamicAddresses = current.DynamicAddresses;
-            for (int cellIndex = 0; cellIndex < delta.Cells.Count; cellIndex++)
-            {
-                NavigationCellOverlayOperation operation = delta.Cells[cellIndex];
-                if (operation.Kind == NavigationCellOverlayOperationKind.Set
-                    && !current.Map.ContainsCell(operation.Index))
-                {
-                    dynamicAddresses = dynamicAddresses.Set(operation.Index, 0);
-                }
-            }
-            if (HasOversizedCorridor(current.Map, nextOverlay, limits.MaxCorridorCells))
-                return NavigationOperationRejection.CapacityExceeded;
-            if (nextOverlay.CellCount > limits.MaxOverlayCellsPerMap
-                || nextOverlay.ConnectionCount > limits.MaxOverlayConnectionsPerMap
-                || nextOverlay.TransitionCount > limits.MaxOverlayTransitionsPerMap)
-            {
-                return NavigationOperationRejection.CapacityExceeded;
-            }
-
-            candidateCellCount += nextOverlay.CellCount - current.Overlay.CellCount;
-            candidateConnectionCount += nextOverlay.ConnectionCount - current.Overlay.ConnectionCount;
-            candidateTransitionCount += nextOverlay.TransitionCount - current.Overlay.TransitionCount;
-            nextMapIds[i] = delta.MapId;
-            nextStates[i] = new MapState(
-                current.Map,
-                current.BakeVersion,
-                current.PreparedMapRetainedBytes,
-                nextOverlay,
-                current.DynamicSlotGeneration,
-                dynamicAddresses,
-                current.BakedCellLookup);
-        }
-
-        if (candidateCellCount > limits.MaxOverlayCells
-            || candidateConnectionCount > limits.MaxOverlayConnections
-            || candidateTransitionCount > limits.MaxOverlayTransitions)
-        {
-            return NavigationOperationRejection.CapacityExceeded;
-        }
-
-        for (int i = 0; i < deltas.Length; i++)
-        {
-            ReadOnlySpan<NavigationConnectionOverlayOperation> connections = deltas[i].ConnectionSpan;
-            for (int connectionIndex = 0; connectionIndex < connections.Length; connectionIndex++)
-            {
-                NavigationConnectionOverlayOperation operation = connections[connectionIndex];
-                if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert
-                    && !ValidateConnection(
-                        nextStates[i],
-                        operation.Connection!,
-                        nextMapIds,
-                        nextStates,
-                        corridorPrisms,
-                        corridorWaypoints,
-                        allowDormantEndpoints: false))
-                {
-                    return NavigationOperationRejection.ValidationFailed;
-                }
-            }
-
-            ReadOnlySpan<TraversalTransitionOverlayOperation> transitions = deltas[i].TransitionSpan;
-            for (int transitionIndex = 0; transitionIndex < transitions.Length; transitionIndex++)
-            {
-                TraversalTransitionOverlayOperation operation = transitions[transitionIndex];
-                if (operation.Kind == TraversalTransitionOverlayOperationKind.Upsert
-                    && !ValidateTransition(
-                        nextStates[i],
-                        operation.Transition,
-                        nextMapIds,
-                        nextStates,
-                        allowDormantEndpoints: false))
-                {
-                    return NavigationOperationRejection.ValidationFailed;
-                }
-            }
-        }
-
-        if (!ValidateCandidate(
-                nextMapIds,
-                nextStates,
-                corridorPrisms,
-                corridorWaypoints,
-                allowDormantEndpoints: true))
-            return NavigationOperationRejection.ValidationFailed;
-
-        for (int i = 0; i < deltas.Length; i++)
-        {
-            _maps.TryGetValue(deltas[i].MapId, out MapState? current);
-            UpdateIncomingDependencies(current, nextStates[i]);
-            ReplaceTotals(current, nextStates[i]);
-            SetMapState(current, nextStates[i]);
-        }
-
-        return NavigationOperationRejection.None;
     }
 
     private void SetMapState(MapState? previous, MapState next)
@@ -617,92 +600,6 @@ internal sealed partial class NavigationOperationCandidate
         }
     }
 
-    private static bool HasOversizedCorridor(
-        NavigationMap map,
-        NavigationMapOverlayState overlay,
-        int maxCorridorCells)
-    {
-        for (int i = 0; i < map.Connections.Count; i++)
-        {
-            if (map.Connections[i].Witnesses.Count > maxCorridorCells - 2)
-                return true;
-        }
-        for (int i = 0; i < overlay.ConnectionCount; i++)
-        {
-            NavigationConnectionOverlayOperation operation = overlay.GetConnectionAt(i);
-            if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert
-                && operation.Connection!.Witnesses.Count > maxCorridorCells - 2)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private bool ValidateCandidate(
-        string[] changedMapIds,
-        MapState[] changedStates,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints,
-        bool allowDormantEndpoints)
-    {
-        for (int changedIndex = 0; changedIndex < changedMapIds.Length; changedIndex++)
-        {
-            MapState state = changedStates[changedIndex];
-            if (!ValidateState(
-                    state,
-                    changedMapIds,
-                    changedStates,
-                    corridorPrisms,
-                    corridorWaypoints,
-                    allowDormantEndpoints))
-                return false;
-
-            if (!_incomingSources.TryGetValue(
-                    changedMapIds[changedIndex],
-                    out PersistentStringMap<bool> sources))
-                continue;
-            for (int sourceIndex = 0; sourceIndex < sources.Count; sourceIndex++)
-            {
-                string sourceId = sources.GetKeyAt(sourceIndex);
-                MapState? source = FindChangedState(sourceId, changedMapIds, changedStates);
-                if (source == null && !_maps.TryGetValue(sourceId, out source))
-                    continue;
-                if (!ValidateState(
-                        source,
-                        changedMapIds,
-                        changedStates,
-                        corridorPrisms,
-                        corridorWaypoints,
-                        allowDormantEndpoints))
-                    return false;
-            }
-        }
-
-        return true;
-    }
-
-    private void UpdateIncomingDependencies(MapState? previous, MapState? next)
-    {
-        if (previous != null)
-            VisitDestinationMapIds(previous, remove: true);
-        if (next != null)
-            VisitDestinationMapIds(next, remove: false);
-    }
-
-    private void VisitDestinationMapIds(MapState state, bool remove)
-    {
-        for (int i = 0; i < state.Map.Transitions.Count; i++)
-            UpdateIncomingSource(state.Map.Transitions[i].Destination.MapId, state.Map.MapId, remove);
-        for (int i = 0; i < state.Overlay.TransitionCount; i++)
-        {
-            TraversalTransitionOverlayOperation operation = state.Overlay.GetTransitionAt(i);
-            if (operation.Kind == TraversalTransitionOverlayOperationKind.Upsert)
-                UpdateIncomingSource(operation.Transition.Destination.MapId, state.Map.MapId, remove);
-        }
-    }
-
     private void UpdateIncomingSource(string destinationMapId, string sourceMapId, bool remove)
     {
         bool hadSources = _incomingSources.TryGetValue(
@@ -753,244 +650,16 @@ internal sealed partial class NavigationOperationCandidate
             _incomingSetPersistentPages - previousPages + nextPages);
     }
 
-    private bool ValidateState(
-        MapState state,
-        string[] changedMapIds,
-        MapState[] changedStates,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints,
-        bool allowDormantEndpoints)
-    {
-        NavigationMap map = state.Map;
-        NavigationMapOverlayState overlay = state.Overlay;
-        for (int i = 0; i < overlay.CellCount; i++)
-        {
-            if (!map.GridBinding.IsValidIndex(overlay.GetCellAt(i).Index))
-                return false;
-        }
-
-        for (int i = 0; i < map.Connections.Count; i++)
-        {
-            NavigationConnection connection = map.Connections[i];
-            if (TryFindConnectionOverlay(overlay, connection.Id, out NavigationConnectionOverlayOperation change))
-            {
-                if (change.Kind != NavigationConnectionOverlayOperationKind.RevertToBake)
-                    continue;
-            }
-
-            if (!ValidateConnection(
-                    state,
-                    connection,
-                    changedMapIds,
-                    changedStates,
-                    corridorPrisms,
-                    corridorWaypoints,
-                    allowDormantEndpoints))
-                return false;
-        }
-
-        for (int i = 0; i < overlay.ConnectionCount; i++)
-        {
-            NavigationConnectionOverlayOperation operation = overlay.GetConnectionAt(i);
-            if (operation.Kind == NavigationConnectionOverlayOperationKind.Upsert
-                && !ValidateConnection(
-                    state,
-                    operation.Connection!,
-                    changedMapIds,
-                    changedStates,
-                    corridorPrisms,
-                    corridorWaypoints,
-                    allowDormantEndpoints))
-            {
-                return false;
-            }
-        }
-
-        for (int i = 0; i < map.Transitions.Count; i++)
-        {
-            TraversalTransitionDefinition transition = map.Transitions[i];
-            if (TryFindTransitionOverlay(overlay, transition.Id, out TraversalTransitionOverlayOperation change))
-            {
-                if (change.Kind != TraversalTransitionOverlayOperationKind.RevertToBake)
-                    continue;
-            }
-
-            if (!ValidateTransition(
-                    state,
-                    transition,
-                    changedMapIds,
-                    changedStates,
-                    allowDormantEndpoints))
-                return false;
-        }
-
-        for (int i = 0; i < overlay.TransitionCount; i++)
-        {
-            TraversalTransitionOverlayOperation operation = overlay.GetTransitionAt(i);
-            if (operation.Kind == TraversalTransitionOverlayOperationKind.Upsert
-                && !ValidateTransition(
-                    state,
-                    operation.Transition,
-                    changedMapIds,
-                    changedStates,
-                    allowDormantEndpoints))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private bool ValidateConnection(
-        MapState source,
-        NavigationConnection connection,
-        string[] changedMapIds,
-        MapState[] changedStates,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints,
-        bool allowDormantEndpoints,
-        bool useAuthoredFallback = false)
-    {
-        if (!TryGetValidationCell(
-                source,
-                connection.SourceIndex,
-                useAuthoredFallback,
-                out NavigationCell sourceCell))
-        {
-            return allowDormantEndpoints
-                && IsKnownSuppressed(source, connection.SourceIndex);
-        }
-        if (connection.PortalRadiusClearance > sourceCell.RadiusClearance
-            || connection.PortalHeightClearance > sourceCell.HeightClearance
-            || !source.Map.GridBinding.TryGetCellPrism(connection.SourceIndex, out GridForge.Grids.Topology.GridCellPrism sourcePrism)
-            || !sourcePrism.Contains(connection.EntryAnchor))
-        {
-            return false;
-        }
-
-        if (!TryValidateConnectionAddress(
-                connection.Destination,
-                connection.PortalRadiusClearance,
-                connection.PortalHeightClearance,
-                connection.ExitAnchor,
-                validateAnchor: true,
-                changedMapIds,
-                changedStates,
-                allowDormantEndpoints,
-                useAuthoredFallback,
-                out bool destinationDormant))
-        {
-            return false;
-        }
-        if (destinationDormant)
-            return true;
-
-        for (int i = 0; i < connection.Witnesses.Count; i++)
-        {
-            if (!TryValidateConnectionAddress(
-                    connection.Witnesses[i],
-                    connection.PortalRadiusClearance,
-                    connection.PortalHeightClearance,
-                    anchor: default,
-                    validateAnchor: false,
-                    changedMapIds,
-                    changedStates,
-                    allowDormantEndpoints,
-                    useAuthoredFallback,
-                    out bool witnessDormant))
-            {
-                return false;
-            }
-            if (witnessDormant)
-                return true;
-        }
-
-        return TryValidateCorridor(
-            source,
-            connection,
-            changedMapIds,
-            changedStates,
-            corridorPrisms,
-            corridorWaypoints);
-    }
-
-    private bool TryValidateCorridor(
-        MapState source,
-        NavigationConnection connection,
-        string[] changedMapIds,
-        MapState[] changedStates,
-        GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
-    {
-        int prismCount = connection.Witnesses.Count + 2;
-        if (prismCount > corridorPrisms.Length)
-            return false;
-        if (!source.Map.GridBinding.TryGetCellPrism(connection.SourceIndex, out corridorPrisms[0]))
-            return false;
-
-        for (int i = 0; i < connection.Witnesses.Count; i++)
-        {
-            NavigationCellAddress witness = connection.Witnesses[i];
-            MapState? witnessMap = FindChangedState(witness.MapId, changedMapIds, changedStates);
-            if (witnessMap == null && !_maps.TryGetValue(witness.MapId, out witnessMap))
-                return true;
-            if (!witnessMap.Map.GridBinding.TryGetCellPrism(witness.Index, out corridorPrisms[i + 1]))
-                return false;
-        }
-
-        MapState? destination = FindChangedState(connection.Destination.MapId, changedMapIds, changedStates);
-        if (destination == null && !_maps.TryGetValue(connection.Destination.MapId, out destination))
-            return true;
-        if (!destination.Map.GridBinding.TryGetCellPrism(connection.Destination.Index, out corridorPrisms[prismCount - 1]))
-            return false;
-
-        bool valid = GridCellGeometry.TryValidateNavigationCorridor(
-            corridorPrisms.AsSpan(0, prismCount),
-            connection.EntryAnchor,
-            connection.ExitAnchor,
-            connection.PortalRadiusClearance,
-            connection.PortalHeightClearance,
-            corridorWaypoints.AsSpan(0, (prismCount - 1) * 2),
-            out _,
-            out Fixed64 corridorCost);
-        if (!valid || !connection.IsLowerBoundCertified)
-            return valid;
-
-        if (!TryGetValidationCell(
-                destination,
-                connection.Destination.Index,
-                useAuthoredFallback: true,
-                out NavigationCell destinationCell))
-            return false;
-
-        Vector3d sourceAnchor = GetFootAnchor(corridorPrisms[0]);
-        Vector3d destinationAnchor = GetFootAnchor(corridorPrisms[prismCount - 1]);
-        return Vector3d.TryGetDistance(sourceAnchor, connection.EntryAnchor, out Fixed64 approachCost)
-            && Vector3d.TryGetDistance(connection.ExitAnchor, destinationAnchor, out Fixed64 departureCost)
-            && Fixed64.TryAdd(approachCost, corridorCost, out Fixed64 traversalCost)
-            && Fixed64.TryAdd(traversalCost, departureCost, out traversalCost)
-            && Fixed64.TryAdd(traversalCost, connection.AdditionalCost, out traversalCost)
-            && Fixed64.TryAdd(traversalCost, destinationCell.EnterCost, out traversalCost)
-            && Vector3d.TryGetDistance(sourceAnchor, destinationAnchor, out Fixed64 directCost)
-            && traversalCost >= directCost;
-    }
-
-    private static Vector3d GetFootAnchor(in GridCellPrism prism) =>
-        new(prism.Center.X, prism.VerticalMin, prism.Center.Z);
-
     private bool ValidateTransition(
         MapState source,
         TraversalTransitionDefinition transition,
         string[] changedMapIds,
         MapState[] changedStates,
-        bool allowDormantEndpoints,
-        bool useAuthoredFallback = false)
+        bool allowDormantEndpoints)
     {
         if (!TryGetValidationCell(
                 source,
                 transition.SourceIndex,
-                useAuthoredFallback,
                 out NavigationCell sourceCell))
             return allowDormantEndpoints;
         if (!SupportsMedium(sourceCell, transition.SourceMedium))
@@ -1009,7 +678,6 @@ internal sealed partial class NavigationOperationCandidate
         if (!TryGetValidationCell(
                 destination,
                 transition.Destination.Index,
-                useAuthoredFallback,
                 out NavigationCell destinationCell))
             return allowDormantEndpoints;
         if (!SupportsMedium(destinationCell, transition.DestinationMedium))
@@ -1018,43 +686,6 @@ internal sealed partial class NavigationOperationCandidate
         return !transition.HasDestinationPointOverride
             || (destination.Map.GridBinding.TryGetCellPrism(transition.Destination.Index, out GridForge.Grids.Topology.GridCellPrism destinationPrism)
                 && destinationPrism.Contains(transition.DestinationPointOverride));
-    }
-
-    private bool TryValidateConnectionAddress(
-        NavigationCellAddress address,
-        FixedMathSharp.Fixed64 radius,
-        FixedMathSharp.Fixed64 height,
-        FixedMathSharp.Vector3d anchor,
-        bool validateAnchor,
-        string[] changedMapIds,
-        MapState[] changedStates,
-        bool allowDormantEndpoints,
-        bool useAuthoredFallback,
-        out bool dormant)
-    {
-        dormant = false;
-        MapState? target = FindChangedState(address.MapId, changedMapIds, changedStates);
-        if (target == null && !_maps.TryGetValue(address.MapId, out target))
-        {
-            dormant = true;
-            return true;
-        }
-
-        if (!TryGetValidationCell(target, address.Index, useAuthoredFallback, out NavigationCell cell))
-        {
-            dormant = allowDormantEndpoints
-                && IsKnownSuppressed(target, address.Index);
-            return dormant;
-        }
-        if (radius > cell.RadiusClearance
-            || height > cell.HeightClearance)
-        {
-            return false;
-        }
-
-        return !validateAnchor
-            || (target.Map.GridBinding.TryGetCellPrism(address.Index, out GridForge.Grids.Topology.GridCellPrism prism)
-                && prism.Contains(anchor));
     }
 
     private static bool TryGetEffectiveCell(
@@ -1092,23 +723,7 @@ internal sealed partial class NavigationOperationCandidate
     private static bool TryGetValidationCell(
         MapState state,
         GridForge.Spatial.VoxelIndex index,
-        bool useAuthoredFallback,
-        out NavigationCell cell)
-    {
-        if (TryGetEffectiveCell(state, index, out cell))
-            return true;
-        if (useAuthoredFallback)
-        {
-            int baked = state.Map.FindCellIndex(index);
-            if (baked >= 0)
-            {
-                cell = state.Map.Cells[baked].Cell;
-                return true;
-            }
-        }
-        cell = default;
-        return false;
-    }
+        out NavigationCell cell) => TryGetEffectiveCell(state, index, out cell);
 
     private static bool SupportsMedium(NavigationCell cell, TraversalMedium medium) => medium switch
     {
@@ -1145,18 +760,6 @@ internal sealed partial class NavigationOperationCandidate
         GridForge.Spatial.VoxelIndex index,
         out NavigationCellOverlayOperation operation)
         => overlay.TryGetCell(index, out operation);
-
-    private static bool TryFindConnectionOverlay(
-        NavigationMapOverlayState overlay,
-        string id,
-        out NavigationConnectionOverlayOperation operation)
-        => overlay.TryGetConnection(id, out operation);
-
-    private static bool TryFindTransitionOverlay(
-        NavigationMapOverlayState overlay,
-        string id,
-        out TraversalTransitionOverlayOperation operation)
-        => overlay.TryGetTransition(id, out operation);
 
     internal sealed class MapState
     {

@@ -14,11 +14,10 @@ internal ref struct NavigationSurfaceEdgeEnumerator
 {
     private readonly NavigationWorldGraph? _graph;
     private readonly NavigationCellAddress _origin;
-    private readonly ReadOnlySpan<NavigationConnectionOwnerKey> _incident;
+    private NavigationPagedSequence<NavigationConnectionOwnerKey>.Enumerator _incident;
     private NavigationNativeSurfaceEdgeEnumerator _native;
     private readonly bool _incoming;
     private readonly bool _includeNative;
-    private int _explicitIndex;
     private bool _nativeComplete;
     private bool _hasNative;
     private bool _hasExplicit;
@@ -36,7 +35,6 @@ internal ref struct NavigationSurfaceEdgeEnumerator
         _graph = graph;
         _incoming = incoming;
         _includeNative = includeNative;
-        _explicitIndex = 0;
         _nativeComplete = !includeNative;
         _hasNative = false;
         _hasExplicit = false;
@@ -55,7 +53,9 @@ internal ref struct NavigationSurfaceEdgeEnumerator
             _native = default;
             return;
         }
-        _incident = graph.ExplicitConnections.GetIncidentOwners(_origin);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> endpoints =
+            graph.ExplicitConnections.GetEndpointOwnerRow(_origin);
+        _incident = endpoints.GetEnumerator();
         _native = includeNative ? graph.EnumerateNativeSurfaceEdges(origin) : default;
     }
 
@@ -107,9 +107,9 @@ internal ref struct NavigationSurfaceEdgeEnumerator
     {
         if (_hasExplicit)
             return;
-        while (_explicitIndex < _incident.Length)
+        while (_incident.MoveNext())
         {
-            NavigationConnectionOwnerKey owner = _incident[_explicitIndex++];
+            NavigationConnectionOwnerKey owner = _incident.Current;
             if (!_graph!.ExplicitConnections.TryGet(
                     owner,
                     out NavigationExplicitConnectionRecord record)

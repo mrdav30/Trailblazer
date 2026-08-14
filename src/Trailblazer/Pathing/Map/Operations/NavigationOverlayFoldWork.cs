@@ -20,6 +20,8 @@ internal sealed class NavigationOverlayFoldWork
     private readonly NavigationOperationLimits _limits;
     private readonly GridCellPrism[] _corridorPrisms;
     private readonly FixedMathSharp.Vector3d[] _corridorWaypoints;
+    private readonly NavigationCellAddress[] _corridorAddresses;
+    private readonly NavigationAddressStampSet _corridorAddressSet;
     private readonly NavigationOperationCandidate.MapState[] _priorStates;
     private readonly NavigationOperationCandidate.MapState[] _nextStates;
     private readonly string[] _changedMapIds;
@@ -38,9 +40,10 @@ internal sealed class NavigationOverlayFoldWork
     private int _validationSourceIndex = -1;
     private int _validationStage;
     private int _validationEdgeIndex;
-    private int _validationWorkIndex;
     private Stage _stage;
     private NavigationOperationCandidate.ExplicitConnectionRefreshWork? _explicitRefresh;
+    private long _displacedMapStatePayloadBytes;
+    private int _displacedMapStatePayloadPages;
 
     internal NavigationOverlayFoldWork(
         NavigationOperationCandidate source,
@@ -48,7 +51,9 @@ internal sealed class NavigationOverlayFoldWork
         long operationSequence,
         NavigationOperationLimits limits,
         GridCellPrism[] corridorPrisms,
-        FixedMathSharp.Vector3d[] corridorWaypoints)
+        FixedMathSharp.Vector3d[] corridorWaypoints,
+        NavigationCellAddress[] corridorAddresses,
+        NavigationAddressStampSet corridorAddressSet)
     {
         _source = source;
         _working = source.Clone();
@@ -57,6 +62,8 @@ internal sealed class NavigationOverlayFoldWork
         _limits = limits;
         _corridorPrisms = corridorPrisms;
         _corridorWaypoints = corridorWaypoints;
+        _corridorAddresses = corridorAddresses;
+        _corridorAddressSet = corridorAddressSet;
         int mapCount = transaction.MapSpan.Length;
         _priorStates = new NavigationOperationCandidate.MapState[mapCount];
         _nextStates = new NavigationOperationCandidate.MapState[mapCount];
@@ -65,9 +72,19 @@ internal sealed class NavigationOverlayFoldWork
 
     internal NavigationOperationCandidate Candidate => _working;
 
-    internal long SourceRetainedBytes => _source.RetainedBytes;
+    internal bool ExplicitGatherComplete => _explicitRefresh?.IsGatherComplete == true;
 
-    internal int SourcePersistentPageCount => _source.PersistentPageCount;
+    internal bool MayChangeExplicitConnections => _transaction.MayChangeExplicitConnections;
+
+    internal long DisplacedExplicitPayloadBytes =>
+        _explicitRefresh?.DisplacedSourcePayloadBytes ?? 0L;
+
+    internal int DisplacedExplicitPayloadPages =>
+        _explicitRefresh?.DisplacedSourcePayloadPages ?? 0;
+
+    internal long DisplacedMapStatePayloadBytes => _displacedMapStatePayloadBytes;
+
+    internal int DisplacedMapStatePayloadPages => _displacedMapStatePayloadPages;
 
     internal long RetainedBytes => checked(
         160L
@@ -76,13 +93,13 @@ internal sealed class NavigationOverlayFoldWork
             * IntPtr.Size)
         + _working.WorkCopiedPersistentBytes
         + (_explicitRefresh?.RetainedBytes ?? 0)
-        + Math.Max(0L, _working.RetainedBytes - _source.RetainedBytes));
+        + GetPendingMapStatePayloadBytes());
 
     internal int PersistentPageCount => checked(
         1
         + _working.WorkCopiedPersistentPages
         + (_explicitRefresh?.PersistentPageCount ?? 0)
-        + Math.Max(0, _working.PersistentPageCount - _source.PersistentPageCount));
+        + GetPendingMapStatePayloadPages());
 
     internal bool Advance(
         MaintenanceWorkMeter meter,
@@ -170,12 +187,16 @@ internal sealed class NavigationOverlayFoldWork
                     _current.DynamicSlotGeneration,
                     _dynamicAddresses!,
                     _current.BakedCellLookup);
+                _working.RecordMapStateOwnership(
+                    delta.MapId,
+                    next,
+                    _source,
+                    ref _displacedMapStatePayloadBytes,
+                    ref _displacedMapStatePayloadPages);
                 rejection = _working.ReplaceOverlayState(
                     _current,
                     next,
-                    _limits,
-                    _corridorPrisms,
-                    _corridorWaypoints);
+                    _limits);
                 if (rejection != NavigationOperationRejection.None)
                     return true;
                 _priorStates[_mapIndex] = _current;
@@ -258,8 +279,11 @@ internal sealed class NavigationOverlayFoldWork
         }
         _explicitRefresh ??= _working.BeginExplicitConnectionRefresh(
             _transaction,
+            _source.ExplicitConnections,
             _corridorPrisms,
-            _corridorWaypoints);
+            _corridorWaypoints,
+            _corridorAddresses,
+            _corridorAddressSet);
         if (!_explicitRefresh.Advance(meter))
         {
             rejection = NavigationOperationRejection.None;
@@ -273,6 +297,36 @@ internal sealed class NavigationOverlayFoldWork
         _stage = Stage.Complete;
         rejection = NavigationOperationRejection.None;
         return true;
+    }
+
+    private long GetPendingMapStatePayloadBytes()
+    {
+        long bytes = 0;
+        if (_current == null)
+            return bytes;
+        if (_overlay != null && !ReferenceEquals(_overlay, _current.Overlay))
+            bytes = checked(bytes + _overlay.RetainedBytes);
+        if (_dynamicAddresses != null
+            && !ReferenceEquals(_dynamicAddresses, _current.DynamicAddresses))
+        {
+            bytes = checked(bytes + _dynamicAddresses.RetainedBytes);
+        }
+        return bytes;
+    }
+
+    private int GetPendingMapStatePayloadPages()
+    {
+        int pages = 0;
+        if (_current == null)
+            return pages;
+        if (_overlay != null && !ReferenceEquals(_overlay, _current.Overlay))
+            pages = checked(pages + _overlay.PersistentNodeCount);
+        if (_dynamicAddresses != null
+            && !ReferenceEquals(_dynamicAddresses, _current.DynamicAddresses))
+        {
+            pages = checked(pages + _dynamicAddresses.PersistentNodeCount);
+        }
+        return pages;
     }
 
     private bool AdvanceDependencies(
@@ -315,44 +369,24 @@ internal sealed class NavigationOverlayFoldWork
         MaintenanceWorkMeter meter,
         out bool valid)
     {
-        while (_validationStage < 4)
+        while (_validationStage < 2)
         {
-            int count = _validationStage switch
-            {
-                0 => state.Map.ConnectionSpan.Length,
-                1 => state.Overlay.ConnectionCount,
-                2 => state.Map.TransitionSpan.Length,
-                _ => state.Overlay.TransitionCount
-            };
+            int count = _validationStage == 0
+                ? state.Map.TransitionSpan.Length
+                : state.Overlay.TransitionCount;
             while (_validationEdgeIndex < count)
             {
-                if (_validationStage < 2)
+                if (!meter.TryConsumeExplicitEdges(1))
                 {
-                    _validationEdgeIndex++;
-                    continue;
+                    valid = true;
+                    return false;
                 }
-                int workUnits = GetValidationWorkUnits(
-                    state,
-                    _validationStage,
-                    _validationEdgeIndex);
-                while (_validationWorkIndex < workUnits)
-                {
-                    if (!meter.TryConsumeExplicitEdges(1))
-                    {
-                        valid = true;
-                        return false;
-                    }
-                    _validationWorkIndex++;
-                }
-                _validationWorkIndex = 0;
-                if (!_working.ValidateStateEdgeForWork(
+                if (!_working.ValidateTransitionForWork(
                         state,
-                        _validationStage,
+                        overlay: _validationStage == 1,
                         _validationEdgeIndex++,
                         _changedMapIds,
                         _nextStates,
-                        _corridorPrisms,
-                        _corridorWaypoints,
                         allowDormantEndpoints: true))
                 {
                     valid = false;
@@ -365,21 +399,6 @@ internal sealed class NavigationOverlayFoldWork
         _validationStage = 0;
         valid = true;
         return true;
-    }
-
-    private static int GetValidationWorkUnits(
-        NavigationOperationCandidate.MapState state,
-        int stage,
-        int index)
-    {
-        if (stage == 0)
-            return state.Map.ConnectionSpan[index].Witnesses.Count + 2;
-        if (stage != 1)
-            return 1;
-        NavigationConnectionOverlayOperation operation = state.Overlay.GetConnectionAt(index);
-        return operation.Kind == NavigationConnectionOverlayOperationKind.Upsert
-            ? operation.Connection!.Witnesses.Count + 2
-            : 1;
     }
 
     private void ResetDependencyCursor()

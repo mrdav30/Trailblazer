@@ -17,61 +17,84 @@ internal sealed class NavigationStructuralCompositionWork
 {
     private const long BaseRetainedBytes = 72L;
 
-    private readonly long _batchSequence;
     private readonly int _batchChangeCount;
     private readonly NavigationWorldGraph _sourceGraph;
+    private readonly NavigationOperationCandidate _candidate;
+    private readonly NavigationOperationFrameChange[] _changes;
     private readonly bool _updateComposition;
-    private readonly NavigationWorldGraph.StructuralPreparationWork _preparation;
+    private readonly NavigationCompositionWorkspace _workspace;
+    private PersistentStringMap<bool> _changedMapIds = PersistentStringMap<bool>.Empty;
+    private PersistentStringMap<bool> _affectedComponents = PersistentStringMap<bool>.Empty;
+    private PersistentStringMap<bool> _publishedAffectedComponents =
+        PersistentStringMap<bool>.Empty;
+    private NavigationWorldGraph.StructuralPreparationWork? _preparation;
     private NavigationCompositionIndex.UpdateWork? _update;
+    private string? _pendingMapId;
+    private string? _pendingComponentKey;
+    private int _explicitSourceIndex;
+    private int _changeIndex;
+    private int _overlayIndex;
+    private int _capturePhase;
+    private bool _allClosePublished;
+    private bool _affectedClosurePublished;
 
     internal NavigationStructuralCompositionWork(
         NavigationWorldGraph sourceGraph,
         NavigationOperationCandidate candidate,
         NavigationOperationFrameChange[] changes,
         int changeCount,
-        bool updateComposition)
+        bool updateComposition,
+        NavigationCompositionWorkspace workspace)
     {
         _sourceGraph = sourceGraph;
+        _candidate = candidate;
+        _changes = changes;
         _updateComposition = updateComposition;
+        _workspace = workspace;
+        _workspace.Reset();
         _batchChangeCount = changeCount;
-        for (int i = 0; i < changeCount; i++)
-        {
-            if (changes[i].OperationSequence > _batchSequence)
-                _batchSequence = changes[i].OperationSequence;
-        }
-
-        ChangedMapIds = CaptureChangedMapIds(
-            candidate,
-            changes,
-            changeCount);
-        _preparation = new NavigationWorldGraph.StructuralPreparationWork(
-            sourceGraph,
-            candidate,
-            changes,
-            changeCount,
-            sourceGraph.GraphVersion + 1);
     }
 
-    internal string[] ChangedMapIds { get; }
+    internal int CapturedChangedMapCount => _changedMapIds.Count;
 
-    internal ReadOnlySpan<string> AffectedMapIds => _update == null
-        ? ReadOnlySpan<string>.Empty
-        : _update.AffectedMapIds;
+    internal bool IsChangedMapCaptureComplete => _capturePhase == 4;
+
+    internal PersistentStringMap<bool> AffectedComponents => _affectedComponents;
+
+    internal bool RequiresAffectedClosurePublication => _updateComposition
+        && _allClosePublished
+        && IsChangedMapCaptureComplete
+        && !_affectedClosurePublished;
+
+    internal string GetCapturedChangedMapIdAt(int ordinal) =>
+        _changedMapIds.GetKeyAt(ordinal);
 
     internal bool UpdatesComposition => _updateComposition;
 
-    internal NavigationWorldGraph PreparedGraph => _preparation.Result;
+    internal NavigationWorldGraph PreparedGraph => _preparation!.Result;
 
     internal long RetainedBytes => checked(
         BaseRetainedBytes
-        + _preparation.RetainedBytes
+        + _changedMapIds.RetainedBytes
+        + Math.Max(
+            0L,
+            _affectedComponents.RetainedBytes - _publishedAffectedComponents.RetainedBytes)
+        + (_preparation?.RetainedBytes ?? 0)
         + GetUpdateAdditionalRetainedBytes()
-        + ((long)(ChangedMapIds.Length + AffectedMapIds.Length) * IntPtr.Size));
+        );
 
     internal int PersistentPageCount => checked(
-        1 + _preparation.PersistentPageCount + GetUpdateAdditionalPersistentPages());
+        1
+        + _changedMapIds.PersistentNodeCount
+        + Math.Max(
+            0,
+            _affectedComponents.PersistentNodeCount
+                - _publishedAffectedComponents.PersistentNodeCount)
+        + (_preparation?.PersistentPageCount ?? 0)
+        + GetUpdateAdditionalPersistentPages());
 
-    internal bool IsComplete => _preparation.IsComplete
+    internal bool IsComplete => IsChangedMapCaptureComplete
+        && (_preparation?.IsComplete ?? false)
         && (!_updateComposition || (_update?.IsComplete ?? false));
 
     internal NavigationWorldGraph Result => _updateComposition
@@ -90,33 +113,46 @@ internal sealed class NavigationStructuralCompositionWork
     {
         if (_update == null)
             return 0;
-        return Math.Max(0L, _update.RetainedBytes - _sourceGraph.Composition.RetainedBytes);
+        return checked(
+            Math.Max(
+                0L,
+                _update.NonPayloadRetainedBytes
+                    - _sourceGraph.Composition.RootAndValueRetainedBytes)
+            + _update.PayloadAdditionalRetainedBytes);
     }
 
     private int GetUpdateAdditionalPersistentPages()
     {
         if (_update == null)
             return 0;
-        return Math.Max(
-            0,
-            _update.PersistentPageCount - _sourceGraph.Composition.PersistentPageCount);
+        return checked(
+            Math.Max(
+                0,
+                _update.NonPayloadPersistentPageCount
+                    - _sourceGraph.Composition.PersistentPageCount)
+            + _update.PayloadAdditionalPersistentPages);
     }
 
     internal bool Matches(NavigationOperationFrameChange[] changes, int changeCount)
     {
         if (changeCount != _batchChangeCount)
             return false;
-        long sequence = 0;
-        for (int i = 0; i < changeCount; i++)
-        {
-            if (changes[i].OperationSequence > sequence)
-                sequence = changes[i].OperationSequence;
-        }
-        return sequence == _batchSequence;
+        return ReferenceEquals(changes, _changes);
     }
 
     internal bool Advance(MaintenanceWorkMeter meter)
     {
+        if (!IsChangedMapCaptureComplete && !AdvanceChangedMapCapture(meter))
+            return false;
+        if (RequiresAffectedClosurePublication)
+            return false;
+        _preparation ??= new NavigationWorldGraph.StructuralPreparationWork(
+            _sourceGraph,
+            _candidate,
+            _changes,
+            _batchChangeCount,
+            _changedMapIds,
+            _sourceGraph.GraphVersion + 1);
         // Topology-native edges, seams, and cache invalidations enter the same meter in Phases 3
         // and 4; Phase 2 owns only explicit edges, reverse dependencies, and weak components.
         if (!_preparation.IsComplete && !_preparation.Advance(meter))
@@ -125,9 +161,102 @@ internal sealed class NavigationStructuralCompositionWork
             return true;
         _update ??= PreparedGraph.BeginCompositionUpdate(
             _sourceGraph,
-            ChangedMapIds,
-            PreparedGraph.GraphVersion);
+            _changedMapIds,
+            _preparation.CompositionChanged
+                ? PreparedGraph.GraphVersion
+                : _sourceGraph.Composition.Version,
+            PreparedGraph.GraphVersion,
+            _workspace);
         return _update.Advance(meter);
+    }
+
+    internal void MarkAffectedClosurePublished()
+    {
+        _publishedAffectedComponents = _affectedComponents;
+        _affectedClosurePublished = true;
+    }
+
+    internal void MarkAllClosePublished() => _allClosePublished = true;
+
+    internal void AdoptPublishedAffectedClosure(PersistentStringMap<bool> components)
+    {
+        _affectedComponents = components;
+        _publishedAffectedComponents = components;
+        _affectedClosurePublished = true;
+    }
+
+    private bool AdvanceChangedMapCapture(MaintenanceWorkMeter meter)
+    {
+        while (_capturePhase < 4)
+        {
+            if (_capturePhase == 0)
+            {
+                if (!HasNextRawMapId())
+                {
+                    _capturePhase = 4;
+                    return true;
+                }
+                if (!meter.TryConsumeComponentNodes(1))
+                    return false;
+                _pendingMapId = TakeNextRawMapId();
+                string pendingMapId = _pendingMapId!;
+                _pendingComponentKey = _sourceGraph.Composition.TryGetComponentKey(
+                    pendingMapId,
+                    out string componentKey)
+                    ? componentKey
+                    : null;
+                _capturePhase = 1;
+            }
+            if (_capturePhase == 1)
+            {
+                if (!_changedMapIds.ContainsKey(_pendingMapId!))
+                {
+                    if (!meter.TryConsumeDependencyEntries(1))
+                        return false;
+                    _changedMapIds = _changedMapIds.Set(_pendingMapId!, true);
+                }
+                _capturePhase = 2;
+            }
+            if (_capturePhase == 2)
+            {
+                if (_pendingComponentKey != null
+                    && !_affectedComponents.ContainsKey(_pendingComponentKey))
+                {
+                    if (!meter.TryConsumeDependencyEntries(1))
+                        return false;
+                    _affectedComponents = _affectedComponents.Set(_pendingComponentKey, true);
+                }
+                _pendingMapId = null;
+                _pendingComponentKey = null;
+                _capturePhase = 0;
+            }
+        }
+        return true;
+    }
+
+    private bool HasNextRawMapId() =>
+        _explicitSourceIndex < _candidate.ExplicitChangedSourceCount
+        || _changeIndex < _batchChangeCount;
+
+    private string TakeNextRawMapId()
+    {
+        if (_explicitSourceIndex < _candidate.ExplicitChangedSourceCount)
+            return _candidate.GetExplicitChangedSourceAt(_explicitSourceIndex++);
+        NavigationOperationFrameChange change = _changes[_changeIndex];
+        if (change.Kind != NavigationOperationFrameChangeKind.Overlay)
+        {
+            _changeIndex++;
+            return change.MapId!;
+        }
+        ReadOnlySpan<NavigationMapOverlayDelta> maps =
+            change.PreparedOverlay!.Transaction.MapSpan;
+        string mapId = maps[_overlayIndex++].MapId;
+        if (_overlayIndex == maps.Length)
+        {
+            _overlayIndex = 0;
+            _changeIndex++;
+        }
+        return mapId;
     }
 
     internal static long GetMinimumScratchBytes(
@@ -156,52 +285,6 @@ internal sealed class NavigationStructuralCompositionWork
             2
             + (candidateMapCount * 2)
             + checked((int)Math.Min(int.MaxValue, semanticPages * 2L)));
-    }
-
-    private static string[] CaptureChangedMapIds(
-        NavigationOperationCandidate candidate,
-        NavigationOperationFrameChange[] changes,
-        int changeCount)
-    {
-        int capacity = candidate.ExplicitChangedSourceCount;
-        for (int i = 0; i < changeCount; i++)
-        {
-            capacity = checked(capacity + (changes[i].Kind == NavigationOperationFrameChangeKind.Overlay
-                ? changes[i].PreparedOverlay!.Transaction.MapSpan.Length
-                : 1));
-        }
-        var mapIds = new string[capacity];
-        int offset = 0;
-        for (int i = 0; i < candidate.ExplicitChangedSourceCount; i++)
-            mapIds[offset++] = candidate.GetExplicitChangedSourceAt(i);
-        for (int i = 0; i < changeCount; i++)
-        {
-            NavigationOperationFrameChange change = changes[i];
-            if (change.Kind != NavigationOperationFrameChangeKind.Overlay)
-            {
-                mapIds[offset++] = change.MapId!;
-                continue;
-            }
-            ReadOnlySpan<NavigationMapOverlayDelta> maps =
-                change.PreparedOverlay!.Transaction.MapSpan;
-            for (int mapIndex = 0; mapIndex < maps.Length; mapIndex++)
-            {
-                NavigationMapOverlayDelta map = maps[mapIndex];
-                mapIds[offset++] = map.MapId;
-            }
-        }
-        Array.Sort(mapIds, StringComparer.Ordinal);
-        if (mapIds.Length == 0)
-            return mapIds;
-        int count = 1;
-        for (int i = 1; i < mapIds.Length; i++)
-        {
-            if (!string.Equals(mapIds[count - 1], mapIds[i], StringComparison.Ordinal))
-                mapIds[count++] = mapIds[i];
-        }
-        if (count != mapIds.Length)
-            Array.Resize(ref mapIds, count);
-        return mapIds;
     }
 
 }

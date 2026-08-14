@@ -79,7 +79,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxIngressEntries.Should().Be(10);
         settings.MaxIngressBytes.Should().Be(256);
         settings.MaxActiveSnapshots.Should().Be(12);
-        settings.MaxActiveSnapshotBytes.Should().Be(2_016);
+        settings.MaxActiveSnapshotBytes.Should().Be(2_088);
         settings.MaxRetiredSnapshots.Should().Be(14);
         settings.MaxRetiredSnapshotBytes.Should().Be(15);
         settings.MaxPersistentGraphPages.Should().Be(30);
@@ -204,7 +204,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         int maxIngressEntries = 1,
         long maxIngressBytes = 256,
         int maxActiveSnapshots = 3,
-        long maxActiveSnapshotBytes = 2_016,
+        long maxActiveSnapshotBytes = 2_088,
         int maxRetiredSnapshots = 1,
         long maxRetiredSnapshotBytes = 1,
         int maxPersistentGraphPages = 30,

@@ -72,28 +72,12 @@ internal sealed class PersistentStringMap<T>
     }
 
     internal T GetValueAt(int ordinal)
-    {
-        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-            (uint)ordinal >= (uint)Count,
-            ordinal,
-            nameof(ordinal));
-        Node node = _root!;
-        while (true)
-        {
-            int leftCount = CountOf(node.Left);
-            if (ordinal < leftCount)
-                node = node.Left!;
-            else if (ordinal == leftCount)
-                return node.Value;
-            else
-            {
-                ordinal -= leftCount + 1;
-                node = node.Right!;
-            }
-        }
-    }
+        => GetNodeAt(ordinal).Value;
 
     internal string GetKeyAt(int ordinal)
+        => GetNodeAt(ordinal).Key;
+
+    private Node GetNodeAt(int ordinal)
     {
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
             (uint)ordinal >= (uint)Count,
@@ -106,7 +90,7 @@ internal sealed class PersistentStringMap<T>
             if (ordinal < leftCount)
                 node = node.Left!;
             else if (ordinal == leftCount)
-                return node.Key;
+                return node;
             else
             {
                 ordinal -= leftCount + 1;

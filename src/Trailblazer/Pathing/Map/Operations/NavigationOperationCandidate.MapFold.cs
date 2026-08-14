@@ -17,35 +17,45 @@ internal sealed partial class NavigationOperationCandidate
         OverlayReplacementPolicy replacementPolicy,
         NavigationOperationLimits limits,
         GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints) => new(
+        Vector3d[] corridorWaypoints,
+        NavigationCellAddress[] corridorAddresses,
+        NavigationAddressStampSet corridorAddressSet) => new(
             this,
             prepared,
             replacementPolicy,
             limits,
             corridorPrisms,
-            corridorWaypoints);
+            corridorWaypoints,
+            corridorAddresses,
+            corridorAddressSet);
 
     internal MapFoldCursor BeginMapRemovalFold(
         string mapId,
         GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints) => new(
+        Vector3d[] corridorWaypoints,
+        NavigationCellAddress[] corridorAddresses,
+        NavigationAddressStampSet corridorAddressSet) => new(
             this,
             mapId,
             corridorPrisms,
-            corridorWaypoints);
+            corridorWaypoints,
+            corridorAddresses,
+            corridorAddressSet);
 
     internal sealed class MapFoldCursor
     {
         private readonly NavigationOperationCandidate _working;
+        private readonly NavigationOperationCandidate _foldSource;
         private readonly PreparedNavigationMap? _prepared;
         private readonly OverlayReplacementPolicy _replacementPolicy;
         private readonly NavigationOperationLimits _limits;
         private readonly GridCellPrism[]? _corridorPrisms;
         private readonly Vector3d[]? _corridorWaypoints;
+        private readonly NavigationCellAddress[] _corridorAddresses;
+        private readonly NavigationAddressStampSet _corridorAddressSet;
         private readonly string _mapId;
         private readonly MapState? _current;
-        private readonly long _sourceRetainedBytes;
-        private readonly int _sourcePersistentPageCount;
+        private readonly NavigationExplicitConnectionIndex _sourceExplicitConnections;
         private MapState? _next;
         private readonly string[] _changedMapIds = new string[1];
         private readonly MapState[] _changedStates = new MapState[1];
@@ -53,17 +63,16 @@ internal sealed partial class NavigationOperationCandidate
         private int _cellIndex;
         private int _overlayCellIndex;
         private int _dynamicIndex;
-        private int _authoredStage;
         private int _authoredIndex;
-        private int _authoredWorkIndex;
         private int _validationSourceIndex = -1;
         private int _validationStage;
         private int _validationIndex;
-        private int _validationWorkIndex;
         private int _dependencyStage;
         private int _dependencyIndex;
         private bool _removeDependencies = true;
         private ExplicitConnectionRefreshWork? _explicitRefresh;
+        private long _displacedMapStatePayloadBytes;
+        private int _displacedMapStatePayloadPages;
         private Stage _stage;
 
         internal MapFoldCursor(
@@ -72,16 +81,20 @@ internal sealed partial class NavigationOperationCandidate
             OverlayReplacementPolicy replacementPolicy,
             NavigationOperationLimits limits,
             GridCellPrism[] corridorPrisms,
-            Vector3d[] corridorWaypoints)
+            Vector3d[] corridorWaypoints,
+            NavigationCellAddress[] corridorAddresses,
+            NavigationAddressStampSet corridorAddressSet)
         {
             _working = source.Clone();
-            _sourceRetainedBytes = source.RetainedBytes;
-            _sourcePersistentPageCount = source.PersistentPageCount;
+            _foldSource = source;
+            _sourceExplicitConnections = source.ExplicitConnections;
             _prepared = prepared;
             _replacementPolicy = replacementPolicy;
             _limits = limits;
             _corridorPrisms = corridorPrisms;
             _corridorWaypoints = corridorWaypoints;
+            _corridorAddresses = corridorAddresses;
+            _corridorAddressSet = corridorAddressSet;
             _mapId = prepared.Map.MapId;
             _working._maps.TryGetValue(_mapId, out _current);
             _changedMapIds[0] = _mapId;
@@ -92,17 +105,21 @@ internal sealed partial class NavigationOperationCandidate
             NavigationOperationCandidate source,
             string mapId,
             GridCellPrism[] corridorPrisms,
-            Vector3d[] corridorWaypoints)
+            Vector3d[] corridorWaypoints,
+            NavigationCellAddress[] corridorAddresses,
+            NavigationAddressStampSet corridorAddressSet)
         {
             _working = source.Clone();
-            _sourceRetainedBytes = source.RetainedBytes;
-            _sourcePersistentPageCount = source.PersistentPageCount;
+            _foldSource = source;
+            _sourceExplicitConnections = source.ExplicitConnections;
             _prepared = null;
             _replacementPolicy = OverlayReplacementPolicy.Clear;
             _limits = default;
             _mapId = mapId;
             _corridorPrisms = corridorPrisms;
             _corridorWaypoints = corridorWaypoints;
+            _corridorAddresses = corridorAddresses;
+            _corridorAddressSet = corridorAddressSet;
             _working._maps.TryGetValue(mapId, out _current);
             _changedMapIds[0] = mapId;
             _stage = _current == null ? Stage.Complete : Stage.Dependencies;
@@ -113,21 +130,27 @@ internal sealed partial class NavigationOperationCandidate
 
         internal NavigationOperationCandidate Candidate => _working;
 
-        internal long SourceRetainedBytes => _sourceRetainedBytes;
+        internal bool ExplicitGatherComplete => _explicitRefresh?.IsGatherComplete == true;
 
-        internal int SourcePersistentPageCount => _sourcePersistentPageCount;
+        internal long DisplacedExplicitPayloadBytes =>
+            _explicitRefresh?.DisplacedSourcePayloadBytes ?? 0L;
+
+        internal int DisplacedExplicitPayloadPages =>
+            _explicitRefresh?.DisplacedSourcePayloadPages ?? 0;
+
+        internal long DisplacedMapStatePayloadBytes => _displacedMapStatePayloadBytes;
+
+        internal int DisplacedMapStatePayloadPages => _displacedMapStatePayloadPages;
 
         internal long RetainedBytes => checked(
             128L
             + ((long)(_changedMapIds.Length + _changedStates.Length) * System.IntPtr.Size)
-            + System.Math.Max(0L, _working.RetainedBytes - _sourceRetainedBytes)
             + _working.WorkCopiedPersistentBytes
             + (_explicitRefresh?.RetainedBytes ?? 0)
             + GetPendingStateGrowthBytes());
 
         internal int PersistentPageCount => checked(
             1
-            + System.Math.Max(0, _working.PersistentPageCount - _sourcePersistentPageCount)
             + _working.WorkCopiedPersistentPages
             + (_explicitRefresh?.PersistentPageCount ?? 0)
             + GetPendingStateGrowthPages());
@@ -136,28 +159,16 @@ internal sealed partial class NavigationOperationCandidate
         {
             if (_next == null || _stage == Stage.Complete)
                 return 0;
-            long currentBytes = _current == null
-                ? 0
-                : checked(
-                    _current.PreparedMapRetainedBytes
-                    + _current.Overlay.RetainedBytes
-                    + _current.DynamicAddresses.RetainedBytes);
-            long nextBytes = checked(
-                _next.PreparedMapRetainedBytes
-                + _next.Overlay.RetainedBytes
-                + _next.DynamicAddresses.RetainedBytes);
-            return System.Math.Max(0L, nextBytes - currentBytes);
+            GetAdditionalMapStatePayload(_next, _current, out long bytes, out _);
+            return bytes;
         }
 
         private int GetPendingStateGrowthPages()
         {
             if (_next == null || _stage == Stage.Complete)
                 return 0;
-            int currentPages = _current == null
-                ? 0
-                : checked(_current.Overlay.PersistentNodeCount + _current.DynamicAddresses.PersistentNodeCount);
-            int nextPages = checked(_next.Overlay.PersistentNodeCount + _next.DynamicAddresses.PersistentNodeCount);
-            return System.Math.Max(0, nextPages - currentPages);
+            GetAdditionalMapStatePayload(_next, _current, out _, out int pages);
+            return pages;
         }
 
         internal bool Advance(
@@ -324,55 +335,17 @@ internal sealed partial class NavigationOperationCandidate
 
         private bool AdvanceAuthoredValidation(MaintenanceWorkMeter meter)
         {
-            while (_authoredStage < 2)
+            while (_authoredIndex < _next!.Map.ConnectionSpan.Length)
             {
-                int count = _authoredStage == 0
-                    ? _next!.Map.ConnectionSpan.Length
-                    : _next!.Map.TransitionSpan.Length;
-                while (_authoredIndex < count)
+                if (!meter.TryConsumeExplicitEdges(1))
+                    return false;
+                if (_next.Map.ConnectionSpan[_authoredIndex++].Witnesses.Count
+                    > _limits.MaxCorridorCells - 2)
                 {
-                    if (_authoredStage == 0
-                        && _next!.Map.ConnectionSpan[_authoredIndex].Witnesses.Count
-                            > _limits.MaxCorridorCells - 2)
-                    {
-                        _rejection = NavigationOperationRejection.CapacityExceeded;
-                        _stage = Stage.Complete;
-                        return true;
-                    }
-                    if (_authoredStage == 0
-                        && !RequiresAuthoredConnectionValidation(_next!, _authoredIndex))
-                    {
-                        _authoredIndex++;
-                        continue;
-                    }
-                    int workUnits = _authoredStage == 0
-                        ? _next!.Map.ConnectionSpan[_authoredIndex].Witnesses.Count + 2
-                        : 1;
-                    while (_authoredWorkIndex < workUnits)
-                    {
-                        if (!meter.TryConsumeExplicitEdges(1))
-                            return false;
-                        _authoredWorkIndex++;
-                    }
-                    int edgeIndex = _authoredIndex++;
-                    _authoredWorkIndex = 0;
-                    if (!_working.ValidateAuthoredStateEdgeForWork(
-                            _next,
-                            connection: _authoredStage == 0,
-                            edgeIndex,
-                            _changedMapIds,
-                            _changedStates,
-                            _corridorPrisms!,
-                            _corridorWaypoints!,
-                            allowDormantEndpoints: true))
-                    {
-                        _rejection = NavigationOperationRejection.ValidationFailed;
-                        _stage = Stage.Complete;
-                        return true;
-                    }
+                    _rejection = NavigationOperationRejection.CapacityExceeded;
+                    _stage = Stage.Complete;
+                    return true;
                 }
-                _authoredStage++;
-                _authoredIndex = 0;
             }
             _stage = Stage.Validation;
             return true;
@@ -420,46 +393,21 @@ internal sealed partial class NavigationOperationCandidate
 
         private bool AdvanceStateValidation(MapState state, MaintenanceWorkMeter meter)
         {
-            while (_validationStage < 4)
+            while (_validationStage < 2)
             {
-                int count = _validationStage switch
-                {
-                    0 => state.Map.ConnectionSpan.Length,
-                    1 => state.Overlay.ConnectionCount,
-                    2 => state.Map.TransitionSpan.Length,
-                    _ => state.Overlay.TransitionCount
-                };
+                int count = _validationStage == 0
+                    ? state.Map.TransitionSpan.Length
+                    : state.Overlay.TransitionCount;
                 while (_validationIndex < count)
                 {
-                    if (_validationStage < 2)
-                    {
-                        _validationIndex++;
-                        continue;
-                    }
-                    int workUnits = GetWitnessCount(state, _validationStage, _validationIndex) + 1;
-                    while (_validationWorkIndex < workUnits)
-                    {
-                        if (!meter.TryConsumeExplicitEdges(1))
-                            return false;
-                        _validationWorkIndex++;
-                    }
-                    int edgeIndex = _validationIndex++;
-                    _validationWorkIndex = 0;
-                    if (GetWitnessCount(state, _validationStage, edgeIndex)
-                        > _limits.MaxCorridorCells - 2)
-                    {
-                        _rejection = NavigationOperationRejection.CapacityExceeded;
-                        _stage = Stage.Complete;
-                        return true;
-                    }
-                    if (!_working.ValidateStateEdgeForWork(
+                    if (!meter.TryConsumeExplicitEdges(1))
+                        return false;
+                    if (!_working.ValidateTransitionForWork(
                             state,
-                            _validationStage,
-                            edgeIndex,
+                            overlay: _validationStage == 1,
+                            _validationIndex++,
                             _changedMapIds,
                             _changedStates,
-                            _corridorPrisms!,
-                            _corridorWaypoints!,
                             allowDormantEndpoints: true))
                     {
                         _rejection = NavigationOperationRejection.ValidationFailed;
@@ -471,18 +419,6 @@ internal sealed partial class NavigationOperationCandidate
                 _validationIndex = 0;
             }
             return true;
-        }
-
-        private static int GetWitnessCount(MapState state, int stage, int index)
-        {
-            if (stage == 0)
-                return state.Map.ConnectionSpan[index].Witnesses.Count;
-            if (stage != 1)
-                return 0;
-            NavigationConnectionOverlayOperation operation = state.Overlay.GetConnectionAt(index);
-            return operation.Kind == NavigationConnectionOverlayOperationKind.Upsert
-                ? operation.Connection!.Witnesses.Count
-                : 0;
         }
 
         private bool AdvanceDependencies(MaintenanceWorkMeter meter)
@@ -540,6 +476,12 @@ internal sealed partial class NavigationOperationCandidate
 
         private void Commit()
         {
+            _working.RecordMapStateOwnership(
+                _mapId,
+                _next,
+                _foldSource,
+                ref _displacedMapStatePayloadBytes,
+                ref _displacedMapStatePayloadPages);
             if (_next == null)
             {
                 _working._maps = _working._maps.Remove(
@@ -580,8 +522,11 @@ internal sealed partial class NavigationOperationCandidate
             }
             _explicitRefresh = _working.BeginExplicitConnectionRefresh(
                 _mapId,
+                _sourceExplicitConnections,
                 _corridorPrisms!,
-                _corridorWaypoints!);
+                _corridorWaypoints!,
+                _corridorAddresses,
+                _corridorAddressSet);
             _stage = Stage.ExplicitConnections;
         }
 

@@ -16,58 +16,100 @@ internal sealed class NavigationExplicitConnectionIndex
 {
     internal static readonly NavigationExplicitConnectionIndex Empty = new(
         PersistentStringMap<PersistentStringMap<NavigationExplicitConnectionRecord>>.Empty,
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]>>.Empty,
+        PersistentStringMap<PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>>.Empty,
+        PersistentStringMap<PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>>.Empty,
         ownerMapBytes: 0,
         incidentMapBytes: 0,
+        endpointMapBytes: 0,
         recordBytes: 0,
         incidentArrayBytes: 0,
+        endpointArrayBytes: 0,
         ownerMapPages: 0,
-        incidentMapPages: 0);
+        incidentMapPages: 0,
+        endpointMapPages: 0,
+        recordPages: 0,
+        incidentArrayPages: 0,
+        endpointArrayPages: 0);
 
     private readonly PersistentStringMap<PersistentStringMap<NavigationExplicitConnectionRecord>> _owners;
-    private readonly PersistentStringMap<PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]>> _incident;
+    private readonly PersistentStringMap<PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>> _incident;
+    private readonly PersistentStringMap<PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>> _endpoints;
     private readonly long _ownerMapBytes;
     private readonly long _incidentMapBytes;
+    private readonly long _endpointMapBytes;
     private readonly long _recordBytes;
     private readonly long _incidentArrayBytes;
+    private readonly long _endpointArrayBytes;
     private readonly int _ownerMapPages;
     private readonly int _incidentMapPages;
+    private readonly int _endpointMapPages;
+    private readonly int _recordPages;
+    private readonly int _incidentArrayPages;
+    private readonly int _endpointArrayPages;
 
     private NavigationExplicitConnectionIndex(
         PersistentStringMap<PersistentStringMap<NavigationExplicitConnectionRecord>> owners,
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]>> incident,
+        PersistentStringMap<PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>> incident,
+        PersistentStringMap<PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>> endpoints,
         long ownerMapBytes,
         long incidentMapBytes,
+        long endpointMapBytes,
         long recordBytes,
         long incidentArrayBytes,
+        long endpointArrayBytes,
         int ownerMapPages,
-        int incidentMapPages)
+        int incidentMapPages,
+        int endpointMapPages,
+        int recordPages,
+        int incidentArrayPages,
+        int endpointArrayPages)
     {
         _owners = owners;
         _incident = incident;
+        _endpoints = endpoints;
         _ownerMapBytes = ownerMapBytes;
         _incidentMapBytes = incidentMapBytes;
+        _endpointMapBytes = endpointMapBytes;
         _recordBytes = recordBytes;
         _incidentArrayBytes = incidentArrayBytes;
+        _endpointArrayBytes = endpointArrayBytes;
         _ownerMapPages = ownerMapPages;
         _incidentMapPages = incidentMapPages;
+        _endpointMapPages = endpointMapPages;
+        _recordPages = recordPages;
+        _incidentArrayPages = incidentArrayPages;
+        _endpointArrayPages = endpointArrayPages;
     }
 
     internal long RetainedBytes => checked(
-        80L
+        112L
         + _owners.RetainedBytes
         + _incident.RetainedBytes
+        + _endpoints.RetainedBytes
         + _ownerMapBytes
         + _incidentMapBytes
+        + _endpointMapBytes
         + _recordBytes
-        + _incidentArrayBytes);
+        + _incidentArrayBytes
+        + _endpointArrayBytes);
 
     internal int PersistentPageCount => checked(
-        2
+        3
         + _owners.PersistentNodeCount
         + _incident.PersistentNodeCount
+        + _endpoints.PersistentNodeCount
         + _ownerMapPages
-        + _incidentMapPages);
+        + _incidentMapPages
+        + _endpointMapPages
+        + _recordPages
+        + _incidentArrayPages
+        + _endpointArrayPages);
+
+    internal long PayloadRetainedBytes => checked(
+        _recordBytes + _incidentArrayBytes + _endpointArrayBytes);
+
+    internal int PayloadPersistentPageCount => checked(
+        _recordPages + _incidentArrayPages + _endpointArrayPages);
 
     internal bool TryGet(
         NavigationConnectionOwnerKey owner,
@@ -95,23 +137,44 @@ internal sealed class NavigationExplicitConnectionIndex
         return map.GetValueAt(ordinal);
     }
 
-    internal ReadOnlySpan<NavigationConnectionOwnerKey> GetIncidentOwners(
+    internal NavigationPagedSequence<NavigationConnectionOwnerKey>.Enumerator
+        GetIncidentOwnerEnumerator(NavigationCellAddress address) =>
+            GetIncidentOwnerRow(address).GetEnumerator();
+
+    internal NavigationPagedSequence<NavigationConnectionOwnerKey> GetIncidentOwnerRow(
         NavigationCellAddress address)
     {
         if (_incident.TryGetValue(
                 address.MapId,
-                out PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]> map)
-            && map.TryGetValue(address.Index, out NavigationConnectionOwnerKey[] owners))
+                out PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>> map)
+            && map.TryGetValue(
+                address.Index,
+                out NavigationPagedSequence<NavigationConnectionOwnerKey> owners))
         {
             return owners;
         }
-        return ReadOnlySpan<NavigationConnectionOwnerKey>.Empty;
+        return NavigationPagedSequence<NavigationConnectionOwnerKey>.Empty;
+    }
+
+    internal NavigationPagedSequence<NavigationConnectionOwnerKey> GetEndpointOwnerRow(
+        NavigationCellAddress address)
+    {
+        if (_endpoints.TryGetValue(
+                address.MapId,
+                out PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>> map)
+            && map.TryGetValue(
+                address.Index,
+                out NavigationPagedSequence<NavigationConnectionOwnerKey> owners))
+        {
+            return owners;
+        }
+        return NavigationPagedSequence<NavigationConnectionOwnerKey>.Empty;
     }
 
     internal int GetIncidentAddressCount(string mapId) =>
         _incident.TryGetValue(
             mapId,
-            out PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]> addresses)
+            out PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>> addresses)
                 ? addresses.Count
                 : 0;
 
@@ -119,7 +182,7 @@ internal sealed class NavigationExplicitConnectionIndex
     {
         _incident.TryGetValue(
             mapId,
-            out PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]> addresses);
+            out PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>> addresses);
         return new NavigationCellAddress(mapId, addresses.GetKeyAt(ordinal));
     }
 
@@ -147,12 +210,19 @@ internal sealed class NavigationExplicitConnectionIndex
         return new NavigationExplicitConnectionIndex(
             owners,
             _incident,
+            _endpoints,
             ownerMapBytes,
             _incidentMapBytes,
+            _endpointMapBytes,
             checked(_recordBytes - (prior?.RetainedBytes ?? 0) + record.RetainedBytes),
             _incidentArrayBytes,
+            _endpointArrayBytes,
             ownerMapPages,
-            _incidentMapPages);
+            _incidentMapPages,
+            _endpointMapPages,
+            checked(_recordPages - (prior?.PersistentPageCount ?? 0) + record.PersistentPageCount),
+            _incidentArrayPages,
+            _endpointArrayPages);
     }
 
     internal NavigationExplicitConnectionIndex RemoveOwner(
@@ -187,142 +257,125 @@ internal sealed class NavigationExplicitConnectionIndex
         return new NavigationExplicitConnectionIndex(
             owners,
             _incident,
+            _endpoints,
             ownerMapBytes,
             _incidentMapBytes,
+            _endpointMapBytes,
             checked(_recordBytes - prior.RetainedBytes),
             _incidentArrayBytes,
+            _endpointArrayBytes,
             ownerMapPages,
-            _incidentMapPages);
+            _incidentMapPages,
+            _endpointMapPages,
+            checked(_recordPages - prior.PersistentPageCount),
+            _incidentArrayPages,
+            _endpointArrayPages);
     }
 
-    internal NavigationExplicitConnectionIndex UpdateIncidence(
+    internal NavigationExplicitConnectionIndex SetIncidentRow(
         NavigationCellAddress address,
-        NavigationConnectionOwnerKey owner,
-        bool add,
+        NavigationPagedSequence<NavigationConnectionOwnerKey> prior,
+        NavigationPagedSequence<NavigationConnectionOwnerKey> next,
         out int copiedNodes)
     {
         copiedNodes = 0;
-        PersistentStringMap<PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]>> incident =
-            _incident;
-        long incidentMapBytes = _incidentMapBytes;
-        int incidentMapPages = _incidentMapPages;
-        long incidentArrayBytes = _incidentArrayBytes;
-        UpdateIncident(
-            ref incident,
-            address,
-            owner,
-            add,
-            _owners,
-            ref incidentMapBytes,
-            ref incidentMapPages,
-            ref incidentArrayBytes,
-            ref copiedNodes);
-        return new NavigationExplicitConnectionIndex(
-            _owners,
-            incident,
-            _ownerMapBytes,
-            incidentMapBytes,
-            _recordBytes,
-            incidentArrayBytes,
-            _ownerMapPages,
-            incidentMapPages);
-    }
-
-    private static void UpdateIncident(
-        ref PersistentStringMap<PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]>> root,
-        NavigationCellAddress address,
-        NavigationConnectionOwnerKey owner,
-        bool add,
-        PersistentStringMap<PersistentStringMap<NavigationExplicitConnectionRecord>> owners,
-        ref long mapBytes,
-        ref int mapPages,
-        ref long arrayBytes,
-        ref int copiedNodes)
-    {
-        bool hadMap = root.TryGetValue(
+        bool hadMap = _incident.TryGetValue(
             address.MapId,
-            out PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]> map);
-        map ??= PersistentVoxelIndexMap<NavigationConnectionOwnerKey[]>.Empty;
-        mapBytes -= hadMap ? map.RetainedBytes : 0;
-        mapPages -= hadMap ? map.PersistentNodeCount : 0;
-        map.TryGetValue(address.Index, out NavigationConnectionOwnerKey[] prior);
-        prior ??= Array.Empty<NavigationConnectionOwnerKey>();
-        NavigationConnectionOwnerKey[] next = add
-            ? Insert(prior, owner, owners)
-            : Remove(prior, owner);
-        if (ReferenceEquals(prior, next))
-        {
-            mapBytes += hadMap ? map.RetainedBytes : 0;
-            mapPages += hadMap ? map.PersistentNodeCount : 0;
-            return;
-        }
-        arrayBytes = checked(arrayBytes - (prior.Length * 16L) + (next.Length * 16L));
+            out PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>> map);
+        map ??= PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>.Empty;
+        long incidentMapBytes = _incidentMapBytes - (hadMap ? map.RetainedBytes : 0);
+        int incidentMapPages = _incidentMapPages - (hadMap ? map.PersistentNodeCount : 0);
         int copied;
-        if (next.Length == 0)
+        if (next.Count == 0)
             map = map.Remove(address.Index, out _, out copied);
         else
             map = map.Set(address.Index, next, out copied);
         copiedNodes = checked(copiedNodes + copied);
+        PersistentStringMap<PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>> incident;
         if (map.Count == 0)
-            root = root.Remove(address.MapId, out _, out copied);
+            incident = _incident.Remove(address.MapId, out _, out copied);
         else
         {
-            mapBytes = checked(mapBytes + map.RetainedBytes);
-            mapPages = checked(mapPages + map.PersistentNodeCount);
-            root = root.Set(address.MapId, map, out copied);
+            incidentMapBytes = checked(incidentMapBytes + map.RetainedBytes);
+            incidentMapPages = checked(incidentMapPages + map.PersistentNodeCount);
+            incident = _incident.Set(address.MapId, map, out copied);
         }
         copiedNodes = checked(copiedNodes + copied);
+        return new NavigationExplicitConnectionIndex(
+            _owners,
+            incident,
+            _endpoints,
+            _ownerMapBytes,
+            incidentMapBytes,
+            _endpointMapBytes,
+            _recordBytes,
+            checked(
+                _incidentArrayBytes
+                - prior.RetainedBytes
+                + next.RetainedBytes),
+            _endpointArrayBytes,
+            _ownerMapPages,
+            incidentMapPages,
+            _endpointMapPages,
+            _recordPages,
+            checked(
+                _incidentArrayPages
+                - prior.PersistentPageCount
+                + next.PersistentPageCount),
+            _endpointArrayPages);
     }
 
-    private static NavigationConnectionOwnerKey[] Insert(
-        NavigationConnectionOwnerKey[] values,
-        NavigationConnectionOwnerKey owner,
-        PersistentStringMap<PersistentStringMap<NavigationExplicitConnectionRecord>> owners)
+    internal NavigationExplicitConnectionIndex SetEndpointRow(
+        NavigationCellAddress address,
+        NavigationPagedSequence<NavigationConnectionOwnerKey> prior,
+        NavigationPagedSequence<NavigationConnectionOwnerKey> next,
+        out int copiedNodes)
     {
-        int low = 0;
-        int high = values.Length;
-        while (low < high)
+        copiedNodes = 0;
+        bool hadMap = _endpoints.TryGetValue(
+            address.MapId,
+            out PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>> map);
+        map ??= PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>.Empty;
+        long endpointMapBytes = _endpointMapBytes - (hadMap ? map.RetainedBytes : 0);
+        int endpointMapPages = _endpointMapPages - (hadMap ? map.PersistentNodeCount : 0);
+        int copied;
+        if (next.Count == 0)
+            map = map.Remove(address.Index, out _, out copied);
+        else
+            map = map.Set(address.Index, next, out copied);
+        copiedNodes = checked(copiedNodes + copied);
+        PersistentStringMap<PersistentVoxelIndexMap<NavigationPagedSequence<NavigationConnectionOwnerKey>>> endpoints;
+        if (map.Count == 0)
+            endpoints = _endpoints.Remove(address.MapId, out _, out copied);
+        else
         {
-            int middle = low + ((high - low) >> 1);
-            int comparison = CompareOwners(values[middle], owner, owners);
-            if (comparison < 0)
-                low = middle + 1;
-            else
-                high = middle;
+            endpointMapBytes = checked(endpointMapBytes + map.RetainedBytes);
+            endpointMapPages = checked(endpointMapPages + map.PersistentNodeCount);
+            endpoints = _endpoints.Set(address.MapId, map, out copied);
         }
-        for (int i = 0; i < values.Length; i++)
-        {
-            if (values[i].Equals(owner))
-                return values;
-        }
-        var result = new NavigationConnectionOwnerKey[values.Length + 1];
-        Array.Copy(values, 0, result, 0, low);
-        result[low] = owner;
-        Array.Copy(values, low, result, low + 1, values.Length - low);
-        return result;
-    }
-
-    private static NavigationConnectionOwnerKey[] Remove(
-        NavigationConnectionOwnerKey[] values,
-        NavigationConnectionOwnerKey owner)
-    {
-        int index = -1;
-        for (int i = 0; i < values.Length; i++)
-        {
-            if (values[i].Equals(owner))
-            {
-                index = i;
-                break;
-            }
-        }
-        if (index < 0)
-            return values;
-        if (values.Length == 1)
-            return Array.Empty<NavigationConnectionOwnerKey>();
-        var result = new NavigationConnectionOwnerKey[values.Length - 1];
-        Array.Copy(values, 0, result, 0, index);
-        Array.Copy(values, index + 1, result, index, result.Length - index);
-        return result;
+        copiedNodes = checked(copiedNodes + copied);
+        return new NavigationExplicitConnectionIndex(
+            _owners,
+            _incident,
+            endpoints,
+            _ownerMapBytes,
+            _incidentMapBytes,
+            endpointMapBytes,
+            _recordBytes,
+            _incidentArrayBytes,
+            checked(
+                _endpointArrayBytes
+                - prior.RetainedBytes
+                + next.RetainedBytes),
+            _ownerMapPages,
+            _incidentMapPages,
+            endpointMapPages,
+            _recordPages,
+            _incidentArrayPages,
+            checked(
+                _endpointArrayPages
+                - prior.PersistentPageCount
+                + next.PersistentPageCount));
     }
 
     private static int CompareOwners(
@@ -349,6 +402,10 @@ internal sealed class NavigationExplicitConnectionIndex
             ? comparison
             : CompareAnchor(leftRecord.Definition.ExitAnchor, rightRecord.Definition.ExitAnchor);
     }
+
+    internal int CompareOwners(
+        NavigationConnectionOwnerKey left,
+        NavigationConnectionOwnerKey right) => CompareOwners(left, right, _owners);
 
     private static bool TryGetRecord(
         PersistentStringMap<PersistentStringMap<NavigationExplicitConnectionRecord>> owners,

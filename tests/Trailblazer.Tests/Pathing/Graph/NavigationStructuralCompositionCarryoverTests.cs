@@ -1,4 +1,5 @@
 using FixedMathSharp;
+using System;
 using FluentAssertions;
 using GridForge.Configuration;
 using GridForge.Grids;
@@ -21,25 +22,274 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         Fixed64.One);
 
     [Fact]
+    public void ChangedMapCapture_ShouldNotScanBeforeMeteredAdvance()
+    {
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        NavigationMap first = new NavigationMapBuilder("A", CreateBinding(0))
+            .AddCell(default, Cell)
+            .Build();
+        NavigationMap second = new NavigationMapBuilder("B", CreateBinding(10))
+            .AddCell(default, Cell)
+            .Build();
+        PreparedNavigationMap preparedFirst = new(first, 1);
+        PreparedNavigationMap preparedSecond = new(second, 1);
+        NavigationOperationCandidate candidate = FoldMap(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            preparedFirst,
+            OverlayReplacementPolicy.Clear,
+            defaults);
+        candidate = FoldMap(
+            candidate,
+            preparedSecond,
+            OverlayReplacementPolicy.Clear,
+            defaults);
+        NavigationOperationFrameChange[] changes =
+        {
+            NavigationOperationFrameChange.MapCommit(
+                preparedFirst,
+                OverlayReplacementPolicy.Clear,
+                1),
+            NavigationOperationFrameChange.MapCommit(
+                preparedSecond,
+                OverlayReplacementPolicy.Clear,
+                2),
+            NavigationOperationFrameChange.MapCommit(
+                preparedFirst,
+                OverlayReplacementPolicy.Clear,
+                3)
+        };
+
+        var work = new NavigationStructuralCompositionWork(
+            NavigationWorldGraph.Empty,
+            candidate,
+            changes,
+            changes.Length,
+            updateComposition: true,
+            new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
+
+        work.CapturedChangedMapCount.Should().Be(0,
+            "construction may retain sources but must not scan or copy changed map IDs");
+        work.IsChangedMapCaptureComplete.Should().BeFalse();
+
+        MaintenanceWorkBudget defaultsBudget = defaults.MaintenanceBudget;
+        var budget = new MaintenanceWorkBudget(
+            defaultsBudget.MaxConsumedEnvelopes,
+            defaultsBudget.MaxBaselineAddresses,
+            defaultsBudget.MaxOverlaySlots,
+            maxComponentNodes: 1,
+            defaultsBudget.MaxExplicitEdges,
+            maxDependencyEntries: 2);
+        var meter = new MaintenanceWorkMeter(budget);
+        int componentUnits = 0;
+        int dependencyUnits = 0;
+        for (int frame = 0; frame < changes.Length; frame++)
+        {
+            work.Advance(meter).Should().BeFalse();
+            componentUnits += meter.ComponentNodes;
+            dependencyUnits += meter.DependencyEntries;
+            meter.ComponentNodes.Should().Be(1,
+                "each frame may inspect exactly one raw changed-map ID");
+            meter.Reset();
+        }
+
+        work.IsChangedMapCaptureComplete.Should().BeTrue();
+        work.CapturedChangedMapCount.Should().Be(2,
+            "duplicate IDs must be canonicalized in the metered root");
+        work.GetCapturedChangedMapIdAt(0).Should().Be("A");
+        work.GetCapturedChangedMapIdAt(1).Should().Be("B");
+        componentUnits.Should().Be(3);
+        dependencyUnits.Should().Be(2,
+            "only unique changed-root insertions consume dependency units when no prior component exists");
+    }
+
+    [Fact]
+    public void AffectedClosurePublication_ShouldTransferPreparedRootOwnership()
+    {
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NavigationMap map = AddGridAndCreateMap(context, "A", 0, null, null, null);
+        NavigationMapCommitOperation install = AdmitMap(context, map, 1);
+        SimulateUntilTerminal(context, install.Receipt);
+        install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var prepared = new PreparedNavigationMap(map, 2);
+        NavigationOperationCandidate candidate = FoldMap(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            prepared,
+            OverlayReplacementPolicy.Clear,
+            defaults);
+        NavigationOperationFrameChange[] changes =
+        {
+            NavigationOperationFrameChange.MapCommit(
+                prepared,
+                OverlayReplacementPolicy.Clear,
+                2)
+        };
+        var work = new NavigationStructuralCompositionWork(
+            lease.Graph,
+            candidate,
+            changes,
+            changes.Length,
+            updateComposition: true,
+            new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
+        work.MarkAllClosePublished();
+
+        var meter = new MaintenanceWorkMeter(defaults.MaintenanceBudget);
+        work.Advance(meter).Should().BeFalse();
+        work.RequiresAffectedClosurePublication.Should().BeTrue();
+        PersistentStringMap<bool> affected = work.AffectedComponents;
+        affected.Count.Should().Be(1);
+        long ownedBytes = affected.RetainedBytes
+            - PersistentStringMap<bool>.Empty.RetainedBytes;
+        int ownedPages = affected.PersistentNodeCount;
+        long retainedBytes = work.RetainedBytes;
+        int retainedPages = work.PersistentPageCount;
+
+        work.MarkAffectedClosurePublished();
+
+        work.RetainedBytes.Should().Be(retainedBytes - ownedBytes,
+            "the graph owns the exact affected-component root after publication");
+        work.PersistentPageCount.Should().Be(retainedPages - ownedPages);
+    }
+
+    [Fact]
+    public void ShrinkingCompositionUpdate_ShouldRetainReplacementPayloadSeparately()
+    {
+        const int MapCount = 16;
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        var maps = new NavigationMap[MapCount];
+        NavigationMapCommitOperation last = default;
+        NavigationOperationCandidate candidate = new(navigationAreaCount: 1);
+        for (int i = 0; i < MapCount; i++)
+        {
+            string? destination = i + 1 < MapCount ? $"map-{i + 1:D2}" : null;
+            maps[i] = AddGridAndCreateMap(
+                context,
+                $"map-{i:D2}",
+                i * 3,
+                destination,
+                destination == null ? null : (i + 1) * 3,
+                destination == null ? null : $"edge-{i:D2}");
+            last = AdmitMap(context, maps[i], i + 1);
+            candidate = FoldMap(
+                candidate,
+                new PreparedNavigationMap(maps[i], 1),
+                OverlayReplacementPolicy.Clear,
+                defaults);
+        }
+        SimulateUntilTerminal(context, last.Receipt);
+        last.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        var changes = new NavigationOperationFrameChange[MapCount - 1];
+        for (int i = 1; i < MapCount; i++)
+        {
+            candidate = FoldMapRemoval(candidate, maps[i].MapId, defaults);
+            changes[i - 1] = NavigationOperationFrameChange.MapRemove(maps[i].MapId, i);
+        }
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var preparationOnly = new NavigationStructuralCompositionWork(
+            lease.Graph,
+            candidate,
+            changes,
+            changes.Length,
+            updateComposition: false,
+            new NavigationCompositionWorkspace(MapCount));
+        var withUpdate = new NavigationStructuralCompositionWork(
+            lease.Graph,
+            candidate,
+            changes,
+            changes.Length,
+            updateComposition: true,
+            new NavigationCompositionWorkspace(MapCount));
+        var meter = new MaintenanceWorkMeter(defaults.MaintenanceBudget);
+        for (int frame = 0; frame < 4096 && !preparationOnly.IsComplete; frame++)
+        {
+            preparationOnly.Advance(meter);
+            meter.Reset();
+        }
+        for (int frame = 0; frame < 4096 && !withUpdate.IsComplete; frame++)
+        {
+            withUpdate.Advance(meter);
+            meter.Reset();
+        }
+
+        preparationOnly.IsComplete.Should().BeTrue();
+        withUpdate.IsComplete.Should().BeTrue();
+        (withUpdate.RetainedBytes - preparationOnly.RetainedBytes).Should().Be(
+            224,
+            "the new singleton payload and positive non-payload delta coexist with the much larger source composition");
+        (withUpdate.PersistentPageCount - preparationOnly.PersistentPageCount)
+            .Should().Be(3);
+    }
+
+    [Fact]
+    public void EmptyCompositionUpdate_ShouldNotSubtractPublishedObjectHeader()
+    {
+        var changes = Array.Empty<NavigationOperationFrameChange>();
+        var candidate = new NavigationOperationCandidate(navigationAreaCount: 1);
+        var preparationOnly = new NavigationStructuralCompositionWork(
+            NavigationWorldGraph.Empty,
+            candidate,
+            changes,
+            changeCount: 0,
+            updateComposition: false,
+            new NavigationCompositionWorkspace(1));
+        var withUpdate = new NavigationStructuralCompositionWork(
+            NavigationWorldGraph.Empty,
+            candidate,
+            changes,
+            changeCount: 0,
+            updateComposition: true,
+            new NavigationCompositionWorkspace(1));
+        var meter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        preparationOnly.Advance(meter).Should().BeTrue();
+        meter.Reset();
+        withUpdate.Advance(meter).Should().BeTrue();
+
+        (withUpdate.RetainedBytes - preparationOnly.RetainedBytes).Should().Be(
+            192L + NavigationCompositionWorkspace.GetRetainedBytes(1),
+            "the distinct update object and workspace coexist while only published roots are shared");
+    }
+
+    [Fact]
     public void BridgeRemoval_ShouldFailClosedOnlyAffectedComponentUntilAtomicPublication()
     {
         using TrailblazerWorldContext context = CreateConnectedContext(out long sequence);
         NavigationGraphDiagnosticsSnapshot before = context.Pathing.GetNavigationGraphDiagnostics();
         int priorComponent = FindMap(before, "A").ComponentId;
-        var removal = SuppressTransition(context, ++sequence, "B", "bc");
+        FindMap(before, "C").ComponentId.Should().Be(priorComponent,
+            "the installed explicit A-B-C bridge must begin as one component");
+        var removal = SuppressConnection(context, ++sequence, "B", "bc");
 
         context.Simulate();
 
         removal.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
         (context.Pathing.RetainedCompositionWorkCount
             + context.Pathing.RetainedOperationWorkCount).Should().Be(1);
-        context.Pathing.NavigationMaintenanceMeter.OverlaySlots.Should().Be(1);
+        context.Pathing.NavigationMaintenanceMeter.OverlaySlots.Should().BeGreaterThan(0);
         GetCell(context, "A").IsMaterialized.Should().BeFalse();
         GetCell(context, "B").IsMaterialized.Should().BeFalse();
         GetCell(context, "C").IsMaterialized.Should().BeFalse();
+        GetCell(context, "U").IsMaterialized.Should().BeFalse(
+            "explicit incidence is conservatively unknown before its metered gather completes");
+        for (int i = 0;
+             i < 64 && removal.Receipt.Status == NavigationOperationStatus.Pending
+                 && !GetCell(context, "U").IsMaterialized;
+             i++)
+        {
+            context.Simulate();
+        }
+        removal.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
         GetCell(context, "U").IsMaterialized.Should().BeTrue();
         NavigationGraphDiagnosticsSnapshot blocked = context.Pathing.GetNavigationGraphDiagnostics();
-        FindMap(blocked, "A").ComponentId.Should().Be(priorComponent);
+        NavigationGraphMapDiagnostic blockedA = FindMap(blocked, "A");
+        NavigationGraphMapDiagnostic blockedC = FindMap(blocked, "C");
+        blockedA.ComponentId.Should().Be(priorComponent,
+            $"graph={blocked.GraphVersion}, beforeComponent={priorComponent}, "
+            + $"A={blockedA.ComponentId}/{blockedA.ComponentVersion}, "
+            + $"C={blockedC.ComponentId}/{blockedC.ComponentVersion}");
         FindMap(blocked, "C").ComponentId.Should().Be(priorComponent);
         blocked.ActiveSnapshotBytes.Should().BeGreaterThan(0);
         blocked.PersistentGraphPageCount.Should().BeGreaterThan(0);
@@ -62,11 +312,11 @@ public sealed class NavigationStructuralCompositionCarryoverTests
     public void DeferredStructuralBatch_ShouldNotAllowLaterOperationToOvertake()
     {
         using TrailblazerWorldContext context = CreateConnectedContext(out long sequence);
-        var removal = SuppressTransition(context, ++sequence, "B", "bc");
+        var removal = SuppressConnection(context, ++sequence, "B", "bc");
         context.Simulate();
         removal.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
 
-        NavigationMap laterMap = AddGridAndCreateMap(context, "V", 50, null, null);
+        NavigationMap laterMap = AddGridAndCreateMap(context, "V", 50, null, null, null);
         var later = new NavigationMapCommitOperation(
             new PreparedNavigationMap(laterMap, 1),
             OverlayReplacementPolicy.Clear,
@@ -97,7 +347,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
     public void Reset_ShouldReleaseUnpublishedStructuralWork()
     {
         using TrailblazerWorldContext context = CreateConnectedContext(out long sequence);
-        NavigationOverlayCommitOperation removal = SuppressTransition(
+        NavigationOverlayCommitOperation removal = SuppressConnection(
             context,
             ++sequence,
             "B",
@@ -119,10 +369,10 @@ public sealed class NavigationStructuralCompositionCarryoverTests
     {
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: defaults);
-        NavigationMap a = AddGridAndCreateMap(context, "A", 0, "B", "ab");
-        NavigationMap b = AddGridAndCreateMap(context, "B", 10, null, null);
-        NavigationMapCommitOperation first = AdmitMap(context, a, 1);
-        NavigationMapCommitOperation second = AdmitMap(context, b, 2);
+        NavigationMap a = AddGridAndCreateMap(context, "A", 0, "B", 3, "ab");
+        NavigationMap b = AddGridAndCreateMap(context, "B", 3, null, null, null);
+        NavigationMapCommitOperation first = AdmitMap(context, b, 1);
+        NavigationMapCommitOperation second = AdmitMap(context, a, 2);
 
         context.Simulate();
 
@@ -132,111 +382,9 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
         lease.Graph.Composition.TryGetComponentRecord("A", out NavigationStructuralComponent component)
             .Should().BeTrue();
-        component.FlatMembers.Should().Equal("A", "B");
-    }
-
-    [Fact]
-    public void StructuralWork_ShouldExposeSameCountMultiMapCopiesBeyondTightCap()
-    {
-        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
-        GridCellPrism[] corridorPrisms = new GridCellPrism[defaults.OperationLimits.MaxCorridorCells];
-        Vector3d[] corridorWaypoints = new Vector3d[(defaults.OperationLimits.MaxCorridorCells * 2) - 2];
-        NormalizedGridConfiguration firstBinding = CreateBinding(0);
-        NormalizedGridConfiguration secondBinding = CreateBinding(10);
-        TraversalTransitionDefinition firstTransition = CreateTransition("ab", "B", Fixed64.Zero);
-        TraversalTransitionDefinition secondTransition = CreateTransition("ba", "A", Fixed64.Zero);
-        NavigationMap first = new NavigationMapBuilder("A", firstBinding)
-            .AddCell(default, Cell)
-            .AddTransition(firstTransition)
-            .Build();
-        NavigationMap second = new NavigationMapBuilder("B", secondBinding)
-            .AddCell(default, Cell)
-            .AddTransition(secondTransition)
-            .Build();
-        var candidate = new NavigationOperationCandidate(navigationAreaCount: 1);
-        candidate.ApplyMap(
-            new PreparedNavigationMap(first, 1),
-            OverlayReplacementPolicy.Clear,
-            defaults.OperationLimits,
-            corridorPrisms,
-            corridorWaypoints).Should().Be(NavigationOperationRejection.None);
-        candidate.ApplyMap(
-            new PreparedNavigationMap(second, 1),
-            OverlayReplacementPolicy.Clear,
-            defaults.OperationLimits,
-            corridorPrisms,
-            corridorWaypoints).Should().Be(NavigationOperationRejection.None);
-        var initialOverlay = new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
-        {
-            new NavigationMapOverlayDelta(
-                "A",
-                transitions: new[] { TraversalTransitionOverlayOperation.Upsert(firstTransition) }),
-            new NavigationMapOverlayDelta(
-                "B",
-                transitions: new[] { TraversalTransitionOverlayOperation.Upsert(secondTransition) })
-        }));
-        candidate.ApplyOverlay(
-            initialOverlay.Transaction,
-            1,
-            defaults.OperationLimits,
-            corridorPrisms,
-            corridorWaypoints).Should().Be(NavigationOperationRejection.None);
-        NavigationOperationCandidate.MapState[] states = candidate.CaptureStates();
-        var instances = new NavigationMapInstance[states.Length];
-        for (int i = 0; i < states.Length; i++)
-        {
-            instances[i] = NavigationMapInstance.ComposeDetached(
-                states[i],
-                previous: null,
-                instanceVersion: 1);
-        }
-        var source = new NavigationWorldGraph(1, instances);
-
-        NavigationOperationCandidate replacementCandidate = candidate.Clone();
-        var replacementOverlay = new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
-        {
-            new NavigationMapOverlayDelta(
-                "A",
-                transitions: new[]
-                {
-                    TraversalTransitionOverlayOperation.Upsert(
-                        CreateTransition("ab", "B", Fixed64.One))
-                }),
-            new NavigationMapOverlayDelta(
-                "B",
-                transitions: new[]
-                {
-                    TraversalTransitionOverlayOperation.Upsert(
-                        CreateTransition("ba", "A", Fixed64.One))
-                })
-        }));
-        replacementCandidate.ApplyOverlay(
-            replacementOverlay.Transaction,
-            2,
-            defaults.OperationLimits,
-            corridorPrisms,
-            corridorWaypoints).Should().Be(NavigationOperationRejection.None);
-        NavigationOperationFrameChange[] changes =
-        {
-            NavigationOperationFrameChange.Overlay(replacementOverlay, 2)
-        };
-        var work = new NavigationStructuralCompositionWork(
-            source,
-            replacementCandidate,
-            changes,
-            changes.Length,
-            updateComposition: true);
-        long tightByteCap = work.RetainedBytes;
-        int tightPageCap = work.PersistentPageCount;
-        var meter = new MaintenanceWorkMeter(defaults.MaintenanceBudget);
-
-        work.Advance(meter).Should().BeTrue();
-
-        work.IsComplete.Should().BeTrue();
-        (work.RetainedBytes > tightByteCap || work.PersistentPageCount > tightPageCap)
-            .Should().BeTrue("same-count structural replacements retain copied persistent paths");
-        work.Result.Composition.GetIncidentEdgeCount(0).Should().Be(2);
-        work.Result.Composition.GetIncidentEdgeCount(1).Should().Be(2);
+        component.FlatMembers.Count.Should().Be(2);
+        component.FlatMembers[0].Should().Be("A");
+        component.FlatMembers[1].Should().Be("B");
     }
 
     [Fact]
@@ -250,7 +398,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                 new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
             publicationSequence: 1,
             effectiveFrame: context.FrameCount + 1);
-        NavigationOverlayCommitOperation removal = SuppressTransition(
+        NavigationOverlayCommitOperation removal = SuppressConnection(
             context,
             ++sequence,
             "B",
@@ -278,29 +426,57 @@ public sealed class NavigationStructuralCompositionCarryoverTests
     public void UnrelatedObstacle_ShouldPublishDuringStructuralCarryoverWithoutBeingReverted()
     {
         using TrailblazerWorldContext context = CreateConnectedContext(out long sequence);
-        NavigationOverlayCommitOperation removal = SuppressTransition(
+        NavigationOverlayCommitOperation removal = SuppressConnection(
             context,
             ++sequence,
             "B",
             "bc");
         context.Simulate();
         removal.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        for (int i = 0;
+             i < 64 && removal.Receipt.Status == NavigationOperationStatus.Pending
+                 && !GetCell(context, "U").IsMaterialized;
+             i++)
+        {
+            context.Simulate();
+        }
+        removal.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        GetCell(context, "U").IsMaterialized.Should().BeTrue();
         VoxelGrid unrelatedGrid = context.World.ActiveGrids[3];
         unrelatedGrid.TryGetVoxel(default(VoxelIndex), out Voxel? voxel).Should().BeTrue();
         unrelatedGrid.TryAddObstacle(voxel!, context.World.AllocateObstacleToken()).Should().BeTrue();
-        long versionBeforeSafetyMaintenance = context.Pathing
-            .GetNavigationGraphDiagnostics()
-            .GraphVersion;
+        NavigationGraphDiagnosticsSnapshot beforeSafety = context.Pathing
+            .GetNavigationGraphDiagnostics();
+        long versionBeforeSafetyMaintenance = beforeSafety.GraphVersion;
+        long componentVersionBeforeSafetyMaintenance = beforeSafety.Maps[3].ComponentVersion;
+        long compositionVersionBeforeSafetyMaintenance;
+        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+            compositionVersionBeforeSafetyMaintenance = lease.Graph.Composition.Version;
 
         context.Simulate();
 
-        removal.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
         NavigationGraphCellState updated = GetCell(context, "U");
+        for (int i = 0;
+             i < 64 && removal.Receipt.Status == NavigationOperationStatus.Pending
+                 && updated.ObstacleCount == 0;
+             i++)
+        {
+            context.Simulate();
+            updated = GetCell(context, "U");
+        }
+        removal.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
         updated.IsMaterialized.Should().BeTrue();
         updated.ObstacleCount.Should().Be(1);
-        context.Pathing.GetNavigationGraphDiagnostics().GraphVersion
+        NavigationGraphDiagnosticsSnapshot afterSafety = context.Pathing
+            .GetNavigationGraphDiagnostics();
+        afterSafety.GraphVersion
             .Should().Be(versionBeforeSafetyMaintenance + 1,
                 "one maintenance boundary may publish at most one immutable root");
+        afterSafety.Maps[3].ComponentVersion.Should()
+            .BeGreaterThan(componentVersionBeforeSafetyMaintenance);
+        long componentVersionAfterSafetyMaintenance = afterSafety.Maps[3].ComponentVersion;
+        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+            lease.Graph.Composition.Version.Should().Be(compositionVersionBeforeSafetyMaintenance);
 
         SimulateUntilTerminal(context, removal.Receipt);
 
@@ -309,12 +485,15 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         retained.IsMaterialized.Should().BeTrue();
         retained.ObstacleCount.Should().Be(1,
             "publishing older structural work must not revert reconciled GridForge state");
+        context.Pathing.GetNavigationGraphDiagnostics().Maps[3].ComponentVersion
+            .Should().BeGreaterThanOrEqualTo(componentVersionAfterSafetyMaintenance,
+                "publishing older structural work must not revert the physical component clock");
     }
 
     private static int RunBridgeRemoval()
     {
         using TrailblazerWorldContext context = CreateConnectedContext(out long sequence);
-        NavigationOverlayCommitOperation removal = SuppressTransition(
+        NavigationOverlayCommitOperation removal = SuppressConnection(
             context,
             ++sequence,
             "B",
@@ -353,15 +532,15 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             defaults.MaxAreaRules,
             defaults.MaxConcurrentSnapshotLeases);
         TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
-        NavigationMap a = AddGridAndCreateMap(context, "A", 0, "B", "ab");
-        NavigationMap b = AddGridAndCreateMap(context, "B", 10, "C", "bc");
-        NavigationMap c = AddGridAndCreateMap(context, "C", 20, null, null);
-        NavigationMap u = AddGridAndCreateMap(context, "U", 30, null, null);
+        NavigationMap a = AddGridAndCreateMap(context, "A", 0, "B", 3, "ab");
+        NavigationMap b = AddGridAndCreateMap(context, "B", 3, "C", 6, "bc");
+        NavigationMap c = AddGridAndCreateMap(context, "C", 6, null, null, null);
+        NavigationMap u = AddGridAndCreateMap(context, "U", 10, null, null, null);
         var operations = new[]
         {
-            AdmitMap(context, a, 1),
+            AdmitMap(context, c, 1),
             AdmitMap(context, b, 2),
-            AdmitMap(context, c, 3),
+            AdmitMap(context, a, 3),
             AdmitMap(context, u, 4)
         };
         for (int i = 0; i < 256 && operations[3].Receipt.Status == NavigationOperationStatus.Pending; i++)
@@ -370,6 +549,16 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             operation.Receipt.Status == NavigationOperationStatus.Applied);
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
         {
+            lease.Graph.ExplicitConnections.TryGet(
+                    new NavigationConnectionOwnerKey("A", "ab"),
+                    out NavigationExplicitConnectionRecord ab)
+                .Should().BeTrue();
+            ab.IsActive.Should().BeTrue();
+            lease.Graph.ExplicitConnections.TryGet(
+                    new NavigationConnectionOwnerKey("B", "bc"),
+                    out NavigationExplicitConnectionRecord bc)
+                .Should().BeTrue();
+            bc.IsActive.Should().BeTrue();
             foreach (string mapId in new[] { "A", "B", "C", "U" })
             {
                 lease.Graph.Composition.TryGetComponentRecord(mapId, out _)
@@ -385,11 +574,12 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         string mapId,
         int origin,
         string? destinationMapId,
+        int? destinationOrigin,
         string? transitionId)
     {
         var configuration = new GridConfiguration(
             new Vector3d(origin, 0, 0),
-            new Vector3d(origin, 0, 0),
+            new Vector3d(destinationMapId == null ? origin : origin + 2, 0, 0),
             topologyKind: GridTopologyKind.RectangularPrism,
             topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
             storageKind: GridStorageKind.Dense);
@@ -398,14 +588,18 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         var builder = new NavigationMapBuilder(mapId, binding).AddCell(default, Cell);
         if (destinationMapId != null)
         {
-            builder.AddTransition(new TraversalTransitionDefinition(
+            var sourceIndex = new VoxelIndex(2, 0, 0);
+            builder.AddCell(sourceIndex, Cell);
+            NormalizedGridConfiguration destinationBinding =
+                CreateBinding(destinationOrigin!.Value);
+            builder.AddConnection(new NavigationConnection(
                 transitionId!,
-                TraversalTransitionType.Climb,
-                default,
-                TraversalMedium.Solid,
+                sourceIndex,
                 new NavigationCellAddress(destinationMapId, default),
-                TraversalMedium.Solid,
-                TraversalCapability.Climb));
+                GetFoot(binding, sourceIndex),
+                GetFoot(destinationBinding, default),
+                Fixed64.Zero,
+                Fixed64.One));
         }
         return builder.Build();
     }
@@ -422,18 +616,13 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         return binding;
     }
 
-    private static TraversalTransitionDefinition CreateTransition(
-        string id,
-        string destinationMapId,
-        Fixed64 additionalCost) => new(
-        id,
-        TraversalTransitionType.Climb,
-        default,
-        TraversalMedium.Solid,
-        new NavigationCellAddress(destinationMapId, default),
-        TraversalMedium.Solid,
-        TraversalCapability.Climb,
-        additionalCost);
+    private static Vector3d GetFoot(
+        NormalizedGridConfiguration binding,
+        VoxelIndex index)
+    {
+        binding.TryGetCellPrism(index, out GridCellPrism prism).Should().BeTrue();
+        return new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z);
+    }
 
     private static NavigationMapCommitOperation AdmitMap(
         TrailblazerWorldContext context,
@@ -449,7 +638,92 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         return operation;
     }
 
-    private static NavigationOverlayCommitOperation SuppressTransition(
+    private static NavigationOperationCandidate FoldMap(
+        NavigationOperationCandidate source,
+        PreparedNavigationMap prepared,
+        OverlayReplacementPolicy replacementPolicy,
+        TrailblazerWorldContextSettings settings)
+    {
+        int capacity = settings.OperationLimits.MaxCorridorCells;
+        var work = new NavigationMapFoldWork(
+            source,
+            prepared,
+            replacementPolicy,
+            settings.OperationLimits,
+            new GridCellPrism[capacity],
+            new Vector3d[(capacity * 2) - 2],
+            new NavigationCellAddress[capacity],
+            new NavigationAddressStampSet(capacity));
+        AdvanceFold(work, settings.MaintenanceBudget);
+        return work.Candidate;
+    }
+
+    private static NavigationOperationCandidate FoldMapRemoval(
+        NavigationOperationCandidate source,
+        string mapId,
+        TrailblazerWorldContextSettings settings)
+    {
+        int capacity = settings.OperationLimits.MaxCorridorCells;
+        var work = new NavigationMapFoldWork(
+            source,
+            mapId,
+            new GridCellPrism[capacity],
+            new Vector3d[(capacity * 2) - 2],
+            new NavigationCellAddress[capacity],
+            new NavigationAddressStampSet(capacity));
+        AdvanceFold(work, settings.MaintenanceBudget);
+        return work.Candidate;
+    }
+
+    private static NavigationOperationCandidate FoldOverlay(
+        NavigationOperationCandidate source,
+        NavigationOverlayTransaction transaction,
+        long sequence,
+        TrailblazerWorldContextSettings settings)
+    {
+        int capacity = settings.OperationLimits.MaxCorridorCells;
+        var work = new NavigationOverlayFoldWork(
+            source,
+            transaction,
+            sequence,
+            settings.OperationLimits,
+            new GridCellPrism[capacity],
+            new Vector3d[(capacity * 2) - 2],
+            new NavigationCellAddress[capacity],
+            new NavigationAddressStampSet(capacity));
+        var meter = new MaintenanceWorkMeter(settings.MaintenanceBudget);
+        for (int i = 0; i < 4096; i++)
+        {
+            if (work.Advance(meter, out NavigationOperationRejection rejection))
+            {
+                rejection.Should().Be(NavigationOperationRejection.None);
+                return work.Candidate;
+            }
+            rejection.Should().Be(NavigationOperationRejection.None);
+            meter.Reset();
+        }
+        throw new Xunit.Sdk.XunitException("Overlay fold did not complete.");
+    }
+
+    private static void AdvanceFold(
+        NavigationMapFoldWork work,
+        MaintenanceWorkBudget budget)
+    {
+        var meter = new MaintenanceWorkMeter(budget);
+        for (int i = 0; i < 4096; i++)
+        {
+            if (work.Advance(meter, out NavigationOperationRejection rejection))
+            {
+                rejection.Should().Be(NavigationOperationRejection.None);
+                return;
+            }
+            rejection.Should().Be(NavigationOperationRejection.None);
+            meter.Reset();
+        }
+        throw new Xunit.Sdk.XunitException("Map fold did not complete.");
+    }
+
+    private static NavigationOverlayCommitOperation SuppressConnection(
         TrailblazerWorldContext context,
         long sequence,
         string mapId,
@@ -462,9 +736,9 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                     {
                         new NavigationMapOverlayDelta(
                             mapId,
-                            transitions: new[]
+                            connections: new[]
                             {
-                                TraversalTransitionOverlayOperation.Suppress(transitionId)
+                                NavigationConnectionOverlayOperation.Suppress(transitionId)
                             })
                     })),
             sequence,

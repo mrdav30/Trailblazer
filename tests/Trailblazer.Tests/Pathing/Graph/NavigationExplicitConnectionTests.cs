@@ -63,14 +63,14 @@ public sealed class NavigationExplicitConnectionTests
 
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
         var owner = new NavigationConnectionOwnerKey("left", "bridge");
-        lease.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord record)
+        lease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord record)
             .Should().BeTrue();
         record.IsActive.Should().BeTrue();
         record.Source.Should().Be(new NavigationCellAddress("left", sourceIndex));
         record.Destination.Should().Be(new NavigationCellAddress("right", destinationIndex));
         record.CorridorCost.Should().Be(Fixed64.One);
         record.IsLowerBoundCertified.Should().BeTrue();
-        record.PortalWaypoints.Length.Should().Be(1);
+        record.PortalWaypoints.Count.Should().Be(1);
         record.PortalWaypoints[0].Should().Be(
             new Vector3d((Fixed64)2.5m, (Fixed64)(-0.5m), Fixed64.Zero));
     }
@@ -114,24 +114,24 @@ public sealed class NavigationExplicitConnectionTests
         context.Simulate();
         using (NavigationWorldGraphLease dormantLease = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            dormantLease.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord dormant)
+            dormantLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord dormant)
                 .Should().BeTrue();
             dormant.IsActive.Should().BeFalse();
-            dormant.PortalWaypoints.Length.Should().Be(0);
+            dormant.PortalWaypoints.Count.Should().Be(0);
             dormantLease.Graph.Composition.GetIncidentEdgeCount(0).Should().Be(0);
             dormantLease.Graph.Composition.GetIncidentEdgeCount(1).Should().Be(0);
         }
-        oldLease.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord old)
+        oldLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord old)
             .Should().BeTrue();
         old.IsActive.Should().BeTrue();
 
         CommitCell(context, "right", NavigationCellOverlayOperation.RevertToBake(destinationIndex), 4);
         context.Simulate();
         using NavigationWorldGraphLease revivedLease = context.Pathing.TryAcquireNavigationGraph()!;
-        revivedLease.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord revived)
+        revivedLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord revived)
             .Should().BeTrue();
         revived.IsActive.Should().BeTrue();
-        revived.PortalWaypoints.Length.Should().Be(1);
+        revived.PortalWaypoints.Count.Should().Be(1);
     }
 
     [Fact]
@@ -173,29 +173,965 @@ public sealed class NavigationExplicitConnectionTests
             3);
         context.Simulate();
         var owner = new NavigationConnectionOwnerKey("left", "bridge");
+        NavigationMapInstance priorLeft;
+        long priorComponentVersion;
+        using (NavigationWorldGraphLease installed = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            priorLeft = FindInstance(installed.Graph, "left");
+            priorComponentVersion = installed.Graph.Composition
+                .GetComponentRecord("left")
+                .Version;
+        }
 
         CommitCell(context, "middle", NavigationCellOverlayOperation.Suppress(default), 4);
         context.Simulate();
         using (NavigationWorldGraphLease dormantLease = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            dormantLease.Graph.TryGetExplicitConnection(
+            dormantLease.Graph.ExplicitConnections.TryGet(
                     owner,
                     out NavigationExplicitConnectionRecord dormant)
                 .Should().BeTrue();
             dormant.IsActive.Should().BeFalse();
-            ReadOnlySpan<NavigationConnectionOwnerKey> incident =
-                dormantLease.Graph.ExplicitConnections.GetIncidentOwners(witnessAddress);
-            incident.Length.Should().Be(1);
-            incident[0].Should().Be(owner);
+            NavigationPagedSequence<NavigationConnectionOwnerKey> witnessOwners =
+                dormantLease.Graph.ExplicitConnections.GetIncidentOwnerRow(witnessAddress);
+            witnessOwners.Count.Should().Be(1);
+            witnessOwners[0].Should().Be(owner);
+            NavigationMapInstance dormantLeft = FindInstance(dormantLease.Graph, "left");
+            dormantLeft.Should().BeSameAs(priorLeft,
+                "a witness-only change must not rebuild the external source map instance");
+            dormantLeft.InstanceVersion.Should().Be(priorLeft.InstanceVersion);
+            dormantLease.Graph.Composition.GetComponentRecord("left").Version
+                .Should().BeGreaterThan(priorComponentVersion,
+                    "the external source's structural component must still be recomputed");
         }
 
         CommitCell(context, "middle", NavigationCellOverlayOperation.RevertToBake(default), 5);
         context.Simulate();
         using NavigationWorldGraphLease revivedLease = context.Pathing.TryAcquireNavigationGraph()!;
-        revivedLease.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord revived)
+        revivedLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord revived)
             .Should().BeTrue();
         revived.IsActive.Should().BeTrue();
-        revived.PortalWaypoints.Length.Should().Be(2);
+        revived.PortalWaypoints.Count.Should().Be(2);
+    }
+
+    [Fact]
+    public void DeferredWitnessSuppression_ShouldFailCloseAffectedExplicitComponent()
+    {
+        using TrailblazerWorldContext context = CreateContextWithExplicitBudget(1);
+        NormalizedGridConfiguration left = AddGrid(context, 0);
+        NormalizedGridConfiguration middle = AddGrid(context, 3);
+        NormalizedGridConfiguration right = AddGrid(context, 4);
+        VoxelIndex sourceIndex = new(2, 0, 0);
+        var connection = new NavigationConnection(
+            "bridge",
+            sourceIndex,
+            new NavigationCellAddress("right", default),
+            GetFoot(left, sourceIndex),
+            GetFoot(right, default),
+            Fixed64.Zero,
+            Fixed64.One,
+            new[] { new NavigationCellAddress("middle", default) });
+        NavigationMapCommitOperation rightCommit = Admit(
+            context,
+            new NavigationMapBuilder("right", right).AddCell(default, SolidCell).Build(),
+            1);
+        NavigationMapCommitOperation middleCommit = Admit(
+            context,
+            new NavigationMapBuilder("middle", middle).AddCell(default, SolidCell).Build(),
+            2);
+        NavigationMapCommitOperation leftCommit = Admit(
+            context,
+            new NavigationMapBuilder("left", left)
+                .AddCell(sourceIndex, SolidCell).AddConnection(connection).Build(),
+            3);
+        SimulateUntilTerminal(context, leftCommit.Receipt);
+        rightCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        middleCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        leftCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        NavigationOverlayCommitOperation suppression = CommitCell(
+            context,
+            "middle",
+            NavigationCellOverlayOperation.Suppress(default),
+            4);
+        context.Simulate();
+
+        suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        context.Pathing.TryGetNavigationGraphCellState(
+                "left",
+                sourceIndex,
+                out NavigationGraphCellState sourceState)
+            .Should().BeTrue();
+        sourceState.IsMaterialized.Should().BeFalse();
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetNodeRef(
+                new NavigationCellAddress("left", sourceIndex),
+                out NavigationNodeRef source)
+            .Should().BeTrue();
+        lease.Graph.EnumerateSurfaceEdges(source).MoveNext().Should().BeFalse(
+            "the old explicit edge cannot remain queryable while witness suppression is deferred");
+
+        SimulateUntilTerminal(context, suppression.Receipt);
+        suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+    }
+
+    [Fact]
+    public void PreGatherWitnessSuppression_ShouldCloseAllThenNarrowWhilePending()
+    {
+        using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
+            maxExplicitEdges: 1,
+            maxOverlaySlots: 1);
+        const int unrelatedCount = 8;
+        var unrelatedMapIds = new string[unrelatedCount];
+        long sequence = 0;
+        for (int i = 0; i < unrelatedMapIds.Length; i++)
+        {
+            string mapId = $"unrelated-{i}";
+            unrelatedMapIds[i] = mapId;
+            NormalizedGridConfiguration binding = AddGrid(context, 20 + (i * 2));
+            Admit(
+                context,
+                new NavigationMapBuilder(mapId, binding).AddCell(default, SolidCell).Build(),
+                ++sequence);
+        }
+        NormalizedGridConfiguration left = AddGrid(context, 0);
+        NormalizedGridConfiguration middle = AddGrid(context, 3);
+        NormalizedGridConfiguration right = AddGrid(context, 5);
+        VoxelIndex sourceIndex = new(3, 0, 0);
+        VoxelIndex firstMiddle = default;
+        VoxelIndex witnessIndex = new(1, 0, 0);
+        var connection = new NavigationConnection(
+            "bridge",
+            sourceIndex,
+            new NavigationCellAddress("right", default),
+            GetFoot(left, sourceIndex),
+            GetFoot(right, default),
+            Fixed64.Zero,
+            Fixed64.One,
+            new[] { new NavigationCellAddress("middle", witnessIndex) });
+        NavigationMapCommitOperation rightCommit = Admit(
+            context,
+            new NavigationMapBuilder("right", right).AddCell(default, SolidCell).Build(),
+            ++sequence);
+        NavigationMapCommitOperation middleCommit = Admit(
+            context,
+            new NavigationMapBuilder("middle", middle)
+                .AddCell(firstMiddle, SolidCell)
+                .AddCell(witnessIndex, SolidCell)
+                .Build(),
+            ++sequence);
+        NavigationMapCommitOperation leftCommit = Admit(
+            context,
+            new NavigationMapBuilder("left", left)
+                .AddCell(sourceIndex, SolidCell)
+                .AddConnection(connection)
+                .Build(),
+            ++sequence);
+        SimulateUntilTerminal(context, leftCommit.Receipt);
+        rightCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        middleCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        leftCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        var suppression = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "middle",
+                    new[]
+                    {
+                        NavigationCellOverlayOperation.Set(firstMiddle, SolidCell),
+                        NavigationCellOverlayOperation.Suppress(witnessIndex)
+                    })
+            })),
+            operationSequence: ++sequence,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(suppression).Should().BeTrue();
+
+        context.Simulate();
+
+        suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        context.Pathing.NavigationMaintenanceMeter.OverlaySlots.Should().Be(1);
+        context.Pathing.TryGetNavigationGraphCellState(
+                "left",
+                sourceIndex,
+                out NavigationGraphCellState sourceState)
+            .Should().BeTrue();
+        sourceState.IsMaterialized.Should().BeFalse(
+            "the source component must close before explicit incidence gather begins");
+        for (int i = 0; i < unrelatedMapIds.Length; i++)
+        {
+            context.Pathing.TryGetNavigationGraphCellState(
+                    unrelatedMapIds[i],
+                    default,
+                    out NavigationGraphCellState unrelatedState)
+                .Should().BeTrue();
+            unrelatedState.IsMaterialized.Should().BeFalse(
+                "unknown explicit incidence must conservatively close every structural component");
+        }
+
+        bool narrowedWhilePending = false;
+        for (int frame = 0; frame < 64 && suppression.Receipt.Status == NavigationOperationStatus.Pending; frame++)
+        {
+            context.Simulate();
+            if (suppression.Receipt.Status != NavigationOperationStatus.Pending)
+                break;
+            bool allUnrelatedOpen = true;
+            for (int i = 0; i < unrelatedMapIds.Length; i++)
+            {
+                context.Pathing.TryGetNavigationGraphCellState(
+                        unrelatedMapIds[i],
+                        default,
+                        out NavigationGraphCellState unrelatedState)
+                    .Should().BeTrue();
+                allUnrelatedOpen &= unrelatedState.IsMaterialized;
+            }
+            if (allUnrelatedOpen)
+            {
+                narrowedWhilePending = true;
+                break;
+            }
+        }
+
+        narrowedWhilePending.Should().BeTrue(
+            "completed incidence gather must replace the conservative closure before publication");
+        suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        context.Pathing.TryGetNavigationGraphCellState(
+                "left",
+                sourceIndex,
+                out sourceState)
+            .Should().BeTrue();
+        sourceState.IsMaterialized.Should().BeFalse(
+            "the discovered explicit owner source remains fail-closed until publication");
+    }
+
+    [Fact]
+    public void ExactNarrowing_ShouldRetryAfterRetiredSnapshotPressure()
+    {
+        using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
+            maxExplicitEdges: 1,
+            maxOverlaySlots: 1,
+            maxComponentNodes: 1,
+            maxDependencyEntries: 3,
+            maxRetiredSnapshots: 1);
+        long sequence = 0;
+        NormalizedGridConfiguration unrelated = AddGrid(context, 20);
+        NormalizedGridConfiguration left = AddGrid(context, 0);
+        NormalizedGridConfiguration middle = AddGrid(context, 3);
+        NormalizedGridConfiguration right = AddGrid(context, 5);
+        var sourceIndex = new VoxelIndex(3, 0, 0);
+        var witnessIndex = new VoxelIndex(1, 0, 0);
+        Admit(
+            context,
+            new NavigationMapBuilder("unrelated", unrelated).AddCell(default, SolidCell).Build(),
+            ++sequence);
+        Admit(
+            context,
+            new NavigationMapBuilder("right", right).AddCell(default, SolidCell).Build(),
+            ++sequence);
+        Admit(
+            context,
+            new NavigationMapBuilder("middle", middle)
+                .AddCell(default, SolidCell)
+                .AddCell(witnessIndex, SolidCell)
+                .Build(),
+            ++sequence);
+        var connection = new NavigationConnection(
+            "bridge",
+            sourceIndex,
+            new NavigationCellAddress("right", default),
+            GetFoot(left, sourceIndex),
+            GetFoot(right, default),
+            Fixed64.Zero,
+            Fixed64.One,
+            new[] { new NavigationCellAddress("middle", witnessIndex) });
+        NavigationMapCommitOperation leftCommit = Admit(
+            context,
+            new NavigationMapBuilder("left", left)
+                .AddCell(sourceIndex, SolidCell)
+                .AddConnection(connection)
+                .Build(),
+            ++sequence);
+        SimulateUntilTerminal(context, leftCommit.Receipt);
+        leftCommit.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        using NavigationWorldGraphLease retiredLease =
+            context.Pathing.TryAcquireNavigationGraph()!;
+        var suppression = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "middle",
+                    new[]
+                    {
+                        NavigationCellOverlayOperation.Set(default, SolidCell),
+                        NavigationCellOverlayOperation.Suppress(witnessIndex)
+                    })
+            })),
+            ++sequence,
+            context.FrameCount + 1);
+        context.Pathing.Admit(suppression).Should().BeTrue();
+
+        context.Simulate();
+
+        suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        GetGraphCell(context, "unrelated").IsMaterialized.Should().BeFalse();
+        NavigationWorldGraphStore store = context.Pathing.NavigationGraphStore;
+        store.RetiredGenerationCount.Should().Be(1);
+        NavigationWorldGraph closed = store.Current;
+        closed.Checkout();
+        try
+        {
+            context.Simulate();
+
+            suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+            (context.Pathing.RetainedCompositionWorkCount
+                + context.Pathing.RetainedOperationWorkCount).Should().BeGreaterThan(0);
+            GetGraphCell(context, "unrelated").IsMaterialized.Should().BeFalse(
+                "the exact narrowing handoff must remain blocked while the store cannot publish");
+        }
+        finally
+        {
+            closed.Return();
+            retiredLease.Dispose();
+        }
+
+        for (int frame = 0;
+             frame < 128 && suppression.Receipt.Status == NavigationOperationStatus.Pending
+                 && !GetGraphCell(context, "unrelated").IsMaterialized;
+             frame++)
+        {
+            context.Simulate();
+        }
+
+        suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        GetGraphCell(context, "unrelated").IsMaterialized.Should().BeTrue();
+        GetGraphCell(context, "left", sourceIndex).IsMaterialized.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DeferredExplicitNarrowing_ShouldChargeEveryDiscoveredSource()
+    {
+        const int ownerCount = 4;
+        using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
+            maxExplicitEdges: 1,
+            maxOverlaySlots: 1,
+            maxComponentNodes: 1,
+            maxDependencyEntries: 3);
+        long sequence = 0;
+        NormalizedGridConfiguration unrelated = AddGrid(context, 20);
+        Admit(
+            context,
+            new NavigationMapBuilder("unrelated", unrelated).AddCell(default, SolidCell).Build(),
+            ++sequence);
+        NormalizedGridConfiguration middle = AddGrid(context, 3);
+        NormalizedGridConfiguration right = AddGrid(context, 5);
+        var sourceIndex = new VoxelIndex(3, 0, 0);
+        var witnessIndex = new VoxelIndex(1, 0, 0);
+        Admit(
+            context,
+            new NavigationMapBuilder("right", right).AddCell(default, SolidCell).Build(),
+            ++sequence);
+        Admit(
+            context,
+            new NavigationMapBuilder("middle", middle)
+                .AddCell(default, SolidCell)
+                .AddCell(witnessIndex, SolidCell)
+                .Build(),
+            ++sequence);
+        NavigationMapCommitOperation last = default;
+        for (int i = 0; i < ownerCount; i++)
+        {
+            string mapId = $"source-{i}";
+            NormalizedGridConfiguration sourceBinding = AddGridWithExtent(context, 0, 3 + i);
+            var connection = new NavigationConnection(
+                "bridge",
+                sourceIndex,
+                new NavigationCellAddress("right", default),
+                GetFoot(sourceBinding, sourceIndex),
+                GetFoot(right, default),
+                Fixed64.Zero,
+                Fixed64.One,
+                new[] { new NavigationCellAddress("middle", witnessIndex) });
+            last = Admit(
+                context,
+                new NavigationMapBuilder(mapId, sourceBinding)
+                    .AddCell(sourceIndex, SolidCell)
+                    .AddConnection(connection)
+                    .Build(),
+                ++sequence);
+        }
+        SimulateUntilTerminal(context, last.Receipt);
+        last.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        var suppression = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "middle",
+                    new[]
+                    {
+                        NavigationCellOverlayOperation.Set(default, SolidCell),
+                        NavigationCellOverlayOperation.Suppress(witnessIndex)
+                    })
+            })),
+            ++sequence,
+            context.FrameCount + 1);
+        context.Pathing.Admit(suppression).Should().BeTrue();
+        context.Simulate();
+        GetGraphCell(context, "unrelated").IsMaterialized.Should().BeFalse();
+
+        int dependencyUnits = context.Pathing.NavigationMaintenanceMeter.DependencyEntries;
+        int componentUnits = context.Pathing.NavigationMaintenanceMeter.ComponentNodes;
+        bool narrowedWhilePending = false;
+        for (int frame = 0; frame < 256 && suppression.Receipt.Status == NavigationOperationStatus.Pending; frame++)
+        {
+            context.Simulate();
+            dependencyUnits += context.Pathing.NavigationMaintenanceMeter.DependencyEntries;
+            componentUnits += context.Pathing.NavigationMaintenanceMeter.ComponentNodes;
+            if (suppression.Receipt.Status == NavigationOperationStatus.Pending
+                && GetGraphCell(context, "unrelated").IsMaterialized)
+            {
+                narrowedWhilePending = true;
+                break;
+            }
+        }
+
+        narrowedWhilePending.Should().BeTrue();
+        componentUnits.Should().BeGreaterThanOrEqualTo(ownerCount,
+            "every narrowed source-to-component lookup/root write must be charged");
+        dependencyUnits.Should().BeGreaterThanOrEqualTo(ownerCount,
+            "safety narrowing must charge every incident source component write");
+        GetGraphCell(context, "source-0", sourceIndex).IsMaterialized.Should().BeFalse();
+    }
+
+    [Fact]
+    public void HighDegreeSharedWitnessRefresh_ShouldChargeLinearDependencyWork()
+    {
+        const int ownerCount = 8;
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
+            defaults.MaintenanceBudget.MaxExplicitEdges);
+        long sequence = 0;
+        NormalizedGridConfiguration middle = AddGrid(context, 3);
+        NormalizedGridConfiguration right = AddGrid(context, 5);
+        var sourceIndex = new VoxelIndex(3, 0, 0);
+        var witnessIndex = new VoxelIndex(1, 0, 0);
+        Admit(
+            context,
+            new NavigationMapBuilder("right", right).AddCell(default, SolidCell).Build(),
+            ++sequence);
+        Admit(
+            context,
+            new NavigationMapBuilder("middle", middle)
+                .AddCell(default, SolidCell)
+                .AddCell(witnessIndex, SolidCell)
+                .Build(),
+            ++sequence);
+        NavigationMapCommitOperation last = default;
+        for (int i = 0; i < ownerCount; i++)
+        {
+            string mapId = $"source-{i:D2}";
+            NormalizedGridConfiguration binding = AddGridWithExtent(context, 0, 3 + i);
+            var connection = new NavigationConnection(
+                "bridge",
+                sourceIndex,
+                new NavigationCellAddress("right", default),
+                GetFoot(binding, sourceIndex),
+                GetFoot(right, default),
+                Fixed64.Zero,
+                Fixed64.One,
+                new[] { new NavigationCellAddress("middle", witnessIndex) });
+            last = Admit(
+                context,
+                new NavigationMapBuilder(mapId, binding)
+                    .AddCell(sourceIndex, SolidCell)
+                    .AddConnection(connection)
+                    .Build(),
+                ++sequence);
+        }
+        SimulateUntilTerminal(context, last.Receipt);
+        last.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        var suppression = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "middle",
+                    new[] { NavigationCellOverlayOperation.Suppress(witnessIndex) })
+            })),
+            ++sequence,
+            context.FrameCount + 1);
+        context.Pathing.Admit(suppression).Should().BeTrue();
+        int dependencyWork = 0;
+        for (int frame = 0; frame < 256 && suppression.Receipt.Status == NavigationOperationStatus.Pending; frame++)
+        {
+            context.Simulate();
+            dependencyWork += context.Pathing.NavigationMaintenanceMeter.DependencyEntries;
+        }
+
+        suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        dependencyWork.Should().BeLessThanOrEqualTo(ownerCount * 20,
+            "unchanged canonical incidence membership must not be recopied once per owner");
+    }
+
+    [Theory]
+    [InlineData(8)]
+    [InlineData(32)]
+    public void SharedRowMapReplacement_ShouldRebuildEachIncidenceRowOnce(int ownerCount)
+    {
+        NormalizedGridConfiguration binding = CreateBinding(0, 1);
+        NavigationMap BuildMap()
+        {
+            var builder = new NavigationMapBuilder("map", binding)
+                .AddCell(default, SolidCell)
+                .AddCell(new VoxelIndex(1, 0, 0), SolidCell);
+            for (int i = 0; i < ownerCount; i++)
+            {
+                builder.AddConnection(new NavigationConnection(
+                    $"edge-{i:D2}",
+                    default,
+                    new NavigationCellAddress("map", new VoxelIndex(1, 0, 0)),
+                    GetFoot(binding, default),
+                    GetFoot(binding, new VoxelIndex(1, 0, 0)),
+                    Fixed64.Zero,
+                    Fixed64.One));
+            }
+            return builder.Build();
+        }
+
+        NavigationOperationCandidate source = FoldMapCandidate(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(BuildMap(), 1));
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        int capacity = defaults.OperationLimits.MaxCorridorCells;
+        var replacement = new NavigationMapFoldWork(
+            source,
+            new PreparedNavigationMap(BuildMap(), 2),
+            OverlayReplacementPolicy.Clear,
+            defaults.OperationLimits,
+            new GridCellPrism[capacity],
+            new Vector3d[(capacity * 2) - 2],
+            new NavigationCellAddress[capacity],
+            new NavigationAddressStampSet(capacity));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(
+            defaults.MaintenanceBudget.MaxConsumedEnvelopes,
+            defaults.MaintenanceBudget.MaxBaselineAddresses,
+            defaults.MaintenanceBudget.MaxOverlaySlots,
+            defaults.MaintenanceBudget.MaxComponentNodes,
+            defaults.MaintenanceBudget.MaxExplicitEdges,
+            maxDependencyEntries: 1));
+        int dependencyWork = 0;
+        bool complete = false;
+
+        for (int frame = 0; frame < 4096 && !complete; frame++)
+        {
+            complete = replacement.Advance(meter, out NavigationOperationRejection rejection);
+            rejection.Should().Be(NavigationOperationRejection.None);
+            dependencyWork += meter.DependencyEntries;
+            meter.DependencyEntries.Should().BeLessThanOrEqualTo(1);
+            meter.Reset();
+        }
+
+        complete.Should().BeTrue();
+        dependencyWork.Should().Be((19 * ownerCount) + 4,
+            "dependency rows rebuild once and their endpoint subsets append and commit once");
+    }
+
+    [Fact]
+    public void SharedWitnessFanIn_ShouldNotEnterEndpointEnumerationRows()
+    {
+        const int ownerCount = 64;
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NormalizedGridConfiguration binding = AddGridWithExtent(context, 0, 2);
+        VoxelIndex sourceIndex = default;
+        VoxelIndex witnessIndex = new(1, 0, 0);
+        VoxelIndex destinationIndex = new(2, 0, 0);
+        var witnessAddress = new NavigationCellAddress("map", witnessIndex);
+        var builder = new NavigationMapBuilder("map", binding)
+            .AddCell(sourceIndex, SolidCell)
+            .AddCell(witnessIndex, SolidCell)
+            .AddCell(destinationIndex, SolidCell);
+        for (int i = 0; i < ownerCount; i++)
+        {
+            builder.AddConnection(new NavigationConnection(
+                $"edge-{i:D2}",
+                sourceIndex,
+                new NavigationCellAddress("map", destinationIndex),
+                GetFoot(binding, sourceIndex),
+                GetFoot(binding, destinationIndex),
+                Fixed64.Zero,
+                Fixed64.One,
+                new[] { witnessAddress }));
+        }
+        NavigationMapCommitOperation operation = Admit(context, builder.Build(), 1);
+        SimulateUntilTerminal(context, operation.Receipt);
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationExplicitConnectionIndex index = lease.Graph.ExplicitConnections;
+
+        index.GetIncidentOwnerRow(witnessAddress).Count.Should().Be(ownerCount);
+        index.GetEndpointOwnerRow(witnessAddress).Count.Should().Be(0,
+            "witness dependency fan-in is not query incidence");
+        lease.Graph.TryGetNodeRef(witnessAddress, out NavigationNodeRef witness).Should().BeTrue();
+        NavigationSurfaceEdgeEnumerator edges = lease.Graph.EnumerateSurfaceEdges(witness);
+        int explicitEdgeCount = 0;
+        while (edges.MoveNext())
+        {
+            if (edges.Current.Kind == NavigationGraphEdgeKind.Explicit)
+                explicitEdgeCount++;
+        }
+        explicitEdgeCount.Should().Be(0,
+            "the empty endpoint row must produce no explicit witness edges");
+    }
+
+    [Fact]
+    public void ActiveIncidenceJournal_ShouldRetainItsTreeNodeExactly()
+    {
+        NormalizedGridConfiguration binding = CreateBinding(0, 1);
+        NavigationMap BuildMap() => new NavigationMapBuilder("map", binding)
+            .AddCell(default, SolidCell)
+            .AddCell(new VoxelIndex(1, 0, 0), SolidCell)
+            .AddConnection(new NavigationConnection(
+                "edge",
+                default,
+                new NavigationCellAddress("map", new VoxelIndex(1, 0, 0)),
+                GetFoot(binding, default),
+                GetFoot(binding, new VoxelIndex(1, 0, 0)),
+                Fixed64.Zero,
+                Fixed64.One))
+            .Build();
+        NavigationOperationCandidate source = FoldMapCandidate(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(BuildMap(), 1));
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        NavigationMapFoldWork CreateWork() => new(
+            source,
+            new PreparedNavigationMap(BuildMap(), 2),
+            OverlayReplacementPolicy.Clear,
+            defaults.OperationLimits,
+            new GridCellPrism[defaults.OperationLimits.MaxCorridorCells],
+            new Vector3d[(defaults.OperationLimits.MaxCorridorCells * 2) - 2],
+            new NavigationCellAddress[defaults.OperationLimits.MaxCorridorCells],
+            new NavigationAddressStampSet(defaults.OperationLimits.MaxCorridorCells));
+        MaintenanceWorkMeter CreateMeter(int dependencyEntries) => new(
+            new MaintenanceWorkBudget(
+                defaults.MaintenanceBudget.MaxConsumedEnvelopes,
+                defaults.MaintenanceBudget.MaxBaselineAddresses,
+                defaults.MaintenanceBudget.MaxOverlaySlots,
+                defaults.MaintenanceBudget.MaxComponentNodes,
+                defaults.MaintenanceBudget.MaxExplicitEdges,
+                dependencyEntries));
+        NavigationMapFoldWork beforeTree = CreateWork();
+        MaintenanceWorkMeter beforeMeter = CreateMeter(8);
+        beforeTree.Advance(beforeMeter, out NavigationOperationRejection beforeRejection)
+            .Should().BeFalse();
+        beforeRejection.Should().Be(NavigationOperationRejection.None);
+        beforeMeter.DependencyEntries.Should().Be(8);
+        NavigationMapFoldWork withTree = CreateWork();
+        MaintenanceWorkMeter withMeter = CreateMeter(9);
+        withTree.Advance(withMeter, out NavigationOperationRejection withRejection)
+            .Should().BeFalse();
+        withRejection.Should().Be(NavigationOperationRejection.None);
+        withMeter.DependencyEntries.Should().Be(9);
+
+        (withTree.RetainedBytes - beforeTree.RetainedBytes).Should().Be(64);
+        (withTree.PersistentPageCount - beforeTree.PersistentPageCount).Should().Be(1);
+    }
+
+    [Fact]
+    public void MapReplacement_ShouldPublishFinalCanonicalIncidenceOrdering()
+    {
+        NormalizedGridConfiguration binding = CreateBinding(0, 2);
+        VoxelIndex source = default;
+        VoxelIndex firstDestination = new(1, 0, 0);
+        VoxelIndex secondDestination = new(2, 0, 0);
+        NavigationMap BuildMap(bool replacement)
+        {
+            var builder = new NavigationMapBuilder("map", binding)
+                .AddCell(source, SolidCell)
+                .AddCell(firstDestination, SolidCell)
+                .AddCell(secondDestination, SolidCell);
+            (string Id, VoxelIndex Destination)[] definitions = replacement
+                ? new[]
+                {
+                    ("edge-a", firstDestination),
+                    ("edge-b", firstDestination),
+                    ("edge-c", secondDestination)
+                }
+                : new[]
+                {
+                    ("edge-a", secondDestination),
+                    ("edge-b", firstDestination),
+                    ("edge-c", firstDestination)
+                };
+            for (int i = 0; i < definitions.Length; i++)
+            {
+                NavigationCellAddress[] witnesses = definitions[i].Destination == secondDestination
+                    ? new[] { new NavigationCellAddress("map", firstDestination) }
+                    : Array.Empty<NavigationCellAddress>();
+                builder.AddConnection(new NavigationConnection(
+                    definitions[i].Id,
+                    source,
+                    new NavigationCellAddress("map", definitions[i].Destination),
+                    GetFoot(binding, source),
+                    GetFoot(binding, definitions[i].Destination),
+                    Fixed64.Zero,
+                    Fixed64.One,
+                    witnesses));
+            }
+            return builder.Build();
+        }
+
+        NavigationOperationCandidate candidate = FoldMapCandidate(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(BuildMap(replacement: false), 1));
+        candidate = FoldMapCandidate(
+            candidate,
+            new PreparedNavigationMap(BuildMap(replacement: true), 2));
+
+        NavigationExplicitConnectionIndex index = candidate.ExplicitConnections;
+        var sourceAddress = new NavigationCellAddress("map", source);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> sourceOwners =
+            index.GetIncidentOwnerRow(sourceAddress);
+        sourceOwners.Count.Should().Be(3);
+        sourceOwners[0].ConnectionId.Should().Be("edge-a");
+        sourceOwners[1].ConnectionId.Should().Be("edge-b");
+        sourceOwners[2].ConnectionId.Should().Be("edge-c");
+        var firstAddress = new NavigationCellAddress("map", firstDestination);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> firstOwners =
+            index.GetIncidentOwnerRow(firstAddress);
+        firstOwners.Count.Should().Be(3);
+        firstOwners[0].ConnectionId.Should().Be("edge-a");
+        firstOwners[1].ConnectionId.Should().Be("edge-b");
+        firstOwners[2].ConnectionId.Should().Be("edge-c");
+        NavigationPagedSequence<NavigationConnectionOwnerKey> firstEndpoints =
+            index.GetEndpointOwnerRow(firstAddress);
+        firstEndpoints.Count.Should().Be(2);
+        firstEndpoints[0].ConnectionId.Should().Be("edge-a");
+        firstEndpoints[1].ConnectionId.Should().Be("edge-b");
+        var secondAddress = new NavigationCellAddress("map", secondDestination);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> secondOwners =
+            index.GetIncidentOwnerRow(secondAddress);
+        secondOwners.Count.Should().Be(1);
+        secondOwners[0].ConnectionId.Should().Be("edge-c");
+    }
+
+    [Fact]
+    public void DuplicateSemanticAddresses_ShouldPublishOneOwnerPerIncidentRow()
+    {
+        NormalizedGridConfiguration binding = CreateBinding(0, 0);
+        var source = new NavigationCellAddress("map", default(VoxelIndex));
+        var missing = new NavigationCellAddress("missing", default(VoxelIndex));
+        var connection = new NavigationConnection(
+            "edge",
+            source.Index,
+            missing,
+            GetFoot(binding, source.Index),
+            Vector3d.Zero,
+            Fixed64.Zero,
+            Fixed64.One,
+            new[] { source });
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(source.Index, SolidCell)
+            .Build();
+
+        NavigationOperationCandidate candidate = FoldMapCandidate(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(map, 1));
+        candidate = FoldOverlayCandidate(
+            candidate,
+            new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "map",
+                    connections: new[] { NavigationConnectionOverlayOperation.Upsert(connection) })
+            }),
+            sequence: 1);
+
+        candidate.ExplicitConnections.GetIncidentOwnerRow(source).Count.Should().Be(1);
+        candidate.ExplicitConnections.GetIncidentOwnerRow(missing).Count.Should().Be(1);
+    }
+
+    [Fact]
+    public void CellOnlyRefresh_ShouldReuseRefEqualIncidenceRows()
+    {
+        NormalizedGridConfiguration binding = CreateBinding(0, 1);
+        var source = new NavigationCellAddress("map", default(VoxelIndex));
+        var destination = new NavigationCellAddress("map", new VoxelIndex(1, 0, 0));
+        var definition = new NavigationConnection(
+            "edge",
+            source.Index,
+            destination,
+            GetFoot(binding, source.Index),
+            GetFoot(binding, destination.Index),
+            Fixed64.Zero,
+            Fixed64.One);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(source.Index, SolidCell)
+            .AddCell(destination.Index, SolidCell)
+            .AddConnection(definition)
+            .Build();
+        NavigationOperationCandidate candidate = FoldMapCandidate(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(map, 1));
+        NavigationPagedSequence<NavigationConnectionOwnerKey> priorSource =
+            candidate.ExplicitConnections.GetIncidentOwnerRow(source);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> priorDestination =
+            candidate.ExplicitConnections.GetIncidentOwnerRow(destination);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> priorSourceEndpoints =
+            candidate.ExplicitConnections.GetEndpointOwnerRow(source);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> priorDestinationEndpoints =
+            candidate.ExplicitConnections.GetEndpointOwnerRow(destination);
+
+        candidate = FoldOverlayCandidate(
+            candidate,
+            new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "map",
+                    new[] { NavigationCellOverlayOperation.Set(source.Index, SolidCell) })
+            }),
+            sequence: 1);
+
+        candidate.ExplicitConnections.GetIncidentOwnerRow(source)
+            .Should().BeSameAs(priorSource);
+        candidate.ExplicitConnections.GetIncidentOwnerRow(destination)
+            .Should().BeSameAs(priorDestination);
+        candidate.ExplicitConnections.GetEndpointOwnerRow(source)
+            .Should().BeSameAs(priorSourceEndpoints);
+        candidate.ExplicitConnections.GetEndpointOwnerRow(destination)
+            .Should().BeSameAs(priorDestinationEndpoints);
+    }
+
+    [Fact]
+    public void DeferredTransitionOnlyOverlay_ShouldNotCloseUnrelatedComponents()
+    {
+        using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
+            maxExplicitEdges: 1,
+            maxOverlaySlots: 1,
+            maxComponentNodes: 1);
+        NormalizedGridConfiguration sourceBinding = AddGrid(context, 0);
+        NormalizedGridConfiguration destinationBinding = AddGrid(context, 10);
+        NormalizedGridConfiguration unrelatedBinding = AddGrid(context, 20);
+        var first = new TraversalTransitionDefinition(
+            "first",
+            TraversalTransitionType.Climb,
+            default,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("destination", default),
+            TraversalMedium.Solid,
+            TraversalCapability.Climb);
+        var second = new TraversalTransitionDefinition(
+            "second",
+            TraversalTransitionType.Climb,
+            default,
+            TraversalMedium.Solid,
+            new NavigationCellAddress("destination", default),
+            TraversalMedium.Solid,
+            TraversalCapability.Climb);
+        long sequence = 0;
+        NavigationMapCommitOperation destination = Admit(
+            context,
+            new NavigationMapBuilder("destination", destinationBinding)
+                .AddCell(default, SolidCell)
+                .Build(),
+            ++sequence);
+        NavigationMapCommitOperation unrelated = Admit(
+            context,
+            new NavigationMapBuilder("unrelated", unrelatedBinding)
+                .AddCell(default, SolidCell)
+                .Build(),
+            ++sequence);
+        NavigationMapCommitOperation source = Admit(
+            context,
+            new NavigationMapBuilder("source", sourceBinding)
+                .AddCell(default, SolidCell)
+                .AddTransition(first)
+                .AddTransition(second)
+                .Build(),
+            ++sequence);
+        SimulateUntilTerminal(context, source.Receipt);
+        destination.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        unrelated.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        source.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        var overlay = new NavigationOverlayCommitOperation(
+            new PreparedNavigationOverlay(new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "source",
+                    transitions: new[]
+                    {
+                        TraversalTransitionOverlayOperation.Suppress("first"),
+                        TraversalTransitionOverlayOperation.Suppress("second")
+                    })
+            })),
+            ++sequence,
+            context.FrameCount + 1);
+        context.Pathing.Admit(overlay).Should().BeTrue();
+
+        context.Simulate();
+
+        overlay.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        GetGraphCell(context, "unrelated").IsMaterialized.Should().BeTrue();
+        GetGraphCell(context, "source").IsMaterialized.Should().BeFalse();
+        GetGraphCell(context, "destination").IsMaterialized.Should().BeTrue(
+            "cross-map transitions do not join structural components before Phase 7");
+    }
+
+    [Fact]
+    public void DeferredClosureCapacityRejection_ShouldReopenEveryComponentOnce()
+    {
+        long firstCursorPeak = 0;
+        long secondCursorPeak = 0;
+        using (TrailblazerWorldContext probe = CreateClosureCursorCapacityScenario(
+            maxActiveSnapshotBytes: null,
+            out NavigationOverlayCommitOperation probeOperation))
+        {
+            for (int frame = 0; frame < 128 && secondCursorPeak == 0; frame++)
+            {
+                probe.Simulate();
+                if (probeOperation.Receipt.Status != NavigationOperationStatus.Pending
+                    || probe.Pathing.NavigationMaintenanceMeter.OverlaySlots != 0
+                    || probe.Pathing.NavigationMaintenanceMeter.ComponentNodes != 1
+                    || probe.Pathing.NavigationMaintenanceMeter.DependencyEntries != 1)
+                {
+                    continue;
+                }
+                long retained = probe.Pathing.GetNavigationGraphDiagnostics().ActiveSnapshotBytes;
+                if (firstCursorPeak == 0)
+                    firstCursorPeak = retained;
+                else
+                    secondCursorPeak = retained;
+            }
+        }
+        firstCursorPeak.Should().BePositive();
+        secondCursorPeak.Should().Be(firstCursorPeak + 64,
+            "one additional prepared closure component owns one persistent record");
+
+        using TrailblazerWorldContext context = CreateClosureCursorCapacityScenario(
+            secondCursorPeak - 1,
+            out NavigationOverlayCommitOperation operation);
+        long previousVersion = context.Pathing.GetNavigationGraphDiagnostics().GraphVersion;
+        bool observedClosed = false;
+        for (int frame = 0; frame < 128 && operation.Receipt.Status == NavigationOperationStatus.Pending; frame++)
+        {
+            context.Simulate();
+            long version = context.Pathing.GetNavigationGraphDiagnostics().GraphVersion;
+            version.Should().BeLessThanOrEqualTo(previousVersion + 1,
+                "maintenance may publish at most one safety or rollback root per frame");
+            previousVersion = version;
+            observedClosed |= !GetGraphCell(context, "map-0").IsMaterialized;
+        }
+
+        observedClosed.Should().BeTrue();
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        for (int frame = 0; frame < 16 && !GetGraphCell(context, "map-0").IsMaterialized; frame++)
+            context.Simulate();
+        for (int i = 0; i < 4; i++)
+            GetGraphCell(context, $"map-{i}").IsMaterialized.Should().BeTrue();
+        context.Pathing.RetainedOperationWorkCount.Should().Be(0);
     }
 
     [Fact]
@@ -239,15 +1175,15 @@ public sealed class NavigationExplicitConnectionTests
         remove.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         using (NavigationWorldGraphLease dormantLease = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            dormantLease.Graph.TryGetExplicitConnection(
+            dormantLease.Graph.ExplicitConnections.TryGet(
                     owner,
                     out NavigationExplicitConnectionRecord dormant)
                 .Should().BeTrue();
             dormant.IsActive.Should().BeFalse();
-            dormantLease.Graph.ExplicitConnections.GetIncidentOwners(destinationAddress)
-                .Length.Should().Be(1);
+            dormantLease.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count
+                .Should().Be(1);
         }
-        oldLease.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord old)
+        oldLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord old)
             .Should().BeTrue();
         old.IsActive.Should().BeTrue();
 
@@ -260,7 +1196,7 @@ public sealed class NavigationExplicitConnectionTests
         context.Simulate();
         install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         using NavigationWorldGraphLease revivedLease = context.Pathing.TryAcquireNavigationGraph()!;
-        revivedLease.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord revived)
+        revivedLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord revived)
             .Should().BeTrue();
         revived.IsActive.Should().BeTrue();
     }
@@ -307,11 +1243,11 @@ public sealed class NavigationExplicitConnectionTests
         context.Simulate();
         using (NavigationWorldGraphLease suppressed = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            suppressed.Graph.TryGetExplicitConnection(owner, out _).Should().BeFalse();
-            suppressed.Graph.ExplicitConnections.GetIncidentOwners(destinationAddress)
-                .Length.Should().Be(0);
+            suppressed.Graph.ExplicitConnections.TryGet(owner, out _).Should().BeFalse();
+            suppressed.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count
+                .Should().Be(0);
         }
-        oldLease.Graph.TryGetExplicitConnection(owner, out _).Should().BeTrue();
+        oldLease.Graph.ExplicitConnections.TryGet(owner, out _).Should().BeTrue();
 
         CommitConnection(
             context,
@@ -321,7 +1257,7 @@ public sealed class NavigationExplicitConnectionTests
         context.Simulate();
         using (NavigationWorldGraphLease reverted = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            reverted.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord record)
+            reverted.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord record)
                 .Should().BeTrue();
             record.Definition.Should().BeSameAs(baked);
         }
@@ -342,10 +1278,10 @@ public sealed class NavigationExplicitConnectionTests
             5);
         context.Simulate();
         using NavigationWorldGraphLease updated = context.Pathing.TryAcquireNavigationGraph()!;
-        updated.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord replacement)
+        updated.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord replacement)
             .Should().BeTrue();
         replacement.Definition.Should().BeSameAs(upsert);
-        updated.Graph.ExplicitConnections.GetIncidentOwners(destinationAddress).Length.Should().Be(1);
+        updated.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count.Should().Be(1);
     }
 
     [Fact]
@@ -397,11 +1333,11 @@ public sealed class NavigationExplicitConnectionTests
         context.Simulate();
         using (NavigationWorldGraphLease replaced = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            replaced.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord record)
+            replaced.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord record)
                 .Should().BeTrue();
             record.Definition.Should().BeSameAs(replacement);
         }
-        oldLease.Graph.TryGetExplicitConnection(owner, out NavigationExplicitConnectionRecord old)
+        oldLease.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord old)
             .Should().BeTrue();
         old.Definition.AdditionalCost.Should().Be(Fixed64.Zero);
 
@@ -412,8 +1348,86 @@ public sealed class NavigationExplicitConnectionTests
         context.Pathing.Admit(remove).Should().BeTrue();
         context.Simulate();
         using NavigationWorldGraphLease removed = context.Pathing.TryAcquireNavigationGraph()!;
-        removed.Graph.TryGetExplicitConnection(owner, out _).Should().BeFalse();
-        removed.Graph.ExplicitConnections.GetIncidentOwners(destinationAddress).Length.Should().Be(0);
+        removed.Graph.ExplicitConnections.TryGet(owner, out _).Should().BeFalse();
+        removed.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count.Should().Be(0);
+        removed.Graph.ExplicitConnections.GetEndpointOwnerRow(destinationAddress).Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void DeferredIncidenceRebuild_ShouldPublishAllRowsAtomically()
+    {
+        using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
+            maxExplicitEdges: 16,
+            maxDependencyEntries: 3);
+        NormalizedGridConfiguration binding = AddGrid(context, 0);
+        VoxelIndex sourceIndex = default;
+        VoxelIndex destinationIndex = new(1, 0, 0);
+        var sourceAddress = new NavigationCellAddress("map", sourceIndex);
+        var destinationAddress = new NavigationCellAddress("map", destinationIndex);
+        NavigationMap BuildMap(Fixed64 additionalCost) => new NavigationMapBuilder("map", binding)
+            .AddCell(sourceIndex, SolidCell)
+            .AddCell(destinationIndex, SolidCell)
+            .AddConnection(new NavigationConnection(
+                "edge",
+                sourceIndex,
+                destinationAddress,
+                GetFoot(binding, sourceIndex),
+                GetFoot(binding, destinationIndex),
+                Fixed64.Zero,
+                Fixed64.One,
+                additionalCost: additionalCost))
+            .Build();
+        NavigationMapCommitOperation initial = Admit(context, BuildMap(Fixed64.Zero), 1);
+        SimulateUntilTerminal(context, initial.Receipt);
+        initial.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        NavigationPagedSequence<NavigationConnectionOwnerKey> priorSource;
+        NavigationPagedSequence<NavigationConnectionOwnerKey> priorDestination;
+        NavigationPagedSequence<NavigationConnectionOwnerKey> priorSourceEndpoints;
+        NavigationPagedSequence<NavigationConnectionOwnerKey> priorDestinationEndpoints;
+        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            priorSource = lease.Graph.ExplicitConnections.GetIncidentOwnerRow(sourceAddress);
+            priorDestination = lease.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress);
+            priorSourceEndpoints = lease.Graph.ExplicitConnections.GetEndpointOwnerRow(sourceAddress);
+            priorDestinationEndpoints =
+                lease.Graph.ExplicitConnections.GetEndpointOwnerRow(destinationAddress);
+        }
+
+        var replacement = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(BuildMap(Fixed64.One), bakeVersion: 2),
+            OverlayReplacementPolicy.Clear,
+            operationSequence: 2,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(replacement).Should().BeTrue();
+        bool observedDeferred = false;
+        for (int frame = 0; frame < 4096 && replacement.Receipt.Status == NavigationOperationStatus.Pending; frame++)
+        {
+            context.Simulate();
+            if (replacement.Receipt.Status != NavigationOperationStatus.Pending)
+                break;
+            observedDeferred = true;
+            using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+            lease.Graph.ExplicitConnections.GetIncidentOwnerRow(sourceAddress)
+                .Should().BeSameAs(priorSource);
+            lease.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress)
+                .Should().BeSameAs(priorDestination);
+            lease.Graph.ExplicitConnections.GetEndpointOwnerRow(sourceAddress)
+                .Should().BeSameAs(priorSourceEndpoints);
+            lease.Graph.ExplicitConnections.GetEndpointOwnerRow(destinationAddress)
+                .Should().BeSameAs(priorDestinationEndpoints);
+        }
+
+        observedDeferred.Should().BeTrue();
+        replacement.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
+        published.Graph.ExplicitConnections.GetIncidentOwnerRow(sourceAddress)
+            .Should().NotBeSameAs(priorSource);
+        published.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress)
+            .Should().NotBeSameAs(priorDestination);
+        published.Graph.ExplicitConnections.GetEndpointOwnerRow(sourceAddress)
+            .Should().NotBeSameAs(priorSourceEndpoints);
+        published.Graph.ExplicitConnections.GetEndpointOwnerRow(destinationAddress)
+            .Should().NotBeSameAs(priorDestinationEndpoints);
     }
 
     [Fact]
@@ -450,19 +1464,16 @@ public sealed class NavigationExplicitConnectionTests
             .AddCell(destination, SolidCell)
             .AddConnection(connection)
             .Build();
-        var candidate = new NavigationOperationCandidate(navigationAreaCount: 1);
-        candidate.ApplyMap(
-                new PreparedNavigationMap(map, bakeVersion: 1),
-                OverlayReplacementPolicy.Clear,
-                TrailblazerWorldContextSettings.Default.OperationLimits,
-                new GridCellPrism[4],
-                new Vector3d[6])
-            .Should().Be(NavigationOperationRejection.None);
         var captured = new GridCellPrism[4];
-        var work = candidate.BeginExplicitConnectionRefresh(
-            "map",
+        var work = new NavigationMapFoldWork(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(map, bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            TrailblazerWorldContextSettings.Default.OperationLimits,
             captured,
-            new Vector3d[6]);
+            new Vector3d[6],
+            new NavigationCellAddress[4],
+            new NavigationAddressStampSet(4));
         var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(
             maxConsumedEnvelopes: 1,
             maxBaselineAddresses: 1,
@@ -472,23 +1483,38 @@ public sealed class NavigationExplicitConnectionTests
             maxDependencyEntries: 16));
         VoxelIndex[] expected = { source, firstWitness, secondWitness, destination };
 
-        for (int step = 0; step < expected.Length; step++)
+        int semanticStep = 0;
+        int explicitUnits = 0;
+        bool complete = false;
+        for (int frame = 0; frame < 128 && !complete; frame++)
         {
-            work.Advance(meter).Should().Be(step == expected.Length - 1);
-            meter.ExplicitEdges.Should().Be(1);
-            binding.TryGetCellPrism(expected[step], out GridCellPrism prism).Should().BeTrue();
-            captured[step].Should().Be(prism,
-                "each successful explicit debit must immediately capture that semantic cell");
-            if (step + 1 < captured.Length)
-                captured[step + 1].Should().Be(default(GridCellPrism));
+            complete = work.Advance(meter, out NavigationOperationRejection rejection);
+            rejection.Should().Be(NavigationOperationRejection.None);
+            meter.ExplicitEdges.Should().BeLessThanOrEqualTo(1);
+            explicitUnits += meter.ExplicitEdges;
+            if (semanticStep < expected.Length && captured[semanticStep].FootprintVertexCount != 0)
+            {
+                binding.TryGetCellPrism(expected[semanticStep], out GridCellPrism prism)
+                    .Should().BeTrue();
+                captured[semanticStep].Should().Be(prism,
+                    "each semantic-cell debit must immediately capture that exact prism");
+                meter.ExplicitEdges.Should().Be(1);
+                semanticStep++;
+                if (semanticStep < captured.Length)
+                    captured[semanticStep].Should().Be(default(GridCellPrism));
+            }
             meter.Reset();
         }
 
-        candidate.ExplicitConnections.TryGet(
+        complete.Should().BeTrue();
+        semanticStep.Should().Be(expected.Length);
+        work.Candidate.ExplicitConnections.TryGet(
                 new NavigationConnectionOwnerKey("map", "corridor"),
                 out NavigationExplicitConnectionRecord record)
             .Should().BeTrue();
         record.IsActive.Should().BeTrue();
+        explicitUnits.Should().Be(14 + record.PortalWaypoints.Count,
+            "each final waypoint must be materialized under its own explicit debit");
     }
 
     [Fact]
@@ -516,37 +1542,297 @@ public sealed class NavigationExplicitConnectionTests
             .AddCell(destination, SolidCell)
             .AddConnection(connection)
             .Build();
-        var candidate = new NavigationOperationCandidate(navigationAreaCount: 1);
-        candidate.ApplyMap(
-                new PreparedNavigationMap(map, bakeVersion: 1),
-                OverlayReplacementPolicy.Clear,
-                TrailblazerWorldContextSettings.Default.OperationLimits,
-                new GridCellPrism[2],
-                new Vector3d[2])
-            .Should().Be(NavigationOperationRejection.None);
-        var work = candidate.BeginExplicitConnectionRefresh(
-            "map",
+        var work = new NavigationMapFoldWork(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(map, bakeVersion: 1),
+            OverlayReplacementPolicy.Clear,
+            TrailblazerWorldContextSettings.Default.OperationLimits,
             new GridCellPrism[2],
-            new Vector3d[2]);
+            new Vector3d[2],
+            new NavigationCellAddress[2],
+            new NavigationAddressStampSet(2));
         var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(1, 1, 1, 1, 16, 1));
         var sourceAddress = new NavigationCellAddress("map", source);
         var destinationAddress = new NavigationCellAddress("map", destination);
 
-        work.Advance(meter).Should().BeFalse();
-        candidate.ExplicitConnections.GetIncidentOwners(sourceAddress).Length.Should().Be(0);
-        candidate.ExplicitConnections.GetIncidentOwners(destinationAddress).Length.Should().Be(0);
+        bool complete = false;
+        bool sawSourceOnly = false;
+        for (int frame = 0; frame < 64 && !complete; frame++)
+        {
+            complete = work.Advance(meter, out NavigationOperationRejection rejection);
+            rejection.Should().Be(NavigationOperationRejection.None);
+            meter.DependencyEntries.Should().BeLessThanOrEqualTo(1);
+            int sourceCount = work.Candidate.ExplicitConnections
+                .GetIncidentOwnerRow(sourceAddress).Count;
+            int destinationCount = work.Candidate.ExplicitConnections
+                .GetIncidentOwnerRow(destinationAddress).Count;
+            if (sourceCount == 1 && destinationCount == 0)
+                sawSourceOnly = true;
+            destinationCount.Should().BeLessThanOrEqualTo(sourceCount,
+                "a later incidence row cannot publish ahead of the prior source row");
+            meter.Reset();
+        }
 
-        meter.Reset();
-        work.Advance(meter).Should().BeFalse();
-        meter.DependencyEntries.Should().Be(1);
-        candidate.ExplicitConnections.GetIncidentOwners(sourceAddress).Length.Should().Be(1);
-        candidate.ExplicitConnections.GetIncidentOwners(destinationAddress).Length.Should().Be(0);
+        complete.Should().BeTrue();
+        sawSourceOnly.Should().BeTrue();
+        work.Candidate.ExplicitConnections.GetIncidentOwnerRow(sourceAddress).Count.Should().Be(1);
+        work.Candidate.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count.Should().Be(1);
+        work.Candidate.ExplicitConnections.GetEndpointOwnerRow(sourceAddress).Count.Should().Be(1);
+        work.Candidate.ExplicitConnections.GetEndpointOwnerRow(destinationAddress).Count.Should().Be(1);
+    }
 
-        meter.Reset();
-        work.Advance(meter).Should().BeTrue();
-        meter.DependencyEntries.Should().Be(1);
-        candidate.ExplicitConnections.GetIncidentOwners(sourceAddress).Length.Should().Be(1);
-        candidate.ExplicitConnections.GetIncidentOwners(destinationAddress).Length.Should().Be(1);
+    [Fact]
+    public void AddressStampReset_ShouldDiscardAbandonedOwnerKeys()
+    {
+        var addresses = new NavigationAddressStampSet(64);
+        var first = new NavigationCellAddress("map", default);
+        var second = new NavigationCellAddress("map", new VoxelIndex(1, 0, 0));
+        addresses.Add(first).Should().BeTrue();
+        addresses.Add(second).Should().BeTrue();
+
+        addresses.Reset();
+
+        addresses.Add(first).Should().BeTrue(
+            "an abandoned refresh generation must not leak keys into the next owner");
+        addresses.Add(first).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExplicitRefreshConstruction_ShouldAccountForEveryOwnedObject()
+    {
+        const int Iterations = 256;
+        TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
+        int capacity = settings.OperationLimits.MaxCorridorCells;
+        var candidate = new NavigationOperationCandidate(navigationAreaCount: 1);
+        var prisms = new GridCellPrism[capacity];
+        var waypoints = new Vector3d[(capacity * 2) - 2];
+        var addresses = new NavigationCellAddress[capacity];
+        var addressSet = new NavigationAddressStampSet(capacity);
+        NavigationOperationCandidate.ExplicitConnectionRefreshWork warmup =
+            candidate.BeginExplicitConnectionRefresh(
+                "missing",
+                candidate.ExplicitConnections,
+                prisms,
+                waypoints,
+                addresses,
+                addressSet);
+        GC.KeepAlive(warmup);
+        long retained = 0;
+
+        long allocated = AllocationTestUtility.MeasureAllocatedBytes(() =>
+        {
+            for (int i = 0; i < Iterations; i++)
+            {
+                NavigationOperationCandidate.ExplicitConnectionRefreshWork work =
+                    candidate.BeginExplicitConnectionRefresh(
+                        "missing",
+                        candidate.ExplicitConnections,
+                        prisms,
+                        waypoints,
+                        addresses,
+                        addressSet);
+                retained += work.RetainedBytes;
+                GC.KeepAlive(work);
+            }
+        });
+
+        retained.Should().Be(allocated + (Iterations * 64L),
+            "the exact refresh allocation and its two logical persistent-root wrappers are retained");
+    }
+
+    [Fact]
+    public void RepeatedSameRowReplacement_ShouldRetainOnlyLiveExplicitPayloadOwnership()
+    {
+        NormalizedGridConfiguration binding = CreateBinding(0, 2);
+        VoxelIndex sourceIndex = default;
+        VoxelIndex destinationIndex = new(1, 0, 0);
+        NavigationConnection baked = new(
+            "edge",
+            sourceIndex,
+            new NavigationCellAddress("map", destinationIndex),
+            GetFoot(binding, sourceIndex),
+            GetFoot(binding, destinationIndex),
+            Fixed64.Zero,
+            Fixed64.One);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(sourceIndex, SolidCell)
+            .AddCell(destinationIndex, SolidCell)
+            .AddConnection(baked)
+            .Build();
+        NavigationOperationCandidate candidate = FoldMapCandidate(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(map, 1));
+        candidate.ResetWorkCopiedPersistentOwnership();
+        NavigationConnection replacement = new(
+            "edge",
+            sourceIndex,
+            new NavigationCellAddress("map", destinationIndex),
+            GetFoot(binding, sourceIndex),
+            GetFoot(binding, destinationIndex),
+            Fixed64.Zero,
+            Fixed64.One,
+            additionalCost: Fixed64.One);
+        candidate = FoldOverlayCandidate(
+            candidate,
+            new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "map",
+                    connections: new[] { NavigationConnectionOverlayOperation.Upsert(replacement) })
+            }),
+            sequence: 1);
+        candidate.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("map", "edge"),
+                out NavigationExplicitConnectionRecord record)
+            .Should().BeTrue();
+        long onceBytes = candidate.WorkOwnedExplicitPayloadBytes;
+        int oncePages = candidate.WorkOwnedExplicitPayloadPages;
+        var sourceAddress = new NavigationCellAddress("map", sourceIndex);
+        var destinationAddress = new NavigationCellAddress("map", destinationIndex);
+        NavigationPagedSequence<NavigationConnectionOwnerKey>[] liveRows =
+        {
+            candidate.ExplicitConnections.GetIncidentOwnerRow(sourceAddress),
+            candidate.ExplicitConnections.GetIncidentOwnerRow(destinationAddress),
+            candidate.ExplicitConnections.GetEndpointOwnerRow(sourceAddress),
+            candidate.ExplicitConnections.GetEndpointOwnerRow(destinationAddress)
+        };
+        long rowBytes = 0;
+        int rowPages = 0;
+        for (int i = 0; i < liveRows.Length; i++)
+        {
+            rowBytes += liveRows[i].RetainedBytes;
+            rowPages += liveRows[i].PersistentPageCount;
+        }
+        onceBytes.Should().Be(record.RetainedBytes + rowBytes,
+            "the live record and its dependency and endpoint rows are the only payload replacements");
+        oncePages.Should().Be(record.PersistentPageCount + rowPages);
+
+        candidate = FoldOverlayCandidate(
+            candidate,
+            new NavigationOverlayTransaction(new[]
+            {
+                new NavigationMapOverlayDelta(
+                    "map",
+                    new[] { NavigationCellOverlayOperation.Set(sourceIndex, SolidCell) })
+            }),
+            sequence: 2);
+
+        candidate.WorkOwnedExplicitPayloadBytes.Should().Be(onceBytes,
+            "replacing the same record and rows twice must overwrite the live ownership ledger");
+        candidate.WorkOwnedExplicitPayloadPages.Should().Be(oncePages);
+    }
+
+    [Theory]
+    [InlineData(0, 2)]
+    [InlineData(2, 0)]
+    public void VariableSizeReplacement_ShouldChargeCurrentAndDisplacedPayloadExactly(
+        int sourceWitnessCount,
+        int targetWitnessCount)
+    {
+        NormalizedGridConfiguration binding = CreateBinding(0, 1);
+        var source = new VoxelIndex(0, 0, 0);
+        NavigationConnection CreateConnection(int witnessCount, Fixed64 additionalCost) => new(
+            "edge",
+            source,
+            new NavigationCellAddress("missing-destination", default),
+            GetFoot(binding, source),
+            GetFoot(binding, source),
+            Fixed64.Zero,
+            Fixed64.One,
+            witnessCount switch
+            {
+                0 => null,
+                1 => new[] { new NavigationCellAddress("missing-witness-1", default) },
+                _ => new[]
+                {
+                    new NavigationCellAddress("missing-witness-1", default),
+                    new NavigationCellAddress("missing-witness-2", default)
+                }
+            },
+            additionalCost);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(source, SolidCell)
+            .AddConnection(CreateConnection(1, Fixed64.Zero))
+            .Build();
+        NavigationOperationCandidate published = FoldMapCandidate(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(map, 1));
+        published.ResetWorkCopiedPersistentOwnership();
+        NavigationOperationCandidate first = FoldOverlayCandidate(
+            published,
+            ConnectionTransaction(CreateConnection(sourceWitnessCount, Fixed64.One)),
+            sequence: 1);
+        long sourceBytes = first.WorkOwnedExplicitPayloadBytes;
+        int sourcePages = first.WorkOwnedExplicitPayloadPages;
+
+        NavigationOverlayFoldWork replacement = FoldOverlayWork(
+            first,
+            ConnectionTransaction(CreateConnection(targetWitnessCount, (Fixed64)2)),
+            sequence: 2);
+
+        replacement.DisplacedExplicitPayloadBytes.Should().Be(sourceBytes);
+        replacement.DisplacedExplicitPayloadPages.Should().Be(sourcePages);
+        replacement.Candidate.WorkOwnedExplicitPayloadBytes.Should().NotBe(sourceBytes,
+            "the target payload cardinality differs from the displaced source");
+    }
+
+    [Fact]
+    public void DifferentOwnerReplacement_ShouldNotChargeSharedSourcePayloadTwice()
+    {
+        NormalizedGridConfiguration binding = CreateBinding(0, 4);
+        var firstSource = new VoxelIndex(0, 0, 0);
+        var firstDestination = new VoxelIndex(1, 0, 0);
+        var secondSource = new VoxelIndex(2, 0, 0);
+        var secondDestination = new VoxelIndex(3, 0, 0);
+        NavigationConnection CreateConnection(
+            string id,
+            VoxelIndex source,
+            VoxelIndex destination,
+            Fixed64 additionalCost) => new(
+                id,
+                source,
+                new NavigationCellAddress("map", destination),
+                GetFoot(binding, source),
+                GetFoot(binding, destination),
+                Fixed64.Zero,
+                Fixed64.One,
+                additionalCost: additionalCost);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(firstSource, SolidCell)
+            .AddCell(firstDestination, SolidCell)
+            .AddCell(secondSource, SolidCell)
+            .AddCell(secondDestination, SolidCell)
+            .AddConnection(CreateConnection("x", firstSource, firstDestination, Fixed64.Zero))
+            .AddConnection(CreateConnection("y", secondSource, secondDestination, Fixed64.Zero))
+            .Build();
+        NavigationOperationCandidate published = FoldMapCandidate(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(map, 1));
+        published.ResetWorkCopiedPersistentOwnership();
+        NavigationOperationCandidate first = FoldOverlayCandidate(
+            published,
+            ConnectionTransaction(CreateConnection(
+                "x",
+                firstSource,
+                firstDestination,
+                Fixed64.One)),
+            sequence: 1);
+        long firstBytes = first.WorkOwnedExplicitPayloadBytes;
+        int firstPages = first.WorkOwnedExplicitPayloadPages;
+
+        NavigationOverlayFoldWork second = FoldOverlayWork(
+            first,
+            ConnectionTransaction(CreateConnection(
+                "y",
+                secondSource,
+                secondDestination,
+                Fixed64.One)),
+            sequence: 2);
+
+        second.DisplacedExplicitPayloadBytes.Should().Be(0);
+        second.DisplacedExplicitPayloadPages.Should().Be(0);
+        second.Candidate.WorkOwnedExplicitPayloadBytes.Should().Be(firstBytes * 2);
+        second.Candidate.WorkOwnedExplicitPayloadPages.Should().Be(firstPages * 2);
     }
 
     [Fact]
@@ -607,69 +1893,18 @@ public sealed class NavigationExplicitConnectionTests
     [Fact]
     public void ExplicitEvaluation_ShouldUseCertifiedCostInclusiveCapacityAndOneWayDirection()
     {
-        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
-        NormalizedGridConfiguration binding = AddGrid(context, 0);
-        VoxelIndex sourceIndex = default;
-        VoxelIndex witnessIndex = new(1, 0, 0);
-        VoxelIndex destinationIndex = new(2, 0, 0);
-        NavigationCell cell = new(
-            TraversalMedia.Solid,
-            TraversalCapability.None,
-            default,
-            Fixed64.Zero,
-            Fixed64.Half,
-            Fixed64.One);
-        NavigationCell destinationCell = new(
-            TraversalMedia.Solid,
-            TraversalCapability.None,
-            default,
-            (Fixed64)2,
-            Fixed64.Half,
-            Fixed64.One);
-        var connection = new NavigationConnection(
-            "shortcut",
-            sourceIndex,
-            new NavigationCellAddress("map", destinationIndex),
-            GetFoot(binding, sourceIndex),
-            GetFoot(binding, destinationIndex),
-            Fixed64.Half,
-            Fixed64.One,
-            new[] { new NavigationCellAddress("map", witnessIndex) },
-            additionalCost: (Fixed64)3);
-        Admit(
-            context,
-            new NavigationMapBuilder("map", binding)
-                .AddCell(sourceIndex, cell)
-                .AddCell(witnessIndex, cell)
-                .AddCell(destinationIndex, destinationCell)
-                .AddConnection(connection)
-                .Build(),
-            1);
-        context.Simulate();
+        using TrailblazerWorldContext context = CreateExplicitEvaluationContext();
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationNodeRef source = ResolveNode(lease.Graph, default);
         lease.Graph.TryGetNodeRef(
-                new NavigationCellAddress("map", sourceIndex),
-                out NavigationNodeRef source)
-            .Should().BeTrue();
-        lease.Graph.TryGetNodeRef(
-                new NavigationCellAddress("map", destinationIndex),
+                new NavigationCellAddress("map", new VoxelIndex(2, 0, 0)),
                 out NavigationNodeRef destination)
             .Should().BeTrue();
         NavigationGraphEdge edge = FindExplicitEdge(lease.Graph, source, "shortcut");
-        var profile = new NavigationAgentProfile(
-            new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
-            Fixed64.Zero,
-            Fixed64.Zero,
-            Fixed64.Zero,
-            TraversalMedia.Solid,
-            TraversalCapability.None);
-        var policy = new NavigationAreaPolicy(
-            new NavigationAreaPolicyKey("explicit", 1),
-            new[] { new NavigationAreaRule(isAllowed: true, additionalEnterCost: (Fixed64)4) });
         var evaluator = new TraversalEvaluator(
             lease.Graph,
-            profile,
-            policy,
+            CreateExplicitEvaluationProfile(),
+            CreateExplicitEvaluationPolicy(),
             TraversalMedium.Solid);
 
         evaluator.EvaluateEdge(source, edge, out Fixed64 cost)
@@ -678,15 +1913,15 @@ public sealed class NavigationExplicitConnectionTests
         evaluator.EvaluateEdge(destination, edge, out _)
             .Should().Be(TraversalEvaluationStatus.Impassable);
         var oversized = new TraversalEvaluator(
-            lease.Graph,
-            new NavigationAgentProfile(
+                lease.Graph,
+                new NavigationAgentProfile(
                 new KinematicBodyShape((Fixed64)0.5001m, Fixed64.One, Fixed64.Zero),
                 Fixed64.Zero,
                 Fixed64.Zero,
                 Fixed64.Zero,
                 TraversalMedia.Solid,
                 TraversalCapability.None),
-            policy,
+            CreateExplicitEvaluationPolicy(),
             TraversalMedium.Solid);
         oversized.EvaluateEdge(source, edge, out _)
             .Should().Be(TraversalEvaluationStatus.Impassable);
@@ -694,32 +1929,14 @@ public sealed class NavigationExplicitConnectionTests
         NavigationSurfaceEdgeEnumerator reverse = lease.Graph.EnumerateSurfaceEdges(destination);
         while (reverse.MoveNext())
             reverse.Current.Kind.Should().NotBe(NavigationGraphEdgeKind.Explicit);
+    }
 
-        VoxelGrid grid = context.World.ActiveGrids[0];
-        grid.TryGetVoxel(witnessIndex, out Voxel? witness).Should().BeTrue();
-        GridForge.ObstacleToken obstacle = context.World.AllocateObstacleToken();
-        grid.TryAddObstacle(witness!, obstacle).Should().BeTrue();
-        context.Simulate();
-        using (NavigationWorldGraphLease blockedLease = context.Pathing.TryAcquireNavigationGraph()!)
-        {
-            blockedLease.Graph.TryGetNodeRef(
-                    new NavigationCellAddress("map", sourceIndex),
-                    out NavigationNodeRef blockedSource)
-                .Should().BeTrue();
-            NavigationGraphEdge blocked = FindExplicitEdge(
-                blockedLease.Graph,
-                blockedSource,
-                "shortcut");
-            new TraversalEvaluator(
-                    blockedLease.Graph,
-                    profile,
-                    policy,
-                    TraversalMedium.Solid)
-                .EvaluateEdge(blockedSource, blocked, out _)
-                .Should().Be(TraversalEvaluationStatus.Impassable);
-        }
-
-        grid.TryRemoveObstacle(witness!, obstacle).Should().BeTrue();
+    [Fact]
+    public void ExplicitEvaluation_ShouldRejectBlockedWitnessBeforeCostOverflow()
+    {
+        using TrailblazerWorldContext context = CreateExplicitEvaluationContext();
+        VoxelIndex witnessIndex = new(1, 0, 0);
+        VoxelIndex destinationIndex = new(2, 0, 0);
         CommitCell(
             context,
             "map",
@@ -733,24 +1950,218 @@ public sealed class NavigationExplicitConnectionTests
                     Fixed64.Half,
                     Fixed64.One)),
             2);
+
+        VoxelGrid grid = context.World.ActiveGrids[0];
+        grid.TryGetVoxel(witnessIndex, out Voxel? witness).Should().BeTrue();
+        GridForge.ObstacleToken obstacle = context.World.AllocateObstacleToken();
+        grid.TryAddObstacle(witness!, obstacle).Should().BeTrue();
+        context.Simulate();
+        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            NavigationNodeRef source = ResolveNode(lease.Graph, default);
+            NavigationGraphEdge edge = FindExplicitEdge(lease.Graph, source, "shortcut");
+            new TraversalEvaluator(
+                    lease.Graph,
+                    CreateExplicitEvaluationProfile(),
+                    CreateExplicitEvaluationPolicy(),
+                    TraversalMedium.Solid)
+                .EvaluateEdge(source, edge, out _)
+                .Should().Be(TraversalEvaluationStatus.Impassable);
+        }
+
+        grid.TryRemoveObstacle(witness!, obstacle).Should().BeTrue();
         context.Simulate();
         using NavigationWorldGraphLease overflowLease = context.Pathing.TryAcquireNavigationGraph()!;
-        overflowLease.Graph.TryGetNodeRef(
-                new NavigationCellAddress("map", sourceIndex),
-                out NavigationNodeRef overflowSource)
-            .Should().BeTrue();
+        NavigationNodeRef overflowSource = ResolveNode(overflowLease.Graph, default);
         NavigationGraphEdge overflowEdge = FindExplicitEdge(
             overflowLease.Graph,
             overflowSource,
             "shortcut");
-        new TraversalEvaluator(
+            new TraversalEvaluator(
                 overflowLease.Graph,
-                profile,
-                policy,
+                CreateExplicitEvaluationProfile(),
+                CreateExplicitEvaluationPolicy(),
                 TraversalMedium.Solid)
             .EvaluateEdge(overflowSource, overflowEdge, out Fixed64 overflowCost)
             .Should().Be(TraversalEvaluationStatus.CostOverflow);
         overflowCost.Should().Be(Fixed64.Zero);
+    }
+
+    [Fact]
+    public void ExplicitEvaluation_ShouldApplyStepLimitToEachSemanticLeg()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NormalizedGridConfiguration sourceBinding = AddGrid(context, 0, Fixed64.Zero);
+        NormalizedGridConfiguration witnessBinding = AddGrid(context, 0, Fixed64.One);
+        NormalizedGridConfiguration destinationBinding = AddGrid(context, 0, (Fixed64)2);
+        VoxelIndex sourceIndex = default;
+        var connection = new NavigationConnection(
+            "steps",
+            sourceIndex,
+            new NavigationCellAddress("destination", default),
+            GetFoot(sourceBinding, sourceIndex),
+            GetFoot(destinationBinding, default),
+            Fixed64.Zero,
+            Fixed64.One,
+            new[] { new NavigationCellAddress("witness", default) });
+        Admit(context, new NavigationMapBuilder("destination", destinationBinding)
+            .AddCell(default, SolidCell).Build(), 1);
+        Admit(context, new NavigationMapBuilder("witness", witnessBinding)
+            .AddCell(default, SolidCell).Build(), 2);
+        NavigationMapCommitOperation sourceCommit = Admit(
+            context,
+            new NavigationMapBuilder("source", sourceBinding)
+                .AddCell(sourceIndex, SolidCell).AddConnection(connection).Build(),
+            3);
+        context.Simulate();
+        sourceCommit.Receipt.Rejection.Should().Be(NavigationOperationRejection.None);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetNodeRef(
+            new NavigationCellAddress("source", sourceIndex), out NavigationNodeRef source).Should().BeTrue();
+        NavigationGraphEdge edge = FindExplicitEdge(lease.Graph, source, "steps");
+
+        CreateEvaluator(lease.Graph, maxStepUp: Fixed64.One, maxDropDown: Fixed64.Zero)
+            .EvaluateEdge(source, edge, out _).Should().Be(TraversalEvaluationStatus.Passable,
+                "two one-unit steps are valid even though the total rise is two units");
+        CreateEvaluator(
+                lease.Graph,
+                maxStepUp: Fixed64.One - Fixed64.FromRaw(1),
+                maxDropDown: Fixed64.Zero)
+            .EvaluateEdge(source, edge, out _).Should().Be(TraversalEvaluationStatus.Impassable);
+    }
+
+    [Fact]
+    public void ExplicitEvaluation_ShouldApplyDropLimitToEachSemanticLeg()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NormalizedGridConfiguration sourceBinding = AddGrid(context, 0, (Fixed64)2);
+        NormalizedGridConfiguration witnessBinding = AddGrid(context, 0, Fixed64.One);
+        NormalizedGridConfiguration destinationBinding = AddGrid(context, 0, Fixed64.Zero);
+        VoxelIndex sourceIndex = default;
+        var connection = new NavigationConnection(
+            "drops",
+            sourceIndex,
+            new NavigationCellAddress("destination", default),
+            GetFoot(sourceBinding, sourceIndex),
+            GetFoot(destinationBinding, default),
+            Fixed64.Zero,
+            Fixed64.One,
+            new[] { new NavigationCellAddress("witness", default) });
+        Admit(context, new NavigationMapBuilder("destination", destinationBinding)
+            .AddCell(default, SolidCell).Build(), 1);
+        Admit(context, new NavigationMapBuilder("witness", witnessBinding)
+            .AddCell(default, SolidCell).Build(), 2);
+        NavigationMapCommitOperation sourceCommit = Admit(
+            context,
+            new NavigationMapBuilder("source", sourceBinding)
+                .AddCell(sourceIndex, SolidCell).AddConnection(connection).Build(),
+            3);
+        context.Simulate();
+        sourceCommit.Receipt.Rejection.Should().Be(NavigationOperationRejection.None);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        lease.Graph.TryGetNodeRef(
+            new NavigationCellAddress("source", sourceIndex), out NavigationNodeRef source).Should().BeTrue();
+        NavigationGraphEdge edge = FindExplicitEdge(lease.Graph, source, "drops");
+
+        CreateEvaluator(lease.Graph, maxStepUp: Fixed64.Zero, maxDropDown: Fixed64.One)
+            .EvaluateEdge(source, edge, out _).Should().Be(TraversalEvaluationStatus.Passable);
+        CreateEvaluator(
+                lease.Graph,
+                maxStepUp: Fixed64.Zero,
+                maxDropDown: Fixed64.One - Fixed64.FromRaw(1))
+            .EvaluateEdge(source, edge, out _).Should().Be(TraversalEvaluationStatus.Impassable);
+    }
+
+    [Fact]
+    public void ExplicitEvaluation_ShouldDistinguishVerticalOverflowFromImpassableEndpoint()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NormalizedGridConfiguration lowBinding = AddGrid(
+            context,
+            0,
+            Fixed64.MinValue + Fixed64.One);
+        NormalizedGridConfiguration highBinding = AddGrid(
+            context,
+            0,
+            Fixed64.MaxValue - Fixed64.One);
+        NavigationCell gatedTarget = new(
+            TraversalMedia.Solid,
+            TraversalCapability.Jump,
+            default,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.One);
+        NavigationMapCommitOperation low = Admit(
+            context,
+            new NavigationMapBuilder("low", lowBinding).AddCell(default, SolidCell).Build(),
+            1);
+        NavigationMapCommitOperation high = Admit(
+            context,
+            new NavigationMapBuilder("high", highBinding).AddCell(default, gatedTarget).Build(),
+            2);
+        SimulateUntilTerminal(context, high.Receipt);
+        low.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        high.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var definition = new NavigationConnection(
+            "overflow",
+            default,
+            new NavigationCellAddress("high", default),
+            GetFoot(lowBinding, default),
+            GetFoot(highBinding, default),
+            Fixed64.Zero,
+            Fixed64.One);
+        var record = new NavigationExplicitConnectionRecord(
+            new NavigationConnectionOwnerKey("low", "overflow"),
+            definition,
+            isActive: true,
+            Fixed64.Zero,
+            NavigationPagedSequence<Vector3d>.Empty);
+        NavigationExplicitConnectionIndex explicitIndex =
+            NavigationExplicitConnectionIndex.Empty.SetOwner(record, out _);
+        var instances = new NavigationMapInstance[lease.Graph.MapCount];
+        for (int i = 0; i < instances.Length; i++)
+            instances[i] = lease.Graph.GetInstance(i);
+        var graph = new NavigationWorldGraph(
+            lease.Graph.GraphVersion,
+            instances,
+            explicitConnections: explicitIndex);
+        graph.TryGetNodeRef(
+            new NavigationCellAddress("low", default), out NavigationNodeRef source).Should().BeTrue();
+        graph.TryGetNodeRef(
+            new NavigationCellAddress("high", default), out NavigationNodeRef target).Should().BeTrue();
+        var edge = new NavigationGraphEdge(target, record);
+        NavigationAreaPolicy policy = new(
+            new NavigationAreaPolicyKey("vertical-overflow", 1),
+            new[] { new NavigationAreaRule(true, Fixed64.Zero) });
+
+        new TraversalEvaluator(
+                graph,
+                new NavigationAgentProfile(
+                    new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+                    Fixed64.MaxValue,
+                    Fixed64.MaxValue,
+                    Fixed64.Zero,
+                    TraversalMedia.Solid,
+                    TraversalCapability.Jump),
+                policy,
+                TraversalMedium.Solid)
+            .EvaluateEdge(source, edge, out _)
+            .Should().Be(TraversalEvaluationStatus.CostOverflow);
+        new TraversalEvaluator(
+                graph,
+                new NavigationAgentProfile(
+                    new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+                    Fixed64.MaxValue,
+                    Fixed64.MaxValue,
+                    Fixed64.Zero,
+                    TraversalMedia.Solid,
+                    TraversalCapability.None),
+                policy,
+                TraversalMedium.Solid)
+            .EvaluateEdge(source, edge, out _)
+            .Should().Be(TraversalEvaluationStatus.Impassable,
+                "endpoint passability is checked before the overflowing vertical delta");
     }
 
     [Fact]
@@ -804,7 +2215,7 @@ public sealed class NavigationExplicitConnectionTests
         var destinationAddress = new NavigationCellAddress("destination", destinationIndex);
         lease.Graph.TryGetNodeRef(destinationAddress, out NavigationNodeRef destination)
             .Should().BeTrue();
-        lease.Graph.ExplicitConnections.GetIncidentOwners(destinationAddress).Length.Should().Be(2);
+        lease.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count.Should().Be(2);
         var sources = new List<NavigationCellAddress>();
 
         NavigationSurfaceEdgeEnumerator incoming =
@@ -890,9 +2301,14 @@ public sealed class NavigationExplicitConnectionTests
 
     private static NormalizedGridConfiguration AddGrid(
         TrailblazerWorldContext context,
-        int minimumX)
+        int minimumX) => AddGrid(context, minimumX, Fixed64.Zero);
+
+    private static NormalizedGridConfiguration AddGrid(
+        TrailblazerWorldContext context,
+        int minimumX,
+        Fixed64 minimumY)
     {
-        var minimum = new Vector3d((Fixed64)minimumX, Fixed64.Zero, Fixed64.Zero);
+        var minimum = new Vector3d((Fixed64)minimumX, minimumY, Fixed64.Zero);
         var configuration = new GridConfiguration(
             minimum,
             minimum + new Vector3d(3, 1, 2),
@@ -904,13 +2320,216 @@ public sealed class NavigationExplicitConnectionTests
         return binding;
     }
 
+    private static NormalizedGridConfiguration AddGridWithExtent(
+        TrailblazerWorldContext context,
+        int minimumX,
+        int extentX)
+    {
+        var minimum = new Vector3d((Fixed64)minimumX, Fixed64.Zero, Fixed64.Zero);
+        var configuration = new GridConfiguration(
+            minimum,
+            minimum + new Vector3d((Fixed64)extentX, Fixed64.One, (Fixed64)2),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        context.World.TryAddGrid(configuration, out _).Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        return binding;
+    }
+
+    private static NormalizedGridConfiguration CreateBinding(int minimumX, int maximumX)
+    {
+        var configuration = new GridConfiguration(
+            new Vector3d(minimumX, 0, 0),
+            new Vector3d(maximumX, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        return binding;
+    }
+
+    private static NavigationOperationCandidate FoldMapCandidate(
+        NavigationOperationCandidate source,
+        PreparedNavigationMap prepared)
+    {
+        TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
+        int capacity = settings.OperationLimits.MaxCorridorCells;
+        var work = new NavigationMapFoldWork(
+            source,
+            prepared,
+            OverlayReplacementPolicy.Clear,
+            settings.OperationLimits,
+            new GridCellPrism[capacity],
+            new Vector3d[(capacity * 2) - 2],
+            new NavigationCellAddress[capacity],
+            new NavigationAddressStampSet(capacity));
+        AdvanceFold(work, settings.MaintenanceBudget);
+        return work.Candidate;
+    }
+
+    private static NavigationOperationCandidate FoldOverlayCandidate(
+        NavigationOperationCandidate source,
+        NavigationOverlayTransaction transaction,
+        long sequence)
+    {
+        return FoldOverlayWork(source, transaction, sequence).Candidate;
+    }
+
+    private static NavigationOverlayFoldWork FoldOverlayWork(
+        NavigationOperationCandidate source,
+        NavigationOverlayTransaction transaction,
+        long sequence)
+    {
+        TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
+        int capacity = settings.OperationLimits.MaxCorridorCells;
+        var work = new NavigationOverlayFoldWork(
+            source,
+            transaction,
+            sequence,
+            settings.OperationLimits,
+            new GridCellPrism[capacity],
+            new Vector3d[(capacity * 2) - 2],
+            new NavigationCellAddress[capacity],
+            new NavigationAddressStampSet(capacity));
+        var meter = new MaintenanceWorkMeter(settings.MaintenanceBudget);
+        for (int i = 0; i < 4096; i++)
+        {
+            if (work.Advance(meter, out NavigationOperationRejection rejection))
+            {
+                rejection.Should().Be(NavigationOperationRejection.None);
+                return work;
+            }
+            rejection.Should().Be(NavigationOperationRejection.None);
+            meter.Reset();
+        }
+        throw new Xunit.Sdk.XunitException("Overlay fold did not complete.");
+    }
+
+    private static NavigationOverlayTransaction ConnectionTransaction(
+        NavigationConnection connection) => new(new[]
+        {
+            new NavigationMapOverlayDelta(
+                "map",
+                connections: new[] { NavigationConnectionOverlayOperation.Upsert(connection) })
+        });
+
+    private static void AdvanceFold(
+        NavigationMapFoldWork work,
+        MaintenanceWorkBudget budget)
+    {
+        var meter = new MaintenanceWorkMeter(budget);
+        for (int i = 0; i < 4096; i++)
+        {
+            if (work.Advance(meter, out NavigationOperationRejection rejection))
+            {
+                rejection.Should().Be(NavigationOperationRejection.None);
+                return;
+            }
+            rejection.Should().Be(NavigationOperationRejection.None);
+            meter.Reset();
+        }
+        throw new Xunit.Sdk.XunitException("Map fold did not complete.");
+    }
+
+    private static TraversalEvaluator CreateEvaluator(
+        NavigationWorldGraph graph,
+        Fixed64 maxStepUp,
+        Fixed64 maxDropDown) => new(
+            graph,
+            new NavigationAgentProfile(
+                new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+                maxStepUp,
+                maxDropDown,
+                Fixed64.Zero,
+                TraversalMedia.Solid,
+                TraversalCapability.None),
+            new NavigationAreaPolicy(
+                new NavigationAreaPolicyKey("explicit-step-drop", 1),
+                new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
+            TraversalMedium.Solid);
+
+    private static TrailblazerWorldContext CreateExplicitEvaluationContext()
+    {
+        TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        try
+        {
+            NormalizedGridConfiguration binding = AddGrid(context, 0);
+            VoxelIndex source = default;
+            VoxelIndex witness = new(1, 0, 0);
+            VoxelIndex destination = new(2, 0, 0);
+            NavigationCell cell = new(
+                TraversalMedia.Solid,
+                TraversalCapability.None,
+                default,
+                Fixed64.Zero,
+                Fixed64.Half,
+                Fixed64.One);
+            NavigationCell destinationCell = new(
+                TraversalMedia.Solid,
+                TraversalCapability.None,
+                default,
+                (Fixed64)2,
+                Fixed64.Half,
+                Fixed64.One);
+            var connection = new NavigationConnection(
+                "shortcut",
+                source,
+                new NavigationCellAddress("map", destination),
+                GetFoot(binding, source),
+                GetFoot(binding, destination),
+                Fixed64.Half,
+                Fixed64.One,
+                new[] { new NavigationCellAddress("map", witness) },
+                additionalCost: (Fixed64)3);
+            NavigationMapCommitOperation operation = Admit(
+                context,
+                new NavigationMapBuilder("map", binding)
+                    .AddCell(source, cell)
+                    .AddCell(witness, cell)
+                    .AddCell(destination, destinationCell)
+                    .AddConnection(connection)
+                    .Build(),
+                1);
+            SimulateUntilTerminal(context, operation.Receipt);
+            operation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+            return context;
+        }
+        catch
+        {
+            context.Dispose();
+            throw;
+        }
+    }
+
+    private static NavigationAgentProfile CreateExplicitEvaluationProfile() => new(
+        new KinematicBodyShape(Fixed64.Half, Fixed64.One, Fixed64.Zero),
+        Fixed64.Zero,
+        Fixed64.Zero,
+        Fixed64.Zero,
+        TraversalMedia.Solid,
+        TraversalCapability.None);
+
+    private static NavigationAreaPolicy CreateExplicitEvaluationPolicy() => new(
+        new NavigationAreaPolicyKey("explicit", 1),
+        new[] { new NavigationAreaRule(isAllowed: true, additionalEnterCost: (Fixed64)4) });
+
+    private static NavigationNodeRef ResolveNode(
+        NavigationWorldGraph graph,
+        VoxelIndex index)
+    {
+        graph.TryGetNodeRef(new NavigationCellAddress("map", index), out NavigationNodeRef node)
+            .Should().BeTrue();
+        return node;
+    }
+
     private static Vector3d GetFoot(NormalizedGridConfiguration binding, VoxelIndex index)
     {
         binding.TryGetCellPrism(index, out GridCellPrism prism).Should().BeTrue();
         return new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z);
     }
 
-    private static void Admit(
+    private static NavigationMapCommitOperation Admit(
         TrailblazerWorldContext context,
         NavigationMap map,
         long sequence)
@@ -921,9 +2540,10 @@ public sealed class NavigationExplicitConnectionTests
             sequence,
             effectiveFrame: context.FrameCount + 1);
         context.Pathing.Admit(operation).Should().BeTrue();
+        return operation;
     }
 
-    private static void CommitCell(
+    private static NavigationOverlayCommitOperation CommitCell(
         TrailblazerWorldContext context,
         string mapId,
         NavigationCellOverlayOperation cell,
@@ -937,6 +2557,124 @@ public sealed class NavigationExplicitConnectionTests
             sequence,
             effectiveFrame: context.FrameCount + 1);
         context.Pathing.Admit(operation).Should().BeTrue();
+        return operation;
+    }
+
+    private static TrailblazerWorldContext CreateContextWithExplicitBudget(
+        int maxExplicitEdges,
+        int? maxOverlaySlots = null,
+        int? maxComponentNodes = null,
+        int? maxDependencyEntries = null,
+        long? maxActiveSnapshotBytes = null,
+        int? maxRetiredSnapshots = null)
+    {
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        var budget = new MaintenanceWorkBudget(
+            defaults.MaintenanceBudget.MaxConsumedEnvelopes,
+            defaults.MaintenanceBudget.MaxBaselineAddresses,
+            maxOverlaySlots ?? defaults.MaintenanceBudget.MaxOverlaySlots,
+            maxComponentNodes ?? defaults.MaintenanceBudget.MaxComponentNodes,
+            maxExplicitEdges,
+            maxDependencyEntries ?? defaults.MaintenanceBudget.MaxDependencyEntries);
+        var settings = new TrailblazerWorldContextSettings(
+            defaults.OperationLimits,
+            budget,
+            defaults.MaxIngressEntries,
+            defaults.MaxIngressBytes,
+            defaults.MaxActiveSnapshots,
+            maxActiveSnapshotBytes ?? defaults.MaxActiveSnapshotBytes,
+            maxRetiredSnapshots ?? defaults.MaxRetiredSnapshots,
+            defaults.MaxRetiredSnapshotBytes,
+            defaults.MaxPersistentGraphPages,
+            defaults.MaxDynamicCellSlotsPerMap,
+            defaults.MaxDynamicCellSlots,
+            maxDependencyEntries.HasValue ? 1 : defaults.NavigationAreaCount,
+            maxDependencyEntries.HasValue ? 1 : defaults.MaxAreaPolicies,
+            maxDependencyEntries.HasValue ? 1 : defaults.MaxAreaRulesPerPolicy,
+            maxDependencyEntries.HasValue ? 1 : defaults.MaxAreaRules,
+            defaults.MaxConcurrentSnapshotLeases);
+        return TrailblazerWorldContext.CreateOwned(settings: settings);
+    }
+
+    private static TrailblazerWorldContext CreateClosureCursorCapacityScenario(
+        long? maxActiveSnapshotBytes,
+        out NavigationOverlayCommitOperation operation)
+    {
+        TrailblazerWorldContext context = CreateContextWithExplicitBudget(
+            maxExplicitEdges: 1,
+            maxOverlaySlots: 1,
+            maxComponentNodes: 1,
+            maxDependencyEntries: 3,
+            maxActiveSnapshotBytes);
+        try
+        {
+            long sequence = 0;
+            NavigationMapCommitOperation last = default;
+            var deltas = new NavigationMapOverlayDelta[4];
+            for (int i = 0; i < deltas.Length; i++)
+            {
+                string mapId = $"map-{i}";
+                NormalizedGridConfiguration binding = AddGrid(context, i * 10);
+                last = Admit(
+                    context,
+                    new NavigationMapBuilder(mapId, binding)
+                        .AddCell(default, SolidCell)
+                        .Build(),
+                    ++sequence);
+                deltas[i] = new NavigationMapOverlayDelta(
+                    mapId,
+                    new[]
+                    {
+                        NavigationCellOverlayOperation.Set(
+                            new VoxelIndex(1, 0, 0),
+                            SolidCell)
+                    });
+            }
+            SimulateUntilTerminal(context, last.Receipt);
+            last.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+            operation = new NavigationOverlayCommitOperation(
+                new PreparedNavigationOverlay(new NavigationOverlayTransaction(deltas)),
+                ++sequence,
+                context.FrameCount + 1);
+            context.Pathing.Admit(operation).Should().BeTrue();
+            return context;
+        }
+        catch
+        {
+            context.Dispose();
+            throw;
+        }
+    }
+
+    private static NavigationGraphCellState GetGraphCell(
+        TrailblazerWorldContext context,
+        string mapId,
+        VoxelIndex index = default)
+    {
+        context.Pathing.TryGetNavigationGraphCellState(mapId, index, out NavigationGraphCellState state)
+            .Should().BeTrue();
+        return state;
+    }
+
+    private static NavigationMapInstance FindInstance(
+        NavigationWorldGraph graph,
+        string mapId)
+    {
+        for (int i = 0; i < graph.MapCount; i++)
+        {
+            NavigationMapInstance instance = graph.GetInstance(i);
+            if (string.Equals(instance.MapId, mapId, StringComparison.Ordinal))
+                return instance;
+        }
+        throw new Xunit.Sdk.XunitException($"Expected map instance '{mapId}'.");
+    }
+
+    private static void SimulateUntilTerminal(
+        TrailblazerWorldContext context,
+        NavigationOperationReceipt receipt)
+    {
+        for (int i = 0; i < 256 && receipt.Status == NavigationOperationStatus.Pending; i++)
+            context.Simulate();
     }
 
     private static void CommitConnection(
@@ -971,4 +2709,5 @@ public sealed class NavigationExplicitConnectionTests
         }
         throw new System.InvalidOperationException("Expected explicit edge was not enumerated.");
     }
+
 }

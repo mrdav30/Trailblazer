@@ -500,9 +500,12 @@ public sealed class NavigationOperationProcessorTests
         first.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
         later.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
         processor.Candidate.MapCount.Should().Be(0);
-        var deferredStructuralIds = new string[4];
-        processor.CopyDeferredStructuralMapIds(deferredStructuralIds).Should().Be(1);
-        deferredStructuralIds[0].Should().Be("first");
+        processor.AdvanceDeferredStructuralClosure(
+                NavigationWorldGraph.Empty,
+                meter,
+                static (_, _) => true,
+                out _)
+            .Should().Be(NavigationDeferredStructuralClosureStatus.CloseAll);
         int frame = 1;
         while (later.Receipt.Status == NavigationOperationStatus.Pending && frame < 32)
         {
@@ -783,6 +786,7 @@ public sealed class NavigationOperationProcessorTests
         processor.Admit(smallOperation).Should().BeTrue();
         processor.ProcessFrame(1);
         long beforeGrowth = processor.Candidate.RetainedBytes;
+        long beforeExplicitGrowth = processor.Candidate.ExplicitConnections.RetainedBytes;
 
         var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(8, 8, 1, 8, 1, 8));
         long maximumGrowthGuardBytes = 0;
@@ -806,6 +810,12 @@ public sealed class NavigationOperationProcessorTests
         }
         growth.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         processor.Candidate.OverlayConnectionCount.Should().Be(1);
+        processor.Candidate.ExplicitConnections.GetIncidentAddressCount("d").Should().Be(0);
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            processor.Candidate.ExplicitConnections.GetIncidentAddressCount(witnesses[i].MapId)
+                .Should().Be(1);
+        }
         long payloadGrowth = processor.Candidate.RetainedBytes - beforeGrowth;
         payloadGrowth.Should().BePositive();
         maximumGrowthGuardBytes.Should().BeGreaterThanOrEqualTo(payloadGrowth);
@@ -829,7 +839,421 @@ public sealed class NavigationOperationProcessorTests
         }
         shrink.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         processor.Candidate.OverlayConnectionCount.Should().Be(1);
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            processor.Candidate.ExplicitConnections.GetIncidentAddressCount(witnesses[i].MapId)
+                .Should().Be(0);
+        }
+        processor.Candidate.ExplicitConnections.GetIncidentAddressCount(large.Destination.MapId)
+            .Should().Be(0);
+        processor.Candidate.ExplicitConnections.RetainedBytes.Should().Be(beforeExplicitGrowth);
         processor.Candidate.RetainedBytes.Should().Be(beforeGrowth);
+    }
+
+    [Fact]
+    public void RetainedGuard_ShouldRejectSameSizedExplicitPayloadReplacementBelowExactPeak()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        VoxelIndex destination = new(1, 0, 0);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(default, SolidCell)
+            .AddCell(destination, SolidCell)
+            .Build();
+        processor.Admit(Commit(map, 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        NavigationConnection CreateConnection(Fixed64 additionalCost) => new(
+            "connection",
+            default,
+            new NavigationCellAddress("map", destination),
+            GetFootAnchor(binding, default),
+            GetFootAnchor(binding, destination),
+            Fixed64.Zero,
+            Fixed64.Half,
+            additionalCost: additionalCost);
+        NavigationOverlayCommitOperation initial = ConnectionOverlay(
+            CreateConnection(Fixed64.Zero),
+            2,
+            1);
+        processor.Admit(initial).Should().BeTrue();
+        processor.ProcessFrame(1);
+        initial.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        long sourceBytes = processor.Candidate.RetainedBytes;
+        int sourcePages = processor.Candidate.PersistentPageCount;
+
+        long exactPeakBytes = 0;
+        int exactPeakPages = 0;
+        NavigationOverlayCommitOperation firstReplacement = ConnectionOverlay(
+            CreateConnection(Fixed64.One),
+            3,
+            2);
+        processor.Admit(firstReplacement).Should().BeTrue();
+        processor.ProcessFrame(
+            2,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, pages) =>
+            {
+                exactPeakBytes = Math.Max(exactPeakBytes, bytes);
+                exactPeakPages = Math.Max(exactPeakPages, pages);
+                return true;
+            });
+        firstReplacement.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        long logicalByteDelta = Math.Max(0L, processor.Candidate.RetainedBytes - sourceBytes);
+        int logicalPageDelta = Math.Max(0, processor.Candidate.PersistentPageCount - sourcePages);
+        processor.Candidate.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("map", "connection"),
+                out NavigationExplicitConnectionRecord published)
+            .Should().BeTrue();
+        long replacementPayloadBytes = published.RetainedBytes
+            + processor.Candidate.ExplicitConnections.GetIncidentOwnerRow(
+                new NavigationCellAddress("map", default)).RetainedBytes
+            + processor.Candidate.ExplicitConnections.GetIncidentOwnerRow(
+                new NavigationCellAddress("map", destination)).RetainedBytes;
+        int replacementPayloadPages = published.PersistentPageCount
+            + processor.Candidate.ExplicitConnections.GetIncidentOwnerRow(
+                new NavigationCellAddress("map", default)).PersistentPageCount
+            + processor.Candidate.ExplicitConnections.GetIncidentOwnerRow(
+                new NavigationCellAddress("map", destination)).PersistentPageCount;
+        exactPeakBytes.Should().BeGreaterThanOrEqualTo(replacementPayloadBytes,
+            "the new record and both fixed-page incidence rows coexist with the source payload");
+        exactPeakPages.Should().BeGreaterThanOrEqualTo(replacementPayloadPages);
+        exactPeakBytes.Should().BeGreaterThan(logicalByteDelta,
+            "same-sized candidate totals alone exclude source/new payload coexistence");
+        exactPeakPages.Should().BeGreaterThan(logicalPageDelta);
+        long tightByteCap = exactPeakBytes - 1;
+        tightByteCap.Should().BeGreaterThanOrEqualTo(logicalByteDelta);
+
+        NavigationOverlayCommitOperation rejected = ConnectionOverlay(
+            CreateConnection((Fixed64)2),
+            4,
+            3);
+        processor.Admit(rejected).Should().BeTrue();
+        processor.ProcessFrame(
+            3,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, pages) => bytes <= tightByteCap && pages <= exactPeakPages);
+
+        rejected.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        rejected.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        processor.Candidate.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("map", "connection"),
+                out NavigationExplicitConnectionRecord retained)
+            .Should().BeTrue();
+        retained.Definition.AdditionalCost.Should().Be(Fixed64.One,
+            "capacity rejection must retain the prior successful explicit root");
+    }
+
+    [Fact]
+    public void RetainedGuard_ShouldChargeIntermediateSameOwnerPayloadAcrossBatch()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        VoxelIndex destination = new(1, 0, 0);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(default, SolidCell)
+            .AddCell(destination, SolidCell)
+            .Build();
+        processor.Admit(Commit(map, 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        NavigationConnection CreateConnection(Fixed64 additionalCost) => new(
+            "connection",
+            default,
+            new NavigationCellAddress("map", destination),
+            GetFootAnchor(binding, default),
+            GetFootAnchor(binding, destination),
+            Fixed64.Zero,
+            Fixed64.Half,
+            additionalCost: additionalCost);
+        NavigationOverlayCommitOperation initial = ConnectionOverlay(
+            CreateConnection(Fixed64.Zero),
+            2,
+            1);
+        processor.Admit(initial).Should().BeTrue();
+        processor.ProcessFrame(1);
+
+        long oneFoldPeak = 0;
+        NavigationOverlayCommitOperation measured = ConnectionOverlay(
+            CreateConnection(Fixed64.One),
+            3,
+            2);
+        processor.Admit(measured).Should().BeTrue();
+        processor.ProcessFrame(
+            2,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, _) =>
+            {
+                oneFoldPeak = Math.Max(oneFoldPeak, bytes);
+                return true;
+            });
+        measured.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        processor.Candidate.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("map", "connection"),
+                out NavigationExplicitConnectionRecord record)
+            .Should().BeTrue();
+        long onePayloadBytes = record.RetainedBytes
+            + processor.Candidate.ExplicitConnections.GetIncidentOwnerRow(
+                new NavigationCellAddress("map", default)).RetainedBytes
+            + processor.Candidate.ExplicitConnections.GetIncidentOwnerRow(
+                new NavigationCellAddress("map", destination)).RetainedBytes;
+        onePayloadBytes.Should().Be(record.RetainedBytes + 432);
+
+        NavigationOverlayCommitOperation first = ConnectionOverlay(
+            CreateConnection((Fixed64)2),
+            4,
+            3);
+        NavigationOverlayCommitOperation second = ConnectionOverlay(
+            CreateConnection((Fixed64)3),
+            5,
+            3);
+        processor.Admit(first).Should().BeTrue();
+        processor.Admit(second).Should().BeTrue();
+
+        long pairPeak = 0;
+        processor.ProcessFrame(
+            3,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, _) =>
+            {
+                pairPeak = Math.Max(pairPeak, bytes);
+                return true;
+            });
+
+        pairPeak.Should().BeGreaterThan(oneFoldPeak);
+        first.Receipt.Rejection.Should().NotBe(NavigationOperationRejection.CapacityExceeded);
+        second.Receipt.Rejection.Should().NotBe(NavigationOperationRejection.CapacityExceeded);
+
+        NavigationOverlayCommitOperation rejectedFirst = ConnectionOverlay(
+            CreateConnection((Fixed64)4),
+            6,
+            4);
+        NavigationOverlayCommitOperation rejectedSecond = ConnectionOverlay(
+            CreateConnection((Fixed64)5),
+            7,
+            4);
+        processor.Admit(rejectedFirst).Should().BeTrue();
+        processor.Admit(rejectedSecond).Should().BeTrue();
+        processor.ProcessFrame(
+            4,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, _) => bytes < pairPeak);
+
+        rejectedFirst.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        rejectedFirst.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        rejectedSecond.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        rejectedSecond.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        processor.Candidate.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("map", "connection"),
+                out NavigationExplicitConnectionRecord retained)
+            .Should().BeTrue();
+        retained.Definition.AdditionalCost.Should().Be((Fixed64)3,
+            "the rejected pair must retain the prior published owner");
+    }
+
+    [Fact]
+    public void RetainedGuard_ShouldReleasePriorFoldPayloadAcrossThreeReplacements()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        VoxelIndex destination = new(1, 0, 0);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(default, SolidCell)
+            .AddCell(destination, SolidCell)
+            .Build();
+        processor.Admit(Commit(map, 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        NavigationConnection CreateConnection(Fixed64 additionalCost) => new(
+            "connection",
+            default,
+            new NavigationCellAddress("map", destination),
+            GetFootAnchor(binding, default),
+            GetFootAnchor(binding, destination),
+            Fixed64.Zero,
+            Fixed64.Half,
+            additionalCost: additionalCost);
+        NavigationOverlayCommitOperation initial = ConnectionOverlay(
+            CreateConnection(Fixed64.Zero),
+            2,
+            1);
+        processor.Admit(initial).Should().BeTrue();
+        processor.ProcessFrame(1);
+
+        long oneFoldPeak = 0;
+        long copiedBytesPerFold = 0;
+        NavigationOverlayCommitOperation measured = ConnectionOverlay(
+            CreateConnection(Fixed64.One),
+            3,
+            2);
+        processor.Admit(measured).Should().BeTrue();
+        processor.ProcessFrame(
+            2,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, _) =>
+            {
+                oneFoldPeak = Math.Max(oneFoldPeak, bytes);
+                copiedBytesPerFold = Math.Max(
+                    copiedBytesPerFold,
+                    processor.Candidate.WorkCopiedPersistentBytes);
+                return true;
+            });
+        measured.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        processor.Candidate.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("map", "connection"),
+                out NavigationExplicitConnectionRecord record)
+            .Should().BeTrue();
+        long onePayloadBytes = record.RetainedBytes + 432;
+        long correctedThreeFoldPeak = oneFoldPeak
+            + (2 * copiedBytesPerFold)
+            + onePayloadBytes;
+
+        NavigationOverlayCommitOperation first = ConnectionOverlay(
+            CreateConnection((Fixed64)2),
+            4,
+            3);
+        NavigationOverlayCommitOperation second = ConnectionOverlay(
+            CreateConnection((Fixed64)3),
+            5,
+            3);
+        NavigationOverlayCommitOperation third = ConnectionOverlay(
+            CreateConnection((Fixed64)4),
+            6,
+            3);
+        processor.Admit(first).Should().BeTrue();
+        processor.Admit(second).Should().BeTrue();
+        processor.Admit(third).Should().BeTrue();
+
+        long observedBatchPeak = 0;
+        processor.ProcessFrame(
+            3,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, _) =>
+            {
+                observedBatchPeak = Math.Max(observedBatchPeak, bytes);
+                return bytes <= correctedThreeFoldPeak;
+            });
+
+        observedBatchPeak.Should().BeLessThanOrEqualTo(correctedThreeFoldPeak);
+        first.Receipt.Rejection.Should().NotBe(NavigationOperationRejection.CapacityExceeded);
+        second.Receipt.Rejection.Should().NotBe(NavigationOperationRejection.CapacityExceeded);
+        third.Receipt.Rejection.Should().NotBe(NavigationOperationRejection.CapacityExceeded);
+        processor.Candidate.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("map", "connection"),
+                out NavigationExplicitConnectionRecord retained)
+            .Should().BeTrue();
+        retained.Definition.AdditionalCost.Should().Be((Fixed64)4);
+    }
+
+    [Fact]
+    public void RetainedGuard_ShouldChargeDifferentOwnersOnceAtExactPeak()
+    {
+        var processor = new NavigationOperationProcessor(CreateLimits());
+        NormalizedGridConfiguration binding = CreateBinding(Vector3d.Zero);
+        var firstSource = new VoxelIndex(0, 0, 0);
+        var firstDestination = new VoxelIndex(1, 0, 0);
+        var secondSource = new VoxelIndex(0, 0, 1);
+        var secondDestination = new VoxelIndex(1, 0, 1);
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(firstSource, SolidCell)
+            .AddCell(firstDestination, SolidCell)
+            .AddCell(secondSource, SolidCell)
+            .AddCell(secondDestination, SolidCell)
+            .Build();
+        processor.Admit(Commit(map, 1, 0)).Should().BeTrue();
+        processor.ProcessFrame(0);
+        NavigationConnection CreateConnection(
+            string id,
+            VoxelIndex source,
+            VoxelIndex destination,
+            Fixed64 additionalCost) => new(
+                id,
+                source,
+                new NavigationCellAddress("map", destination),
+                GetFootAnchor(binding, source),
+                GetFootAnchor(binding, destination),
+                Fixed64.Zero,
+                Fixed64.Half,
+                additionalCost: additionalCost);
+        NavigationOverlayCommitOperation initialX = ConnectionOverlay(
+            CreateConnection("x", firstSource, firstDestination, Fixed64.Zero),
+            2,
+            1);
+        NavigationOverlayCommitOperation initialY = ConnectionOverlay(
+            CreateConnection("y", secondSource, secondDestination, Fixed64.Zero),
+            3,
+            1);
+        processor.Admit(initialX).Should().BeTrue();
+        processor.Admit(initialY).Should().BeTrue();
+        processor.ProcessFrame(1);
+        initialX.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        initialY.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        long exactPeak = 0;
+        NavigationOverlayCommitOperation measuredX = ConnectionOverlay(
+            CreateConnection("x", firstSource, firstDestination, Fixed64.One),
+            4,
+            2);
+        NavigationOverlayCommitOperation measuredY = ConnectionOverlay(
+            CreateConnection("y", secondSource, secondDestination, Fixed64.One),
+            5,
+            2);
+        processor.Admit(measuredX).Should().BeTrue();
+        processor.Admit(measuredY).Should().BeTrue();
+        processor.ProcessFrame(
+            2,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, _) =>
+            {
+                exactPeak = Math.Max(exactPeak, bytes);
+                return true;
+            });
+        measuredX.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        measuredY.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        NavigationOverlayCommitOperation exactX = ConnectionOverlay(
+            CreateConnection("x", firstSource, firstDestination, (Fixed64)2),
+            6,
+            3);
+        NavigationOverlayCommitOperation exactY = ConnectionOverlay(
+            CreateConnection("y", secondSource, secondDestination, (Fixed64)2),
+            7,
+            3);
+        processor.Admit(exactX).Should().BeTrue();
+        processor.Admit(exactY).Should().BeTrue();
+        processor.ProcessFrame(
+            3,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, _) => bytes <= exactPeak);
+        exactX.Receipt.Rejection.Should().NotBe(NavigationOperationRejection.CapacityExceeded);
+        exactY.Receipt.Rejection.Should().NotBe(NavigationOperationRejection.CapacityExceeded);
+
+        NavigationOverlayCommitOperation rejectedX = ConnectionOverlay(
+            CreateConnection("x", firstSource, firstDestination, (Fixed64)3),
+            8,
+            4);
+        NavigationOverlayCommitOperation rejectedY = ConnectionOverlay(
+            CreateConnection("y", secondSource, secondDestination, (Fixed64)3),
+            9,
+            4);
+        processor.Admit(rejectedX).Should().BeTrue();
+        processor.Admit(rejectedY).Should().BeTrue();
+        processor.ProcessFrame(
+            4,
+            static (_, _, _, _) => NavigationCandidatePublication.Published,
+            new MaintenanceWorkMeter(TrailblazerWorldContextSettings.Default.MaintenanceBudget),
+            (bytes, _) => bytes < exactPeak);
+
+        rejectedX.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        rejectedX.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
+        rejectedY.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        rejectedY.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
     }
 
     [Fact]

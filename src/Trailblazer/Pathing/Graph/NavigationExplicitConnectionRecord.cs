@@ -5,7 +5,6 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
-using System;
 using FixedMathSharp;
 
 namespace Trailblazer.Pathing;
@@ -13,14 +12,15 @@ namespace Trailblazer.Pathing;
 /// <summary>Stores one selected explicit definition and its immutable corridor certificate.</summary>
 internal sealed class NavigationExplicitConnectionRecord
 {
-    private readonly Vector3d[] _portalWaypoints;
+    private const long BaseRetainedBytes = 104L;
+    private readonly NavigationPagedSequence<Vector3d> _portalWaypoints;
 
     internal NavigationExplicitConnectionRecord(
         NavigationConnectionOwnerKey owner,
         NavigationConnection definition,
         bool isActive,
         Fixed64 corridorCost,
-        Vector3d[] portalWaypoints,
+        NavigationPagedSequence<Vector3d> portalWaypoints,
         bool isLowerBoundCertified = false)
     {
         Owner = owner;
@@ -47,7 +47,11 @@ internal sealed class NavigationExplicitConnectionRecord
 
     internal bool IsLowerBoundCertified { get; }
 
-    internal ReadOnlySpan<Vector3d> PortalWaypoints => _portalWaypoints;
+    internal NavigationPagedSequence<Vector3d> PortalWaypoints => _portalWaypoints;
 
-    internal long RetainedBytes => checked(80L + ((long)_portalWaypoints.Length * 24L));
+    internal long RetainedBytes => checked(
+        BaseRetainedBytes
+        + _portalWaypoints.RetainedBytes);
+
+    internal int PersistentPageCount => checked(1 + _portalWaypoints.PersistentPageCount);
 }

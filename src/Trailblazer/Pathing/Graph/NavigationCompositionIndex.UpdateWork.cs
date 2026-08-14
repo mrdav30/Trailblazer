@@ -6,8 +6,6 @@
 //=======================================================================
 
 using System;
-using SwiftCollections;
-using SwiftCollections.Utility;
 
 namespace Trailblazer.Pathing;
 
@@ -19,58 +17,67 @@ internal sealed partial class NavigationCompositionIndex
         private readonly NavigationCompositionIndex _source;
         private readonly NavigationInstanceDirectory _directory;
         private readonly NavigationExplicitConnectionIndex _explicitConnections;
-        private readonly string[] _changes;
-        private readonly long _version;
-        private readonly SwiftHashSet<string> _domain;
-        private readonly SwiftHashSet<string> _oldRoots;
-        private readonly SwiftHashSet<string> _cleanupRootSet;
-        private readonly int _hashCapacity;
-        private PersistentStringMap<bool> _buildVisited = PersistentStringMap<bool>.Empty;
+        private readonly PersistentStringMap<bool> _changes;
+        private readonly long _compositionVersion;
+        private readonly long _componentVersion;
+        private readonly NavigationCompositionWorkspace _workspace;
+        private readonly NavigationStringStampSet _domain;
+        private readonly NavigationStringStampSet _rootKeySet;
+        private readonly NavigationStringStampSet _buildVisited;
         private readonly string[] _queue;
         private readonly string[] _buildQueue;
-        private readonly string[] _componentMembers;
-        private readonly NavigationStructuralComponent[] _treeStack;
-        private string[]? _pendingMembers;
+        private NavigationPagedSequence<string>.Builder? _componentBuilder;
+        private NavigationPagedSequence<string>.Enumerator _pendingMemberEnumerator;
+        private string? _componentIdentity;
         private PersistentStringMap<NavigationStructuralNode> _nodes;
         private PersistentStringMap<NavigationIncomingDependencyRecord> _incoming;
         private PersistentStringMap<NavigationStructuralComponent> _components;
         private PersistentStringMap<string> _membership;
-        private PersistentStringMap<string> _aliases;
         private long _nodeBytes;
         private long _incomingBytes;
         private long _componentBytes;
+        private int _nodePages;
+        private int _incomingPages;
+        private int _componentPages;
         private Stage _stage;
         private int _changeIndex;
         private bool _changedNodeConsumed;
         private StructuralNodeWork? _nodeWork;
         private NavigationStructuralNode? _oldNode;
         private NavigationStructuralNode? _nextNode;
-        private int _oldLinkIndex;
-        private int _nextLinkIndex;
+        private NavigationPagedSequence<NavigationStructuralLink>.Enumerator _oldLinks;
+        private NavigationPagedSequence<NavigationStructuralLink>.Enumerator _nextLinks;
+        private NavigationStructuralLink _oldLink;
+        private NavigationStructuralLink _nextLink;
+        private int _oldLinksRemaining;
+        private int _nextLinksRemaining;
+        private bool _oldLinkReady;
+        private bool _nextLinkReady;
+        private bool _reverseInitialized;
         private readonly string[] _rootKeys;
         private int _rootKeyCount;
         private int _rootIndex;
-        private ComponentTreeCursor? _treeCursor;
+        private ComponentMemberCursor? _componentMemberCursor;
         private int _queueRead;
         private int _queueWrite;
-        private int _edgeIndex;
+        private NavigationPagedSequence<NavigationStructuralLink>.Enumerator _edges;
+        private int _edgesRemaining;
         private int _incomingIndex;
         private bool _queueNodeConsumed;
         private readonly string[] _cleanupRoots;
         private int _cleanupRootCount;
-        private int _cleanupMemberIndex;
         private int _buildStartIndex;
         private int _buildRead;
         private int _buildWrite;
         private int _buildMemberCount;
-        private int _buildEdgeIndex;
+        private NavigationPagedSequence<NavigationStructuralLink>.Enumerator _buildEdges;
+        private int _buildEdgesRemaining;
         private int _buildIncomingIndex;
         private bool _buildNodeConsumed;
         private bool _componentActive;
         private bool _componentTraversalComplete;
         private int _publishMemberIndex;
         private NavigationStructuralComponent? _pendingComponent;
-        private int _prepareMemberIndex;
         private int _copiedNodes;
         private int _copiedReverse;
         private int _copiedComponents;
@@ -78,18 +85,33 @@ internal sealed partial class NavigationCompositionIndex
         private int _visitedMaps;
         private int _visitedEdges;
         private int _copiedPersistentPages;
+        private long _payloadAdditionalBytes;
+        private int _payloadAdditionalPages;
+        private PersistentStringMap<PersistentStringMap<int>> _incomingJournal =
+            PersistentStringMap<PersistentStringMap<int>>.Empty;
+        private int _incomingJournalValuePages;
+        private string? _incomingRebuildDestination;
+        private PersistentStringMap<int>? _incomingRebuildChanges;
+        private NavigationIncomingDependencyRecord? _incomingRebuildSource;
+        private PersistentStringMap<int> _incomingRebuildSources =
+            PersistentStringMap<int>.Empty;
+        private int _incomingRebuildSourceIndex;
+        private int _incomingRebuildChangeIndex;
 
         internal UpdateWork(
             NavigationCompositionIndex source,
             NavigationInstanceDirectory directory,
-            ReadOnlySpan<string> changedMapIds,
-            long version)
+            PersistentStringMap<bool> changedMapIds,
+            long version,
+            NavigationCompositionWorkspace workspace)
             : this(
                 source,
                 directory,
                 NavigationExplicitConnectionIndex.Empty,
                 changedMapIds,
-                version)
+                version,
+                version,
+                workspace)
         {
         }
 
@@ -97,33 +119,54 @@ internal sealed partial class NavigationCompositionIndex
             NavigationCompositionIndex source,
             NavigationInstanceDirectory directory,
             NavigationExplicitConnectionIndex explicitConnections,
-            ReadOnlySpan<string> changedMapIds,
-            long version)
+            PersistentStringMap<bool> changedMapIds,
+            long version,
+            NavigationCompositionWorkspace workspace)
+            : this(
+                source,
+                directory,
+                explicitConnections,
+                changedMapIds,
+                version,
+                version,
+                workspace)
+        {
+        }
+
+        internal UpdateWork(
+            NavigationCompositionIndex source,
+            NavigationInstanceDirectory directory,
+            NavigationExplicitConnectionIndex explicitConnections,
+            PersistentStringMap<bool> changedMapIds,
+            long compositionVersion,
+            long componentVersion,
+            NavigationCompositionWorkspace workspace)
         {
             _source = source;
             _directory = directory;
             _explicitConnections = explicitConnections;
-            _changes = NormalizeChanges(changedMapIds);
-            _version = version;
+            _changes = changedMapIds;
+            _compositionVersion = compositionVersion;
+            _componentVersion = componentVersion;
+            _workspace = workspace;
+            _workspace.Reset();
             _nodes = source._nodes;
             _incoming = source._incoming;
             _components = source._components;
             _membership = source._componentMembership;
-            _aliases = source._componentAliases;
             _nodeBytes = source._nodeValueBytes;
             _incomingBytes = source._incomingValueBytes;
             _componentBytes = source._componentValueBytes;
-            int capacity = Math.Max(1, Math.Max(directory.Count, source._nodes.Count));
-            _hashCapacity = GetHashCapacity(capacity);
-            _domain = new SwiftHashSet<string>(_hashCapacity, StringComparer.Ordinal);
-            _oldRoots = new SwiftHashSet<string>(_hashCapacity, StringComparer.Ordinal);
-            _cleanupRootSet = new SwiftHashSet<string>(_hashCapacity, StringComparer.Ordinal);
-            _queue = new string[capacity];
-            _buildQueue = new string[capacity];
-            _componentMembers = new string[capacity];
-            _treeStack = new NavigationStructuralComponent[capacity];
-            _rootKeys = new string[capacity];
-            _cleanupRoots = new string[capacity];
+            _nodePages = source._nodeValuePages;
+            _incomingPages = source._incomingValuePages;
+            _componentPages = source._componentValuePages;
+            _domain = workspace.Domain;
+            _rootKeySet = workspace.RootKeySet;
+            _buildVisited = workspace.BuildVisited;
+            _queue = workspace.DomainQueue;
+            _buildQueue = workspace.BuildQueue;
+            _rootKeys = workspace.RootKeys;
+            _cleanupRoots = _rootKeys;
         }
 
         internal bool IsComplete => _stage == Stage.Complete;
@@ -138,7 +181,17 @@ internal sealed partial class NavigationCompositionIndex
 
         internal int CopiedMembershipRecords => _copiedMemberships;
 
-        internal ReadOnlySpan<string> AffectedMapIds => _queue.AsSpan(0, _queueWrite);
+        internal int RetainedCopiedPersistentPages => GetRetainedCopiedPersistentPages();
+
+        internal long PayloadAdditionalRetainedBytes => _payloadAdditionalBytes;
+
+        internal int PayloadAdditionalPersistentPages => _payloadAdditionalPages;
+
+        internal long NonPayloadRetainedBytes => checked(
+            RetainedBytes - PayloadAdditionalRetainedBytes);
+
+        internal int NonPayloadPersistentPageCount => checked(
+            PersistentPageCount - PayloadAdditionalPersistentPages);
 
         internal long RetainedBytes => checked(
             192L
@@ -146,22 +199,15 @@ internal sealed partial class NavigationCompositionIndex
             + _incoming.RetainedBytes
             + _components.RetainedBytes
             + _membership.RetainedBytes
-            + _aliases.RetainedBytes
             + _nodeBytes
             + _incomingBytes
             + _componentBytes
-            + _buildVisited.RetainedBytes
-            + ((long)(_changes.Length
-                + _queue.Length
-                + _buildQueue.Length
-                + _componentMembers.Length
-                + _rootKeys.Length
-                + _cleanupRoots.Length)
-                * IntPtr.Size)
-            + ((long)_treeStack.Length * IntPtr.Size)
-            + ((long)(_pendingMembers?.Length ?? 0) * IntPtr.Size)
-            + ((long)_hashCapacity * 3L * 16L)
-            + (_treeCursor?.RetainedBytes ?? 0)
+            + _payloadAdditionalBytes
+            + GetIncomingJournalScratchBytes()
+            + GetIncomingRebuildScratchBytes()
+            + _workspace.RetainedBytes
+            + (_componentBuilder?.RetainedBytes ?? 0)
+            + (_componentMemberCursor?.RetainedBytes ?? 0)
             + (_nodeWork?.RetainedBytes ?? 0)
             + (_pendingComponent?.RetainedBytes ?? 0)
             + (GetRetainedCopiedPersistentPages() * 64L));
@@ -172,22 +218,29 @@ internal sealed partial class NavigationCompositionIndex
             int changedMapCount)
         {
             int capacity = Math.Max(1, Math.Max(sourceMapCount, candidateMapCount));
-            int hashCapacity = GetHashCapacity(capacity);
             return checked(
                 192L
-                + ((long)(changedMapCount + (capacity * 6L)) * IntPtr.Size)
                 + ((long)capacity * IntPtr.Size)
-                + ((long)hashCapacity * 3L * 16L));
+                + NavigationCompositionWorkspace.GetRetainedBytes(capacity));
         }
 
         internal int PersistentPageCount => checked(
-            5
+            4
             + _nodes.PersistentNodeCount
             + _incoming.PersistentNodeCount
             + _components.PersistentNodeCount
             + _membership.PersistentNodeCount
-            + _aliases.PersistentNodeCount
-            + _buildVisited.PersistentNodeCount
+            + _nodePages
+            + _incomingPages
+            + _componentPages
+            + _payloadAdditionalPages
+            + _incomingJournal.PersistentNodeCount
+            + _incomingJournalValuePages
+            + _incomingRebuildSources.PersistentNodeCount
+            + (_componentBuilder?.PersistentPageCount ?? 0)
+            + (_componentMemberCursor?.PersistentPageCount ?? 0)
+            + (_nodeWork?.PersistentPageCount ?? 0)
+            + (_pendingComponent?.PersistentPageCount ?? 0)
             + GetRetainedCopiedPersistentPages());
 
         internal bool Advance(MaintenanceWorkMeter meter)
@@ -198,6 +251,10 @@ internal sealed partial class NavigationCompositionIndex
                 {
                     case Stage.CaptureNodes:
                         if (!AdvanceNodeCapture(meter))
+                            return false;
+                        break;
+                    case Stage.ApplyIncomingJournal:
+                        if (!AdvanceIncomingJournal(meter))
                             return false;
                         break;
                     case Stage.SeedOldComponents:
@@ -224,9 +281,9 @@ internal sealed partial class NavigationCompositionIndex
 
         private bool AdvanceNodeCapture(MaintenanceWorkMeter meter)
         {
-            while (_changeIndex < _changes.Length)
+            while (_changeIndex < _changes.Count)
             {
-                string mapId = _changes[_changeIndex];
+                string mapId = _changes.GetKeyAt(_changeIndex);
                 if (!_changedNodeConsumed)
                 {
                     if (!meter.TryConsumeComponentNodes(1))
@@ -234,12 +291,17 @@ internal sealed partial class NavigationCompositionIndex
                     _changedNodeConsumed = true;
                     _source._nodes.TryGetValue(mapId, out _oldNode!);
                     if (_source.TryGetRootComponent(mapId, out NavigationStructuralComponent oldRoot)
-                        && _oldRoots.Add(oldRoot.Key))
+                        && _rootKeySet.Add(oldRoot.Key))
                     {
                         _rootKeys[_rootKeyCount++] = oldRoot.Key;
                     }
                     if (_directory.TryGet(mapId, out NavigationMapInstance next))
-                        _nodeWork = new StructuralNodeWork(next, _explicitConnections);
+                    {
+                        _nodeWork = new StructuralNodeWork(
+                            next,
+                            _explicitConnections,
+                            _oldNode);
+                    }
                 }
                 if (_nodeWork != null && !_nodeWork.Advance(meter))
                     return false;
@@ -248,89 +310,99 @@ internal sealed partial class NavigationCompositionIndex
                 if (!AdvanceReverseIndex(mapId, meter))
                     return false;
 
-                if (_oldNode != null)
+                if (!ReferenceEquals(_oldNode, _nextNode) && _oldNode != null)
                 {
                     _nodes = _nodes.Remove(mapId, out _, out int copiedNodes);
                     RecordPersistentCopies(copiedNodes);
                     _nodeBytes = checked(_nodeBytes - _oldNode.RetainedBytes);
+                    _nodePages = checked(_nodePages - _oldNode.PersistentPageCount);
                     _copiedNodes++;
                 }
-                if (_nextNode != null)
+                if (!ReferenceEquals(_oldNode, _nextNode) && _nextNode != null)
                 {
                     _nodes = _nodes.Set(mapId, _nextNode, out int copiedNodes);
                     RecordPersistentCopies(copiedNodes);
                     _nodeBytes = checked(_nodeBytes + _nextNode.RetainedBytes);
+                    _nodePages = checked(_nodePages + _nextNode.PersistentPageCount);
+                    _payloadAdditionalBytes = checked(
+                        _payloadAdditionalBytes + _nextNode.RetainedBytes);
+                    _payloadAdditionalPages = checked(
+                        _payloadAdditionalPages + _nextNode.PersistentPageCount);
                     _copiedNodes++;
                     AddDomain(mapId);
                 }
                 ResetChangeCursor();
                 _changeIndex++;
             }
-            _stage = Stage.SeedOldComponents;
+            _stage = Stage.ApplyIncomingJournal;
             return true;
         }
 
         private bool AdvanceReverseIndex(string mapId, MaintenanceWorkMeter meter)
         {
-            ReadOnlySpan<NavigationStructuralLink> oldLinks = _oldNode == null
-                ? ReadOnlySpan<NavigationStructuralLink>.Empty
-                : _oldNode.Links;
-            ReadOnlySpan<NavigationStructuralLink> nextLinks = _nextNode == null
-                ? ReadOnlySpan<NavigationStructuralLink>.Empty
-                : _nextNode.Links;
-            while (_oldLinkIndex < oldLinks.Length || _nextLinkIndex < nextLinks.Length)
+            if (ReferenceEquals(_oldNode, _nextNode))
+                return true;
+            if (!_reverseInitialized)
             {
-                int comparison = _oldLinkIndex >= oldLinks.Length
+                _oldLinksRemaining = _oldNode?.LinkCount ?? 0;
+                _nextLinksRemaining = _nextNode?.LinkCount ?? 0;
+                if (_oldNode != null)
+                    _oldLinks = _oldNode.GetLinkEnumerator();
+                if (_nextNode != null)
+                    _nextLinks = _nextNode.GetLinkEnumerator();
+                _reverseInitialized = true;
+            }
+            while (_oldLinksRemaining != 0 || _nextLinksRemaining != 0)
+            {
+                if (!meter.TryConsumeDependencyEntries(1))
+                    return false;
+                if (!_oldLinkReady && _oldLinksRemaining != 0)
+                {
+                    _oldLinks.MoveNext();
+                    _oldLink = _oldLinks.Current;
+                    _oldLinkReady = true;
+                }
+                if (!_nextLinkReady && _nextLinksRemaining != 0)
+                {
+                    _nextLinks.MoveNext();
+                    _nextLink = _nextLinks.Current;
+                    _nextLinkReady = true;
+                }
+                int comparison = !_oldLinkReady
                     ? 1
-                    : _nextLinkIndex >= nextLinks.Length
+                    : !_nextLinkReady
                         ? -1
                         : string.CompareOrdinal(
-                            oldLinks[_oldLinkIndex].DestinationMapId,
-                            nextLinks[_nextLinkIndex].DestinationMapId);
+                            _oldLink.DestinationMapId,
+                            _nextLink.DestinationMapId);
                 string destination;
                 int count;
                 if (comparison < 0)
                 {
-                    destination = oldLinks[_oldLinkIndex++].DestinationMapId;
+                    destination = _oldLink.DestinationMapId;
                     count = 0;
+                    _oldLinkReady = false;
+                    _oldLinksRemaining--;
                 }
                 else
                 {
-                    destination = nextLinks[_nextLinkIndex].DestinationMapId;
-                    count = nextLinks[_nextLinkIndex++].Count;
+                    destination = _nextLink.DestinationMapId;
+                    count = _nextLink.Count;
+                    _nextLinkReady = false;
+                    _nextLinksRemaining--;
                     if (comparison == 0)
                     {
-                        if (oldLinks[_oldLinkIndex].Count == count)
+                        int oldCount = _oldLink.Count;
+                        _oldLinkReady = false;
+                        _oldLinksRemaining--;
+                        if (oldCount == count)
                         {
-                            _oldLinkIndex++;
                             continue;
                         }
-                        _oldLinkIndex++;
                     }
                 }
-                if (!meter.TryConsumeDependencyEntries(1))
-                {
-                    if (comparison < 0)
-                        _oldLinkIndex--;
-                    else
-                    {
-                        _nextLinkIndex--;
-                        if (comparison == 0)
-                            _oldLinkIndex--;
-                    }
-                    return false;
-                }
-                _incoming = SetIncoming(
-                    _incoming,
-                    destination,
-                    mapId,
-                    count,
-                    ref _incomingBytes,
-                    out bool copied,
-                    out int copiedNodes);
-                RecordPersistentCopies(copiedNodes);
-                if (copied)
-                    _copiedReverse++;
+                RecordIncomingChange(destination, mapId, count);
+                _copiedReverse++;
             }
             return true;
         }
@@ -339,7 +411,7 @@ internal sealed partial class NavigationCompositionIndex
         {
             while (_rootIndex < _rootKeyCount)
             {
-                if (_treeCursor == null)
+                if (_componentMemberCursor == null)
                 {
                     if (!_source._components.TryGetValue(
                             _rootKeys[_rootIndex],
@@ -348,23 +420,24 @@ internal sealed partial class NavigationCompositionIndex
                         _rootIndex++;
                         continue;
                     }
-                    _treeCursor = new ComponentTreeCursor(root, _treeStack);
+                    _componentMemberCursor = new ComponentMemberCursor(root);
                 }
-                if (!_treeCursor.TryAdvance(meter, out string? treeKey, out string? member))
+                if (!_componentMemberCursor.TryAdvance(
+                        meter,
+                        out string? treeKey,
+                        out string? member))
                     return false;
-                if (treeKey != null)
-                {
-                    _aliases = _aliases.Remove(treeKey, out _, out int copiedNodes);
-                    RecordPersistentCopies(copiedNodes);
-                }
+                _ = treeKey;
                 if (member != null && _nodes.ContainsKey(member))
                     AddDomain(member);
-                if (!_treeCursor.IsComplete)
+                if (!_componentMemberCursor.IsComplete)
                     continue;
-                _treeCursor = null;
+                _componentMemberCursor = null;
+                _cleanupRoots[_cleanupRootCount++] = _rootKeys[_rootIndex];
                 _rootIndex++;
             }
             _queueRead = 0;
+            _rootKeyCount = 0;
             _stage = Stage.ExpandAffectedDomain;
             return true;
         }
@@ -380,32 +453,32 @@ internal sealed partial class NavigationCompositionIndex
                         return false;
                     _queueNodeConsumed = true;
                     _visitedMaps++;
+                    _nodes.TryGetValue(mapId, out NavigationStructuralNode capturedNode);
+                    _edges = capturedNode.GetLinkEnumerator();
+                    _edgesRemaining = capturedNode.LinkCount;
                 }
-                _nodes.TryGetValue(mapId, out NavigationStructuralNode node);
                 if (_source.TryGetRootComponent(mapId, out NavigationStructuralComponent root)
-                    && _cleanupRootSet.Add(root.Key))
+                    && _rootKeySet.Add(root.Key))
                 {
                     _cleanupRoots[_cleanupRootCount++] = root.Key;
                 }
-                ReadOnlySpan<NavigationStructuralLink> links = node.Links;
-                while (_edgeIndex < links.Length)
+                while (_edgesRemaining != 0)
                 {
                     if (!meter.TryConsumeExplicitEdges(1))
                         return false;
-                    NavigationStructuralLink link = links[_edgeIndex++];
+                    _edges.MoveNext();
+                    NavigationStructuralLink link = _edges.Current;
+                    _edgesRemaining--;
                     _visitedEdges = checked(_visitedEdges + link.Count);
                     if (_nodes.ContainsKey(link.DestinationMapId))
                         AddDomain(link.DestinationMapId);
                 }
-                ReadOnlySpan<NavigationIncomingDependency> sources =
-                    _incoming.TryGetValue(mapId, out NavigationIncomingDependencyRecord incoming)
-                        ? incoming.Sources
-                        : ReadOnlySpan<NavigationIncomingDependency>.Empty;
-                while (_incomingIndex < sources.Length)
+                _incoming.TryGetValue(mapId, out NavigationIncomingDependencyRecord incoming);
+                while (_incomingIndex < (incoming?.Count ?? 0))
                 {
                     if (!meter.TryConsumeExplicitEdges(1))
                         return false;
-                    NavigationIncomingDependency source = sources[_incomingIndex++];
+                    NavigationIncomingDependency source = incoming!.GetAt(_incomingIndex++);
                     _visitedEdges = checked(_visitedEdges + source.Count);
                     if (_nodes.ContainsKey(source.SourceMapId))
                         AddDomain(source.SourceMapId);
@@ -423,7 +496,7 @@ internal sealed partial class NavigationCompositionIndex
             while (_rootIndex < _cleanupRootCount)
             {
                 string rootKey = _cleanupRoots[_rootIndex];
-                if (_treeCursor == null)
+                if (_componentMemberCursor == null)
                 {
                     if (!_source._components.TryGetValue(
                             rootKey,
@@ -432,38 +505,37 @@ internal sealed partial class NavigationCompositionIndex
                         _rootIndex++;
                         continue;
                     }
-                    _treeCursor = new ComponentTreeCursor(root, _treeStack);
+                    _componentMemberCursor = new ComponentMemberCursor(root);
                 }
-                if (!_treeCursor.TryAdvance(meter, out string? treeKey, out _))
+                if (!_componentMemberCursor.TryAdvance(
+                        meter,
+                        out string? treeKey,
+                        out string? member))
                     return false;
-                if (treeKey != null)
+                _ = treeKey;
+                if (member != null)
                 {
-                    _aliases = _aliases.Remove(treeKey, out _, out int copiedNodes);
-                    RecordPersistentCopies(copiedNodes);
+                    _membership = _membership.Remove(
+                        member,
+                        out bool membershipRemoved,
+                        out int membershipCopies);
+                    RecordPersistentCopies(membershipCopies);
+                    if (membershipRemoved)
+                        _copiedMemberships++;
                 }
-                if (!_treeCursor.IsComplete)
+                if (!_componentMemberCursor.IsComplete)
                     continue;
-                _treeCursor = null;
+                _componentMemberCursor = null;
                 if (_components.TryGetValue(rootKey, out NavigationStructuralComponent removed))
                 {
                     _components = _components.Remove(rootKey, out _, out int copiedNodes);
                     RecordPersistentCopies(copiedNodes);
                     _componentBytes = checked(_componentBytes - removed.RetainedBytes);
+                    _componentPages = checked(
+                        _componentPages - removed.PersistentPageCount);
                     _copiedComponents++;
                 }
                 _rootIndex++;
-            }
-            while (_cleanupMemberIndex < _queueWrite)
-            {
-                if (!meter.TryConsumeComponentNodes(1))
-                    return false;
-                _membership = _membership.Remove(
-                    _queue[_cleanupMemberIndex++],
-                    out bool removed,
-                    out int copiedNodes);
-                RecordPersistentCopies(copiedNodes);
-                if (removed)
-                    _copiedMemberships++;
             }
             _stage = Stage.BuildComponents;
             return true;
@@ -479,10 +551,12 @@ internal sealed partial class NavigationCompositionIndex
                     {
                         if (!meter.TryConsumeComponentNodes(1))
                             return false;
+                        _pendingMemberEnumerator.MoveNext();
                         _membership = _membership.Set(
-                            _componentMembers[_publishMemberIndex++],
+                            _pendingMemberEnumerator.Current,
                             _pendingComponent.Key,
                             out int copiedNodes);
+                        _publishMemberIndex++;
                         RecordPersistentCopies(copiedNodes);
                         _copiedMemberships++;
                     }
@@ -493,6 +567,12 @@ internal sealed partial class NavigationCompositionIndex
                     RecordPersistentCopies(componentCopies);
                     _componentBytes = checked(
                         _componentBytes + _pendingComponent.RetainedBytes);
+                    _componentPages = checked(
+                        _componentPages + _pendingComponent.PersistentPageCount);
+                    _payloadAdditionalBytes = checked(
+                        _payloadAdditionalBytes + _pendingComponent.RetainedBytes);
+                    _payloadAdditionalPages = checked(
+                        _payloadAdditionalPages + _pendingComponent.PersistentPageCount);
                     _copiedComponents++;
                     _pendingComponent = null;
                     _buildMemberCount = 0;
@@ -501,19 +581,14 @@ internal sealed partial class NavigationCompositionIndex
 
                 if (_componentTraversalComplete)
                 {
-                    while (_prepareMemberIndex < _buildMemberCount)
-                    {
-                        if (!meter.TryConsumeComponentNodes(1))
-                            return false;
-                        _pendingMembers![_prepareMemberIndex] =
-                            _componentMembers[_prepareMemberIndex];
-                        _prepareMemberIndex++;
-                    }
+                    NavigationPagedSequence<string> members = _componentBuilder!.Seal();
                     _pendingComponent = NavigationStructuralComponent.CreateFlat(
-                        _pendingMembers!,
-                        _version);
-                    _pendingMembers = null;
-                    _prepareMemberIndex = 0;
+                        members,
+                        _componentIdentity!,
+                        _componentVersion);
+                    _pendingMemberEnumerator = members.GetEnumerator();
+                    _componentBuilder = null;
+                    _componentIdentity = null;
                     _componentActive = false;
                     _componentTraversalComplete = false;
                     _buildWrite = 0;
@@ -537,17 +612,19 @@ internal sealed partial class NavigationCompositionIndex
                 if (!_componentActive)
                 {
                     Result = new NavigationCompositionIndex(
-                        _version,
+                        _compositionVersion,
                         _nodes,
                         _incoming,
                         _components,
                         _membership,
-                        _aliases,
                         _nodeBytes,
                         _incomingBytes,
                         _componentBytes,
+                        _nodePages,
+                        _incomingPages,
+                        _componentPages,
                         new NavigationCompositionUpdateCounters(
-                            _changes.Length,
+                            _changes.Count,
                             _visitedMaps,
                             _visitedEdges,
                             _copiedNodes,
@@ -566,29 +643,37 @@ internal sealed partial class NavigationCompositionIndex
                         if (!meter.TryConsumeComponentNodes(1))
                             return false;
                         _buildNodeConsumed = true;
-                        _componentMembers[_buildMemberCount++] = mapId;
+                        _componentBuilder ??= new NavigationPagedSequence<string>.Builder(
+                            IntPtr.Size);
+                        _componentBuilder.Append(mapId);
+                        if (_componentIdentity == null
+                            || string.CompareOrdinal(mapId, _componentIdentity) < 0)
+                        {
+                            _componentIdentity = mapId;
+                        }
+                        _buildMemberCount++;
+                        _nodes.TryGetValue(mapId, out NavigationStructuralNode capturedNode);
+                        _buildEdges = capturedNode.GetLinkEnumerator();
+                        _buildEdgesRemaining = capturedNode.LinkCount;
                     }
-                    _nodes.TryGetValue(mapId, out NavigationStructuralNode node);
-                    ReadOnlySpan<NavigationStructuralLink> links = node.Links;
-                    while (_buildEdgeIndex < links.Length)
+                    while (_buildEdgesRemaining != 0)
                     {
                         if (!meter.TryConsumeExplicitEdges(1))
                             return false;
-                        string neighbor = links[_buildEdgeIndex++].DestinationMapId;
+                        _buildEdges.MoveNext();
+                        string neighbor = _buildEdges.Current.DestinationMapId;
+                        _buildEdgesRemaining--;
                         if (_domain.Contains(neighbor) && TryVisitBuild(neighbor))
                         {
                             _buildQueue[_buildWrite++] = neighbor;
                         }
                     }
-                    ReadOnlySpan<NavigationIncomingDependency> sources =
-                        _incoming.TryGetValue(mapId, out NavigationIncomingDependencyRecord incoming)
-                            ? incoming.Sources
-                            : ReadOnlySpan<NavigationIncomingDependency>.Empty;
-                    while (_buildIncomingIndex < sources.Length)
+                    _incoming.TryGetValue(mapId, out NavigationIncomingDependencyRecord incoming);
+                    while (_buildIncomingIndex < (incoming?.Count ?? 0))
                     {
                         if (!meter.TryConsumeExplicitEdges(1))
                             return false;
-                        string neighbor = sources[_buildIncomingIndex++].SourceMapId;
+                        string neighbor = incoming!.GetAt(_buildIncomingIndex++).SourceMapId;
                         if (_domain.Contains(neighbor) && TryVisitBuild(neighbor))
                         {
                             _buildQueue[_buildWrite++] = neighbor;
@@ -596,15 +681,14 @@ internal sealed partial class NavigationCompositionIndex
                     }
                     _buildRead++;
                     _buildNodeConsumed = false;
-                    _buildEdgeIndex = 0;
+                    _buildEdges = default;
+                    _buildEdgesRemaining = 0;
                     _buildIncomingIndex = 0;
                 }
-                _prepareMemberIndex = 0;
                 if (_buildMemberCount == 0)
                     _componentActive = false;
                 else
                 {
-                    _pendingMembers = new string[_buildMemberCount];
                     _componentTraversalComplete = true;
                 }
             }
@@ -618,16 +702,159 @@ internal sealed partial class NavigationCompositionIndex
 
         private bool TryVisitBuild(string mapId)
         {
-            if (_buildVisited.ContainsKey(mapId))
-                return false;
-            _buildVisited = _buildVisited.Set(mapId, true, out int copiedNodes);
-            RecordPersistentCopies(copiedNodes);
-            return true;
+            return _buildVisited.Add(mapId);
         }
 
         private void RecordPersistentCopies(int copiedNodes)
         {
             _copiedPersistentPages = checked(_copiedPersistentPages + copiedNodes);
+        }
+
+        private void RecordIncomingChange(
+            string destination,
+            string source,
+            int count)
+        {
+            bool alreadyTracked = _incomingJournal.TryGetValue(
+                destination,
+                out PersistentStringMap<int> changes);
+            changes ??= PersistentStringMap<int>.Empty;
+            PersistentStringMap<int> next = changes.Set(source, count);
+            _incomingJournalValuePages = checked(
+                _incomingJournalValuePages
+                + next.PersistentNodeCount
+                - (alreadyTracked ? changes.PersistentNodeCount : 0));
+            _incomingJournal = _incomingJournal.Set(destination, next);
+        }
+
+        private bool AdvanceIncomingJournal(MaintenanceWorkMeter meter)
+        {
+            while (_incomingJournal.Count != 0)
+            {
+                if (_incomingRebuildDestination == null)
+                {
+                    if (!meter.TryConsumeDependencyEntries(1))
+                        return false;
+                    _incomingRebuildDestination = _incomingJournal.GetKeyAt(0);
+                    _incomingRebuildChanges = _incomingJournal.GetValueAt(0);
+                    _source._incoming.TryGetValue(
+                        _incomingRebuildDestination,
+                        out _incomingRebuildSource!);
+                }
+                int sourceCount = _incomingRebuildSource?.Count ?? 0;
+                PersistentStringMap<int> changes = _incomingRebuildChanges!;
+                while (_incomingRebuildSourceIndex < sourceCount
+                    || _incomingRebuildChangeIndex < changes.Count)
+                {
+                    if (!meter.TryConsumeDependencyEntries(1))
+                        return false;
+                    bool hasSource = _incomingRebuildSourceIndex < sourceCount;
+                    bool hasChange = _incomingRebuildChangeIndex
+                        < changes.Count;
+                    NavigationIncomingDependency source = hasSource
+                        ? _incomingRebuildSource!.GetAt(_incomingRebuildSourceIndex)
+                        : default;
+                    string? changedSource = hasChange
+                        ? changes.GetKeyAt(_incomingRebuildChangeIndex)
+                        : null;
+                    int comparison = !hasSource
+                        ? 1
+                        : !hasChange
+                            ? -1
+                            : string.CompareOrdinal(source.SourceMapId, changedSource);
+                    string sourceMapId;
+                    int count;
+                    if (comparison < 0)
+                    {
+                        sourceMapId = source.SourceMapId;
+                        count = source.Count;
+                        _incomingRebuildSourceIndex++;
+                    }
+                    else
+                    {
+                        sourceMapId = changedSource!;
+                        count = changes.GetValueAt(
+                            _incomingRebuildChangeIndex++);
+                        if (comparison == 0)
+                            _incomingRebuildSourceIndex++;
+                    }
+                    if (count != 0)
+                    {
+                        _incomingRebuildSources = _incomingRebuildSources.Set(
+                            sourceMapId,
+                            count);
+                    }
+                }
+                PublishIncomingRebuild();
+            }
+            _stage = Stage.SeedOldComponents;
+            return true;
+        }
+
+        private void PublishIncomingRebuild()
+        {
+            if (_incomingRebuildSource != null)
+            {
+                _incomingBytes = checked(
+                    _incomingBytes - _incomingRebuildSource.RetainedBytes);
+                _incomingPages = checked(
+                    _incomingPages - _incomingRebuildSource.PersistentPageCount);
+            }
+            if (_incomingRebuildSources.Count == 0)
+            {
+                _incoming = _incoming.Remove(
+                    _incomingRebuildDestination!,
+                    out _,
+                    out int copiedNodes);
+                RecordPersistentCopies(copiedNodes);
+            }
+            else
+            {
+                var next = new NavigationIncomingDependencyRecord(
+                    _incomingRebuildSources);
+                _incoming = _incoming.Set(
+                    _incomingRebuildDestination!,
+                    next,
+                    out int copiedNodes);
+                RecordPersistentCopies(copiedNodes);
+                _incomingBytes = checked(_incomingBytes + next.RetainedBytes);
+                _incomingPages = checked(_incomingPages + next.PersistentPageCount);
+                _payloadAdditionalBytes = checked(
+                    _payloadAdditionalBytes + next.RetainedBytes);
+                _payloadAdditionalPages = checked(
+                    _payloadAdditionalPages + next.PersistentPageCount);
+            }
+            _incomingJournal = _incomingJournal.Remove(
+                _incomingRebuildDestination!,
+                out _,
+                out _);
+            _incomingJournalValuePages = checked(
+                _incomingJournalValuePages
+                - _incomingRebuildChanges!.PersistentNodeCount);
+            ResetIncomingRebuildCursor();
+        }
+
+        private long GetIncomingJournalScratchBytes() =>
+            _incomingJournal.Count == 0
+                ? 0
+                : checked(
+                    _incomingJournal.RetainedBytes
+                    + (32L * _incomingJournal.Count)
+                    + (64L * _incomingJournalValuePages));
+
+        private long GetIncomingRebuildScratchBytes() =>
+            _incomingRebuildSources.Count == 0
+                ? 0
+                : _incomingRebuildSources.RetainedBytes;
+
+        private void ResetIncomingRebuildCursor()
+        {
+            _incomingRebuildDestination = null;
+            _incomingRebuildChanges = null;
+            _incomingRebuildSource = null;
+            _incomingRebuildSources = PersistentStringMap<int>.Empty;
+            _incomingRebuildSourceIndex = 0;
+            _incomingRebuildChangeIndex = 0;
         }
 
         private int GetRetainedCopiedPersistentPages()
@@ -636,23 +863,10 @@ internal sealed partial class NavigationCompositionIndex
                 _nodes.PersistentNodeCount
                 + _incoming.PersistentNodeCount
                 + _components.PersistentNodeCount
-                + _membership.PersistentNodeCount
-                + _aliases.PersistentNodeCount
-                + _buildVisited.PersistentNodeCount);
+                + _membership.PersistentNodeCount);
             // A live copied node is both a recorded allocation and reachable from a current root.
             // The smaller of those two upper bounds cannot undercount live COW ownership.
             return Math.Min(_copiedPersistentPages, reachableNodes);
-        }
-
-        private static int GetHashCapacity(int itemCapacity)
-        {
-            long required = ((long)itemCapacity * 100L + 84L) / 85L;
-            SwiftThrowHelper.ThrowIfArgumentOutOfRange(
-                required > 1L << 30,
-                itemCapacity,
-                nameof(itemCapacity),
-                "Structural composition scratch capacity is too large.");
-            return SwiftHashTools.NextPowerOfTwo((int)Math.Max(SwiftHashSet<string>.DefaultCapacity, required));
         }
 
         private void ResetChangeCursor()
@@ -661,20 +875,27 @@ internal sealed partial class NavigationCompositionIndex
             _nodeWork = null;
             _oldNode = null;
             _nextNode = null;
-            _oldLinkIndex = 0;
-            _nextLinkIndex = 0;
+            _oldLinks = default;
+            _nextLinks = default;
+            _oldLinksRemaining = 0;
+            _nextLinksRemaining = 0;
+            _oldLinkReady = false;
+            _nextLinkReady = false;
+            _reverseInitialized = false;
         }
 
         private void ResetQueueCursor()
         {
             _queueNodeConsumed = false;
-            _edgeIndex = 0;
+            _edges = default;
+            _edgesRemaining = 0;
             _incomingIndex = 0;
         }
 
         private enum Stage
         {
             CaptureNodes,
+            ApplyIncomingJournal,
             SeedOldComponents,
             ExpandAffectedDomain,
             CleanupComponents,
@@ -687,17 +908,25 @@ internal sealed partial class NavigationCompositionIndex
     {
         private readonly NavigationMapInstance _instance;
         private readonly NavigationExplicitConnectionIndex _explicitConnections;
+        private readonly NavigationStructuralNode? _oldNode;
+        private NavigationPagedSequence<NavigationStructuralLink>.Enumerator _oldLinks;
         private PersistentStringMap<int> _counts = PersistentStringMap<int>.Empty;
-        private int _stage;
         private int _index;
-        private NavigationStructuralLink[]? _links;
+        private bool _ownersCaptured;
+        private bool _matchesOld;
+        private NavigationPagedSequence<NavigationStructuralLink>.Builder? _links;
 
         internal StructuralNodeWork(
             NavigationMapInstance instance,
-            NavigationExplicitConnectionIndex explicitConnections)
+            NavigationExplicitConnectionIndex explicitConnections,
+            NavigationStructuralNode? oldNode)
         {
             _instance = instance;
             _explicitConnections = explicitConnections;
+            _oldNode = oldNode;
+            _matchesOld = oldNode != null;
+            if (oldNode != null)
+                _oldLinks = oldNode.GetLinkEnumerator();
         }
 
         internal NavigationStructuralNode Result { get; private set; } = null!;
@@ -705,89 +934,92 @@ internal sealed partial class NavigationCompositionIndex
         internal long RetainedBytes => checked(
             40L
             + _counts.RetainedBytes
-            + ((_links?.Length ?? 0) * 24L));
+            + (_links?.RetainedBytes
+                ?? (Result != null && !ReferenceEquals(Result, _oldNode)
+                    ? Result.RetainedBytes
+                    : 0)));
+
+        internal int PersistentPageCount => checked(
+            1
+            + _counts.PersistentNodeCount
+            + (_links?.PersistentPageCount
+                ?? (Result != null && !ReferenceEquals(Result, _oldNode)
+                    ? Result.PersistentPageCount
+                    : 0)));
 
         internal bool Advance(MaintenanceWorkMeter meter)
         {
-            while (_stage < 3)
+            if (!_ownersCaptured)
             {
-                int count = GetStageCount();
+                int count = _explicitConnections.GetSourceOwnerCount(_instance.MapId);
                 while (_index < count)
                 {
                     if (!meter.TryConsumeExplicitEdges(1))
                         return false;
-                    string? destination = GetDestination(_index++);
-                    if (destination == null)
+                    NavigationExplicitConnectionRecord record =
+                        _explicitConnections.GetSourceOwnerAt(_instance.MapId, _index++);
+                    if (!record.IsActive)
                         continue;
+                    string destination = record.Destination.MapId;
                     _counts.TryGetValue(destination, out int current);
                     _counts = _counts.Set(destination, checked(current + 1));
                 }
-                _stage++;
+                _ownersCaptured = true;
                 _index = 0;
             }
-            _links ??= new NavigationStructuralLink[_counts.Count];
-            while (_index < _links.Length)
+            while (_index < _counts.Count)
             {
                 if (!meter.TryConsumeDependencyEntries(1))
                     return false;
-                _links[_index] = new NavigationStructuralLink(
+                _links ??= new NavigationPagedSequence<NavigationStructuralLink>.Builder(16);
+                var link = new NavigationStructuralLink(
                     _counts.GetKeyAt(_index),
                     _counts.GetValueAt(_index));
+                _links.Append(link);
+                if (_matchesOld
+                    && (!_oldLinks.MoveNext() || !_oldLinks.Current.Equals(link)))
+                {
+                    _matchesOld = false;
+                }
                 _index++;
             }
-            Result ??= new NavigationStructuralNode(_links);
-            return true;
-        }
-
-        private int GetStageCount() => _stage switch
-        {
-            0 => _explicitConnections.GetSourceOwnerCount(_instance.MapId),
-            1 => _instance.Map.TransitionSpan.Length,
-            2 => _instance.Overlay.TransitionCount,
-            _ => 0
-        };
-
-        private string? GetDestination(int index)
-        {
-            switch (_stage)
+            if (Result == null)
             {
-                case 0:
-                    NavigationExplicitConnectionRecord record =
-                        _explicitConnections.GetSourceOwnerAt(_instance.MapId, index);
-                    return record.IsActive ? record.Destination.MapId : null;
-                case 1:
-                    TraversalTransitionDefinition transition = _instance.Map.TransitionSpan[index];
-                    return _instance.Overlay.TryGetTransition(transition.Id, out _)
-                        ? null
-                        : transition.Destination.MapId;
-                default:
-                    TraversalTransitionOverlayOperation transitionOverlay =
-                        _instance.Overlay.GetTransitionAt(index);
-                    return transitionOverlay.Kind == TraversalTransitionOverlayOperationKind.Upsert
-                        ? transitionOverlay.Transition.Destination.MapId
-                        : null;
+                if (_matchesOld && !_oldLinks.MoveNext())
+                {
+                    Result = _oldNode!;
+                }
+                else
+                {
+                    Result = new NavigationStructuralNode(
+                        _links?.Seal()
+                            ?? NavigationPagedSequence<NavigationStructuralLink>.Empty);
+                }
+                _links = null;
             }
+            return true;
         }
     }
 
-    private sealed class ComponentTreeCursor
+    private sealed class ComponentMemberCursor
     {
-        private readonly NavigationStructuralComponent[] _stack;
-        private int _stackCount;
-        private NavigationStructuralComponent? _leaf;
-        private int _memberIndex;
+        private readonly NavigationStructuralComponent _component;
+        private NavigationPagedSequence<string>.Enumerator _members;
+        private bool _rootConsumed;
+        private int _membersConsumed;
 
-        internal ComponentTreeCursor(
-            NavigationStructuralComponent root,
-            NavigationStructuralComponent[] stack)
+        internal ComponentMemberCursor(NavigationStructuralComponent root)
         {
-            _stack = stack;
-            _stack[_stackCount++] = root;
+            _component = root;
+            _members = root.FlatMembers.GetEnumerator();
         }
 
-        internal bool IsComplete => _stackCount == 0 && _leaf == null;
+        internal bool IsComplete => _rootConsumed
+            && _membersConsumed == _component.MemberCount;
 
         internal long RetainedBytes => 32L;
+
+        internal int PersistentPageCount => 1;
 
         internal bool TryAdvance(
             MaintenanceWorkMeter meter,
@@ -796,31 +1028,21 @@ internal sealed partial class NavigationCompositionIndex
         {
             treeKey = null;
             member = null;
-            if (_leaf != null)
+            if (!_rootConsumed)
             {
                 if (!meter.TryConsumeComponentNodes(1))
                     return false;
-                member = _leaf.FlatMembers![_memberIndex++];
-                if (_memberIndex == _leaf.FlatMembers!.Length)
-                {
-                    _leaf = null;
-                    _memberIndex = 0;
-                }
+                treeKey = _component.Key;
+                _rootConsumed = true;
                 return true;
             }
-            if (_stackCount == 0)
+            if (_membersConsumed == _component.MemberCount)
                 return true;
             if (!meter.TryConsumeComponentNodes(1))
                 return false;
-            NavigationStructuralComponent current = _stack[--_stackCount];
-            treeKey = current.Key;
-            if (current.FlatMembers != null)
-                _leaf = current;
-            else
-            {
-                _stack[_stackCount++] = current.Right!;
-                _stack[_stackCount++] = current.Left!;
-            }
+            _members.MoveNext();
+            member = _members.Current;
+            _membersConsumed++;
             return true;
         }
     }

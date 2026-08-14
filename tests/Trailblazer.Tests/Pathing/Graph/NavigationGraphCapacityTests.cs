@@ -460,9 +460,13 @@ public sealed class NavigationGraphCapacityTests
         NavigationGraphDiagnosticsSnapshot diagnostics = context.Pathing.GetNavigationGraphDiagnostics();
         diagnostics.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(settings.MaxActiveSnapshotBytes);
         diagnostics.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(settings.MaxPersistentGraphPages);
-        diagnostics.ActiveSnapshotBytes.Should().Be(9_902_440,
-            "the default envelope measurement pins the honest owned-root accounting used to size defaults");
-        diagnostics.PersistentGraphPageCount.Should().Be(82_502);
+        diagnostics.ActiveSnapshotBytes.Should().Be(12_953_856,
+            "endpoint incidence adds a 32-byte index field block, a 288-byte outer root, "
+            + "262,528 bytes for four 1,025-address inner maps, and 885,600 bytes for "
+            + "4,100 one-page owner rows");
+        diagnostics.PersistentGraphPageCount.Should().Be(127_622,
+            "the endpoint index adds one root page, 4 outer/4,100 inner nodes, and "
+            + "12,300 fixed-row pages for the 4,100 distinct endpoint addresses");
         for (int mapIndex = 0; mapIndex < 4; mapIndex++)
         {
             context.Pathing.TryGetNavigationGraphCellState(
@@ -520,7 +524,7 @@ public sealed class NavigationGraphCapacityTests
                 connections: new[] { NavigationConnectionOverlayOperation.Upsert(largeConnection) }),
             2);
 
-        NavigationMapInstance smallInstance = NavigationMapInstance.ComposeDetached(
+        NavigationMapInstance smallInstance = NavigationMapInstanceTestFactory.ComposeDetached(
             new NavigationOperationCandidate.MapState(
                 map,
                 1,
@@ -529,7 +533,7 @@ public sealed class NavigationGraphCapacityTests
                 0),
             previous: null,
             instanceVersion: 1);
-        NavigationMapInstance largeInstance = NavigationMapInstance.ComposeDetached(
+        NavigationMapInstance largeInstance = NavigationMapInstanceTestFactory.ComposeDetached(
             new NavigationOperationCandidate.MapState(
                 map,
                 1,
@@ -556,7 +560,7 @@ public sealed class NavigationGraphCapacityTests
     }
 
     [Fact]
-    public void SemanticComposeWork_ShouldRetainPriorPhysicalRootAndPayload()
+    public void SemanticComposeWork_ShouldNotRecountPriorPhysicalRootAndPayload()
     {
         GridConfiguration configuration = CreateConfiguration();
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
@@ -577,7 +581,7 @@ public sealed class NavigationGraphCapacityTests
             prepared.RetainedBytes,
             NavigationMapOverlayState.Empty,
             0);
-        NavigationMapInstance dormant = NavigationMapInstance.ComposeDetached(
+        NavigationMapInstance dormant = NavigationMapInstanceTestFactory.ComposeDetached(
             sourceState,
             previous: null,
             instanceVersion: 1);
@@ -617,10 +621,8 @@ public sealed class NavigationGraphCapacityTests
         var dormantWork = new NavigationMapInstance.ComposeWork(nextState, dormant, delta, 3);
         var materializedWork = new NavigationMapInstance.ComposeWork(nextState, materialized, delta, 3);
 
-        (materializedWork.RetainedBytes - dormantWork.RetainedBytes)
-            .Should().Be(materialized.RetainedBytes - dormant.RetainedBytes);
-        (materializedWork.PersistentPageCount - dormantWork.PersistentPageCount)
-            .Should().Be(materialized.PersistentPageCount - dormant.PersistentPageCount);
+        materializedWork.RetainedBytes.Should().Be(dormantWork.RetainedBytes);
+        materializedWork.PersistentPageCount.Should().Be(dormantWork.PersistentPageCount);
 
         var meter = new MaintenanceWorkMeter(
             new MaintenanceWorkBudget(1, 1, 1, 1, 1, 1));
@@ -990,8 +992,21 @@ public sealed class NavigationGraphCapacityTests
             firstChunkPageCount = diagnostics.PersistentGraphPageCount;
         }
 
+        const int explicitCompilationReserve = 2;
+        using (TrailblazerWorldContext insufficient = CreateChunkedBaselineContext(
+            firstChunkPageCount - explicitCompilationReserve - 1,
+            includeExplicitConnection: true))
+        {
+            insufficient.Simulate();
+            NavigationGraphDiagnosticsSnapshot belowMinimum =
+                insufficient.Pathing.GetNavigationGraphDiagnostics();
+            belowMinimum.BaselineRebuildCount.Should().Be(0,
+                "the three-page first rebuild cannot fit below its measured page total");
+            belowMinimum.PersistentGraphPageCount.Should().BeLessThan(firstChunkPageCount);
+        }
+
         using TrailblazerWorldContext capped = CreateChunkedBaselineContext(
-            firstChunkPageCount,
+            firstChunkPageCount + explicitCompilationReserve,
             includeExplicitConnection: true);
         capped.Simulate();
         NavigationGraphDiagnosticsSnapshot first = capped.Pathing.GetNavigationGraphDiagnostics();
@@ -1000,13 +1015,20 @@ public sealed class NavigationGraphCapacityTests
         GetCellState(capped, "map").IsMaterialized.Should().BeFalse();
 
         capped.Simulate();
+        NavigationGraphDiagnosticsSnapshot filled = capped.Pathing.GetNavigationGraphDiagnostics();
+        filled.BaselineRebuildCount.Should().Be(1);
+        filled.BaselineCapacityBlockedCount.Should().Be(0);
+        filled.PersistentGraphPageCount.Should().Be(firstChunkPageCount + 2);
+        GetCellState(capped, "map").IsMaterialized.Should().BeFalse();
+
+        capped.Simulate();
         NavigationGraphDiagnosticsSnapshot stalled = capped.Pathing.GetNavigationGraphDiagnostics();
         stalled.BaselineRebuildCount.Should().Be(1);
         stalled.BaselineCapacityBlockedCount.Should().Be(1,
             "an impossible next page is a terminal, observable fail-closed outcome");
-        stalled.BaselineRebuildPageCount.Should().Be(first.BaselineRebuildPageCount);
-        stalled.BaselineRebuildBytes.Should().Be(first.BaselineRebuildBytes);
-        stalled.PersistentGraphPageCount.Should().Be(firstChunkPageCount);
+        stalled.BaselineRebuildPageCount.Should().Be(filled.BaselineRebuildPageCount);
+        stalled.BaselineRebuildBytes.Should().Be(filled.BaselineRebuildBytes);
+        stalled.PersistentGraphPageCount.Should().Be(firstChunkPageCount + 2);
         GetCellState(capped, "map").IsMaterialized.Should().BeFalse(
             "unpublished pages must carry over without escaping the configured ceiling");
         capped.Pathing.RetainedBaselineCaptureCount.Should().Be(0);
@@ -1204,7 +1226,7 @@ public sealed class NavigationGraphCapacityTests
             1,
             1);
         context.Pathing.Admit(firstOperation).Should().BeTrue();
-        for (int i = 0; i < 8 && firstOperation.Receipt.Status == NavigationOperationStatus.Pending; i++)
+        for (int i = 0; i < 256 && firstOperation.Receipt.Status == NavigationOperationStatus.Pending; i++)
             context.Simulate();
         firstOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         var overBudget = new NavigationMapCommitOperation(
@@ -1256,14 +1278,28 @@ public sealed class NavigationGraphCapacityTests
         for (int x = 0; x < 16; x++)
             builder.AddCell(new VoxelIndex(x, 0, 0), cell);
         var prepared = new PreparedNavigationMap(builder.Build(), 1);
-        var candidate = new NavigationOperationCandidate(navigationAreaCount: 1);
-        candidate.ApplyMap(
-                prepared,
-                OverlayReplacementPolicy.Clear,
-                CreateOperationLimits(maxPreparedMapBytes: 3_000_000),
-                new GridCellPrism[64],
-                new Vector3d[126])
-            .Should().Be(NavigationOperationRejection.None);
+        NavigationOperationLimits limits = CreateOperationLimits(maxPreparedMapBytes: 3_000_000);
+        var fold = new NavigationMapFoldWork(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            prepared,
+            OverlayReplacementPolicy.Clear,
+            limits,
+            new GridCellPrism[limits.MaxCorridorCells],
+            new Vector3d[(limits.MaxCorridorCells * 2) - 2],
+            new NavigationCellAddress[limits.MaxCorridorCells],
+            new NavigationAddressStampSet(limits.MaxCorridorCells));
+        var foldMeter = new MaintenanceWorkMeter(
+            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
+        NavigationOperationRejection foldRejection = NavigationOperationRejection.None;
+        bool foldComplete = false;
+        for (int i = 0; i < 64 && !foldComplete; i++)
+        {
+            foldComplete = fold.Advance(foldMeter, out foldRejection);
+            foldMeter.Reset();
+        }
+        foldComplete.Should().BeTrue();
+        foldRejection.Should().Be(NavigationOperationRejection.None);
+        NavigationOperationCandidate candidate = fold.Candidate;
         NavigationWorldGraph empty = NavigationWorldGraph.CreateEmpty(0);
         long cap = System.Math.Max(candidate.RetainedBytes, empty.RetainedBytes) + 64;
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(

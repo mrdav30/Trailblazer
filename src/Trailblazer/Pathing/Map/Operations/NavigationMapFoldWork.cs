@@ -21,30 +21,47 @@ internal sealed class NavigationMapFoldWork
         OverlayReplacementPolicy replacementPolicy,
         NavigationOperationLimits limits,
         GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
+        Vector3d[] corridorWaypoints,
+        NavigationCellAddress[] corridorAddresses,
+        NavigationAddressStampSet corridorAddressSet)
     {
         _cursor = source.BeginMapFold(
             prepared,
             replacementPolicy,
             limits,
             corridorPrisms,
-            corridorWaypoints);
+            corridorWaypoints,
+            corridorAddresses,
+            corridorAddressSet);
     }
 
     internal NavigationMapFoldWork(
         NavigationOperationCandidate source,
         string mapId,
         GridCellPrism[] corridorPrisms,
-        Vector3d[] corridorWaypoints)
+        Vector3d[] corridorWaypoints,
+        NavigationCellAddress[] corridorAddresses,
+        NavigationAddressStampSet corridorAddressSet)
     {
-        _cursor = source.BeginMapRemovalFold(mapId, corridorPrisms, corridorWaypoints);
+        _cursor = source.BeginMapRemovalFold(
+            mapId,
+            corridorPrisms,
+            corridorWaypoints,
+            corridorAddresses,
+            corridorAddressSet);
     }
 
     internal NavigationOperationCandidate Candidate => _cursor.Candidate;
 
-    internal long SourceRetainedBytes => _cursor.SourceRetainedBytes;
+    internal bool ExplicitGatherComplete => _cursor.ExplicitGatherComplete;
 
-    internal int SourcePersistentPageCount => _cursor.SourcePersistentPageCount;
+    internal long DisplacedExplicitPayloadBytes => _cursor.DisplacedExplicitPayloadBytes;
+
+    internal int DisplacedExplicitPayloadPages => _cursor.DisplacedExplicitPayloadPages;
+
+    internal long DisplacedMapStatePayloadBytes => _cursor.DisplacedMapStatePayloadBytes;
+
+    internal int DisplacedMapStatePayloadPages => _cursor.DisplacedMapStatePayloadPages;
 
     internal long RetainedBytes => _cursor.RetainedBytes;
 

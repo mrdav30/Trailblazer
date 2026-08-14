@@ -125,101 +125,6 @@ internal sealed partial class NavigationMapInstance
         + (_physicalPages.PersistentNodeCount * 2)
         + _dynamicBaselineHighWater.PersistentNodeCount;
 
-    internal static NavigationMapInstance Compose(
-        GridWorld world,
-        NavigationOperationCandidate.MapState state,
-        NavigationMapInstance? previous,
-        long instanceVersion)
-    {
-        NavigationMapInstance composed = ComposeDetached(state, previous, instanceVersion);
-        if (ReferenceEquals(composed, previous))
-            return composed;
-        return composed.TryCaptureBaseline(world, out NavigationMapInstance? materialized)
-            ? materialized!
-            : composed;
-    }
-
-    internal static NavigationMapInstance ComposeDetached(
-        NavigationOperationCandidate.MapState state,
-        NavigationMapInstance? previous,
-        long instanceVersion)
-    {
-        if (previous != null
-            && ReferenceEquals(previous.Map, state.Map)
-            && ReferenceEquals(previous.Overlay, state.Overlay)
-            && previous.BakeVersion == state.BakeVersion
-            && previous.DynamicSlotGeneration == state.DynamicSlotGeneration)
-        {
-            return previous;
-        }
-
-        if (previous != null
-            && ReferenceEquals(previous.Map, state.Map)
-            && previous.BakeVersion == state.BakeVersion
-            && previous.DynamicSlotGeneration == state.DynamicSlotGeneration
-            && previous.Overlay.HasSameCellRoot(state.Overlay))
-        {
-            return new NavigationMapInstance(
-                state.Map,
-                state.BakeVersion,
-                state.Overlay,
-                state.DynamicSlotGeneration,
-                previous._dynamicSlots,
-                previous._dynamicSlotIndexes,
-                previous._nextDynamicSlot,
-                previous._semanticPages,
-                previous._physicalPages,
-                previous._dynamicBaselineHighWater,
-                state.BakedCellLookup,
-                state.PreparedMapRetainedBytes,
-                previous.GridIdentity,
-                previous.BaselineHighWater,
-                instanceVersion,
-                previous.SemanticVersion,
-                previous.PhysicalVersion,
-                lastBaselineAddressCount: 0,
-                lastCopiedSemanticPages: 0,
-                lastCopiedPhysicalPages: 0,
-                dynamicAddresses: state.DynamicAddresses);
-        }
-
-        PersistentVoxelIndexMap<NavigationDynamicCellSlot> dynamicSlots = BuildDynamicSlots(
-            state,
-            previous,
-            out int nextDynamicSlot);
-        PersistentIntMap<VoxelIndex> dynamicSlotIndexes = BuildDynamicSlotIndexes(dynamicSlots);
-        PersistentIntMap<ulong> dynamicBaselineHighWater = BuildDynamicBaselineHighWater(dynamicSlots, previous);
-        PersistentIntMap<NavigationSemanticPage> semanticPages = BuildSemanticPages(
-            state,
-            dynamicSlots,
-            instanceVersion);
-        NavigationBakedCellLookup bakedLookup = state.BakedCellLookup;
-        var dormant = new NavigationMapInstance(
-            state.Map,
-            state.BakeVersion,
-            state.Overlay,
-            state.DynamicSlotGeneration,
-            dynamicSlots,
-            dynamicSlotIndexes,
-            nextDynamicSlot,
-            semanticPages,
-            PersistentIntMap<NavigationPhysicalPage>.Empty,
-            dynamicBaselineHighWater,
-            bakedLookup,
-            state.PreparedMapRetainedBytes,
-            default,
-            baselineHighWater: 0,
-            instanceVersion,
-            semanticVersion: instanceVersion,
-            physicalVersion: instanceVersion,
-            lastBaselineAddressCount: 0,
-            lastCopiedSemanticPages: semanticPages.Count,
-            lastCopiedPhysicalPages: 0,
-            dynamicAddresses: state.DynamicAddresses);
-
-        return dormant;
-    }
-
     internal bool TryGetSlot(VoxelIndex index, out int slot)
     {
         int baked = _bakedLookup.Find(index);
@@ -300,9 +205,6 @@ internal sealed partial class NavigationMapInstance
             physical?.Version ?? 0);
     }
 
-    internal NavigationMapInstance Apply(GridWorld world, in GridEventInfo eventInfo, long instanceVersion)
-        => Apply(world.SpawnToken, eventInfo, instanceVersion);
-
     internal NavigationMapInstance Apply(
         long worldSpawnToken,
         in GridEventInfo eventInfo,
@@ -348,13 +250,6 @@ internal sealed partial class NavigationMapInstance
     }
 
     internal NavigationMapInstance ApplyBatch(
-        GridWorld world,
-        ReadOnlySpan<GridEventInfo> events,
-        bool resnapshotAll,
-        long instanceVersion)
-        => ApplyBatch(world.SpawnToken, events, resnapshotAll, instanceVersion);
-
-    internal NavigationMapInstance ApplyBatch(
         long worldSpawnToken,
         ReadOnlySpan<GridEventInfo> events,
         bool resnapshotAll,
@@ -372,11 +267,6 @@ internal sealed partial class NavigationMapInstance
         }
         return next.ApplyPhysicalSegment(events.Slice(segmentStart), instanceVersion);
     }
-
-    internal NavigationMapInstance Resnapshot(GridWorld world, long instanceVersion) =>
-        TryCaptureBaseline(world, out NavigationMapInstance? materialized)
-            ? materialized!
-            : MakeDormant(instanceVersion);
 
     internal NavigationMapInstance Materialize(
         in NavigationGridBaselineCapture capture,
@@ -498,129 +388,6 @@ internal sealed partial class NavigationMapInstance
     internal NavigationMapInstance FailClosed(long instanceVersion) =>
         MakeDormant(instanceVersion);
 
-    internal NavigationMapInstance ApplyCellOverlay(
-        GridWorld world,
-        NavigationOperationCandidate.MapState state,
-        ReadOnlySpan<NavigationCellOverlayOperation> operations,
-        long instanceVersion)
-        => ApplyCellOverlay(world, state, operations, instanceVersion, captureNewAddresses: true);
-
-    internal NavigationMapInstance ApplyCellOverlayDetached(
-        NavigationOperationCandidate.MapState state,
-        ReadOnlySpan<NavigationCellOverlayOperation> operations,
-        long instanceVersion) =>
-        ApplyCellOverlay(null, state, operations, instanceVersion, captureNewAddresses: false);
-
-    private NavigationMapInstance ApplyCellOverlay(
-        GridWorld? world,
-        NavigationOperationCandidate.MapState state,
-        ReadOnlySpan<NavigationCellOverlayOperation> operations,
-        long instanceVersion,
-        bool captureNewAddresses)
-    {
-        PersistentVoxelIndexMap<NavigationDynamicCellSlot> dynamicSlots = _dynamicSlots;
-        PersistentIntMap<VoxelIndex> dynamicSlotIndexes = _dynamicSlotIndexes;
-        PersistentIntMap<ulong> dynamicHighWater = _dynamicBaselineHighWater;
-        PersistentIntMap<NavigationPhysicalPage> physicalPages = _physicalPages;
-        PersistentIntMap<NavigationSemanticPage> pages = _semanticPages;
-        int nextDynamicSlot = _nextDynamicSlot;
-        int copiedSemanticPages = 0;
-        var newAddresses = new VoxelIndex[operations.Length];
-        int newAddressCount = 0;
-        for (int i = 0; i < operations.Length; i++)
-        {
-            NavigationCellOverlayOperation operation = operations[i];
-            int slot = _bakedLookup.Find(operation.Index);
-            if (slot < 0 && dynamicSlots.TryGetValue(operation.Index, out NavigationDynamicCellSlot dynamicSlot))
-                slot = dynamicSlot.Slot;
-            if (slot < 0 && operation.Kind == NavigationCellOverlayOperationKind.Set)
-            {
-                slot = nextDynamicSlot++;
-                dynamicSlot = new NavigationDynamicCellSlot(operation.Index, slot);
-                dynamicSlots = dynamicSlots.Set(operation.Index, dynamicSlot);
-                dynamicSlotIndexes = dynamicSlotIndexes.Set(slot, operation.Index);
-                newAddresses[newAddressCount++] = operation.Index;
-            }
-            if (slot < 0)
-                continue;
-            PersistentIntMap<NavigationSemanticPage> updated = ApplySemanticOperation(
-                pages,
-                slot,
-                operation,
-                instanceVersion);
-            if (!ReferenceEquals(updated, pages))
-                copiedSemanticPages++;
-            pages = updated;
-        }
-
-        NavigationGridGenerationIdentity gridIdentity = GridIdentity;
-        ulong baselineHighWater = BaselineHighWater;
-        if (captureNewAddresses && newAddressCount > 0 && IsMaterialized)
-        {
-            ReadOnlySpan<VoxelIndex> requested = newAddresses.AsSpan(0, newAddressCount);
-            if (!world!.TryCaptureNavigationBaseline(Map.GridBinding.Key, requested, out GridNavigationBaseline? baseline)
-                || baseline == null
-                || !GridIdentity.Matches(
-                    baseline.WorldSpawnToken,
-                    baseline.GridIndex,
-                    baseline.GridSpawnToken))
-            {
-                gridIdentity = default;
-                baselineHighWater = 0;
-                physicalPages = PersistentIntMap<NavigationPhysicalPage>.Empty;
-            }
-            else
-            {
-                for (int i = 0; i < newAddressCount; i++)
-                {
-                    dynamicSlots.TryGetValue(newAddresses[i], out NavigationDynamicCellSlot slot);
-                    NavigationBaselineVoxelState physical = baseline.VoxelStates[i];
-                    physicalPages = ApplyPhysicalState(
-                    physicalPages,
-                    slot.Slot,
-                    physical.IsPresent,
-                    physical.ObstacleCount,
-                    instanceVersion);
-                    dynamicHighWater = dynamicHighWater.Set(slot.Slot, baseline.HighWaterSequence);
-                }
-            }
-        }
-        else if (!captureNewAddresses && newAddressCount > 0)
-        {
-            gridIdentity = default;
-            baselineHighWater = 0;
-            physicalPages = PersistentIntMap<NavigationPhysicalPage>.Empty;
-        }
-        if (ReferenceEquals(pages, _semanticPages)
-            && ReferenceEquals(dynamicSlots, _dynamicSlots)
-            && ReferenceEquals(state.Overlay, Overlay))
-        {
-            return this;
-        }
-        return new NavigationMapInstance(
-            Map,
-            BakeVersion,
-            state.Overlay,
-            DynamicSlotGeneration,
-            dynamicSlots,
-            dynamicSlotIndexes,
-            nextDynamicSlot,
-            pages,
-            physicalPages,
-            dynamicHighWater,
-            _bakedLookup,
-            _preparedMapRetainedBytes,
-            gridIdentity,
-            baselineHighWater,
-            instanceVersion,
-            semanticVersion: instanceVersion,
-            physicalVersion: newAddressCount > 0 ? instanceVersion : PhysicalVersion,
-            lastBaselineAddressCount: newAddressCount,
-            lastCopiedSemanticPages: copiedSemanticPages,
-            lastCopiedPhysicalPages: newAddressCount > 0 ? CountTouchedPages(newAddresses, newAddressCount, dynamicSlots) : 0,
-            dynamicAddresses: state.DynamicAddresses);
-    }
-
     internal NavigationGraphMapDiagnostic CreateDiagnostic(
         int maximumCells,
         int componentId,
@@ -672,27 +439,6 @@ internal sealed partial class NavigationMapInstance
             LastCopiedSemanticPages,
             LastCopiedPhysicalPages,
             cells);
-    }
-
-    private bool TryCaptureBaseline(GridWorld world, out NavigationMapInstance? materialized)
-    {
-        VoxelIndex[] addresses = GetAddressSnapshot();
-        if (!world.TryCaptureNavigationBaseline(Map.GridBinding.Key, addresses, out GridNavigationBaseline? baseline)
-            || baseline == null
-            || baseline.WorldSpawnToken != world.SpawnToken
-            || !baseline.ConfigurationKey.Equals(Map.GridBinding.Key))
-        {
-            materialized = null;
-            return false;
-        }
-
-        PersistentIntMap<NavigationPhysicalPage> pages = BuildPhysicalPages(baseline.VoxelStates);
-        materialized = CreateMaterialized(
-            new NavigationGridBaselineCapture(addresses, baseline),
-            pages,
-            addresses.Length,
-            InstanceVersion);
-        return true;
     }
 
     private NavigationMapInstance CreateMaterialized(
@@ -806,39 +552,6 @@ internal sealed partial class NavigationMapInstance
                 count++;
         }
         return count;
-    }
-
-    internal VoxelIndex[] GetAddressSnapshot()
-    {
-        var addresses = new VoxelIndex[Map.CellSpan.Length + _dynamicSlots.Count];
-        for (int i = 0; i < Map.CellSpan.Length; i++)
-            addresses[i] = Map.CellSpan[i].Index;
-        for (int i = 0; i < _dynamicSlots.Count; i++)
-            addresses[Map.CellSpan.Length + i] = _dynamicSlots.GetValueAt(i).Index;
-        Array.Sort(addresses, static (left, right) => left.CompareTo(right));
-        int unique = 0;
-        for (int i = 0; i < addresses.Length; i++)
-        {
-            if (unique == 0 || addresses[i].CompareTo(addresses[unique - 1]) != 0)
-                addresses[unique++] = addresses[i];
-        }
-        if (unique != addresses.Length)
-            Array.Resize(ref addresses, unique);
-        return addresses;
-    }
-
-    internal VoxelIndex[] GetNewAddressSnapshot(NavigationMapInstance previous)
-    {
-        VoxelIndex[] addresses = GetAddressSnapshot();
-        int count = 0;
-        for (int i = 0; i < addresses.Length; i++)
-        {
-            if (!previous.TryGetSlot(addresses[i], out _))
-                addresses[count++] = addresses[i];
-        }
-        if (count != addresses.Length)
-            Array.Resize(ref addresses, count);
-        return addresses;
     }
 
     private NavigationMapInstance MakeDormant(long instanceVersion)
@@ -1032,61 +745,6 @@ internal sealed partial class NavigationMapInstance
         return pages;
     }
 
-    private static PersistentVoxelIndexMap<NavigationDynamicCellSlot> BuildDynamicSlots(
-        NavigationOperationCandidate.MapState state,
-        NavigationMapInstance? previous,
-        out int nextSlot)
-    {
-        PersistentVoxelIndexMap<NavigationDynamicCellSlot> slots = previous != null
-            && previous.DynamicSlotGeneration == state.DynamicSlotGeneration
-            ? previous._dynamicSlots
-            : PersistentVoxelIndexMap<NavigationDynamicCellSlot>.Empty;
-        nextSlot = previous != null && previous.DynamicSlotGeneration == state.DynamicSlotGeneration
-            ? previous._nextDynamicSlot
-            : DynamicSlotBase;
-
-        for (int i = 0; i < state.DynamicAddresses.Count; i++)
-        {
-            VoxelIndex index = state.DynamicAddresses.GetKeyAt(i);
-            if (slots.TryGetValue(index, out _))
-            {
-                continue;
-            }
-            slots = slots.Set(
-                index,
-                new NavigationDynamicCellSlot(index, nextSlot++));
-        }
-        return slots;
-    }
-
-    private static PersistentIntMap<VoxelIndex> BuildDynamicSlotIndexes(
-        PersistentVoxelIndexMap<NavigationDynamicCellSlot> slots)
-    {
-        PersistentIntMap<VoxelIndex> indexes = PersistentIntMap<VoxelIndex>.Empty;
-        for (int i = 0; i < slots.Count; i++)
-        {
-            NavigationDynamicCellSlot slot = slots.GetValueAt(i);
-            indexes = indexes.Set(slot.Slot, slot.Index);
-        }
-        return indexes;
-    }
-
-    private static PersistentIntMap<ulong> BuildDynamicBaselineHighWater(
-        PersistentVoxelIndexMap<NavigationDynamicCellSlot> slots,
-        NavigationMapInstance? previous)
-    {
-        PersistentIntMap<ulong> highWater = PersistentIntMap<ulong>.Empty;
-        if (previous == null)
-            return highWater;
-        for (int i = 0; i < slots.Count; i++)
-        {
-            NavigationDynamicCellSlot slot = slots.GetValueAt(i);
-            if (previous._dynamicBaselineHighWater.TryGetValue(slot.Slot, out ulong prior))
-                highWater = highWater.Set(slot.Slot, prior);
-        }
-        return highWater;
-    }
-
     private PersistentIntMap<ulong> FillDynamicBaselineHighWater(ulong highWater)
     {
         PersistentIntMap<ulong> result = PersistentIntMap<ulong>.Empty;
@@ -1103,50 +761,6 @@ internal sealed partial class NavigationMapInstance
             ? highWater
             : BaselineHighWater;
     }
-
-    private static PersistentIntMap<NavigationSemanticPage> BuildSemanticPages(
-        NavigationOperationCandidate.MapState state,
-        PersistentVoxelIndexMap<NavigationDynamicCellSlot> dynamicSlots,
-        long version)
-    {
-        if (state.Overlay.CellCount == 0)
-            return PersistentIntMap<NavigationSemanticPage>.Empty;
-
-        PersistentIntMap<NavigationSemanticPage> pages = PersistentIntMap<NavigationSemanticPage>.Empty;
-        for (int i = 0; i < state.Overlay.CellCount; i++)
-        {
-            NavigationCellOverlayOperation operation = state.Overlay.GetCellAt(i);
-            int slot = state.Map.FindCellIndex(operation.Index);
-            if (slot < 0)
-            {
-                if (dynamicSlots.TryGetValue(operation.Index, out NavigationDynamicCellSlot dynamicSlot))
-                    slot = dynamicSlot.Slot;
-            }
-            if (slot < 0)
-                continue;
-
-            int pageIndex = slot / NavigationSemanticPage.SlotCount;
-            if (!pages.TryGetValue(pageIndex, out NavigationSemanticPage? page))
-                page = new NavigationSemanticPage(pageIndex, version);
-            int offset = slot % NavigationSemanticPage.SlotCount;
-            page!.HasOverride[offset] = operation.Kind == NavigationCellOverlayOperationKind.Set;
-            page.IsSuppressed[offset] = operation.Kind == NavigationCellOverlayOperationKind.Suppress;
-            page.Cells[offset] = operation.Cell;
-            pages = pages.Set(pageIndex, page);
-        }
-        return pages;
-    }
-
-    private static PersistentIntMap<NavigationSemanticPage> ApplySemanticOperation(
-        PersistentIntMap<NavigationSemanticPage> pages,
-        int slot,
-        NavigationCellOverlayOperation operation,
-        long version) => ApplySemanticOperation(
-        pages,
-        slot,
-        operation,
-        version,
-        out _);
 
     private static PersistentIntMap<NavigationSemanticPage> ApplySemanticOperation(
         PersistentIntMap<NavigationSemanticPage> pages,

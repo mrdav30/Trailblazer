@@ -98,27 +98,13 @@ internal readonly struct TraversalEvaluator
                 shape.Radius,
                 shape.Height,
                 out Vector3d sourcePortalFoot,
-                out Vector3d targetPortalFoot)
-            || !Fixed64.TrySubtract(
-                targetState.FootAnchor.Y,
-                sourceState.FootAnchor.Y,
-                out Fixed64 verticalDelta))
+                out Vector3d targetPortalFoot))
         {
             return TraversalEvaluationStatus.CostOverflow;
         }
-
-        if (verticalDelta > Fixed64.Zero)
-        {
-            if (verticalDelta > _profile.MaxStepUp)
-                return TraversalEvaluationStatus.Impassable;
-        }
-        else if (verticalDelta < Fixed64.Zero)
-        {
-            if (!Fixed64.TrySubtract(Fixed64.Zero, verticalDelta, out Fixed64 drop))
-                return TraversalEvaluationStatus.CostOverflow;
-            if (drop > _profile.MaxDropDown)
-                return TraversalEvaluationStatus.Impassable;
-        }
+        TraversalEvaluationStatus vertical = EvaluateVerticalDelta(sourceState, targetState);
+        if (vertical != TraversalEvaluationStatus.Passable)
+            return vertical;
 
         if (!Vector3d.TryGetDistance(
                 sourceState.FootAnchor,
@@ -169,14 +155,24 @@ internal readonly struct TraversalEvaluator
         {
             return TraversalEvaluationStatus.Impassable;
         }
+        NavigationNodeState previousState = sourceState;
         for (int i = 0; i < connection.Witnesses.Count; i++)
         {
             if (!_graph.TryGetNodeRef(connection.Witnesses[i], out NavigationNodeRef witness)
-                || !TryGetPassableNode(witness, out _, out _))
+                || !TryGetPassableNode(witness, out NavigationNodeState witnessState, out _))
             {
                 return TraversalEvaluationStatus.Impassable;
             }
+            TraversalEvaluationStatus vertical = EvaluateVerticalDelta(previousState, witnessState);
+            if (vertical != TraversalEvaluationStatus.Passable)
+                return vertical;
+            previousState = witnessState;
         }
+        TraversalEvaluationStatus destinationVertical = EvaluateVerticalDelta(
+            previousState,
+            targetState);
+        if (destinationVertical != TraversalEvaluationStatus.Passable)
+            return destinationVertical;
 
         if (!Vector3d.TryGetDistance(
                 sourceState.FootAnchor,
@@ -197,6 +193,32 @@ internal readonly struct TraversalEvaluator
 
         cost = total;
         return TraversalEvaluationStatus.Passable;
+    }
+
+    private TraversalEvaluationStatus EvaluateVerticalDelta(
+        NavigationNodeState source,
+        NavigationNodeState target)
+    {
+        if (!Fixed64.TrySubtract(
+                target.FootAnchor.Y,
+                source.FootAnchor.Y,
+                out Fixed64 verticalDelta))
+        {
+            return TraversalEvaluationStatus.CostOverflow;
+        }
+        if (verticalDelta > Fixed64.Zero)
+        {
+            return verticalDelta <= _profile.MaxStepUp
+                ? TraversalEvaluationStatus.Passable
+                : TraversalEvaluationStatus.Impassable;
+        }
+        if (verticalDelta >= Fixed64.Zero)
+            return TraversalEvaluationStatus.Passable;
+        if (!Fixed64.TrySubtract(Fixed64.Zero, verticalDelta, out Fixed64 drop))
+            return TraversalEvaluationStatus.CostOverflow;
+        return drop <= _profile.MaxDropDown
+            ? TraversalEvaluationStatus.Passable
+            : TraversalEvaluationStatus.Impassable;
     }
 
     private bool TryGetPassableNode(

@@ -13,11 +13,6 @@ namespace Trailblazer.Pathing;
 
 internal sealed partial class NavigationWorldGraph
 {
-    internal bool TryGetExplicitConnection(
-        NavigationConnectionOwnerKey owner,
-        out NavigationExplicitConnectionRecord record) =>
-        _explicitConnections.TryGet(owner, out record);
-
     internal bool TryGetNodeRef(
         int mapOrdinal,
         VoxelIndex index,

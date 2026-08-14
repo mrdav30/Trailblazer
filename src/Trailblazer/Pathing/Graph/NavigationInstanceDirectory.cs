@@ -38,9 +38,6 @@ internal sealed class NavigationInstanceDirectory
     internal bool TryGet(string mapId, out NavigationMapInstance instance) =>
         _instances.TryGetValue(mapId, out instance!);
 
-    internal NavigationInstanceDirectory Set(string mapId, NavigationMapInstance instance) =>
-        new(_instances.Set(mapId, instance));
-
     internal NavigationInstanceDirectory Set(
         string mapId,
         NavigationMapInstance instance,
@@ -57,7 +54,7 @@ internal sealed class NavigationInstanceDirectory
         new(_instances.Remove(mapId, out removed, out copiedNodeCount));
 
     internal NavigationInstanceDirectory With(int ordinal, NavigationMapInstance instance) =>
-        Set(GetMapId(ordinal), instance);
+        new(_instances.Set(GetMapId(ordinal), instance));
 
     internal NavigationMapInstance[] ToArray()
     {

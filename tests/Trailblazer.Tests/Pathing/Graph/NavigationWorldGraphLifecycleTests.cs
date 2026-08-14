@@ -183,8 +183,10 @@ public sealed class NavigationWorldGraphLifecycleTests
         context.Simulate();
 
         GraphDependencyStamp stamp;
+        long compositionVersion;
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
         {
+            compositionVersion = lease.Graph.Composition.Version;
             lease.Graph.TryGetDependencyStamp(
                     policyKey,
                     new[] { "A" },
@@ -200,7 +202,10 @@ public sealed class NavigationWorldGraphLifecycleTests
             sequence: 4);
         context.Simulate();
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+        {
             lease.Graph.IsDependencyCurrent(stamp).Should().BeTrue();
+            lease.Graph.Composition.Version.Should().Be(compositionVersion);
+        }
 
         AdmitCellOverlay(
             context,
@@ -209,7 +214,18 @@ public sealed class NavigationWorldGraphLifecycleTests
             sequence: 5);
         context.Simulate();
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
-            lease.Graph.IsDependencyCurrent(stamp).Should().BeTrue();
+        {
+            lease.Graph.IsDependencyCurrent(stamp).Should().BeFalse(
+                "any semantic change in the selected conservative component advances its traversal version");
+            lease.Graph.Composition.Version.Should().Be(compositionVersion,
+                "semantic-only overlays do not change the topology-composition clock");
+            lease.Graph.TryGetDependencyStamp(
+                    policyKey,
+                    new[] { "A" },
+                    new[] { new GraphPageDependencyAddress("A", 0) },
+                    out stamp)
+                .Should().BeTrue();
+        }
 
         AdmitCellOverlay(
             context,
@@ -219,6 +235,70 @@ public sealed class NavigationWorldGraphLifecycleTests
         context.Simulate();
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
             lease.Graph.IsDependencyCurrent(stamp).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PhysicalChangeOnUnrecordedPage_ShouldAdvanceOnlyOwningComponentVersion()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        GridConfiguration firstConfiguration = CreateWideConfiguration(xOffset: 0, cellCount: 65);
+        GridConfiguration secondConfiguration = CreateWideConfiguration(xOffset: 256, cellCount: 1);
+        VoxelGrid firstGrid = AddGrid(
+            context.World,
+            firstConfiguration,
+            GridStorageKind.Dense,
+            default);
+        AddGrid(context.World, secondConfiguration, GridStorageKind.Dense, default);
+        AdmitMap(context, CreateWideMap("A", xOffset: 0, cellCount: 65), 1, 1);
+        AdmitMap(context, CreateWideMap("B", xOffset: 256, cellCount: 1), 2, 1);
+        var policyKey = new NavigationAreaPolicyKey("ground", 1);
+        var policyOperation = new NavigationAreaPolicyCommitOperation(
+            new NavigationAreaPolicy(
+                policyKey,
+                new[] { new NavigationAreaRule(true, Fixed64.Zero) }),
+            publicationSequence: 3,
+            effectiveFrame: context.FrameCount + 1);
+        context.Pathing.Admit(policyOperation).Should().BeTrue();
+        context.Simulate();
+
+        GraphDependencyStamp firstStamp;
+        GraphDependencyStamp secondStamp;
+        long compositionVersion;
+        NavigationGraphDiagnosticsSnapshot before = context.Pathing.GetNavigationGraphDiagnostics();
+        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            compositionVersion = lease.Graph.Composition.Version;
+            lease.Graph.TryGetDependencyStamp(
+                    policyKey,
+                    new[] { "A" },
+                    new[] { new GraphPageDependencyAddress("A", 0) },
+                    out firstStamp)
+                .Should().BeTrue();
+            lease.Graph.TryGetDependencyStamp(
+                    policyKey,
+                    new[] { "B" },
+                    new[] { new GraphPageDependencyAddress("B", 0) },
+                    out secondStamp)
+                .Should().BeTrue();
+        }
+
+        var unrecordedAddress = new VoxelIndex(64, 0, 0);
+        firstGrid.TryGetVoxel(unrecordedAddress, out Voxel? voxel).Should().BeTrue();
+        firstGrid.TryAddObstacle(voxel!, context.World.AllocateObstacleToken()).Should().BeTrue();
+        context.Simulate();
+
+        NavigationGraphDiagnosticsSnapshot after = context.Pathing.GetNavigationGraphDiagnostics();
+        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            lease.Graph.IsDependencyCurrent(firstStamp).Should().BeFalse(
+                "an unrecorded physical page still invalidates its conservative component");
+            lease.Graph.IsDependencyCurrent(secondStamp).Should().BeTrue(
+                "a disconnected component did not consume the physical change");
+            lease.Graph.Composition.Version.Should().Be(compositionVersion,
+                "physical-only changes do not change topology composition");
+        }
+        after.Maps[0].ComponentVersion.Should().BeGreaterThan(before.Maps[0].ComponentVersion);
+        after.Maps[1].ComponentVersion.Should().Be(before.Maps[1].ComponentVersion);
     }
 
     [Fact]
@@ -613,8 +693,8 @@ public sealed class NavigationWorldGraphLifecycleTests
             GridTopologyKind.RectangularPrism,
             GridStorageKind.Dense);
         GridConfiguration secondConfiguration = new(
-            new Vector3d(10, 0, 0),
-            new Vector3d(12, 1, 1),
+            new Vector3d(3, 0, 0),
+            new Vector3d(5, 1, 1),
             topologyKind: GridTopologyKind.RectangularPrism,
             topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
             storageKind: GridStorageKind.Dense);
@@ -622,17 +702,25 @@ public sealed class NavigationWorldGraphLifecycleTests
         AddGrid(context.World, secondConfiguration, GridStorageKind.Dense, default);
         firstConfiguration.TryNormalize(out NormalizedGridConfiguration firstBinding).Should().BeTrue();
         secondConfiguration.TryNormalize(out NormalizedGridConfiguration secondBinding).Should().BeTrue();
-        var transition = new TraversalTransitionDefinition(
-            "ladder",
-            TraversalTransitionType.Climb,
-            default,
-            TraversalMedium.Solid,
+        var sourceIndex = new VoxelIndex(2, 0, 0);
+        firstBinding.TryGetCellPrism(sourceIndex, out GridCellPrism sourcePrism)
+            .Should().BeTrue();
+        secondBinding.TryGetCellPrism(default, out GridCellPrism destinationPrism)
+            .Should().BeTrue();
+        var connection = new NavigationConnection(
+            "bridge",
+            sourceIndex,
             new NavigationCellAddress("other", default),
-            TraversalMedium.Solid,
-            TraversalCapability.Climb);
+            new Vector3d(sourcePrism.Center.X, sourcePrism.VerticalMin, sourcePrism.Center.Z),
+            new Vector3d(
+                destinationPrism.Center.X,
+                destinationPrism.VerticalMin,
+                destinationPrism.Center.Z),
+            Fixed64.Zero,
+            Fixed64.One);
         NavigationMap firstMap = new NavigationMapBuilder("map", firstBinding)
-            .AddCell(default, SolidCell)
-            .AddTransition(transition)
+            .AddCell(sourceIndex, SolidCell)
+            .AddConnection(connection)
             .Build();
         NavigationMap secondMap = new NavigationMapBuilder("other", secondBinding)
             .AddCell(default, SolidCell)
@@ -652,7 +740,7 @@ public sealed class NavigationWorldGraphLifecycleTests
                     {
                         new NavigationMapOverlayDelta(
                             "map",
-                            transitions: new[] { TraversalTransitionOverlayOperation.Suppress("ladder") })
+                            connections: new[] { NavigationConnectionOverlayOperation.Suppress("bridge") })
                     })),
             3,
             context.FrameCount + 1);
@@ -689,6 +777,34 @@ public sealed class NavigationWorldGraphLifecycleTests
         AdmitMap(context, map, sequence: 1, bakeVersion: 1);
         context.Simulate();
         GetState(context, default).HasCell.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CellSemanticChange_ShouldAdvanceOwningComponentVersionWithoutExplicitEdges()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        GridConfiguration configuration = CreateConfiguration(
+            GridTopologyKind.RectangularPrism,
+            GridStorageKind.Dense);
+        AddGrid(context.World, configuration, GridStorageKind.Dense, default);
+        AdmitMap(context, CreateMap("map", configuration, default), 1, 1);
+        context.Simulate();
+        NavigationGraphMapDiagnostic before = context.Pathing
+            .GetNavigationGraphDiagnostics()
+            .Maps[0];
+
+        AdmitCellOverlay(
+            context,
+            NavigationCellOverlayOperation.Set(default, LiquidCell()),
+            2);
+        context.Simulate();
+
+        NavigationGraphMapDiagnostic after = context.Pathing
+            .GetNavigationGraphDiagnostics()
+            .Maps[0];
+        after.ComponentId.Should().Be(before.ComponentId);
+        after.ComponentVersion.Should().BeGreaterThan(before.ComponentVersion,
+            "effective cell semantics invalidate the conservative component cache");
     }
 
     [Fact]
@@ -859,16 +975,18 @@ public sealed class NavigationWorldGraphLifecycleTests
 
     private static NavigationMap CreateWideMap(string mapId, int xOffset, int cellCount)
     {
-        var configuration = new GridConfiguration(
-            new Vector3d(xOffset, 0, 0),
-            new Vector3d(xOffset + cellCount - 1, 0, 0),
-            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One));
+        GridConfiguration configuration = CreateWideConfiguration(xOffset, cellCount);
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
         var builder = new NavigationMapBuilder(mapId, binding);
         for (int x = 0; x < cellCount; x++)
             builder.AddCell(new VoxelIndex(x, 0, 0), SolidCell);
         return builder.Build();
     }
+
+    private static GridConfiguration CreateWideConfiguration(int xOffset, int cellCount) => new(
+        new Vector3d(xOffset, 0, 0),
+        new Vector3d(xOffset + cellCount - 1, 0, 0),
+        topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One));
 
     private static NavigationCell LiquidCell() => new(
         TraversalMedia.Liquid,

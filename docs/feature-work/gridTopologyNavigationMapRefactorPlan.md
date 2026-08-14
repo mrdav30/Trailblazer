@@ -458,7 +458,8 @@ TrailblazerWorldContext
   immutable direct-indexed navigation-area policies
   A* / reverse-Dijkstra flow / reachability
   synchronized guide caches and compiled transition indexes
-  bounded PathQueryWorkspace pool (one checkout per admitted batch query)
+  algorithm-specific bounded workspaces (combined Phase 3/4 uses one
+    NavigationAStarWorkspace per admitted A* query)
 ```
 
 ### Navigation map instances and node lookup
@@ -736,30 +737,36 @@ records, dependency indexes, and seam-index roots; changing one overlay bit does
 not copy an `O(active maps)` array. Overlay updates copy only touched semantic/
 physical pages, incident index pages, plus `O(log pages)` directory nodes and
 lazily reject cache stamps.
-Structural additions can union component records locally. A removal that splits
-a component honestly costs `O(Vc + Ec)` over the affected old effective node
-component, where `Ec` includes implicit native, explicit, seam, and transition
-edges. It is processed under the maintenance budget and remains fail-closed
-through carryover; no initial dynamic connectivity structure is justified
-without benchmark evidence.
+Through combined Phase 3/4, structural additions union conservative MapId
+component records locally and removals budget-split only that map-level
+partition over explicit and automatic-seam structure. Phase 5 replaces it
+with exact node-level surface reachability; only then does a removal that splits
+a node component honestly cost `O(Vc + Ec)`, including implicit native edges.
+Either split is processed under the maintenance budget and remains fail-closed
+through carryover; no dynamic-connectivity accelerator is justified without
+benchmark evidence.
 
 Use three scoped correctness clocks from the first implementation:
 
 - `CompositionVersion` changes when the registered map set, an exact bound grid
   generation, automatic cross-map seam structure, or baked map structure changes;
-- each semantic overlay page has a `MapOverlayPageVersion`. Endpoint resolution
-  records the pages covering its bounded candidate region, including pages where
-  a later Set could materialize a previously unauthored cell. Page identity is a
-  deterministic topology-local address tile derived from `VoxelIndex`, so an
-  unallocated page still has a stable zero version and no address-volume table;
-- the effective composition precomputes weakly connected structural components
-  over baked-plus-overlay cells, explicit connections, and transitions while
-  ignoring only GridForge physical presence/blockage. Each has a
-  `TraversalComponentVersion` incremented when member media/cost/capability,
-  physical presence/blockage, or effective edges change. An overlay node/edge/
-  transition addition invalidates and merges incident components; removal
-  invalidates the old component and budget-splits it before reopening. An
-  isolated new cell creates a new component without invalidating unrelated ones.
+- each semantic/physical slot page has an exact page version. Endpoint
+  resolution records every page it actually reads plus the conservative
+  component/version for every bounded eligible MapId it examines, including an
+  eligible map with no current candidate. A later Set at a previously
+  unauthored address advances that map's component version; the design does not
+  add a second address-derived zero-page index beside stable slot pages;
+- through combined Phase 3/4, effective composition precomputes conservative
+  weakly connected MapId components over surface-native membership, explicit
+  connections, and automatic seams. Cross-map transitions do not join the
+  surface partition until Phase 7 binds effective transition nodes. Each
+  `TraversalComponentVersion` advances when any
+  member map's media/cost/capability, physical presence/blockage, or effective
+  edge state changes. Exact semantic/physical page versions keep endpoint and
+  visited-state dependencies honest, while two disconnected regions inside one
+  map may conservatively invalidate together. Phase 5 replaces this partition
+  with exact node-level surface reachability when flow/reachability consume it;
+  no earlier phase claims articulation-cell locality it does not implement.
 
 Search results and guides store a `GraphDependencyStamp`: the composition
 version, sorted endpoint-candidate overlay page versions, and sorted
@@ -772,11 +779,11 @@ A local obstacle or semantic overlay change therefore invalidates the affected
 component/candidate pages but not a disconnected map set. A baked map/grid/
 automatic-seam change conservatively changes `CompositionVersion`.
 
-Phase 0 measures component size and invalidation/repath waves. Finer per-instance
-or seam/corridor dependencies land before Phase 2 only if the absolute gate
-fails and a proof shows additions/removals/cost changes outside the recorded
-set cannot alter endpoint selection, reachability, or optimality. “Only nodes
-A* expanded” is explicitly not a valid dependency proof.
+Phase 2 measures conservative component size and invalidation/repath waves.
+Phase 5 replaces the MapId partition with exact surface reachability and must
+prove that additions/removals/cost changes outside the recorded set cannot alter
+endpoint selection, reachability, or optimality. “Only nodes A* expanded” is
+explicitly not a valid dependency proof.
 
 Immutable request identity always includes both exact endpoints for equality,
 diagnostics, and guide ownership, but survey payload keys are algorithm
@@ -790,8 +797,10 @@ generated transition indexes publish with the graph snapshot, so there is no
 independently mutable registry version.
 
 A search acquires an O(1) ref-counted snapshot lease for resolution, expansion,
-and result copy. Each concurrent query also checks out its own pooled
-`PathQueryWorkspace`; no mutable scratch is shared. A guide acquires a short
+and result copy. Each concurrent query also checks out its own pooled,
+algorithm-specific bounded workspace; combined Phase 3/4 uses
+`NavigationAStarWorkspace`, while Phase 5 adds a concrete flow workspace only
+from its measured consumer needs. No mutable scratch is shared. A guide acquires a short
 snapshot lease for acquisition, sample, waypoint advance, and steering. It
 validates its dependency stamp before work and again against the currently
 published snapshot before returning. If publication raced the operation and a
@@ -920,10 +929,15 @@ than publishing a mixed-time overlay. This bounds retained deltas without losing
 an address change that occurs after its earlier chunk was processed.
 
 `MaintenanceWorkBudget` counts consumed envelopes, baseline addresses, overlay
-slots, seam candidates, component nodes, implicit native edges, explicit/seam/
-transition edges, dependency-index entries, and cache invalidations. Canonically sorted unfinished work carries to the next
-frame; affected work remains fail-closed, while unrelated published instances
-continue serving. Work completion is based on counters, never elapsed time.
+slots, component nodes, explicit/transition edges, and dependency-index entries
+in Phase 2. Combined Phase 3/4 adds seam candidates only with GridForge's bounded
+candidate cursor and adds invalidation work only with the concrete A* cache.
+Implicit native expansion is query work charged to
+`NavigationWorkBudget.MaxEvaluatedEdges`; it becomes maintenance work only when
+Phase 5 builds exact node-level reachability. Canonically sorted unfinished work
+carries to the next frame; affected work remains fail-closed, while unrelated
+published instances continue serving. Work completion is based on counters,
+never elapsed time.
 
 1. map lifecycle and semantic overlay transactions folded by context sequence,
    then coalesced to final state by ordinal `MapId` plus address/source-owned ID;
@@ -985,10 +999,14 @@ selection. Algorithm-specific options are value objects. In particular,
 payload promotion is the fixed cache invariant below, not a caller-selectable
 policy.
 
-The public guide service returns an explicit status/result lease model covering
-at least `Success`, `NoMap`, `InvalidProfile`, `InvalidStart`, `InvalidEnd`,
+The public guide service returns `NavigationGuideStatus` with `Success`,
+`Unsupported`, `NoMap`, `InvalidProfile`, `InvalidStart`, `InvalidEnd`,
 `NoPath`, `BudgetExceeded`, `CostOverflow`, `CapacityExceeded`, and `Stale`.
-Queries never encode these states through partially initialized mutable objects.
+`RequestGuide(PathQuery, out NavigationGuideLease?)` returns a lease only for
+`Success`; the lease owns one immutable payload reference plus its guide-local
+cursor, never a long-lived graph snapshot lease. Its sampling and advancement
+operations return the same status model so staleness is explicit. Queries never
+encode these states through partially initialized mutable objects.
 
 Resolution examines mapped instances rather than letting a single
 `GridWorld.TryGetGridAndVoxel(position)` call choose an overlapping grid.
@@ -999,31 +1017,38 @@ within the eligible set is:
 1. fixed-point distance to the exact query point;
 2. stable authored `NavigationCellAddress` order.
 
-Start with GridForge's topology-aware covered-voxel query over the endpoint's
-bounded world-space search box, then filter exact mapped nodes and rank them by
-the rules above. Phase 0 benchmarks this against a simple graph scan and a
-map-owned spatial index. Add a second endpoint index only if it materially
-improves the intended workload after accounting for memory and sparse mutation
-cost. Runtime identities validate candidates but never decide deterministic
-ordering. Exact flow sampling in overlapping instances uses the same map and
-candidate-ranking contract.
+Start with a caller-owned GridForge covered-address cursor over the endpoint's
+bounded world-space search box and the leased graph's eligible exact grid
+generations. The cursor bounds overlapping-grid discovery and topology-address
+probes separately, charges candidates before yield, and emits configuration/
+generation identity plus `VoxelIndex`, never live `Voxel` objects. It returns
+`More`, `Complete`, or `Stale`; any expected generation/high-water mismatch
+invalidates the partial resolution. The leased graph alone decides authored
+membership, physical presence/blockage, and semantic state, then ranks exact
+mapped nodes by the rules above. Phase 0 benchmarks direct covered-address
+lookup against a simple graph scan and map-owned index; do not add a second
+endpoint cell index without a measured need. Exact flow sampling in overlapping
+instances later uses the same snapshot-consistent map and ranking contract.
 
 ### Weighted A*
 
-Replace `PathHeap<TNode>` integer metadata with fixed-point costs and an
-explicit canonical node-key tie break:
+The new surface-A* workspace replaces legacy integer heap use with fixed-point
+metadata and an explicit canonical node-key tie break. The shared legacy
+`PathHeap<TNode>` remains unchanged until its final flow/volume consumer moves:
 
 1. lowest total estimated cost;
 2. lowest heuristic cost;
 3. lowest `(ordinal MapId, lexicographic VoxelIndex)` canonical node key.
 
-Heaps, fields, and search metadata use compact `(instance ordinal, baked node
-ordinal)` handles that resolve the canonical key for comparison; the compact
-ordinals themselves never decide a cross-map tie. Implicit native enumeration is fixed-degree and allocation-
-free; explicit outgoing/incoming indexes are precompiled. Query workspaces choose
-between pooled compact hash metadata and lazily cleared generation-stamped
-ordinal pages from Phase 0 measurements. A short search must not rent/clear
-arrays sized to every node in the world.
+Heaps, fields, and search metadata use snapshot-scoped `NavigationNodeRef`
+values containing an instance ordinal plus a stable baked-or-dynamic slot. They
+resolve the canonical `(MapId, VoxelIndex)` key for comparison; compact ordinals
+and slots never decide a cross-map tie or persist across graph roots. Implicit
+native enumeration is fixed-degree and allocation-free; explicit outgoing/
+incoming indexes are precompiled. Query workspaces choose between pooled compact
+hash metadata and lazily cleared generation-stamped slot pages from Phase 0
+measurements. A short search must not rent/clear arrays sized to every node in
+the world.
 
 Every algorithm consumes one directed function:
 
@@ -1516,8 +1541,9 @@ and result-cache infrastructure before any new A*/flow consumer existed. That
 layer was removed instead of being carried as speculative compatibility code.
 Phase 2 retains the bounded
 immutable graph, safety-aware snapshot leases, publication pressure, and exact
-dependency primitives. Phase 4 owns query admission, workspaces, and result
-caching when the first real search consumer can define and test their lifetimes.
+dependency primitives. The combined Phase 3/4 milestone owns query admission,
+workspaces, and result caching when the first real search consumer can define
+and test their lifetimes.
 Canonical Phase 2 evidence now measures the resulting snapshot-lease API
 directly; all pinned latency and capacity gates pass without widening a limit.
 
@@ -1570,7 +1596,8 @@ Tasks:
 - Enforce the concurrent snapshot-lease ceiling and mandatory safety barrier in
   the graph store itself. Raw/internal leases may not bypass catch-up closure.
 - Do not ship a query admission gate, query workspace pool, or result cache in
-  Phase 2. Add them with their first production A*/flow consumer in Phase 4 so
+  Phase 2. Add them with the first production A* consumer in the combined
+  Phase 3/4 milestone so
   their contracts and performance evidence exercise real work rather than a
   synthetic future seam.
 - Implement high-water queue detachment from the single committed final-state
@@ -1602,76 +1629,218 @@ Exit criteria:
 - slot reuse cannot alias old graph state;
 - one context's events cannot mutate another context's graph.
 
-### Phase 3 - Native Edges And Traversal Evaluation
+### Phase 3/4 - Native Graph And Weighted Surface A*
 
-**Goal:** make graph semantics topology-correct before adding search.
+**Goal:** make graph semantics topology-correct and immediately replace the
+first complete request/search path that consumes them.
+
+Phase 3 and Phase 4 are one vertical delivery milestone. They retain a strict
+internal dependency order: graph semantics are implemented and proven first,
+then endpoint resolution, query admission, and weighted surface A* consume
+those exact contracts. The new A* remains internal and unreachable from every
+production/public service until the final cutover checkpoint atomically ports
+all direct surface callers, switches authority, and deletes the old provider.
+There is no checkpoint with two reachable A* authorities and no standalone
+Phase 3 exit that leaves speculative edge/query infrastructure in the branch.
+
+The area-policy boundary follows the same rule. `TraversalEvaluator` consumes
+one already-resolved immutable `NavigationAreaPolicy`; it does not look up a
+policy key or own query admission. The first real query-admission path below
+resolves `PathQuery.AreaPolicy` exactly once and supplies that policy to every
+expansion. This keeps the evaluator reusable without recreating the premature
+Phase 2 admission/cache layer.
+
+This milestone pulls forward the kinematic pieces of Phase 8 needed to construct
+an honest `PathQuery`: one authoritative `KinematicBodyShape` across Navigator,
+`ISteer`, setup/activation, and root-to-foot conversion; matching guided
+`NavigationAgentProfile` state; removal of caller-selected A* heuristics; and
+the A*-specific serialized request/cursor schema. It does not retain a second
+scalar size or guess a profile from it. Material-entry events, flow/volume
+request schema, navigation rays, and other Phase 8 work remain in their owning
+phases.
+
+The committed Phase 2 component index is a conservative map-connectivity
+dependency partition, not a per-node reachability structure. Combined Phase
+3/4 records exact semantic/physical endpoint and visited page dependencies plus
+that conservative component/version. This is correctness-safe but may stale an
+unrelated region in the same map. Phase 5 replaces it with exact node-level
+surface reachability when flow/reachability provide the first real consumer;
+combined Phase 3/4 does not add a speculative dynamic-connectivity subsystem.
+
+If implementation evidence exposes another phase-boundary mismatch, choose the
+smallest coherent vertical boundary that preserves correctness, deterministic
+ordering, bounded work, and a misuse-resistant public API. Record the decision
+and affected deletion/test gates in this tracker before implementation. Do not
+paper over the mismatch with a guessed adapter, duplicate authority, or public
+future-facing abstraction.
+
+#### Living implementation tracker
+
+| Checkpoint | Scope | Status |
+| --- | --- | --- |
+| 3/4A | Freeze status/lease, edge/evaluator/search, GridForge seam, and deletion contracts | Complete |
+| 3/4B | Rectangular/hex surface native edges, compiled explicit connections, exact seams, canonical ordering | Pending |
+| 3/4C | Shared allocation-free surface evaluation, conservative component/page dependencies, maintenance integration | Pending |
+| 3/4D | Bounded endpoint resolution, real A* admission, concrete workspace/cache, and dependency capture | Pending |
+| 3/4E | Internal unreachable fixed-point weighted surface A* and immutable result/guide lifecycle | Pending |
+| 3/4F | Pull guided profile/schema forward, atomically port callers, switch authority, and delete legacy A* | Pending |
+| 3/4G | Coverage/CRAP, determinism, allocation, performance, Release/Lean, and external review gates | Pending |
+
+Update this table only from fresh test, coverage, benchmark, deletion-inventory,
+and review evidence. Each checkpoint must leave one coherent authority and may
+not add a public forwarding facade for a later checkpoint.
+
+#### Native-edge and traversal-evaluation tasks
 
 Tasks:
 
 - Implement rectangular and hex topology kernels from GridForge's public
   direction spans.
-- Implement surface and volume edge rules and witness validation.
+- Implement only the surface rules consumed by this milestone: four planar
+  rectangular primary directions and six planar axial hex primary directions
+  for both pointy and flat orientation. Retain shared topology primitives, but
+  move volume degrees and vertical-diagonal witness activation to Phase 7.
 - Implement implicit same-grid native edge enumeration in both directions.
+- Add one concrete caller-owned GridForge `GridBoundaryContactCursor`, begun and
+  advanced through `GridWorld`, that binds both exact world/grid spawn tokens,
+  both per-grid committed high-water sequences, and a canonical candidate
+  ordinal. The cursor spans spatial overlapping-grid-pair discovery, canonical
+  source/target address discovery, and every exact narrow-phase probe. Each
+  chunk runs under GridForge's short navigation-maintenance gate, accepts
+  separate candidate-probe and output ceilings, and returns `More`, `Complete`,
+  or `Stale`. Any bound identity/high-water mismatch discards the unpublished
+  partial seam candidate and restarts from ordinal zero; the cursor retains no
+  `Voxel` reference, no chunk mixes generations, and the first chunk may not
+  hide an unbounded pair or potential-source-voxel collection pass.
+- Add `GridCellGeometry.TryResolveNavigationPortal(...)` over one exact
+  precomputed manifold. Composition calls it once to produce an
+  agent-independent directed portal record containing fixed canonical source/
+  target anchors, maximum certified radius/height capacity, and lower-bound
+  certification. `TraversalEvaluator` performs direct profile-fit and
+  participant-cell-clearance comparisons only; body-specific geometry never
+  changes legality, anchors, or cost during expansion, and Trailblazer never
+  duplicates GridForge's prism/polygon logic.
 - Materialize sorted explicit connections and only exact positive-area
-  cross-grid portals. Without upstream contact geometry, require explicit
-  connections for every cross-grid seam.
+  cross-grid portals through that bounded composition cursor. Point, edge,
+  AABB-only, and volume-overlap contacts never become edges.
 - Compile connection Upsert/Suppress/RevertToBake overlays into persistent
   source-owned outgoing/incoming pages. Validate changed endpoints, witnesses,
-  corridor geometry, IDs, and component merge/split atomically without rebuilding
-  unrelated baked connection tables.
+  corridor geometry, IDs, and conservative component changes atomically without
+  rebuilding unrelated baked connection tables. One internal compiled record
+  retains the source-owned definition, durable source/destination
+  `(MapId, VoxelIndex)` addresses, checked geometric corridor cost, canonical
+  portal waypoints, and lower-bound certification result produced during bake/
+  composition. It never persists a sorted-directory map ordinal. Enumeration
+  resolves snapshot-local compact `NavigationNodeRef` values from those durable
+  addresses; expansion never recomputes the corridor.
+- Make the compiled incidence roots the one effective explicit-edge authority
+  consumed by enumeration and structural dependency capture. Delete the
+  independent scan in `NavigationStructuralNode`; do not retain two connection
+  interpretations.
+- Keep `NavigationNodeRef` internal and snapshot-scoped. Its map ordinal may be
+  used only while the owning immutable root is leased; no persistent edge,
+  cache key, guide, or cross-root comparison stores it. Canonical ordering and
+  retained identity always use `MapId` plus `VoxelIndex`.
 - Implement the shared `TraversalEvaluator` for media, profile, clearance,
   blockers, steps/drops, witnesses, directionality, navigation-area admission,
   and checked authored plus policy costs.
-- Resolve area policy once per admitted query and prove the zero/default and
-  custom-area expansion paths use direct indexed reads with zero allocations
-  and no virtual/host callback.
+- Accept one already-resolved immutable area policy in `TraversalEvaluator` and
+  prove the zero/default and custom-area paths use direct indexed reads with
+  zero allocations and no virtual/host callback. Query admission below owns the
+  one-time key resolution.
 - Enforce node, native-face, explicit-portal, witness, and swept-shortcut
-  clearance in this phase, before any search uses the graph.
-- Pin duplicate suppression and this complete canonical edge order: target
-  canonical `(MapId, VoxelIndex)` key; edge kind; topology direction ordinal for native edges or
-  ordinal connection ID for explicit edges; then entry and exit anchor raw
-  components. Explicit connection IDs are unique within a map. This comparator,
-  not cost or runtime insertion order, resolves parallel-edge ties.
+  clearance before any search uses the graph. Expansion consumes the
+  authoring/composition-time corridor certificate plus current witness and
+  clearance state; Phase 6 owns arbitrary swept-ray/string-pull certification.
+- Pin duplicate suppression and the complete directional canonical edge order:
+  opposite endpoint canonical `(MapId, VoxelIndex)` key (target for outgoing,
+  source for incoming); edge kind; original source-to-target topology direction
+  ordinal for native edges or `StringComparer.Ordinal` connection ID for
+  explicit edges; then entry and exit anchor `Fixed64.RawValue` components in
+  X/Y/Z order. A directed automatic seam is identified only by its durable
+  source/target addresses because convex cell prisms have one exact contact
+  manifold; its maintenance cursor ordinal is never retained identity. If
+  GridForge later proves multiple manifolds for one pair, their tie key is
+  canonical manifold geometry, never enumeration position. Explicit IDs are
+  unique within their source map. This comparator, not cost, runtime insertion
+  order, compact map ordinal, or stable slot, resolves parallel-edge ties.
 
-Exit criteria:
+Native-graph criteria:
 
-- rectangular primary surface/volume degrees and certified shortcuts are correct;
-- hex primary surface/volume degrees and certified shortcuts are correct for
+- rectangular four-degree surface adjacency and certified shortcuts are correct;
+- hex six-degree surface adjacency and certified shortcuts are correct for
   pointy and flat orientation;
 - sparse holes remove edges naturally;
 - one-to-many cross-grid seams retain every valid contact deterministically;
 - every search consumer can use the same edge result without topology casts.
 
-### Phase 4 - Endpoint Resolution And Weighted Surface A*
-
-**Goal:** replace the first complete request/search path.
-
-Tasks:
+#### Endpoint-resolution and weighted-surface-A* tasks
 
 - Build strict and bounded nearest-navigable endpoint resolution over mapped
   instances using the selected Phase 0 query strategy.
+- Add one caller-owned GridForge covered-address cursor initialized with the
+  leased graph's eligible exact grid generations. It bounds spatial grid
+  discovery and topology-address probes before yield, emits identities plus
+  `VoxelIndex` rather than live `Voxel` state, and returns
+  `More`/`Complete`/`Stale`. Endpoint work debits
+  `MaxLookupProbes`/`MaxEndpointCandidates`; the leased graph alone
+  filters presence, blockage, media, and authored membership.
 - Prove an explicit endpoint `MapId` filters candidates before distance
   ranking, including an overlapping-grid case where the selected cell is
   farther than a cell on another map.
 - Add immutable resolved queries with exact endpoints, snapshot leases, and
   captured dependency stamps.
-- Add deterministic query-batch admission, exclusive bounded search workspaces,
-  aggregate result-payload reservations, and the context result cache. The
-  store-owned safety barrier remains authoritative; cache promotion/return must
-  revalidate exact dependencies against the currently published root.
-- Convert heap metadata, A* metadata, waypoint costs, survey results, and guide
-  costs to `Fixed64`.
+- Add `CompositionVersion` to `GraphDependencyStamp`; record every endpoint
+  page actually read and the conservative component/version for every bounded
+  eligible MapId examined, including maps with no current candidate. A new
+  overlapping map or seam must stale the result through `CompositionVersion`;
+  a later unauthored-address Set must stale it through the owning map component.
+  Do not add a parallel address-derived endpoint-page index.
+- Advance the affected conservative component version for every effective cell
+  media/cost/capability/presence/blockage change even when connectivity is
+  unchanged. Exact pages localize candidate/visited state; the component clock
+  prevents a path or negative result from remaining current after an unrecorded
+  alternative changes.
+- Resolve `PathQuery.AreaPolicy` once during real query admission and pass the
+  immutable direct-indexed policy to `TraversalEvaluator`; expansion performs
+  no policy-key lookup, allocation, virtual dispatch, or host callback.
+- Add the public `NavigationGuideStatus` values `Success`, `Unsupported`,
+  `NoMap`, `InvalidProfile`, `InvalidStart`, `InvalidEnd`, `NoPath`,
+  `BudgetExceeded`, `CostOverflow`, `CapacityExceeded`, and `Stale`.
+  `TrailblazerGuideService.RequestGuide(PathQuery, out NavigationGuideLease?)`
+  returns that status; a lease exists only for `Success`, owns its mutable
+  guide cursor plus one immutable A* payload reference, never retains a graph
+  snapshot lease between calls, and returns status from sampling/advance.
+- Checkpoints 3/4D-E implement and test these contracts internally while the
+  new A* remains unreachable. The public accessibility and service routing
+  change only in the atomic 3/4F cut; no earlier public method returns a
+  placeholder or future-only status.
+- During this milestone, `FlowField`, resolved volume traversal, and
+  `AllowTransitions == true` return `Unsupported` at admission and never fall
+  back to legacy providers. Their existing request branches remain the only
+  branch-only authority until Phases 5/7.
+- Add deterministic query-batch admission, one concrete exclusive bounded
+  `NavigationAStarWorkspace`, aggregate A* result-payload reservations, and one
+  concrete A* payload cache. Add no generic cache-policy interfaces, flow
+  promotion hooks, or volume fields. The store-owned safety barrier remains
+  authoritative; cache promotion/return revalidates exact dependencies against
+  the currently published root.
+- Use `Fixed64` throughout the new A* workspace metadata, waypoint costs,
+  immutable result payload, and guide cost. Do not convert the shared legacy
+  `PathHeap` used by unported flow/volume branches.
 - Implement stable three-part heap ordering.
-- Implement internal certified Euclidean/zero heuristic selection.
+- Use zero heuristic by default. Enable Euclidean only when immutable
+  snapshot/component metadata proves before the first expansion that every
+  reachable edge is lower-bound certified; discovery during expansion can
+  never downgrade a running search.
 - Use the generic graph edge enumerator/search core and cut the surface domain
   to it. Phase 7 activates the already-designed volume domain after media and
   hybrid semantics are ported.
-- Split immutable request identity from algorithm payload keys. Port A* payload
-  keys with both endpoints; port destination-centric flow keys without origin,
-  with origin coverage checked at checkout. Both include their complete
-  exact addressed endpoints where algorithmically applicable, profile,
-  traversal, budget, and options identity; payload reuse is validated by the
-  captured `GraphDependencyStamp`, not a singular map/version field.
+- Split immutable request identity from the concrete A* payload key. The A* key
+  includes both complete exact addressed endpoints, profile, traversal, budget,
+  and options identity; payload reuse validates the captured
+  `GraphDependencyStamp`, not a singular map/version field. Flow keys remain in
+  Phase 5.
 - Validate dependency stamps on guide acquisition, waypoint advance, and every
   steering tick; stale signaling is part of the first guide cutover.
 - Add A*-versus-zero-heuristic-Dijkstra property tests across the matrix.
@@ -1682,17 +1851,31 @@ Tasks:
   legs no longer call the old provider. Cut direct A* and guide service
   authority only after an `rg` inventory confirms that every direct production
   caller compiles against the new service.
+- Pull forward the authoritative Navigator/`ISteer` body shape, required
+  setup/activation shape, root-to-foot conversion, guided profile, and
+  A*-specific serialization discriminator needed by those consumers. Reject
+  old A* records; do not add a compatibility reader, retained scalar size, or
+  scalar-profile adapter.
+- Delete Catmull-Rom from the A* guide during this cutover. Phase 6 adds only
+  geometry-certified ray/string-pull simplification.
 - Delete the superseded direct A* provider/data path, then run a clean Release
-  build and full suite before Phase 4 exits. Shared branch-only carriers needed
-  by not-yet-ported flow/volume modes remain internal until their own cut phase.
+  build and full suite before the combined milestone exits. `AStarWaypoint`,
+  `HeuristicMethod`, the legacy heap/request/cache carriers, and higher-level
+  flow/volume/hybrid orchestration remain internal only where a direct unported
+  consumer still exists; they contain no forwarding A* search/cache authority.
+- Add an architecture allowlist proving the new query/search namespace has no
+  dependency on charts, partitions, `PathManager`, `AStarSurveyor`, old endpoint
+  finders, or the legacy reusable cache.
 
-Exit criteria:
+Combined exit criteria:
 
 - dense rectangular characterization remains intentionally equivalent where
   the new contract preserves behavior;
 - anisotropic and hex path costs reflect actual world geometry;
-- no surveyor references GridForge storage kind or rectangular directions;
-- negative or overflowing costs fail safely.
+- the new endpoint/evaluator/surface-A* path references neither GridForge
+  storage kind nor rectangular directions outside its topology kernel; legacy
+  flow/volume surveyors remain scoped to their later deletion phases;
+- negative or overflowing costs fail safely;
 - different body/profile clearances select only legal routes;
 - same-context mutation cannot race a search or leave a guide live on old state.
 
@@ -1703,6 +1886,13 @@ Exit criteria:
 Tasks:
 
 - Implement reverse Dijkstra over incoming graph edges.
+- Replace the conservative MapId dependency partition with exact node-level
+  surface reachability components over native, explicit, and automatic-seam
+  edges using the shared edge enumerator. Charge implicit native-edge inspection
+  to the maintenance cursor here, where flow integration and reachability are
+  real consumers; pin articulation-cell split and unrelated-region reuse before
+  retiring the conservative partition. Phase 7 extends/rebuilds the partition
+  with effective transition edges when their exact runtime nodes exist.
 - Store exact-node selected edges with deterministic ties; derive headings from
   the sampled foot position through guide-local certified portal progression.
 - Preserve destination-centric cache sharing, partial-field coverage checks,
@@ -1735,7 +1925,8 @@ Tasks:
 - Implement ordered, sparse-hole-safe navigation rays.
 - Route direct-path checks, endpoint trace fallback, and string pulling through
   the same evaluator.
-- Delete Catmull-Rom path smoothing from path correctness code.
+- Verify the Phase 3/4 Catmull-Rom deletion remains complete; add no smoothing
+  path that bypasses the navigation ray.
 - Add explicit portal entry/exit waypoints where cell centers are not the true
   seam anchors.
 - Validate the complete swept body through the selected prism union: inset
@@ -1760,9 +1951,16 @@ Exit criteria:
 
 Tasks:
 
+- Activate rectangular six-face and hex six-planar-plus-two-vertical volume
+  native directions plus the corresponding volume branches in
+  `TraversalEvaluator`. Activate certified diagonal/vertical-diagonal witness
+  rules only with their first volume/hybrid consumer.
 - Delete runtime volume predicate rules and port host examples to immutable map
   defaults plus explicit addressed cell overlay deltas.
 - Bind persistent transition addresses to exact runtime graph nodes.
+- Extend/rebuild exact reachability components and dependency stamps with the
+  newly effective transition edges before any transition-aware query is
+  admitted.
 - Compile generated transitions from effective baked-plus-overlay cells and graph
   contacts; a cell delta refreshes only transitions incident to changed addresses.
 - Compile transition Upsert/Suppress/RevertToBake operations into persistent
@@ -1796,33 +1994,32 @@ Exit criteria:
 
 ### Phase 8 - Navigator, Kinematic Boundary, And Serialization
 
-**Goal:** remove the remaining grid-size coupling above pathfinding.
+**Goal:** finish controller behavior and the remaining flow/volume/hybrid
+serialization cutover after the authoritative shape and A* schema moved into
+combined Phase 3/4.
 
 Tasks:
 
-- Replace Navigator's scalar `Size` with authoritative `KinematicBodyShape` and
-  make guided navigators derive a matching `NavigationAgentProfile` plus
-  immutable `PathQuery` intent.
-- Replace `ISteer.Size` with `BodyShape`, make any retained `Radius` a direct
-  derived value, and replace every optional scalar-size `Setup`/`Activate`
-  parameter with a required validated shape.
-- Replace root/foot conversions with the immutable shape convention and delete
-  the mutable `FootPositionAdjust` surface.
 - Replace steering closing/arrival thresholds and movement-group bucket padding
   with explicit world-unit settings.
-- Port guide factories, guided volume exits, repath checks, and LOS calls.
+- Port only the remaining flow/volume/hybrid controller and serialized-request
+  consumers, plus the Phase 6 LOS integration. Guided surface A*, its repath
+  checks, and its surface legs were already cut over in combined Phase 3/4; do
+  not add a second adapter or request authority here.
 - Keep motor, turning, locomotion, and heightmap behavior topology-neutral.
 - Emit deterministic committed cell/area-entry metadata only after controller
   movement commits, and expose the last committed area as read-only controller
   state for the next fixed step. The host owns damage, audio, friction, status
   effects, and every other material-specific side effect; speculative navigation
   never runs them.
-- Replace the complete old serialized authority: `PathRequestRecord`, Navigator
-  path mode/endpoint/heuristic/flow fields, NavSteering last-unit/request fields,
-  and guided-volume chart/heuristic/range fields.
-- Add an explicit new schema discriminator whose missing/old value fails in
-  both JSON and MemoryPack transports. Runtime snapshots, dependency stamps,
-  and leases remain
+- Replace the remaining old serialized flow/volume/hybrid authority:
+  `PathRequestRecord`, Navigator path mode/endpoint/flow fields, NavSteering
+  legacy request fields, and guided-volume chart/heuristic/range fields. The
+  A*-specific discriminator and old-record rejection already land in combined
+  Phase 3/4.
+- Extend the explicit schema discriminator introduced by the A* cutover so a
+  missing/old remaining request shape fails in both JSON and MemoryPack
+  transports. Runtime snapshots, dependency stamps, and leases remain
   rebuild-only.
 - Continue populate-existing-instance loading: hosts register every per-grid map
   referenced by restored navigators, then restore/replay their coalesced semantic
@@ -1927,7 +2124,8 @@ Critical focused regressions:
   without rebaking or copying the map.
 - A cell can atomically change solid -> water -> lava-policy -> suppressed ->
   RevertToBake with full media/capability/cost/clearance semantics. Only incident
-  edges/generated transitions and affected candidate pages/components invalidate.
+  edges and affected candidate pages/components invalidate; from Phase 7, the
+  same rule includes generated transitions.
 - A ladder Upsert creates source-owned climb transitions/required connections;
   Suppress/Revert removes them. Active guides stale atomically, unrelated
   components remain reusable, and no map replacement or secondary registry occurs.
@@ -1951,9 +2149,12 @@ Critical focused regressions:
 - A checkpoint captured at overlay sequence N rejects `Stale` if a later delta
   publishes before its Clear commit; concurrent permutations never lose or
   double-apply either mutation.
-- Removing a mined articulation cell from a large single-map component charges
-  every visited node and implicit/explicit/seam/transition edge, remains fail-
-  closed across budget carryover, and reopens only after the split publishes.
+- From Phase 5 onward, removing a mined articulation cell from a large
+  single-map component charges every visited node and every then-effective
+  native/explicit/seam edge; Phase 7 adds effective transition edges to that
+  charge. It remains fail-closed across budget carryover and reopens only after
+  the split publishes. Combined Phase 3/4 uses conservative map-component
+  invalidation and makes no finer locality claim.
 - An active GridForge grid with no map remains usable by KCC/spatial systems and
   contributes no AI nodes.
 - One candidate registry cannot contain duplicate `MapId` values or two map IDs
@@ -2106,20 +2307,23 @@ freezing budgets.
 - A bake stores static cell/anchor/edge data once. Runtime instances contain
   compact semantic override/tombstone pages, physical masks, and incident seams,
   not a second full node graph.
-- One map set/replace/remove is `O(Mi + Ei + incident seam candidates)` for that
-  map plus any structural-component split it causes. With the persistent AVL
-  membership directory selected in Phase 2, deleting a bridge cell/edge costs
-  `O((Vc log M) + Ec)` over the affected old effective node component,
-  including implicit native edges, but never scans unrelated components. Split
-  benchmarks report copied persistent nodes/bytes so a measured dynamic-
-  connectivity replacement can be justified later instead of assumed.
+- Through combined Phase 3/4, one map set/replace/remove is
+  `O(Mi + Ei + incident seam candidates)` for that map plus any conservative
+  MapId-component split it causes. It does not enumerate native node edges to
+  maintain a per-node component. Phase 5's exact surface-reachability partition
+  makes node-level bridge deletion `O((Vc log M) + Ec)` over the affected old
+  effective node component, including implicit native edges, without scanning
+  unrelated components. Split benchmarks report copied persistent nodes/bytes
+  so a measured dynamic-connectivity replacement can be justified later
+  instead of assumed.
 - Sparse presence/blockage mutation is `O(native degree + incident explicit
   edges + incident seams + log directory pages)` and never copies an active-map
   root, recomputes structural components, or shifts/re-sorts baked node slots.
 - A semantic cell/connection/transition delta copies only touched overlay/index
-  pages and updates incident degree. Additions merge incident components locally;
-  a removal that splits connectivity has the already-stated honest `O(Vc + Ec)`
-  budgeted/fail-closed cost over the affected old effective node component.
+  pages and updates incident degree. Combined Phase 3/4 invalidates the owning
+  conservative MapId component; Phase 5 additions merge exact node components
+  locally, while a removal that splits node connectivity has the already-stated
+  honest `O(Vc + Ec)` budgeted/fail-closed cost over the affected old component.
 - Adding a grid/map uses GridForge's spatial broad phase and boundary candidates;
   it never compares every cell or blindly scans every active grid.
 - Exact convex contact clipping runs at composition/mutation boundaries, never
@@ -2186,10 +2390,12 @@ freezing budgets.
     pending prepared-bake bytes, batch descriptor/sort scratch,
     reserved/actual result-payload bytes, reversed worker completion, query
     p50/p95/p99, admission closure, and maintenance delay.
-17. One giant structural component: overlay bit flip at 1/16/128+ maps, a mined
-    articulation-cell removal inside a 1M-node single map, cross-map bridge seam
-    deletion/component split, persistent-root pages copied, visited nodes/all
-    edge kinds, fail-closed carryover, and cache stamp rejection work.
+17. One giant structural component: overlay bit flip at 1/16/128+ maps and
+    cross-map bridge seam deletion under the conservative combined-3/4
+    partition; then, in Phase 5, a mined articulation-cell removal inside a
+    1M-node single map. Record the applicable component split, persistent-root
+    pages copied, visited nodes/all edge kinds, fail-closed carryover, and cache
+    stamp rejection work without attributing Phase 5 locality to Phase 3/4.
 18. Transition/hybrid planning across topology seams and multi-map streaming;
     record lookup probes, candidate pairs, staged/subsearch attempts, and shared
     budget exhaustion.
@@ -2221,10 +2427,11 @@ freezing budgets.
   directory path, and local/incident degree; it performs no active-map root copy
   or component rebuild.
 - One semantic delta costs `O(touched addresses/IDs + copied persistent paths +
-  incident degree)` before any required affected-component split. It never copies
-  the bake/map root or scans unrelated components; articulation/bridge removal is
-  charged as `O(Vc + Ec)` to the maintenance/component-split budget, including
-  implicit native, explicit, seam, and transition edges.
+  incident degree)` before any required affected-component split. It never
+  copies the bake/map root or scans unrelated conservative components. Combined
+  Phase 3/4 charges cross-map component work over explicit/seam structure;
+  Phase 5 charges node-level articulation/bridge removal as `O(Vc + Ec)` over
+  native/explicit/seam edges, and Phase 7 extends that charge to transitions.
 - Overlay cells/edges/transitions, non-reused dynamic slots, pending delta bytes,
   copied/retired pages, and per-frame maintenance have hard caps. Exhaustion
   returns `CapacityExceeded` without partial publication; checkpoint rebaking is
@@ -2247,8 +2454,9 @@ freezing budgets.
   frozen streaming repath-wave/cache-discard budget or be dependency-scoped
   further before Phase 2 exits.
 - Snapshot acquisition/publication meet the frozen p95/p99
-  contention/writer-delay budget at 1/2/4/8 concurrent lease holders. Phase 4
-  adds the separate query/cache contention gate with real search consumers.
+  contention/writer-delay budget at 1/2/4/8 concurrent lease holders. The
+  combined Phase 3/4 milestone adds the separate query/cache contention gate
+  with real search consumers.
 - Event ingress, maintenance carryover, active generations, leases, and retired
   memory stay within frozen aggregate byte/count ceilings under overload;
   mandatory GridForge safety changes converge without admitting navigation
@@ -2345,7 +2553,7 @@ exceptions, and tests/docs do not count as runtime compatibility):
 | Trailblazer-owned voxel partitions force a pre-removal protocol and add per-cell state. | Keep baked/runtime navigation state external so ordinary otherwise-empty sparse removal needs no Trailblazer cleanup call. |
 | Mixed metrics break cost/heuristic admissibility. | Use actual fixed-point anchors, non-negative costs, and certified Euclidean or zero heuristic. |
 | Dependency tracking grows too complex. | Start with composition plus conservative structural-component versions; refine only with a correctness proof and failed streaming gate. |
-| A guide races snapshot publication. | Operate under an immutable snapshot lease, validate dependencies before/after, and retain retired pages until leases return. |
+| A guide races snapshot publication. | Resolve/search under a bounded immutable snapshot lease, release it before returning the guide, and validate exact dependencies at cache promotion and every guide use. |
 | Event inclusion depends on callback timing. | Detach immutable prefixes at source high-water marks and pair exact/generic events only by cause ID. |
 | Per-grid streaming causes rebuild, cache, or repath waves. | Localize bake/overlay/seam ownership, publish immutable snapshots, dependency-index caches/guides, and enforce p95/p99/repath-byte gates. |
 | Mining, media changes, or temporary ladders require a whole-map rebake. | Keep the map as an immutable default and publish sparse addressed cell/connection/transition overlay transactions into persistent snapshot pages. |
@@ -2354,7 +2562,7 @@ exceptions, and tests/docs do not count as runtime compatibility):
 | Friend assembly access spreads across GridForge internals. | Restrict it to a dedicated navigation bridge namespace and architecture test; keep generally useful immutable geometry contracts public. |
 | Flow behavior feels less smooth after deleting interpolation. | Ship exact topology-correct sampling first; profile and design topology-specific smoothing separately. |
 | KCC becomes entangled with topology. | Keep graph output in world-space anchors and place all topology code below the guide boundary. |
-| A long branch ships both old and new systems. | Cut authority and delete each superseded slice in Phases 4, 5, 7, and 8; Phase 9 verifies residue. |
+| A long branch ships both old and new systems. | Keep new A* unreachable until the combined Phase 3/4 atomic cut, then delete each remaining superseded slice in Phases 5, 7, and 8; Phase 9 verifies residue. |
 
 ## Definition Of Done
 

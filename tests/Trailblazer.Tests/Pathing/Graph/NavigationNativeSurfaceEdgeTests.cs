@@ -255,7 +255,7 @@ public sealed class NavigationNativeSurfaceEdgeTests
     }
 
     [Fact]
-    public void HexNativePortalTemplate_ShouldMatchDirectCompilationForRawFractionalRadius()
+    public void HexNativePortalTemplate_ShouldUseSharedEndpointForRawFractionalRadius()
     {
         Fixed64 radius = Fixed64.FromRaw(4_294_967_302L);
         GridConfiguration configuration = new(
@@ -279,7 +279,19 @@ public sealed class NavigationNativeSurfaceEdgeTests
             .TryTranslate(source.Center, out GridNavigationPortal translated)
             .Should().BeTrue();
 
-        direct.CanonicalFacePoint.Z.m_rawValue.Should().Be(-76_235_669_491L);
+        direct.CanonicalFacePoint.X.m_rawValue.Should().Be(-26_920_636_784L);
+        direct.CanonicalFacePoint.Z.m_rawValue.Should().Be(-77_309_411_316L);
+        direct.MaximumHorizontalRadius.Should().Be(Fixed64.Zero);
+        direct.TryResolveProfile(Fixed64.MinIncrement, Fixed64.One, out _, out _)
+            .Should().BeFalse();
+        direct.TryResolveProfile(
+                Fixed64.Zero,
+                Fixed64.One,
+                out Vector3d sourceAnchor,
+                out Vector3d targetAnchor)
+            .Should().BeTrue();
+        source.Contains(sourceAnchor).Should().BeTrue();
+        target.Contains(targetAnchor).Should().BeTrue();
         AssertPortal(translated, direct);
     }
 

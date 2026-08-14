@@ -258,6 +258,63 @@ public sealed class TraversalEvaluatorTests
     }
 
     [Fact]
+    public void FractionalHexEndpointPortal_ShouldAdmitOnlyZeroRadiusProfiles()
+    {
+        GridConfiguration configuration = new(
+            new Vector3d(-8, 3, -20),
+            new Vector3d(8, 5, -4),
+            topologyKind: GridTopologyKind.HexPrism,
+            topologyMetrics: GridTopologyMetrics.Hex(
+                Fixed64.FromRaw(4_294_967_302L),
+                (Fixed64)2,
+                HexOrientation.PointyTop),
+            storageKind: GridStorageKind.Sparse);
+        var sourceIndex = new VoxelIndex(1, 0, 1);
+        var targetIndex = new VoxelIndex(0, 0, 2);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        binding.TryGetCellPrism(sourceIndex, out GridCellPrism sourcePrism).Should().BeTrue();
+        binding.TryGetCellPrism(targetIndex, out GridCellPrism targetPrism).Should().BeTrue();
+        using TrailblazerWorldContext context = CreateContext(
+            configuration,
+            sourceIndex,
+            targetIndex,
+            Cell(),
+            Cell(),
+            targetPhysicallyPresent: true);
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationNodeRef source = Resolve(lease.Graph, sourceIndex);
+        NavigationGraphEdge edge = FindEdge(lease.Graph, source, Resolve(lease.Graph, targetIndex));
+        var zeroRadiusProfile = new NavigationAgentProfile(
+            new KinematicBodyShape(Fixed64.Zero, Fixed64.One, Fixed64.Zero),
+            Fixed64.Zero,
+            Fixed64.Zero,
+            Fixed64.Zero,
+            TraversalMedia.Solid,
+            TraversalCapability.None);
+
+        new TraversalEvaluator(lease.Graph, zeroRadiusProfile, DefaultPolicy, TraversalMedium.Solid)
+            .EvaluateNativeEdge(source, edge, out _)
+            .Should().Be(TraversalEvaluationStatus.Passable);
+        new TraversalEvaluator(
+                lease.Graph,
+                Profile(radius: Fixed64.MinIncrement),
+                DefaultPolicy,
+                TraversalMedium.Solid)
+            .EvaluateNativeEdge(source, edge, out _)
+            .Should().Be(TraversalEvaluationStatus.Impassable);
+        edge.NativePortal.TryTranslate(sourcePrism.Center, out GridNavigationPortal portal)
+            .Should().BeTrue();
+        portal.TryResolveProfile(
+                Fixed64.Zero,
+                Fixed64.One,
+                out Vector3d sourceAnchor,
+                out Vector3d targetAnchor)
+            .Should().BeTrue();
+        sourcePrism.Contains(sourceAnchor).Should().BeTrue();
+        targetPrism.Contains(targetAnchor).Should().BeTrue();
+    }
+
+    [Fact]
     public void EvaluateNativeEdge_ShouldReportCheckedOverflowAfterPassabilityOnly()
     {
         NavigationCell sourceCell = Cell();
@@ -336,13 +393,27 @@ public sealed class TraversalEvaluatorTests
         NavigationCell target,
         bool targetPhysicallyPresent = true)
     {
-        GridConfiguration configuration = CreateConfiguration();
+        return CreateContext(
+            CreateConfiguration(),
+            default,
+            new VoxelIndex(1, 0, 0),
+            source,
+            target,
+            targetPhysicallyPresent);
+    }
+
+    private static TrailblazerWorldContext CreateContext(
+        GridConfiguration configuration,
+        VoxelIndex sourceIndex,
+        VoxelIndex targetIndex,
+        NavigationCell source,
+        NavigationCell target,
+        bool targetPhysicallyPresent)
+    {
         TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateSettings());
         try
         {
-            var sourceIndex = default(VoxelIndex);
-            var targetIndex = new VoxelIndex(1, 0, 0);
             VoxelIndex[] physical = targetPhysicallyPresent
                 ? new[] { sourceIndex, targetIndex }
                 : new[] { sourceIndex };

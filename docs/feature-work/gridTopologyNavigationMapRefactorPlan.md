@@ -677,7 +677,8 @@ checks:
 - GridForge blockage mirrored into graph state;
 - topology witness cells for diagonal/vertical-diagonal movement;
 - step-up/drop-down limits from actual world Y delta;
-- one-way and semantic edge policy;
+- the enumerated directed edge's applicable traversal policy; semantic
+  transition policy remains transition-owned;
 - non-negative fixed-point movement cost.
 
 Clearance is expressed in world units and supplied by the authored/baked map.
@@ -1055,15 +1056,18 @@ Every algorithm consumes one directed function:
 ```text
 TraversalCost(source, edge, target) =
     Distance(source anchor, portal entry)
-  + Distance(portal entry, portal exit)
+  + compiled certified portal/corridor route cost
   + Distance(portal exit, target anchor)
   + edge non-negative surcharge
   + target EnterCost
+  + target navigation-area AdditionalEnterCost
 ```
 
-For a native primary edge, entry/exit collapse to the shared face crossing and
-the geometric terms equal the certified physical route. For reverse integration
-over `predecessor -> current`, evaluate
+For a native primary edge, the compiled route term is the shared-face segment
+and the geometric terms equal the certified physical route. For an explicit
+connection it is the checked multi-prism corridor cost compiled from the full
+witness chain, never direct entry-to-exit distance. For reverse integration over
+`predecessor -> current`, evaluate
 `TraversalCost(predecessor, edge, current)`; do not reverse the asymmetric
 target enter cost. A*, flow integration, flow direction choice, reachability,
 and staged physical segment totals use this exact function once.

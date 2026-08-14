@@ -1,3 +1,10 @@
+//=======================================================================
+// NavigationNativeSurfaceEdgeTests.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -138,7 +145,7 @@ public sealed class NavigationNativeSurfaceEdgeTests
     }
 
     [Fact]
-    public void SnapshotNodeRefs_ShouldBeSmallStableValues_AndFailClosedAgainstAnotherRoot()
+    public void SnapshotNodeRefs_ShouldBeSmallStableValues_AndRejectForeignMissingSlots()
     {
         Unsafe.SizeOf<NavigationNodeRef>().Should().Be(8);
         default(NavigationNodeRef).IsValid.Should().BeFalse();

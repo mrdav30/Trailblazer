@@ -59,7 +59,10 @@ public sealed class PreparedNavigationMap
 
     private static long EstimateRetainedBytes(NavigationMap map)
     {
-        long bytes = checked(128L + (map.MapId.Length * sizeof(char)));
+        long bytes = checked(
+            128L
+            + (map.MapId.Length * sizeof(char))
+            + map.NativePortalTemplateRetainedBytes);
         bytes = checked(bytes + ((long)map.Cells.Count * 96L));
         for (int i = 0; i < map.Connections.Count; i++)
         {

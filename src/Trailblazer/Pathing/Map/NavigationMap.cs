@@ -8,7 +8,11 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
+using FixedMathSharp;
 using GridForge.Configuration;
+using GridForge.Grids.Topology;
+using GridForge.Spatial;
 using SwiftCollections.Utility;
 
 namespace Trailblazer.Pathing;
@@ -21,6 +25,7 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
     private readonly NavigationCellEntry[] _cells;
     private readonly NavigationConnection[] _connections;
     private readonly TraversalTransitionDefinition[] _transitions;
+    private readonly GridNavigationPortal[] _nativePortalTemplates;
     private readonly ReadOnlyCollection<NavigationCellEntry> _cellView;
     private readonly ReadOnlyCollection<NavigationConnection> _connectionView;
     private readonly ReadOnlyCollection<TraversalTransitionDefinition> _transitionView;
@@ -56,6 +61,11 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
 
     internal ReadOnlySpan<TraversalTransitionDefinition> TransitionSpan => _transitions;
 
+    internal int NativePortalTemplateCount => _nativePortalTemplates.Length;
+
+    internal long NativePortalTemplateRetainedBytes => checked(
+        24L + ((long)_nativePortalTemplates.Length * Unsafe.SizeOf<GridNavigationPortal>()));
+
     internal NavigationMap(
         string mapId,
         NormalizedGridConfiguration gridBinding,
@@ -68,6 +78,7 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         _cells = cells;
         _connections = connections;
         _transitions = transitions;
+        _nativePortalTemplates = CompileNativePortalTemplates(gridBinding);
         _cellView = Array.AsReadOnly(_cells);
         _connectionView = Array.AsReadOnly(_connections);
         _transitionView = Array.AsReadOnly(_transitions);
@@ -152,5 +163,82 @@ public sealed class NavigationMap : IEquatable<NavigationMap>
         }
 
         return -1;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal GridNavigationPortal GetNativePortalTemplate(int directionIndex) =>
+        (uint)directionIndex < (uint)_nativePortalTemplates.Length
+            ? _nativePortalTemplates[directionIndex]
+            : default;
+
+    internal static int GetNativeSurfaceDirectionCount(GridTopologyKind topology) => topology switch
+    {
+        GridTopologyKind.RectangularPrism => 4,
+        GridTopologyKind.HexPrism => 6,
+        _ => 0
+    };
+
+    internal static VoxelIndex GetNativeSurfaceOffset(
+        GridTopologyKind topology,
+        int directionIndex)
+    {
+        if (topology == GridTopologyKind.HexPrism)
+        {
+            HexDirection direction = directionIndex switch
+            {
+                0 => HexDirection.QNegative,
+                1 => HexDirection.QNegativeRPositive,
+                2 => HexDirection.RNegative,
+                3 => HexDirection.RPositive,
+                4 => HexDirection.QPositiveRNegative,
+                5 => HexDirection.QPositive,
+                _ => default
+            };
+            return HexDirectionUtility.GetOffset(direction);
+        }
+
+        RectangularDirection rectangular = directionIndex switch
+        {
+            0 => RectangularDirection.West,
+            1 => RectangularDirection.South,
+            2 => RectangularDirection.North,
+            3 => RectangularDirection.East,
+            _ => default
+        };
+        (int x, int y, int z) offset = RectangularDirectionUtility.Offsets[(int)rectangular];
+        return new VoxelIndex(offset.x, offset.y, offset.z);
+    }
+
+    private static GridNavigationPortal[] CompileNativePortalTemplates(
+        NormalizedGridConfiguration binding)
+    {
+        GridTopologyKind topology = binding.Configuration.TopologyKind;
+        int count = GetNativeSurfaceDirectionCount(topology);
+        var templates = new GridNavigationPortal[count];
+        for (int directionIndex = 0; directionIndex < count; directionIndex++)
+        {
+            VoxelIndex offset = GetNativeSurfaceOffset(topology, directionIndex);
+            var sourceIndex = new VoxelIndex(
+                offset.x < 0 ? 1 : 0,
+                0,
+                offset.z < 0 ? 1 : 0);
+            var targetIndex = new VoxelIndex(
+                sourceIndex.x + offset.x,
+                sourceIndex.y + offset.y,
+                sourceIndex.z + offset.z);
+            if (!binding.IsValidIndex(sourceIndex) || !binding.IsValidIndex(targetIndex))
+                continue;
+
+            bool compiled = binding.TryGetCellPrism(sourceIndex, out GridCellPrism source)
+                && binding.TryGetCellPrism(targetIndex, out GridCellPrism target)
+                && GridCellGeometry.TryCreateNavigationPortal(source, target, out GridNavigationPortal portal)
+                && Vector3d.TrySubtract(Vector3d.Zero, source.Center, out Vector3d translation)
+                && portal.TryTranslate(translation, out templates[directionIndex]);
+            SwiftThrowHelper.ThrowIfArgument(
+                !compiled,
+                nameof(binding),
+                "Grid binding could not compile an exact native surface portal template.");
+        }
+        return templates;
     }
 }

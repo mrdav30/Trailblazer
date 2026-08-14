@@ -198,6 +198,126 @@ public sealed class NavigationNativeSurfaceEdgeTests
         checksum.Should().NotBe(0);
     }
 
+    [Fact]
+    public void RectangularNativePortalTemplates_ShouldMatchDirectGridForgeCompilationAtMultipleCells()
+    {
+        GridConfiguration configuration = new(
+            new Vector3d(-5, 2, -7),
+            new Vector3d(7, 4, 8),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular((Fixed64)2, (Fixed64)2, (Fixed64)3));
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap map = new NavigationMapBuilder("map", binding).Build();
+        VoxelIndex[] offsets =
+        {
+            new(-1, 0, 0),
+            new(0, 0, -1),
+            new(0, 0, 1),
+            new(1, 0, 0)
+        };
+
+        map.NativePortalTemplateCount.Should().Be(4);
+        AssertPortalTemplatesMatchDirectCompilation(
+            map,
+            binding,
+            offsets,
+            new VoxelIndex(1, 0, 1),
+            new VoxelIndex(3, 0, 3));
+    }
+
+    [Theory]
+    [InlineData(HexOrientation.PointyTop)]
+    [InlineData(HexOrientation.FlatTop)]
+    public void HexNativePortalTemplates_ShouldMatchDirectGridForgeCompilationAtMultipleCells(
+        HexOrientation orientation)
+    {
+        GridConfiguration configuration = new(
+            new Vector3d(-8, 3, -8),
+            new Vector3d(8, 5, 8),
+            topologyKind: GridTopologyKind.HexPrism,
+            topologyMetrics: GridTopologyMetrics.Hex((Fixed64)2, (Fixed64)2, orientation));
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap map = new NavigationMapBuilder("map", binding).Build();
+        VoxelIndex[] offsets =
+        {
+            HexDirectionUtility.GetOffset(HexDirection.QNegative),
+            HexDirectionUtility.GetOffset(HexDirection.QNegativeRPositive),
+            HexDirectionUtility.GetOffset(HexDirection.RNegative),
+            HexDirectionUtility.GetOffset(HexDirection.RPositive),
+            HexDirectionUtility.GetOffset(HexDirection.QPositiveRNegative),
+            HexDirectionUtility.GetOffset(HexDirection.QPositive)
+        };
+        VoxelIndex first = FindHexCenter(binding);
+        VoxelIndex second = FindHexCenter(binding, first);
+
+        map.NativePortalTemplateCount.Should().Be(6);
+        AssertPortalTemplatesMatchDirectCompilation(map, binding, offsets, first, second);
+    }
+
+    [Fact]
+    public void NodeState_ShouldDeriveExactBakedAndDynamicAnchorsWithoutPerCellAnchorArrays()
+    {
+        GridConfiguration configuration = new(
+            new Vector3d(-4, 6, -8),
+            new Vector3d(2, 8, -2),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular((Fixed64)2, (Fixed64)2, (Fixed64)3),
+            storageKind: GridStorageKind.Sparse);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        VoxelIndex baked = default;
+        VoxelIndex dynamic = new(1, 0, 0);
+        using TrailblazerWorldContext context = CreateContext(
+            configuration,
+            new[] { baked },
+            new[] { baked, dynamic });
+        CommitCellOverlay(context, NavigationCellOverlayOperation.Set(dynamic, SolidCell));
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+
+        AssertNodeAnchors(lease.Graph, binding, baked);
+        AssertNodeAnchors(lease.Graph, binding, dynamic);
+        typeof(NavigationMap).GetFields(
+                System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic)
+            .Should().NotContain(field => field.FieldType == typeof(Vector3d[]));
+        typeof(NavigationMapInstance).GetFields(
+                System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic)
+            .Should().NotContain(field => field.FieldType == typeof(Vector3d[]));
+    }
+
+    [Fact]
+    public void NativePortalTemplateStorage_ShouldBeCountedOnceAndReusedBySnapshots()
+    {
+        GridConfiguration configuration = CreateRectangularConfiguration(GridStorageKind.Dense);
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap map = new NavigationMapBuilder("map", binding)
+            .AddCell(default, SolidCell)
+            .Build();
+        var prepared = new PreparedNavigationMap(map, bakeVersion: 1);
+        long expectedTemplateBytes = 24L
+            + ((long)map.NativePortalTemplateCount * Unsafe.SizeOf<GridNavigationPortal>());
+        long expectedPreparedBytes = 128L
+            + (map.MapId.Length * sizeof(char))
+            + ((long)map.Cells.Count * 96L)
+            + prepared.BakedCellLookup.RetainedBytes
+            + expectedTemplateBytes;
+
+        map.NativePortalTemplateRetainedBytes.Should().Be(expectedTemplateBytes);
+        prepared.RetainedBytes.Should().Be(expectedPreparedBytes);
+
+        using TrailblazerWorldContext context = CreateContext(
+            configuration,
+            new[] { default(VoxelIndex) },
+            new[] { default(VoxelIndex) });
+        using NavigationWorldGraphLease first = context.Pathing.TryAcquireNavigationGraph()!;
+        NavigationMap storageOwner = first.Graph.GetInstance(0).Map;
+        CommitCellOverlay(context, NavigationCellOverlayOperation.Set(default, SolidCell));
+        using NavigationWorldGraphLease second = context.Pathing.TryAcquireNavigationGraph()!;
+
+        second.Graph.GetInstance(0).Map.Should().BeSameAs(storageOwner);
+        second.Graph.GetInstance(0).PreparedMapRetainedBytes.Should().Be(prepared.RetainedBytes);
+    }
+
     private static TrailblazerWorldContext CreateContext(
         GridConfiguration configuration,
         IReadOnlyList<VoxelIndex> authoredCells,
@@ -265,6 +385,7 @@ public sealed class NavigationNativeSurfaceEdgeTests
         while (edges.MoveNext())
         {
             edges.Current.Kind.Should().Be(NavigationGraphEdgeKind.Native);
+            edges.Current.NativePortal.IsValid.Should().BeTrue();
             graph.TryGetNodeAddress(edges.Current.Target, out NavigationCellAddress address)
                 .Should().BeTrue();
             targets.Add(address);
@@ -285,6 +406,58 @@ public sealed class NavigationNativeSurfaceEdgeTests
                 checksum += edges.Current.Target.GetHashCode();
         }
         return checksum;
+    }
+
+    private static void AssertPortalTemplatesMatchDirectCompilation(
+        NavigationMap map,
+        NormalizedGridConfiguration binding,
+        VoxelIndex[] offsets,
+        params VoxelIndex[] sources)
+    {
+        for (int sourceOrdinal = 0; sourceOrdinal < sources.Length; sourceOrdinal++)
+        {
+            VoxelIndex source = sources[sourceOrdinal];
+            binding.TryGetCellPrism(source, out GridCellPrism sourcePrism).Should().BeTrue();
+            for (int direction = 0; direction < offsets.Length; direction++)
+            {
+                VoxelIndex offset = offsets[direction];
+                var target = new VoxelIndex(
+                    source.x + offset.x,
+                    source.y + offset.y,
+                    source.z + offset.z);
+                binding.TryGetCellPrism(target, out GridCellPrism targetPrism).Should().BeTrue();
+                GridCellGeometry.TryCreateNavigationPortal(
+                        sourcePrism,
+                        targetPrism,
+                        out GridNavigationPortal direct)
+                    .Should().BeTrue();
+                map.GetNativePortalTemplate(direction)
+                    .TryTranslate(sourcePrism.Center, out GridNavigationPortal translated)
+                    .Should().BeTrue();
+                AssertPortal(translated, direct);
+            }
+        }
+    }
+
+    private static void AssertPortal(GridNavigationPortal actual, GridNavigationPortal expected)
+    {
+        actual.IsValid.Should().BeTrue();
+        actual.FaceKind.Should().Be(expected.FaceKind);
+        actual.SourceToTarget.Should().Be(expected.SourceToTarget);
+        actual.CanonicalFacePoint.Should().Be(expected.CanonicalFacePoint);
+        actual.MaximumHorizontalRadius.Should().Be(expected.MaximumHorizontalRadius);
+        actual.MaximumBodyHeight.Should().Be(expected.MaximumBodyHeight);
+    }
+
+    private static void AssertNodeAnchors(
+        NavigationWorldGraph graph,
+        NormalizedGridConfiguration binding,
+        VoxelIndex index)
+    {
+        binding.TryGetCellPrism(index, out GridCellPrism prism).Should().BeTrue();
+        graph.TryGetNodeState(Resolve(graph, index), out NavigationNodeState state).Should().BeTrue();
+        state.Center.Should().Be(prism.Center);
+        state.FootAnchor.Should().Be(new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z));
     }
 
     private static NavigationCellAddress Address(VoxelIndex index) => new("map", index);
@@ -317,13 +490,17 @@ public sealed class NavigationNativeSurfaceEdgeTests
         return cells;
     }
 
-    private static VoxelIndex FindHexCenter(NormalizedGridConfiguration binding)
+    private static VoxelIndex FindHexCenter(
+        NormalizedGridConfiguration binding,
+        VoxelIndex excluded = default)
     {
         for (int q = 1; q < binding.Width - 1; q++)
         {
             for (int r = 1; r < binding.Length - 1; r++)
             {
                 VoxelIndex candidate = new(q, 0, r);
+                if (candidate.Equals(excluded))
+                    continue;
                 VoxelIndex[] neighborhood = CreateHexNeighborhood(candidate);
                 bool valid = true;
                 for (int i = 0; i < neighborhood.Length; i++)

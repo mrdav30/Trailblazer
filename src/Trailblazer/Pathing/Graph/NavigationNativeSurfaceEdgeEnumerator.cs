@@ -13,24 +13,6 @@ namespace Trailblazer.Pathing;
 /// <summary>Enumerates physically present native surface neighbors in canonical address order.</summary>
 internal ref struct NavigationNativeSurfaceEdgeEnumerator
 {
-    private static readonly RectangularDirection[] RectangularDirections =
-    {
-        RectangularDirection.West,
-        RectangularDirection.South,
-        RectangularDirection.North,
-        RectangularDirection.East
-    };
-
-    private static readonly HexDirection[] HexDirections =
-    {
-        HexDirection.QNegative,
-        HexDirection.QNegativeRPositive,
-        HexDirection.RNegative,
-        HexDirection.RPositive,
-        HexDirection.QPositiveRNegative,
-        HexDirection.QPositive
-    };
-
     private readonly NavigationWorldGraph? _graph;
     private readonly NavigationMapInstance? _instance;
     private readonly int _mapOrdinal;
@@ -59,14 +41,11 @@ internal ref struct NavigationNativeSurfaceEdgeEnumerator
             return false;
 
         GridTopologyKind topology = _instance.Map.GridBinding.Configuration.TopologyKind;
-        int directionCount = topology == GridTopologyKind.RectangularPrism
-            ? RectangularDirections.Length
-            : topology == GridTopologyKind.HexPrism
-                ? HexDirections.Length
-                : 0;
+        int directionCount = NavigationMap.GetNativeSurfaceDirectionCount(topology);
         while (_directionIndex < directionCount)
         {
-            VoxelIndex offset = GetOffset(topology, _directionIndex++);
+            int directionIndex = _directionIndex++;
+            VoxelIndex offset = NavigationMap.GetNativeSurfaceOffset(topology, directionIndex);
             var targetIndex = new VoxelIndex(
                 _sourceIndex.x + offset.x,
                 _sourceIndex.y + offset.y,
@@ -79,21 +58,14 @@ internal ref struct NavigationNativeSurfaceEdgeEnumerator
                 continue;
             }
 
-            Current = new NavigationGraphEdge(target, NavigationGraphEdgeKind.Native);
+            Current = new NavigationGraphEdge(
+                target,
+                NavigationGraphEdgeKind.Native,
+                _instance.Map.GetNativePortalTemplate(directionIndex));
             return true;
         }
 
         Current = default;
         return false;
-    }
-
-    private static VoxelIndex GetOffset(GridTopologyKind topology, int directionIndex)
-    {
-        if (topology == GridTopologyKind.HexPrism)
-            return HexDirectionUtility.GetOffset(HexDirections[directionIndex]);
-
-        (int x, int y, int z) offset =
-            RectangularDirectionUtility.Offsets[(int)RectangularDirections[directionIndex]];
-        return new VoxelIndex(offset.x, offset.y, offset.z);
     }
 }

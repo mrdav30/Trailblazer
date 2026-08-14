@@ -5,6 +5,8 @@
 // See LICENSE file in the project root for full license information.
 //=======================================================================
 
+using FixedMathSharp;
+using GridForge.Grids.Topology;
 using GridForge.Spatial;
 
 namespace Trailblazer.Pathing;
@@ -50,15 +52,22 @@ internal sealed partial class NavigationWorldGraph
 
     internal bool TryGetNodeState(NavigationNodeRef node, out NavigationNodeState state)
     {
-        if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out _)
-            || !instance!.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell))
+        if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out VoxelIndex index)
+            || IsStructuralScopeClosed(instance!.MapId)
+            || !instance.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell)
+            || !instance.Map.GridBinding.TryGetCellPrism(index, out GridCellPrism prism))
         {
             state = default;
             return false;
         }
 
         instance.TryGetPhysicalState(node.CellSlot, out bool isPresent, out byte obstacleCount);
-        state = new NavigationNodeState(cell, isPresent, obstacleCount);
+        state = new NavigationNodeState(
+            cell,
+            isPresent,
+            obstacleCount,
+            prism.Center,
+            new Vector3d(prism.Center.X, prism.VerticalMin, prism.Center.Z));
         return true;
     }
 

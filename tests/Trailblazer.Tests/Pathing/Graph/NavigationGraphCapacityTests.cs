@@ -460,7 +460,7 @@ public sealed class NavigationGraphCapacityTests
         NavigationGraphDiagnosticsSnapshot diagnostics = context.Pathing.GetNavigationGraphDiagnostics();
         diagnostics.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(settings.MaxActiveSnapshotBytes);
         diagnostics.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(settings.MaxPersistentGraphPages);
-        diagnostics.ActiveSnapshotBytes.Should().Be(8_818_680,
+        diagnostics.ActiveSnapshotBytes.Should().Be(8_819_928,
             "the default envelope measurement pins the honest owned-root accounting used to size defaults");
         diagnostics.PersistentGraphPageCount.Should().Be(74_296);
         for (int mapIndex = 0; mapIndex < 4; mapIndex++)

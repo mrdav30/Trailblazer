@@ -1,0 +1,105 @@
+//=======================================================================
+// NavigationWorldGraph.NativeEdges.cs
+//=======================================================================
+// MIT License, Copyright (c) 2024-present David Oravsky (mrdav30)
+// See LICENSE file in the project root for full license information.
+//=======================================================================
+
+using GridForge.Spatial;
+
+namespace Trailblazer.Pathing;
+
+internal sealed partial class NavigationWorldGraph
+{
+    internal bool TryGetNodeRef(
+        int mapOrdinal,
+        VoxelIndex index,
+        out NavigationNodeRef node)
+    {
+        if ((uint)mapOrdinal >= (uint)_instances.Count)
+        {
+            node = default;
+            return false;
+        }
+
+        NavigationMapInstance instance = _instances.Get(mapOrdinal);
+        if (!instance.Map.GridBinding.IsValidIndex(index)
+            || !instance.TryGetSlot(index, out int slot))
+        {
+            node = default;
+            return false;
+        }
+
+        node = new NavigationNodeRef(mapOrdinal, slot);
+        return node.IsValid;
+    }
+
+    internal bool TryGetNodeAddress(
+        NavigationNodeRef node,
+        out NavigationCellAddress address)
+    {
+        if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out VoxelIndex index))
+        {
+            address = default;
+            return false;
+        }
+
+        address = new NavigationCellAddress(instance!.MapId, index);
+        return true;
+    }
+
+    internal bool TryGetNodeState(NavigationNodeRef node, out NavigationNodeState state)
+    {
+        if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out _)
+            || !instance!.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell))
+        {
+            state = default;
+            return false;
+        }
+
+        instance.TryGetPhysicalState(node.CellSlot, out bool isPresent, out byte obstacleCount);
+        state = new NavigationNodeState(cell, isPresent, obstacleCount);
+        return true;
+    }
+
+    internal NavigationNativeSurfaceEdgeEnumerator EnumerateNativeSurfaceEdges(
+        NavigationNodeRef source)
+    {
+        if (!TryGetNodeLocation(
+                source,
+                out NavigationMapInstance? instance,
+                out VoxelIndex sourceIndex)
+            || !TryGetNodeState(source, out NavigationNodeState sourceState)
+            || !sourceState.IsPresent)
+        {
+            return default;
+        }
+
+        return new NavigationNativeSurfaceEdgeEnumerator(
+            this,
+            source.MapOrdinal,
+            instance!,
+            sourceIndex);
+    }
+
+    private bool TryGetNodeLocation(
+        NavigationNodeRef node,
+        out NavigationMapInstance? instance,
+        out VoxelIndex index)
+    {
+        if (!node.IsValid || (uint)node.MapOrdinal >= (uint)_instances.Count)
+        {
+            instance = null;
+            index = default;
+            return false;
+        }
+
+        instance = _instances.Get(node.MapOrdinal);
+        if (instance.TryGetSlotIndex(node.CellSlot, out index))
+            return true;
+
+        instance = null;
+        index = default;
+        return false;
+    }
+}

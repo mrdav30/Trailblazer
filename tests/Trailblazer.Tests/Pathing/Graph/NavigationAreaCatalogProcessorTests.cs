@@ -274,7 +274,7 @@ public sealed class NavigationAreaCatalogProcessorTests
         var graph = new NavigationWorldGraph(1, Array.Empty<NavigationMapInstance>(), catalog);
         graph.TryGetDependencyStamp(
             firstPolicy.Key,
-            ReadOnlySpan<string>.Empty,
+            ReadOnlySpan<NavigationSurfaceComponentKey>.Empty,
             ReadOnlySpan<GraphPageDependencyAddress>.Empty,
             out GraphDependencyStamp stamp).Should().BeTrue();
 
@@ -292,14 +292,14 @@ public sealed class NavigationAreaCatalogProcessorTests
     public void Runtime_ShouldRejectAreaPolicyWhenCatalogCannotFitSnapshotCapacity()
     {
         TrailblazerWorldContextSettings settings = CreateSettings(
-            navigationAreaCount: 80,
+            navigationAreaCount: 512,
             maxAreaPolicies: 1,
-            maxAreaRules: 80,
-            maxDependencyEntries: 81,
+            maxAreaRules: 512,
+            maxDependencyEntries: 513,
             maxActiveSnapshotBytes: TrailblazerWorldContextSettings.MinimumActiveSnapshotBytes);
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
         var operation = new NavigationAreaPolicyCommitOperation(
-            CreatePolicy("ground", 1, 80),
+            CreatePolicy("ground", 1, 512),
             1,
             context.FrameCount + 1);
 

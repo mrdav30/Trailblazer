@@ -162,7 +162,7 @@ public sealed class NavigationAStarAdmissionTests
             CreateLimits(
                 maxBatchItems: 3,
                 maxConcurrentQueries: 3,
-                maxSinglePayloadBytes: 440,
+                maxSinglePayloadBytes: 472,
                 maxActivePayloadBytes: 1_000,
                 maxActivePayloadLeases: 3));
         PathQuery small = Query(maxExpandedNodes: 0);
@@ -276,7 +276,8 @@ public sealed class NavigationAStarAdmissionTests
                 maxAStarReusablePayloadBytes: 2_048,
                 maxAStarSinglePayloadBytes: 1_024,
                 maxAStarActivePayloadBytes: 1_024,
-                maxAStarActivePayloadLeases: 1));
+                maxAStarActivePayloadLeases: 1,
+                aStarWorkspaceComponentCapacity: 4));
         PathQuery query = Query(start, end, maxExpandedNodes: 2);
 
         gate.Begin(query, out NavigationAStarBatchWork first)
@@ -355,7 +356,8 @@ public sealed class NavigationAStarAdmissionTests
                 maxAStarReusablePayloadBytes: 2_048,
                 maxAStarSinglePayloadBytes: 1_024,
                 maxAStarActivePayloadBytes: 1_024,
-                maxAStarActivePayloadLeases: 1));
+                maxAStarActivePayloadLeases: 1,
+                aStarWorkspaceComponentCapacity: 4));
         PathQuery query = Query(start, end, maxExpandedNodes: 2);
         gate.Begin(query, out NavigationAStarBatchWork created)
             .Should().Be(NavigationAStarQueryStatus.Pending);
@@ -488,7 +490,7 @@ public sealed class NavigationAStarAdmissionTests
             out Vector3d start,
             out Vector3d end);
         using NavigationWorldGraphStore store = CreateStore(graph, maxConcurrentLeases: 1);
-        var workspace = new NavigationAStarWorkspace(1, 2, 2);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2);
         var cache = new NavigationAStarPayloadCache(
             maxEntries: 1,
             maxReusableBytes: 2_048,
@@ -518,8 +520,9 @@ public sealed class NavigationAStarAdmissionTests
         for (int step = 0; step < 64 && !cached.IsReadyToPublish; step++)
             cached.PrepareSearchOrCheckout(1, 1);
         cached.IsReadyToPublish.Should().BeTrue();
-        NavigationWorldGraph changed = graph.WithComposition(
-            graph.Composition.WithVersion(graph.Composition.Version + 1));
+        NavigationWorldGraph changed = graph
+            .WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+            .WithGraphVersion(graph.GraphVersion + 1);
         store.TryPublish(changed).Should().Be(NavigationCandidatePublication.Published);
 
         cached.Publish().Should().Be(NavigationAStarQueryStatus.Stale);
@@ -551,7 +554,8 @@ public sealed class NavigationAStarAdmissionTests
                 maxAStarReusablePayloadBytes: 4_096,
                 maxAStarSinglePayloadBytes: 1_024,
                 maxAStarActivePayloadBytes: 2_048,
-                maxAStarActivePayloadLeases: 2));
+                maxAStarActivePayloadLeases: 2,
+                aStarWorkspaceComponentCapacity: 4));
         PathQuery queryA = Query(start, end, maxExpandedNodes: 2);
         PathQuery queryB = Query(end, start, maxExpandedNodes: 2);
         PathQuery queryC = Query(start, end, maxExpandedNodes: 2, maxEvaluatedEdges: 7);
@@ -622,7 +626,8 @@ public sealed class NavigationAStarAdmissionTests
             maxAStarReusablePayloadBytes: 16_384,
             maxAStarSinglePayloadBytes: maxSinglePayloadBytes,
             maxAStarActivePayloadBytes: maxActivePayloadBytes,
-            maxAStarActivePayloadLeases: maxActivePayloadLeases);
+            maxAStarActivePayloadLeases: maxActivePayloadLeases,
+            aStarWorkspaceComponentCapacity: 2);
 
     private static PathQuery Query(int maxExpandedNodes) => new(
         new NavigationEndpoint(Vector3d.Zero),
@@ -675,7 +680,8 @@ public sealed class NavigationAStarAdmissionTests
                 maxAStarReusablePayloadBytes: 2_048,
                 maxAStarSinglePayloadBytes: 1_024,
                 maxAStarActivePayloadBytes: 2_048,
-                maxAStarActivePayloadLeases: 2));
+                maxAStarActivePayloadLeases: 2,
+                aStarWorkspaceComponentCapacity: 4));
         PathQuery query = Query(start, end, maxExpandedNodes: 2);
         var batch = new PathQueryBatch(
             new[]
@@ -851,23 +857,6 @@ public sealed class NavigationAStarAdmissionTests
             state,
             previous: null,
             instanceVersion: 1);
-        NavigationInstanceDirectory directory = NavigationInstanceDirectory.Create(
-            new[] { instance });
-        var composition = new NavigationCompositionIndex.UpdateWork(
-            NavigationCompositionIndex.Empty,
-            directory,
-            NavigationExplicitConnectionIndex.Empty,
-            PersistentStringMap<bool>.Empty.Set(instance.MapId, true),
-            version: 1,
-            new NavigationCompositionWorkspace(1));
-        var meter = new MaintenanceWorkMeter(
-            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
-        for (int frame = 0; frame < 64 && !composition.IsComplete; frame++)
-        {
-            composition.Advance(meter);
-            meter.Reset();
-        }
-        composition.IsComplete.Should().BeTrue();
         NavigationAreaCatalog.Empty.TryPublish(
                 Policy,
                 maxPolicies: 1,
@@ -880,11 +869,12 @@ public sealed class NavigationAStarAdmissionTests
         binding.TryGetCellPrism(endIndex, out GridCellPrism endPrism).Should().BeTrue();
         start = new Vector3d(startPrism.Center.X, startPrism.VerticalMin, startPrism.Center.Z);
         end = new Vector3d(endPrism.Center.X, endPrism.VerticalMin, endPrism.Center.Z);
-        return new NavigationWorldGraph(
+        var graph = new NavigationWorldGraph(
             1,
             new[] { instance },
-            areaCatalog: catalog,
-            composition: composition.Result);
+            areaCatalog: catalog);
+        return graph.WithSurfaceComponents(
+            NavigationSurfaceComponentTestFactory.Build(graph));
     }
 
     private static NavigationWorldGraphStore CreateStore(

@@ -28,19 +28,13 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         const int CandidateMaps = 3;
         const int ChangedMaps = 1;
         const long OverlayCells = 0;
-        long updateBytes = NavigationCompositionIndex.UpdateWork.GetMinimumScratchBytes(
-            SourceMaps,
-            CandidateMaps,
-            ChangedMaps);
-
         NavigationStructuralCompositionWork.GetMinimumScratchBytes(
                 SourceMaps,
                 CandidateMaps,
                 ChangedMaps,
                 OverlayCells)
             .Should().Be(
-                updateBytes
-                + 256L
+                256L
                 + (CandidateMaps * 256L)
                 + NavigationAutomaticSeamRefreshWork.FixedRetainedBytes);
         NavigationStructuralCompositionWork.GetMinimumScratchPages(
@@ -112,28 +106,18 @@ public sealed class NavigationStructuralCompositionCarryoverTests
                 2)
         };
 
-        long lower = 1;
-        long upper = defaults.MaxActiveSnapshotBytes;
-        while (lower < upper)
-        {
-            long middle = lower + ((upper - lower) >> 1);
-            RunSeamWork(world, candidate, changes, middle, out bool exceeded);
-            if (exceeded)
-                lower = middle + 1;
-            else
-                upper = middle;
-        }
+        const long exactPeak = 11_048L;
+        const long oneBelowPeak = 11_047L;
 
-        lower.Should().Be(13_360L,
-            "the exact retained peak includes both 8-byte GridHighWaterSequence owners");
-
-        RunSeamWork(world, candidate, changes, lower, out bool exactExceeded)
+        RunSeamWork(world, candidate, changes, exactPeak, out bool exactExceeded)
             .Should().BeTrue();
         exactExceeded.Should().BeFalse();
-        RunSeamWork(world, candidate, changes, lower - 1, out bool belowExceeded)
+        RunSeamWork(world, candidate, changes, oneBelowPeak, out bool belowExceeded)
             .Should().BeFalse();
         belowExceeded.Should().BeTrue(
-            "the completed final index can be smaller than an intermediate row/journal peak");
+            "the exact peak retains seam journals and affected-component work after deleting "
+            + "the duplicate composition authority and 64-byte test-only full-graph scan state; "
+            + "one byte below cannot retain that boundary");
     }
 
     [Fact]
@@ -181,8 +165,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             candidate,
             changes,
             changes.Length,
-            updateComposition: true,
-            workspace: new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
+            updateComposition: true);
 
         work.CapturedChangedMapCount.Should().Be(0,
             "construction may retain sources but must not scan or copy changed map IDs");
@@ -217,14 +200,78 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         work.GetCapturedChangedMapIdAt(0).Should().Be("A");
         work.GetCapturedChangedMapIdAt(1).Should().Be("B");
         componentUnits.Should().Be(3);
-        dependencyUnits.Should().Be(2,
-            "only unique changed-root insertions consume dependency units when no prior component exists");
+        dependencyUnits.Should().Be(4,
+            "each changed map and each exact authored seed is inserted under the dependency budget");
         for (int frame = 0; frame < 512 && !work.IsChangedMapCaptureComplete; frame++)
         {
             meter.Reset();
             work.Advance(meter);
         }
         work.IsChangedMapCaptureComplete.Should().BeTrue();
+    }
+
+    [Fact]
+    public void WholeMapRemoval_ShouldCaptureItsMembershipWithinOneComponentNode()
+    {
+        TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        NavigationMap unrelated = AddLinearGridAndCreateMap(context, "A", 0, 64);
+        NavigationMap removed = AddLinearGridAndCreateMap(context, "Z", 100, 1);
+        NavigationMapCommitOperation first = AdmitMap(context, unrelated, 1);
+        NavigationMapCommitOperation second = AdmitMap(context, removed, 2);
+        SimulateUntilTerminal(context, second.Receipt);
+        first.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        second.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+
+        using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
+        var removedAddress = new NavigationCellAddress("Z", default);
+        lease.Graph.TryGetSurfaceComponent(
+                removedAddress,
+                out NavigationSurfaceComponentKey removedComponent,
+                out _)
+            .Should().BeTrue();
+        NavigationOperationCandidate candidate = FoldMap(
+            new NavigationOperationCandidate(navigationAreaCount: 1),
+            new PreparedNavigationMap(unrelated, 1),
+            OverlayReplacementPolicy.Clear,
+            defaults);
+        candidate = FoldMap(
+            candidate,
+            new PreparedNavigationMap(removed, 1),
+            OverlayReplacementPolicy.Clear,
+            defaults);
+        candidate = FoldMapRemoval(candidate, removed.MapId, defaults);
+        NavigationOperationFrameChange[] changes =
+        {
+            NavigationOperationFrameChange.MapRemove(removed.MapId, 3)
+        };
+        var work = new NavigationStructuralCompositionWork(
+            context.World,
+            lease.Graph,
+            candidate,
+            changes,
+            changes.Length,
+            updateComposition: true);
+        MaintenanceWorkBudget source = defaults.MaintenanceBudget;
+        var budget = new MaintenanceWorkBudget(
+            source.MaxConsumedEnvelopes,
+            source.MaxBaselineAddresses,
+            source.MaxOverlaySlots,
+            maxComponentNodes: 1,
+            source.MaxSeamCandidateProbes,
+            source.MaxExplicitEdges,
+            maxDependencyEntries: 8);
+        var meter = new MaintenanceWorkMeter(budget);
+
+        work.Advance(meter).Should().BeFalse(
+            "the first frame only captures the raw changed-map scope");
+        work.AffectedComponents.Contains(removedComponent).Should().BeFalse();
+        meter.Reset();
+
+        work.Advance(meter).Should().BeFalse();
+        meter.ComponentNodes.Should().Be(1);
+        work.AffectedComponents.Contains(removedComponent).Should().BeTrue(
+            "the node debit must enumerate the removed map, not scan unrelated components");
     }
 
     [Fact]
@@ -257,18 +304,16 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             candidate,
             changes,
             changes.Length,
-            updateComposition: true,
-            workspace: new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
+            updateComposition: true);
         work.MarkAllClosePublished();
 
         var meter = new MaintenanceWorkMeter(defaults.MaintenanceBudget);
         work.Advance(meter).Should().BeFalse();
         work.RequiresAffectedClosurePublication.Should().BeTrue();
-        PersistentStringMap<bool> affected = work.AffectedComponents;
+        NavigationSurfaceComponentKeySet affected = work.AffectedComponents;
         affected.Count.Should().Be(1);
-        long ownedBytes = affected.RetainedBytes
-            - PersistentStringMap<bool>.Empty.RetainedBytes;
-        int ownedPages = affected.PersistentNodeCount;
+        long ownedBytes = affected.RetainedBytes;
+        int ownedPages = affected.PersistentPageCount;
         long retainedBytes = work.RetainedBytes;
         int retainedPages = work.PersistentPageCount;
 
@@ -320,16 +365,14 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             candidate,
             changes,
             changes.Length,
-            updateComposition: false,
-            workspace: new NavigationCompositionWorkspace(MapCount));
+            updateComposition: false);
         var withUpdate = new NavigationStructuralCompositionWork(
             context.World,
             lease.Graph,
             candidate,
             changes,
             changes.Length,
-            updateComposition: true,
-            workspace: new NavigationCompositionWorkspace(MapCount));
+            updateComposition: true);
         var meter = new MaintenanceWorkMeter(defaults.MaintenanceBudget);
         for (int frame = 0; frame < 4096 && !preparationOnly.IsComplete; frame++)
         {
@@ -345,53 +388,32 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         preparationOnly.IsComplete.Should().BeTrue();
         withUpdate.IsComplete.Should().BeTrue();
         (withUpdate.RetainedBytes - preparationOnly.RetainedBytes).Should().Be(
-            224,
-            "the new singleton payload and positive non-payload delta coexist with the much larger source composition");
+            12_240,
+            "the exact affected-component workspace coexists with the source root without the "
+            + "deleted duplicate composition payload or test-only full-graph scan state");
         (withUpdate.PersistentPageCount - preparationOnly.PersistentPageCount)
-            .Should().Be(3);
+            .Should().Be(12,
+                "the update owns the adjacency path copies and exact affected-component payload pages");
     }
 
     [Fact]
-    public void EmptyCompositionUpdate_ShouldNotSubtractPublishedObjectHeader()
-    {
-        using var world = new GridWorld();
-        var changes = Array.Empty<NavigationOperationFrameChange>();
-        var candidate = new NavigationOperationCandidate(navigationAreaCount: 1);
-        var preparationOnly = new NavigationStructuralCompositionWork(
-            world,
-            NavigationWorldGraph.Empty,
-            candidate,
-            changes,
-            changeCount: 0,
-            updateComposition: false,
-            workspace: new NavigationCompositionWorkspace(1));
-        var withUpdate = new NavigationStructuralCompositionWork(
-            world,
-            NavigationWorldGraph.Empty,
-            candidate,
-            changes,
-            changeCount: 0,
-            updateComposition: true,
-            workspace: new NavigationCompositionWorkspace(1));
-        var meter = new MaintenanceWorkMeter(
-            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
-        preparationOnly.Advance(meter).Should().BeTrue();
-        meter.Reset();
-        withUpdate.Advance(meter).Should().BeTrue();
-
-        (withUpdate.RetainedBytes - preparationOnly.RetainedBytes).Should().Be(
-            192L + NavigationCompositionWorkspace.GetRetainedBytes(1),
-            "the distinct update object and workspace coexist while only published roots are shared");
-    }
-
-    [Fact]
-    public void BridgeRemoval_ShouldFailClosedOnlyAffectedComponentUntilAtomicPublication()
+    public void BridgeRemoval_ShouldFailClosedOnlyExactEndpointComponentUntilAtomicPublication()
     {
         using TrailblazerWorldContext context = CreateConnectedContext(out long sequence);
-        NavigationGraphDiagnosticsSnapshot before = context.Pathing.GetNavigationGraphDiagnostics();
-        int priorComponent = FindMap(before, "A").ComponentId;
-        FindMap(before, "C").ComponentId.Should().Be(priorComponent,
-            "the installed explicit A-B-C bridge must begin as one component");
+        var bridgeSource = new NavigationCellAddress("B", new VoxelIndex(2, 0, 0));
+        var bridgeDestination = new NavigationCellAddress("C", default);
+        NavigationSurfaceComponentKey priorComponent;
+        long priorComponentVersion;
+        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            lease.Graph.TryGetSurfaceComponent(
+                    bridgeSource,
+                    out priorComponent,
+                    out priorComponentVersion)
+                .Should().BeTrue();
+            lease.Graph.AreInSameSurfaceComponent(bridgeSource, bridgeDestination)
+                .Should().BeTrue();
+        }
         var removal = SuppressConnection(context, ++sequence, "B", "bc");
 
         context.Simulate();
@@ -414,14 +436,24 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         }
         removal.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
         GetCell(context, "U").IsMaterialized.Should().BeTrue();
+        context.Pathing.TryGetNavigationGraphCellState(
+                bridgeSource.MapId,
+                bridgeSource.Index,
+                out NavigationGraphCellState blockedSource)
+            .Should().BeTrue();
+        blockedSource.IsMaterialized.Should().BeFalse();
         NavigationGraphDiagnosticsSnapshot blocked = context.Pathing.GetNavigationGraphDiagnostics();
-        NavigationGraphMapDiagnostic blockedA = FindMap(blocked, "A");
-        NavigationGraphMapDiagnostic blockedC = FindMap(blocked, "C");
-        blockedA.ComponentId.Should().Be(priorComponent,
-            $"graph={blocked.GraphVersion}, beforeComponent={priorComponent}, "
-            + $"A={blockedA.ComponentId}/{blockedA.ComponentVersion}, "
-            + $"C={blockedC.ComponentId}/{blockedC.ComponentVersion}");
-        FindMap(blocked, "C").ComponentId.Should().Be(priorComponent);
+        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            lease.Graph.TryGetSurfaceComponent(
+                    bridgeSource,
+                    out NavigationSurfaceComponentKey blockedComponent,
+                    out long blockedVersion)
+                .Should().BeTrue();
+            blockedComponent.Should().Be(priorComponent);
+            blockedVersion.Should().Be(priorComponentVersion,
+                "the exact index remains the old atomic root while its component is closed");
+        }
         blocked.ActiveSnapshotBytes.Should().BeGreaterThan(0);
         blocked.PersistentGraphPageCount.Should().BeGreaterThan(0);
         blocked.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(
@@ -435,8 +467,9 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         context.Pathing.RetainedCompositionWorkCount.Should().Be(0);
         GetCell(context, "A").IsMaterialized.Should().BeTrue();
         GetCell(context, "C").IsMaterialized.Should().BeTrue();
-        NavigationGraphDiagnosticsSnapshot published = context.Pathing.GetNavigationGraphDiagnostics();
-        FindMap(published, "A").ComponentId.Should().NotBe(FindMap(published, "C").ComponentId);
+        using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
+        published.Graph.AreInSameSurfaceComponent(bridgeSource, bridgeDestination)
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -511,11 +544,31 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         second.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         context.Pathing.RetainedCompositionWorkCount.Should().Be(0);
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
-        lease.Graph.Composition.TryGetComponentRecord("A", out NavigationStructuralComponent component)
+        lease.Graph.ExplicitConnections.TryGet(
+                new NavigationConnectionOwnerKey("A", "ab"),
+                out NavigationExplicitConnectionRecord explicitEdge)
             .Should().BeTrue();
-        component.FlatMembers.Count.Should().Be(2);
-        component.FlatMembers[0].Should().Be("A");
-        component.FlatMembers[1].Should().Be("B");
+        explicitEdge.IsActive.Should().BeTrue();
+        var aAddress = new NavigationCellAddress("A", new VoxelIndex(2, 0, 0));
+        lease.Graph.ExplicitConnections.GetEndpointOwnerRow(aAddress).Count
+            .Should().Be(1, "the source endpoint row must contain the active owner");
+        var bAddress = new NavigationCellAddress("B", default);
+        lease.Graph.ExplicitConnections.GetEndpointOwnerRow(bAddress).Count
+            .Should().Be(1, "the destination endpoint row must contain the active owner");
+        lease.Graph.TryGetNodeRef(aAddress, out NavigationNodeRef aNode).Should().BeTrue();
+        NavigationSurfaceEdgeEnumerator outgoing =
+            lease.Graph.EnumerateStructuralSurfaceEdges(aNode);
+        outgoing.MoveNext().Should().BeTrue(
+            "the active A-B explicit edge must be visible to structural component traversal");
+        lease.Graph.SurfaceComponents.TryGet(
+                aAddress,
+                out NavigationSurfaceComponent component)
+            .Should().BeTrue();
+        component.Members.Count.Should().Be(2);
+        lease.Graph.AreInSameSurfaceComponent(
+                aAddress,
+                bAddress)
+            .Should().BeTrue();
     }
 
     [Fact]
@@ -580,10 +633,6 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             .GetNavigationGraphDiagnostics();
         long versionBeforeSafetyMaintenance = beforeSafety.GraphVersion;
         long componentVersionBeforeSafetyMaintenance = beforeSafety.Maps[3].ComponentVersion;
-        long compositionVersionBeforeSafetyMaintenance;
-        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
-            compositionVersionBeforeSafetyMaintenance = lease.Graph.Composition.Version;
-
         context.Simulate();
 
         NavigationGraphCellState updated = GetCell(context, "U");
@@ -603,12 +652,10 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         afterSafety.GraphVersion
             .Should().Be(versionBeforeSafetyMaintenance + 1,
                 "one maintenance boundary may publish at most one immutable root");
-        afterSafety.Maps[3].ComponentVersion.Should()
-            .BeGreaterThan(componentVersionBeforeSafetyMaintenance);
+        afterSafety.Maps[3].ComponentVersion.Should().Be(
+            componentVersionBeforeSafetyMaintenance,
+            "physical obstacles are page-level traversal state and do not rebuild structural components");
         long componentVersionAfterSafetyMaintenance = afterSafety.Maps[3].ComponentVersion;
-        using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
-            lease.Graph.Composition.Version.Should().Be(compositionVersionBeforeSafetyMaintenance);
-
         SimulateUntilTerminal(context, removal.Receipt);
 
         removal.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
@@ -694,7 +741,9 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             bc.IsActive.Should().BeTrue();
             foreach (string mapId in new[] { "A", "B", "C", "U" })
             {
-                lease.Graph.Composition.TryGetComponentRecord(mapId, out _)
+                lease.Graph.SurfaceComponents.TryGet(
+                        new NavigationCellAddress(mapId, default),
+                        out _)
                     .Should().BeTrue($"{mapId} must have structural membership");
             }
         }
@@ -737,6 +786,26 @@ public sealed class NavigationStructuralCompositionCarryoverTests
         return builder.Build();
     }
 
+    private static NavigationMap AddLinearGridAndCreateMap(
+        TrailblazerWorldContext context,
+        string mapId,
+        int origin,
+        int cellCount)
+    {
+        var configuration = new GridConfiguration(
+            new Vector3d(origin, 0, 0),
+            new Vector3d(origin + cellCount - 1, 0, 0),
+            topologyKind: GridTopologyKind.RectangularPrism,
+            topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
+            storageKind: GridStorageKind.Dense);
+        context.World.TryAddGrid(configuration, out _).Should().BeTrue();
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        var builder = new NavigationMapBuilder(mapId, binding);
+        for (int i = 0; i < cellCount; i++)
+            builder.AddCell(new VoxelIndex(i, 0, 0), Cell);
+        return builder.Build();
+    }
+
     private static bool RunSeamWork(
         GridWorld world,
         NavigationOperationCandidate candidate,
@@ -751,8 +820,7 @@ public sealed class NavigationStructuralCompositionCarryoverTests
             candidate,
             changes,
             changes.Length,
-            updateComposition: true,
-            workspace: new NavigationCompositionWorkspace(defaults.OperationLimits.MaxMaps));
+            updateComposition: true);
         var meter = new MaintenanceWorkMeter(defaults.MaintenanceBudget);
         return work.Advance(
             meter,

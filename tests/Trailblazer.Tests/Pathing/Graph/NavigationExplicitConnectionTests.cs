@@ -179,9 +179,11 @@ public sealed class NavigationExplicitConnectionTests
         using (NavigationWorldGraphLease installed = context.Pathing.TryAcquireNavigationGraph()!)
         {
             priorLeft = FindInstance(installed.Graph, "left");
-            priorComponentVersion = installed.Graph.Composition
-                .GetComponentRecord("left")
-                .Version;
+            installed.Graph.SurfaceComponents.TryGet(
+                    new NavigationCellAddress("left", sourceIndex),
+                    out NavigationSurfaceComponent component)
+                .Should().BeTrue();
+            priorComponentVersion = component.Version;
         }
 
         CommitCell(context, "middle", NavigationCellOverlayOperation.Suppress(default), 4);
@@ -201,7 +203,11 @@ public sealed class NavigationExplicitConnectionTests
             dormantLeft.Should().BeSameAs(priorLeft,
                 "a witness-only change must not rebuild the external source map instance");
             dormantLeft.InstanceVersion.Should().Be(priorLeft.InstanceVersion);
-            dormantLease.Graph.Composition.GetComponentRecord("left").Version
+            dormantLease.Graph.SurfaceComponents.TryGet(
+                    new NavigationCellAddress("left", sourceIndex),
+                    out NavigationSurfaceComponent component)
+                .Should().BeTrue();
+            component.Version
                 .Should().BeGreaterThan(priorComponentVersion,
                     "the external source's structural component must still be recomputed");
         }
@@ -288,7 +294,7 @@ public sealed class NavigationExplicitConnectionTests
     }
 
     [Fact]
-    public void PreGatherWitnessSuppression_ShouldCloseAllThenNarrowWhilePending()
+    public void PreGatherWitnessSuppression_ShouldCloseAllUntilAtomicExactPublication()
     {
         using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
             maxExplicitEdges: 1,
@@ -384,39 +390,27 @@ public sealed class NavigationExplicitConnectionTests
                 "unknown explicit incidence must conservatively close every structural component");
         }
 
-        bool narrowedWhilePending = false;
         for (int frame = 0; frame < 64 && suppression.Receipt.Status == NavigationOperationStatus.Pending; frame++)
         {
             context.Simulate();
-            if (suppression.Receipt.Status != NavigationOperationStatus.Pending)
-                break;
-            bool allUnrelatedOpen = true;
-            for (int i = 0; i < unrelatedMapIds.Length; i++)
-            {
-                context.Pathing.TryGetNavigationGraphCellState(
-                        unrelatedMapIds[i],
-                        default,
-                        out NavigationGraphCellState unrelatedState)
-                    .Should().BeTrue();
-                allUnrelatedOpen &= unrelatedState.IsMaterialized;
-            }
-            if (allUnrelatedOpen)
-            {
-                narrowedWhilePending = true;
-                break;
-            }
         }
 
-        narrowedWhilePending.Should().BeTrue(
-            "completed incidence gather must replace the conservative closure before publication");
-        suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
+        suppression.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        for (int i = 0; i < unrelatedMapIds.Length; i++)
+        {
+            context.Pathing.TryGetNavigationGraphCellState(
+                    unrelatedMapIds[i],
+                    default,
+                    out NavigationGraphCellState unrelatedState)
+                .Should().BeTrue();
+            unrelatedState.IsMaterialized.Should().BeTrue();
+        }
         context.Pathing.TryGetNavigationGraphCellState(
                 "left",
                 sourceIndex,
                 out sourceState)
             .Should().BeTrue();
-        sourceState.IsMaterialized.Should().BeFalse(
-            "the discovered explicit owner source remains fail-closed until publication");
+        sourceState.IsMaterialized.Should().BeTrue();
     }
 
     [Fact]
@@ -1036,7 +1030,7 @@ public sealed class NavigationExplicitConnectionTests
     }
 
     [Fact]
-    public void DeferredTransitionOnlyOverlay_ShouldNotCloseUnrelatedComponents()
+    public void DeferredTransitionOnlyOverlay_ShouldCloseAllThenNarrowToExactEndpoints()
     {
         using TrailblazerWorldContext context = CreateContextWithExplicitBudget(
             maxExplicitEdges: 1,
@@ -1105,63 +1099,114 @@ public sealed class NavigationExplicitConnectionTests
         context.Simulate();
 
         overlay.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
-        GetGraphCell(context, "unrelated").IsMaterialized.Should().BeTrue();
+        GetGraphCell(context, "unrelated").IsMaterialized.Should().BeFalse(
+            "operation folding owns an all-close safety root until exact endpoints are known");
         GetGraphCell(context, "source").IsMaterialized.Should().BeFalse();
-        GetGraphCell(context, "destination").IsMaterialized.Should().BeTrue(
-            "cross-map transitions do not join structural components before Phase 7");
+        GetGraphCell(context, "destination").IsMaterialized.Should().BeFalse();
+
+        for (int frame = 0;
+             frame < 64 && overlay.Receipt.Status == NavigationOperationStatus.Pending
+                 && !GetGraphCell(context, "unrelated").IsMaterialized;
+             frame++)
+        {
+            context.Simulate();
+        }
+        GetGraphCell(context, "unrelated").IsMaterialized.Should().BeTrue();
     }
 
     [Fact]
-    public void DeferredClosureCapacityRejection_ShouldReopenEveryComponentOnce()
+    public void ExactClosureCapacityRejection_ShouldReopenEveryOwnedComponentOnce()
     {
-        long firstCursorPeak = 0;
-        long secondCursorPeak = 0;
+        long exactPeak = 0;
+        long installationPeak;
         using (TrailblazerWorldContext probe = CreateClosureCursorCapacityScenario(
             maxActiveSnapshotBytes: null,
-            out NavigationOverlayCommitOperation probeOperation))
+            out NavigationOverlayCommitOperation probeOperation,
+            out installationPeak,
+            maxRetiredSnapshots: null))
         {
-            for (int frame = 0; frame < 128 && secondCursorPeak == 0; frame++)
+            for (int frame = 0;
+                 frame < 512 && probeOperation.Receipt.Status == NavigationOperationStatus.Pending;
+                 frame++)
             {
                 probe.Simulate();
-                if (probeOperation.Receipt.Status != NavigationOperationStatus.Pending
-                    || probe.Pathing.NavigationMaintenanceMeter.OverlaySlots != 0
-                    || probe.Pathing.NavigationMaintenanceMeter.ComponentNodes != 1
-                    || probe.Pathing.NavigationMaintenanceMeter.DependencyEntries != 1)
-                {
-                    continue;
-                }
-                long retained = probe.Pathing.GetNavigationGraphDiagnostics().ActiveSnapshotBytes;
-                if (firstCursorPeak == 0)
-                    firstCursorPeak = retained;
-                else
-                    secondCursorPeak = retained;
+                long activeBytes =
+                    probe.Pathing.GetNavigationGraphDiagnostics().ActiveSnapshotBytes;
+                if (activeBytes > exactPeak)
+                    exactPeak = activeBytes;
             }
+            probeOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
         }
-        firstCursorPeak.Should().BePositive();
-        secondCursorPeak.Should().Be(firstCursorPeak + 64,
-            "one additional prepared closure component owns one persistent record");
+        exactPeak.Should().BeGreaterThan(installationPeak,
+            "the multi-map exact rebuild must exceed the sequential installation peak");
+
+        int rejectionFrame = -1;
+        using (TrailblazerWorldContext timing = CreateClosureCursorCapacityScenario(
+            exactPeak - 1,
+            out NavigationOverlayCommitOperation timingOperation,
+            out _,
+            maxRetiredSnapshots: null))
+        {
+            for (int frame = 0;
+                 frame < 512 && timingOperation.Receipt.Status == NavigationOperationStatus.Pending;
+                 frame++)
+            {
+                timing.Simulate();
+                if (timingOperation.Receipt.Status == NavigationOperationStatus.Rejected)
+                    rejectionFrame = frame;
+            }
+            timingOperation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+            timingOperation.Receipt.Rejection.Should().Be(
+                NavigationOperationRejection.CapacityExceeded);
+        }
+        rejectionFrame.Should().BeGreaterThan(0);
 
         using TrailblazerWorldContext context = CreateClosureCursorCapacityScenario(
-            secondCursorPeak - 1,
-            out NavigationOverlayCommitOperation operation);
+            exactPeak - 1,
+            out NavigationOverlayCommitOperation operation,
+            out _,
+            maxRetiredSnapshots: 1);
+        using NavigationWorldGraphLease retainedSource =
+            context.Pathing.TryAcquireNavigationGraph()!;
         long previousVersion = context.Pathing.GetNavigationGraphDiagnostics().GraphVersion;
-        bool observedClosed = false;
-        for (int frame = 0; frame < 128 && operation.Receipt.Status == NavigationOperationStatus.Pending; frame++)
+        for (int frame = 0; frame < rejectionFrame; frame++)
         {
             context.Simulate();
+            operation.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
             long version = context.Pathing.GetNavigationGraphDiagnostics().GraphVersion;
             version.Should().BeLessThanOrEqualTo(previousVersion + 1,
-                "maintenance may publish at most one safety or rollback root per frame");
+                "maintenance may publish at most one safety root per frame");
             previousVersion = version;
-            observedClosed |= !GetGraphCell(context, "map-0").IsMaterialized;
         }
 
-        observedClosed.Should().BeTrue();
-        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
-        operation.Receipt.Rejection.Should().Be(NavigationOperationRejection.CapacityExceeded);
-        for (int frame = 0; frame < 16 && !GetGraphCell(context, "map-0").IsMaterialized; frame++)
+        GetGraphCell(context, "map-0").IsMaterialized.Should().BeFalse();
+        NavigationWorldGraph rollbackSource = context.Pathing.NavigationGraphStore.Current;
+        rollbackSource.Checkout();
+        try
+        {
             context.Simulate();
-        for (int i = 0; i < 4; i++)
+
+            operation.Receipt.Status.Should().Be(NavigationOperationStatus.Pending,
+                "capacity rejection must wait until the owned closure can be rolled back");
+            GetGraphCell(context, "map-0").IsMaterialized.Should().BeFalse(
+                "failed rollback publication must retain the owned safety closure");
+        }
+        finally
+        {
+            rollbackSource.Return();
+        }
+
+        retainedSource.Dispose();
+        for (int frame = 0;
+             frame < 16 && operation.Receipt.Status == NavigationOperationStatus.Pending;
+             frame++)
+        {
+            context.Simulate();
+        }
+        operation.Receipt.Status.Should().Be(NavigationOperationStatus.Rejected);
+        operation.Receipt.Rejection.Should().Be(
+            NavigationOperationRejection.CapacityExceeded);
+        for (int i = 0; i < 16; i++)
             GetGraphCell(context, $"map-{i}").IsMaterialized.Should().BeTrue();
         context.Pathing.RetainedOperationWorkCount.Should().Be(0);
     }
@@ -1287,11 +1332,17 @@ public sealed class NavigationExplicitConnectionTests
             NavigationConnectionOverlayOperation.RevertToBake("bridge"),
             4);
         context.Simulate();
+        long revertedComponentVersion;
         using (NavigationWorldGraphLease reverted = context.Pathing.TryAcquireNavigationGraph()!)
         {
             reverted.Graph.ExplicitConnections.TryGet(owner, out NavigationExplicitConnectionRecord record)
                 .Should().BeTrue();
             record.Definition.Should().BeSameAs(baked);
+            reverted.Graph.SurfaceComponents.TryGet(
+                    new NavigationCellAddress("left", sourceIndex),
+                    out NavigationSurfaceComponent component)
+                .Should().BeTrue();
+            revertedComponentVersion = component.Version;
         }
 
         var upsert = new NavigationConnection(
@@ -1314,6 +1365,12 @@ public sealed class NavigationExplicitConnectionTests
             .Should().BeTrue();
         replacement.Definition.Should().BeSameAs(upsert);
         updated.Graph.ExplicitConnections.GetIncidentOwnerRow(destinationAddress).Count.Should().Be(1);
+        updated.Graph.SurfaceComponents.TryGet(
+                new NavigationCellAddress("left", sourceIndex),
+                out NavigationSurfaceComponent updatedComponent)
+            .Should().BeTrue();
+        updatedComponent.Version.Should().BeGreaterThan(revertedComponentVersion,
+            "same-endpoint cost changes must invalidate component-stamped cached paths");
     }
 
     [Fact]
@@ -1450,7 +1507,9 @@ public sealed class NavigationExplicitConnectionTests
         }
 
         observedDeferred.Should().BeTrue();
-        replacement.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        replacement.Receipt.Status.Should().Be(
+            NavigationOperationStatus.Applied,
+            $"rejection={replacement.Receipt.Rejection}");
         using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
         published.Graph.ExplicitConnections.GetIncidentOwnerRow(sourceAddress)
             .Should().NotBeSameAs(priorSource);
@@ -2844,19 +2903,23 @@ public sealed class NavigationExplicitConnectionTests
 
     private static TrailblazerWorldContext CreateClosureCursorCapacityScenario(
         long? maxActiveSnapshotBytes,
-        out NavigationOverlayCommitOperation operation)
+        out NavigationOverlayCommitOperation operation,
+        out long installationPeak,
+        int? maxRetiredSnapshots)
     {
         TrailblazerWorldContext context = CreateContextWithExplicitBudget(
             maxExplicitEdges: 1,
             maxOverlaySlots: 1,
             maxComponentNodes: 1,
             maxDependencyEntries: 3,
-            maxActiveSnapshotBytes);
+            maxActiveSnapshotBytes,
+            maxRetiredSnapshots);
         try
         {
+            installationPeak = context.Pathing.GetNavigationGraphDiagnostics().ActiveSnapshotBytes;
             long sequence = 0;
             NavigationMapCommitOperation last = default;
-            var deltas = new NavigationMapOverlayDelta[4];
+            var deltas = new NavigationMapOverlayDelta[16];
             for (int i = 0; i < deltas.Length; i++)
             {
                 string mapId = $"map-{i}";
@@ -2867,6 +2930,16 @@ public sealed class NavigationExplicitConnectionTests
                         .AddCell(default, SolidCell)
                         .Build(),
                     ++sequence);
+                for (int frame = 0;
+                     frame < 512 && last.Receipt.Status == NavigationOperationStatus.Pending;
+                     frame++)
+                {
+                    context.Simulate();
+                    installationPeak = Math.Max(
+                        installationPeak,
+                        context.Pathing.GetNavigationGraphDiagnostics().ActiveSnapshotBytes);
+                }
+                last.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
                 deltas[i] = new NavigationMapOverlayDelta(
                     mapId,
                     new[]
@@ -2876,8 +2949,6 @@ public sealed class NavigationExplicitConnectionTests
                             SolidCell)
                     });
             }
-            SimulateUntilTerminal(context, last.Receipt);
-            last.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
             operation = new NavigationOverlayCommitOperation(
                 new PreparedNavigationOverlay(new NavigationOverlayTransaction(deltas)),
                 ++sequence,

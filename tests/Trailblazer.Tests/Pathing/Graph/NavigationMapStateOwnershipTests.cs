@@ -376,7 +376,11 @@ public sealed class NavigationMapStateOwnershipTests
             sourceState!,
             previous: null,
             instanceVersion: 1);
-        var source = new NavigationWorldGraph(1, new[] { sourceInstance });
+        var sourceWithoutComponents = new NavigationWorldGraph(
+            1,
+            new[] { sourceInstance });
+        NavigationWorldGraph source = sourceWithoutComponents.WithSurfaceComponents(
+            NavigationSurfaceComponentTestFactory.Build(sourceWithoutComponents));
         NavigationCell firstCell = new(
             TraversalMedia.Solid,
             TraversalCapability.None,
@@ -596,7 +600,7 @@ public sealed class NavigationMapStateOwnershipTests
         NavigationMapCommitOperation operation)
     {
         for (int frame = 0;
-             frame < 128 && operation.Receipt.Status == NavigationOperationStatus.Pending;
+             frame < 512 && operation.Receipt.Status == NavigationOperationStatus.Pending;
              frame++)
         {
             runtime.Maintain(frame + 1);

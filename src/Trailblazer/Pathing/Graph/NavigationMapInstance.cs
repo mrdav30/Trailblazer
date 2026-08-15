@@ -180,6 +180,24 @@ internal sealed partial class NavigationMapInstance
         return false;
     }
 
+    internal bool TryGetSemanticState(
+        VoxelIndex index,
+        out NavigationCellSemanticSource source,
+        out bool hasCell,
+        out NavigationCell cell)
+    {
+        if (!TryGetSlot(index, out int slot))
+        {
+            source = default;
+            hasCell = false;
+            cell = default;
+            return false;
+        }
+        source = GetSemanticSource(slot);
+        hasCell = TryGetEffectiveCell(slot, out cell);
+        return true;
+    }
+
     internal bool TryGetPhysicalState(int slot, out bool isPresent, out byte obstacleCount)
     {
         NavigationPhysicalPage? page = FindPhysicalPage(slot / NavigationPhysicalPage.SlotCount);

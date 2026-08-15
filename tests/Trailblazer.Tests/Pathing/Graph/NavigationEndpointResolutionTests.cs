@@ -20,6 +20,28 @@ namespace Trailblazer.Tests.Pathing.Graph;
 [Collection("PathingCollection")]
 public sealed class NavigationEndpointResolutionTests
 {
+    [Fact]
+    public void ComponentDependencyCapacity_ShouldBeIndependentFromEndpointPages()
+    {
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 1,
+            nodeCapacity: 1,
+            componentCapacity: 3);
+
+        workspace.TryRecordEndpointComponent(new NavigationSurfaceComponentKey(
+                new NavigationCellAddress("map", new VoxelIndex(0, 0, 0))))
+            .Should().BeTrue();
+        workspace.TryRecordEndpointComponent(new NavigationSurfaceComponentKey(
+                new NavigationCellAddress("map", new VoxelIndex(1, 0, 0))))
+            .Should().BeTrue();
+        workspace.TryRecordEndpointComponent(new NavigationSurfaceComponentKey(
+                new NavigationCellAddress("map", new VoxelIndex(2, 0, 0))))
+            .Should().BeTrue();
+        workspace.EndpointComponentCount.Should().Be(3,
+            "same-page explicit witnesses may belong to independent weak components");
+    }
+
     private static readonly NavigationCell Cell = new(
         TraversalMedia.Solid,
         TraversalCapability.None,
@@ -48,7 +70,8 @@ public sealed class NavigationEndpointResolutionTests
             "closer",
             closerConfiguration,
             physicallyPresent: true);
-        var graph = new NavigationWorldGraph(1, new[] { selected, closer });
+        NavigationWorldGraph graph = WithSurfaceComponents(
+            new NavigationWorldGraph(1, new[] { selected, closer }));
         selectedConfiguration.TryNormalize(out NormalizedGridConfiguration selectedBinding)
             .Should().BeTrue();
         closerConfiguration.TryNormalize(out NormalizedGridConfiguration closerBinding)
@@ -61,7 +84,10 @@ public sealed class NavigationEndpointResolutionTests
             selectedPrism.Center.X + (Fixed64)0.75,
             selectedPrism.VerticalMin,
             selectedPrism.Center.Z);
-        var workspace = new NavigationAStarWorkspace(mapCapacity: 2, endpointPageCapacity: 4);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 2,
+            endpointPageCapacity: 4,
+            componentCapacity: 6);
         var meter = new NavigationWorkMeter(CreateBudget(64, 8));
         var evaluator = new TraversalEvaluator(graph, Profile(), Policy, TraversalMedium.Solid);
 
@@ -115,10 +141,14 @@ public sealed class NavigationEndpointResolutionTests
             "map",
             configuration,
             physicallyPresent: false);
-        var graph = new NavigationWorldGraph(1, new[] { instance });
+        NavigationWorldGraph graph = WithSurfaceComponents(
+            new NavigationWorldGraph(1, new[] { instance }));
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
         binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
-        var workspace = new NavigationAStarWorkspace(mapCapacity: 1, endpointPageCapacity: 2);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 2,
+            componentCapacity: 4);
         var meter = new NavigationWorkMeter(CreateBudget(16, 2));
         var work = new NavigationEndpointResolutionWork(
             world,
@@ -147,10 +177,14 @@ public sealed class NavigationEndpointResolutionTests
             "map",
             configuration,
             physicallyPresent: true);
-        var graph = new NavigationWorldGraph(1, new[] { instance });
+        NavigationWorldGraph graph = WithSurfaceComponents(
+            new NavigationWorldGraph(1, new[] { instance }));
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
         binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
-        var workspace = new NavigationAStarWorkspace(mapCapacity: 1, endpointPageCapacity: 2);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 2,
+            componentCapacity: 4);
         var meter = new NavigationWorkMeter(CreateBudget(16, 2));
         var work = new NavigationEndpointResolutionWork(
             world,
@@ -183,10 +217,14 @@ public sealed class NavigationEndpointResolutionTests
             "map",
             configuration,
             physicallyPresent: true);
-        var graph = new NavigationWorldGraph(1, new[] { instance });
+        NavigationWorldGraph graph = WithSurfaceComponents(
+            new NavigationWorldGraph(1, new[] { instance }));
         configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
         binding.TryGetCellPrism(default, out GridCellPrism prism).Should().BeTrue();
-        var workspace = new NavigationAStarWorkspace(mapCapacity: 1, endpointPageCapacity: 2);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 2,
+            componentCapacity: 4);
         var meter = new NavigationWorkMeter(CreateBudget(16, 2));
         var work = new NavigationEndpointResolutionWork(
             world,
@@ -260,7 +298,6 @@ public sealed class NavigationEndpointResolutionTests
             "map",
             configuration,
             physicallyPresent: true);
-        NavigationCompositionIndex composition = BuildComposition(instance);
         NavigationAreaCatalog.Empty.TryPublish(
                 Policy,
                 maxPolicies: 1,
@@ -269,11 +306,10 @@ public sealed class NavigationEndpointResolutionTests
                 maxRules: 1,
                 out NavigationAreaCatalog catalog)
             .Should().Be(NavigationOperationRejection.None);
-        var graph = new NavigationWorldGraph(
+        NavigationWorldGraph graph = WithSurfaceComponents(new NavigationWorldGraph(
             1,
             new[] { instance },
-            areaCatalog: catalog,
-            composition: composition);
+            areaCatalog: catalog));
         using var store = new NavigationWorldGraphStore(
             maxActiveSnapshots: 2,
             maxRetiredSnapshots: 1,
@@ -299,7 +335,10 @@ public sealed class NavigationEndpointResolutionTests
             PathAlgorithm.AStar,
             CreateBudget(32, 4),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(mapCapacity: 1, endpointPageCapacity: 2);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 2,
+            componentCapacity: 4);
         using var work = new NavigationQueryAdmissionWork(world, lease!, query, workspace);
 
         for (int step = 0;
@@ -339,10 +378,6 @@ public sealed class NavigationEndpointResolutionTests
             "m-map",
             noCandidateConfiguration,
             physicallyPresent: true);
-        NavigationCompositionIndex composition = BuildComposition(
-            laterMapId,
-            earlierMapId,
-            noCandidate);
         NavigationAreaCatalog.Empty.TryPublish(
                 Policy,
                 maxPolicies: 1,
@@ -351,11 +386,10 @@ public sealed class NavigationEndpointResolutionTests
                 maxRules: 1,
                 out NavigationAreaCatalog catalog)
             .Should().Be(NavigationOperationRejection.None);
-        var graph = new NavigationWorldGraph(
+        NavigationWorldGraph graph = WithSurfaceComponents(new NavigationWorldGraph(
             1,
             new[] { laterMapId, earlierMapId, noCandidate },
-            areaCatalog: catalog,
-            composition: composition);
+            areaCatalog: catalog));
         using var store = new NavigationWorldGraphStore(
             maxActiveSnapshots: 2,
             maxRetiredSnapshots: 1,
@@ -391,7 +425,10 @@ public sealed class NavigationEndpointResolutionTests
             PathAlgorithm.AStar,
             CreateBudget(256, 32),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(mapCapacity: 3, endpointPageCapacity: 4);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 3,
+            endpointPageCapacity: 4,
+            componentCapacity: 6);
         using var work = new NavigationQueryAdmissionWork(world, lease!, query, workspace);
 
         for (int step = 0;
@@ -419,7 +456,10 @@ public sealed class NavigationEndpointResolutionTests
             maxConcurrentLeases: 1);
         NavigationWorldGraphLease? lease = store.TryAcquire();
         lease.Should().NotBeNull();
-        var workspace = new NavigationAStarWorkspace(mapCapacity: 1, endpointPageCapacity: 1);
+        var workspace = new NavigationAStarWorkspace(
+            mapCapacity: 1,
+            endpointPageCapacity: 1,
+            componentCapacity: 3);
 
         using var work = new NavigationQueryAdmissionWork(
             world,
@@ -440,7 +480,6 @@ public sealed class NavigationEndpointResolutionTests
             "map",
             CreateConfiguration(Fixed64.Zero),
             physicallyPresent: true);
-        NavigationCompositionIndex composition = BuildComposition(instance);
         NavigationAreaCatalog.Empty.TryPublish(
                 Policy,
                 maxPolicies: 1,
@@ -452,9 +491,20 @@ public sealed class NavigationEndpointResolutionTests
         var graph = new NavigationWorldGraph(
             1,
             new[] { instance },
+            areaCatalog: catalog);
+        NavigationSurfaceComponentIndex componentIndex =
+            NavigationSurfaceComponentTestFactory.Build(graph);
+        graph = new NavigationWorldGraph(
+            1,
+            new[] { instance },
             areaCatalog: catalog,
-            composition: composition);
-        var components = new[] { "map" };
+            surfaceComponents: componentIndex);
+        graph.TryGetSurfaceComponent(
+                new NavigationCellAddress("map", default),
+                out NavigationSurfaceComponentKey component,
+                out _)
+            .Should().BeTrue();
+        var components = new[] { component };
         var pages = new[] { new GraphPageDependencyAddress("map", 0) };
         var meter = new NavigationWorkMeter(CreateBudget(2, 0));
         var work = new NavigationDependencyStampWork(
@@ -499,7 +549,10 @@ public sealed class NavigationEndpointResolutionTests
                 world,
                 lease!,
                 query,
-                new NavigationAStarWorkspace(mapCapacity: 1, endpointPageCapacity: 2));
+                new NavigationAStarWorkspace(
+                    mapCapacity: 1,
+                    endpointPageCapacity: 2,
+                    componentCapacity: 4));
 
             Drain(exact);
 
@@ -518,7 +571,10 @@ public sealed class NavigationEndpointResolutionTests
                 world,
                 lease!,
                 query,
-                new NavigationAStarWorkspace(mapCapacity: 1, endpointPageCapacity: 2));
+                new NavigationAStarWorkspace(
+                    mapCapacity: 1,
+                    endpointPageCapacity: 2,
+                    componentCapacity: 4));
 
             Drain(below);
 
@@ -579,31 +635,6 @@ public sealed class NavigationEndpointResolutionTests
             instanceVersion: 1);
     }
 
-    private static NavigationCompositionIndex BuildComposition(
-        params NavigationMapInstance[] instances)
-    {
-        NavigationInstanceDirectory directory = NavigationInstanceDirectory.Create(
-            instances);
-        PersistentStringMap<bool> changed = PersistentStringMap<bool>.Empty;
-        for (int i = 0; i < instances.Length; i++)
-            changed = changed.Set(instances[i].MapId, true);
-        var work = new NavigationCompositionIndex.UpdateWork(
-            NavigationCompositionIndex.Empty,
-            directory,
-            changed,
-            version: 1,
-            new NavigationCompositionWorkspace(instances.Length));
-        var meter = new MaintenanceWorkMeter(
-            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
-        for (int frame = 0; frame < 64 && !work.IsComplete; frame++)
-        {
-            work.Advance(meter);
-            meter.Reset();
-        }
-        work.IsComplete.Should().BeTrue();
-        return work.Result;
-    }
-
     private static NavigationWorldGraph CreateAdmissionGraph(
         params NavigationMapInstance[] instances)
     {
@@ -615,12 +646,14 @@ public sealed class NavigationEndpointResolutionTests
                 maxRules: 1,
                 out NavigationAreaCatalog catalog)
             .Should().Be(NavigationOperationRejection.None);
-        return new NavigationWorldGraph(
+        return WithSurfaceComponents(new NavigationWorldGraph(
             1,
             instances,
-            areaCatalog: catalog,
-            composition: BuildComposition(instances));
+            areaCatalog: catalog));
     }
+
+    private static NavigationWorldGraph WithSurfaceComponents(NavigationWorldGraph graph) =>
+        graph.WithSurfaceComponents(NavigationSurfaceComponentTestFactory.Build(graph));
 
     private static NavigationWorldGraphStore CreateStore(NavigationWorldGraph graph)
     {

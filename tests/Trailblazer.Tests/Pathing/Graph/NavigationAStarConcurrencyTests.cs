@@ -33,7 +33,7 @@ public sealed class NavigationAStarConcurrencyTests
                 "negative-publication");
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
-        var workspace = new NavigationAStarWorkspace(1, 8, 8);
+        var workspace = new NavigationAStarWorkspace(1, 8, 10, 8);
         var cache = new NavigationAStarPayloadCache(
             maxEntries: 1,
             maxReusableBytes: long.MaxValue,
@@ -87,8 +87,9 @@ public sealed class NavigationAStarConcurrencyTests
                 .Should().BeTrue(
                     "the publisher must reach the cache after its dependency precheck");
 
-            NavigationWorldGraph changed = fixture.Graph.WithComposition(
-                fixture.Graph.Composition.WithVersion(fixture.Graph.Composition.Version + 1));
+            NavigationWorldGraph changed = fixture.Graph.WithSurfaceComponents(
+                NavigationSurfaceComponentIndex.Empty).WithGraphVersion(
+                    fixture.Graph.GraphVersion + 1);
             store.TryPublish(changed).Should().Be(NavigationCandidatePublication.Published);
         }
         finally
@@ -119,7 +120,7 @@ public sealed class NavigationAStarConcurrencyTests
                 "mutation");
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
-        var workspace = new NavigationAStarWorkspace(1, 64, 32);
+        var workspace = new NavigationAStarWorkspace(1, 64, 66, 32);
         var cache = new NavigationAStarPayloadCache(
             maxEntries: 2,
             maxReusableBytes: long.MaxValue,
@@ -141,8 +142,9 @@ public sealed class NavigationAStarConcurrencyTests
         work.Status.Should().Be(NavigationAStarQueryStatus.Pending);
         work.IsReadyToPublish.Should().BeFalse();
 
-        NavigationWorldGraph changed = fixture.Graph.WithComposition(
-            fixture.Graph.Composition.WithVersion(fixture.Graph.Composition.Version + 1));
+        NavigationWorldGraph changed = fixture.Graph.WithSurfaceComponents(
+            NavigationSurfaceComponentIndex.Empty).WithGraphVersion(
+                fixture.Graph.GraphVersion + 1);
         store.TryPublish(changed).Should().Be(NavigationCandidatePublication.Published);
         CompleteSearch(work);
 
@@ -167,8 +169,8 @@ public sealed class NavigationAStarConcurrencyTests
                 "same-key");
         using NavigationWorldGraphStore store =
             NavigationAStarExitTestHarness.CreateStore(fixture.Graph, 4);
-        var firstWorkspace = new NavigationAStarWorkspace(1, 32, 16);
-        var secondWorkspace = new NavigationAStarWorkspace(1, 32, 16);
+        var firstWorkspace = new NavigationAStarWorkspace(1, 32, 34, 16);
+        var secondWorkspace = new NavigationAStarWorkspace(1, 32, 34, 16);
         var cache = new NavigationAStarPayloadCache(
             maxEntries: 2,
             maxReusableBytes: long.MaxValue,
@@ -232,8 +234,9 @@ public sealed class NavigationAStarConcurrencyTests
         NavigationAStarExitTestHarness.SearchResult search =
             NavigationAStarExitTestHarness.RunAStar(world, fixture.Graph, query);
         NavigationAStarPayload payload = search.Payload!;
-        NavigationWorldGraph changed = fixture.Graph.WithComposition(
-            fixture.Graph.Composition.WithVersion(fixture.Graph.Composition.Version + 1));
+        NavigationWorldGraph changed = fixture.Graph.WithSurfaceComponents(
+            NavigationSurfaceComponentIndex.Empty).WithGraphVersion(
+                fixture.Graph.GraphVersion + 1);
 
         using (NavigationWorldGraphStore staleStore =
             NavigationAStarExitTestHarness.CreateStore(changed, 2))

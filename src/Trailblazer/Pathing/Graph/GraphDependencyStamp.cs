@@ -18,27 +18,22 @@ internal sealed class GraphDependencyStamp
     private const long ReferenceSlotBytes = 8L;
     private const long Int64Bytes = 8L;
     private const long NavigationAreaPolicyKeyBytes = ReferenceSlotBytes + Int64Bytes;
-    private const long GraphComponentDependencyBytes = ReferenceSlotBytes + Int64Bytes;
+    private const long GraphComponentDependencyBytes = 32L;
     private const long GraphPageDependencyBytes = 48L;
     private static readonly long BaseRetainedBytes = Align8(
         ObjectHeaderBytes
-        + Int64Bytes
         + NavigationAreaPolicyKeyBytes
         + (2L * ReferenceSlotBytes));
 
     internal GraphDependencyStamp(
-        long compositionVersion,
         NavigationAreaPolicyKey areaPolicy,
         GraphComponentDependency[] components,
         GraphPageDependency[] pages)
     {
-        CompositionVersion = compositionVersion;
         AreaPolicy = areaPolicy;
         Components = components;
         Pages = pages;
     }
-
-    internal long CompositionVersion { get; }
 
     internal NavigationAreaPolicyKey AreaPolicy { get; }
 
@@ -77,28 +72,25 @@ internal sealed class GraphDependencyStamp
 /// <summary>Identifies one structural component generation.</summary>
 internal readonly struct GraphComponentDependency : IEquatable<GraphComponentDependency>
 {
-    internal GraphComponentDependency(string representativeMapId, long version)
+    internal GraphComponentDependency(NavigationSurfaceComponentKey key, long version)
     {
-        RepresentativeMapId = representativeMapId;
+        Key = key;
         Version = version;
     }
 
-    internal string RepresentativeMapId { get; }
+    internal NavigationSurfaceComponentKey Key { get; }
 
     internal long Version { get; }
 
     public bool Equals(GraphComponentDependency other) =>
-        string.Equals(RepresentativeMapId, other.RepresentativeMapId, StringComparison.Ordinal)
+        Key.Equals(other.Key)
         && Version == other.Version;
 
     public override bool Equals(object? obj) => obj is GraphComponentDependency other && Equals(other);
 
     public override int GetHashCode()
     {
-        int mapHash = RepresentativeMapId == null
-            ? 0
-            : SwiftHashTools.GetDeterministicStringEqualityComparer().GetHashCode(RepresentativeMapId);
-        return SwiftHashTools.CombineHashCodes(mapHash, Version.GetHashCode());
+        return SwiftHashTools.CombineHashCodes(Key.GetHashCode(), Version.GetHashCode());
     }
 }
 

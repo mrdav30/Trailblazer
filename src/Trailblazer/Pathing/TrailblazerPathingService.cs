@@ -66,18 +66,6 @@ public sealed class TrailblazerPathingService
     internal int RetainedOperationWorkPageCount =>
         _navigationGraph.RetainedOperationWorkPageCount;
 
-    internal int CompositionCopiedNodeRecords =>
-        _navigationGraph.CompositionCopiedNodeRecords;
-
-    internal int CompositionCopiedReverseRecords =>
-        _navigationGraph.CompositionCopiedReverseRecords;
-
-    internal int CompositionCopiedComponentRecords =>
-        _navigationGraph.CompositionCopiedComponentRecords;
-
-    internal int CompositionCopiedMembershipRecords =>
-        _navigationGraph.CompositionCopiedMembershipRecords;
-
     internal MaintenanceWorkMeter NavigationMaintenanceMeter =>
         _navigationGraph.MaintenanceMeter;
 

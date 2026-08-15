@@ -14,6 +14,21 @@ namespace Trailblazer.Tests.Pathing.Graph;
 
 public sealed class NavigationWorldGraphStoreTests
 {
+    [Fact]
+    public void TryPublish_ShouldRejectNonMonotonicGraphVersions()
+    {
+        using var store = CreateStore();
+        store.TryPublish(NavigationWorldGraph.CreateEmpty(2))
+            .Should().Be(NavigationCandidatePublication.Published);
+
+        Action publishSame = () => store.TryPublish(NavigationWorldGraph.CreateEmpty(2));
+        Action publishOlder = () => store.TryPublish(NavigationWorldGraph.CreateEmpty(1));
+
+        publishSame.Should().Throw<InvalidOperationException>();
+        publishOlder.Should().Throw<InvalidOperationException>();
+        store.Current.GraphVersion.Should().Be(2);
+    }
+
     [Theory]
     [InlineData(0, 1_000_000)]
     [InlineData(2, 0)]
@@ -92,7 +107,7 @@ public sealed class NavigationWorldGraphStoreTests
     }
 
     [Fact]
-    public void GraphAccounting_ShouldIncludeCatalogDirectoryMapIndexAndCompositionRoots()
+    public void GraphAccounting_ShouldIncludeCatalogAndStructuralRoots()
     {
         NavigationAreaCatalog emptyCatalog = NavigationAreaCatalog.Empty;
         var policy = new NavigationAreaPolicy(
@@ -108,7 +123,7 @@ public sealed class NavigationWorldGraphStoreTests
             + NavigationInstanceDirectory.Create(Array.Empty<NavigationMapInstance>()).RetainedBytes
             + NavigationWorldGraph.EmptyMapIndexRetainedBytes
             + NavigationWorldGraph.EmptyClosedStructuralComponentsRetainedBytes
-            + NavigationCompositionIndex.Empty.RetainedBytes
+            + NavigationSurfaceComponentIndex.Empty.RetainedBytes
             + NavigationExplicitConnectionIndex.Empty.RetainedBytes
             + NavigationAutomaticSeamIndex.Empty.RetainedBytes
             + catalog.RetainedBytes);
@@ -116,7 +131,7 @@ public sealed class NavigationWorldGraphStoreTests
             NavigationInstanceDirectory.Create(Array.Empty<NavigationMapInstance>()).PersistentPageCount
             + NavigationWorldGraph.EmptyMapIndexPersistentPageCount
             + NavigationWorldGraph.EmptyClosedStructuralComponentsPersistentPageCount
-            + NavigationCompositionIndex.Empty.PersistentPageCount
+            + NavigationSurfaceComponentIndex.Empty.PersistentPageCount
             + NavigationExplicitConnectionIndex.Empty.PersistentPageCount
             + NavigationAutomaticSeamIndex.Empty.PersistentPageCount
             + catalog.PersistentPageCount);

@@ -23,7 +23,8 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
         int maxComponentNodes,
         int maxSeamCandidateProbes,
         int maxExplicitEdges,
-        int maxDependencyEntries)
+        int maxDependencyEntries,
+        int maxSurfaceComponentEdges = 65_536)
     {
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
             maxConsumedEnvelopes <= 0,
@@ -53,6 +54,10 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
             maxDependencyEntries <= 0,
             maxDependencyEntries,
             nameof(maxDependencyEntries));
+        SwiftThrowHelper.ThrowIfArgumentOutOfRange(
+            maxSurfaceComponentEdges <= 0,
+            maxSurfaceComponentEdges,
+            nameof(maxSurfaceComponentEdges));
 
         MaxConsumedEnvelopes = maxConsumedEnvelopes;
         MaxBaselineAddresses = maxBaselineAddresses;
@@ -61,6 +66,7 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
         MaxSeamCandidateProbes = maxSeamCandidateProbes;
         MaxExplicitEdges = maxExplicitEdges;
         MaxDependencyEntries = maxDependencyEntries;
+        MaxSurfaceComponentEdges = maxSurfaceComponentEdges;
     }
 
     /// <summary>Gets the maximum detached GridForge envelopes consumed.</summary>
@@ -84,6 +90,9 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
     /// <summary>Gets the maximum dependency-index entries processed.</summary>
     public int MaxDependencyEntries { get; }
 
+    /// <summary>Gets the maximum directed surface-edge candidates inspected by component work.</summary>
+    public int MaxSurfaceComponentEdges { get; }
+
     /// <inheritdoc/>
     public bool Equals(MaintenanceWorkBudget other) =>
         MaxConsumedEnvelopes == other.MaxConsumedEnvelopes
@@ -92,7 +101,8 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
         && MaxComponentNodes == other.MaxComponentNodes
         && MaxSeamCandidateProbes == other.MaxSeamCandidateProbes
         && MaxExplicitEdges == other.MaxExplicitEdges
-        && MaxDependencyEntries == other.MaxDependencyEntries;
+        && MaxDependencyEntries == other.MaxDependencyEntries
+        && MaxSurfaceComponentEdges == other.MaxSurfaceComponentEdges;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is MaintenanceWorkBudget other && Equals(other);
@@ -105,7 +115,8 @@ public readonly struct MaintenanceWorkBudget : IEquatable<MaintenanceWorkBudget>
         hash = SwiftHashTools.CombineHashCodes(hash, MaxComponentNodes);
         hash = SwiftHashTools.CombineHashCodes(hash, MaxSeamCandidateProbes);
         hash = SwiftHashTools.CombineHashCodes(hash, MaxExplicitEdges);
-        return SwiftHashTools.CombineHashCodes(hash, MaxDependencyEntries);
+        hash = SwiftHashTools.CombineHashCodes(hash, MaxDependencyEntries);
+        return SwiftHashTools.CombineHashCodes(hash, MaxSurfaceComponentEdges);
     }
 
     /// <summary>Tests two budgets for equality.</summary>

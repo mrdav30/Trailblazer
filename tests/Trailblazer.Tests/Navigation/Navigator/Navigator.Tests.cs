@@ -286,6 +286,7 @@ public class NavigatorTests : IDisposable
         NavSteering steering = TestRequire.NotNull(navigator.Steering);
         NavigationAStarAdmissionGate gate = TestWorld.Context.Pathing.NavigationAStarAdmissionGate;
         NavigationWorldGraphStore store = TestWorld.Context.Pathing.NavigationGraphStore;
+        NavigationSurfaceComponentIndex currentComponents = store.Current.SurfaceComponents;
         FieldInfo cacheSyncField = TestRequire.NotNull(
             typeof(NavigationAStarPayloadCache).GetField(
                 "_sync",
@@ -302,8 +303,9 @@ public class NavigatorTests : IDisposable
                     TimeSpan.FromSeconds(5))
                 .Should().BeTrue();
             NavigationWorldGraph current = store.Current;
-            NavigationWorldGraph changed = current.WithComposition(
-                current.Composition.WithVersion(current.Composition.Version + 1));
+            NavigationWorldGraph changed = current.WithSurfaceComponents(
+                NavigationSurfaceComponentIndex.Empty).WithGraphVersion(
+                    current.GraphVersion + 1);
             store.TryPublish(changed).Should().Be(NavigationCandidatePublication.Published);
         }
         finally
@@ -316,6 +318,10 @@ public class NavigatorTests : IDisposable
         steering.ShouldMove.Should().BeTrue();
         steering.IsAtDestination.Should().BeFalse();
 
+        NavigationWorldGraph invalidated = store.Current;
+        store.TryPublish(invalidated.WithSurfaceComponents(currentComponents).WithGraphVersion(
+                invalidated.GraphVersion + 1))
+            .Should().Be(NavigationCandidatePublication.Published);
         steering.GetHeading(navigator).Should().NotBe(Vector3d.Zero);
         steering.CurrentQuery.Should().Be(query);
         steering.ShouldMove.Should().BeTrue();

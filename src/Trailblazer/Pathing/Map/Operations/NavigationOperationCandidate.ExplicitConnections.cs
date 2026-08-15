@@ -17,8 +17,13 @@ internal sealed partial class NavigationOperationCandidate
 
     internal int ExplicitChangedSourceCount => _explicitChangedSources.Count;
 
+    internal int ExplicitChangedOwnerCount => _explicitChangedOwners.Count;
+
     internal string GetExplicitChangedSourceAt(int ordinal) =>
         _explicitChangedSources.GetKeyAt(ordinal);
+
+    internal NavigationConnectionOwnerKey GetExplicitChangedOwnerAt(int ordinal) =>
+        _explicitChangedOwners.GetAt(ordinal);
 
     internal ExplicitConnectionRefreshWork BeginExplicitConnectionRefresh(
         string mapId,
@@ -214,6 +219,7 @@ internal sealed partial class NavigationOperationCandidate
         private bool _incidenceUnchanged;
         private bool _ownerUpdated;
         private bool _ownerJournaled;
+        private bool _componentOwnerJournaled;
         private bool _corridorStarted;
         private GridNavigationCorridorValidationCursor _corridorCursor;
         private NavigationPagedSequence<Vector3d>.Builder? _waypointBuilder;
@@ -321,6 +327,15 @@ internal sealed partial class NavigationOperationCandidate
                         return false;
                     if (!IsValid)
                         return true;
+                    if (!_componentOwnerJournaled
+                        && HasComponentEdgeChanged(_priorRecord, _preparedRecord))
+                    {
+                        if (!meter.TryConsumeDependencyEntries(1))
+                            return false;
+                        _candidate._explicitChangedOwners =
+                            _candidate._explicitChangedOwners.Add(_currentOwner);
+                        _componentOwnerJournaled = true;
+                    }
                     _incidenceUnchanged = _priorRecord != null
                         && _preparedRecord != null
                         && ReferenceEquals(
@@ -924,10 +939,45 @@ internal sealed partial class NavigationOperationCandidate
             _incidenceUnchanged = false;
             _ownerUpdated = false;
             _ownerJournaled = false;
+            _componentOwnerJournaled = false;
             _corridorStarted = false;
             _corridorCursor = default;
             _waypointBuilder = null;
             _waypointCopyIndex = 0;
+        }
+
+        private static bool HasComponentEdgeChanged(
+            NavigationExplicitConnectionRecord? prior,
+            NavigationExplicitConnectionRecord? next)
+        {
+            bool priorActive = prior?.IsActive ?? false;
+            bool nextActive = next?.IsActive ?? false;
+            if (priorActive != nextActive)
+                return true;
+            if (!priorActive)
+                return false;
+            return prior!.Source != next!.Source
+                || prior.Destination != next.Destination
+                || prior.IsLowerBoundCertified != next.IsLowerBoundCertified
+                || prior.CorridorCost != next.CorridorCost
+                || !prior.Definition.Equals(next.Definition)
+                || !WaypointsEqual(prior.PortalWaypoints, next.PortalWaypoints);
+        }
+
+        private static bool WaypointsEqual(
+            NavigationPagedSequence<Vector3d> left,
+            NavigationPagedSequence<Vector3d> right)
+        {
+            if (left.Count != right.Count)
+                return false;
+            NavigationPagedSequence<Vector3d>.Enumerator leftValues = left.GetEnumerator();
+            NavigationPagedSequence<Vector3d>.Enumerator rightValues = right.GetEnumerator();
+            while (leftValues.MoveNext())
+            {
+                if (!rightValues.MoveNext() || leftValues.Current != rightValues.Current)
+                    return false;
+            }
+            return !rightValues.MoveNext();
         }
 
         private bool AdvanceGather(MaintenanceWorkMeter meter)

@@ -183,21 +183,19 @@ public sealed class NavigationWorldGraphLifecycleTests
         context.Simulate();
 
         GraphDependencyStamp stamp;
-        long compositionVersion;
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            compositionVersion = lease.Graph.Composition.Version;
+            lease.Graph.TryGetSurfaceComponent(
+                    new NavigationCellAddress("A", default),
+                    out NavigationSurfaceComponentKey component,
+                    out _)
+                .Should().BeTrue();
             lease.Graph.TryGetDependencyStamp(
                     policyKey,
-                    new[] { "A" },
+                    new[] { component },
                     new[] { new GraphPageDependencyAddress("A", 0) },
                     out stamp)
                 .Should().BeTrue();
-            stamp.CompositionVersion.Should().Be(compositionVersion);
-            NavigationWorldGraph topologyChanged = lease.Graph.WithComposition(
-                lease.Graph.Composition.WithVersion(compositionVersion + 1));
-            topologyChanged.IsDependencyCurrent(stamp).Should().BeFalse(
-                "an overlapping map or automatic seam can create an unexpanded alternative");
         }
 
         AdmitCellOverlay(
@@ -209,7 +207,6 @@ public sealed class NavigationWorldGraphLifecycleTests
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
         {
             lease.Graph.IsDependencyCurrent(stamp).Should().BeTrue();
-            lease.Graph.Composition.Version.Should().Be(compositionVersion);
         }
 
         AdmitCellOverlay(
@@ -221,12 +218,15 @@ public sealed class NavigationWorldGraphLifecycleTests
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
         {
             lease.Graph.IsDependencyCurrent(stamp).Should().BeFalse(
-                "any semantic change in the selected conservative component advances its traversal version");
-            lease.Graph.Composition.Version.Should().Be(compositionVersion,
-                "semantic-only overlays do not change the topology-composition clock");
+                "an authored semantic change can alter the optimal route anywhere in its component");
             lease.Graph.TryGetDependencyStamp(
                     policyKey,
-                    new[] { "A" },
+                    new[]
+                    {
+                        GetSurfaceComponentKey(
+                            lease.Graph,
+                            new NavigationCellAddress("A", default))
+                    },
                     new[] { new GraphPageDependencyAddress("A", 0) },
                     out stamp)
                 .Should().BeTrue();
@@ -243,7 +243,7 @@ public sealed class NavigationWorldGraphLifecycleTests
     }
 
     [Fact]
-    public void PhysicalChangeOnUnrecordedPage_ShouldAdvanceOnlyOwningComponentVersion()
+    public void PhysicalChangeOnUnrecordedPage_ShouldLeaveExactDependenciesCurrent()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
         GridConfiguration firstConfiguration = CreateWideConfiguration(xOffset: 0, cellCount: 65);
@@ -268,20 +268,28 @@ public sealed class NavigationWorldGraphLifecycleTests
 
         GraphDependencyStamp firstStamp;
         GraphDependencyStamp secondStamp;
-        long compositionVersion;
         NavigationGraphDiagnosticsSnapshot before = context.Pathing.GetNavigationGraphDiagnostics();
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            compositionVersion = lease.Graph.Composition.Version;
             lease.Graph.TryGetDependencyStamp(
                     policyKey,
-                    new[] { "A" },
+                    new[]
+                    {
+                        GetSurfaceComponentKey(
+                            lease.Graph,
+                            new NavigationCellAddress("A", default))
+                    },
                     new[] { new GraphPageDependencyAddress("A", 0) },
                     out firstStamp)
                 .Should().BeTrue();
             lease.Graph.TryGetDependencyStamp(
                     policyKey,
-                    new[] { "B" },
+                    new[]
+                    {
+                        GetSurfaceComponentKey(
+                            lease.Graph,
+                            new NavigationCellAddress("B", default))
+                    },
                     new[] { new GraphPageDependencyAddress("B", 0) },
                     out secondStamp)
                 .Should().BeTrue();
@@ -295,14 +303,13 @@ public sealed class NavigationWorldGraphLifecycleTests
         NavigationGraphDiagnosticsSnapshot after = context.Pathing.GetNavigationGraphDiagnostics();
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            lease.Graph.IsDependencyCurrent(firstStamp).Should().BeFalse(
-                "an unrecorded physical page still invalidates its conservative component");
+            lease.Graph.IsDependencyCurrent(firstStamp).Should().BeTrue(
+                "an unrecorded physical page is outside the exact dependency set");
             lease.Graph.IsDependencyCurrent(secondStamp).Should().BeTrue(
                 "a disconnected component did not consume the physical change");
-            lease.Graph.Composition.Version.Should().Be(compositionVersion,
-                "physical-only changes do not change topology composition");
         }
-        after.Maps[0].ComponentVersion.Should().BeGreaterThan(before.Maps[0].ComponentVersion);
+        after.Maps[0].ComponentVersion.Should().BeGreaterThanOrEqualTo(
+            before.Maps[0].ComponentVersion);
         after.Maps[1].ComponentVersion.Should().Be(before.Maps[1].ComponentVersion);
     }
 
@@ -811,7 +818,7 @@ public sealed class NavigationWorldGraphLifecycleTests
     }
 
     [Fact]
-    public void CellSemanticChange_ShouldAdvanceOwningComponentVersionWithoutExplicitEdges()
+    public void CellSemanticChange_ShouldAdvanceComponentVersionWithoutChangingKey()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
         GridConfiguration configuration = CreateConfiguration(
@@ -835,7 +842,89 @@ public sealed class NavigationWorldGraphLifecycleTests
             .Maps[0];
         after.ComponentId.Should().Be(before.ComponentId);
         after.ComponentVersion.Should().BeGreaterThan(before.ComponentVersion,
-            "effective cell semantics invalidate the conservative component cache");
+            "component generations invalidate alternative cached routes without changing membership");
+    }
+
+    [Fact]
+    public void RepeatedIdenticalCellSet_ShouldReuseSemanticAndComponentGenerations()
+    {
+        using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned();
+        GridConfiguration configuration = CreateConfiguration(
+            GridTopologyKind.RectangularPrism,
+            GridStorageKind.Dense);
+        AddGrid(context.World, configuration, GridStorageKind.Dense, default);
+        AdmitMap(context, CreateMap("map", configuration, default), 1, 1);
+        context.Simulate();
+        NavigationGraphMapDiagnostic baked = context.Pathing
+            .GetNavigationGraphDiagnostics()
+            .Maps[0];
+
+        AdmitCellOverlay(
+            context,
+            NavigationCellOverlayOperation.Set(default, SolidCell),
+            2);
+        context.Simulate();
+        NavigationSurfaceComponent firstComponent;
+        GraphPageDependency firstPage;
+        using (NavigationWorldGraphLease first = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            NavigationCellAddress address = new("map", default);
+            first.Graph.TryGetSurfaceComponent(
+                    address,
+                    out NavigationSurfaceComponentKey key,
+                    out long version)
+                .Should().BeTrue();
+            first.Graph.SurfaceComponents.TryGet(key, out firstComponent!).Should().BeTrue();
+            first.Graph.TryGetPageDependency(
+                    new GraphPageDependencyAddress("map", 0),
+                    out firstPage)
+                .Should().BeTrue();
+            version.Should().BeGreaterThan(baked.ComponentVersion,
+                "equal payload still changes ownership from bake to overlay");
+        }
+        context.Pathing.GetNavigationGraphDiagnostics().Maps[0].Cells[0].SemanticSource
+            .Should().Be(NavigationCellSemanticSource.OverlaySet);
+
+        AdmitCellOverlay(
+            context,
+            NavigationCellOverlayOperation.Set(default, SolidCell),
+            3);
+        context.Simulate();
+        using (NavigationWorldGraphLease repeated = context.Pathing.TryAcquireNavigationGraph()!)
+        {
+            NavigationCellAddress address = new("map", default);
+            repeated.Graph.TryGetSurfaceComponent(
+                    address,
+                    out NavigationSurfaceComponentKey key,
+                    out _)
+                .Should().BeTrue();
+            repeated.Graph.SurfaceComponents.TryGet(key, out NavigationSurfaceComponent current)
+                .Should().BeTrue();
+            current.Should().BeSameAs(firstComponent);
+            repeated.Graph.TryGetPageDependency(
+                    new GraphPageDependencyAddress("map", 0),
+                    out GraphPageDependency currentPage)
+                .Should().BeTrue();
+            currentPage.Should().Be(firstPage);
+        }
+
+        configuration.TryNormalize(out NormalizedGridConfiguration binding).Should().BeTrue();
+        NavigationMap changedBake = new NavigationMapBuilder("map", binding)
+            .AddCell(default, LiquidCell())
+            .Build();
+        var replacement = new NavigationMapCommitOperation(
+            new PreparedNavigationMap(changedBake, 2),
+            OverlayReplacementPolicy.PreserveAndRevalidate,
+            4,
+            context.FrameCount + 1);
+        context.Pathing.Admit(replacement).Should().BeTrue();
+        context.Simulate();
+
+        replacement.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
+        GetState(context, default).Cell.Should().Be(SolidCell,
+            "the equal-payload Set remains an owned override after the bake changes");
+        context.Pathing.GetNavigationGraphDiagnostics().Maps[0].Cells[0].SemanticSource
+            .Should().Be(NavigationCellSemanticSource.OverlaySet);
     }
 
     [Fact]
@@ -1003,6 +1092,15 @@ public sealed class NavigationWorldGraphLifecycleTests
         context.Pathing.TryGetNavigationGraphCellState("map", index, out NavigationGraphCellState state)
             .Should().BeTrue();
         return state;
+    }
+
+    private static NavigationSurfaceComponentKey GetSurfaceComponentKey(
+        NavigationWorldGraph graph,
+        NavigationCellAddress address)
+    {
+        graph.TryGetSurfaceComponent(address, out NavigationSurfaceComponentKey key, out _)
+            .Should().BeTrue();
+        return key;
     }
 
     private static NavigationMap CreateMap(

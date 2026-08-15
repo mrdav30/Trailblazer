@@ -15,7 +15,7 @@ namespace Trailblazer.Pathing;
 /// <summary>Applies bounded incident automatic-seam changes to one unpublished graph candidate.</summary>
 internal sealed class NavigationAutomaticSeamRefreshWork
 {
-    internal const long FixedRetainedBytes = 3_456L;
+    internal const long FixedRetainedBytes = 3_464L;
 
     private const int CursorHeight = 64;
     private const int PairDeltaNodeBytes = 104;
@@ -46,6 +46,8 @@ internal sealed class NavigationAutomaticSeamRefreshWork
     private readonly GridBoundaryContact[] _contact = new GridBoundaryContact[1];
     private NavigationAutomaticSeamIndex _working;
     private PersistentStringMap<bool> _changedMapIds = PersistentStringMap<bool>.Empty;
+    private NavigationCellAddressSet _changedStructuralEndpoints =
+        NavigationCellAddressSet.Empty;
 
     private NavigationSeamEditTree<NavigationAutomaticSeamPairKey, PairDelta>.Editor? _pairEditor;
     private NavigationSeamEditTree<NavigationAutomaticSeamPairKey, PairDelta>? _pairDeltas;
@@ -187,6 +189,11 @@ internal sealed class NavigationAutomaticSeamRefreshWork
 
     internal string GetChangedMapIdAt(int ordinal) => _changedMapIds.GetKeyAt(ordinal);
 
+    internal int ChangedStructuralEndpointCount => _changedStructuralEndpoints.Count;
+
+    internal NavigationCellAddress GetChangedStructuralEndpointAt(int ordinal) =>
+        _changedStructuralEndpoints.GetAt(ordinal);
+
     internal bool RevalidateForPublication() => RevalidateCompletedCursor();
 
     internal long RetainedBytes => checked(
@@ -194,6 +201,9 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         + (ReferenceEquals(_changedMapIds, PersistentStringMap<bool>.Empty)
             ? 0L
             : _changedMapIds.RetainedBytes)
+        + (ReferenceEquals(_changedStructuralEndpoints, NavigationCellAddressSet.Empty)
+            ? 0L
+            : _changedStructuralEndpoints.RetainedBytes)
         + (_pendingPairOwned ? NavigationAutomaticSeamPair.RetainedSize : 0L)
         + GetPairJournalBytes()
         + GetAddressJournalBytes()
@@ -208,6 +218,9 @@ internal sealed class NavigationAutomaticSeamRefreshWork
         + (ReferenceEquals(_changedMapIds, PersistentStringMap<bool>.Empty)
             ? 0
             : 1 + _changedMapIds.PersistentNodeCount)
+        + (ReferenceEquals(_changedStructuralEndpoints, NavigationCellAddressSet.Empty)
+            ? 0
+            : _changedStructuralEndpoints.PersistentPageCount)
         + (_pendingPairOwned ? 1 : 0)
         + GetPairJournalPages()
         + GetAddressJournalPages()
@@ -757,7 +770,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
                     return true;
                 case 9:
                 case 10:
-                    if (!_currentStructuralLinkChanged)
+                    if (!_currentActiveRowChanged && !_currentStructuralLinkChanged)
                     {
                         _pairApplyStage = 11;
                         continue;
@@ -765,6 +778,16 @@ internal sealed class NavigationAutomaticSeamRefreshWork
                     if (!meter.TryConsumeDependencyEntries(1))
                         return false;
                     bool reverse = _pairApplyStage == 10;
+                    NavigationCellAddress endpoint = reverse
+                        ? _currentPairKey.Second
+                        : _currentPairKey.First;
+                    _changedStructuralEndpoints =
+                        _changedStructuralEndpoints.Add(endpoint);
+                    if (!_currentStructuralLinkChanged)
+                    {
+                        _pairApplyStage++;
+                        return true;
+                    }
                     string source = reverse ? _currentPairKey.Second.MapId : _currentPairKey.First.MapId;
                     string destination = reverse ? _currentPairKey.First.MapId : _currentPairKey.Second.MapId;
                     NavigationAutomaticSeamPair? sourcePair = delta.SourceRecord?.Pair;
@@ -1404,6 +1427,7 @@ internal sealed class NavigationAutomaticSeamRefreshWork
     {
         _working = _sourceGraph.AutomaticSeams;
         _changedMapIds = PersistentStringMap<bool>.Empty;
+        _changedStructuralEndpoints = NavigationCellAddressSet.Empty;
         _pairEditor = null;
         _pairDeltas = null;
         _pairCursor = null;

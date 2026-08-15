@@ -26,6 +26,7 @@ internal struct NavigationSurfaceEdgeEnumerator
     private NavigationNativeSurfaceEdgeEnumerator _native;
     private NavigationAutomaticSeamIndex.EndpointEnumerator _seam;
     private readonly bool _incoming;
+    private readonly bool _structural;
     private bool _nativeComplete;
     private bool _explicitComplete;
     private bool _seamComplete;
@@ -49,10 +50,12 @@ internal struct NavigationSurfaceEdgeEnumerator
         NavigationNodeRef origin,
         bool incoming,
         bool includeNative,
-        bool includeAutomaticSeams)
+        bool includeAutomaticSeams,
+        bool structural = false)
     {
         _graph = graph;
         _incoming = incoming;
+        _structural = structural;
         _nativeComplete = !includeNative;
         _explicitComplete = false;
         _seamComplete = !includeAutomaticSeams;
@@ -72,8 +75,10 @@ internal struct NavigationSurfaceEdgeEnumerator
         _seamEndpoint = default;
         Current = default;
         if (!graph.TryGetNodeAddress(origin, out _origin)
-            || !graph.TryGetNodeState(origin, out NavigationNodeState state)
-            || !state.IsPresent)
+            || (structural
+                ? !graph.HasEffectiveCell(_origin)
+                : !graph.TryGetNodeState(origin, out NavigationNodeState state)
+                    || !state.IsPresent))
         {
             _graph = null;
             _origin = default;
@@ -88,7 +93,11 @@ internal struct NavigationSurfaceEdgeEnumerator
         _seam = includeAutomaticSeams
             ? graph.AutomaticSeams.GetActiveEndpointEnumerator(_origin)
             : default;
-        _native = includeNative ? graph.EnumerateNativeSurfaceEdges(origin) : default;
+        _native = includeNative
+            ? structural
+                ? graph.EnumerateStructuralNativeSurfaceEdges(origin)
+                : graph.EnumerateNativeSurfaceEdges(origin)
+            : default;
     }
 
     internal NavigationGraphEdge Current { get; private set; }
@@ -98,7 +107,9 @@ internal struct NavigationSurfaceEdgeEnumerator
         int unbounded = int.MaxValue;
         while (true)
         {
-            NavigationSurfaceEdgeAdvanceStatus status = AdvanceOne(null, ref unbounded);
+            NavigationSurfaceEdgeAdvanceStatus status = AdvanceOne(
+                (NavigationWorkMeter?)null,
+                ref unbounded);
             if (status == NavigationSurfaceEdgeAdvanceStatus.Edge)
                 return true;
             if (status == NavigationSurfaceEdgeAdvanceStatus.Complete)
@@ -109,6 +120,17 @@ internal struct NavigationSurfaceEdgeEnumerator
     internal NavigationSurfaceEdgeAdvanceStatus AdvanceOne(
         NavigationWorkMeter? meter,
         ref int edgeStepRemaining)
+        => AdvanceOneCore(meter, null, ref edgeStepRemaining);
+
+    internal NavigationSurfaceEdgeAdvanceStatus AdvanceOne(
+        MaintenanceWorkMeter meter,
+        ref int edgeStepRemaining)
+        => AdvanceOneCore(null, meter, ref edgeStepRemaining);
+
+    private NavigationSurfaceEdgeAdvanceStatus AdvanceOneCore(
+        NavigationWorkMeter? queryMeter,
+        MaintenanceWorkMeter? maintenanceMeter,
+        ref int edgeStepRemaining)
     {
         if (_graph == null)
             return NavigationSurfaceEdgeAdvanceStatus.Complete;
@@ -117,8 +139,28 @@ internal struct NavigationSurfaceEdgeEnumerator
         {
             if (!_nativeNeedsDebit)
             {
-                if (!_native.MoveNext())
+                if (maintenanceMeter != null)
+                {
+                    NavigationSurfaceEdgeAdvanceStatus nativeStatus =
+                        _native.AdvanceOne(maintenanceMeter, ref edgeStepRemaining);
+                    if (nativeStatus == NavigationSurfaceEdgeAdvanceStatus.Blocked)
+                        return nativeStatus;
+                    if (nativeStatus == NavigationSurfaceEdgeAdvanceStatus.Pending)
+                        return nativeStatus;
+                    if (nativeStatus == NavigationSurfaceEdgeAdvanceStatus.Complete)
+                        _nativeComplete = true;
+                    else
+                    {
+                        _nativeEdge = _native.Current;
+                        _graph.TryGetNodeAddress(_nativeEdge.Target, out _nativeEndpoint);
+                        _hasNative = true;
+                        return TrySelectReadyEdge();
+                    }
+                }
+                else if (!_native.MoveNext())
+                {
                     _nativeComplete = true;
+                }
                 else
                 {
                     _nativeEdge = _native.Current;
@@ -128,7 +170,7 @@ internal struct NavigationSurfaceEdgeEnumerator
             }
             if (_nativeNeedsDebit)
             {
-                if (!TryConsumeCandidate(meter, ref edgeStepRemaining))
+                if (!TryConsumeCandidate(queryMeter, maintenanceMeter, ref edgeStepRemaining))
                     return NavigationSurfaceEdgeAdvanceStatus.Blocked;
                 _nativeNeedsDebit = false;
                 _hasNative = true;
@@ -150,7 +192,7 @@ internal struct NavigationSurfaceEdgeEnumerator
             }
             if (_hasPendingExplicitOwner)
             {
-                if (!TryConsumeCandidate(meter, ref edgeStepRemaining))
+                if (!TryConsumeCandidate(queryMeter, maintenanceMeter, ref edgeStepRemaining))
                     return NavigationSurfaceEdgeAdvanceStatus.Blocked;
                 NavigationConnectionOwnerKey owner = _pendingExplicitOwner;
                 _pendingExplicitOwner = default;
@@ -174,7 +216,7 @@ internal struct NavigationSurfaceEdgeEnumerator
             }
             if (_hasPendingSeam)
             {
-                if (!TryConsumeCandidate(meter, ref edgeStepRemaining))
+                if (!TryConsumeCandidate(queryMeter, maintenanceMeter, ref edgeStepRemaining))
                     return NavigationSurfaceEdgeAdvanceStatus.Blocked;
                 NavigationAutomaticSeamRef seam = _pendingSeam;
                 _pendingSeam = default;
@@ -275,8 +317,10 @@ internal struct NavigationSurfaceEdgeEnumerator
     {
         NavigationCellAddress endpoint = seam.Destination;
         if (!_graph!.TryGetNodeRef(endpoint, out NavigationNodeRef target)
-            || !_graph.TryGetNodeState(target, out NavigationNodeState state)
-            || !state.IsPresent)
+            || (_structural
+                ? !_graph.HasEffectiveCell(endpoint)
+                : !_graph.TryGetNodeState(target, out NavigationNodeState state)
+                    || !state.IsPresent))
         {
             return;
         }
@@ -286,13 +330,19 @@ internal struct NavigationSurfaceEdgeEnumerator
     }
 
     private static bool TryConsumeCandidate(
-        NavigationWorkMeter? meter,
+        NavigationWorkMeter? queryMeter,
+        MaintenanceWorkMeter? maintenanceMeter,
         ref int edgeStepRemaining)
     {
-        if (meter == null)
+        if (queryMeter == null && maintenanceMeter == null)
             return true;
-        if (edgeStepRemaining == 0 || !meter.TryConsumeEvaluatedEdges(1))
+        if (edgeStepRemaining == 0
+            || (queryMeter != null && !queryMeter.TryConsumeEvaluatedEdges(1))
+            || (maintenanceMeter != null
+                && !maintenanceMeter.TryConsumeSurfaceComponentEdges(1)))
+        {
             return false;
+        }
         edgeStepRemaining--;
         return true;
     }

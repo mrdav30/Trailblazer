@@ -147,10 +147,13 @@ public sealed class TraversalEvaluatorTests
         using (NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!)
         {
             NavigationNodeRef target = Resolve(lease.Graph, new VoxelIndex(1, 0, 0));
-            lease.Graph.Composition.TryGetComponentKey("map", out string componentKey)
+            lease.Graph.TryGetSurfaceComponent(
+                    new NavigationCellAddress("map", new VoxelIndex(1, 0, 0)),
+                    out NavigationSurfaceComponentKey componentKey,
+                    out _)
                 .Should().BeTrue();
             NavigationWorldGraph closed = lease.Graph.WithClosedStructuralComponents(
-                PersistentStringMap<bool>.Empty.Set(componentKey, true),
+                NavigationSurfaceComponentKeySet.Empty.Add(componentKey),
                 false,
                 lease.Graph.GraphVersion + 1);
             new TraversalEvaluator(closed, Profile(), DefaultPolicy, TraversalMedium.Solid)

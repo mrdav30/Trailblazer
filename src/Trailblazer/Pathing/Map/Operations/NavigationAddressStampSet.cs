@@ -50,4 +50,16 @@ internal sealed class NavigationAddressStampSet
         _stamps[index] = _generation;
         return true;
     }
+
+    internal bool Contains(NavigationCellAddress value)
+    {
+        int index = value.GetHashCode() & _mask;
+        while (_stamps[index] == _generation)
+        {
+            if (_values[index].Equals(value))
+                return true;
+            index = (index + 1) & _mask;
+        }
+        return false;
+    }
 }

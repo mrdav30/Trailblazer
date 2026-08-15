@@ -25,7 +25,8 @@ public readonly struct NavigationQueryLimits
         maxAStarReusablePayloadBytes: 16_777_216,
         maxAStarSinglePayloadBytes: 262_144,
         maxAStarActivePayloadBytes: 2_097_152,
-        maxAStarActivePayloadLeases: 8);
+        maxAStarActivePayloadLeases: 8,
+        aStarWorkspaceComponentCapacity: 512);
 
     /// <summary>Initializes explicit finite A* query limits.</summary>
     public NavigationQueryLimits(
@@ -39,7 +40,8 @@ public readonly struct NavigationQueryLimits
         long maxAStarReusablePayloadBytes,
         long maxAStarSinglePayloadBytes,
         long maxAStarActivePayloadBytes,
-        int maxAStarActivePayloadLeases)
+        int maxAStarActivePayloadLeases,
+        int aStarWorkspaceComponentCapacity)
     {
         SwiftThrowHelper.ThrowIfArgumentOutOfRange(
             maxBatchItems <= 0 || maxBatchItems > MaximumBatchItems,
@@ -59,6 +61,9 @@ public readonly struct NavigationQueryLimits
         SwiftThrowHelper.ThrowIfNegative(
             aStarWorkspaceEndpointPageCapacity,
             nameof(aStarWorkspaceEndpointPageCapacity));
+        SwiftThrowHelper.ThrowIfNegative(
+            aStarWorkspaceComponentCapacity,
+            nameof(aStarWorkspaceComponentCapacity));
         SwiftThrowHelper.ThrowIfNegative(
             aStarWorkspaceNodeCapacity,
             nameof(aStarWorkspaceNodeCapacity));
@@ -88,6 +93,7 @@ public readonly struct NavigationQueryLimits
         MaxConcurrentAStarQueries = maxConcurrentAStarQueries;
         AStarWorkspaceMapCapacity = aStarWorkspaceMapCapacity;
         AStarWorkspaceEndpointPageCapacity = aStarWorkspaceEndpointPageCapacity;
+        AStarWorkspaceComponentCapacity = aStarWorkspaceComponentCapacity;
         AStarWorkspaceNodeCapacity = aStarWorkspaceNodeCapacity;
         MaxAStarCacheEntries = maxAStarCacheEntries;
         MaxAStarReusablePayloadBytes = maxAStarReusablePayloadBytes;
@@ -110,6 +116,9 @@ public readonly struct NavigationQueryLimits
 
     /// <summary>Gets the endpoint-page capacity of each exclusive A* workspace.</summary>
     public int AStarWorkspaceEndpointPageCapacity { get; }
+
+    /// <summary>Gets the exact component-dependency capacity of each exclusive A* workspace.</summary>
+    public int AStarWorkspaceComponentCapacity { get; }
 
     /// <summary>Gets the node capacity of each exclusive A* workspace.</summary>
     public int AStarWorkspaceNodeCapacity { get; }

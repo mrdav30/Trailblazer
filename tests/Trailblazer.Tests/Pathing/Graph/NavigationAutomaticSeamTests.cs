@@ -49,7 +49,7 @@ public sealed class NavigationAutomaticSeamTests
         using var world = new GridWorld();
         NavigationOperationFrameChange[] changes = Array.Empty<NavigationOperationFrameChange>();
         NavigationAutomaticSeamRefreshWork? last = null;
-        for (int i = 0; i < 32; i++)
+        for (int i = 0; i < 512; i++)
         {
             last = new NavigationAutomaticSeamRefreshWork(
                 world,
@@ -86,16 +86,14 @@ public sealed class NavigationAutomaticSeamTests
     {
         using var world = new GridWorld();
         GridEventInfo[] events = Array.Empty<GridEventInfo>();
-        var workspace = new NavigationCompositionWorkspace(1);
         NavigationAutomaticSeamLifecycleWork? last = null;
-        for (int i = 0; i < 32; i++)
+        for (int i = 0; i < 512; i++)
         {
             last = new NavigationAutomaticSeamLifecycleWork(
                 world,
                 NavigationWorldGraph.Empty,
                 events,
-                0,
-                workspace);
+                0);
         }
         long before = GC.GetAllocatedBytesForCurrentThread();
         const int Iterations = 256;
@@ -105,8 +103,7 @@ public sealed class NavigationAutomaticSeamTests
                 world,
                 NavigationWorldGraph.Empty,
                 events,
-                0,
-                workspace);
+                0);
         }
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         GC.KeepAlive(last);
@@ -125,7 +122,6 @@ public sealed class NavigationAutomaticSeamTests
     public void SeamLifecycleCapacity_ShouldAcceptExactMinimumAndRejectOneByteBelow()
     {
         using var world = new GridWorld();
-        var workspace = new NavigationCompositionWorkspace(1);
         GridEventInfo[] events = Array.Empty<GridEventInfo>();
         long exactBytes = NavigationAutomaticSeamLifecycleWork.BaseRetainedBytes
             + NavigationAutomaticSeamRefreshWork.FixedRetainedBytes;
@@ -133,14 +129,12 @@ public sealed class NavigationAutomaticSeamTests
             world,
             NavigationWorldGraph.Empty,
             events,
-            0,
-            workspace);
+            0);
         var below = new NavigationAutomaticSeamLifecycleWork(
             world,
             NavigationWorldGraph.Empty,
             events,
-            0,
-            workspace);
+            0);
 
         exact.AdvanceOne(
                 new MaintenanceWorkMeter(
@@ -193,6 +187,11 @@ public sealed class NavigationAutomaticSeamTests
             GetIncomingSources(lease.Graph, scenario.Source, "target").Should().Equal(
                 scenario.FirstTarget,
                 scenario.SecondTarget);
+            lease.Graph.AreInSameSurfaceComponent(
+                    scenario.Source,
+                    scenario.FirstTarget)
+                .Should().BeTrue(
+                    "an active automatic seam joins its endpoint nodes in weak membership");
         }
 
         var remove = new NavigationMapRemoveOperation(
@@ -281,20 +280,18 @@ public sealed class NavigationAutomaticSeamTests
         SimulateUntilTerminal(context, targetOperation.Receipt);
         var sourceAddress = new NavigationCellAddress("source", default);
         CountCrossMapTargets(context, sourceAddress, "target").Should().Be(0);
-        long topologyCompositionVersion;
         long dormantComponentVersion;
         using (NavigationWorldGraphLease dormant = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            topologyCompositionVersion = dormant.Graph.Composition.Version;
-            dormant.Graph.Composition.TryGetComponentRecord(
-                    "source",
-                    out NavigationStructuralComponent sourceComponent)
+            dormant.Graph.SurfaceComponents.TryGet(
+                    sourceAddress,
+                    out NavigationSurfaceComponent sourceComponent)
                 .Should().BeTrue();
-            dormant.Graph.Composition.TryGetComponentRecord(
-                    "target",
-                    out NavigationStructuralComponent targetComponent)
+            dormant.Graph.SurfaceComponents.TryGet(
+                    new NavigationCellAddress("target", default),
+                    out NavigationSurfaceComponent targetComponent)
                 .Should().BeTrue();
-            sourceComponent.Id.Should().Be(targetComponent.Id,
+            sourceComponent.Key.Should().Be(targetComponent.Key,
                 "physical absence makes the durable seam dormant, not structurally nonexistent");
             dormantComponentVersion = sourceComponent.Version;
         }
@@ -305,14 +302,13 @@ public sealed class NavigationAutomaticSeamTests
         long activeComponentVersion;
         using (NavigationWorldGraphLease active = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            active.Graph.Composition.Version.Should().Be(topologyCompositionVersion,
-                "physical presence activates retained portal geometry without recomposing it");
-            active.Graph.Composition.TryGetComponentRecord(
-                    "source",
-                    out NavigationStructuralComponent activeComponent)
+            active.Graph.SurfaceComponents.TryGet(
+                    sourceAddress,
+                    out NavigationSurfaceComponent activeComponent)
                 .Should().BeTrue();
             activeComponentVersion = activeComponent.Version;
-            activeComponentVersion.Should().BeGreaterThan(dormantComponentVersion);
+            activeComponentVersion.Should().Be(dormantComponentVersion,
+                "physical presence is runtime traversal state and must not rebuild structural components");
         }
 
         targetGrid.TryRemoveVoxel(default).Should().BeTrue();
@@ -320,12 +316,11 @@ public sealed class NavigationAutomaticSeamTests
         CountCrossMapTargets(context, sourceAddress, "target").Should().Be(0);
         using (NavigationWorldGraphLease dormantAgain = context.Pathing.TryAcquireNavigationGraph()!)
         {
-            dormantAgain.Graph.Composition.Version.Should().Be(topologyCompositionVersion);
-            dormantAgain.Graph.Composition.TryGetComponentRecord(
-                    "source",
-                    out NavigationStructuralComponent dormantAgainComponent)
+            dormantAgain.Graph.SurfaceComponents.TryGet(
+                    sourceAddress,
+                    out NavigationSurfaceComponent dormantAgainComponent)
                 .Should().BeTrue();
-            dormantAgainComponent.Version.Should().BeGreaterThan(activeComponentVersion);
+            dormantAgainComponent.Version.Should().Be(activeComponentVersion);
         }
 
         targetGrid.TryAddVoxel(default, out _).Should().BeTrue();
@@ -542,7 +537,7 @@ public sealed class NavigationAutomaticSeamTests
         using (NavigationWorldGraphLease pending = context.Pathing.TryAcquireNavigationGraph()!)
         {
             pending.Graph.HasClosedStructuralScope.Should().BeTrue();
-            pending.Graph.IsStructuralScopeClosed("unrelated").Should().BeTrue(
+            pending.Graph.AreAllStructuralComponentsClosed.Should().BeTrue(
                 "unknown lifecycle scope must fail closed before bounded incidence finishes");
             pending.Graph.AutomaticSeams.PairCount.Should().Be(1,
                 "the old pair remains private to the closed published source until atomic replacement");
@@ -559,11 +554,11 @@ public sealed class NavigationAutomaticSeamTests
         using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
         published.Graph.HasClosedStructuralScope.Should().BeFalse();
         published.Graph.AutomaticSeams.PairCount.Should().Be(0);
-        published.Graph.IsStructuralScopeClosed("unrelated").Should().BeFalse();
+        published.Graph.AreAllStructuralComponentsClosed.Should().BeFalse();
     }
 
     [Fact]
-    public void LifecycleWithoutStructuralLinkChange_ShouldAdvanceCompositionVersion()
+    public void LifecycleWithoutStructuralLinkChange_ShouldAdvanceGraphVersion()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateTinyBudgetSettings());
@@ -580,7 +575,7 @@ public sealed class NavigationAutomaticSeamTests
         SimulateUntilTerminal(context, operation.Receipt);
         long priorVersion;
         using (NavigationWorldGraphLease prior = context.Pathing.TryAcquireNavigationGraph()!)
-            priorVersion = prior.Graph.Composition.Version;
+            priorVersion = prior.Graph.GraphVersion;
 
         context.World.TryRemoveGrid(gridIndex).Should().BeTrue();
         context.Simulate();
@@ -593,12 +588,12 @@ public sealed class NavigationAutomaticSeamTests
 
         using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
         published.Graph.AutomaticSeams.PairCount.Should().Be(0);
-        published.Graph.Composition.Version.Should().BeGreaterThan(priorVersion,
+        published.Graph.GraphVersion.Should().BeGreaterThan(priorVersion,
             "lifecycle publication advances dependency time even without component recompute");
     }
 
     [Fact]
-    public void WorldResetWithMappedZeroPairGraph_ShouldAdvanceCompositionVersion()
+    public void WorldResetWithMappedZeroPairGraph_ShouldAdvanceGraphVersion()
     {
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(
             settings: CreateTinyBudgetSettings());
@@ -616,7 +611,7 @@ public sealed class NavigationAutomaticSeamTests
         using (NavigationWorldGraphLease prior = context.Pathing.TryAcquireNavigationGraph()!)
         {
             prior.Graph.AutomaticSeams.PairCount.Should().Be(0);
-            priorVersion = prior.Graph.Composition.Version;
+            priorVersion = prior.Graph.GraphVersion;
         }
 
         context.World.Reset();
@@ -629,7 +624,7 @@ public sealed class NavigationAutomaticSeamTests
             if (probe == null)
                 continue;
             bool complete = !probe.Graph.HasClosedStructuralScope
-                && probe.Graph.Composition.Version > priorVersion;
+                && probe.Graph.GraphVersion > priorVersion;
             probe.Dispose();
             if (complete)
                 break;
@@ -637,7 +632,7 @@ public sealed class NavigationAutomaticSeamTests
 
         using NavigationWorldGraphLease published = context.Pathing.TryAcquireNavigationGraph()!;
         published.Graph.HasClosedStructuralScope.Should().BeFalse();
-        published.Graph.Composition.Version.Should().BeGreaterThan(priorVersion);
+        published.Graph.GraphVersion.Should().BeGreaterThan(priorVersion);
     }
 
     [Fact]
@@ -959,7 +954,7 @@ public sealed class NavigationAutomaticSeamTests
         using (NavigationWorldGraphLease pending = context.Pathing.TryAcquireNavigationGraph()!)
         {
             pending.Graph.HasClosedStructuralScope.Should().BeTrue();
-            pending.Graph.IsStructuralScopeClosed("unrelated").Should().BeTrue(
+            pending.Graph.AreAllStructuralComponentsClosed.Should().BeTrue(
                 "a consumed generation event must widen retained operation safety to all-close");
         }
 
@@ -1020,9 +1015,12 @@ public sealed class NavigationAutomaticSeamTests
             AdmitMap(context, "target", targetBinding, new[] { default(VoxelIndex) }, 2);
         SimulateUntilTerminal(context, targetOperation.Receipt);
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
-        lease.Graph.Composition.GetComponentRecord("source")
-            .AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
         var sourceAddress = new NavigationCellAddress("source", default);
+        lease.Graph.SurfaceComponents.TryGet(
+                sourceAddress,
+                out NavigationSurfaceComponent sourceComponent)
+            .Should().BeTrue();
+        sourceComponent.AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
         NavigationGraphEdge edge = FindCrossMapEdge(lease.Graph, sourceAddress, "target");
         lease.Graph.TryGetNodeRef(sourceAddress, out NavigationNodeRef sourceNode).Should().BeTrue();
         var policy = new NavigationAreaPolicy(
@@ -1084,8 +1082,11 @@ public sealed class NavigationAutomaticSeamTests
             AdmitMap(context, "upper", upper, new[] { default(VoxelIndex) }, 2);
         SimulateUntilTerminal(context, upperOperation.Receipt);
         using NavigationWorldGraphLease lease = context.Pathing.TryAcquireNavigationGraph()!;
-        lease.Graph.Composition.GetComponentRecord("lower")
-            .AllSurfaceEdgesEuclideanCertified.Should().BeFalse(
+        lease.Graph.SurfaceComponents.TryGet(
+                new NavigationCellAddress("lower", default),
+                out NavigationSurfaceComponent lowerComponent)
+            .Should().BeTrue();
+        lowerComponent.AllSurfaceEdgesEuclideanCertified.Should().BeFalse(
                 "horizontal seam evaluation omits the portal-foot vertical span");
         var lowerAddress = new NavigationCellAddress("lower", default);
         var upperAddress = new NavigationCellAddress("upper", default);
@@ -1152,8 +1153,11 @@ public sealed class NavigationAutomaticSeamTests
         using (NavigationWorldGraphLease vertical = context.Pathing.TryAcquireNavigationGraph()!)
         {
             vertical.Graph.AutomaticSeams.PairCount.Should().Be(1);
-            vertical.Graph.Composition.GetComponentRecord("source")
-                .AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
+            vertical.Graph.SurfaceComponents.TryGet(
+                    new NavigationCellAddress("source", default),
+                    out NavigationSurfaceComponent component)
+                .Should().BeTrue();
+            component.AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
         }
 
         NavigationMap replacementMap = new NavigationMapBuilder("target", upper)
@@ -1184,8 +1188,11 @@ public sealed class NavigationAutomaticSeamTests
             horizontal.Graph.AutomaticSeams.GetStructuralLinks("source").GetEnumerator();
         links.MoveNext().Should().BeTrue();
         links.Current.UncertifiedCount.Should().Be(1);
-        horizontal.Graph.Composition.GetComponentRecord("source")
-            .AllSurfaceEdgesEuclideanCertified.Should().BeFalse();
+        horizontal.Graph.SurfaceComponents.TryGet(
+                new NavigationCellAddress("source", default),
+                out NavigationSurfaceComponent horizontalComponent)
+            .Should().BeTrue();
+        horizontalComponent.AllSurfaceEdgesEuclideanCertified.Should().BeFalse();
     }
 
     [Fact]

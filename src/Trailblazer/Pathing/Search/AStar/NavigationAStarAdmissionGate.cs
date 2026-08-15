@@ -56,9 +56,10 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
         for (int i = 0; i < _queries.Length; i++)
         {
             var workspace = new NavigationAStarWorkspace(
-                limits.AStarWorkspaceMapCapacity,
-                limits.AStarWorkspaceEndpointPageCapacity,
-                limits.AStarWorkspaceNodeCapacity);
+                mapCapacity: limits.AStarWorkspaceMapCapacity,
+                endpointPageCapacity: limits.AStarWorkspaceEndpointPageCapacity,
+                componentCapacity: limits.AStarWorkspaceComponentCapacity,
+                nodeCapacity: limits.AStarWorkspaceNodeCapacity);
             _queries[i] = new NavigationAStarQueryWork(world, store, workspace, _cache);
         }
         _descriptors = new BatchDescriptor[limits.MaxBatchItems];
@@ -180,7 +181,7 @@ internal sealed class NavigationAStarAdmissionGate : IDisposable
                 Math.Min(
                     _limits.AStarWorkspaceNodeCapacity,
                     query.Budget.MaxExpandedNodes),
-                _limits.AStarWorkspaceMapCapacity,
+                _limits.AStarWorkspaceComponentCapacity,
                 _limits.AStarWorkspaceEndpointPageCapacity);
             if (!_cache.TryReservePayload(maximumBytes, out _reservations[admitted]))
                 break;

@@ -39,6 +39,7 @@ internal sealed class NavigationOperationProcessor
             int.MaxValue,
             int.MaxValue,
             int.MaxValue,
+            int.MaxValue,
             int.MaxValue));
     private readonly NavigationOperationRejection[] _outcomes;
     private readonly bool[] _superseded;
@@ -61,11 +62,6 @@ internal sealed class NavigationOperationProcessor
     private NavigationOperationCandidate? _sourceCandidateForDeferred;
     private NavigationOperationCandidate? _deferredCandidate;
     private NavigationOperationCandidate? _activeFoldSourceCandidate;
-    private DeferredStructuralClosureWork? _deferredStructuralClosureWork;
-    private NavigationOperationCandidate? _narrowedStructuralCandidate;
-    private PersistentStringMap<bool> _narrowedStructuralComponents =
-        PersistentStringMap<bool>.Empty;
-    private int _narrowedStructuralPrefixCount = -1;
     private bool _supersedenceActive;
     private int _supersedenceIndex;
     private int _supersedenceMapIndex;
@@ -124,203 +120,8 @@ internal sealed class NavigationOperationProcessor
         _mapFoldWork != null
         || _overlayFoldWork != null
         || _deferredCandidate != null
-        || _deferredStructuralClosureWork != null
             ? 1
             : 0;
-
-    internal NavigationDeferredStructuralClosureStatus AdvanceDeferredStructuralClosure(
-        NavigationWorldGraph graph,
-        MaintenanceWorkMeter meter,
-        NavigationRetainedWorkGuard retainedWorkGuard,
-        out PersistentStringMap<bool> components)
-    {
-        NavigationOperationCandidate? folded = _mapFoldWork?.Candidate
-            ?? _overlayFoldWork?.Candidate
-            ?? _deferredCandidate;
-        components = PersistentStringMap<bool>.Empty;
-        if (folded == null)
-        {
-            ResetDeferredStructuralClosure();
-            return NavigationDeferredStructuralClosureStatus.CloseAll;
-        }
-
-        bool gatherComplete = _mapFoldWork?.ExplicitGatherComplete
-            ?? _overlayFoldWork?.ExplicitGatherComplete
-            ?? true;
-        if (!gatherComplete && ActiveFoldMayChangeExplicitConnections())
-        {
-            ResetDeferredStructuralClosure();
-            return NavigationDeferredStructuralClosureStatus.CloseAll;
-        }
-
-        int processedPrefixCount = GetProcessedDeferredPrefixCount();
-        if (ReferenceEquals(_narrowedStructuralCandidate, folded)
-            && _narrowedStructuralPrefixCount == processedPrefixCount)
-        {
-            return NavigationDeferredStructuralClosureStatus.Published;
-        }
-        _narrowedStructuralCandidate = null;
-        _narrowedStructuralPrefixCount = -1;
-        if (_deferredStructuralClosureWork == null
-            || !_deferredStructuralClosureWork.Matches(folded, processedPrefixCount))
-        {
-            long replacedBytes = _deferredStructuralClosureWork?.RetainedBytes ?? 0L;
-            int replacedPages = _deferredStructuralClosureWork?.PersistentPageCount ?? 0;
-            if (!retainedWorkGuard(
-                    checked(RetainedOperationWorkBytes - replacedBytes
-                        + DeferredStructuralClosureWork.EmptyRetainedBytes),
-                    checked(RetainedOperationWorkPageCount - replacedPages
-                        + DeferredStructuralClosureWork.EmptyPersistentPageCount)))
-            {
-                return NavigationDeferredStructuralClosureStatus.CapacityExceeded;
-            }
-            _deferredStructuralClosureWork = new DeferredStructuralClosureWork(
-                folded,
-                processedPrefixCount);
-        }
-
-        DeferredStructuralClosureWork work = _deferredStructuralClosureWork;
-        while (!work.IsReady)
-        {
-            if (work.PendingComponentKey != null)
-            {
-                if (!meter.TryConsumeDependencyEntries(1))
-                    return NavigationDeferredStructuralClosureStatus.InProgress;
-                string pendingComponentKey = work.PendingComponentKey;
-                work.PendingComponentKey = null;
-                if (work.Components.ContainsKey(pendingComponentKey))
-                    continue;
-                if (!retainedWorkGuard(
-                        checked(RetainedOperationWorkBytes + 64L),
-                        checked(RetainedOperationWorkPageCount + 1)))
-                {
-                    return NavigationDeferredStructuralClosureStatus.CapacityExceeded;
-                }
-                work.Components = work.Components.Set(pendingComponentKey, true);
-                continue;
-            }
-
-            if (!HasNextDeferredStructuralMapId(work))
-            {
-                work.IsReady = true;
-                break;
-            }
-            if (!meter.TryConsumeComponentNodes(1))
-                return NavigationDeferredStructuralClosureStatus.InProgress;
-            TakeNextDeferredStructuralMapId(work, out string mapId, out bool hasChanges);
-            if (hasChanges
-                && graph.Composition.TryGetComponentKey(mapId, out string componentKey))
-            {
-                work.PendingComponentKey = componentKey;
-            }
-        }
-
-        components = work.Components;
-        return NavigationDeferredStructuralClosureStatus.Ready;
-    }
-
-    private bool ActiveFoldMayChangeExplicitConnections() =>
-        _mapFoldWork != null
-        || (_overlayFoldWork?.MayChangeExplicitConnections ?? false);
-
-    internal void MarkDeferredStructuralClosurePublished()
-    {
-        if (_deferredStructuralClosureWork == null
-            || !_deferredStructuralClosureWork.IsReady)
-        {
-            return;
-        }
-        _narrowedStructuralCandidate = _deferredStructuralClosureWork.Candidate;
-        _narrowedStructuralComponents = _deferredStructuralClosureWork.Components;
-        _narrowedStructuralPrefixCount = _deferredStructuralClosureWork.ProcessedPrefixCount;
-        _deferredStructuralClosureWork = null;
-    }
-
-    internal bool TryGetPublishedDeferredStructuralClosure(
-        NavigationOperationCandidate candidate,
-        out PersistentStringMap<bool> components)
-    {
-        if (ReferenceEquals(_narrowedStructuralCandidate, candidate))
-        {
-            components = _narrowedStructuralComponents;
-            return true;
-        }
-        components = PersistentStringMap<bool>.Empty;
-        return false;
-    }
-
-    internal void RelinquishDeferredStructuralClosure()
-    {
-        _deferredStructuralClosureWork = null;
-        _narrowedStructuralCandidate = null;
-        _narrowedStructuralComponents = PersistentStringMap<bool>.Empty;
-        _narrowedStructuralPrefixCount = -1;
-    }
-
-    private int GetProcessedDeferredPrefixCount()
-    {
-        int prefixCount = Math.Min(_deferredPrefixCount, _pending.Count);
-        return _mapFoldWork != null || _overlayFoldWork != null
-            ? Math.Min(prefixCount, _foldOperationIndex + 1)
-            : Math.Min(prefixCount, _foldOperationIndex);
-    }
-
-    private bool HasNextDeferredStructuralMapId(DeferredStructuralClosureWork work)
-    {
-        if (work.ExplicitSourceIndex < work.Candidate.ExplicitChangedSourceCount)
-            return true;
-        return work.OperationIndex < work.ProcessedPrefixCount;
-    }
-
-    private void TakeNextDeferredStructuralMapId(
-        DeferredStructuralClosureWork work,
-        out string mapId,
-        out bool hasChanges)
-    {
-        if (work.ExplicitSourceIndex < work.Candidate.ExplicitChangedSourceCount)
-        {
-            mapId = work.Candidate.GetExplicitChangedSourceAt(work.ExplicitSourceIndex++);
-            hasChanges = true;
-            return;
-        }
-
-        PendingOperation operation = _pending[work.OperationIndex];
-        if (_outcomes[work.OperationIndex] != NavigationOperationRejection.None)
-        {
-            work.OperationIndex++;
-            work.MapIndex = 0;
-            mapId = string.Empty;
-            hasChanges = false;
-            return;
-        }
-        if (operation.IsMapOperation)
-        {
-            work.OperationIndex++;
-            work.MapIndex = 0;
-            mapId = operation.MapId!;
-            hasChanges = true;
-            return;
-        }
-        NavigationMapOverlayDelta map =
-            operation.PreparedOverlay!.Transaction.MapSpan[work.MapIndex++];
-        mapId = map.MapId;
-        hasChanges = !map.CellSpan.IsEmpty
-            || !map.ConnectionSpan.IsEmpty
-            || !map.TransitionSpan.IsEmpty;
-        if (work.MapIndex == operation.PreparedOverlay.Transaction.MapSpan.Length)
-        {
-            work.OperationIndex++;
-            work.MapIndex = 0;
-        }
-    }
-
-    private void ResetDeferredStructuralClosure()
-    {
-        _deferredStructuralClosureWork = null;
-        _narrowedStructuralCandidate = null;
-        _narrowedStructuralComponents = PersistentStringMap<bool>.Empty;
-        _narrowedStructuralPrefixCount = -1;
-    }
 
     internal void RejectDeferredCapacity()
     {
@@ -336,7 +137,6 @@ internal sealed class NavigationOperationProcessor
         _sourceCandidateForDeferred = null;
         _deferredCandidate = null;
         _activeFoldSourceCandidate = null;
-        ResetDeferredStructuralClosure();
         ResetSupersedence();
     }
 
@@ -358,7 +158,6 @@ internal sealed class NavigationOperationProcessor
         _sourceCandidateForDeferred = null;
         _deferredCandidate = null;
         _activeFoldSourceCandidate = null;
-        ResetDeferredStructuralClosure();
         ResetSupersedence();
         _mapOverwriters.Clear();
         _coveredCells.Clear();
@@ -403,9 +202,6 @@ internal sealed class NavigationOperationProcessor
             _unboundedMaintenanceMeter.Reset();
             maintenanceMeter = _unboundedMaintenanceMeter;
         }
-        if (_deferredStructuralClosureWork != null)
-            return NavigationOperationFrameResult.Deferred;
-
         int eligibleCount = 0;
         long batchDescriptorBytes = 0;
         long batchScratchBytes = GetFixedScratchBytes(_limits.MaxBatchItems);
@@ -462,12 +258,8 @@ internal sealed class NavigationOperationProcessor
                 _foldOperationIndex = i;
                 if (retainedWorkGuard != null
                     && !retainedWorkGuard(
-                        IncludeDeferredClosureBytes(GetAdditionalRetainedBytes(
-                            _mapFoldWork,
-                            published)),
-                        IncludeDeferredClosurePages(GetAdditionalPersistentPages(
-                            _mapFoldWork,
-                            published))))
+                        GetAdditionalRetainedBytes(_mapFoldWork, published),
+                        GetAdditionalPersistentPages(_mapFoldWork, published)))
                 {
                     _outcomes[i] = NavigationOperationRejection.CapacityExceeded;
                     _candidate = _activeFoldSourceCandidate;
@@ -488,12 +280,8 @@ internal sealed class NavigationOperationProcessor
                 if (_outcomes[i] == NavigationOperationRejection.None
                     && retainedWorkGuard != null
                     && !retainedWorkGuard(
-                        IncludeDeferredClosureBytes(GetAdditionalRetainedBytes(
-                            _mapFoldWork,
-                            published)),
-                        IncludeDeferredClosurePages(GetAdditionalPersistentPages(
-                            _mapFoldWork,
-                            published))))
+                        GetAdditionalRetainedBytes(_mapFoldWork, published),
+                        GetAdditionalPersistentPages(_mapFoldWork, published)))
                 {
                     _outcomes[i] = NavigationOperationRejection.CapacityExceeded;
                 }
@@ -521,12 +309,8 @@ internal sealed class NavigationOperationProcessor
                 _foldOperationIndex = i;
                 if (retainedWorkGuard != null
                     && !retainedWorkGuard(
-                        IncludeDeferredClosureBytes(GetAdditionalRetainedBytes(
-                            _overlayFoldWork,
-                            published)),
-                        IncludeDeferredClosurePages(GetAdditionalPersistentPages(
-                            _overlayFoldWork,
-                            published))))
+                        GetAdditionalRetainedBytes(_overlayFoldWork, published),
+                        GetAdditionalPersistentPages(_overlayFoldWork, published)))
                 {
                     _outcomes[i] = NavigationOperationRejection.CapacityExceeded;
                     _candidate = _activeFoldSourceCandidate;
@@ -547,12 +331,8 @@ internal sealed class NavigationOperationProcessor
                 if (_outcomes[i] == NavigationOperationRejection.None
                     && retainedWorkGuard != null
                     && !retainedWorkGuard(
-                        IncludeDeferredClosureBytes(GetAdditionalRetainedBytes(
-                            _overlayFoldWork,
-                            published)),
-                        IncludeDeferredClosurePages(GetAdditionalPersistentPages(
-                            _overlayFoldWork,
-                            published))))
+                        GetAdditionalRetainedBytes(_overlayFoldWork, published),
+                        GetAdditionalPersistentPages(_overlayFoldWork, published)))
                 {
                     _outcomes[i] = NavigationOperationRejection.CapacityExceeded;
                 }
@@ -575,10 +355,8 @@ internal sealed class NavigationOperationProcessor
         if (maintenanceMeter != null
             && retainedWorkGuard != null
             && !retainedWorkGuard(
-                IncludeDeferredClosureBytes(checked(
-                    GetPositiveRetainedDelta(_candidate, published) + _coverageScratchBytes)),
-                IncludeDeferredClosurePages(
-                    GetPositivePersistentPageDelta(_candidate, published))))
+                checked(GetPositiveRetainedDelta(_candidate, published) + _coverageScratchBytes),
+                GetPositivePersistentPageDelta(_candidate, published)))
         {
             _candidate = published;
             for (int i = 0; i < eligibleCount; i++)
@@ -647,7 +425,6 @@ internal sealed class NavigationOperationProcessor
         _sourceCandidateForDeferred = null;
         _deferredCandidate = null;
         _activeFoldSourceCandidate = null;
-        ResetDeferredStructuralClosure();
         ResetSupersedence();
         if (eligibleCount == 0)
             return NavigationOperationFrameResult.None;
@@ -883,34 +660,26 @@ internal sealed class NavigationOperationProcessor
     private long GetActiveAdditionalRetainedBytes()
     {
         NavigationOperationCandidate published = _sourceCandidateForDeferred ?? _candidate;
-        long closureBytes = _deferredStructuralClosureWork?.RetainedBytes ?? 0L;
         if (_mapFoldWork != null)
-            return checked(GetAdditionalRetainedBytes(_mapFoldWork, published) + closureBytes);
+            return GetAdditionalRetainedBytes(_mapFoldWork, published);
         if (_overlayFoldWork != null)
-            return checked(GetAdditionalRetainedBytes(_overlayFoldWork, published) + closureBytes);
-        return checked((_deferredCandidate == null
+            return GetAdditionalRetainedBytes(_overlayFoldWork, published);
+        return _deferredCandidate == null
             ? 0
-            : GetPositiveRetainedDelta(_deferredCandidate, published)) + closureBytes);
+            : GetPositiveRetainedDelta(_deferredCandidate, published);
     }
 
     private int GetActiveAdditionalPersistentPages()
     {
         NavigationOperationCandidate published = _sourceCandidateForDeferred ?? _candidate;
-        int closurePages = _deferredStructuralClosureWork?.PersistentPageCount ?? 0;
         if (_mapFoldWork != null)
-            return checked(GetAdditionalPersistentPages(_mapFoldWork, published) + closurePages);
+            return GetAdditionalPersistentPages(_mapFoldWork, published);
         if (_overlayFoldWork != null)
-            return checked(GetAdditionalPersistentPages(_overlayFoldWork, published) + closurePages);
-        return checked((_deferredCandidate == null
+            return GetAdditionalPersistentPages(_overlayFoldWork, published);
+        return _deferredCandidate == null
             ? 0
-            : GetPositivePersistentPageDelta(_deferredCandidate, published)) + closurePages);
+            : GetPositivePersistentPageDelta(_deferredCandidate, published);
     }
-
-    private long IncludeDeferredClosureBytes(long workBytes) => checked(
-        workBytes + (_deferredStructuralClosureWork?.RetainedBytes ?? 0L));
-
-    private int IncludeDeferredClosurePages(int workPages) => checked(
-        workPages + (_deferredStructuralClosureWork?.PersistentPageCount ?? 0));
 
     private static long GetAdditionalRetainedBytes(
         NavigationMapFoldWork work,
@@ -1026,42 +795,6 @@ internal sealed class NavigationOperationProcessor
 
         for (int i = 0; i < count; i++)
             _pending.RemoveAt(index);
-    }
-
-    private sealed class DeferredStructuralClosureWork
-    {
-        private const long BaseRetainedBytes = 64L;
-
-        internal static long EmptyRetainedBytes => checked(
-            BaseRetainedBytes + PersistentStringMap<bool>.Empty.RetainedBytes);
-
-        internal const int EmptyPersistentPageCount = 1;
-
-        internal DeferredStructuralClosureWork(
-            NavigationOperationCandidate candidate,
-            int processedPrefixCount)
-        {
-            Candidate = candidate;
-            ProcessedPrefixCount = processedPrefixCount;
-        }
-
-        internal NavigationOperationCandidate Candidate { get; }
-        internal int ProcessedPrefixCount { get; }
-        internal PersistentStringMap<bool> Components { get; set; } =
-            PersistentStringMap<bool>.Empty;
-        internal string? PendingComponentKey { get; set; }
-        internal int ExplicitSourceIndex { get; set; }
-        internal int OperationIndex { get; set; }
-        internal int MapIndex { get; set; }
-        internal bool IsReady { get; set; }
-        internal long RetainedBytes => checked(BaseRetainedBytes + Components.RetainedBytes);
-        internal int PersistentPageCount => checked(1 + Components.PersistentNodeCount);
-
-        internal bool Matches(
-            NavigationOperationCandidate candidate,
-            int processedPrefixCount) =>
-            ReferenceEquals(Candidate, candidate)
-            && ProcessedPrefixCount == processedPrefixCount;
     }
 
     private enum PendingOperationKind
@@ -1200,13 +933,4 @@ internal sealed class NavigationOperationProcessor
                 : overlay.DescriptorBytes * 2;
 
     }
-}
-
-internal enum NavigationDeferredStructuralClosureStatus
-{
-    CloseAll,
-    InProgress,
-    Ready,
-    Published,
-    CapacityExceeded
 }

@@ -135,8 +135,7 @@ internal sealed class NavigationDependencySortWork
     {
         if (_collection == Collection.Components)
         {
-            return string.CompareOrdinal(
-                _workspace.EndpointComponents[left],
+            return _workspace.EndpointComponents[left].CompareTo(
                 _workspace.EndpointComponents[right]);
         }
         GraphPageDependencyAddress leftPage = _workspace.EndpointPages[left];

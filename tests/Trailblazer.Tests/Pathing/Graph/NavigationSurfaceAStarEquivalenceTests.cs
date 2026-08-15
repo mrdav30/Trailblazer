@@ -673,6 +673,7 @@ internal static class NavigationAStarExitTestHarness
         var workspace = new NavigationAStarWorkspace(
             Math.Max(1, graph.MapCount),
             endpointPageCapacity: 128,
+            componentCapacity: 130,
             nodeCapacity: 128);
         using var admission = new NavigationQueryAdmissionWork(
             world,
@@ -734,6 +735,7 @@ internal static class NavigationAStarExitTestHarness
         var workspace = new NavigationAStarWorkspace(
             Math.Max(1, graph.MapCount),
             endpointPageCapacity: 128,
+            componentCapacity: 130,
             nodeCapacity: 128);
         using var admission = new NavigationQueryAdmissionWork(
             world,
@@ -958,25 +960,6 @@ internal static class NavigationAStarExitTestHarness
         NavigationMapInstance[] instances,
         NavigationExplicitConnectionIndex? explicitConnections = null)
     {
-        NavigationInstanceDirectory directory = NavigationInstanceDirectory.Create(instances);
-        var changed = PersistentStringMap<bool>.Empty;
-        for (int i = 0; i < instances.Length; i++)
-            changed = changed.Set(instances[i].MapId, true);
-        var work = new NavigationCompositionIndex.UpdateWork(
-            NavigationCompositionIndex.Empty,
-            directory,
-            explicitConnections ?? NavigationExplicitConnectionIndex.Empty,
-            changed,
-            version: 1,
-            new NavigationCompositionWorkspace(Math.Max(1, instances.Length)));
-        var meter = new MaintenanceWorkMeter(
-            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
-        for (int frame = 0; frame < 1_024 && !work.IsComplete; frame++)
-        {
-            work.Advance(meter);
-            meter.Reset();
-        }
-        work.IsComplete.Should().BeTrue();
         NavigationAreaCatalog.Empty.TryPublish(
                 Policy,
                 1,
@@ -985,12 +968,13 @@ internal static class NavigationAStarExitTestHarness
                 1,
                 out NavigationAreaCatalog catalog)
             .Should().Be(NavigationOperationRejection.None);
-        return new NavigationWorldGraph(
+        var graph = new NavigationWorldGraph(
             1,
             instances,
             areaCatalog: catalog,
-            composition: work.Result,
             explicitConnections: explicitConnections);
+        return graph.WithSurfaceComponents(
+            NavigationSurfaceComponentTestFactory.Build(graph));
     }
 
     private static NavigationExplicitConnectionIndex BuildExplicitIndex(
@@ -1102,8 +1086,10 @@ internal static class NavigationAStarExitTestHarness
         Fixed64 edgeCost)
     {
         graph.TryGetNodeAddress(source, out NavigationCellAddress sourceAddress);
-        if (!graph.Composition.GetComponentRecord(sourceAddress.MapId)
-            .AllSurfaceEdgesEuclideanCertified)
+        if (!graph.SurfaceComponents.TryGet(
+                sourceAddress,
+                out NavigationSurfaceComponent component)
+            || !component.AllSurfaceEdgesEuclideanCertified)
         {
             return true;
         }

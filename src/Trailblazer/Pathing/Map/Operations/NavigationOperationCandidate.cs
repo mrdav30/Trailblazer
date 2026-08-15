@@ -23,6 +23,8 @@ internal sealed partial class NavigationOperationCandidate
         NavigationExplicitConnectionIndex.Empty;
     private PersistentStringMap<bool> _explicitChangedSources =
         PersistentStringMap<bool>.Empty;
+    private NavigationConnectionOwnerKeySet _explicitChangedOwners =
+        NavigationConnectionOwnerKeySet.Empty;
     private long _overlaySlotCount;
     private long _overlayConnectionCount;
     private long _overlayTransitionCount;
@@ -59,13 +61,16 @@ internal sealed partial class NavigationOperationCandidate
     internal int NavigationAreaCount => _navigationAreaCount;
 
     internal long RetainedBytes => checked(
-        96L
+        104L
         + _maps.RetainedBytes
         + _bakeVersionHighWater.RetainedBytes
         + _incomingSources.RetainedBytes
         + _gridBindings.RetainedBytes
         + _explicitConnections.RetainedBytes
         + _explicitChangedSources.RetainedBytes
+        + (ReferenceEquals(_explicitChangedOwners, NavigationConnectionOwnerKeySet.Empty)
+            ? 0L
+            : _explicitChangedOwners.RetainedBytes)
         + _mapStateRetainedBytes
         + _incomingSetRetainedBytes);
 
@@ -77,6 +82,9 @@ internal sealed partial class NavigationOperationCandidate
         + _gridBindings.Count
         + _explicitConnections.PersistentPageCount
         + _explicitChangedSources.PersistentNodeCount
+        + (ReferenceEquals(_explicitChangedOwners, NavigationConnectionOwnerKeySet.Empty)
+            ? 0
+            : _explicitChangedOwners.PersistentPageCount)
         + _mapStatePersistentPages
         + _incomingSetPersistentPages);
 
@@ -113,6 +121,7 @@ internal sealed partial class NavigationOperationCandidate
         _workPublishedExplicitConnections = _explicitConnections;
         _workPublishedMaps = _maps;
         _explicitChangedSources = PersistentStringMap<bool>.Empty;
+        _explicitChangedOwners = NavigationConnectionOwnerKeySet.Empty;
     }
 
     internal void RecordPersistentCopies(int copiedNodes, long bytesPerNode = 64L)
@@ -436,6 +445,7 @@ internal sealed partial class NavigationOperationCandidate
             _gridBindings = _gridBindings,
             _explicitConnections = _explicitConnections,
             _explicitChangedSources = _explicitChangedSources,
+            _explicitChangedOwners = _explicitChangedOwners,
             _overlaySlotCount = _overlaySlotCount,
             _overlayConnectionCount = _overlayConnectionCount,
             _overlayTransitionCount = _overlayTransitionCount,
@@ -521,6 +531,60 @@ internal sealed partial class NavigationOperationCandidate
 
     internal bool TryGetState(string mapId, out MapState? state) =>
         _maps.TryGetValue(mapId, out state);
+
+    internal bool TryGetSemanticState(
+        NavigationCellAddress address,
+        out NavigationCellSemanticSource source,
+        out bool hasCell,
+        out NavigationCell cell)
+    {
+        if (!_maps.TryGetValue(address.MapId, out MapState? state) || state == null)
+        {
+            source = default;
+            hasCell = false;
+            cell = default;
+            return false;
+        }
+        int bakedSlot = state.BakedCellLookup.Find(address.Index);
+        bool dynamic = bakedSlot < 0
+            && state.DynamicAddresses.TryGetValue(address.Index, out _);
+        if (bakedSlot < 0 && !dynamic)
+        {
+            source = default;
+            hasCell = false;
+            cell = default;
+            return false;
+        }
+        if (state.Overlay.TryGetCell(
+                address.Index,
+                out NavigationCellOverlayOperation operation))
+        {
+            if (operation.Kind == NavigationCellOverlayOperationKind.Set)
+            {
+                source = dynamic
+                    ? NavigationCellSemanticSource.DynamicOverlaySet
+                    : NavigationCellSemanticSource.OverlaySet;
+                hasCell = true;
+                cell = operation.Cell;
+                return true;
+            }
+            source = NavigationCellSemanticSource.OverlaySuppressed;
+            hasCell = false;
+            cell = default;
+            return true;
+        }
+        if (dynamic)
+        {
+            source = NavigationCellSemanticSource.DynamicInactive;
+            hasCell = false;
+            cell = default;
+            return true;
+        }
+        source = NavigationCellSemanticSource.Baked;
+        hasCell = true;
+        cell = state.Map.CellSpan[bakedSlot].Cell;
+        return true;
+    }
 
     internal bool TryGetOverlay(string mapId, out NavigationMapOverlayState overlay)
     {

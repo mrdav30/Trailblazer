@@ -21,7 +21,8 @@ internal sealed partial class NavigationWorldGraph
 
     private readonly NavigationInstanceDirectory _instances;
     private readonly PersistentGridConfigurationMap<string> _mapIndex;
-    private readonly PersistentStringMap<bool> _closedStructuralComponents;
+    private readonly NavigationSurfaceComponentKeySet _closedStructuralComponents;
+    private readonly NavigationSurfaceComponentKeySet _additionalClosedStructuralComponents;
     private readonly bool _allStructuralComponentsClosed;
     private readonly NavigationExplicitConnectionIndex _explicitConnections;
     private readonly NavigationAutomaticSeamIndex _automaticSeams;
@@ -32,9 +33,9 @@ internal sealed partial class NavigationWorldGraph
         NavigationMapInstance[] instances,
         NavigationAreaCatalog? areaCatalog = null,
         PersistentGridConfigurationMap<string>? mapIndex = null,
-        NavigationCompositionIndex? composition = null,
         NavigationExplicitConnectionIndex? explicitConnections = null,
-        NavigationAutomaticSeamIndex? automaticSeams = null)
+        NavigationAutomaticSeamIndex? automaticSeams = null,
+        NavigationSurfaceComponentIndex? surfaceComponents = null)
     {
         GraphVersion = graphVersion;
         _instances = NavigationInstanceDirectory.Create(instances);
@@ -42,22 +43,23 @@ internal sealed partial class NavigationWorldGraph
         _mapIndex = mapIndex ?? BuildMapIndex(instances);
         _explicitConnections = explicitConnections ?? NavigationExplicitConnectionIndex.Empty;
         _automaticSeams = automaticSeams ?? NavigationAutomaticSeamIndex.Empty;
-        Composition = composition ?? NavigationCompositionIndex.Empty;
-        _closedStructuralComponents = PersistentStringMap<bool>.Empty;
+        SurfaceComponents = surfaceComponents ?? NavigationSurfaceComponentIndex.Empty;
+        _closedStructuralComponents = NavigationSurfaceComponentKeySet.Empty;
+        _additionalClosedStructuralComponents = NavigationSurfaceComponentKeySet.Empty;
         _allStructuralComponentsClosed = false;
         long bytes = checked(
             BaseRetainedBytes
             + _instances.RetainedBytes
             + _mapIndex.RetainedBytes
             + _closedStructuralComponents.RetainedBytes
-            + Composition.RetainedBytes
+            + SurfaceComponents.RetainedBytes
             + _explicitConnections.RetainedBytes
             + _automaticSeams.RetainedBytes
             + AreaCatalog.RetainedBytes);
         PersistentPageCount = _instances.PersistentPageCount
             + 1 + _mapIndex.Count
-            + _closedStructuralComponents.PersistentNodeCount
-            + Composition.PersistentPageCount
+            + _closedStructuralComponents.PersistentPageCount
+            + SurfaceComponents.PersistentPageCount
             + _explicitConnections.PersistentPageCount
             + _automaticSeams.PersistentPageCount
             + AreaCatalog.PersistentPageCount;
@@ -74,10 +76,11 @@ internal sealed partial class NavigationWorldGraph
         NavigationInstanceDirectory instances,
         NavigationAreaCatalog areaCatalog,
         PersistentGridConfigurationMap<string> mapIndex,
-        NavigationCompositionIndex composition,
+        NavigationSurfaceComponentIndex surfaceComponents,
         NavigationExplicitConnectionIndex explicitConnections,
         NavigationAutomaticSeamIndex automaticSeams,
-        PersistentStringMap<bool> closedStructuralComponents,
+        NavigationSurfaceComponentKeySet closedStructuralComponents,
+        NavigationSurfaceComponentKeySet additionalClosedStructuralComponents,
         bool allStructuralComponentsClosed,
         long retainedBytes,
         int persistentPageCount)
@@ -86,10 +89,11 @@ internal sealed partial class NavigationWorldGraph
         _instances = instances;
         AreaCatalog = areaCatalog;
         _mapIndex = mapIndex;
-        Composition = composition;
+        SurfaceComponents = surfaceComponents;
         _explicitConnections = explicitConnections;
         _automaticSeams = automaticSeams;
         _closedStructuralComponents = closedStructuralComponents;
+        _additionalClosedStructuralComponents = additionalClosedStructuralComponents;
         _allStructuralComponentsClosed = allStructuralComponentsClosed;
         RetainedBytes = retainedBytes;
         PersistentPageCount = persistentPageCount;
@@ -104,7 +108,7 @@ internal sealed partial class NavigationWorldGraph
 
     internal NavigationAreaCatalog AreaCatalog { get; }
 
-    internal NavigationCompositionIndex Composition { get; }
+    internal NavigationSurfaceComponentIndex SurfaceComponents { get; }
 
     internal NavigationExplicitConnectionIndex ExplicitConnections => _explicitConnections;
 
@@ -131,7 +135,38 @@ internal sealed partial class NavigationWorldGraph
         && instance.TryGetSlot(address.Index, out int slot)
         && instance.TryGetEffectiveCell(slot, out _);
 
+    internal bool TryGetSemanticState(
+        NavigationCellAddress address,
+        out NavigationCellSemanticSource source,
+        out bool hasCell,
+        out NavigationCell cell)
+    {
+        if (_instances.TryGet(address.MapId, out NavigationMapInstance instance))
+        {
+            return instance.TryGetSemanticState(
+                address.Index,
+                out source,
+                out hasCell,
+                out cell);
+        }
+        source = default;
+        hasCell = false;
+        cell = default;
+        return false;
+    }
+
     internal int MapCount => _instances.Count;
+
+    internal int TotalAddressCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < _instances.Count; i++)
+                count = checked(count + _instances.Get(i).AddressCount);
+            return count;
+        }
+    }
 
     internal bool TryGetCoveredAddressGeneration(
         int configurationOrdinal,
@@ -167,8 +202,28 @@ internal sealed partial class NavigationWorldGraph
         return false;
     }
 
-    internal bool TryGetComponentKey(string mapId, out string componentKey) =>
-        Composition.TryGetComponentKey(mapId, out componentKey!);
+    internal bool TryGetSurfaceComponent(
+        NavigationCellAddress address,
+        out NavigationSurfaceComponentKey key,
+        out long version)
+    {
+        if (SurfaceComponents.TryGet(address, out NavigationSurfaceComponent component))
+        {
+            key = component.Key;
+            version = component.Version;
+            return true;
+        }
+        key = default;
+        version = 0;
+        return false;
+    }
+
+    internal bool AreInSameSurfaceComponent(
+        NavigationCellAddress left,
+        NavigationCellAddress right) =>
+        SurfaceComponents.TryGet(left, out NavigationSurfaceComponent leftComponent)
+        && SurfaceComponents.TryGet(right, out NavigationSurfaceComponent rightComponent)
+        && leftComponent.Key == rightComponent.Key;
 
     internal long RetainedBytes { get; }
 
@@ -180,10 +235,10 @@ internal sealed partial class NavigationWorldGraph
     internal static int EmptyMapIndexPersistentPageCount => 1;
 
     internal static long EmptyClosedStructuralComponentsRetainedBytes =>
-        PersistentStringMap<bool>.Empty.RetainedBytes;
+        NavigationSurfaceComponentKeySet.Empty.RetainedBytes;
 
     internal static int EmptyClosedStructuralComponentsPersistentPageCount =>
-        PersistentStringMap<bool>.Empty.PersistentNodeCount;
+        NavigationSurfaceComponentKeySet.Empty.PersistentPageCount;
 
     internal int LeaseCount => Volatile.Read(ref _leaseCount);
 
@@ -213,50 +268,37 @@ internal sealed partial class NavigationWorldGraph
         return found;
     }
 
-    internal bool IsStructuralScopeClosed(string mapId) =>
+    internal bool IsSurfaceAddressClosed(NavigationCellAddress address) =>
         _allStructuralComponentsClosed
-        || (Composition.TryGetComponentKey(mapId, out string componentKey)
-            && _closedStructuralComponents.ContainsKey(componentKey));
+        || (SurfaceComponents.TryGet(address, out NavigationSurfaceComponent component)
+            && (_closedStructuralComponents.Contains(component.Key)
+                || _additionalClosedStructuralComponents.Contains(component.Key)));
 
-    internal NavigationCompositionIndex.UpdateWork BeginCompositionUpdate(
-        NavigationWorldGraph source,
-        PersistentStringMap<bool> changedMapIds,
-        long compositionVersion,
-        long componentVersion,
-        NavigationCompositionWorkspace workspace) => new(
-            source.Composition,
-            _instances,
-            _explicitConnections,
-            _automaticSeams,
-            changedMapIds,
-            compositionVersion,
-            componentVersion,
-            workspace);
+    internal bool IsSurfaceComponentClosed(NavigationSurfaceComponentKey key) =>
+        _allStructuralComponentsClosed
+        || _closedStructuralComponents.Contains(key)
+        || _additionalClosedStructuralComponents.Contains(key);
 
-    internal NavigationWorldGraph WithComposition(NavigationCompositionIndex composition)
+    internal NavigationWorldGraph WithSurfaceComponents(
+        NavigationSurfaceComponentIndex surfaceComponents)
     {
-        PersistentStringMap<bool> openComponents = PersistentStringMap<bool>.Empty;
-        long bytes = checked(
-            RetainedBytes
-            - Composition.RetainedBytes
-            + composition.RetainedBytes
-            - _closedStructuralComponents.RetainedBytes
-            + openComponents.RetainedBytes);
-        int pages = PersistentPageCount - Composition.PersistentPageCount
-            + composition.PersistentPageCount
-            - _closedStructuralComponents.PersistentNodeCount;
+        if (ReferenceEquals(surfaceComponents, SurfaceComponents))
+            return this;
         return new NavigationWorldGraph(
             GraphVersion,
             _instances,
             AreaCatalog,
             _mapIndex,
-            composition,
+            surfaceComponents,
             _explicitConnections,
             _automaticSeams,
-            openComponents,
-            false,
-            bytes,
-            pages);
+            _closedStructuralComponents,
+            _additionalClosedStructuralComponents,
+            _allStructuralComponentsClosed,
+            checked(RetainedBytes - SurfaceComponents.RetainedBytes
+                + surfaceComponents.RetainedBytes),
+            PersistentPageCount - SurfaceComponents.PersistentPageCount
+                + surfaceComponents.PersistentPageCount);
     }
 
     internal NavigationWorldGraph WithAutomaticSeams(NavigationAutomaticSeamIndex seams)
@@ -268,10 +310,11 @@ internal sealed partial class NavigationWorldGraph
             _instances,
             AreaCatalog,
             _mapIndex,
-            Composition,
+            SurfaceComponents,
             _explicitConnections,
             seams,
             _closedStructuralComponents,
+            _additionalClosedStructuralComponents,
             _allStructuralComponentsClosed,
             checked(RetainedBytes - _automaticSeams.RetainedBytes + seams.RetainedBytes),
             PersistentPageCount - _automaticSeams.PersistentPageCount
@@ -307,12 +350,16 @@ internal sealed partial class NavigationWorldGraph
     }
 
     internal NavigationWorldGraph WithClosedStructuralComponents(
-        PersistentStringMap<bool> closed,
+        NavigationSurfaceComponentKeySet closed,
         bool closeAllStructuralComponents,
         long graphVersion)
     {
         if (ReferenceEquals(closed, _closedStructuralComponents)
-            && closeAllStructuralComponents == _allStructuralComponentsClosed)
+            && ReferenceEquals(
+                _additionalClosedStructuralComponents,
+                NavigationSurfaceComponentKeySet.Empty)
+            && closeAllStructuralComponents == _allStructuralComponentsClosed
+            && graphVersion == GraphVersion)
         {
             return this;
         }
@@ -321,36 +368,116 @@ internal sealed partial class NavigationWorldGraph
             _instances,
             AreaCatalog,
             _mapIndex,
-            Composition,
+            SurfaceComponents,
             _explicitConnections,
             _automaticSeams,
             closed,
+            NavigationSurfaceComponentKeySet.Empty,
             closeAllStructuralComponents,
-            checked(RetainedBytes - _closedStructuralComponents.RetainedBytes + closed.RetainedBytes),
-            PersistentPageCount - _closedStructuralComponents.PersistentNodeCount
-                + closed.PersistentNodeCount);
+            checked(RetainedBytes - GetClosedRootRetainedBytes()
+                + closed.RetainedBytes),
+            PersistentPageCount - GetClosedRootPersistentPages()
+                + closed.PersistentPageCount);
     }
 
-    internal bool HasClosedStructuralScope =>
-        _allStructuralComponentsClosed || _closedStructuralComponents.Count != 0;
-
-    internal NavigationWorldGraph ReopenStructuralScopes(long graphVersion)
+    internal NavigationWorldGraph WithOwnedStructuralClosure(
+        NavigationSurfaceComponentKeySet baseline,
+        NavigationSurfaceComponentKeySet affected,
+        bool closeAllStructuralComponents,
+        long graphVersion)
     {
-        if (!_allStructuralComponentsClosed && _closedStructuralComponents.Count == 0)
-            return this;
-        PersistentStringMap<bool> open = PersistentStringMap<bool>.Empty;
+        if (closeAllStructuralComponents)
+        {
+            return WithClosedStructuralComponents(
+                NavigationSurfaceComponentKeySet.Empty,
+                true,
+                graphVersion);
+        }
+        NavigationSurfaceComponentKeySet additional = ReferenceEquals(baseline, affected)
+            ? NavigationSurfaceComponentKeySet.Empty
+            : affected;
         return new NavigationWorldGraph(
             graphVersion,
             _instances,
             AreaCatalog,
             _mapIndex,
-            Composition,
+            SurfaceComponents,
+            _explicitConnections,
+            _automaticSeams,
+            baseline,
+            additional,
+            false,
+            checked(RetainedBytes - GetClosedRootRetainedBytes()
+                + baseline.RetainedBytes
+                + GetAdditionalClosedRootRetainedBytes(baseline, additional)),
+            PersistentPageCount - GetClosedRootPersistentPages()
+                + baseline.PersistentPageCount
+                + GetAdditionalClosedRootPersistentPages(baseline, additional));
+    }
+
+    internal bool HasClosedStructuralScope =>
+        _allStructuralComponentsClosed
+        || _closedStructuralComponents.Count != 0
+        || _additionalClosedStructuralComponents.Count != 0;
+
+    internal NavigationSurfaceComponentKeySet ClosedStructuralComponents =>
+        _closedStructuralComponents;
+
+    internal bool RetainsClosedComponentRoot(NavigationSurfaceComponentKeySet root) =>
+        ReferenceEquals(root, _closedStructuralComponents)
+        || ReferenceEquals(root, _additionalClosedStructuralComponents);
+
+    private long GetClosedRootRetainedBytes() => checked(
+        _closedStructuralComponents.RetainedBytes
+        + GetAdditionalClosedRootRetainedBytes(
+            _closedStructuralComponents,
+            _additionalClosedStructuralComponents));
+
+    private int GetClosedRootPersistentPages() => checked(
+        _closedStructuralComponents.PersistentPageCount
+        + GetAdditionalClosedRootPersistentPages(
+            _closedStructuralComponents,
+            _additionalClosedStructuralComponents));
+
+    private static long GetAdditionalClosedRootRetainedBytes(
+        NavigationSurfaceComponentKeySet baseline,
+        NavigationSurfaceComponentKeySet additional) =>
+        ReferenceEquals(additional, NavigationSurfaceComponentKeySet.Empty)
+        || ReferenceEquals(additional, baseline)
+            ? 0L
+            : additional.RetainedBytes;
+
+    private static int GetAdditionalClosedRootPersistentPages(
+        NavigationSurfaceComponentKeySet baseline,
+        NavigationSurfaceComponentKeySet additional) =>
+        ReferenceEquals(additional, NavigationSurfaceComponentKeySet.Empty)
+        || ReferenceEquals(additional, baseline)
+            ? 0
+            : additional.PersistentPageCount;
+
+    internal bool AreAllStructuralComponentsClosed => _allStructuralComponentsClosed;
+
+    internal NavigationWorldGraph ReopenStructuralScopes(long graphVersion)
+    {
+        if (!_allStructuralComponentsClosed
+            && _closedStructuralComponents.Count == 0
+            && _additionalClosedStructuralComponents.Count == 0)
+            return this;
+        NavigationSurfaceComponentKeySet open = NavigationSurfaceComponentKeySet.Empty;
+        return new NavigationWorldGraph(
+            graphVersion,
+            _instances,
+            AreaCatalog,
+            _mapIndex,
+            SurfaceComponents,
             _explicitConnections,
             _automaticSeams,
             open,
+            NavigationSurfaceComponentKeySet.Empty,
             false,
-            checked(RetainedBytes - _closedStructuralComponents.RetainedBytes + open.RetainedBytes),
-            PersistentPageCount - _closedStructuralComponents.PersistentNodeCount);
+            checked(RetainedBytes - GetClosedRootRetainedBytes() + open.RetainedBytes),
+            PersistentPageCount - GetClosedRootPersistentPages()
+                + open.PersistentPageCount);
     }
 
     internal int CaptureMaintenanceSnapshot(
@@ -649,7 +776,6 @@ internal sealed partial class NavigationWorldGraph
         long graphVersion)
     {
         NavigationInstanceDirectory changed = _instances;
-        NavigationCompositionIndex composition = Composition;
         long retainedBytes = RetainedBytes;
         int persistentPages = PersistentPageCount;
         for (int affectedIndex = 0; affectedIndex < affectedCount; affectedIndex++)
@@ -686,8 +812,6 @@ internal sealed partial class NavigationWorldGraph
             {
                 next = current.Materialize(baselineCaptures[mapIndex], graphVersion);
             }
-            if (next.PhysicalVersion != current.PhysicalVersion)
-                composition = composition.WithComponentVersion(current.MapId, graphVersion);
             if (!ReferenceEquals(current, next))
             {
                 retainedBytes = checked(retainedBytes - current.RetainedBytes + next.RetainedBytes);
@@ -695,27 +819,22 @@ internal sealed partial class NavigationWorldGraph
                 changed = changed.With(mapIndex, next);
             }
         }
-        if (ReferenceEquals(changed, _instances)
-            && ReferenceEquals(composition, Composition))
-        {
+        if (ReferenceEquals(changed, _instances))
             return this;
-        }
-        retainedBytes = checked(
-            retainedBytes - Composition.RetainedBytes + composition.RetainedBytes);
-        persistentPages = persistentPages - Composition.PersistentPageCount
-            + composition.PersistentPageCount;
-        return new NavigationWorldGraph(
+        var updated = new NavigationWorldGraph(
                 graphVersion,
                 changed,
                 AreaCatalog,
                 _mapIndex,
-                composition,
+                SurfaceComponents,
                 _explicitConnections,
                 _automaticSeams,
                 _closedStructuralComponents,
+                _additionalClosedStructuralComponents,
                 _allStructuralComponentsClosed,
                 retainedBytes,
                 persistentPages);
+        return updated;
     }
 
     internal NavigationWorldGraph WithAreaCatalog(
@@ -731,18 +850,38 @@ internal sealed partial class NavigationWorldGraph
             _instances,
             catalog,
             _mapIndex,
-            Composition,
+            SurfaceComponents,
             _explicitConnections,
             _automaticSeams,
             _closedStructuralComponents,
+            _additionalClosedStructuralComponents,
             _allStructuralComponentsClosed,
             retainedBytes,
             persistentPages);
     }
 
+    internal NavigationWorldGraph WithGraphVersion(long graphVersion)
+    {
+        if (graphVersion == GraphVersion)
+            return this;
+        return new NavigationWorldGraph(
+            graphVersion,
+            _instances,
+            AreaCatalog,
+            _mapIndex,
+            SurfaceComponents,
+            _explicitConnections,
+            _automaticSeams,
+            _closedStructuralComponents,
+            _additionalClosedStructuralComponents,
+            _allStructuralComponentsClosed,
+            RetainedBytes,
+            PersistentPageCount);
+    }
+
     internal bool TryGetDependencyStamp(
         NavigationAreaPolicyKey areaPolicy,
-        ReadOnlySpan<string> componentRepresentativeMapIds,
+        ReadOnlySpan<NavigationSurfaceComponentKey> componentKeys,
         ReadOnlySpan<GraphPageDependencyAddress> pageAddresses,
         out GraphDependencyStamp stamp)
     {
@@ -752,20 +891,18 @@ internal sealed partial class NavigationWorldGraph
             return false;
         }
 
-        var components = new GraphComponentDependency[componentRepresentativeMapIds.Length];
-        string? priorComponent = null;
-        for (int i = 0; i < componentRepresentativeMapIds.Length; i++)
+        var components = new GraphComponentDependency[componentKeys.Length];
+        NavigationSurfaceComponentKey priorComponent = default;
+        for (int i = 0; i < componentKeys.Length; i++)
         {
-            string representative = componentRepresentativeMapIds[i];
-            if (string.IsNullOrEmpty(representative)
-                || (priorComponent != null
-                    && string.CompareOrdinal(priorComponent, representative) >= 0)
-                || !TryGetComponentDependency(representative, out components[i]))
+            NavigationSurfaceComponentKey key = componentKeys[i];
+            if ((i > 0 && priorComponent.CompareTo(key) >= 0)
+                || !TryGetComponentDependency(key, out components[i]))
             {
                 stamp = null!;
                 return false;
             }
-            priorComponent = representative;
+            priorComponent = key;
         }
 
         var pages = new GraphPageDependency[pageAddresses.Length];
@@ -783,7 +920,6 @@ internal sealed partial class NavigationWorldGraph
                 || (mapComparison == 0 && address.PageIndex <= priorPageIndex)
                 || !TryGetPageDependency(
                     address,
-                    componentRepresentativeMapIds,
                     out pages[i]))
             {
                 stamp = null!;
@@ -794,7 +930,6 @@ internal sealed partial class NavigationWorldGraph
         }
 
         stamp = new GraphDependencyStamp(
-            Composition.Version,
             areaPolicy,
             components,
             pages);
@@ -802,21 +937,15 @@ internal sealed partial class NavigationWorldGraph
     }
 
     internal bool TryGetComponentDependency(
-        string representativeMapId,
+        NavigationSurfaceComponentKey key,
         out GraphComponentDependency dependency)
     {
-        if (!string.IsNullOrEmpty(representativeMapId)
-            && !IsStructuralScopeClosed(representativeMapId)
-            && Composition.TryGetComponentRecord(
-                representativeMapId,
-                out NavigationStructuralComponent component)
-            && string.Equals(
-                component.Key,
-                representativeMapId,
-                StringComparison.Ordinal))
+        if (!IsSurfaceComponentClosed(key)
+            && SurfaceComponents.TryGet(key, out NavigationSurfaceComponent component)
+            && component.Key == key)
         {
             dependency = new GraphComponentDependency(
-                representativeMapId,
+                key,
                 component.Version);
             return true;
         }
@@ -826,17 +955,12 @@ internal sealed partial class NavigationWorldGraph
 
     internal bool TryGetPageDependency(
         GraphPageDependencyAddress address,
-        ReadOnlySpan<string> componentRepresentativeMapIds,
         out GraphPageDependency dependency)
     {
         if (!string.IsNullOrEmpty(address.MapId)
             && address.PageIndex >= 0
             && TryGetMap(address.MapId, out NavigationMapInstance? instance)
-            && instance != null
-            && Composition.TryGetComponentRecord(
-                address.MapId,
-                out NavigationStructuralComponent pageComponent)
-            && ContainsOrdinal(componentRepresentativeMapIds, pageComponent.Key))
+            && instance != null)
         {
             dependency = instance.GetPageDependency(address.PageIndex);
             return true;
@@ -848,20 +972,16 @@ internal sealed partial class NavigationWorldGraph
     internal bool IsDependencyCurrent(GraphDependencyStamp stamp)
     {
         if (stamp == null
-            || stamp.CompositionVersion != Composition.Version
             || !AreaCatalog.TryGet(stamp.AreaPolicy, out _))
             return false;
         for (int component = 0; component < stamp.Components.Length; component++)
         {
             GraphComponentDependency dependency = stamp.Components[component];
-            if (IsStructuralScopeClosed(dependency.RepresentativeMapId)
-                || !Composition.TryGetComponentRecord(
-                    dependency.RepresentativeMapId,
-                    out NavigationStructuralComponent current)
-                || !string.Equals(
-                    current.Key,
-                    dependency.RepresentativeMapId,
-                    StringComparison.Ordinal)
+            if (IsSurfaceComponentClosed(dependency.Key)
+                || !SurfaceComponents.TryGet(
+                    dependency.Key,
+                    out NavigationSurfaceComponent current)
+                || current.Key != dependency.Key
                 || current.Version != dependency.Version)
                 return false;
         }
@@ -874,24 +994,6 @@ internal sealed partial class NavigationWorldGraph
                 return false;
         }
         return true;
-    }
-
-    private static bool ContainsOrdinal(ReadOnlySpan<string> values, string value)
-    {
-        int low = 0;
-        int high = values.Length - 1;
-        while (low <= high)
-        {
-            int middle = low + ((high - low) >> 1);
-            int comparison = string.CompareOrdinal(values[middle], value);
-            if (comparison == 0)
-                return true;
-            if (comparison < 0)
-                low = middle + 1;
-            else
-                high = middle - 1;
-        }
-        return false;
     }
 
     private static PersistentGridConfigurationMap<string> BuildMapIndex(

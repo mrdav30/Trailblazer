@@ -236,7 +236,6 @@ internal sealed class NavigationEndpointResolutionWork
             {
                 _workspace.CoveredAddressGenerations[0] = generation;
                 _workspace.CoveredAddressGenerationCount = 1;
-                RecordComponent(_endpoint.MapId);
             }
             _mapOrdinal = 1;
             _discoveryComplete = true;
@@ -251,7 +250,6 @@ internal sealed class NavigationEndpointResolutionWork
         {
             _workspace.CoveredAddressGenerations[
                 _workspace.CoveredAddressGenerationCount++] = generationAtOrdinal;
-            RecordComponent(mapId);
         }
         _mapOrdinal++;
         _discoveryComplete = _mapOrdinal >= _graph.MapCount;
@@ -290,6 +288,11 @@ internal sealed class NavigationEndpointResolutionWork
         }
 
         var address = new NavigationCellAddress(mapId, candidate.VoxelIndex);
+        if (!_graph.TryGetSurfaceComponent(address, out _, out _))
+        {
+            Finish(NavigationEndpointResolutionStatus.Stale);
+            return false;
+        }
         if (!_hasResult
             || distance < Result.ResolutionDistance
             || (distance == Result.ResolutionDistance
@@ -302,16 +305,6 @@ internal sealed class NavigationEndpointResolutionWork
             _hasResult = true;
         }
         return true;
-    }
-
-    private void RecordComponent(string mapId)
-    {
-        if (!_graph.TryGetComponentKey(mapId, out string componentKey))
-            return;
-        if (!_workspace.TryRecordEndpointComponent(componentKey))
-        {
-            Finish(NavigationEndpointResolutionStatus.CapacityExceeded);
-        }
     }
 
     private bool TryGetBounds(out Vector3d minimum, out Vector3d maximum)
@@ -338,6 +331,20 @@ internal sealed class NavigationEndpointResolutionWork
     private NavigationEndpointResolutionStatus Finish(
         NavigationEndpointResolutionStatus status)
     {
+        if (status == NavigationEndpointResolutionStatus.Success)
+        {
+            if (!_graph.TryGetSurfaceComponent(
+                    Result.Address,
+                    out NavigationSurfaceComponentKey componentKey,
+                    out _))
+            {
+                status = NavigationEndpointResolutionStatus.Stale;
+            }
+            else if (!_workspace.TryRecordEndpointComponent(componentKey))
+            {
+                status = NavigationEndpointResolutionStatus.CapacityExceeded;
+            }
+        }
         Status = status;
         if (status != NavigationEndpointResolutionStatus.Success)
             Result = default;

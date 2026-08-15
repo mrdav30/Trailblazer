@@ -500,12 +500,6 @@ public sealed class NavigationOperationProcessorTests
         first.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
         later.Receipt.Status.Should().Be(NavigationOperationStatus.Pending);
         processor.Candidate.MapCount.Should().Be(0);
-        processor.AdvanceDeferredStructuralClosure(
-                NavigationWorldGraph.Empty,
-                meter,
-                static (_, _) => true,
-                out _)
-            .Should().Be(NavigationDeferredStructuralClosureStatus.CloseAll);
         int frame = 1;
         while (later.Receipt.Status == NavigationOperationStatus.Pending && frame < 32)
         {

@@ -130,7 +130,8 @@ internal static class NavigationGraphBenchmarkScenario
             maxAStarReusablePayloadBytes: Math.Max(16_777_216L, maximumPayloadBytes * cacheEntries),
             maxAStarSinglePayloadBytes: maximumPayloadBytes,
             maxAStarActivePayloadBytes: checked(maximumPayloadBytes * concurrentQueries),
-            maxAStarActivePayloadLeases: concurrentQueries);
+            maxAStarActivePayloadLeases: concurrentQueries,
+            aStarWorkspaceComponentCapacity: 1);
         TrailblazerWorldContextSettings defaults = TrailblazerWorldContextSettings.Default;
         return new TrailblazerWorldContextSettings(
             defaults.OperationLimits,

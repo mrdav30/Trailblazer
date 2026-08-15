@@ -27,7 +27,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
     private readonly int _maxPersistentGraphPages;
     private readonly NavigationCandidatePublisher _publishCandidate;
     private readonly NavigationRetainedWorkGuard _retainedWorkGuard;
-    private readonly NavigationCompositionWorkspace _compositionWorkspace;
     private readonly Action _maintainSnapshot;
     private readonly GridEventInfo[] _maintenanceEvents;
     private readonly NavigationGridChangeScope[] _blockedScopes;
@@ -62,13 +61,11 @@ internal sealed class NavigationGraphRuntime : IDisposable
     private readonly int[] _affectedMapStamps;
     private int _affectedMapStamp;
     private int _lastAffectedMapCollectionCount;
-    private int _lastCompletedCopiedNodes;
-    private int _lastCompletedCopiedReverse;
-    private int _lastCompletedCopiedComponents;
-    private int _lastCompletedCopiedMemberships;
     private bool _publishedThisMaintenance;
     private bool _automaticSeamFullRebuildPending;
     private bool _operationClosureRollbackPending;
+    private NavigationSurfaceComponentKeySet? _ownedStructuralClosureBaseline;
+    private bool _ownedStructuralClosureBaselineAll;
     private bool _resetPending;
     private bool _disposed;
 
@@ -117,8 +114,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
         _affectedMapStamps = new int[settings.OperationLimits.MaxMaps];
         _publishCandidate = PublishPendingCandidate;
         _retainedWorkGuard = IsOperationWithinRetainedWorkCapacity;
-        _compositionWorkspace = new NavigationCompositionWorkspace(
-            settings.OperationLimits.MaxMaps);
         _maintainSnapshot = MaintainSnapshot;
     }
 
@@ -145,7 +140,8 @@ internal sealed class NavigationGraphRuntime : IDisposable
 
     internal long RetainedCompositionWorkBytes => checked(
         (_compositionWork?.RetainedBytes ?? 0L)
-        + (_lifecycleWork?.RetainedBytes ?? 0L));
+        + (_lifecycleWork?.RetainedBytes ?? 0L)
+        + GetOwnedClosureBaselineAdditionalRetainedBytes());
 
     internal long RetainedOperationWorkBytes => _operations.RetainedOperationWorkBytes;
 
@@ -154,21 +150,10 @@ internal sealed class NavigationGraphRuntime : IDisposable
     internal int RetainedCompositionWorkPageCount =>
         checked(
             (_compositionWork?.PersistentPageCount ?? 0)
-            + (_lifecycleWork?.PersistentPageCount ?? 0));
+            + (_lifecycleWork?.PersistentPageCount ?? 0)
+            + GetOwnedClosureBaselineAdditionalPersistentPages());
 
     internal int RetainedOperationWorkPageCount => _operations.RetainedOperationWorkPageCount;
-
-    internal int CompositionCopiedNodeRecords =>
-        _compositionWork?.CopiedNodeRecords ?? _lastCompletedCopiedNodes;
-
-    internal int CompositionCopiedReverseRecords =>
-        _compositionWork?.CopiedReverseRecords ?? _lastCompletedCopiedReverse;
-
-    internal int CompositionCopiedComponentRecords =>
-        _compositionWork?.CopiedComponentRecords ?? _lastCompletedCopiedComponents;
-
-    internal int CompositionCopiedMembershipRecords =>
-        _compositionWork?.CopiedMembershipRecords ?? _lastCompletedCopiedMemberships;
 
     internal MaintenanceWorkMeter MaintenanceMeter => _maintenanceMeter;
 
@@ -291,8 +276,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
         if (operationResult == NavigationOperationFrameResult.Deferred)
         {
             _publicationAreaCatalog = before.AreaCatalog;
-            if (_compositionWork != null)
-                _operations.RelinquishDeferredStructuralClosure();
             long retainedWorkBytes = checked(
                 _operations.RetainedOperationWorkBytes
                 + (_compositionWork?.RetainedBytes ?? 0L));
@@ -324,40 +307,27 @@ internal sealed class NavigationGraphRuntime : IDisposable
             else if (!_publishedThisMaintenance)
             {
                 NavigationWorldGraph publishedGraph = _store.Current;
-                NavigationDeferredStructuralClosureStatus closureStatus =
-                    _operations.AdvanceDeferredStructuralClosure(
-                        publishedGraph,
-                        _maintenanceMeter,
-                        _retainedWorkGuard,
-                        out PersistentStringMap<bool> closedComponents);
-                if (closureStatus == NavigationDeferredStructuralClosureStatus.CapacityExceeded
-                    || !IsWithinRetainedWorkCapacity(
+                if (!IsWithinRetainedWorkCapacity(
                         _operations.RetainedOperationWorkBytes,
                         _operations.RetainedOperationWorkPageCount))
                 {
                     _operations.RejectDeferredCapacity();
                     BeginOperationClosureRollback();
                 }
-                else if (closureStatus != NavigationDeferredStructuralClosureStatus.Published)
+                else
                 {
                     long safetyVersion = publishedGraph.GraphVersion + 1;
-                    bool closeAll = closureStatus is NavigationDeferredStructuralClosureStatus.CloseAll
-                        or NavigationDeferredStructuralClosureStatus.InProgress;
+                    CaptureOwnedStructuralClosureBaseline(publishedGraph);
                     NavigationWorldGraph closed = publishedGraph.WithClosedStructuralComponents(
-                        closeAll ? PersistentStringMap<bool>.Empty : closedComponents,
-                        closeAll,
+                        NavigationSurfaceComponentKeySet.Empty,
+                        true,
                         safetyVersion);
                     NavigationCandidatePublication closurePublication = ReconcileAndPublish(
                         closed,
                         Array.Empty<NavigationOperationFrameChange>(),
                         0,
                         safetyVersion);
-                    if (closurePublication == NavigationCandidatePublication.Published
-                        && closureStatus == NavigationDeferredStructuralClosureStatus.Ready)
-                    {
-                        _operations.MarkDeferredStructuralClosurePublished();
-                    }
-                    else if (closurePublication == NavigationCandidatePublication.PermanentCapacity)
+                    if (closurePublication == NavigationCandidatePublication.PermanentCapacity)
                     {
                         _operations.RejectDeferredCapacity();
                         BeginOperationClosureRollback();
@@ -483,7 +453,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
             if (_automaticSeamFullRebuildPending && !startAutomaticSeamLifecycle)
             {
                 next = next.WithClosedStructuralComponents(
-                    PersistentStringMap<bool>.Empty,
+                    NavigationSurfaceComponentKeySet.Empty,
                     true,
                     graphVersion);
             }
@@ -581,7 +551,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
     {
         eventsRequeued = false;
         NavigationWorldGraph closed = prepared.WithClosedStructuralComponents(
-            PersistentStringMap<bool>.Empty,
+            NavigationSurfaceComponentKeySet.Empty,
             true,
             graphVersion);
         long minimumBytes = checked(
@@ -617,7 +587,6 @@ internal sealed class NavigationGraphRuntime : IDisposable
             closed,
             _maintenanceEvents,
             _lifecycleEventCount,
-            _compositionWorkspace,
             _automaticSeamFullRebuildPending);
         return NavigationCandidatePublication.Published;
     }
@@ -720,7 +689,8 @@ internal sealed class NavigationGraphRuntime : IDisposable
             slot >= instance.BakedSlotCount,
             hasCell,
             cell,
-            instance.IsMaterialized && !graph.IsStructuralScopeClosed(mapId),
+            instance.IsMaterialized
+                && !graph.IsSurfaceAddressClosed(new NavigationCellAddress(mapId, index)),
             isPresent,
             obstacleCount,
             instance.GridIdentity.GridSpawnToken);
@@ -749,12 +719,8 @@ internal sealed class NavigationGraphRuntime : IDisposable
             if (_baselineRebuilds.GetValueAt(i).IsCapacityBlocked)
                 baselineCapacityBlockedCount++;
         }
-        long compositionWorkBytes = checked(
-            (_compositionWork?.RetainedBytes ?? 0L)
-            + (_lifecycleWork?.RetainedBytes ?? 0L));
-        int compositionWorkPages = checked(
-            (_compositionWork?.PersistentPageCount ?? 0)
-            + (_lifecycleWork?.PersistentPageCount ?? 0));
+        long compositionWorkBytes = RetainedCompositionWorkBytes;
+        int compositionWorkPages = RetainedCompositionWorkPageCount;
         long operationWorkBytes = _operations.RetainedOperationWorkBytes;
         int operationWorkPages = _operations.RetainedOperationWorkPageCount;
         var maps = new NavigationGraphMapDiagnostic[graph.MapCount];
@@ -762,12 +728,18 @@ internal sealed class NavigationGraphRuntime : IDisposable
         bool truncated = false;
         for (int i = 0; i < graph.MapCount; i++)
         {
-            maps[i] = graph.GetInstance(i).CreateDiagnostic(
+            NavigationMapInstance instance = graph.GetInstance(i);
+            GetSurfaceComponentDiagnostic(
+                graph,
+                instance,
+                out int componentId,
+                out long componentVersion);
+            maps[i] = instance.CreateDiagnostic(
                 remaining,
-                graph.Composition.GetComponentId(i),
-                graph.Composition.GetComponentVersion(i),
+                componentId,
+                componentVersion,
                 graph.ExplicitConnections.GetActiveIncidentEdgeCount(
-                    graph.GetInstance(i).MapId),
+                    instance.MapId),
                 out bool mapTruncated);
             remaining -= maps[i].Cells.Count;
             truncated |= mapTruncated;
@@ -802,6 +774,48 @@ internal sealed class NavigationGraphRuntime : IDisposable
             maps);
     }
 
+    private static void GetSurfaceComponentDiagnostic(
+        NavigationWorldGraph graph,
+        NavigationMapInstance instance,
+        out int componentId,
+        out long componentVersion)
+    {
+        componentId = 0;
+        componentVersion = 0;
+        NavigationSurfaceComponentKey selected = default;
+        bool found = false;
+        int bakedCursor = 0;
+        int dynamicCursor = 0;
+        Span<GridForge.Spatial.VoxelIndex> address =
+            stackalloc GridForge.Spatial.VoxelIndex[1];
+        for (int ordinal = 0; ordinal < instance.AddressCount; ordinal++)
+        {
+            instance.CopyCanonicalAddressChunk(
+                ref bakedCursor,
+                ref dynamicCursor,
+                address);
+            var exact = new NavigationCellAddress(instance.MapId, address[0]);
+            if (!graph.HasEffectiveCell(exact)
+                || !graph.TryGetSurfaceComponent(exact, out NavigationSurfaceComponentKey key, out long version))
+            {
+                continue;
+            }
+            if (!found)
+            {
+                selected = key;
+                componentId = key.GetHashCode();
+                componentVersion = version;
+                found = true;
+            }
+            else if (key != selected)
+            {
+                componentId = -1;
+                componentVersion = 0;
+                return;
+            }
+        }
+    }
+
     internal void Reset()
     {
         EnsureUsable();
@@ -816,6 +830,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
         _lifecycleEventCount = 0;
         _automaticSeamFullRebuildPending = false;
         _operationClosureRollbackPending = false;
+        ClearOwnedStructuralClosureBaseline();
         Array.Clear(_baselineCaptures, 0, _baselineCaptures.Length);
         _resetPending = _store.TryPublish(
             NavigationWorldGraph.CreateEmpty(_store.Current.GraphVersion + 1))
@@ -912,9 +927,11 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 _compositionWork = null;
                 return NavigationCandidatePublication.PermanentCapacity;
             }
+            long completedVersion = checked(_store.Current.GraphVersion + 1);
             NavigationWorldGraph completed = _compositionWork.Result.WithAreaCatalog(
                 areaCatalog,
-                _compositionWork.Result.GraphVersion);
+                completedVersion).WithGraphVersion(completedVersion);
+            completed = PreservePriorStructuralClosures(completed);
             if (!completed.IsWithinDynamicSlotCapacity(_maxDynamicSlotsPerMap, _maxDynamicSlots))
             {
                 if (!TryRollbackCompositionClosure())
@@ -926,7 +943,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 completed,
                 changes,
                 changeCount,
-                completed.GraphVersion);
+                completedVersion);
             if (completedPublication == NavigationCandidatePublication.PermanentCapacity
                 && !TryRollbackCompositionClosure())
             {
@@ -934,8 +951,9 @@ internal sealed class NavigationGraphRuntime : IDisposable
             }
             if (completedPublication != NavigationCandidatePublication.Deferred)
             {
-                CaptureCompletedCompositionCounters();
                 _compositionWork = null;
+                if (completedPublication == NavigationCandidatePublication.Published)
+                    ClearOwnedStructuralClosureBaseline();
             }
             return completedPublication;
         }
@@ -976,17 +994,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 candidate,
                 changes,
                 changeCount,
-                hasStructuralChanges,
-                _compositionWorkspace);
-            PersistentStringMap<bool> publishedAffectedComponents =
-                PersistentStringMap<bool>.Empty;
-            bool preserveExactClosure = hasStructuralChanges
-                && _operations.TryGetPublishedDeferredStructuralClosure(
-                    candidate,
-                    out publishedAffectedComponents);
-            if (preserveExactClosure)
-                work.AdoptPublishedAffectedClosure(publishedAffectedComponents);
-            ResetCompletedCompositionCounters();
+                hasStructuralChanges);
             GetCompositionWorkAllowance(out long initialBytes, out int initialPages);
             if (!work.Advance(
                     _maintenanceMeter,
@@ -996,17 +1004,18 @@ internal sealed class NavigationGraphRuntime : IDisposable
             {
                 if (initialCapacityExceeded)
                     return NavigationCandidatePublication.PermanentCapacity;
-                NavigationWorldGraph closed = preserveExactClosure
-                    ? current
-                    : hasStructuralChanges
-                    ? current.WithClosedStructuralComponents(
+                if (hasStructuralChanges)
+                    CaptureOwnedStructuralClosureBaseline(current);
+                NavigationWorldGraph closed = hasStructuralChanges
+                    ? CreateOwnedStructuralClosure(
+                        current,
                         work.AffectedComponents,
                         !work.IsChangedMapCaptureComplete,
                         current.GraphVersion + 1)
                     : current;
                 if (!IsWithinRetainedWorkCapacity(
-                        GetCombinedCompositionWorkBytes(work),
-                        GetCombinedCompositionWorkPages(work),
+                        GetCombinedCompositionWorkBytes(work, closed),
+                        GetCombinedCompositionWorkPages(work, closed),
                         closed))
                 {
                     return NavigationCandidatePublication.PermanentCapacity;
@@ -1023,7 +1032,7 @@ internal sealed class NavigationGraphRuntime : IDisposable
                 }
                 if (hasStructuralChanges)
                 {
-                    if (preserveExactClosure || work.IsChangedMapCaptureComplete)
+                    if (work.IsChangedMapCaptureComplete)
                         work.MarkAffectedClosurePublished();
                     else
                         work.MarkAllClosePublished();
@@ -1037,22 +1046,21 @@ internal sealed class NavigationGraphRuntime : IDisposable
             {
                 return NavigationCandidatePublication.PermanentCapacity;
             }
-            completedStructural = work.Result;
-            _lastCompletedCopiedNodes = work.CopiedNodeRecords;
-            _lastCompletedCopiedReverse = work.CopiedReverseRecords;
-            _lastCompletedCopiedComponents = work.CopiedComponentRecords;
-            _lastCompletedCopiedMemberships = work.CopiedMembershipRecords;
+            completedStructural = PreservePriorStructuralClosures(work.Result);
         }
         NavigationWorldGraph next = changeCount == 0
             ? current.ReopenStructuralScopes(nextVersion)
             : completedStructural!;
         if (!next.IsWithinDynamicSlotCapacity(_maxDynamicSlotsPerMap, _maxDynamicSlots))
             return NavigationCandidatePublication.PermanentCapacity;
-        return ReconcileAndPublish(
+        NavigationCandidatePublication publication = ReconcileAndPublish(
             next.WithAreaCatalog(areaCatalog, nextVersion),
             changes,
             changeCount,
             nextVersion);
+        if (publication == NavigationCandidatePublication.Published)
+            ClearOwnedStructuralClosureBaseline();
+        return publication;
     }
 
     private bool IsWithinRetainedWorkCapacity(
@@ -1086,7 +1094,9 @@ internal sealed class NavigationGraphRuntime : IDisposable
         NavigationStructuralCompositionWork work)
     {
         NavigationWorldGraph current = _store.Current;
-        NavigationWorldGraph narrowed = current.WithClosedStructuralComponents(
+        CaptureOwnedStructuralClosureBaseline(current);
+        NavigationWorldGraph narrowed = CreateOwnedStructuralClosure(
+            current,
             work.AffectedComponents,
             false,
             current.GraphVersion + 1);
@@ -1109,8 +1119,9 @@ internal sealed class NavigationGraphRuntime : IDisposable
         NavigationStructuralCompositionWork work)
     {
         NavigationWorldGraph current = _store.Current;
+        CaptureOwnedStructuralClosureBaseline(current);
         NavigationWorldGraph closed = current.WithClosedStructuralComponents(
-            PersistentStringMap<bool>.Empty,
+            NavigationSurfaceComponentKeySet.Empty,
             true,
             current.GraphVersion + 1);
         if (ReferenceEquals(current, closed))
@@ -1137,40 +1148,100 @@ internal sealed class NavigationGraphRuntime : IDisposable
     {
         if (_automaticSeamFullRebuildPending || _publishedThisMaintenance)
             return false;
-        NavigationWorldGraph current = _store.Current;
-        NavigationWorldGraph reopened = current.ReopenStructuralScopes(current.GraphVersion + 1);
-        if (ReferenceEquals(current, reopened))
+        if (_ownedStructuralClosureBaseline == null)
             return true;
+        NavigationWorldGraph current = _store.Current;
+        NavigationWorldGraph reopened = current.WithClosedStructuralComponents(
+            _ownedStructuralClosureBaseline,
+            _ownedStructuralClosureBaselineAll,
+            current.GraphVersion + 1);
+        if (ReferenceEquals(current, reopened))
+        {
+            ClearOwnedStructuralClosureBaseline();
+            return true;
+        }
         if (_store.TryPublish(reopened) != NavigationCandidatePublication.Published)
             return false;
         _publishedThisMaintenance = true;
+        ClearOwnedStructuralClosureBaseline();
         return true;
     }
 
-    private void CaptureCompletedCompositionCounters()
+    private void CaptureOwnedStructuralClosureBaseline(NavigationWorldGraph graph)
     {
-        _lastCompletedCopiedNodes = _compositionWork!.CopiedNodeRecords;
-        _lastCompletedCopiedReverse = _compositionWork.CopiedReverseRecords;
-        _lastCompletedCopiedComponents = _compositionWork.CopiedComponentRecords;
-        _lastCompletedCopiedMemberships = _compositionWork.CopiedMembershipRecords;
+        if (_ownedStructuralClosureBaseline != null)
+            return;
+        _ownedStructuralClosureBaseline = graph.ClosedStructuralComponents;
+        _ownedStructuralClosureBaselineAll = graph.AreAllStructuralComponentsClosed;
     }
 
-    private void ResetCompletedCompositionCounters()
+    private NavigationWorldGraph CreateOwnedStructuralClosure(
+        NavigationWorldGraph graph,
+        NavigationSurfaceComponentKeySet affected,
+        bool closeAll,
+        long graphVersion)
     {
-        _lastCompletedCopiedNodes = 0;
-        _lastCompletedCopiedReverse = 0;
-        _lastCompletedCopiedComponents = 0;
-        _lastCompletedCopiedMemberships = 0;
+        return graph.WithOwnedStructuralClosure(
+            _ownedStructuralClosureBaseline!,
+            affected,
+            closeAll || _ownedStructuralClosureBaselineAll,
+            graphVersion);
+    }
+
+    private NavigationWorldGraph PreservePriorStructuralClosures(
+        NavigationWorldGraph graph) => _ownedStructuralClosureBaseline == null
+            ? graph
+            : graph.WithClosedStructuralComponents(
+                _ownedStructuralClosureBaseline,
+                _ownedStructuralClosureBaselineAll,
+                graph.GraphVersion);
+
+    private void ClearOwnedStructuralClosureBaseline()
+    {
+        _ownedStructuralClosureBaseline = null;
+        _ownedStructuralClosureBaselineAll = false;
     }
 
     private bool IsOperationWithinRetainedWorkCapacity(long workBytes, int workPages) =>
         IsWithinRetainedWorkCapacity(workBytes, workPages);
 
-    private long GetCombinedCompositionWorkBytes(NavigationStructuralCompositionWork work) =>
-        checked(work.RetainedBytes + _operations.RetainedOperationWorkBytes);
+    private long GetCombinedCompositionWorkBytes(
+        NavigationStructuralCompositionWork work,
+        NavigationWorldGraph? ownerGraph = null) =>
+        checked(
+            work.RetainedBytes
+            + _operations.RetainedOperationWorkBytes
+            + GetOwnedClosureBaselineAdditionalRetainedBytes(ownerGraph));
 
-    private int GetCombinedCompositionWorkPages(NavigationStructuralCompositionWork work) =>
-        checked(work.PersistentPageCount + _operations.RetainedOperationWorkPageCount);
+    private int GetCombinedCompositionWorkPages(
+        NavigationStructuralCompositionWork work,
+        NavigationWorldGraph? ownerGraph = null) =>
+        checked(
+            work.PersistentPageCount
+            + _operations.RetainedOperationWorkPageCount
+            + GetOwnedClosureBaselineAdditionalPersistentPages(ownerGraph));
+
+    private long GetOwnedClosureBaselineAdditionalRetainedBytes(
+        NavigationWorldGraph? ownerGraph = null)
+    {
+        NavigationSurfaceComponentKeySet? baseline = _ownedStructuralClosureBaseline;
+        return baseline == null
+            || ReferenceEquals(baseline, NavigationSurfaceComponentKeySet.Empty)
+            || (ownerGraph ?? _store.Current).RetainsClosedComponentRoot(baseline)
+                ? 0L
+                : baseline.RetainedBytes;
+    }
+
+    private int GetOwnedClosureBaselineAdditionalPersistentPages(
+        NavigationWorldGraph? ownerGraph = null)
+    {
+        NavigationSurfaceComponentKeySet? baseline = _ownedStructuralClosureBaseline;
+        return baseline == null
+            || ReferenceEquals(baseline, NavigationSurfaceComponentKeySet.Empty)
+            || (ownerGraph ?? _store.Current).RetainsClosedComponentRoot(baseline)
+                ? 0
+                : baseline.PersistentPageCount;
+    }
 
     private void GetCompositionWorkAllowance(out long bytes, out int pages)
     {
@@ -1182,11 +1253,13 @@ internal sealed class NavigationGraphRuntime : IDisposable
         bytes = _maxActiveSnapshotBytes
             - current.RetainedBytes
             - rebuildBytes
-            - _operations.RetainedOperationWorkBytes;
+            - _operations.RetainedOperationWorkBytes
+            - GetOwnedClosureBaselineAdditionalRetainedBytes();
         pages = _maxPersistentGraphPages
             - current.PersistentPageCount
             - rebuildPages
-            - _operations.RetainedOperationWorkPageCount;
+            - _operations.RetainedOperationWorkPageCount
+            - GetOwnedClosureBaselineAdditionalPersistentPages();
     }
 
     private NavigationCandidatePublication PublishPendingCandidate(

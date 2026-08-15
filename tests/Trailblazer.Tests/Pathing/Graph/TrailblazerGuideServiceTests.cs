@@ -536,8 +536,11 @@ public sealed class TrailblazerGuideServiceTests
         using (NavigationWorldGraphLease graphLease =
                TestRequire.NotNull(context.Pathing.TryAcquireNavigationGraph()))
         {
-            graphLease.Graph.Composition.GetComponentRecord(mapId)
-                .AllSurfaceEdgesEuclideanCertified.Should().BeFalse(
+            graphLease.Graph.SurfaceComponents.TryGet(
+                    new NavigationCellAddress(mapId, default),
+                    out NavigationSurfaceComponent component)
+                .Should().BeTrue();
+            component.AllSurfaceEdgesEuclideanCertified.Should().BeFalse(
                     "the exact expansion boundary requires Dijkstra ordering across the full plane");
         }
         binding.TryGetCellPrism(default, out GridCellPrism startPrism).Should().BeTrue();

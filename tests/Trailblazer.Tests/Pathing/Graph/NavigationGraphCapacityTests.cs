@@ -385,6 +385,10 @@ public sealed class NavigationGraphCapacityTests
     {
         TrailblazerWorldContextSettings settings = TrailblazerWorldContextSettings.Default;
         using TrailblazerWorldContext context = TrailblazerWorldContext.CreateOwned(settings: settings);
+        long maximumObservedActiveSnapshotBytes =
+            context.Pathing.GetNavigationGraphDiagnostics().ActiveSnapshotBytes;
+        int maximumObservedPersistentGraphPages =
+            context.Pathing.GetNavigationGraphDiagnostics().PersistentGraphPageCount;
         long sequence = 0;
         for (int mapIndex = 0; mapIndex < 4; mapIndex++)
         {
@@ -412,7 +416,15 @@ public sealed class NavigationGraphCapacityTests
                 context.FrameCount + 1);
             context.Pathing.Admit(install).Should().BeTrue();
             for (int frame = 0; frame < 64 && install.Receipt.Status == NavigationOperationStatus.Pending; frame++)
+            {
                 context.Simulate();
+                maximumObservedActiveSnapshotBytes = Math.Max(
+                    maximumObservedActiveSnapshotBytes,
+                    context.Pathing.GetNavigationGraphDiagnostics().ActiveSnapshotBytes);
+                maximumObservedPersistentGraphPages = Math.Max(
+                    maximumObservedPersistentGraphPages,
+                    context.Pathing.GetNavigationGraphDiagnostics().PersistentGraphPageCount);
+            }
             install.Receipt.Status.Should().Be(NavigationOperationStatus.Applied);
 
             var cells = new NavigationCellOverlayOperation[settings.OperationLimits.MaxOverlayCellsPerMap];
@@ -475,29 +487,48 @@ public sealed class NavigationGraphCapacityTests
                     frame++)
                 {
                     context.Simulate();
+                    maximumObservedActiveSnapshotBytes = Math.Max(
+                        maximumObservedActiveSnapshotBytes,
+                        context.Pathing.GetNavigationGraphDiagnostics().ActiveSnapshotBytes);
+                    maximumObservedPersistentGraphPages = Math.Max(
+                        maximumObservedPersistentGraphPages,
+                        context.Pathing.GetNavigationGraphDiagnostics().PersistentGraphPageCount);
                 }
                 operation.Receipt.Status.Should().Be(
                     NavigationOperationStatus.Applied,
-                    "map {0} delta {1} should be legal; rejection was {2}",
+                    "map {0} delta {1} should be legal; rejection was {2}; active={3}, pages={4}, peak={5}",
                     mapIndex,
                     delta,
-                    operation.Receipt.Rejection);
+                    operation.Receipt.Rejection,
+                    context.Pathing.GetNavigationGraphDiagnostics().ActiveSnapshotBytes,
+                    context.Pathing.GetNavigationGraphDiagnostics().PersistentGraphPageCount,
+                    maximumObservedActiveSnapshotBytes);
             }
         }
 
         NavigationGraphDiagnosticsSnapshot diagnostics = context.Pathing.GetNavigationGraphDiagnostics();
+        maximumObservedActiveSnapshotBytes.Should().Be(31_860_608,
+            "the active envelope includes the published root plus retained operation, "
+            + "composition, and exact affected-component work at the largest overlay boundary "
+            + "after deleting the 64-byte test-only full-graph component scan state");
+        maximumObservedPersistentGraphPages.Should().Be(399_592,
+            "the conservative page envelope counts shared persistent ownership at every "
+            + "unpublished work boundary; calibration proved 399,591 rejects the final cell overlay");
         diagnostics.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(settings.MaxActiveSnapshotBytes);
         diagnostics.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(settings.MaxPersistentGraphPages);
-        diagnostics.ActiveSnapshotBytes.Should().Be(12_954_112,
+        diagnostics.ActiveSnapshotBytes.Should().Be(14_509_872,
             "endpoint incidence adds a 32-byte index field block, a 288-byte outer root, "
             + "262,528 bytes for four 1,025-address inner maps, and 885,600 bytes for "
             + "4,100 one-page owner rows; the automatic seam index adds its 224-byte "
             + "empty immutable root; four published map instances each retain one new "
-            + "8-byte grid high-water sequence (32 bytes total)");
-        diagnostics.PersistentGraphPageCount.Should().Be(127_626,
+            + "8-byte grid high-water sequence (32 bytes total); the exact surface-component "
+            + "membership, record, and member-sequence ownership remains after deleting the "
+            + "2,080-byte duplicate composition carrier");
+        diagnostics.PersistentGraphPageCount.Should().Be(148_089,
             "the endpoint index adds one root page, 4 outer/4,100 inner nodes, and "
             + "12,300 fixed-row pages for the 4,100 distinct endpoint addresses; the "
-            + "empty automatic seam index owns four roots");
+            + "empty automatic seam index owns four roots; exact surface components add "
+            + "exact component ownership without the deleted 30-page legacy carrier");
         for (int mapIndex = 0; mapIndex < 4; mapIndex++)
         {
             context.Pathing.TryGetNavigationGraphCellState(
@@ -1033,67 +1064,38 @@ public sealed class NavigationGraphCapacityTests
     }
 
     [Fact]
-    public void ChunkedBaseline_ShouldRemainFailClosedAtUnpublishedPageCeiling()
+    public void ChunkedBaseline_ShouldRespectExactPrefixPageBoundaryAndComplete()
     {
-        int firstChunkPageCount;
-        using (TrailblazerWorldContext probe = CreateChunkedBaselineContext(
-            1_000,
-            includeExplicitConnection: true))
-        {
-            probe.Simulate();
-            NavigationGraphDiagnosticsSnapshot diagnostics =
-                probe.Pathing.GetNavigationGraphDiagnostics();
-            diagnostics.BaselineRebuildCount.Should().Be(1);
-            diagnostics.BaselineRebuildPageCount.Should().BePositive();
-            firstChunkPageCount = diagnostics.PersistentGraphPageCount;
-        }
+        const int exactPageCeiling = 330;
+        const int oneBelowPageCeiling = 329;
 
-        const int explicitCompilationReserve = 2;
         using (TrailblazerWorldContext insufficient = CreateChunkedBaselineContext(
-            firstChunkPageCount - explicitCompilationReserve - 1,
+            oneBelowPageCeiling,
             includeExplicitConnection: true))
         {
             insufficient.Simulate();
             NavigationGraphDiagnosticsSnapshot belowMinimum =
                 insufficient.Pathing.GetNavigationGraphDiagnostics();
             belowMinimum.BaselineRebuildCount.Should().Be(0,
-                "the three-page first rebuild cannot fit below its measured page total");
-            belowMinimum.PersistentGraphPageCount.Should().BeLessThan(firstChunkPageCount);
+                "the source root, retained operation state, baseline prefix, and exact-component "
+                + "preparation own 330 conservative pages after deleting the 16-page legacy "
+                + "composition carrier; 329 cannot retain that first prefix");
+            belowMinimum.PersistentGraphPageCount.Should().BeLessThan(exactPageCeiling);
         }
 
-        using TrailblazerWorldContext capped = CreateChunkedBaselineContext(
-            firstChunkPageCount + explicitCompilationReserve,
+        using TrailblazerWorldContext complete = CreateChunkedBaselineContext(
+            exactPageCeiling,
             includeExplicitConnection: true);
-        capped.Simulate();
-        NavigationGraphDiagnosticsSnapshot first = capped.Pathing.GetNavigationGraphDiagnostics();
-        first.PersistentGraphPageCount.Should().Be(firstChunkPageCount);
-        first.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(4_000_000);
-        GetCellState(capped, "map").IsMaterialized.Should().BeFalse();
-
-        capped.Simulate();
-        NavigationGraphDiagnosticsSnapshot filled = capped.Pathing.GetNavigationGraphDiagnostics();
-        filled.BaselineRebuildCount.Should().Be(1);
-        filled.BaselineCapacityBlockedCount.Should().Be(0);
-        filled.PersistentGraphPageCount.Should().Be(firstChunkPageCount + 2);
-        GetCellState(capped, "map").IsMaterialized.Should().BeFalse();
-
-        capped.Simulate();
-        NavigationGraphDiagnosticsSnapshot stalled = capped.Pathing.GetNavigationGraphDiagnostics();
-        stalled.BaselineRebuildCount.Should().Be(1);
-        stalled.BaselineCapacityBlockedCount.Should().Be(1,
-            "an impossible next page is a terminal, observable fail-closed outcome");
-        stalled.BaselineRebuildPageCount.Should().Be(filled.BaselineRebuildPageCount);
-        stalled.BaselineRebuildBytes.Should().Be(filled.BaselineRebuildBytes);
-        stalled.PersistentGraphPageCount.Should().Be(firstChunkPageCount + 2);
-        GetCellState(capped, "map").IsMaterialized.Should().BeFalse(
-            "unpublished pages must carry over without escaping the configured ceiling");
-        capped.Pathing.RetainedBaselineCaptureCount.Should().Be(0);
-        for (int frame = 0; frame < 3; frame++)
-        {
-            capped.Simulate();
-            capped.Pathing.NavigationMaintenanceMeter.BaselineAddresses.Should().Be(0,
-                "a terminal capacity block must not retry the same address chunk forever");
-        }
+        complete.Simulate();
+        NavigationGraphDiagnosticsSnapshot prefix = complete.Pathing.GetNavigationGraphDiagnostics();
+        prefix.BaselineRebuildCount.Should().Be(1);
+        prefix.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(exactPageCeiling);
+        prefix.ActiveSnapshotBytes.Should().BeLessThanOrEqualTo(4_000_000);
+        GetCellState(complete, "map").IsMaterialized.Should().BeFalse();
+        SimulateUntil(complete, () => IsMaterialized(complete, "map"));
+        NavigationGraphDiagnosticsSnapshot completed = complete.Pathing.GetNavigationGraphDiagnostics();
+        completed.BaselineCapacityBlockedCount.Should().Be(0);
+        completed.PersistentGraphPageCount.Should().BeLessThanOrEqualTo(exactPageCeiling);
     }
 
     [Fact]
@@ -1726,7 +1728,8 @@ public sealed class NavigationGraphCapacityTests
             source.MaxAStarReusablePayloadBytes,
             source.MaxAStarSinglePayloadBytes,
             source.MaxAStarActivePayloadBytes,
-            source.MaxAStarActivePayloadLeases);
+            source.MaxAStarActivePayloadLeases,
+            source.AStarWorkspaceComponentCapacity);
 
     private static TrailblazerWorldContext CreateChunkedBaselineContext(
         int maxPersistentGraphPages,

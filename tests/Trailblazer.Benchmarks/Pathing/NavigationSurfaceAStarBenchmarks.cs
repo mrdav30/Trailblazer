@@ -58,8 +58,10 @@ public class NavigationSurfaceAStarBenchmarks
         long before = GC.GetAllocatedBytesForCurrentThread();
         _workspace = new NavigationAStarWorkspace(
             mapCapacity: 1,
-            NavigationGraphBenchmarkScenario.GetPageCapacity(ExpansionCount),
-            ExpansionCount);
+            endpointPageCapacity: NavigationGraphBenchmarkScenario.GetPageCapacity(ExpansionCount),
+            componentCapacity: checked(
+                NavigationGraphBenchmarkScenario.GetPageCapacity(ExpansionCount) + 2),
+            nodeCapacity: ExpansionCount);
         _workspaceAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         _admission = new NavigationQueryAdmissionWork(_fixture.World, _workspace);
 

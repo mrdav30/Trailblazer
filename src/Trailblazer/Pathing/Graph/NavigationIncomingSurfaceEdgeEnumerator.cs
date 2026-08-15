@@ -13,6 +13,7 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
     private readonly NavigationWorldGraph? _graph;
     private readonly NavigationNodeRef _destination;
     private readonly NavigationCellAddress _destinationAddress;
+    private readonly bool _structural;
     private NavigationSurfaceEdgeEnumerator _incomingCandidates;
     private NavigationSurfaceEdgeEnumerator _outgoingEdges;
     private NavigationGraphEdge _incomingCandidate;
@@ -22,7 +23,8 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
 
     internal NavigationIncomingSurfaceEdgeEnumerator(
         NavigationWorldGraph graph,
-        NavigationNodeRef destination)
+        NavigationNodeRef destination,
+        bool structural = false)
     {
         _destination = destination;
         _outgoingEdges = default;
@@ -30,10 +32,13 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
         _predecessor = default;
         _outgoingOrdinal = 0;
         _hasIncomingCandidate = false;
+        _structural = structural;
         Current = default;
         if (!graph.TryGetNodeAddress(destination, out _destinationAddress)
-            || !graph.TryGetNodeState(destination, out NavigationNodeState state)
-            || !state.IsPresent)
+            || (structural
+                ? !graph.HasEffectiveCell(_destinationAddress)
+                : !graph.TryGetNodeState(destination, out NavigationNodeState state)
+                    || !state.IsPresent))
         {
             _graph = null;
             _incomingCandidates = default;
@@ -47,7 +52,8 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
             destination,
             incoming: true,
             includeNative: true,
-            includeAutomaticSeams: true);
+            includeAutomaticSeams: true,
+            structural: structural);
     }
 
     internal NavigationIncomingSurfaceEdge Current { get; private set; }
@@ -57,7 +63,9 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
         int unbounded = int.MaxValue;
         while (true)
         {
-            NavigationSurfaceEdgeAdvanceStatus status = AdvanceOne(null, ref unbounded);
+            NavigationSurfaceEdgeAdvanceStatus status = AdvanceOne(
+                (NavigationWorkMeter?)null,
+                ref unbounded);
             if (status == NavigationSurfaceEdgeAdvanceStatus.Edge)
                 return true;
             if (status == NavigationSurfaceEdgeAdvanceStatus.Complete)
@@ -68,6 +76,17 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
     internal NavigationSurfaceEdgeAdvanceStatus AdvanceOne(
         NavigationWorkMeter? meter,
         ref int edgeStepRemaining)
+        => AdvanceOneCore(meter, null, ref edgeStepRemaining);
+
+    internal NavigationSurfaceEdgeAdvanceStatus AdvanceOne(
+        MaintenanceWorkMeter meter,
+        ref int edgeStepRemaining)
+        => AdvanceOneCore(null, meter, ref edgeStepRemaining);
+
+    private NavigationSurfaceEdgeAdvanceStatus AdvanceOneCore(
+        NavigationWorkMeter? queryMeter,
+        MaintenanceWorkMeter? maintenanceMeter,
+        ref int edgeStepRemaining)
     {
         if (_graph == null)
             return NavigationSurfaceEdgeAdvanceStatus.Complete;
@@ -77,7 +96,15 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
             if (!_hasIncomingCandidate)
             {
                 NavigationSurfaceEdgeAdvanceStatus incomingStatus =
-                    _incomingCandidates.AdvanceOne(meter, ref edgeStepRemaining);
+                    queryMeter != null
+                        ? _incomingCandidates.AdvanceOne(queryMeter, ref edgeStepRemaining)
+                        : maintenanceMeter != null
+                            ? _incomingCandidates.AdvanceOne(
+                                maintenanceMeter,
+                                ref edgeStepRemaining)
+                            : _incomingCandidates.AdvanceOne(
+                                (NavigationWorkMeter?)null,
+                                ref edgeStepRemaining);
                 if (incomingStatus == NavigationSurfaceEdgeAdvanceStatus.Complete)
                     Current = default;
                 if (incomingStatus != NavigationSurfaceEdgeAdvanceStatus.Edge)
@@ -85,13 +112,23 @@ internal struct NavigationIncomingSurfaceEdgeEnumerator
 
                 _incomingCandidate = _incomingCandidates.Current;
                 _predecessor = _incomingCandidate.Target;
-                _outgoingEdges = _graph.EnumerateSurfaceEdges(_predecessor);
+                _outgoingEdges = _structural
+                    ? _graph.EnumerateStructuralSurfaceEdges(_predecessor)
+                    : _graph.EnumerateSurfaceEdges(_predecessor);
                 _outgoingOrdinal = 0;
                 _hasIncomingCandidate = true;
             }
 
             NavigationSurfaceEdgeAdvanceStatus outgoingStatus =
-                _outgoingEdges.AdvanceOne(meter, ref edgeStepRemaining);
+                queryMeter != null
+                    ? _outgoingEdges.AdvanceOne(queryMeter, ref edgeStepRemaining)
+                    : maintenanceMeter != null
+                        ? _outgoingEdges.AdvanceOne(
+                            maintenanceMeter,
+                            ref edgeStepRemaining)
+                        : _outgoingEdges.AdvanceOne(
+                            (NavigationWorkMeter?)null,
+                            ref edgeStepRemaining);
             if (outgoingStatus == NavigationSurfaceEdgeAdvanceStatus.Blocked
                 || outgoingStatus == NavigationSurfaceEdgeAdvanceStatus.Pending)
             {

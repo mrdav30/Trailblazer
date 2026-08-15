@@ -44,10 +44,6 @@ public class NavigationGraphCompositionBenchmarks
     private int _maximumOperationWorkPages;
     private long _maximumTotalWorkBytes;
     private int _maximumTotalWorkPages;
-    private int _maximumCopiedNodeRecords;
-    private int _maximumCopiedReverseRecords;
-    private int _maximumCopiedComponentRecords;
-    private int _maximumCopiedMembershipRecords;
 
     [Params(16, 128)]
     public int MapCount { get; set; }
@@ -121,11 +117,7 @@ public class NavigationGraphCompositionBenchmarks
             + $"operation_work_bytes={_maximumOperationWorkBytes} "
             + $"operation_work_pages={_maximumOperationWorkPages} "
             + $"total_work_bytes={_maximumTotalWorkBytes} "
-            + $"total_work_pages={_maximumTotalWorkPages} "
-            + $"copied_node_records={_maximumCopiedNodeRecords} "
-            + $"copied_reverse_records={_maximumCopiedReverseRecords} "
-            + $"copied_component_records={_maximumCopiedComponentRecords} "
-            + $"copied_membership_records={_maximumCopiedMembershipRecords}");
+            + $"total_work_pages={_maximumTotalWorkPages}");
         _runtime.Dispose();
         _world.Dispose();
     }
@@ -189,18 +181,6 @@ public class NavigationGraphCompositionBenchmarks
             componentNodes += _runtime.MaintenanceMeter.ComponentNodes;
             explicitEdges += _runtime.MaintenanceMeter.ExplicitEdges;
             dependencyEntries += _runtime.MaintenanceMeter.DependencyEntries;
-            _maximumCopiedNodeRecords = Math.Max(
-                _maximumCopiedNodeRecords,
-                _runtime.CompositionCopiedNodeRecords);
-            _maximumCopiedReverseRecords = Math.Max(
-                _maximumCopiedReverseRecords,
-                _runtime.CompositionCopiedReverseRecords);
-            _maximumCopiedComponentRecords = Math.Max(
-                _maximumCopiedComponentRecords,
-                _runtime.CompositionCopiedComponentRecords);
-            _maximumCopiedMembershipRecords = Math.Max(
-                _maximumCopiedMembershipRecords,
-                _runtime.CompositionCopiedMembershipRecords);
             if (_runtime.RetainedCompositionWorkCount != 0
                 || _runtime.RetainedOperationWorkCount != 0)
             {

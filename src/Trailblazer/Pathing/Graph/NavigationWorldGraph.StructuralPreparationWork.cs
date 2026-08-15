@@ -61,8 +61,6 @@ internal sealed partial class NavigationWorldGraph
 
         internal NavigationWorldGraph Result { get; private set; } = null!;
 
-        internal bool CompositionChanged { get; private set; }
-
         internal long RetainedBytes => checked(
             128L
             + _ownedInstanceExclusiveBytes
@@ -128,10 +126,11 @@ internal sealed partial class NavigationWorldGraph
                 _directory,
                 _source.AreaCatalog,
                 _mapIndex,
-                _source.Composition,
+                _source.SurfaceComponents,
                 _candidate.ExplicitConnections,
                 _source._automaticSeams,
                 _source._closedStructuralComponents,
+                _source._additionalClosedStructuralComponents,
                 _source._allStructuralComponentsClosed,
                 _retainedBytes,
                 _persistentPages);
@@ -182,7 +181,6 @@ internal sealed partial class NavigationWorldGraph
                 if (!_compose!.Advance(meter))
                     return false;
                 _next = _compose.Result;
-                CompositionChanged |= HasTopologyCompositionChange(_prior, _next);
             }
             if (!_directoryConsumed)
             {
@@ -258,7 +256,6 @@ internal sealed partial class NavigationWorldGraph
                     _directory.Remove(mapId, out bool removed, out int copiedNodes);
                 if (removed)
                 {
-                    CompositionChanged = true;
                     RecordPersistentCopies(copiedNodes, 64L);
                     _retainedBytes = checked(
                         _retainedBytes
@@ -300,26 +297,6 @@ internal sealed partial class NavigationWorldGraph
             _directoryConsumed = false;
             _indexConsumed = false;
             _composeOwnershipTransferred = false;
-        }
-
-        private static bool HasTopologyCompositionChange(
-            NavigationMapInstance? prior,
-            NavigationMapInstance next)
-        {
-            if (prior == null
-                || !ReferenceEquals(prior.Map, next.Map)
-                || prior.BakeVersion != next.BakeVersion
-                || !ReferenceEquals(prior.BakedCellLookup, next.BakedCellLookup))
-            {
-                return true;
-            }
-
-            NavigationGridGenerationIdentity priorIdentity = prior.GridIdentity;
-            NavigationGridGenerationIdentity nextIdentity = next.GridIdentity;
-            return priorIdentity.WorldSpawnToken != nextIdentity.WorldSpawnToken
-                || priorIdentity.GridIndex != nextIdentity.GridIndex
-                || priorIdentity.GridSpawnToken != nextIdentity.GridSpawnToken
-                || !priorIdentity.ConfigurationKey.Equals(nextIdentity.ConfigurationKey);
         }
 
         private void RecordPersistentCopies(int copiedNodes, long bytesPerNode)

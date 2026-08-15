@@ -10,7 +10,7 @@ public sealed class MaintenanceWorkMeterTests
     [Fact]
     public void Counters_ShouldDebitIndependentlyAndRejectWithoutPartialConsumption()
     {
-        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(1, 2, 3, 4, 5, 6, 7));
+        var meter = new MaintenanceWorkMeter(new MaintenanceWorkBudget(1, 2, 3, 4, 5, 6, 7, 8));
 
         meter.TryConsumeEnvelopes(1).Should().BeTrue();
         meter.TryConsumeBaselineAddresses(2).Should().BeTrue();
@@ -19,6 +19,7 @@ public sealed class MaintenanceWorkMeterTests
         meter.TryConsumeSeamCandidateProbes(5).Should().BeTrue();
         meter.TryConsumeExplicitEdges(6).Should().BeTrue();
         meter.TryConsumeDependencyEntries(7).Should().BeTrue();
+        meter.TryConsumeSurfaceComponentEdges(8).Should().BeTrue();
 
         meter.TryConsumeEnvelopes(1).Should().BeFalse();
         meter.TryConsumeBaselineAddresses(1).Should().BeFalse();
@@ -27,6 +28,7 @@ public sealed class MaintenanceWorkMeterTests
         meter.TryConsumeSeamCandidateProbes(1).Should().BeFalse();
         meter.TryConsumeExplicitEdges(1).Should().BeFalse();
         meter.TryConsumeDependencyEntries(1).Should().BeFalse();
+        meter.TryConsumeSurfaceComponentEdges(1).Should().BeFalse();
         meter.RemainingEnvelopes.Should().Be(0);
         meter.RemainingBaselineAddresses.Should().Be(0);
         meter.RemainingOverlaySlots.Should().Be(0);
@@ -34,10 +36,12 @@ public sealed class MaintenanceWorkMeterTests
         meter.RemainingSeamCandidateProbes.Should().Be(0);
         meter.RemainingExplicitEdges.Should().Be(0);
         meter.RemainingDependencyEntries.Should().Be(0);
+        meter.RemainingSurfaceComponentEdges.Should().Be(0);
 
         meter.Reset();
         meter.SeamCandidateProbes.Should().Be(0);
         meter.RemainingSeamCandidateProbes.Should().Be(5);
+        meter.RemainingSurfaceComponentEdges.Should().Be(8);
     }
 
     [Fact]

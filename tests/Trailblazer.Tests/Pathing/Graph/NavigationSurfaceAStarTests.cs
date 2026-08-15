@@ -37,14 +37,19 @@ public sealed class NavigationSurfaceAStarTests
     public void RetainedBytes_ShouldMatchMaximumForEmptyAndPopulatedLogicalLayouts()
     {
         var emptyDependencies = new GraphDependencyStamp(
-            compositionVersion: 1,
             Policy.Key,
             new GraphComponentDependency[0],
             new GraphPageDependency[0]);
         var components = new[]
         {
-            new GraphComponentDependency("map-a", 1),
-            new GraphComponentDependency("map-b", 2)
+            new GraphComponentDependency(
+                new NavigationSurfaceComponentKey(
+                    new NavigationCellAddress("map-a", default)),
+                1),
+            new GraphComponentDependency(
+                new NavigationSurfaceComponentKey(
+                    new NavigationCellAddress("map-b", default)),
+                2)
         };
         var pages = new[]
         {
@@ -54,15 +59,14 @@ public sealed class NavigationSurfaceAStarTests
             new GraphPageDependency("map-b", 2, 0, 1, 4, 4)
         };
         var populatedDependencies = new GraphDependencyStamp(
-            compositionVersion: 1,
             Policy.Key,
             components,
             pages);
 
-        emptyDependencies.RetainedBytes.Should().Be(56L);
+        emptyDependencies.RetainedBytes.Should().Be(48L);
         GraphDependencyStamp.GetRetainedBytes(componentCount: 0, pageCount: 0)
             .Should().Be(emptyDependencies.RetainedBytes);
-        populatedDependencies.RetainedBytes.Should().Be(328L);
+        populatedDependencies.RetainedBytes.Should().Be(352L);
         GraphDependencyStamp.GetRetainedBytes(components.Length, pages.Length)
             .Should().Be(populatedDependencies.RetainedBytes);
 
@@ -99,10 +103,10 @@ public sealed class NavigationSurfaceAStarTests
             populatedDependencies,
             NavigationSurfaceAStarStatus.Success);
 
-        emptyPayload.RetainedBytes.Should().Be(392L);
+        emptyPayload.RetainedBytes.Should().Be(384L);
         NavigationAStarPayload.GetMaximumRetainedBytes(0, 0, 0)
             .Should().Be(emptyPayload.RetainedBytes);
-        populatedPayload.RetainedBytes.Should().Be(760L);
+        populatedPayload.RetainedBytes.Should().Be(784L);
         NavigationAStarPayload.GetMaximumRetainedBytes(
                 populatedPayload.Nodes.Length,
                 components.Length,
@@ -150,8 +154,11 @@ public sealed class NavigationSurfaceAStarTests
             previous: null,
             instanceVersion: 1);
         NavigationWorldGraph graph = CreateGraph(instance);
-        graph.Composition.GetComponentRecord("map")
-            .AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
+        graph.SurfaceComponents.TryGet(
+                new NavigationCellAddress("map", addresses[0]),
+                out NavigationSurfaceComponent component)
+            .Should().BeTrue();
+        component.AllSurfaceEdgesEuclideanCertified.Should().BeTrue();
         using NavigationWorldGraphStore store = CreateStore(
             graph,
             maxConcurrentLeases: 2);
@@ -191,6 +198,7 @@ public sealed class NavigationSurfaceAStarTests
         var workspace = new NavigationAStarWorkspace(
             mapCapacity: 1,
             endpointPageCapacity: 4,
+            componentCapacity: 6,
             nodeCapacity: 8);
         using var admission = new NavigationQueryAdmissionWork(
             world,
@@ -338,8 +346,9 @@ public sealed class NavigationSurfaceAStarTests
         guideCheckoutSucceeded.Should().BeTrue();
         guideCheckoutAllocations.Should().Be(0,
             "warmed guide checkout and return reuse cache-owned lease shells");
-        NavigationWorldGraph topologyChanged = graph.WithComposition(
-            graph.Composition.WithVersion(graph.Composition.Version + 1));
+        NavigationWorldGraph topologyChanged = graph
+            .WithSurfaceComponents(NavigationSurfaceComponentIndex.Empty)
+            .WithGraphVersion(graph.GraphVersion + 1);
         store.TryPublish(topologyChanged).Should().Be(NavigationCandidatePublication.Published);
         publicGuide.TryGetCurrentWaypoint(out _, out _)
             .Should().Be(NavigationGuideStatus.Stale);
@@ -567,7 +576,7 @@ public sealed class NavigationSurfaceAStarTests
             PathAlgorithm.AStar,
             new NavigationWorkBudget(64, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(2, 4, 4);
+        var workspace = new NavigationAStarWorkspace(2, 4, 6, 4);
         var cache = new NavigationAStarPayloadCache(1);
         using NavigationAStarQueryWork queryWork = BeginReservedQuery(
             context.World,
@@ -675,6 +684,7 @@ public sealed class NavigationSurfaceAStarTests
         var workspace = new NavigationAStarWorkspace(
             mapCapacity: 1,
             endpointPageCapacity: 4,
+            componentCapacity: 6,
             nodeCapacity: 65);
         using var admission = new NavigationQueryAdmissionWork(
             world,
@@ -722,9 +732,10 @@ public sealed class NavigationSurfaceAStarTests
             topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
             storageKind: GridStorageKind.Dense);
         var witnessCenter = new Vector3d(20, 0, 0);
+        var witnessMaximum = new Vector3d(24, 0, 0);
         var witnessConfiguration = new GridConfiguration(
             witnessCenter,
-            witnessCenter,
+            witnessMaximum,
             topologyKind: GridTopologyKind.RectangularPrism,
             topologyMetrics: GridTopologyMetrics.Rectangular(Fixed64.One),
             storageKind: GridStorageKind.Dense);
@@ -757,6 +768,8 @@ public sealed class NavigationSurfaceAStarTests
             .Build();
         NavigationMap witnessMap = new NavigationMapBuilder("C", witnessBinding)
             .AddCell(default, Cell)
+            .AddCell(new VoxelIndex(2, 0, 0), Cell)
+            .AddCell(new VoxelIndex(4, 0, 0), Cell)
             .Build();
         NavigationOperationCandidate.MapState CreateState(NavigationMap map)
         {
@@ -795,7 +808,12 @@ public sealed class NavigationSurfaceAStarTests
             destinationFoot,
             portalRadiusClearance: Fixed64.One,
             portalHeightClearance: (Fixed64)2,
-            witnesses: new[] { new NavigationCellAddress("C", default) });
+            witnesses: new[]
+            {
+                new NavigationCellAddress("C", default),
+                new NavigationCellAddress("C", new VoxelIndex(2, 0, 0)),
+                new NavigationCellAddress("C", new VoxelIndex(4, 0, 0))
+            });
         var record = new NavigationExplicitConnectionRecord(
             new NavigationConnectionOwnerKey("A", connection.Id),
             connection,
@@ -822,11 +840,30 @@ public sealed class NavigationSurfaceAStarTests
         NavigationWorldGraph graph = CreateGraph(
             new[] { sourceInstance, destinationInstance, witnessInstance },
             connections);
-        string witnessComponent;
-        graph.TryGetComponentKey("C", out witnessComponent).Should().BeTrue();
-        graph.TryGetComponentKey("A", out string sourceComponent).Should().BeTrue();
-        witnessComponent.Should().NotBe(sourceComponent,
-            "the witness map is otherwise disconnected from the explicit endpoints");
+        var witnessComponents = new NavigationSurfaceComponentKey[3];
+        graph.TryGetSurfaceComponent(
+                new NavigationCellAddress("C", default),
+                out witnessComponents[0],
+                out _)
+            .Should().BeTrue();
+        graph.TryGetSurfaceComponent(
+                new NavigationCellAddress("C", new VoxelIndex(2, 0, 0)),
+                out witnessComponents[1],
+                out _)
+            .Should().BeTrue();
+        graph.TryGetSurfaceComponent(
+                new NavigationCellAddress("C", new VoxelIndex(4, 0, 0)),
+                out witnessComponents[2],
+                out _)
+            .Should().BeTrue();
+        graph.TryGetSurfaceComponent(
+                new NavigationCellAddress("A", default),
+                out NavigationSurfaceComponentKey sourceComponent,
+                out _)
+            .Should().BeTrue();
+        witnessComponents.Should().OnlyHaveUniqueItems();
+        witnessComponents.Should().NotContain(sourceComponent,
+            "same-page witnesses remain structurally disconnected from the explicit endpoints");
         using NavigationWorldGraphStore store = CreateStore(graph);
         var query = new PathQuery(
             new NavigationEndpoint(sourceFoot, mapId: "A"),
@@ -838,9 +875,25 @@ public sealed class NavigationSurfaceAStarTests
                 TraversalMedium.Solid,
                 TraversalDomain.Surface),
             PathAlgorithm.AStar,
-            new NavigationWorkBudget(128, 2, 2, 1, 2, 0, 0, 0, 0, 0, 0),
+            new NavigationWorkBudget(128, 2, 2, 1, 4, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(3, 3, 4);
+        var insufficientWorkspace = new NavigationAStarWorkspace(
+            mapCapacity: 3,
+            endpointPageCapacity: 3,
+            componentCapacity: 3,
+            nodeCapacity: 4);
+        var insufficientCache = new NavigationAStarPayloadCache(1);
+        using (NavigationAStarQueryWork insufficient = BeginReservedQuery(
+            world,
+            store,
+            query,
+            insufficientWorkspace,
+            insufficientCache))
+        {
+            DrainQuery(insufficient, 256);
+            insufficient.Status.Should().Be(NavigationAStarQueryStatus.CapacityExceeded);
+        }
+        var workspace = new NavigationAStarWorkspace(3, 3, 4, 4);
         var cache = new NavigationAStarPayloadCache(1);
         GraphDependencyStamp dependencies;
         using (NavigationAStarQueryWork work = BeginReservedQuery(
@@ -856,8 +909,11 @@ public sealed class NavigationSurfaceAStarTests
             payloadLease.Payload.Nodes.Should().Equal(
                 new NavigationCellAddress("A", default),
                 new NavigationCellAddress("B", default));
-            payloadLease.Payload.Dependencies.Components.Should().ContainSingle(
-                dependency => dependency.RepresentativeMapId == witnessComponent);
+            foreach (NavigationSurfaceComponentKey witnessComponent in witnessComponents)
+            {
+                payloadLease.Payload.Dependencies.Components.Should().ContainSingle(
+                    dependency => dependency.Key == witnessComponent);
+            }
             payloadLease.Payload.Dependencies.Pages.Should().ContainSingle(
                 dependency => dependency.MapId == "C" && dependency.PageIndex == 0);
             dependencies = payloadLease.Payload.Dependencies;
@@ -988,8 +1044,11 @@ public sealed class NavigationSurfaceAStarTests
             ownerRow,
             out _);
         NavigationWorldGraph graph = CreateGraph(instance, connections);
-        graph.Composition.GetComponentRecord("map")
-            .AllSurfaceEdgesEuclideanCertified.Should().BeFalse(
+        graph.SurfaceComponents.TryGet(
+                new NavigationCellAddress("map", default),
+                out NavigationSurfaceComponent component)
+            .Should().BeTrue();
+        component.AllSurfaceEdgesEuclideanCertified.Should().BeFalse(
                 "an active uncertified self-edge disables the component heuristic even when the route does not use it");
         using NavigationWorldGraphStore store = CreateStore(graph);
         NavigationWorldGraphLease? lease = store.TryAcquire();
@@ -1017,7 +1076,7 @@ public sealed class NavigationSurfaceAStarTests
                 maxCoveredVoxelIntervals: 0,
                 maxSimplificationRays: 0),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(1, 4, 4);
+        var workspace = new NavigationAStarWorkspace(1, 4, 6, 4);
         using var admission = new NavigationQueryAdmissionWork(
             world,
             lease!,
@@ -1116,9 +1175,9 @@ public sealed class NavigationSurfaceAStarTests
                 TraversalMedium.Solid,
                 TraversalDomain.Surface),
             PathAlgorithm.AStar,
-            new NavigationWorkBudget(32, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0),
+            new NavigationWorkBudget(32, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
             allowTransitions: false);
-        var workspace = new NavigationAStarWorkspace(1, 2, 2);
+        var workspace = new NavigationAStarWorkspace(1, 2, 4, 2);
         var cache = new NavigationAStarPayloadCache(1);
         using NavigationAStarQueryWork work = BeginReservedQuery(
             world,
@@ -1152,25 +1211,6 @@ public sealed class NavigationSurfaceAStarTests
         NavigationMapInstance[] instances,
         NavigationExplicitConnectionIndex? explicitConnections = null)
     {
-        NavigationInstanceDirectory directory = NavigationInstanceDirectory.Create(instances);
-        var changed = PersistentStringMap<bool>.Empty;
-        for (int i = 0; i < instances.Length; i++)
-            changed = changed.Set(instances[i].MapId, true);
-        var compositionWork = new NavigationCompositionIndex.UpdateWork(
-            NavigationCompositionIndex.Empty,
-            directory,
-            explicitConnections ?? NavigationExplicitConnectionIndex.Empty,
-            changed,
-            version: 1,
-            new NavigationCompositionWorkspace(Math.Max(1, instances.Length)));
-        var maintenanceMeter = new MaintenanceWorkMeter(
-            TrailblazerWorldContextSettings.Default.MaintenanceBudget);
-        for (int frame = 0; frame < 64 && !compositionWork.IsComplete; frame++)
-        {
-            compositionWork.Advance(maintenanceMeter);
-            maintenanceMeter.Reset();
-        }
-        compositionWork.IsComplete.Should().BeTrue();
         NavigationAreaCatalog.Empty.TryPublish(
                 Policy,
                 maxPolicies: 1,
@@ -1179,12 +1219,12 @@ public sealed class NavigationSurfaceAStarTests
                 maxRules: 1,
                 out NavigationAreaCatalog catalog)
             .Should().Be(NavigationOperationRejection.None);
-        return new NavigationWorldGraph(
+        var graph = new NavigationWorldGraph(
             1,
             instances,
             areaCatalog: catalog,
-            composition: compositionWork.Result,
             explicitConnections: explicitConnections);
+        return graph.WithSurfaceComponents(NavigationSurfaceComponentTestFactory.Build(graph));
     }
 
     private static NavigationWorldGraphStore CreateStore(

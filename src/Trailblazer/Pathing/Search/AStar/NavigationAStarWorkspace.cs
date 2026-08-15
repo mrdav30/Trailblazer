@@ -16,11 +16,13 @@ internal sealed class NavigationAStarWorkspace
     internal NavigationAStarWorkspace(
         int mapCapacity,
         int endpointPageCapacity,
+        int componentCapacity,
         int nodeCapacity = 0)
     {
         SwiftThrowHelper.ThrowIfNegative(mapCapacity, nameof(mapCapacity));
         SwiftThrowHelper.ThrowIfNegative(endpointPageCapacity, nameof(endpointPageCapacity));
         SwiftThrowHelper.ThrowIfNegative(nodeCapacity, nameof(nodeCapacity));
+        SwiftThrowHelper.ThrowIfNegative(componentCapacity, nameof(componentCapacity));
         CoveredAddressCursor = new GridCoveredAddressCursor(mapCapacity);
         CoveredAddressGenerations = mapCapacity == 0
             ? Array.Empty<GridCoveredAddressGeneration>()
@@ -29,10 +31,11 @@ internal sealed class NavigationAStarWorkspace
         EndpointPages = endpointPageCapacity == 0
             ? Array.Empty<GraphPageDependencyAddress>()
             : new GraphPageDependencyAddress[endpointPageCapacity];
-        EndpointComponents = mapCapacity == 0
-            ? Array.Empty<string>()
-            : new string[mapCapacity];
-        EndpointComponentSet = new NavigationStringStampSet(Math.Max(1, mapCapacity));
+        EndpointComponents = componentCapacity == 0
+            ? Array.Empty<NavigationSurfaceComponentKey>()
+            : new NavigationSurfaceComponentKey[componentCapacity];
+        EndpointComponentSet = new NavigationAddressStampSet(
+            Math.Max(1, EndpointComponents.Length));
         EndpointPageSet = new NavigationPageStampSet(Math.Max(1, endpointPageCapacity));
         NodeTable = new NavigationAStarNodeTable(nodeCapacity);
         HeapNodes = nodeCapacity == 0
@@ -51,9 +54,9 @@ internal sealed class NavigationAStarWorkspace
 
     internal GraphPageDependencyAddress[] EndpointPages { get; }
 
-    internal string[] EndpointComponents { get; }
+    internal NavigationSurfaceComponentKey[] EndpointComponents { get; }
 
-    internal NavigationStringStampSet EndpointComponentSet { get; }
+    internal NavigationAddressStampSet EndpointComponentSet { get; }
 
     internal NavigationPageStampSet EndpointPageSet { get; }
 
@@ -100,13 +103,12 @@ internal sealed class NavigationAStarWorkspace
         CoveredAddressGenerationCount = 0;
     }
 
-    internal bool TryRecordEndpointComponent(string componentKey)
+    internal bool TryRecordEndpointComponent(NavigationSurfaceComponentKey componentKey)
     {
-        if (EndpointComponentSet.Contains(componentKey))
+        if (!EndpointComponentSet.Add(componentKey.Representative))
             return true;
         if (EndpointComponentCount >= EndpointComponents.Length)
             return false;
-        EndpointComponentSet.Add(componentKey);
         EndpointComponents[EndpointComponentCount++] = componentKey;
         return true;
     }

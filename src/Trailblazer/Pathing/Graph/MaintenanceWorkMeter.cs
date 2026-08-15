@@ -18,6 +18,7 @@ internal sealed class MaintenanceWorkMeter
     private int _seamCandidateProbes;
     private int _explicitEdges;
     private int _dependencyEntries;
+    private int _surfaceComponentEdges;
 
     internal MaintenanceWorkMeter(MaintenanceWorkBudget budget) => _budget = budget;
 
@@ -28,6 +29,7 @@ internal sealed class MaintenanceWorkMeter
     internal int SeamCandidateProbes => _seamCandidateProbes;
     internal int ExplicitEdges => _explicitEdges;
     internal int DependencyEntries => _dependencyEntries;
+    internal int SurfaceComponentEdges => _surfaceComponentEdges;
 
     internal int RemainingEnvelopes => _budget.MaxConsumedEnvelopes - ConsumedEnvelopes;
     internal int RemainingBaselineAddresses => _budget.MaxBaselineAddresses - BaselineAddresses;
@@ -37,6 +39,8 @@ internal sealed class MaintenanceWorkMeter
         _budget.MaxSeamCandidateProbes - SeamCandidateProbes;
     internal int RemainingExplicitEdges => _budget.MaxExplicitEdges - ExplicitEdges;
     internal int RemainingDependencyEntries => _budget.MaxDependencyEntries - DependencyEntries;
+    internal int RemainingSurfaceComponentEdges =>
+        _budget.MaxSurfaceComponentEdges - SurfaceComponentEdges;
 
     internal void Reset()
     {
@@ -47,6 +51,7 @@ internal sealed class MaintenanceWorkMeter
         _seamCandidateProbes = 0;
         _explicitEdges = 0;
         _dependencyEntries = 0;
+        _surfaceComponentEdges = 0;
     }
 
     internal bool TryConsumeEnvelopes(int count) =>
@@ -69,6 +74,9 @@ internal sealed class MaintenanceWorkMeter
 
     internal bool TryConsumeDependencyEntries(int count) =>
         TryConsume(ref _dependencyEntries, count, _budget.MaxDependencyEntries);
+
+    internal bool TryConsumeSurfaceComponentEdges(int count) =>
+        TryConsume(ref _surfaceComponentEdges, count, _budget.MaxSurfaceComponentEdges);
 
     private static bool TryConsume(ref int consumed, int count, int maximum)
     {

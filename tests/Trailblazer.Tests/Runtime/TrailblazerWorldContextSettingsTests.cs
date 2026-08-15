@@ -35,6 +35,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaintenanceBudget.MaxSeamCandidateProbes.Should().Be(65_536);
         settings.MaintenanceBudget.MaxExplicitEdges.Should().Be(65_536);
         settings.MaintenanceBudget.MaxDependencyEntries.Should().Be(65_536);
+        settings.MaintenanceBudget.MaxSurfaceComponentEdges.Should().Be(65_536);
 
         settings.MaxIngressEntries.Should().Be(16_384);
         settings.MaxIngressBytes.Should().Be(4_194_304);
@@ -42,7 +43,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.MaxActiveSnapshotBytes.Should().Be(33_554_432);
         settings.MaxRetiredSnapshots.Should().Be(8);
         settings.MaxRetiredSnapshotBytes.Should().Be(67_108_864);
-        settings.MaxPersistentGraphPages.Should().Be(262_144);
+        settings.MaxPersistentGraphPages.Should().Be(524_288);
         settings.MaxDynamicCellSlotsPerMap.Should().Be(4_096);
         settings.MaxDynamicCellSlots.Should().Be(16_384);
         settings.MaxAreaPolicies.Should().Be(64);
@@ -54,6 +55,7 @@ public sealed class TrailblazerWorldContextSettingsTests
         settings.QueryLimits.MaxConcurrentAStarQueries.Should().Be(8);
         settings.QueryLimits.AStarWorkspaceMapCapacity.Should().Be(16);
         settings.QueryLimits.AStarWorkspaceEndpointPageCapacity.Should().Be(512);
+        settings.QueryLimits.AStarWorkspaceComponentCapacity.Should().Be(512);
         settings.QueryLimits.AStarWorkspaceNodeCapacity.Should().Be(4_096);
         settings.QueryLimits.MaxAStarCacheEntries.Should().Be(128);
         settings.QueryLimits.MaxAStarReusablePayloadBytes.Should().Be(16_777_216);
@@ -66,7 +68,7 @@ public sealed class TrailblazerWorldContextSettingsTests
     public void Constructor_ShouldRetainExplicitLimits()
     {
         NavigationOperationLimits operationLimits = CreateOperationLimits();
-        var maintenanceBudget = new MaintenanceWorkBudget(1, 32, 3, 4, 5, 7, 21);
+        var maintenanceBudget = new MaintenanceWorkBudget(1, 32, 3, 4, 5, 7, 21, 23);
         NavigationQueryLimits queryLimits = CreateQueryLimits(maxConcurrentQueries: 2);
 
         var settings = new TrailblazerWorldContextSettings(
@@ -112,9 +114,9 @@ public sealed class TrailblazerWorldContextSettingsTests
     [Fact]
     public void MaintenanceBudget_ShouldRejectNonPositiveCounters()
     {
-        for (int invalidIndex = 0; invalidIndex < 7; invalidIndex++)
+        for (int invalidIndex = 0; invalidIndex < 8; invalidIndex++)
         {
-            int[] values = { 1, 1, 1, 1, 1, 1, 1 };
+            int[] values = { 1, 1, 1, 1, 1, 1, 1, 1 };
             values[invalidIndex] = 0;
 
             Action create = () => _ = new MaintenanceWorkBudget(
@@ -124,7 +126,8 @@ public sealed class TrailblazerWorldContextSettingsTests
                 values[3],
                 values[4],
                 values[5],
-                values[6]);
+                values[6],
+                values[7]);
 
             create.Should().Throw<ArgumentOutOfRangeException>();
         }
@@ -223,6 +226,16 @@ public sealed class TrailblazerWorldContextSettingsTests
         areaAggregate.Should().Throw<ArgumentException>();
     }
 
+    [Fact]
+    public void QueryLimits_ShouldRejectNegativeComponentCapacity()
+    {
+        Action create = () => _ = CreateQueryLimits(
+            maxConcurrentQueries: 1,
+            componentCapacity: -1);
+
+        create.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
     private static TrailblazerWorldContextSettings CreateSettings(
         NavigationOperationLimits? operationLimits = null,
         MaintenanceWorkBudget? maintenanceBudget = null,
@@ -277,7 +290,8 @@ public sealed class TrailblazerWorldContextSettingsTests
         maxOverlayTransitions: 0);
 
     private static NavigationQueryLimits CreateQueryLimits(
-        int maxConcurrentQueries) => new(
+        int maxConcurrentQueries,
+        int componentCapacity = 1) => new(
             maxBatchItems: 1,
             maxBatchDescriptorBytes: 264,
             maxConcurrentAStarQueries: maxConcurrentQueries,
@@ -288,5 +302,6 @@ public sealed class TrailblazerWorldContextSettingsTests
             maxAStarReusablePayloadBytes: 1,
             maxAStarSinglePayloadBytes: 1,
             maxAStarActivePayloadBytes: 1,
-            maxAStarActivePayloadLeases: 1);
+            maxAStarActivePayloadLeases: 1,
+            aStarWorkspaceComponentCapacity: componentCapacity);
 }

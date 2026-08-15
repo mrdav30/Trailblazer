@@ -347,6 +347,8 @@ internal sealed partial class NavigationMapInstance
             }
             if (slot < 0)
                 return;
+            if (HasSameSemanticState(slot, operation))
+                return;
             PersistentIntMap<NavigationSemanticPage> updated = ApplySemanticOperation(
                 _semanticPages,
                 slot,
@@ -369,6 +371,79 @@ internal sealed partial class NavigationMapInstance
                 }
             }
             _semanticPages = updated;
+        }
+
+        private bool HasSameSemanticState(
+            int slot,
+            NavigationCellOverlayOperation operation)
+        {
+            bool dynamic = slot >= _state.Map.CellSpan.Length;
+            _semanticPages.TryGetValue(
+                slot / NavigationSemanticPage.SlotCount,
+                out NavigationSemanticPage? page);
+            int offset = slot % NavigationSemanticPage.SlotCount;
+            NavigationCellSemanticSource currentSource;
+            bool currentHasCell;
+            NavigationCell currentCell;
+            if (page != null && page.IsSuppressed[offset])
+            {
+                currentSource = NavigationCellSemanticSource.OverlaySuppressed;
+                currentHasCell = false;
+                currentCell = default;
+            }
+            else if (page != null && page.HasOverride[offset])
+            {
+                currentSource = dynamic
+                    ? NavigationCellSemanticSource.DynamicOverlaySet
+                    : NavigationCellSemanticSource.OverlaySet;
+                currentHasCell = true;
+                currentCell = page.Cells[offset];
+            }
+            else if (dynamic)
+            {
+                currentSource = NavigationCellSemanticSource.DynamicInactive;
+                currentHasCell = false;
+                currentCell = default;
+            }
+            else
+            {
+                currentSource = NavigationCellSemanticSource.Baked;
+                currentHasCell = true;
+                currentCell = _state.Map.CellSpan[slot].Cell;
+            }
+
+            NavigationCellSemanticSource nextSource;
+            bool nextHasCell;
+            NavigationCell nextCell;
+            if (operation.Kind == NavigationCellOverlayOperationKind.Set)
+            {
+                nextSource = dynamic
+                    ? NavigationCellSemanticSource.DynamicOverlaySet
+                    : NavigationCellSemanticSource.OverlaySet;
+                nextHasCell = true;
+                nextCell = operation.Cell;
+            }
+            else if (operation.Kind == NavigationCellOverlayOperationKind.Suppress)
+            {
+                nextSource = NavigationCellSemanticSource.OverlaySuppressed;
+                nextHasCell = false;
+                nextCell = default;
+            }
+            else if (dynamic)
+            {
+                nextSource = NavigationCellSemanticSource.DynamicInactive;
+                nextHasCell = false;
+                nextCell = default;
+            }
+            else
+            {
+                nextSource = NavigationCellSemanticSource.Baked;
+                nextHasCell = true;
+                nextCell = _state.Map.CellSpan[slot].Cell;
+            }
+            return currentSource == nextSource
+                && currentHasCell == nextHasCell
+                && (!currentHasCell || currentCell.Equals(nextCell));
         }
 
         private void RecordPersistentCopies(int copiedNodes, long bytesPerNode)

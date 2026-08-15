@@ -61,7 +61,7 @@ internal sealed partial class NavigationWorldGraph
     internal bool TryGetNodeState(NavigationNodeRef node, out NavigationNodeState state)
     {
         if (!TryGetNodeLocation(node, out NavigationMapInstance? instance, out VoxelIndex index)
-            || IsStructuralScopeClosed(instance!.MapId)
+            || IsSurfaceAddressClosed(new NavigationCellAddress(instance!.MapId, index))
             || !instance.TryGetEffectiveCell(node.CellSlot, out NavigationCell cell)
             || !instance.Map.GridBinding.TryGetCellPrism(index, out GridCellPrism prism))
         {
@@ -99,6 +99,25 @@ internal sealed partial class NavigationWorldGraph
             sourceIndex);
     }
 
+    internal NavigationNativeSurfaceEdgeEnumerator EnumerateStructuralNativeSurfaceEdges(
+        NavigationNodeRef source)
+    {
+        if (!TryGetNodeLocation(
+                source,
+                out NavigationMapInstance? instance,
+                out VoxelIndex sourceIndex)
+            || !instance!.TryGetEffectiveCell(source.CellSlot, out _))
+        {
+            return default;
+        }
+        return new NavigationNativeSurfaceEdgeEnumerator(
+            this,
+            source.MapOrdinal,
+            instance,
+            sourceIndex,
+            structural: true);
+    }
+
     internal NavigationSurfaceEdgeEnumerator EnumerateSurfaceEdges(
         NavigationNodeRef source) => new(
             this,
@@ -109,6 +128,18 @@ internal sealed partial class NavigationWorldGraph
 
     internal NavigationIncomingSurfaceEdgeEnumerator EnumerateIncomingSurfaceEdges(
         NavigationNodeRef destination) => new(this, destination);
+
+    internal NavigationSurfaceEdgeEnumerator EnumerateStructuralSurfaceEdges(
+        NavigationNodeRef source) => new(
+            this,
+            source,
+            incoming: false,
+            includeNative: true,
+            includeAutomaticSeams: true,
+            structural: true);
+
+    internal NavigationIncomingSurfaceEdgeEnumerator EnumerateIncomingStructuralSurfaceEdges(
+        NavigationNodeRef destination) => new(this, destination, structural: true);
 
     internal NavigationSurfaceEdgeEnumerator EnumerateIncomingExplicitSurfaceEdges(
         NavigationNodeRef destination) => new(

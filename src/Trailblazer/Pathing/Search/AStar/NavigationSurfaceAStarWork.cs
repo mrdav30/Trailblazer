@@ -81,9 +81,10 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
             query.AreaPolicy,
             query.Medium);
         _resultStatus = NavigationSurfaceAStarStatus.Success;
-        _useEuclideanHeuristic = _graph.Composition
-            .GetComponentRecord(query.Start.Address.MapId)
-            .AllSurfaceEdgesEuclideanCertified;
+        _useEuclideanHeuristic = _graph.SurfaceComponents.TryGet(
+            query.Start.Address,
+            out NavigationSurfaceComponent startComponent)
+            && startComponent.AllSurfaceEdgesEuclideanCertified;
         bool targetResolved = _graph.TryGetNodeState(
             query.End.Node,
             out NavigationNodeState targetState);
@@ -91,6 +92,16 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         if (!targetResolved)
         {
             Finish(NavigationSurfaceAStarStatus.Stale);
+            return;
+        }
+        if (!_graph.AreInSameSurfaceComponent(
+                query.Start.Address,
+                query.End.Address))
+        {
+            _resultStatus = NavigationSurfaceAStarStatus.NoPath;
+            _workspace.PathNodeCount = 0;
+            _dependencySort = new NavigationDependencySortWork(_workspace);
+            _stage = Stage.SortDependencies;
             return;
         }
         if (!_workspace.NodeTable.TryGetOrAdd(
@@ -204,7 +215,9 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                             ref _explicitEdgeWork,
                             out NavigationNodeRef dependencyNode,
                             out Fixed64 explicitCost);
-                    if (dependencyNode.IsValid && !RecordPage(dependencyNode))
+                    if (dependencyNode.IsValid
+                        && dependencyNode != _pendingEdge.Target
+                        && !RecordPage(dependencyNode, true))
                         return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
                     if (explicitStatus == TraversalExplicitEdgeStatus.Pending)
                         continue;
@@ -232,7 +245,7 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
                     ClearPendingEdge();
                     continue;
                 }
-                if (!RecordPage(edge.Target))
+                if (!RecordPage(edge.Target, false))
                     return Finish(NavigationSurfaceAStarStatus.CapacityExceeded);
                 if (edge.Kind == NavigationGraphEdgeKind.Explicit)
                 {
@@ -413,11 +426,15 @@ internal sealed class NavigationSurfaceAStarWork : IDisposable
         _explicitEdgeWork = default;
     }
 
-    private bool RecordPage(NavigationNodeRef node)
+    private bool RecordPage(NavigationNodeRef node, bool recordComponent)
     {
         if (!_graph!.TryGetNodeAddress(node, out NavigationCellAddress address)
-            || !_graph.TryGetComponentKey(address.MapId, out string componentKey)
-            || !_workspace.TryRecordEndpointComponent(componentKey))
+            || (recordComponent
+                && (!_graph.TryGetSurfaceComponent(
+                        address,
+                        out NavigationSurfaceComponentKey componentKey,
+                        out _)
+                    || !_workspace.TryRecordEndpointComponent(componentKey))))
         {
             return false;
         }

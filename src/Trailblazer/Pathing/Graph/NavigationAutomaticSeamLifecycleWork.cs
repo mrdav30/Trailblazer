@@ -12,23 +12,27 @@ namespace Trailblazer.Pathing;
 /// <summary>Retains one fail-closed GridForge lifecycle prefix until seam state is atomic.</summary>
 internal sealed class NavigationAutomaticSeamLifecycleWork
 {
-    internal const long BaseRetainedBytes = 48L;
+    internal const long BaseRetainedBytes = 80L;
 
     private readonly NavigationWorldGraph _source;
     private readonly NavigationAutomaticSeamRefreshWork _refresh;
-    private readonly NavigationCompositionWorkspace _workspace;
-    private NavigationCompositionIndex.UpdateWork? _update;
+    private NavigationSurfaceComponentKeySet _affectedComponents =
+        NavigationSurfaceComponentKeySet.Empty;
+    private NavigationCellAddressSet _affectedAddresses = NavigationCellAddressSet.Empty;
+    private NavigationWorldGraph? _structuralGraph;
+    private NavigationSurfaceComponentBuildWork? _componentUpdate;
+    private int _affectedMemberCount;
+    private int _endpointOrdinal;
+    private bool _affectedCaptureComplete;
 
     internal NavigationAutomaticSeamLifecycleWork(
         GridWorld world,
         NavigationWorldGraph source,
         GridEventInfo[] events,
         int eventCount,
-        NavigationCompositionWorkspace workspace,
         bool fullRebuild = false)
     {
         _source = source;
-        _workspace = workspace;
         _refresh = new NavigationAutomaticSeamRefreshWork(
             world,
             source,
@@ -41,23 +45,30 @@ internal sealed class NavigationAutomaticSeamLifecycleWork
     internal long RetainedBytes => checked(
         BaseRetainedBytes
         + _refresh.RetainedBytes
-        + GetUpdateAdditionalRetainedBytes());
+        + (ReferenceEquals(_affectedComponents, NavigationSurfaceComponentKeySet.Empty)
+            ? 0L
+            : _affectedComponents.RetainedBytes)
+        + (ReferenceEquals(_affectedAddresses, NavigationCellAddressSet.Empty)
+            ? 0L
+            : _affectedAddresses.RetainedBytes)
+        + (_componentUpdate?.RetainedBytes ?? 0L));
 
     internal int PersistentPageCount => checked(
         1
         + _refresh.PersistentPageCount
-        + GetUpdateAdditionalPersistentPages());
+        + (ReferenceEquals(_affectedComponents, NavigationSurfaceComponentKeySet.Empty)
+            ? 0
+            : _affectedComponents.PersistentPageCount)
+        + (ReferenceEquals(_affectedAddresses, NavigationCellAddressSet.Empty)
+            ? 0
+            : _affectedAddresses.PersistentPageCount)
+        + (_componentUpdate?.PersistentPageCount ?? 0));
 
     internal NavigationWorldGraph Result
     {
         get
         {
-            NavigationWorldGraph next = _source
-                .WithAutomaticSeams(_refresh.Result)
-                .ReopenStructuralScopes(_source.GraphVersion + 1);
-            NavigationCompositionIndex composition = _update?.Result
-                ?? _source.Composition.WithVersion(next.GraphVersion);
-            return next.WithComposition(composition);
+            return _structuralGraph!.WithSurfaceComponents(_componentUpdate!.Result);
         }
     }
 
@@ -87,71 +98,52 @@ internal sealed class NavigationAutomaticSeamLifecycleWork
             };
         }
 
-        if (!_refresh.StructuralLinksChanged)
-            return AdvanceStatus.Complete;
-        if (_update == null)
+        while (!_affectedCaptureComplete)
         {
-            NavigationWorldGraph next = _source
-                .WithAutomaticSeams(_refresh.Result)
-                .ReopenStructuralScopes(_source.GraphVersion + 1);
-            _update = next.BeginCompositionUpdate(
-                _source,
-                _refresh.ChangedMapIds,
-                _source.GraphVersion + 1,
-                _source.GraphVersion + 1,
-                _workspace);
-            return ExceedsCapacity(maximumRetainedBytes, maximumPersistentPages)
-                ? AdvanceStatus.CapacityExceeded
-                : AdvanceStatus.Progressed;
+            if (_endpointOrdinal >= _refresh.ChangedStructuralEndpointCount)
+            {
+                _affectedCaptureComplete = true;
+                break;
+            }
+            if (!meter.TryConsumeDependencyEntries(1))
+                return AdvanceStatus.Blocked;
+            NavigationCellAddress address =
+                _refresh.GetChangedStructuralEndpointAt(_endpointOrdinal++);
+            _affectedAddresses = _affectedAddresses.Add(address);
+            if (_source.TryGetSurfaceComponent(
+                    address,
+                    out NavigationSurfaceComponentKey key,
+                    out _)
+                && !_affectedComponents.Contains(key))
+            {
+                _affectedComponents = _affectedComponents.Add(key);
+                _source.SurfaceComponents.TryGet(key, out NavigationSurfaceComponent component);
+                _affectedMemberCount = checked(
+                    _affectedMemberCount + component.Members.Count);
+            }
+            if (ExceedsCapacity(maximumRetainedBytes, maximumPersistentPages))
+                return AdvanceStatus.CapacityExceeded;
         }
 
-        int before = GetConsumedWork(meter);
-        bool complete = _update.Advance(meter);
+        NavigationWorldGraph next = _source
+            .WithAutomaticSeams(_refresh.Result)
+            .ReopenStructuralScopes(_source.GraphVersion + 1);
+        _structuralGraph ??= next;
+        _componentUpdate ??= new NavigationSurfaceComponentBuildWork(
+            _structuralGraph,
+            _source,
+            _affectedComponents,
+            _affectedAddresses,
+            checked(_affectedMemberCount + _affectedAddresses.Count));
+        bool complete = _componentUpdate.Advance(meter);
         if (ExceedsCapacity(maximumRetainedBytes, maximumPersistentPages))
             return AdvanceStatus.CapacityExceeded;
-        if (complete)
-            return AdvanceStatus.Complete;
-        return GetConsumedWork(meter) != before
-            ? AdvanceStatus.Progressed
-            : AdvanceStatus.Blocked;
+        return complete ? AdvanceStatus.Complete : AdvanceStatus.Blocked;
     }
 
     private bool ExceedsCapacity(long maximumRetainedBytes, int maximumPersistentPages) =>
         RetainedBytes > maximumRetainedBytes
         || PersistentPageCount > maximumPersistentPages;
-
-    private long GetUpdateAdditionalRetainedBytes()
-    {
-        if (_update == null)
-            return 0;
-        return checked(
-            System.Math.Max(
-                0L,
-                _update.NonPayloadRetainedBytes
-                    - _source.Composition.RootAndValueRetainedBytes)
-            + _update.PayloadAdditionalRetainedBytes);
-    }
-
-    private int GetUpdateAdditionalPersistentPages()
-    {
-        if (_update == null)
-            return 0;
-        return checked(
-            System.Math.Max(
-                0,
-                _update.NonPayloadPersistentPageCount
-                    - _source.Composition.PersistentPageCount)
-            + _update.PayloadAdditionalPersistentPages);
-    }
-
-    private static int GetConsumedWork(MaintenanceWorkMeter meter) => checked(
-        meter.ConsumedEnvelopes
-        + meter.BaselineAddresses
-        + meter.OverlaySlots
-        + meter.ComponentNodes
-        + meter.SeamCandidateProbes
-        + meter.ExplicitEdges
-        + meter.DependencyEntries);
 
     internal enum AdvanceStatus : byte
     {

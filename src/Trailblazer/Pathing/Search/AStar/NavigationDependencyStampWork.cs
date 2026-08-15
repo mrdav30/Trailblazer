@@ -14,7 +14,7 @@ internal sealed class NavigationDependencyStampWork
 {
     private readonly NavigationWorldGraph _graph;
     private readonly NavigationAreaPolicyKey _areaPolicy;
-    private readonly string[] _componentAddresses;
+    private readonly NavigationSurfaceComponentKey[] _componentAddresses;
     private readonly GraphPageDependencyAddress[] _pageAddresses;
     private readonly GraphComponentDependency[] _components;
     private readonly GraphPageDependency[] _pages;
@@ -24,7 +24,7 @@ internal sealed class NavigationDependencyStampWork
     internal NavigationDependencyStampWork(
         NavigationWorldGraph graph,
         NavigationAreaPolicy areaPolicy,
-        string[] componentAddresses,
+        NavigationSurfaceComponentKey[] componentAddresses,
         int componentCount,
         GraphPageDependencyAddress[] pageAddresses,
         int pageCount)
@@ -70,11 +70,11 @@ internal sealed class NavigationDependencyStampWork
             if (remaining == 0 || !meter.TryConsumeLookupProbes(1))
                 return false;
             remaining--;
-            string representative = _componentAddresses[_componentOrdinal];
+            NavigationSurfaceComponentKey representative =
+                _componentAddresses[_componentOrdinal];
             if ((_componentOrdinal > 0
-                    && string.CompareOrdinal(
-                        _componentAddresses[_componentOrdinal - 1],
-                        representative) >= 0)
+                    && _componentAddresses[_componentOrdinal - 1]
+                        .CompareTo(representative) >= 0)
                 || !_graph.TryGetComponentDependency(
                     representative,
                     out _components[_componentOrdinal]))
@@ -95,7 +95,6 @@ internal sealed class NavigationDependencyStampWork
                         address) >= 0)
                 || !_graph.TryGetPageDependency(
                     address,
-                    _componentAddresses.AsSpan(0, _components.Length),
                     out _pages[_pageOrdinal]))
             {
                 return CompleteInvalid();
@@ -103,7 +102,6 @@ internal sealed class NavigationDependencyStampWork
             _pageOrdinal++;
         }
         Result = new GraphDependencyStamp(
-            _graph.Composition.Version,
             _areaPolicy,
             _components,
             _pages);
